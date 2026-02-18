@@ -1,0 +1,14 @@
+# Redirigir todo a la carpeta public
+RewriteEngine On
+
+# Excluir la carpeta api de las redirecciones
+RewriteRule ^api/ - [L]
+
+# Si no es un archivo o directorio existente, redirigir a public/
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ public/$1 [L]
+
+# Si se accede a la raíz, redirigir a public/
+RewriteRule ^$ public/ [L]

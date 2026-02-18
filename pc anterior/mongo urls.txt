@@ -1,0 +1,11 @@
+dev rv(syl):
+mongodb+srv://RepmanDev:HPXCHSSmQ2D0JZh6@repman-vp3kv.mongodb.net/repman_rv?authSource=admin&replicaSet=Repman-shard-0&w=majority&readPreference=primary&retryWrites=true&ssl=true
+
+syl:
+mongodb+srv://RepmanDev:HPXCHSSmQ2D0JZh6@repmansyl.vp3kv.mongodb.net/syl_staging?authSource=admin&replicaSet=atlas-9poxhc-shard-0&readPreference=primary&ssl=true
+
+iot:
+mongodb+srv://RepmanIoT:PrnGALBIulxwGWee@repmaniot.ddljn8v.mongodb.net/
+
+rv:
+mongodb+srv://RepmanRVProd:0DCPH3ZGHersZmhs@repmanrv.vp3kv.mongodb.net/rv_staging?authSource=admin&replicaSet=atlas-fll1yk-shard-0&w=majority&readPreference=primary&retryWrites=true&ssl=true

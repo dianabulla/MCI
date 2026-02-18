@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 Acceso Rápido ESP32-CAM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 50px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+            margin-bottom: 40px;
+        }
+        
+        .buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        a {
+            display: block;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            font-size: 1.2em;
+            font-weight: bold;
+            transition: all 0.3s;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        a:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+        }
+        
+        a.secondary {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+            font-size: 1em;
+        }
+        
+        a.test {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+        
+        .icon {
+            font-size: 1.5em;
+            margin-right: 10px;
+        }
+        
+        .info {
+            margin-top: 40px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            text-align: left;
+        }
+        
+        .info h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .info ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .info li {
+            padding: 8px 0;
+            color: #666;
+        }
+        
+        .info li::before {
+            content: "✓ ";
+            color: #28a745;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: left;
+        }
+        
+        .warning strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 ESP32-CAM</h1>
+        <p class="subtitle">Sistema de Transmisión en Vivo</p>
+        
+        <div class="buttons">
+            <a href="/mci_madrid_colombia/public/index.php?route=stream/live">
+                <span class="icon">📹</span>
+                Ver Transmisión en Vivo
+            </a>
+            
+            <a href="/mci_madrid_colombia/public/index.php?route=stream/gallery">
+                <span class="icon">🖼️</span>
+                Galería de Fotos
+            </a>
+            
+            <a href="/mci_madrid_colombia/test_esp32cam.html" class="test">
+                <span class="icon">🧪</span>
+                Probar Sistema (Sin ESP32-CAM)
+            </a>
+            
+            <a href="/mci_madrid_colombia/ESP32_CAM_SETUP.md" class="secondary" target="_blank">
+                <span class="icon">📖</span>
+                Guía de Configuración ESP32-CAM
+            </a>
+            
+            <a href="/mci_madrid_colombia/STREAM_README.md" class="secondary" target="_blank">
+                <span class="icon">📄</span>
+                Documentación Completa
+            </a>
+        </div>
+        
+        <div class="info">
+            <h3>✨ Características</h3>
+            <ul>
+                <li>Transmisión en vivo cada 1 segundo</li>
+                <li>Galería de hasta 100 fotos</li>
+                <li>Sin autenticación requerida</li>
+                <li>URLs ocultas (no visibles en menús)</li>
+                <li>Compatible con ESP32-CAM</li>
+            </ul>
+        </div>
+        
+        <div class="warning">
+            <strong>⚠️ URLs Privadas</strong>
+            Estas URLs no están vinculadas desde ningún menú. 
+            Solo accesibles para quien conozca la dirección exacta.
+        </div>
+    </div>
+</body>
+</html>

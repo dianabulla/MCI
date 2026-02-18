@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test ESP32-CAM Upload</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+        
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        
+        .upload-area:hover {
+            background: #f8f9ff;
+            border-color: #5568d3;
+        }
+        
+        .upload-area.dragover {
+            background: #f0f4ff;
+            border-color: #4a5dc4;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .upload-text {
+            color: #666;
+            font-size: 1.1em;
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 15px;
+        }
+        
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .preview {
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .preview img {
+            width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .result.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .result.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .links {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px solid #eee;
+        }
+        
+        .links a {
+            display: block;
+            padding: 12px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .links a:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #004085;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test ESP32-CAM</h1>
+        <p class="subtitle">Prueba el endpoint de carga de imágenes</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📸</div>
+            <div class="upload-text">
+                Haz clic o arrastra una imagen aquí
+            </div>
+            <input type="file" id="fileInput" accept="image/*">
+        </div>
+        
+        <div class="preview" id="preview">
+            <img id="previewImage" src="" alt="Preview">
+        </div>
+        
+        <button id="uploadBtn" disabled onclick="uploadImage()">
+            📤 Subir Imagen
+        </button>
+        
+        <div class="result" id="result"></div>
+        
+        <div class="links">
+            <a href="/public/index.php?route=stream/live" target="_blank">
+                📹 Ver Transmisión en Vivo
+            </a>
+            <a href="/public/index.php?route=stream/gallery" target="_blank">
+                🖼️ Ver Galería de Fotos
+            </a>
+        </div>
+        
+        <div class="info">
+            <strong>ℹ️ Nota:</strong> Este formulario simula el envío de imágenes desde una ESP32-CAM. 
+            Selecciona una imagen y súbela para probar el sistema.
+        </div>
+    </div>
+    
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const preview = document.getElementById('preview');
+        const previewImage = document.getElementById('previewImage');
+        const result = document.getElementById('result');
+        
+        let selectedFile = null;
+        
+        // Click en el área de carga
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+        
+        // Prevenir comportamiento por defecto del drag
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        // Highlight cuando arrastramos
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => {
+                uploadArea.classList.add('dragover');
+            });
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => {
+                uploadArea.classList.remove('dragover');
+            });
+        });
+        
+        // Handle drop
+        uploadArea.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+        
+        // Handle file select
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+        
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                showResult('Error: Solo se permiten archivos de imagen', 'error');
+                return;
+            }
+            
+            selectedFile = file;
+            
+            // Mostrar preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImage.src = e.target.result;
+                preview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+            
+            // Habilitar botón
+            uploadBtn.disabled = false;
+            
+            // Ocultar resultado anterior
+            result.style.display = 'none';
+        }
+        
+        async function uploadImage() {
+            if (!selectedFile) {
+                showResult('Error: No hay archivo seleccionado', 'error');
+                return;
+            }
+            
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = '⏳ Subiendo...';
+            
+            try {
+                // Convertir imagen a binary
+                const arrayBuffer = await selectedFile.arrayBuffer();
+                
+                // Enviar al servidor
+                const response = await fetch('/api/stream.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'image/jpeg'
+                    },
+                    body: arrayBuffer
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult(`✅ ${data.message}<br>Archivo: ${data.filename}<br>Hora: ${data.timestamp}`, 'success');
+                } else {
+                    showResult(`❌ Error: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                showResult(`❌ Error de conexión: ${error.message}`, 'error');
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = '📤 Subir Imagen';
+            }
+        }
+        
+        function showResult(message, type) {
+            result.innerHTML = message;
+            result.className = `result ${type}`;
+            result.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
