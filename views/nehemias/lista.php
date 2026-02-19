@@ -196,6 +196,9 @@
             <?php endif; ?>
         </h2>
         <div>
+            <a href="?url=nehemias/seremos1200" class="btn btn-warning btn-action me-2">
+                <i class="bi bi-people"></i> Seremos 1200
+            </a>
             <a href="?url=nehemias/exportarExcel" class="btn btn-success btn-action">
                 <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
             </a>
@@ -290,6 +293,42 @@
                                        id="cedula_vacia" <?= !empty($filtros['cedula_vacia']) ? 'checked' : '' ?>>
                                 <label class="form-check-label" for="cedula_vacia">
                                     Cédula Vacía
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mt-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="subido_link_vacio" value="1" 
+                                       id="subido_link_vacio" <?= !empty($filtros['subido_link_vacio']) ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="subido_link_vacio">
+                                    Subido link vacío
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mt-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="subido_link_lleno" value="1" 
+                                       id="subido_link_lleno" <?= !empty($filtros['subido_link_lleno']) ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="subido_link_lleno">
+                                    Subido link completo
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mt-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="bogota_subio_vacio" value="1" 
+                                       id="bogota_subio_vacio" <?= !empty($filtros['bogota_subio_vacio']) ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="bogota_subio_vacio">
+                                    En Bogotá se le subió vacío
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mt-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="bogota_subio_lleno" value="1" 
+                                       id="bogota_subio_lleno" <?= !empty($filtros['bogota_subio_lleno']) ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="bogota_subio_lleno">
+                                    En Bogotá se le subió completo
                                 </label>
                             </div>
                         </div>

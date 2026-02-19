@@ -13,7 +13,7 @@ class Nehemias extends BaseModel {
      * Obtener registros ordenados por fecha
      */
     public function getAllOrdered() {
-        $sql = "SELECT * FROM {$this->table} ORDER BY Fecha_Registro DESC";
+        $sql = "SELECT * FROM {$this->table} ORDER BY Fecha_Registro DESC, Id_Nehemias DESC";
         return $this->query($sql);
     }
 
@@ -78,13 +78,33 @@ class Nehemias extends BaseModel {
             $sql .= " AND (Numero_Cedula IS NULL OR Numero_Cedula = '')";
         }
 
+        // Filtro por Subido_Link vacío
+        if (isset($filtros['subido_link_vacio']) && $filtros['subido_link_vacio'] === '1') {
+            $sql .= " AND (Subido_Link IS NULL OR TRIM(Subido_Link) = '')";
+        }
+
+        // Filtro por Subido_Link con valor
+        if (isset($filtros['subido_link_lleno']) && $filtros['subido_link_lleno'] === '1') {
+            $sql .= " AND Subido_Link IS NOT NULL AND TRIM(Subido_Link) != ''";
+        }
+
+        // Filtro por En_Bogota_Subio vacío
+        if (isset($filtros['bogota_subio_vacio']) && $filtros['bogota_subio_vacio'] === '1') {
+            $sql .= " AND (En_Bogota_Subio IS NULL OR TRIM(En_Bogota_Subio) = '')";
+        }
+
+        // Filtro por En_Bogota_Subio con valor
+        if (isset($filtros['bogota_subio_lleno']) && $filtros['bogota_subio_lleno'] === '1') {
+            $sql .= " AND En_Bogota_Subio IS NOT NULL AND TRIM(En_Bogota_Subio) != ''";
+        }
+
         // Filtro por acepta
         if (isset($filtros['acepta']) && $filtros['acepta'] !== '') {
             $sql .= " AND Acepta = ?";
             $params[] = $filtros['acepta'];
         }
 
-        $sql .= " ORDER BY Fecha_Registro DESC";
+        $sql .= " ORDER BY Fecha_Registro DESC, Id_Nehemias DESC";
 
         // Ejecutar consulta preparada con PDO
         if (!empty($params)) {
@@ -126,6 +146,37 @@ class Nehemias extends BaseModel {
                 FROM {$this->table}
                 WHERE Lider IS NOT NULL AND Lider != ''
                 ORDER BY Lider ASC";
+
+        return $this->query($sql);
+    }
+
+    /**
+     * Conteo por puesto y mesa de votación
+     */
+    public function getConteoPorPuestoMesa() {
+        $sql = "SELECT 
+                    COALESCE(NULLIF(TRIM(Puesto_Votacion), ''), 'Sin puesto') AS puesto,
+                    COALESCE(NULLIF(TRIM(Mesa_Votacion), ''), 'Sin mesa') AS mesa,
+                    COUNT(*) AS total
+                FROM {$this->table}
+                GROUP BY 
+                    COALESCE(NULLIF(TRIM(Puesto_Votacion), ''), 'Sin puesto'),
+                    COALESCE(NULLIF(TRIM(Mesa_Votacion), ''), 'Sin mesa')
+                ORDER BY total DESC, puesto ASC, mesa ASC";
+
+        return $this->query($sql);
+    }
+
+    /**
+     * Conteo total por puesto de votación (para gráfica)
+     */
+    public function getConteoPorPuesto() {
+        $sql = "SELECT 
+                    COALESCE(NULLIF(TRIM(Puesto_Votacion), ''), 'Sin puesto') AS puesto,
+                    COUNT(*) AS total
+                FROM {$this->table}
+                GROUP BY COALESCE(NULLIF(TRIM(Puesto_Votacion), ''), 'Sin puesto')
+                ORDER BY total DESC, puesto ASC";
 
         return $this->query($sql);
     }

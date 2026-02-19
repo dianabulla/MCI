@@ -94,6 +94,12 @@ return [
     'nehemias/exportarExcel' => 'NehemiasController@exportarExcel',
     'nehemias/editar' => 'NehemiasController@editar',
     'nehemias/actualizar' => 'NehemiasController@actualizar',
+    'nehemias/importar' => 'NehemiasController@importar',
+    'nehemias/importar-directo' => 'NehemiasController@importarDirecto',
+    'nehemias/reparar-importacion' => 'NehemiasController@repararImportacion',
+    'nehemias/seremos1200' => 'NehemiasController@seremos1200',
+    'nehemias/seremos1200/importar' => 'NehemiasController@importarSeremos1200',
+    'nehemias/seremos1200/decision' => 'NehemiasController@decisionSeremos1200',
     
     // Transmisiones YouTube (Privadas - Requieren autenticación)
     'transmisiones' => 'TransmisionController@listar',
