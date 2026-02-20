@@ -4,7 +4,7 @@
  * Uso: Subir este archivo a la raíz del proyecto y el archivo Excel
  */
 
-require_once 'conexion.php';
+require_once __DIR__ . '/conexion.php';
 
 // Configuración
 set_time_limit(300); // 5 minutos máximo
@@ -32,6 +32,78 @@ echo "<!DOCTYPE html>
 <div class='container'>
     <h1>Importar Datos Nehemías desde Excel/CSV</h1>";
 
+if (!function_exists('mapearFilaNehemias')) {
+    function mapearFilaNehemias(array $data): array {
+        $limpiar = static function ($value): string {
+            return trim((string) $value);
+        };
+
+        $obtener = static function (array $arr, int $idx) use ($limpiar): string {
+            return isset($arr[$idx]) ? $limpiar($arr[$idx]) : '';
+        };
+
+        $esTexto = static function (string $valor): bool {
+            return preg_match('/[A-Za-zÁÉÍÓÚÑáéíóúñ]/u', $valor) === 1;
+        };
+
+        $cedulaIndex = null;
+        foreach ($data as $i => $valor) {
+            if ($i < 2) {
+                continue;
+            }
+
+            $v = preg_replace('/\D+/', '', (string) $valor);
+            $largo = strlen($v);
+            if ($v !== '' && $largo >= 5 && $largo <= 12 && $esTexto($obtener($data, $i - 1)) && $esTexto($obtener($data, $i - 2))) {
+                $cedulaIndex = $i;
+                break;
+            }
+        }
+
+        if ($cedulaIndex === null && count($data) >= 12) {
+            $primero = $obtener($data, 0);
+            $segundo = strtolower($obtener($data, 1));
+            $esFechaInicial = preg_match('/^\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/', $primero) === 1;
+            $esAcepta = in_array($segundo, ['aceptar', 'acepta', 'si', 'sí', 'no', '0', '1'], true);
+            if ($esFechaInicial || $esAcepta) {
+                $cedulaIndex = 4;
+            }
+        }
+
+        if ($cedulaIndex === null && count($data) >= 10) {
+            $cedulaIndex = 2;
+        }
+
+        if ($cedulaIndex !== null && $cedulaIndex >= 2) {
+            return [
+                'nombres' => $obtener($data, $cedulaIndex - 2),
+                'apellidos' => $obtener($data, $cedulaIndex - 1),
+                'numero_cedula' => $obtener($data, $cedulaIndex),
+                'telefono' => $obtener($data, $cedulaIndex + 1),
+                'lider_nehemias' => $obtener($data, $cedulaIndex + 2),
+                'lider' => $obtener($data, $cedulaIndex + 3),
+                'subido_link' => $obtener($data, $cedulaIndex + 4),
+                'en_bogota_subio' => $obtener($data, $cedulaIndex + 5),
+                'puesto_votacion' => $obtener($data, $cedulaIndex + 6),
+                'mesa_votacion' => $obtener($data, $cedulaIndex + 7)
+            ];
+        }
+
+        return [
+            'nombres' => $obtener($data, 0),
+            'apellidos' => $obtener($data, 1),
+            'numero_cedula' => $obtener($data, 2),
+            'telefono' => $obtener($data, 3),
+            'lider_nehemias' => $obtener($data, 4),
+            'lider' => $obtener($data, 5),
+            'subido_link' => $obtener($data, 6),
+            'en_bogota_subio' => $obtener($data, 7),
+            'puesto_votacion' => $obtener($data, 8),
+            'mesa_votacion' => $obtener($data, 9)
+        ];
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
     $archivo = $_FILES['archivo']['tmp_name'];
     $extension = pathinfo($_FILES['archivo']['name'], PATHINFO_EXTENSION);
@@ -40,49 +112,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
     
     $errores = [];
     $exitosos = 0;
-    $duplicados = 0;
     $linea = 0;
     
     try {
         if ($extension === 'csv') {
             // Procesar CSV
             if (($handle = fopen($archivo, "r")) !== FALSE) {
-                // Saltar la primera línea (encabezados)
-                $encabezados = fgetcsv($handle, 1000, "\t");
+                // Detectar delimitador real del archivo
+                $primeraLinea = fgets($handle);
+                rewind($handle);
+
+                $delimitador = ',';
+                if (substr_count($primeraLinea, "\t") > substr_count($primeraLinea, ",") && substr_count($primeraLinea, "\t") > substr_count($primeraLinea, ";")) {
+                    $delimitador = "\t";
+                } elseif (substr_count($primeraLinea, ";") > substr_count($primeraLinea, ",")) {
+                    $delimitador = ";";
+                }
+
+                // Saltar encabezados y limpiar BOM en la primera celda
+                $encabezados = fgetcsv($handle, 10000, $delimitador);
+                if (is_array($encabezados) && isset($encabezados[0])) {
+                    $encabezados[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) $encabezados[0]);
+                }
                 
-                while (($data = fgetcsv($handle, 1000, "\t")) !== FALSE) {
+                while (($data = fgetcsv($handle, 10000, $delimitador)) !== FALSE) {
                     $linea++;
-                    
-                    // Extraer datos de cada columna
-                    $nombres = isset($data[0]) ? trim($data[0]) : '';
-                    $apellidos = isset($data[1]) ? trim($data[1]) : '';
-                    $numero_cedula = isset($data[2]) ? trim($data[2]) : '';
-                    $telefono = isset($data[3]) ? trim($data[3]) : '';
-                    $lider_nehemias = isset($data[4]) ? trim($data[4]) : '';
-                    $lider = isset($data[5]) ? trim($data[5]) : '';
-                    $subido_link = isset($data[6]) ? trim($data[6]) : '';
-                    $en_bogota_subio = isset($data[7]) ? trim($data[7]) : '';
-                    $puesto_votacion = isset($data[8]) ? trim($data[8]) : '';
-                    $mesa_votacion = isset($data[9]) ? trim($data[9]) : '';
-                    
-                    // Validar datos mínimos
-                    if (empty($nombres) || empty($apellidos) || empty($numero_cedula)) {
-                        $errores[] = "Línea $linea: Faltan datos obligatorios (Nombres, Apellidos o Cédula)";
-                        continue;
+
+                    // Si la línea se leyó como una sola columna, intentar delimitadores alternos
+                    if (count($data) <= 1 && isset($data[0])) {
+                        $lineaRaw = $data[0];
+                        foreach ([";", ",", "\t"] as $delAlt) {
+                            if ($delAlt === $delimitador) {
+                                continue;
+                            }
+                            $dataAlt = str_getcsv($lineaRaw, $delAlt);
+                            if (count($dataAlt) > count($data)) {
+                                $data = $dataAlt;
+                            }
+                        }
                     }
                     
-                    // Verificar si ya existe
-                    $stmt_check = $conn->prepare("SELECT Id FROM nehemias WHERE Numero_Cedula = ?");
-                    $stmt_check->bind_param("s", $numero_cedula);
-                    $stmt_check->execute();
-                    $result_check = $stmt_check->get_result();
-                    
-                    if ($result_check->num_rows > 0) {
-                        $duplicados++;
-                        $stmt_check->close();
-                        continue;
-                    }
-                    $stmt_check->close();
+                    // Extraer datos (soporta filas desplazadas por columnas extra)
+                    $fila = mapearFilaNehemias($data);
+                    $nombres = $fila['nombres'];
+                    $apellidos = $fila['apellidos'];
+                    $numero_cedula = $fila['numero_cedula'];
+                    $telefono = $fila['telefono'];
+                    $lider_nehemias = $fila['lider_nehemias'];
+                    $lider = $fila['lider'];
+                    $subido_link = $fila['subido_link'];
+                    $en_bogota_subio = $fila['en_bogota_subio'];
+                    $puesto_votacion = $fila['puesto_votacion'];
+                    $mesa_votacion = $fila['mesa_votacion'];
                     
                     // Insertar registro
                     $sql = "INSERT INTO nehemias (Nombres, Apellidos, Numero_Cedula, Telefono, Lider_Nehemias, Lider, Subido_Link, En_Bogota_Subio, Puesto_Votacion, Mesa_Votacion, Fecha_Registro) 
@@ -123,7 +204,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
         echo "<tr><th>Concepto</th><th>Cantidad</th></tr>";
         echo "<tr><td>Registros procesados</td><td>$linea</td></tr>";
         echo "<tr><td class='success'>Registros importados exitosamente</td><td>$exitosos</td></tr>";
-        echo "<tr><td class='info'>Registros duplicados (omitidos)</td><td>$duplicados</td></tr>";
         echo "<tr><td class='error'>Errores</td><td>" . count($errores) . "</td></tr>";
         echo "</table>";
         

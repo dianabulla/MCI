@@ -1,3 +1,4 @@
+
 <?php
 /**
  * Script de importación directa desde CSV
@@ -34,6 +35,111 @@ set_time_limit(0); // Sin límite de tiempo
 ini_set('memory_limit', '512M');
 
 $archivo_csv = __DIR__ . '/datos_nehemias.csv';
+
+if (!function_exists('mapearFilaNehemiasDirecto')) {
+    function mapearFilaNehemiasDirecto(array $data): array {
+        $limpiar = static function ($value): string {
+            return trim((string) $value);
+        };
+
+        $obtener = static function (array $arr, int $idx) use ($limpiar): string {
+            return isset($arr[$idx]) ? $limpiar($arr[$idx]) : '';
+        };
+
+        $esTexto = static function (string $valor): bool {
+            return preg_match('/[A-Za-zÁÉÍÓÚÑáéíóúñ]/u', $valor) === 1;
+        };
+
+        $cedulaIndex = null;
+        foreach ($data as $i => $valor) {
+            if ($i < 2) {
+                continue;
+            }
+
+            $soloNumeros = preg_replace('/\D+/', '', (string) $valor);
+            $largo = strlen($soloNumeros);
+            if ($soloNumeros !== '' && $largo >= 5 && $largo <= 12 && $esTexto($obtener($data, $i - 1)) && $esTexto($obtener($data, $i - 2))) {
+                $cedulaIndex = $i;
+                break;
+            }
+        }
+
+        if ($cedulaIndex === null && count($data) >= 12) {
+            $primero = $obtener($data, 0);
+            $segundo = strtolower($obtener($data, 1));
+            $esFechaInicial = preg_match('/^\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/', $primero) === 1;
+            $esAcepta = in_array($segundo, ['aceptar', 'acepta', 'si', 'sí', 'no', '0', '1'], true);
+            if ($esFechaInicial || $esAcepta) {
+                $cedulaIndex = 4;
+            }
+        }
+
+        if ($cedulaIndex === null && count($data) >= 10) {
+            $cedulaIndex = 2;
+        }
+
+        return [
+            'nombres' => $obtener($data, $cedulaIndex !== null ? $cedulaIndex - 2 : 0),
+            'apellidos' => $obtener($data, $cedulaIndex !== null ? $cedulaIndex - 1 : 1),
+            'numero_cedula' => $obtener($data, $cedulaIndex !== null ? $cedulaIndex : 2),
+            'telefono' => $obtener($data, $cedulaIndex !== null ? $cedulaIndex + 1 : 3),
+            'lider_nehemias' => $obtener($data, $cedulaIndex !== null ? $cedulaIndex + 2 : 4),
+            'lider' => $obtener($data, $cedulaIndex !== null ? $cedulaIndex + 3 : 5),
+            'subido_link' => $obtener($data, $cedulaIndex !== null ? $cedulaIndex + 4 : 6),
+            'en_bogota_subio' => $obtener($data, $cedulaIndex !== null ? $cedulaIndex + 5 : 7),
+            'puesto_votacion' => $obtener($data, $cedulaIndex !== null ? $cedulaIndex + 6 : 8),
+            'mesa_votacion' => $obtener($data, $cedulaIndex !== null ? $cedulaIndex + 7 : 9)
+        ];
+    }
+}
+
+if (!function_exists('detectarDelimitadorArchivoDirecto')) {
+    function detectarDelimitadorArchivoDirecto(string $rutaArchivo): string {
+        $muestras = @file($rutaArchivo, FILE_IGNORE_NEW_LINES);
+        if ($muestras === false || empty($muestras)) {
+            return ',';
+        }
+
+        $candidatos = [',', ';', "\t"];
+        $puntajes = [',' => 0, ';' => 0, "\t" => 0];
+
+        $limite = min(count($muestras), 40);
+        for ($i = 0; $i < $limite; $i++) {
+            $linea = (string) $muestras[$i];
+            if (trim($linea) === '') {
+                continue;
+            }
+            foreach ($candidatos as $del) {
+                $puntajes[$del] += substr_count($linea, $del);
+            }
+        }
+
+        arsort($puntajes);
+        $mejor = array_key_first($puntajes);
+        return $mejor ?: ',';
+    }
+}
+
+if (!function_exists('parsearLineaNehemiasDirecto')) {
+    function parsearLineaNehemiasDirecto(string $linea, string $delimitador): array {
+        $linea = preg_replace('/^\xEF\xBB\xBF/', '', $linea);
+        $data = str_getcsv($linea, $delimitador);
+
+        if (count($data) <= 1) {
+            foreach ([";", ",", "\t"] as $delAlt) {
+                if ($delAlt === $delimitador) {
+                    continue;
+                }
+                $dataAlt = str_getcsv($linea, $delAlt);
+                if (count($dataAlt) > count($data)) {
+                    $data = $dataAlt;
+                }
+            }
+        }
+
+        return $data;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang='es'>
@@ -96,7 +202,6 @@ if (!file_exists($archivo_csv)) {
         $inicio = microtime(true);
         $errores = [];
         $exitosos = 0;
-        $duplicados = 0;
         $linea = 0;
         $total_lineas = 0;
         
@@ -114,21 +219,14 @@ if (!file_exists($archivo_csv)) {
         
         // Procesar archivo
         if (($handle = fopen($archivo_csv, "r")) !== FALSE) {
-            // Detectar delimitador
-            $primera_linea = fgets($handle);
-            rewind($handle);
-            
-            $delimitador = ',';
-            if (substr_count($primera_linea, "\t") > substr_count($primera_linea, ",")) {
-                $delimitador = "\t";
-            } elseif (substr_count($primera_linea, ";") > substr_count($primera_linea, ",")) {
-                $delimitador = ";";
-            }
+            // Detectar delimitador de forma robusta
+            $delimitador = detectarDelimitadorArchivoDirecto($archivo_csv);
             
             echo "<p>Delimitador detectado: <strong>" . ($delimitador === "\t" ? "tabulación" : ($delimitador === ";" ? "punto y coma" : "coma")) . "</strong></p>";
             
-            // Leer encabezados
-            $encabezados = fgetcsv($handle, 10000, $delimitador);
+            // Leer encabezados (primera línea física)
+            $encabezadoRaw = fgets($handle);
+            $encabezados = $encabezadoRaw !== false ? parsearLineaNehemiasDirecto($encabezadoRaw, $delimitador) : [];
             
             // Preparar statement
             $sql = "INSERT INTO nehemias (Nombres, Apellidos, Numero_Cedula, Telefono, Lider_Nehemias, Lider, Subido_Link, En_Bogota_Subio, Puesto_Votacion, Mesa_Votacion, Fecha_Registro) 
@@ -140,8 +238,13 @@ if (!file_exists($archivo_csv)) {
                 die("Error al preparar consulta: " . $conn->error);
             }
             
-            while (($data = fgetcsv($handle, 10000, $delimitador)) !== FALSE) {
+            while (($lineaRaw = fgets($handle)) !== false) {
                 $linea++;
+                if (trim($lineaRaw) === '') {
+                    continue;
+                }
+
+                $data = parsearLineaNehemiasDirecto($lineaRaw, $delimitador);
                 
                 if ($linea % 100 == 0) {
                     $porcentaje = round(($linea / $total_lineas) * 100, 1);
@@ -150,32 +253,18 @@ if (!file_exists($archivo_csv)) {
                     ob_flush();
                 }
                 
-                // Extraer y limpiar datos
-                $nombres = isset($data[0]) ? trim($data[0]) : '';
-                $apellidos = isset($data[1]) ? trim($data[1]) : '';
-                $numero_cedula = isset($data[2]) ? trim($data[2]) : '';
-                $telefono = isset($data[3]) ? trim($data[3]) : '';
-                $lider_nehemias = isset($data[4]) ? trim($data[4]) : '';
-                $lider = isset($data[5]) ? trim($data[5]) : '';
-                $subido_link = isset($data[6]) ? trim($data[6]) : '';
-                $en_bogota_subio = isset($data[7]) ? trim($data[7]) : '';
-                $puesto_votacion = isset($data[8]) ? trim($data[8]) : '';
-                $mesa_votacion = isset($data[9]) ? trim($data[9]) : '';
-                
-                // Verificar duplicado solo si tiene cédula
-                if (!empty($numero_cedula)) {
-                    $stmt_check = $conn->prepare("SELECT Id_Nehemias FROM nehemias WHERE Numero_Cedula = ?");
-                    $stmt_check->bind_param("s", $numero_cedula);
-                    $stmt_check->execute();
-                    $result = $stmt_check->get_result();
-                    
-                    if ($result->num_rows > 0) {
-                        $duplicados++;
-                        $stmt_check->close();
-                        continue;
-                    }
-                    $stmt_check->close();
-                }
+                // Extraer datos (soporta filas corridas por columnas extra)
+                $fila = mapearFilaNehemiasDirecto($data);
+                $nombres = $fila['nombres'];
+                $apellidos = $fila['apellidos'];
+                $numero_cedula = $fila['numero_cedula'];
+                $telefono = $fila['telefono'];
+                $lider_nehemias = $fila['lider_nehemias'];
+                $lider = $fila['lider'];
+                $subido_link = $fila['subido_link'];
+                $en_bogota_subio = $fila['en_bogota_subio'];
+                $puesto_votacion = $fila['puesto_votacion'];
+                $mesa_votacion = $fila['mesa_votacion'];
                 
                 // Insertar
                 $stmt->bind_param("ssssssssss",
@@ -217,11 +306,14 @@ if (!file_exists($archivo_csv)) {
             <tr><th>Concepto</th><th>Cantidad</th></tr>
             <tr><td>Total de líneas procesadas</td><td class='info'>" . number_format($linea) . "</td></tr>
             <tr><td>Registros importados exitosamente</td><td class='success'>" . number_format($exitosos) . "</td></tr>
-            <tr><td>Registros duplicados (omitidos)</td><td class='info'>" . number_format($duplicados) . "</td></tr>
             <tr><td>Errores</td><td class='error'>" . number_format(count($errores)) . "</td></tr>
             <tr><td>Tiempo total</td><td>{$tiempo_total} segundos</td></tr>
             <tr><td>Velocidad</td><td>" . round($linea / $tiempo_total, 2) . " registros/segundo</td></tr>
         </table>";
+
+        if ($linea < $total_lineas) {
+            echo "<p class='info'>Nota: se detectaron " . number_format($total_lineas - $linea) . " líneas físicas vacías o no procesables.</p>";
+        }
         
         if (!empty($errores) && count($errores) <= 50) {
             echo "<h3>Errores encontrados:</h3><ul>";

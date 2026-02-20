@@ -64,6 +64,13 @@
         padding: 18px;
         margin-bottom: 20px;
     }
+    .filter-box {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 12px;
+        padding: 14px;
+        margin-bottom: 20px;
+    }
     .btn-action {
         border-radius: 999px;
         padding: 4px 10px;
@@ -99,6 +106,43 @@
                 <button type="submit" class="btn btn-primary w-100">
                     <i class="bi bi-upload"></i> Importar a Seremos 1200
                 </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="filter-box">
+        <form method="GET" action="<?= PUBLIC_URL ?>" class="row g-2 align-items-end">
+            <input type="hidden" name="url" value="nehemias/seremos1200">
+            <div class="col-md-5">
+                <label class="form-label mb-1 fw-bold">Búsqueda rápida</label>
+                <input
+                    type="text"
+                    name="busqueda"
+                    class="form-control"
+                    value="<?= htmlspecialchars($filtros['busqueda'] ?? '') ?>"
+                    placeholder="Nombre, cédula, teléfono, líder..."
+                >
+            </div>
+            <div class="col-md-3">
+                <label class="form-label mb-1 fw-bold">Estado</label>
+                <select name="decision" class="form-select">
+                    <option value="" <?= (($filtros['decision'] ?? '') === '') ? 'selected' : '' ?>>Todos</option>
+                    <option value="pendiente" <?= (($filtros['decision'] ?? '') === 'pendiente') ? 'selected' : '' ?>>Pendiente</option>
+                    <option value="1" <?= (($filtros['decision'] ?? '') === '1') ? 'selected' : '' ?>>Sí acepta</option>
+                    <option value="0" <?= (($filtros['decision'] ?? '') === '0') ? 'selected' : '' ?>>No acepta</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label mb-1 fw-bold">Migrado</label>
+                <select name="migrado" class="form-select">
+                    <option value="" <?= (($filtros['migrado'] ?? '') === '') ? 'selected' : '' ?>>Todos</option>
+                    <option value="1" <?= (($filtros['migrado'] ?? '') === '1') ? 'selected' : '' ?>>Sí</option>
+                    <option value="0" <?= (($filtros['migrado'] ?? '') === '0') ? 'selected' : '' ?>>No</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-grid gap-2">
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+                <a href="?url=nehemias/seremos1200" class="btn btn-secondary">Limpiar</a>
             </div>
         </form>
     </div>

@@ -610,12 +610,25 @@ class NehemiasController extends BaseController {
             exit;
         }
 
-        $registros = $this->seremos1200Model->getAllOrdered();
+        $filtros = [
+            'busqueda' => trim((string)($_GET['busqueda'] ?? '')),
+            'decision' => isset($_GET['decision']) ? trim((string)$_GET['decision']) : '',
+            'migrado' => isset($_GET['migrado']) ? trim((string)$_GET['migrado']) : ''
+        ];
+
+        $hayFiltros = $filtros['busqueda'] !== '' || $filtros['decision'] !== '' || $filtros['migrado'] !== '';
+
+        if ($hayFiltros) {
+            $registros = $this->seremos1200Model->getAllWithFilters($filtros);
+        } else {
+            $registros = $this->seremos1200Model->getAllOrdered();
+        }
 
         $this->view('nehemias/seremos1200', [
             'registros' => $registros,
             'mensaje' => $_GET['mensaje'] ?? null,
-            'tipo' => $_GET['tipo'] ?? 'info'
+            'tipo' => $_GET['tipo'] ?? 'info',
+            'filtros' => $filtros
         ]);
     }
 

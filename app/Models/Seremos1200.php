@@ -41,6 +41,48 @@ class Seremos1200 extends BaseModel {
         return $this->query($sql);
     }
 
+    public function getAllWithFilters($filtros = []) {
+        $sql = "SELECT * FROM {$this->table} WHERE 1=1";
+        $params = [];
+
+        if (!empty($filtros['busqueda'])) {
+            $sql .= " AND (Nombres LIKE ? OR Apellidos LIKE ? OR Numero_Cedula LIKE ? OR Telefono LIKE ? OR Lider LIKE ? OR Lider_Nehemias LIKE ?)";
+            $termino = '%' . $filtros['busqueda'] . '%';
+            $params[] = $termino;
+            $params[] = $termino;
+            $params[] = $termino;
+            $params[] = $termino;
+            $params[] = $termino;
+            $params[] = $termino;
+        }
+
+        if (isset($filtros['decision']) && $filtros['decision'] !== '') {
+            if ($filtros['decision'] === 'pendiente') {
+                $sql .= " AND Decision_Acepta IS NULL";
+            } elseif ($filtros['decision'] === '1' || $filtros['decision'] === '0') {
+                $sql .= " AND Decision_Acepta = ?";
+                $params[] = (int)$filtros['decision'];
+            }
+        }
+
+        if (isset($filtros['migrado']) && $filtros['migrado'] !== '') {
+            if ($filtros['migrado'] === '1' || $filtros['migrado'] === '0') {
+                $sql .= " AND Fue_Migrado_Nehemias = ?";
+                $params[] = (int)$filtros['migrado'];
+            }
+        }
+
+        $sql .= " ORDER BY Fecha_Registro DESC, Id_Seremos1200 DESC";
+
+        if (!empty($params)) {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetchAll();
+        }
+
+        return $this->query($sql);
+    }
+
     public function existeCedula($cedulaNormalizada) {
         $cedulaNormalizada = trim((string)$cedulaNormalizada);
         if ($cedulaNormalizada === '') {
