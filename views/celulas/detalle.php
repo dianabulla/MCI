@@ -3,8 +3,11 @@
 <div class="page-header">
     <h2>Detalle de Célula</h2>
     <div>
-        <a href="<?= PUBLIC_URL ?>index.php?url=celulas/editar&id=<?= $celula['Id_Celula'] ?>" class="btn btn-warning">Editar</a>
-        <a href="<?= PUBLIC_URL ?>index.php?url=celulas" class="btn btn-secondary">Volver</a>
+        <?php if (AuthController::tienePermiso('asistencias', 'crear')): ?>
+        <a href="<?= PUBLIC_URL ?>index.php?url=asistencias/registrar&celula=<?= $celula['Id_Celula'] ?>" class="btn btn-sm btn-success">Asistencias</a>
+        <?php endif; ?>
+        <a href="<?= PUBLIC_URL ?>index.php?url=celulas/editar&id=<?= $celula['Id_Celula'] ?>" class="btn btn-sm btn-warning">Editar</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=celulas" class="btn btn-sm btn-secondary">Volver</a>
     </div>
 </div>
 

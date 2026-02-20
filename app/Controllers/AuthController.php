@@ -24,23 +24,14 @@ class AuthController extends BaseController {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $usuario = $_POST['usuario'] ?? '';
             $contrasena = $_POST['contrasena'] ?? '';
-
-            // Debug temporal
-            $debugInfo = [];
             
             // Validar credenciales
             $user = $this->personaModel->autenticar($usuario, $contrasena);
-            
-            // Debug: verificar si el usuario existe en BD
-            $sql = "SELECT Usuario, Contrasena, Estado_Cuenta FROM persona WHERE Usuario = ?";
-            $testUser = $this->personaModel->query($sql, [$usuario]);
-            $debugInfo['usuario_existe'] = !empty($testUser);
-            $debugInfo['hash_bd'] = !empty($testUser) ? substr($testUser[0]['Contrasena'], 0, 20) . '...' : 'N/A';
-            $debugInfo['estado_cuenta'] = !empty($testUser) ? $testUser[0]['Estado_Cuenta'] : 'N/A';
 
             if ($user) {
                 // Verificar estado de la cuenta
-                if ($user['Estado_Cuenta'] !== 'Activo') {
+                $estadoCuenta = strtolower(trim((string)($user['Estado_Cuenta'] ?? 'Activo')));
+                if ($estadoCuenta === 'inactivo' || $estadoCuenta === 'bloqueado') {
                     $error = 'Cuenta inactiva o bloqueada. Contacte al administrador.';
                     $this->view('auth/login', ['error' => $error]);
                     return;
@@ -62,7 +53,7 @@ class AuthController extends BaseController {
                 $this->redirect('home');
             } else {
                 $error = 'Usuario o contraseña incorrectos';
-                $this->view('auth/login', ['error' => $error, 'debug' => $debugInfo]);
+                $this->view('auth/login', ['error' => $error]);
             }
         } else {
             $this->view('auth/login');

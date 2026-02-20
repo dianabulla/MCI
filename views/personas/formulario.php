@@ -1,8 +1,15 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
+<?php
+$returnToAsistencia = ($return_to ?? '') === 'asistencia';
+$urlVolver = $returnToAsistencia
+    ? (PUBLIC_URL . '?url=asistencias/registrar' . (!empty($celula_retorno) ? '&celula=' . (int)$celula_retorno : ''))
+    : (PUBLIC_URL . '?url=personas');
+?>
+
 <div class="page-header">
     <h2><?= isset($persona) ? 'Editar' : 'Nueva' ?> Persona</h2>
-    <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-secondary">Volver</a>
+    <a href="<?= $urlVolver ?>" class="btn btn-secondary">Volver</a>
 </div>
 
 <?php if (isset($error)): ?>
@@ -13,6 +20,11 @@
 
 <div class="form-container">
     <form method="POST">
+        <?php if ($returnToAsistencia): ?>
+        <input type="hidden" name="return_to" value="asistencia">
+        <input type="hidden" name="celula_retorno" value="<?= (int)($celula_retorno ?? 0) ?>">
+        <?php endif; ?>
+
         <!-- Sección: Información Personal -->
         <div class="form-section">
             <h3 class="section-title">📋 Información Personal</h3>
@@ -91,18 +103,6 @@
                     <label for="email">Email</label>
                     <input type="email" id="email" name="email" class="form-control" 
                            value="<?= htmlspecialchars($persona['Email'] ?? '') ?>">
-                </div>
-
-                <div class="form-group">
-                    <label for="hora_llamada">Mejor Hora para Llamar</label>
-                    <select id="hora_llamada" name="hora_llamada" class="form-control">
-                        <option value="">Seleccionar...</option>
-                        <option value="Mañana" <?= isset($persona) && $persona['Hora_Llamada'] == 'Mañana' ? 'selected' : '' ?>>Mañana</option>
-                        <option value="Medio Dia" <?= isset($persona) && $persona['Hora_Llamada'] == 'Medio Dia' ? 'selected' : '' ?>>Medio Día</option>
-                        <option value="Tarde" <?= isset($persona) && $persona['Hora_Llamada'] == 'Tarde' ? 'selected' : '' ?>>Tarde</option>
-                        <option value="Noche" <?= isset($persona) && $persona['Hora_Llamada'] == 'Noche' ? 'selected' : '' ?>>Noche</option>
-                        <option value="Cualquier Hora" <?= isset($persona) && $persona['Hora_Llamada'] == 'Cualquier Hora' ? 'selected' : '' ?>>Cualquier Hora</option>
-                    </select>
                 </div>
             </div>
 
@@ -271,7 +271,7 @@
 
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Guardar</button>
-            <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-secondary">Cancelar</a>
+            <a href="<?= $urlVolver ?>" class="btn btn-secondary">Cancelar</a>
         </div>
     </form>
 </div>

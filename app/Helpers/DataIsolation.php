@@ -12,14 +12,90 @@ class DataIsolation {
      * Obtener el ID del usuario actual
      */
     public static function getUsuarioId() {
-        return $_SESSION['usuario_id'] ?? null;
+        if (!isset($_SESSION['usuario_id']) || $_SESSION['usuario_id'] === '') {
+            return null;
+        }
+        return (int) $_SESSION['usuario_id'];
     }
 
     /**
      * Obtener el rol del usuario actual
      */
     public static function getUsuarioRol() {
-        return $_SESSION['usuario_rol'] ?? null;
+        if (!isset($_SESSION['usuario_rol']) || $_SESSION['usuario_rol'] === '') {
+            return null;
+        }
+        return (int) $_SESSION['usuario_rol'];
+    }
+
+    /**
+     * Obtener nombre de rol del usuario actual
+     */
+    public static function getUsuarioRolNombre() {
+        $rolNombre = strtolower(trim((string) ($_SESSION['usuario_rol_nombre'] ?? '')));
+        return strtr($rolNombre, [
+            'á' => 'a',
+            'é' => 'e',
+            'í' => 'i',
+            'ó' => 'o',
+            'ú' => 'u',
+            'ü' => 'u',
+            'ñ' => 'n'
+        ]);
+    }
+
+    /**
+     * Obtener el ministerio del usuario actual
+     */
+    public static function getUsuarioMinisterioId() {
+        if (isset($_SESSION['usuario_ministerio']) && $_SESSION['usuario_ministerio'] !== '' && $_SESSION['usuario_ministerio'] !== null) {
+            return (int) $_SESSION['usuario_ministerio'];
+        }
+
+        $usuarioId = self::getUsuarioId();
+        if (!$usuarioId) {
+            return null;
+        }
+
+        global $pdo;
+        if (!isset($pdo)) {
+            return null;
+        }
+
+        $stmt = $pdo->prepare("SELECT Id_Ministerio FROM persona WHERE Id_Persona = ?");
+        $stmt->execute([$usuarioId]);
+        $result = $stmt->fetch();
+
+        if (!empty($result['Id_Ministerio'])) {
+            return (int) $result['Id_Ministerio'];
+        }
+
+        return null;
+    }
+
+    /**
+     * Obtener la célula del usuario actual
+     */
+    public static function getUsuarioCelulaId() {
+        $usuarioId = self::getUsuarioId();
+        if (!$usuarioId) {
+            return null;
+        }
+
+        global $pdo;
+        if (!isset($pdo)) {
+            return null;
+        }
+
+        $stmt = $pdo->prepare("SELECT Id_Celula FROM persona WHERE Id_Persona = ?");
+        $stmt->execute([$usuarioId]);
+        $result = $stmt->fetch();
+
+        if (!empty($result['Id_Celula'])) {
+            return (int) $result['Id_Celula'];
+        }
+
+        return null;
     }
 
     /**
@@ -33,14 +109,62 @@ class DataIsolation {
      * Verificar si el usuario es líder de célula
      */
     public static function esLiderCelula() {
-        return self::getUsuarioRol() === self::ROL_LIDER_CELULA;
+        if (self::getUsuarioRol() === self::ROL_LIDER_CELULA) {
+            return true;
+        }
+
+        $rolNombre = self::getUsuarioRolNombre();
+        return strpos($rolNombre, 'lider de celula') !== false;
     }
 
     /**
      * Verificar si el usuario es líder de 12
      */
     public static function esLider12() {
-        return self::getUsuarioRol() === self::ROL_LIDER_12;
+        if (self::getUsuarioRol() === self::ROL_LIDER_12) {
+            return true;
+        }
+
+        $rolNombre = self::getUsuarioRolNombre();
+        return strpos($rolNombre, 'lider de 12') !== false;
+    }
+
+    /**
+     * Verificar si el usuario es pastor
+     */
+    public static function esPastor() {
+        $rolNombre = self::getUsuarioRolNombre();
+        return strpos($rolNombre, 'pastor') !== false;
+    }
+
+    /**
+     * Verificar si el usuario es del rol Ganar
+     */
+    public static function esGanar() {
+        $rolNombre = self::getUsuarioRolNombre();
+        return strpos($rolNombre, 'ganar') !== false;
+    }
+
+    /**
+     * Roles con acceso total a la información
+     */
+    public static function tieneAccesoTotal() {
+        return self::esAdmin() || self::esPastor() || self::esGanar();
+    }
+
+    /**
+     * Verificar si el usuario es asistente
+     */
+    public static function esAsistente() {
+        $rolNombre = self::getUsuarioRolNombre();
+        return strpos($rolNombre, 'asistente') !== false;
+    }
+
+    /**
+     * Roles con visibilidad por ministerio
+     */
+    public static function usaVisibilidadPorMinisterio() {
+        return self::esLider12() || self::esPastor() || self::esAsistente();
     }
 
     /**
@@ -51,29 +175,25 @@ class DataIsolation {
      */
     public static function generarFiltroPersonas() {
         $usuarioId = self::getUsuarioId();
-        $rol = self::getUsuarioRol();
+        $idMinisterio = self::getUsuarioMinisterioId();
+        $idCelula = self::getUsuarioCelulaId();
 
-        if (self::esAdmin()) {
+        if (self::tieneAccesoTotal()) {
             return "1=1"; // Sin restricciones para administrador
         }
 
         if (self::esLiderCelula()) {
-            // Obtener la célula del líder
-            global $pdo;
-            $stmt = $pdo->prepare("SELECT Id_Celula FROM persona WHERE Id_Persona = ?");
-            $stmt->execute([$usuarioId]);
-            $result = $stmt->fetch();
-            $idCelula = $result['Id_Celula'] ?? null;
-
             if ($idCelula) {
                 return "p.Id_Celula = $idCelula";
             }
-            return "1=0"; // No tiene célula asignada
+            return "1=0";
         }
 
-        if (self::esLider12()) {
-            // Ver solo personas que lidera directamente
-            return "p.Id_Lider = $usuarioId";
+        if (self::usaVisibilidadPorMinisterio()) {
+            if ($idMinisterio) {
+                return "p.Id_Ministerio = $idMinisterio";
+            }
+            return "1=0";
         }
 
         // Otros roles: sin acceso (restringir)
@@ -85,29 +205,24 @@ class DataIsolation {
      */
     public static function generarFiltroCelulas() {
         $usuarioId = self::getUsuarioId();
-        $rol = self::getUsuarioRol();
+        $idMinisterio = self::getUsuarioMinisterioId();
 
-        if (self::esAdmin()) {
+        if (self::tieneAccesoTotal()) {
             return "1=1";
         }
 
         if (self::esLiderCelula()) {
-            // Ver solo su célula
-            global $pdo;
-            $stmt = $pdo->prepare("SELECT Id_Celula FROM persona WHERE Id_Persona = ?");
-            $stmt->execute([$usuarioId]);
-            $result = $stmt->fetch();
-            $idCelula = $result['Id_Celula'] ?? null;
-
-            if ($idCelula) {
-                return "c.Id_Celula = $idCelula";
+            if ($usuarioId) {
+                return "c.Id_Lider = $usuarioId";
             }
             return "1=0";
         }
 
-        if (self::esLider12()) {
-            // Ver células donde es líder
-            return "c.Id_Lider = $usuarioId";
+        if (self::usaVisibilidadPorMinisterio()) {
+            if ($idMinisterio) {
+                return "c.Id_Lider IN (SELECT Id_Persona FROM persona WHERE Id_Ministerio = $idMinisterio)";
+            }
+            return "1=0";
         }
 
         return "1=0";
@@ -118,29 +233,25 @@ class DataIsolation {
      */
     public static function generarFiltroAsistencias() {
         $usuarioId = self::getUsuarioId();
-        $rol = self::getUsuarioRol();
+        $idMinisterio = self::getUsuarioMinisterioId();
+        $idCelula = self::getUsuarioCelulaId();
 
-        if (self::esAdmin()) {
+        if (self::tieneAccesoTotal()) {
             return "1=1";
         }
 
         if (self::esLiderCelula()) {
-            // Ver asistencias de su célula
-            global $pdo;
-            $stmt = $pdo->prepare("SELECT Id_Celula FROM persona WHERE Id_Persona = ?");
-            $stmt->execute([$usuarioId]);
-            $result = $stmt->fetch();
-            $idCelula = $result['Id_Celula'] ?? null;
-
             if ($idCelula) {
                 return "a.Id_Celula = $idCelula";
             }
             return "1=0";
         }
 
-        if (self::esLider12()) {
-            // Ver asistencias de sus personas
-            return "a.Id_Persona IN (SELECT Id_Persona FROM persona WHERE Id_Lider = $usuarioId)";
+        if (self::usaVisibilidadPorMinisterio()) {
+            if ($idMinisterio) {
+                return "a.Id_Persona IN (SELECT Id_Persona FROM persona WHERE Id_Ministerio = $idMinisterio)";
+            }
+            return "1=0";
         }
 
         return "1=0";
@@ -158,15 +269,17 @@ class DataIsolation {
      * Generar cláusula WHERE para ministerios según el rol
      */
     public static function generarFiltroMinisterios() {
-        $rol = self::getUsuarioRol();
+        $idMinisterio = self::getUsuarioMinisterioId();
 
-        if (self::esAdmin()) {
+        if (self::tieneAccesoTotal()) {
             return "1=1";
         }
 
-        if (self::esLiderCelula() || self::esLider12()) {
-            // Ver todos pero gestionar solo los suyos
-            return "1=1";
+        if (self::esLiderCelula() || self::usaVisibilidadPorMinisterio()) {
+            if ($idMinisterio) {
+                return "m.Id_Ministerio = $idMinisterio";
+            }
+            return "1=0";
         }
 
         return "1=0";
@@ -177,29 +290,25 @@ class DataIsolation {
      */
     public static function generarFiltroPeticiones() {
         $usuarioId = self::getUsuarioId();
-        $rol = self::getUsuarioRol();
+        $idMinisterio = self::getUsuarioMinisterioId();
+        $idCelula = self::getUsuarioCelulaId();
 
-        if (self::esAdmin()) {
+        if (self::tieneAccesoTotal()) {
             return "1=1";
         }
 
         if (self::esLiderCelula()) {
-            // Ver peticiones de personas de su célula
-            global $pdo;
-            $stmt = $pdo->prepare("SELECT Id_Celula FROM persona WHERE Id_Persona = ?");
-            $stmt->execute([$usuarioId]);
-            $result = $stmt->fetch();
-            $idCelula = $result['Id_Celula'] ?? null;
-
             if ($idCelula) {
-                return "pe.Id_Persona IN (SELECT Id_Persona FROM persona WHERE Id_Celula = $idCelula)";
+                return "pet.Id_Persona IN (SELECT Id_Persona FROM persona WHERE Id_Celula = $idCelula)";
             }
             return "1=0";
         }
 
-        if (self::esLider12()) {
-            // Ver peticiones de sus personas
-            return "pe.Id_Persona IN (SELECT Id_Persona FROM persona WHERE Id_Lider = $usuarioId)";
+        if (self::usaVisibilidadPorMinisterio()) {
+            if ($idMinisterio) {
+                return "pet.Id_Persona IN (SELECT Id_Persona FROM persona WHERE Id_Ministerio = $idMinisterio)";
+            }
+            return "1=0";
         }
 
         return "1=0";

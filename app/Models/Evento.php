@@ -20,6 +20,17 @@ class Evento extends BaseModel {
     }
 
     /**
+     * Obtener eventos próximos con aislamiento de rol
+     */
+    public function getUpcomingWithRole($filtroRol) {
+        $sql = "SELECT * FROM {$this->table}
+                WHERE Fecha_Evento >= CURDATE()
+                AND $filtroRol
+                ORDER BY Fecha_Evento ASC";
+        return $this->query($sql);
+    }
+
+    /**
      * Obtener eventos pasados
      */
     public function getPast() {

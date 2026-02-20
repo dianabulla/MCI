@@ -30,11 +30,6 @@ class PersonaController extends BaseController {
         // Aplicar filtro de aislamiento según el rol del usuario
         $filtroRol = DataIsolation::generarFiltroPersonas();
         
-        // Si no es administrador, forzar filtro por su ministerio
-        if (!AuthController::esAdministrador()) {
-            $filtroMinisterio = $_SESSION['usuario_ministerio'] ?? null;
-        }
-        
         // Obtener personas con filtros
         if (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '')) {
             $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider);
@@ -53,12 +48,38 @@ class PersonaController extends BaseController {
         ]);
     }
 
+    public function ganar() {
+        $filtroMinisterio = $_GET['ministerio'] ?? null;
+        $filtroLider = $_GET['lider'] ?? null;
+
+        $filtroRol = DataIsolation::generarFiltroPersonas();
+
+        if (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '')) {
+            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, true);
+        } else {
+            $personas = $this->personaModel->getAllWithRole($filtroRol, true);
+        }
+
+        $ministerios = $this->ministerioModel->getAll();
+        $lideres = $this->personaModel->getLideresYPastores();
+
+        $this->view('personas/ganar', [
+            'personas' => $personas,
+            'ministerios' => $ministerios,
+            'lideres' => $lideres
+        ]);
+    }
+
     public function crear() {
         // Verificar permiso de crear
         if (!AuthController::tienePermiso('personas', 'crear')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
+
+        $returnTo = $_POST['return_to'] ?? ($_GET['return_to'] ?? null);
+        $celulaRetorno = $_POST['celula_retorno'] ?? ($_GET['celula'] ?? null);
+        $celulaRetorno = ($celulaRetorno !== null && $celulaRetorno !== '') ? (int) $celulaRetorno : null;
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = [
@@ -71,7 +92,6 @@ class PersonaController extends BaseController {
                 'Genero' => $_POST['genero'] ?: null,
                 'Telefono' => $_POST['telefono'] ?: null,
                 'Email' => $_POST['email'] ?: null,
-                'Hora_Llamada' => $_POST['hora_llamada'] ?: null,
                 'Direccion' => $_POST['direccion'] ?: null,
                 'Barrio' => $_POST['barrio'] ?: null,
                 'Peticion' => $_POST['peticion'] ?: null,
@@ -101,6 +121,14 @@ class PersonaController extends BaseController {
             
             try {
                 $this->personaModel->create($data);
+                if ($returnTo === 'asistencia') {
+                    $urlRetorno = 'asistencias/registrar';
+                    if ($celulaRetorno) {
+                        $urlRetorno .= '&celula=' . $celulaRetorno;
+                    }
+                    $this->redirect($urlRetorno);
+                }
+
                 $this->redirect('personas');
             } catch (PDOException $e) {
                 // Detectar error de duplicado
@@ -117,7 +145,9 @@ class PersonaController extends BaseController {
                     'personas_invitadores' => $this->personaModel->getAll(),
                     'personas_lideres' => $this->personaModel->getLideresYPastores(),
                     'error' => $error,
-                    'post_data' => $_POST
+                    'post_data' => $_POST,
+                    'return_to' => $returnTo,
+                    'celula_retorno' => $celulaRetorno
                 ];
                 $this->view('personas/formulario', $viewData);
             }
@@ -127,7 +157,9 @@ class PersonaController extends BaseController {
                 'ministerios' => $this->ministerioModel->getAll(),
                 'roles' => $this->rolModel->getAll(),
                 'personas_invitadores' => $this->personaModel->getAll(),
-                'personas_lideres' => $this->personaModel->getLideresYPastores()
+                'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                'return_to' => $returnTo,
+                'celula_retorno' => $celulaRetorno
             ];
             $this->view('personas/formulario', $data);
         }
@@ -157,7 +189,6 @@ class PersonaController extends BaseController {
                 'Genero' => $_POST['genero'] ?: null,
                 'Telefono' => $_POST['telefono'] ?: null,
                 'Email' => $_POST['email'] ?: null,
-                'Hora_Llamada' => $_POST['hora_llamada'] ?: null,
                 'Direccion' => $_POST['direccion'] ?: null,
                 'Barrio' => $_POST['barrio'] ?: null,
                 'Peticion' => $_POST['peticion'] ?: null,

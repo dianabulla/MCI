@@ -121,6 +121,18 @@ class Persona extends BaseModel {
     }
 
     /**
+     * Obtener personas activas con aislamiento de rol
+     */
+    public function getAllActivosWithRole($filtroRol) {
+        $sql = "SELECT p.*
+                FROM persona p
+                WHERE (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                AND $filtroRol
+                ORDER BY p.Apellido, p.Nombre";
+        return $this->query($sql);
+    }
+
+    /**
      * Obtener personas por ministerio
      */
     public function getByMinisterio($idMinisterio) {
@@ -194,24 +206,27 @@ class Persona extends BaseModel {
                 LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol 
                 WHERE p.Usuario = ?";
         $result = $this->query($sql, [$usuario]);
-        
-        // Debug temporal
-        error_log("Autenticación - Usuario: $usuario");
-        error_log("Resultado query: " . print_r($result, true));
-        
+
         if (!empty($result)) {
             $user = $result[0];
-            error_log("Usuario encontrado: " . $user['Nombre']);
-            error_log("Hash en BD: " . ($user['Contrasena'] ?? 'NULL'));
-            error_log("Password verify result: " . (password_verify($contrasena, $user['Contrasena']) ? 'TRUE' : 'FALSE'));
-            
-            // Verificar contraseña con password_verify
-            if (password_verify($contrasena, $user['Contrasena'])) {
+
+            $hashAlmacenado = $user['Contrasena'] ?? '';
+            if ($hashAlmacenado === '') {
+                return null;
+            }
+
+            // 1) Validación estándar con hash
+            if (password_verify($contrasena, $hashAlmacenado)) {
                 return $user;
             }
-        } else {
-            error_log("Usuario no encontrado en BD");
+
+            // 2) Compatibilidad temporal con contraseñas antiguas en texto plano
+            if (hash_equals((string) $hashAlmacenado, (string) $contrasena)) {
+                $this->setUsuario($user['Id_Persona'], $user['Usuario'], $contrasena);
+                return $user;
+            }
         }
+
         return null;
     }
 
@@ -263,7 +278,7 @@ class Persona extends BaseModel {
     /**
      * Obtener todas las personas con aislamiento de rol
      */
-    public function getAllWithRole($filtroRol) {
+    public function getAllWithRole($filtroRol, $soloGanar = false) {
         $sql = "SELECT p.*, 
                 c.Nombre_Celula, 
                 r.Nombre_Rol, 
@@ -274,7 +289,13 @@ class Persona extends BaseModel {
                 LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
                 LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
-                WHERE $filtroRol
+                WHERE $filtroRol";
+
+        if ($soloGanar) {
+            $sql .= " AND p.Fecha_Registro >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+        }
+
+        $sql .= "
                 ORDER BY p.Fecha_Registro DESC, p.Id_Persona DESC";
         return $this->query($sql);
     }
@@ -282,7 +303,7 @@ class Persona extends BaseModel {
     /**
      * Obtener personas con filtros y aislamiento de rol
      */
-    public function getWithFiltersAndRole($filtroRol, $idMinisterio = null, $idLider = null) {
+    public function getWithFiltersAndRole($filtroRol, $idMinisterio = null, $idLider = null, $soloGanar = false) {
         $sql = "SELECT p.*, 
                 c.Nombre_Celula, 
                 r.Nombre_Rol, 
@@ -313,6 +334,10 @@ class Persona extends BaseModel {
                 $sql .= " AND p.Id_Lider = ?";
                 $params[] = $idLider;
             }
+        }
+
+        if ($soloGanar) {
+            $sql .= " AND p.Fecha_Registro >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
         }
         
         $sql .= " ORDER BY p.Fecha_Registro DESC, p.Id_Persona DESC";

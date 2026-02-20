@@ -33,14 +33,15 @@ class ReporteController extends BaseController {
         $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
         $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-t');
 
-        // Generar filtro según el rol del usuario
+        // Generar filtros según el rol del usuario
         $filtroRol = DataIsolation::generarFiltroPersonas();
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
 
         // Datos para gráfico de almas ganadas
         $almasGanadas = $this->personaModel->getAlmasGanadasPorMinisterioWithRole($fechaInicio, $fechaFin, $filtroRol);
         
         // Datos para gráfico de asistencia
-        $asistenciaCelulas = $this->asistenciaModel->getAsistenciaPorCelulaWithRole($fechaInicio, $fechaFin, $filtroRol);
+        $asistenciaCelulas = $this->asistenciaModel->getAsistenciaPorCelulaWithRole($fechaInicio, $fechaFin, $filtroCelulas);
 
         $data = [
             'fecha_inicio' => $fechaInicio,
@@ -70,9 +71,9 @@ class ReporteController extends BaseController {
         $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-t');
 
         // Generar filtro según el rol del usuario
-        $filtroRol = DataIsolation::generarFiltroPersonas();
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
 
-        $data = $this->asistenciaModel->getAsistenciaPorCelulaWithRole($fechaInicio, $fechaFin, $filtroRol);
+        $data = $this->asistenciaModel->getAsistenciaPorCelulaWithRole($fechaInicio, $fechaFin, $filtroCelulas);
         
         header('Content-Type: application/json');
         echo json_encode($data);

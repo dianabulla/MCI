@@ -77,6 +77,9 @@
                 <nav class="main-nav">
                     <a href="<?= PUBLIC_URL ?>?url=home">Inicio</a>
                     <?php if (AuthController::tienePermiso('personas')): ?>
+                    <a href="<?= PUBLIC_URL ?>?url=personas/ganar">Personas/Ganar</a>
+                    <?php endif; ?>
+                    <?php if (AuthController::tienePermiso('personas')): ?>
                     <a href="<?= PUBLIC_URL ?>?url=personas">Personas</a>
                     <?php endif; ?>
                     <?php if (AuthController::tienePermiso('celulas')): ?>

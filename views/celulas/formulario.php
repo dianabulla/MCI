@@ -43,20 +43,28 @@
 
         <div class="form-group">
             <label for="lider_search">Líder de Célula</label>
+            <?php
+            $esLiderCelulaActual = (isset($_SESSION['usuario_rol']) && (int)$_SESSION['usuario_rol'] === 3);
+            $nombreLiderDefault = $celula['Nombre_Lider'] ?? ($_SESSION['usuario_nombre'] ?? '');
+            $idLiderDefault = $celula['Id_Lider'] ?? ($_SESSION['usuario_id'] ?? '');
+            ?>
             <div class="autocomplete-container">
                 <input type="text" 
                        id="lider_search" 
                        class="form-control autocomplete-input" 
                        placeholder="Buscar líder por nombre..."
                        autocomplete="off"
-                       value="<?= isset($celula) && !empty($celula['Nombre_Lider']) ? htmlspecialchars($celula['Nombre_Lider']) : '' ?>">
+                       value="<?= htmlspecialchars($nombreLiderDefault) ?>"
+                       <?= $esLiderCelulaActual ? 'readonly' : '' ?>>
                 <input type="hidden" 
                        id="id_lider" 
                        name="id_lider" 
-                       value="<?= isset($celula) ? $celula['Id_Lider'] : '' ?>">
+                       value="<?= htmlspecialchars((string)$idLiderDefault) ?>">
                 <div id="lider_autocomplete_results" class="autocomplete-results"></div>
                 <small class="form-text text-muted">
-                    <?php if (isset($celula) && !empty($celula['Nombre_Lider'])): ?>
+                    <?php if ($esLiderCelulaActual): ?>
+                        Esta célula quedará asignada automáticamente a tu usuario
+                    <?php elseif (isset($celula) && !empty($celula['Nombre_Lider'])): ?>
                         Líder actual: <strong><?= htmlspecialchars($celula['Nombre_Lider']) ?></strong>
                     <?php else: ?>
                         Escriba para buscar un líder o deje en blanco para sin líder

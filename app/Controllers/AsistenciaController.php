@@ -62,9 +62,26 @@ class AsistenciaController extends BaseController {
             
             $this->redirect('asistencias');
         } else {
+            $filtroCelulas = DataIsolation::generarFiltroCelulas();
+            $filtroPersonas = DataIsolation::generarFiltroPersonas();
+            $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
+            $personas = $this->personaModel->getAllWithRole($filtroPersonas);
+
+            $celulaPreseleccionada = null;
+            if (isset($_GET['celula']) && $_GET['celula'] !== '') {
+                $idCelulaSolicitada = (int) $_GET['celula'];
+                foreach ($celulas as $celula) {
+                    if ((int) $celula['Id_Celula'] === $idCelulaSolicitada) {
+                        $celulaPreseleccionada = $idCelulaSolicitada;
+                        break;
+                    }
+                }
+            }
+
             $data = [
-                'celulas' => $this->celulaModel->getAll(),
-                'personas' => $this->personaModel->getAll()
+                'celulas' => $celulas,
+                'personas' => $personas,
+                'celula_preseleccionada' => $celulaPreseleccionada
             ];
             $this->view('asistencias/formulario', $data);
         }

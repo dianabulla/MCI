@@ -35,12 +35,19 @@ class CelulaController extends BaseController {
         }
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $idLider = $_POST['id_lider'] ?: null;
+
+            // Para líder de célula, forzar que la célula quede anclada al usuario logueado
+            if (DataIsolation::esLiderCelula()) {
+                $idLider = $_SESSION['usuario_id'] ?? $idLider;
+            }
+
             $data = [
                 'Nombre_Celula' => $_POST['nombre_celula'],
                 'Direccion_Celula' => $_POST['direccion_celula'],
                 'Dia_Reunion' => $_POST['dia_reunion'],
                 'Hora_Reunion' => $_POST['hora_reunion'],
-                'Id_Lider' => $_POST['id_lider'] ?: null,
+                'Id_Lider' => $idLider,
                 'Pastor_Principal' => $_POST['pastor_principal'] ?: null,
                 'Id_Lider_Inmediato' => $_POST['id_lider_inmediato'] ?: null,
                 'Barrio' => $_POST['barrio'] ?: null,

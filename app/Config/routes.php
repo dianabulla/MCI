@@ -15,6 +15,7 @@ return [
     
     // Personas
     'personas' => 'PersonaController@index',
+    'personas/ganar' => 'PersonaController@ganar',
     'personas/crear' => 'PersonaController@crear',
     'personas/editar' => 'PersonaController@editar',
     'personas/detalle' => 'PersonaController@detalle',

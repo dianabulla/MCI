@@ -30,6 +30,9 @@
                         <td><?= $celula['Total_Miembros'] ?></td>
                         <td>
                             <a href="<?= PUBLIC_URL ?>index.php?url=celulas/detalle&id=<?= $celula['Id_Celula'] ?>" class="btn btn-sm btn-info">Ver</a>
+                            <?php if (AuthController::tienePermiso('asistencias', 'crear')): ?>
+                            <a href="<?= PUBLIC_URL ?>index.php?url=asistencias/registrar&celula=<?= $celula['Id_Celula'] ?>" class="btn btn-sm btn-success">Asistencias</a>
+                            <?php endif; ?>
                             <a href="<?= PUBLIC_URL ?>index.php?url=celulas/editar&id=<?= $celula['Id_Celula'] ?>" class="btn btn-sm btn-warning">Editar</a>
                             <a href="<?= PUBLIC_URL ?>index.php?url=celulas/eliminar&id=<?= $celula['Id_Celula'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar esta célula?')">Eliminar</a>
                         </td>

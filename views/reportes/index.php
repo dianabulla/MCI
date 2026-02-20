@@ -149,8 +149,8 @@
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
-                    <tr>7
-                        <td colspan="6" class="text-center">No hay datos de asistencia en este período</td>
+                    <tr>
+                        <td colspan="7" class="text-center">No hay datos de asistencia en este período</td>
                     </tr>
                 <?php endif; ?>
             </tbody>

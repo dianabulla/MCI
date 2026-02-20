@@ -2,7 +2,10 @@
 
 <div class="page-header">
     <h2>Registrar Asistencia</h2>
-    <a href="<?= PUBLIC_URL ?>index.php?url=asistencias" class="btn btn-secondary">Volver</a>
+    <div style="display: flex; gap: 8px;">
+        <a id="persona_nueva_link" href="<?= PUBLIC_URL ?>index.php?url=personas/crear&return_to=asistencia<?= !empty($celula_preseleccionada) ? '&celula=' . (int)$celula_preseleccionada : '' ?>" class="btn btn-primary">Persona Nueva</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=asistencias" class="btn btn-secondary">Volver</a>
+    </div>
 </div>
 
 <div class="form-container" style="max-width: 800px;">
@@ -95,11 +98,25 @@ const celulasDisponibles = <?= json_encode($celulas ?? []) ?>;
 // Datos de personas desde PHP
 const personas = <?= json_encode($personas ?? []) ?>;
 
+// Célula preseleccionada (opcional)
+const celulaPreseleccionada = <?= json_encode($celula_preseleccionada ?? null) ?>;
+
 // Autocompletar para célula
 const celulaInput = document.getElementById('celula_search');
 const celulaHidden = document.getElementById('id_celula');
 const celulaAutocomplete = document.getElementById('celula_autocomplete');
+const personaNuevaLink = document.getElementById('persona_nueva_link');
 let currentFocus = -1;
+
+function actualizarEnlacePersonaNueva(celulaId) {
+    if (!personaNuevaLink) return;
+
+    let href = '<?= PUBLIC_URL ?>index.php?url=personas/crear&return_to=asistencia';
+    if (celulaId) {
+        href += '&celula=' + encodeURIComponent(celulaId);
+    }
+    personaNuevaLink.setAttribute('href', href);
+}
 
 celulaInput.addEventListener('input', function() {
     const value = this.value;
@@ -107,6 +124,7 @@ celulaInput.addEventListener('input', function() {
     
     if (!value) {
         celulaHidden.value = '';
+        actualizarEnlacePersonaNueva('');
         // Limpiar miembros
         document.getElementById('miembros-container').style.display = 'none';
         document.getElementById('botones-accion').style.display = 'none';
@@ -144,6 +162,7 @@ celulaInput.addEventListener('input', function() {
         div.addEventListener('click', function() {
             celulaInput.value = nombre;
             celulaHidden.value = celula.Id_Celula;
+            actualizarEnlacePersonaNueva(celula.Id_Celula);
             celulaAutocomplete.innerHTML = '';
             cargarMiembrosCelula(celula.Id_Celula);
         });
@@ -200,8 +219,10 @@ function cargarMiembrosCelula(celulaId) {
         return;
     }
 
+    const celulaIdNum = parseInt(celulaId, 10);
+
     // Filtrar personas que pertenecen a esta célula
-    const miembrosCelula = personas.filter(p => parseInt(p.Id_Celula) === celulaId);
+    const miembrosCelula = personas.filter(p => parseInt(p.Id_Celula, 10) === celulaIdNum);
     
     if (miembrosCelula.length === 0) {
         listaMiembros.innerHTML = '<div class="alert alert-warning">Esta célula no tiene miembros asignados.</div>';
@@ -245,6 +266,16 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+if (celulaPreseleccionada) {
+    const celulaInicial = celulasDisponibles.find(c => parseInt(c.Id_Celula, 10) === parseInt(celulaPreseleccionada, 10));
+    if (celulaInicial) {
+        celulaInput.value = celulaInicial.Nombre_Celula;
+        celulaHidden.value = celulaInicial.Id_Celula;
+        actualizarEnlacePersonaNueva(celulaInicial.Id_Celula);
+        cargarMiembrosCelula(celulaInicial.Id_Celula);
+    }
 }
 </script>
 
