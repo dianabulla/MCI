@@ -14,7 +14,7 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #eef3fb;
             min-height: 100vh;
             padding: 20px;
         }
@@ -25,33 +25,35 @@
         }
 
         .header {
-            background: white;
+            background: #ffffff;
             padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            border-radius: 18px;
+            border: 1px solid #dce5f7;
+            box-shadow: 0 8px 18px rgba(21, 46, 94, 0.12);
             margin-bottom: 30px;
             text-align: center;
         }
 
         .header h1 {
-            color: #667eea;
+            color: #3a61ab;
             margin-bottom: 10px;
             font-size: 2.5em;
         }
 
         .header p {
-            color: #666;
+            color: #4f5f82;
             font-size: 1.1em;
         }
 
         /* Transmisión en Vivo */
         .transmision-en-vivo {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            background: #ffffff;
+            border-radius: 18px;
+            box-shadow: 0 8px 18px rgba(22, 49, 99, 0.12);
             padding: 30px;
             margin-bottom: 40px;
-            border: 3px solid #e74c3c;
+            border: 1px solid #dce6fb;
+            border-top: 4px solid #4b73bb;
         }
 
         .transmision-en-vivo-header {
@@ -60,15 +62,16 @@
             gap: 15px;
             margin-bottom: 20px;
             padding-bottom: 15px;
-            border-bottom: 2px solid #e74c3c;
+            border-bottom: 2px solid #d7e4fb;
         }
 
         .indicator-en-vivo {
             width: 20px;
             height: 20px;
-            background: #e74c3c;
+            background: #ff5b65;
             border-radius: 50%;
             animation: pulse 1s infinite;
+            box-shadow: 0 0 0 6px rgba(255, 91, 101, 0.2);
         }
 
         @keyframes pulse {
@@ -81,7 +84,7 @@
         }
 
         .transmision-en-vivo-header h2 {
-            color: #e74c3c;
+            color: #c73b54;
             font-size: 1.8em;
             margin: 0;
         }
@@ -106,26 +109,45 @@
         }
 
         .transmision-info {
-            background: #f8f9fa;
+            background: #f4f8ff;
             padding: 20px;
-            border-radius: 10px;
+            border-radius: 14px;
             margin-top: 20px;
+            border: 1px solid #dce7fa;
         }
 
         .transmision-info h3 {
-            color: #333;
+            color: #2f4674;
             margin-bottom: 10px;
         }
 
         .transmision-info p {
-            color: #666;
+            color: #58688b;
             line-height: 1.6;
             margin: 8px 0;
+        }
+
+        .transmision-descripcion {
+            margin-top: 15px;
+            line-height: 1.8;
+        }
+
+        .transmision-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
         }
 
         /* Transmisiones Próximas */
         .seccion {
             margin-bottom: 40px;
+            background: #ffffff;
+            border: 1px solid #dce6fb;
+            border-top: 4px solid #4b73bb;
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: 0 8px 18px rgba(21, 46, 94, 0.1);
         }
 
         .seccion-header {
@@ -133,13 +155,15 @@
             align-items: center;
             gap: 15px;
             margin-bottom: 20px;
-            color: white;
+            color: #2f4f87;
             font-size: 1.5em;
             font-weight: 600;
+            text-shadow: none;
         }
 
         .seccion-header i {
             font-size: 1.8em;
+            color: #3f66b1;
         }
 
         .transmisiones-grid {
@@ -149,9 +173,10 @@
         }
 
         .transmision-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            background: #fff;
+            border-radius: 14px;
+            border: 1px solid #dbe6f8;
+            box-shadow: 0 8px 20px rgba(20, 47, 97, 0.16);
             overflow: hidden;
             transition: transform 0.3s, box-shadow 0.3s;
             cursor: pointer;
@@ -159,12 +184,12 @@
 
         .transmision-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 14px 28px rgba(20, 47, 97, 0.25);
         }
 
         .transmision-card-header {
             padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #3f66b1 0%, #5a5fc4 100%);
             color: white;
         }
 
@@ -180,7 +205,7 @@
 
         .transmision-card-body p {
             margin: 10px 0;
-            color: #666;
+            color: #5a6b8f;
             font-size: 0.95em;
         }
 
@@ -188,7 +213,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            color: #667eea;
+            color: #3f66b1;
             font-weight: 600;
         }
 
@@ -196,17 +221,17 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            color: #666;
+            color: #5a6b8f;
         }
 
         .btn-ver {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #3f66b1 0%, #5a5fc4 100%);
             color: white;
             padding: 10px 20px;
-            border-radius: 6px;
+            border-radius: 10px;
             text-decoration: none;
             font-weight: 600;
             transition: all 0.3s;
@@ -217,22 +242,46 @@
 
         .btn-ver:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 8px 18px rgba(63, 102, 177, 0.35);
+        }
+
+        .btn-share {
+            background: linear-gradient(135deg, #2fa56f 0%, #1f7f54 100%);
+            flex: 1;
+            text-align: center;
+            justify-content: center;
+        }
+
+        .btn-share:hover {
+            box-shadow: 0 8px 18px rgba(47, 165, 111, 0.35);
+        }
+
+        .btn-full {
+            width: 100%;
+            text-align: center;
+            justify-content: center;
         }
 
         .empty-message {
-            background: white;
+            background: #ffffff;
             padding: 40px;
-            border-radius: 12px;
+            border-radius: 14px;
+            border: 1px solid #dbe6f8;
             text-align: center;
-            color: #666;
+            color: #56688d;
         }
 
         .empty-message i {
             font-size: 3em;
-            color: #ddd;
+            color: #b7c6e6;
             display: block;
             margin-bottom: 20px;
+        }
+
+        .empty-note {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #7a88a8;
         }
 
         .estado-badge {
@@ -245,13 +294,13 @@
         }
 
         .badge-proximamente {
-            background: #fff3cd;
-            color: #856404;
+            background: #fff0d2;
+            color: #8a5a11;
         }
 
         .badge-finalizada {
-            background: #d4edda;
-            color: #155724;
+            background: #dcf5e7;
+            color: #1e6a47;
         }
 
         @media (max-width: 768px) {
@@ -318,15 +367,15 @@
                 </p>
                 <?php endif; ?>
                 <?php if ($transmisionEnVivo['Descripcion']): ?>
-                <p style="margin-top: 15px; line-height: 1.8;">
+                <p class="transmision-descripcion">
                     <?= nl2br(htmlspecialchars($transmisionEnVivo['Descripcion'])) ?>
                 </p>
                 <?php endif; ?>
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <div class="transmision-actions">
                     <a href="<?= htmlspecialchars($transmisionEnVivo['URL_YouTube']) ?>" target="_blank" class="btn-ver">
                         <i class="bi bi-youtube"></i> Ver en YouTube
                     </a>
-                    <button onclick="compartirLink()" class="btn-ver" style="background: linear-gradient(135deg, #27ae60 0%, #229954 100%); flex: 1; text-align: center; justify-content: center;">
+                    <button onclick="compartirLink()" class="btn-ver btn-share">
                         <i class="bi bi-share"></i> Compartir
                     </button>
                 </div>
@@ -363,7 +412,7 @@
                         <?php if ($trans['Descripcion']): ?>
                         <p><?= substr(htmlspecialchars($trans['Descripcion']), 0, 100) ?>...</p>
                         <?php endif; ?>
-                        <a href="<?= htmlspecialchars($trans['URL_YouTube']) ?>" target="_blank" class="btn-ver" style="width: 100%; text-align: center; justify-content: center;">
+                        <a href="<?= htmlspecialchars($trans['URL_YouTube']) ?>" target="_blank" class="btn-ver btn-full">
                             <i class="bi bi-youtube"></i> Ver en YouTube
                         </a>
                     </div>
@@ -402,7 +451,7 @@
                         <?php if ($trans['Descripcion']): ?>
                         <p><?= substr(htmlspecialchars($trans['Descripcion']), 0, 100) ?>...</p>
                         <?php endif; ?>
-                        <a href="<?= htmlspecialchars($trans['URL_YouTube']) ?>" target="_blank" class="btn-ver" style="width: 100%; text-align: center; justify-content: center;">
+                        <a href="<?= htmlspecialchars($trans['URL_YouTube']) ?>" target="_blank" class="btn-ver btn-full">
                             <i class="bi bi-youtube"></i> Ver Grabación
                         </a>
                     </div>
@@ -418,7 +467,7 @@
             <i class="bi bi-calendar-x"></i>
             <h2>Sin Transmisiones</h2>
             <p>No hay transmisiones disponibles en este momento.</p>
-            <p style="margin-top: 20px; font-size: 0.9em; color: #999;">Por favor, intenta más tarde.</p>
+            <p class="empty-note">Por favor, intenta más tarde.</p>
         </div>
         <?php endif; ?>
     </div>

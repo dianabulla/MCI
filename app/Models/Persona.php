@@ -292,7 +292,9 @@ class Persona extends BaseModel {
                 WHERE $filtroRol";
 
         if ($soloGanar) {
-            $sql .= " AND p.Fecha_Registro >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
+            $sql .= " AND (p.Id_Ministerio IS NULL OR p.Id_Lider IS NULL)";
+        } else {
+            $sql .= " AND p.Id_Ministerio IS NOT NULL AND p.Id_Lider IS NOT NULL";
         }
 
         $sql .= "
@@ -315,6 +317,12 @@ class Persona extends BaseModel {
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
                 LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
                 WHERE $filtroRol";
+
+        if ($soloGanar) {
+            $sql .= " AND (p.Id_Ministerio IS NULL OR p.Id_Lider IS NULL)";
+        } else {
+            $sql .= " AND p.Id_Ministerio IS NOT NULL AND p.Id_Lider IS NOT NULL";
+        }
         
         $params = [];
         
@@ -336,10 +344,6 @@ class Persona extends BaseModel {
             }
         }
 
-        if ($soloGanar) {
-            $sql .= " AND p.Fecha_Registro >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
-        }
-        
         $sql .= " ORDER BY p.Fecha_Registro DESC, p.Id_Persona DESC";
         
         return $this->query($sql, $params);

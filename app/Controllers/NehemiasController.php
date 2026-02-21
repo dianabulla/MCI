@@ -6,12 +6,18 @@
 require_once APP . '/Models/Nehemias.php';
 require_once APP . '/Models/Ministerio.php';
 require_once APP . '/Models/Seremos1200.php';
+require_once APP . '/Models/Persona.php';
+require_once APP . '/Helpers/DataIsolation.php';
 require_once APP . '/Controllers/AuthController.php';
 
 class NehemiasController extends BaseController {
     private $nehemiasModel;
     private $ministerioModel;
     private $seremos1200Model;
+
+    private function tienePermiso($accion = 'ver') {
+        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias', $accion);
+    }
 
     public function __construct() {
         $this->nehemiasModel = new Nehemias();
@@ -23,6 +29,114 @@ class NehemiasController extends BaseController {
         } catch (Exception $e) {
             error_log('No se pudo verificar/crear tabla seremos_1200: ' . $e->getMessage());
         }
+    }
+
+    private function normalizarTextoFiltro($valor) {
+        $valor = trim((string)$valor);
+        if ($valor === '') {
+            return '';
+        }
+
+        $valor = str_replace(
+            ['á', 'é', 'í', 'ó', 'ú', 'Á', 'É', 'Í', 'Ó', 'Ú', 'ñ', 'Ñ'],
+            ['a', 'e', 'i', 'o', 'u', 'A', 'E', 'I', 'O', 'U', 'n', 'N'],
+            $valor
+        );
+
+        if (function_exists('mb_strtoupper')) {
+            return mb_strtoupper($valor, 'UTF-8');
+        }
+
+        return strtoupper($valor);
+    }
+
+    private function getContextoFiltroLider(array $lideresDisponibles) {
+        $lideresDisponibles = array_values(array_filter(array_map(static function ($lider) {
+            return trim((string)$lider);
+        }, $lideresDisponibles), static function ($lider) {
+            return $lider !== '';
+        }));
+
+        if (AuthController::esAdministrador() || DataIsolation::tieneAccesoTotal()) {
+            return [
+                'restringido' => false,
+                'lideres' => $lideresDisponibles
+            ];
+        }
+
+        $usuarioId = isset($_SESSION['usuario_id']) ? (int)$_SESSION['usuario_id'] : 0;
+        if ($usuarioId <= 0) {
+            return [
+                'restringido' => true,
+                'lideres' => []
+            ];
+        }
+
+        $personaModel = new Persona();
+        $usuario = $personaModel->getById($usuarioId);
+
+        $candidatos = [];
+        if (!empty($usuario['Nombre_Ministerio'])) {
+            $candidatos[] = (string)$usuario['Nombre_Ministerio'];
+        }
+        if (!empty($usuario['Nombre_Lider'])) {
+            $candidatos[] = (string)$usuario['Nombre_Lider'];
+        }
+        if (!empty($_SESSION['usuario_nombre'])) {
+            $candidatos[] = (string)$_SESSION['usuario_nombre'];
+        }
+
+        $candidatosNormalizados = [];
+        foreach ($candidatos as $candidato) {
+            $clave = $this->normalizarTextoFiltro($candidato);
+            if ($clave !== '') {
+                $candidatosNormalizados[$clave] = true;
+            }
+        }
+
+        $lideresPermitidos = [];
+        foreach ($lideresDisponibles as $lider) {
+            $clave = $this->normalizarTextoFiltro($lider);
+            if ($clave === '') {
+                continue;
+            }
+
+            if (isset($candidatosNormalizados[$clave])) {
+                $lideresPermitidos[] = $lider;
+                continue;
+            }
+
+            foreach (array_keys($candidatosNormalizados) as $candKey) {
+                if (strpos($clave, $candKey) !== false || strpos($candKey, $clave) !== false) {
+                    $lideresPermitidos[] = $lider;
+                    break;
+                }
+            }
+        }
+
+        return [
+            'restringido' => true,
+            'lideres' => array_values(array_unique($lideresPermitidos))
+        ];
+    }
+
+    private function filtrarRegistrosPorLiderPermitido(array $registros, array $lideresPermitidos) {
+        if (empty($lideresPermitidos)) {
+            return [];
+        }
+
+        $permitidosNormalizados = [];
+        foreach ($lideresPermitidos as $lider) {
+            $clave = $this->normalizarTextoFiltro($lider);
+            if ($clave !== '') {
+                $permitidosNormalizados[$clave] = true;
+            }
+        }
+
+        return array_values(array_filter($registros, function ($registro) use ($permitidosNormalizados) {
+            $liderRegistro = $this->normalizarTextoFiltro($registro['Lider'] ?? '');
+            return $liderRegistro !== '' && isset($permitidosNormalizados[$liderRegistro]);
+        }));
     }
 
     public function index() {
@@ -118,7 +232,7 @@ class NehemiasController extends BaseController {
      * Listado administrativo
      */
     public function lista() {
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('ver')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -127,6 +241,11 @@ class NehemiasController extends BaseController {
             fn($row) => $row['Lider'],
             $this->nehemiasModel->getMinisteriosDistinct()
         );
+
+        $contextoFiltro = $this->getContextoFiltroLider($ministeriosNehemias);
+        if ($contextoFiltro['restringido']) {
+            $ministeriosNehemias = $contextoFiltro['lideres'];
+        }
 
         // Obtener filtros de la URL
         $filtros = [
@@ -145,6 +264,16 @@ class NehemiasController extends BaseController {
             'bogota_subio_lleno' => $_GET['bogota_subio_lleno'] ?? '',
             'acepta' => $_GET['acepta'] ?? ''
         ];
+
+        if ($contextoFiltro['restringido']) {
+            if ($filtros['lider'] === '__otros__') {
+                $filtros['lider'] = '';
+            }
+            if ($filtros['lider'] !== '' && !in_array($filtros['lider'], $ministeriosNehemias, true)) {
+                $filtros['lider'] = '';
+            }
+            $filtros['lider_lista'] = $ministeriosNehemias;
+        }
 
         // Verificar si hay filtros activos
         $hayFiltros = false;
@@ -165,10 +294,15 @@ class NehemiasController extends BaseController {
             $registros = $this->nehemiasModel->getAllOrdered();
         }
 
+        if ($contextoFiltro['restringido']) {
+            $registros = $this->filtrarRegistrosPorLiderPermitido($registros, $ministeriosNehemias);
+        }
+
         $this->view('nehemias/lista', [
             'registros' => $registros,
             'filtros' => $filtros,
-            'ministeriosNehemias' => $ministeriosNehemias
+            'ministeriosNehemias' => $ministeriosNehemias,
+            'filtroLiderRestringido' => $contextoFiltro['restringido']
         ]);
     }
 
@@ -176,7 +310,7 @@ class NehemiasController extends BaseController {
      * Reportes Nehemias
      */
     public function reportes() {
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('ver')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -452,12 +586,21 @@ class NehemiasController extends BaseController {
      * Exportar registros a Excel (CSV)
      */
     public function exportarExcel() {
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('ver')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
 
         $registros = $this->nehemiasModel->getAllOrdered();
+
+        $ministeriosNehemias = array_map(
+            fn($row) => $row['Lider'],
+            $this->nehemiasModel->getMinisteriosDistinct()
+        );
+        $contextoFiltro = $this->getContextoFiltroLider($ministeriosNehemias);
+        if ($contextoFiltro['restringido']) {
+            $registros = $this->filtrarRegistrosPorLiderPermitido($registros, $contextoFiltro['lideres']);
+        }
         $nombreArchivo = 'Nehemias_' . date('Y-m-d_His') . '.csv';
 
         header('Content-Type: text/csv; charset=utf-8');
@@ -508,7 +651,7 @@ class NehemiasController extends BaseController {
      * Editar registro (admin)
      */
     public function editar() {
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('editar')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -534,7 +677,7 @@ class NehemiasController extends BaseController {
      * Actualizar registro (admin)
      */
     public function actualizar() {
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('editar')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -566,7 +709,7 @@ class NehemiasController extends BaseController {
      * Importador por carga de archivo (admin)
      */
     public function importar() {
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('crear')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -579,7 +722,7 @@ class NehemiasController extends BaseController {
      * Importador directo desde datos_nehemias.csv (admin)
      */
     public function importarDirecto() {
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('crear')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -592,7 +735,7 @@ class NehemiasController extends BaseController {
      * Reparar registros mal importados (admin)
      */
     public function repararImportacion() {
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('editar')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -605,7 +748,7 @@ class NehemiasController extends BaseController {
      * Pantalla de administración Seremos 1200
      */
     public function seremos1200() {
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('ver')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -613,10 +756,25 @@ class NehemiasController extends BaseController {
         $filtros = [
             'busqueda' => trim((string)($_GET['busqueda'] ?? '')),
             'decision' => isset($_GET['decision']) ? trim((string)$_GET['decision']) : '',
-            'migrado' => isset($_GET['migrado']) ? trim((string)$_GET['migrado']) : ''
+            'migrado' => isset($_GET['migrado']) ? trim((string)$_GET['migrado']) : '',
+            'lider' => isset($_GET['lider']) ? trim((string)$_GET['lider']) : ''
         ];
 
-        $hayFiltros = $filtros['busqueda'] !== '' || $filtros['decision'] !== '' || $filtros['migrado'] !== '';
+        $hayFiltros = $filtros['busqueda'] !== '' || $filtros['decision'] !== '' || $filtros['migrado'] !== '' || $filtros['lider'] !== '';
+
+        $lideres = array_map(
+            fn($row) => (string)($row['Lider'] ?? ''),
+            $this->seremos1200Model->getLideresDistinct()
+        );
+
+        $contextoFiltro = $this->getContextoFiltroLider($lideres);
+        if ($contextoFiltro['restringido']) {
+            $lideres = $contextoFiltro['lideres'];
+            if ($filtros['lider'] !== '' && !in_array($filtros['lider'], $lideres, true)) {
+                $filtros['lider'] = '';
+            }
+            $hayFiltros = $filtros['busqueda'] !== '' || $filtros['decision'] !== '' || $filtros['migrado'] !== '' || $filtros['lider'] !== '';
+        }
 
         if ($hayFiltros) {
             $registros = $this->seremos1200Model->getAllWithFilters($filtros);
@@ -624,11 +782,17 @@ class NehemiasController extends BaseController {
             $registros = $this->seremos1200Model->getAllOrdered();
         }
 
+        if ($contextoFiltro['restringido']) {
+            $registros = $this->filtrarRegistrosPorLiderPermitido($registros, $lideres);
+        }
+
         $this->view('nehemias/seremos1200', [
             'registros' => $registros,
             'mensaje' => $_GET['mensaje'] ?? null,
             'tipo' => $_GET['tipo'] ?? 'info',
-            'filtros' => $filtros
+            'filtros' => $filtros,
+            'lideres' => $lideres,
+            'filtroLiderRestringido' => $contextoFiltro['restringido']
         ]);
     }
 
@@ -636,7 +800,7 @@ class NehemiasController extends BaseController {
      * Importar base Seremos 1200 desde archivo Excel/CSV
      */
     public function importarSeremos1200() {
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('crear')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -755,10 +919,105 @@ class NehemiasController extends BaseController {
     }
 
     /**
+     * Exportar Seremos 1200 a Excel (CSV)
+     */
+    public function exportarExcelSeremos1200() {
+        if (!$this->tienePermiso('ver')) {
+            header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $filtros = [
+            'busqueda' => trim((string)($_GET['busqueda'] ?? '')),
+            'decision' => isset($_GET['decision']) ? trim((string)$_GET['decision']) : '',
+            'migrado' => isset($_GET['migrado']) ? trim((string)$_GET['migrado']) : '',
+            'lider' => isset($_GET['lider']) ? trim((string)$_GET['lider']) : ''
+        ];
+
+        $hayFiltros = $filtros['busqueda'] !== '' || $filtros['decision'] !== '' || $filtros['migrado'] !== '' || $filtros['lider'] !== '';
+        $registros = $hayFiltros
+            ? $this->seremos1200Model->getAllWithFilters($filtros)
+            : $this->seremos1200Model->getAllOrdered();
+
+        $lideres = array_map(
+            fn($row) => (string)($row['Lider'] ?? ''),
+            $this->seremos1200Model->getLideresDistinct()
+        );
+        $contextoFiltro = $this->getContextoFiltroLider($lideres);
+        if ($contextoFiltro['restringido']) {
+            $registros = $this->filtrarRegistrosPorLiderPermitido($registros, $contextoFiltro['lideres']);
+        }
+
+        $nombreArchivo = 'Seremos1200_' . date('Y-m-d_His') . '.csv';
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $nombreArchivo . '"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        $output = fopen('php://output', 'w');
+        fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+        fputcsv($output, [
+            'ID',
+            'Nombres',
+            'Apellidos',
+            'Numero de Cedula',
+            'Telefono',
+            'Lider',
+            'Lider Nehemias',
+            'Subido Link',
+            'En Bogota Subio',
+            'Puesto Votacion',
+            'Mesa Votacion',
+            'Estado',
+            'Migrado a Nehemias',
+            'Nehemias Id',
+            'Fecha Decision',
+            'Fecha Registro'
+        ], ';');
+
+        foreach ($registros as $registro) {
+            $decision = $registro['Decision_Acepta'];
+            if ($decision === null) {
+                $estado = 'Pendiente';
+            } elseif ((int)$decision === 1) {
+                $estado = 'Si acepta';
+            } else {
+                $estado = 'No acepta';
+            }
+
+            $migrado = (int)($registro['Fue_Migrado_Nehemias'] ?? 0) === 1 ? 'Si' : 'No';
+
+            fputcsv($output, [
+                $registro['Id_Seremos1200'] ?? '',
+                $registro['Nombres'] ?? '',
+                $registro['Apellidos'] ?? '',
+                $registro['Numero_Cedula'] ?? '',
+                $registro['Telefono'] ?? '',
+                $registro['Lider'] ?? '',
+                $registro['Lider_Nehemias'] ?? '',
+                $registro['Subido_Link'] ?? '',
+                $registro['En_Bogota_Subio'] ?? '',
+                $registro['Puesto_Votacion'] ?? '',
+                $registro['Mesa_Votacion'] ?? '',
+                $estado,
+                $migrado,
+                $registro['Nehemias_Id'] ?? '',
+                $registro['Fecha_Decision'] ?? '',
+                $registro['Fecha_Registro'] ?? ''
+            ], ';');
+        }
+
+        fclose($output);
+        exit;
+    }
+
+    /**
      * Marcar decisión Sí/No y migrar a nehemias cuando acepta
      */
     public function decisionSeremos1200() {
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('editar')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -810,7 +1069,20 @@ class NehemiasController extends BaseController {
             exit;
         }
 
-        $this->seremos1200Model->marcarDecision($id, 0, null, null);
+        $fueMigrado = (int)($registro['Fue_Migrado_Nehemias'] ?? 0) === 1;
+        $nehemiasId = isset($registro['Nehemias_Id']) ? (int)$registro['Nehemias_Id'] : 0;
+
+        if ($fueMigrado && $nehemiasId > 0) {
+            $this->nehemiasModel->delete($nehemiasId);
+        }
+
+        $this->seremos1200Model->marcarDecision($id, 0, 0, null);
+
+        if ($fueMigrado) {
+            header('Location: ' . PUBLIC_URL . '?url=nehemias/seremos1200&mensaje=' . urlencode('Registro marcado como No acepta y reversado de Nehemias') . '&tipo=info');
+            exit;
+        }
+
         header('Location: ' . PUBLIC_URL . '?url=nehemias/seremos1200&mensaje=' . urlencode('Registro marcado como No acepta') . '&tipo=info');
         exit;
     }

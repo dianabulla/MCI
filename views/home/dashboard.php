@@ -5,32 +5,40 @@
 </div>
 
 <div class="dashboard-grid">
+    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver')): ?>
     <div class="dashboard-card">
         <h3>Personas</h3>
         <div class="value"><?= $totalPersonas ?? 0 ?></div>
         <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-primary btn-sm">Ver todas</a>
     </div>
+    <?php endif; ?>
 
+    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('celulas', 'ver')): ?>
     <div class="dashboard-card" style="border-left-color: #28a745;">
         <h3>Células</h3>
         <div class="value" style="color: #28a745;"><?= $totalCelulas ?? 0 ?></div>
         <a href="<?= PUBLIC_URL ?>?url=celulas" class="btn btn-primary btn-sm">Ver todas</a>
     </div>
+    <?php endif; ?>
 
+    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'ver')): ?>
     <div class="dashboard-card" style="border-left-color: #17a2b8;">
         <h3>Ministerios</h3>
         <div class="value" style="color: #17a2b8;"><?= $totalMinisterios ?? 0 ?></div>
         <a href="<?= PUBLIC_URL ?>?url=ministerios" class="btn btn-primary btn-sm">Ver todos</a>
     </div>
+    <?php endif; ?>
 
+    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('eventos', 'ver')): ?>
     <div class="dashboard-card" style="border-left-color: #ffc107;">
         <h3>Próximos Eventos</h3>
         <div class="value" style="color: #ffc107;"><?= count($eventosProximos ?? []) ?></div>
         <a href="<?= PUBLIC_URL ?>?url=eventos" class="btn btn-primary btn-sm">Ver todos</a>
     </div>
+    <?php endif; ?>
 </div>
 
-<?php if (!empty($eventosProximos)): ?>
+<?php if (!empty($eventosProximos) && (AuthController::esAdministrador() || AuthController::tienePermiso('eventos', 'ver'))): ?>
 <div class="main-content" style="margin-top: 30px;">
     <h3>Próximos Eventos</h3>
     <table class="data-table">

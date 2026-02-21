@@ -8,77 +8,96 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
     <style>
         body {
-            background: linear-gradient(135deg, #0078D4 0%, #005BA1 100%);
+            background:
+                radial-gradient(circle at 10% 10%, rgba(121, 175, 234, 0.25) 0, transparent 30%),
+                radial-gradient(circle at 90% 20%, rgba(95, 96, 216, 0.20) 0, transparent 35%),
+                #edf3fc;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
         }
         .login-container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            background: #ffffff;
+            border-radius: 24px;
+            border: 1px solid #d7e3f6;
+            box-shadow: 0 20px 50px rgba(36, 70, 126, 0.16);
             overflow: hidden;
-            max-width: 400px;
+            max-width: 430px;
             width: 100%;
         }
         .login-header {
-            background: linear-gradient(135deg, #0078D4 0%, #005BA1 100%);
-            padding: 40px 30px;
+            background: linear-gradient(135deg, #355fa8 0%, #5b7fc3 100%);
+            padding: 34px 30px;
             text-align: center;
             color: white;
+            position: relative;
+        }
+        .login-header::after {
+            content: '';
+            position: absolute;
+            inset: auto 0 -22px 0;
+            height: 44px;
+            background: #fff;
+            border-top-left-radius: 26px;
+            border-top-right-radius: 26px;
         }
         .login-header i {
-            font-size: 60px;
-            margin-bottom: 15px;
+            font-size: 54px;
+            margin-bottom: 12px;
         }
         .login-header h2 {
             margin: 0;
-            font-weight: 600;
-            font-size: 24px;
+            font-weight: 700;
+            font-size: 23px;
+            letter-spacing: 0.2px;
         }
         .login-header p {
             margin: 5px 0 0;
-            opacity: 0.9;
+            opacity: 0.95;
             font-size: 14px;
         }
         .login-body {
-            padding: 40px 30px;
+            padding: 34px 30px 30px;
+            position: relative;
+            z-index: 1;
         }
         .form-group {
-            margin-bottom: 25px;
+            margin-bottom: 22px;
         }
         .form-label {
-            font-weight: 600;
-            color: #333;
+            font-weight: 700;
+            color: #4d5f86;
             margin-bottom: 8px;
             font-size: 14px;
         }
         .form-control {
-            border-radius: 10px;
-            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            border: 1px solid #cfdbef;
+            background: #fbfdff;
             padding: 12px 15px;
             font-size: 15px;
             transition: all 0.3s;
         }
         .form-control:focus {
-            border-color: #0078D4;
-            box-shadow: 0 0 0 0.2rem rgba(0, 120, 212, 0.15);
+            border-color: #80a9e8;
+            box-shadow: 0 0 0 0.2rem rgba(105, 144, 211, 0.18);
         }
         .input-group-text {
-            background: white;
-            border: 2px solid #e0e0e0;
+            background: #fbfdff;
+            border: 1px solid #cfdbef;
             border-right: none;
-            border-radius: 10px 0 0 10px;
-            color: #0078D4;
+            border-radius: 12px 0 0 12px;
+            color: #3f69ad;
         }
         .input-group .form-control {
             border-left: none;
-            border-radius: 0 10px 10px 0;
+            border-radius: 0 12px 12px 0;
         }
         .input-group:focus-within .input-group-text {
-            border-color: #0078D4;
+            border-color: #80a9e8;
         }
         .password-toggle {
             position: relative;
@@ -89,45 +108,46 @@
             top: 50%;
             transform: translateY(-50%);
             cursor: pointer;
-            color: #666;
+            color: #7a88a8;
             z-index: 10;
-            background: white;
+            background: #fbfdff;
             padding: 0 5px;
         }
         .password-toggle .toggle-password:hover {
-            color: #0078D4;
+            color: #3f69ad;
         }
         .btn-login {
-            background: linear-gradient(135deg, #0078D4 0%, #005BA1 100%);
+            background: linear-gradient(135deg, #5f60d8 0%, #7a7ee9 100%);
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             padding: 12px;
-            font-weight: 600;
+            font-weight: 700;
             font-size: 16px;
             color: white;
             width: 100%;
-            transition: transform 0.2s;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
         .btn-login:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 120, 212, 0.3);
+            box-shadow: 0 10px 22px rgba(95, 96, 216, 0.34);
             color: white;
         }
         .alert {
-            border-radius: 10px;
-            border: none;
+            border-radius: 12px;
+            border: 1px solid transparent;
             padding: 12px 15px;
         }
         .alert-danger {
-            background-color: #fee;
-            color: #c33;
+            background-color: #ffedf1;
+            border-color: #ffd6dd;
+            color: #9d3c4a;
         }
         .forgot-password {
             text-align: center;
             margin-top: 20px;
         }
         .forgot-password a {
-            color: #0078D4;
+            color: #3f69ad;
             text-decoration: none;
             font-size: 14px;
         }

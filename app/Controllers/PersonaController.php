@@ -23,9 +23,104 @@ class PersonaController extends BaseController {
         $this->rolModel = new Rol();
     }
 
+    private function getContextoFiltrosVisibles() {
+        if (AuthController::esAdministrador() || DataIsolation::tieneAccesoTotal()) {
+            return [
+                'restringido' => false,
+                'ministerios' => $this->ministerioModel->getAll(),
+                'lideres' => $this->personaModel->getLideresYPastores(),
+                'ministerioIdsPermitidos' => null,
+                'liderIdsPermitidos' => null
+            ];
+        }
+
+        $ministerios = [];
+        $lideres = [];
+        $ministerioIdsPermitidos = [];
+        $liderIdsPermitidos = [];
+
+        $idMinisterio = DataIsolation::getUsuarioMinisterioId();
+        if ($idMinisterio) {
+            $ministerio = $this->ministerioModel->getById($idMinisterio);
+            if (!empty($ministerio)) {
+                $ministerios[] = $ministerio;
+                $ministerioIdsPermitidos[] = (int)$ministerio['Id_Ministerio'];
+            }
+
+            $lideres = $this->personaModel->getLideresByMinisterio($idMinisterio);
+            foreach ($lideres as $lider) {
+                $liderIdsPermitidos[] = (int)$lider['Id_Persona'];
+            }
+        }
+
+        if (DataIsolation::esLiderCelula()) {
+            $usuarioId = isset($_SESSION['usuario_id']) ? (int)$_SESSION['usuario_id'] : 0;
+            if ($usuarioId > 0) {
+                $yaExiste = false;
+                foreach ($lideres as $liderExistente) {
+                    if ((int)$liderExistente['Id_Persona'] === $usuarioId) {
+                        $yaExiste = true;
+                        break;
+                    }
+                }
+
+                if (!$yaExiste) {
+                    $personaUsuario = $this->personaModel->getById($usuarioId);
+                    if (!empty($personaUsuario)) {
+                        $lideres[] = $personaUsuario;
+                    }
+                }
+
+                if (!in_array($usuarioId, $liderIdsPermitidos, true)) {
+                    $liderIdsPermitidos[] = $usuarioId;
+                }
+            }
+        }
+
+        return [
+            'restringido' => true,
+            'ministerios' => $ministerios,
+            'lideres' => $lideres,
+            'ministerioIdsPermitidos' => $ministerioIdsPermitidos,
+            'liderIdsPermitidos' => $liderIdsPermitidos
+        ];
+    }
+
+    private function limpiarFiltrosNoPermitidos($filtroMinisterio, $filtroLider, array $contexto) {
+        $filtroMinisterio = $filtroMinisterio !== null ? (string)$filtroMinisterio : '';
+        $filtroLider = $filtroLider !== null ? (string)$filtroLider : '';
+
+        if (!$contexto['restringido']) {
+            return [$filtroMinisterio, $filtroLider];
+        }
+
+        if ($filtroMinisterio === '0') {
+            $filtroMinisterio = '';
+        }
+        if ($filtroLider === '0') {
+            $filtroLider = '';
+        }
+
+        $ministerioIdsPermitidos = $contexto['ministerioIdsPermitidos'] ?? [];
+        $liderIdsPermitidos = $contexto['liderIdsPermitidos'] ?? [];
+
+        if ($filtroMinisterio !== '' && !in_array((int)$filtroMinisterio, $ministerioIdsPermitidos, true)) {
+            $filtroMinisterio = '';
+        }
+
+        if ($filtroLider !== '' && !in_array((int)$filtroLider, $liderIdsPermitidos, true)) {
+            $filtroLider = '';
+        }
+
+        return [$filtroMinisterio, $filtroLider];
+    }
+
     public function index() {
         $filtroMinisterio = $_GET['ministerio'] ?? null;
         $filtroLider = $_GET['lider'] ?? null;
+
+        $contextoFiltros = $this->getContextoFiltrosVisibles();
+        [$filtroMinisterio, $filtroLider] = $this->limpiarFiltrosNoPermitidos($filtroMinisterio, $filtroLider, $contextoFiltros);
         
         // Aplicar filtro de aislamiento según el rol del usuario
         $filtroRol = DataIsolation::generarFiltroPersonas();
@@ -38,19 +133,25 @@ class PersonaController extends BaseController {
         }
         
         // Obtener datos para los filtros
-        $ministerios = $this->ministerioModel->getAll();
-        $lideres = $this->personaModel->getLideresYPastores();
+        $ministerios = $contextoFiltros['ministerios'];
+        $lideres = $contextoFiltros['lideres'];
         
         $this->view('personas/lista', [
             'personas' => $personas,
             'ministerios' => $ministerios,
-            'lideres' => $lideres
+            'lideres' => $lideres,
+            'filtroRestringido' => $contextoFiltros['restringido'],
+            'filtroMinisterioActual' => (string)$filtroMinisterio,
+            'filtroLiderActual' => (string)$filtroLider
         ]);
     }
 
     public function ganar() {
         $filtroMinisterio = $_GET['ministerio'] ?? null;
         $filtroLider = $_GET['lider'] ?? null;
+
+        $contextoFiltros = $this->getContextoFiltrosVisibles();
+        [$filtroMinisterio, $filtroLider] = $this->limpiarFiltrosNoPermitidos($filtroMinisterio, $filtroLider, $contextoFiltros);
 
         $filtroRol = DataIsolation::generarFiltroPersonas();
 
@@ -60,13 +161,16 @@ class PersonaController extends BaseController {
             $personas = $this->personaModel->getAllWithRole($filtroRol, true);
         }
 
-        $ministerios = $this->ministerioModel->getAll();
-        $lideres = $this->personaModel->getLideresYPastores();
+        $ministerios = $contextoFiltros['ministerios'];
+        $lideres = $contextoFiltros['lideres'];
 
         $this->view('personas/ganar', [
             'personas' => $personas,
             'ministerios' => $ministerios,
-            'lideres' => $lideres
+            'lideres' => $lideres,
+            'filtroRestringido' => $contextoFiltros['restringido'],
+            'filtroMinisterioActual' => (string)$filtroMinisterio,
+            'filtroLiderActual' => (string)$filtroLider
         ]);
     }
 
@@ -129,7 +233,7 @@ class PersonaController extends BaseController {
                     $this->redirect($urlRetorno);
                 }
 
-                $this->redirect('personas');
+                $this->redirect('personas/ganar');
             } catch (PDOException $e) {
                 // Detectar error de duplicado
                 if ($e->getCode() == 23000 || strpos($e->getMessage(), '1062') !== false) {

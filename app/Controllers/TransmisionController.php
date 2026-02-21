@@ -6,6 +6,10 @@
 class TransmisionController extends BaseController {
     private $transmision;
 
+    private function tienePermiso($accion = 'ver') {
+        return AuthController::esAdministrador() || AuthController::tienePermiso('transmisiones', $accion);
+    }
+
     public function __construct() {
         require_once APP . '/Models/Transmision.php';
         $this->transmision = new Transmision();
@@ -15,8 +19,7 @@ class TransmisionController extends BaseController {
      * Listar todas las transmisiones (PRIVADA - Admin)
      */
     public function listar() {
-        // Solo administradores pueden gestionar transmisiones
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -40,8 +43,7 @@ class TransmisionController extends BaseController {
      * Vista para crear nueva transmisión (PRIVADA - Admin)
      */
     public function crear() {
-        // Solo administradores pueden gestionar transmisiones
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('crear')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -57,13 +59,23 @@ class TransmisionController extends BaseController {
      * Guardar nueva transmisión (PRIVADA - Admin)
      */
     public function guardar() {
-        // Solo administradores pueden gestionar transmisiones
-        if (!AuthController::esAdministrador()) {
-            $this->json(['error' => 'Acceso denegado'], 403);
+        $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH'])
+            && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+
+        if (!$this->tienePermiso('crear')) {
+            if ($isAjax) {
+                $this->json(['error' => 'Acceso denegado'], 403);
+            }
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
         }
         
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->json(['error' => 'Método no permitido'], 405);
+            if ($isAjax) {
+                $this->json(['error' => 'Método no permitido'], 405);
+            }
+            header('Location: ' . BASE_URL . '/public/?url=transmisiones/crear');
+            exit;
         }
 
         try {
@@ -76,16 +88,24 @@ class TransmisionController extends BaseController {
 
             // Validaciones
             if (empty($nombre) || empty($url) || empty($fecha)) {
-                $this->json([
-                    'error' => 'Nombre, URL y fecha son obligatorios'
-                ], 400);
+                if ($isAjax) {
+                    $this->json([
+                        'error' => 'Nombre, URL y fecha son obligatorios'
+                    ], 400);
+                }
+                header('Location: ' . BASE_URL . '/public/?url=transmisiones/crear&error=' . urlencode('Nombre, URL y fecha son obligatorios'));
+                exit;
             }
 
             // Validar URL de YouTube
             if (!$this->validarURLYouTube($url)) {
-                $this->json([
-                    'error' => 'URL de YouTube inválida'
-                ], 400);
+                if ($isAjax) {
+                    $this->json([
+                        'error' => 'URL de YouTube inválida'
+                    ], 400);
+                }
+                header('Location: ' . BASE_URL . '/public/?url=transmisiones/crear&error=' . urlencode('URL de YouTube inválida'));
+                exit;
             }
 
             // Obtener ID del usuario actual
@@ -101,17 +121,27 @@ class TransmisionController extends BaseController {
                 $idUsuario
             );
 
-            $this->json([
-                'success' => true,
-                'message' => 'Transmisión creada exitosamente',
-                'id' => $id
-            ]);
+            if ($isAjax) {
+                $this->json([
+                    'success' => true,
+                    'message' => 'Transmisión creada exitosamente',
+                    'id' => $id
+                ]);
+            }
+
+            header('Location: ' . BASE_URL . '/public/?url=transmisiones&success=' . urlencode('Transmisión creada exitosamente'));
+            exit;
 
         } catch (Exception $e) {
             error_log("Error al guardar transmisión: " . $e->getMessage());
-            $this->json([
-                'error' => 'Error al guardar la transmisión'
-            ], 500);
+            if ($isAjax) {
+                $this->json([
+                    'error' => 'Error al guardar la transmisión'
+                ], 500);
+            }
+
+            header('Location: ' . BASE_URL . '/public/?url=transmisiones/crear&error=' . urlencode('Error al guardar la transmisión'));
+            exit;
         }
     }
 
@@ -119,8 +149,7 @@ class TransmisionController extends BaseController {
      * Vista para editar transmisión (PRIVADA - Admin)
      */
     public function editar() {
-        // Solo administradores pueden gestionar transmisiones
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('editar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -147,8 +176,7 @@ class TransmisionController extends BaseController {
      * Actualizar transmisión (PRIVADA - Admin)
      */
     public function actualizar() {
-        // Solo administradores pueden gestionar transmisiones
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('editar')) {
             $this->json(['error' => 'Acceso denegado'], 403);
         }
         
@@ -196,8 +224,7 @@ class TransmisionController extends BaseController {
      * Cambiar estado de transmisión (PRIVADA - Admin)
      */
     public function cambiarEstado() {
-        // Solo administradores pueden gestionar transmisiones
-        if (!AuthController::esAdministrador()) {
+        if (!$this->tienePermiso('editar')) {
             $this->json(['error' => 'Acceso denegado'], 403);
         }
         
@@ -233,6 +260,10 @@ class TransmisionController extends BaseController {
      * Eliminar transmisión (PRIVADA - Admin)
      */
     public function eliminar() {
+        if (!$this->tienePermiso('eliminar')) {
+            $this->json(['error' => 'Acceso denegado'], 403);
+        }
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->json(['error' => 'Método no permitido'], 405);
         }
@@ -281,6 +312,10 @@ class TransmisionController extends BaseController {
      * Buscar transmisiones
      */
     public function buscar() {
+        if (!$this->tienePermiso('ver')) {
+            $this->json(['error' => 'Acceso denegado'], 403);
+        }
+
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->json(['error' => 'Método no permitido'], 405);
         }

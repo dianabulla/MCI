@@ -5,6 +5,43 @@
 
 // Confirmación para eliminaciones
 document.addEventListener('DOMContentLoaded', function() {
+    const appShell = document.querySelector('.app-shell');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const sidebarStateKey = 'mci.sidebarCollapsed';
+
+    function setSidebarCollapsed(collapsed) {
+        document.body.classList.toggle('sidebar-collapsed', collapsed);
+        if (appShell) {
+            appShell.classList.toggle('sidebar-collapsed', collapsed);
+        }
+    }
+
+    function getStoredSidebarState() {
+        try {
+            return localStorage.getItem(sidebarStateKey) === '1';
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function saveSidebarState(collapsed) {
+        try {
+            localStorage.setItem(sidebarStateKey, collapsed ? '1' : '0');
+        } catch (error) {
+            // Ignorar fallos de almacenamiento
+        }
+    }
+
+    setSidebarCollapsed(getStoredSidebarState());
+
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', function() {
+            const collapsed = !document.body.classList.contains('sidebar-collapsed');
+            setSidebarCollapsed(collapsed);
+            saveSidebarState(collapsed);
+        });
+    }
+
     // Confirmación de eliminación
     const deleteLinks = document.querySelectorAll('a[href*="eliminar"]');
     deleteLinks.forEach(link => {
@@ -45,6 +82,27 @@ document.addEventListener('DOMContentLoaded', function() {
         if (currentUrl.includes(link.getAttribute('href'))) {
             link.style.background = 'rgba(255,255,255,0.3)';
         }
+    });
+
+    // Convertir tablas a formato tarjeta en móvil usando data-label
+    const tables = document.querySelectorAll('.data-table, .table');
+    tables.forEach(table => {
+        const headerCells = table.querySelectorAll('thead th');
+        if (!headerCells.length) {
+            return;
+        }
+
+        const headers = Array.from(headerCells).map(th => th.textContent.trim());
+        const rows = table.querySelectorAll('tbody tr');
+
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            cells.forEach((cell, index) => {
+                if (!cell.hasAttribute('data-label')) {
+                    cell.setAttribute('data-label', headers[index] || 'Dato');
+                }
+            });
+        });
     });
 });
 

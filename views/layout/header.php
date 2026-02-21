@@ -4,138 +4,129 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $pageTitle ?? 'MCI Madrid Colombia' ?></title>
-    <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/styles.css">
+    <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/styles.css?v=20260220-35">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
-    <style>
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-left: auto;
-            padding: 10px 20px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 25px;
-        }
-        .user-info i {
-            font-size: 20px;
-        }
-        .user-name {
-            font-weight: 600;
-        }
-        .user-role {
-            font-size: 12px;
-            opacity: 0.8;
-        }
-        .btn-logout {
-            background: rgba(255,255,255,0.2);
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 20px;
-            padding: 8px 15px;
-            color: white;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            transition: all 0.3s;
-        }
-        .btn-logout:hover {
-            background: rgba(255,255,255,0.3);
-            color: white;
-        }
-        .app-header .container {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-            text-align: center;
-        }
-        .badge-success {
-            background: #d4edda;
-            color: #155724;
-        }
-        .badge-secondary {
-            background: #e2e3e5;
-            color: #6c757d;
-        }
-        .badge-danger {
-            background: #f8d7da;
-            color: #721c24;
-        }
-    </style>
 </head>
 <body>
-    <header class="app-header">
-        <div class="container">
-            <div>
-                <h1>Iglesia MCI Madrid - Colombia</h1>
-                <nav class="main-nav">
-                    <a href="<?= PUBLIC_URL ?>?url=home">Inicio</a>
-                    <?php if (AuthController::tienePermiso('personas')): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=personas/ganar">Personas/Ganar</a>
-                    <?php endif; ?>
-                    <?php if (AuthController::tienePermiso('personas')): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=personas">Personas</a>
-                    <?php endif; ?>
-                    <?php if (AuthController::tienePermiso('celulas')): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=celulas">Células</a>
-                    <?php endif; ?>
-                    <?php if (AuthController::tienePermiso('ministerios')): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=ministerios">Ministerios</a>
-                    <?php endif; ?>
-                    <?php if (AuthController::tienePermiso('roles')): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=roles">Roles</a>
-                    <?php endif; ?>
-                    <?php if (AuthController::tienePermiso('eventos')): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=eventos">Eventos</a>
-                    <?php endif; ?>
-                    <?php if (AuthController::tienePermiso('peticiones')): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=peticiones">Peticiones</a>
-                    <?php endif; ?>
-                    <?php if (AuthController::tienePermiso('asistencias')): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=asistencias">Asistencias</a>
-                    <?php endif; ?>
-                    <a href="<?= PUBLIC_URL ?>?url=transmisiones">
-                        <i class="bi bi-broadcast"></i> Transmisiones
-                    </a>
-                    <?php if (AuthController::esAdministrador()): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=entrega_obsequio">
-                        <i class="bi bi-gift-fill"></i> Obsequios Navideños
-                    </a>
-                    <?php endif; ?>
-                    <?php if (AuthController::esAdministrador()): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=nehemias/lista">
-                        <i class="bi bi-clipboard-data"></i> Nehemias
-                    </a>
-                    <a href="<?= PUBLIC_URL ?>?url=nehemias/reportes">
-                        <i class="bi bi-graph-up"></i> Nehemias Reportes
-                    </a>
-                    <?php endif; ?>
-                    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('reportes')): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=reportes">Reportes</a>
-                    <?php endif; ?>
-                    <?php if (AuthController::esAdministrador()): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=permisos">Permisos</a>
-                    <?php endif; ?>
-                </nav>
+<?php
+$currentUrl = $_GET['url'] ?? 'home';
+$isActive = function(array $prefixes) use ($currentUrl) {
+    foreach ($prefixes as $prefix) {
+        if ($currentUrl === $prefix || strpos($currentUrl, $prefix . '/') === 0) {
+            return true;
+        }
+    }
+    return false;
+};
+
+$puedeVer = function(string $modulo) {
+    return AuthController::esAdministrador() || AuthController::tienePermiso($modulo, 'ver');
+};
+?>
+
+<div class="app-shell">
+    <aside class="app-sidebar">
+        <div class="sidebar-brand">
+            <div class="sidebar-brand-main">
+                <i class="bi bi-shield-fill"></i>
+                <span class="sidebar-link-text">MCI Madrid</span>
             </div>
-            
-            <div class="user-info">
+            <button type="button" id="sidebarToggle" class="sidebar-toggle" aria-label="Mostrar/Ocultar menú" onclick="(function(){var s=document.querySelector('.app-shell');var c=document.body.classList.toggle('sidebar-collapsed');if(s){s.classList.toggle('sidebar-collapsed',c);}})();">
+                <i class="bi bi-list"></i>
+            </button>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a class="sidebar-link <?= $isActive(['home']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home">
+                <i class="bi bi-house"></i> <span class="sidebar-link-text">Inicio</span>
+            </a>
+
+            <?php if ($puedeVer('eventos')): ?>
+            <a class="sidebar-link <?= $isActive(['eventos']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=eventos">
+                <i class="bi bi-calendar-event"></i> <span class="sidebar-link-text">Eventos</span>
+            </a>
+            <?php endif; ?>
+
+            <?php if ($puedeVer('personas')): ?>
+            <a class="sidebar-link <?= $isActive(['personas', 'personas/ganar']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=personas/ganar">
+                <i class="bi bi-person-plus"></i> <span class="sidebar-link-text">Ganar</span>
+            </a>
+            <?php endif; ?>
+
+            <?php if ($puedeVer('celulas')): ?>
+            <a class="sidebar-link <?= $isActive(['celulas']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=celulas">
+                <i class="bi bi-diagram-3"></i> <span class="sidebar-link-text">Células</span>
+            </a>
+            <?php endif; ?>
+
+            <?php if ($puedeVer('ministerios')): ?>
+            <a class="sidebar-link <?= $isActive(['ministerios']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=ministerios">
+                <i class="bi bi-bank"></i> <span class="sidebar-link-text">Ministerios</span>
+            </a>
+            <?php endif; ?>
+
+            <?php if ($puedeVer('asistencias')): ?>
+            <a class="sidebar-link <?= $isActive(['asistencias']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=asistencias">
+                <i class="bi bi-check2-square"></i> <span class="sidebar-link-text">Asistencias</span>
+            </a>
+            <?php endif; ?>
+
+            <?php if ($puedeVer('peticiones')): ?>
+            <a class="sidebar-link <?= $isActive(['peticiones']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=peticiones">
+                <i class="bi bi-chat-heart"></i> <span class="sidebar-link-text">Peticiones</span>
+            </a>
+            <?php endif; ?>
+
+            <?php if ($puedeVer('transmisiones')): ?>
+            <a class="sidebar-link <?= $isActive(['transmisiones']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=transmisiones">
+                <i class="bi bi-broadcast"></i> <span class="sidebar-link-text">Transmisiones</span>
+            </a>
+            <?php endif; ?>
+
+            <?php if ($puedeVer('entrega_obsequio')): ?>
+            <a class="sidebar-link <?= $isActive(['entrega_obsequio', 'registro_obsequio']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=entrega_obsequio">
+                <i class="bi bi-gift-fill"></i> <span class="sidebar-link-text">Obsequios</span>
+            </a>
+            <?php endif; ?>
+
+            <?php if ($puedeVer('nehemias')): ?>
+            <a class="sidebar-link <?= $isActive(['nehemias']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=nehemias/lista">
+                <i class="bi bi-clipboard-data"></i> <span class="sidebar-link-text">Nehemias</span>
+            </a>
+            <?php endif; ?>
+
+            <?php if ($puedeVer('reportes')): ?>
+            <a class="sidebar-link <?= $isActive(['reportes']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=reportes">
+                <i class="bi bi-bar-chart"></i> <span class="sidebar-link-text">Reportes</span>
+            </a>
+            <?php endif; ?>
+
+            <?php if ($puedeVer('roles')): ?>
+            <a class="sidebar-link <?= $isActive(['roles']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=roles">
+                <i class="bi bi-person-badge"></i> <span class="sidebar-link-text">Roles</span>
+            </a>
+            <?php endif; ?>
+
+            <?php if (AuthController::esAdministrador()): ?>
+            <a class="sidebar-link <?= $isActive(['permisos']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=permisos">
+                <i class="bi bi-shield-check"></i> <span class="sidebar-link-text">Permisos</span>
+            </a>
+            <?php endif; ?>
+        </nav>
+
+        <div class="sidebar-user-card">
+            <div class="sidebar-user-meta">
                 <i class="bi bi-person-circle"></i>
                 <div>
                     <div class="user-name"><?= $_SESSION['usuario_nombre'] ?? 'Usuario' ?></div>
                     <div class="user-role"><?= $_SESSION['usuario_rol_nombre'] ?? 'Sin Rol' ?></div>
                 </div>
-                <a href="<?= PUBLIC_URL ?>?url=auth/logout" class="btn-logout">
-                    <i class="bi bi-box-arrow-right"></i> Salir
-                </a>
             </div>
+            <a href="<?= PUBLIC_URL ?>?url=auth/logout" class="btn-logout sidebar-logout">
+                <i class="bi bi-box-arrow-right"></i> <span class="sidebar-link-text">Salir</span>
+            </a>
         </div>
-    </header>
-    
-    <main class="container main-content">
+    </aside>
+
+    <div class="app-main">
+        <main class="main-content">

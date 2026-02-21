@@ -1,10 +1,10 @@
-    </main>
+        </main>
     
-    <footer class="app-footer">
-        <div class="container">
+        <footer class="app-footer">
             <p>&copy; <?= date('Y') ?> Iglesia MCI Madrid - Colombia. Todos los derechos reservados.</p>
-        </div>
-    </footer>
+        </footer>
+    </div>
+</div>
 
     <script src="<?= ASSETS_URL ?>/js/main.js"></script>
 </body>

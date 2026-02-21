@@ -2,10 +2,30 @@
 
 <div class="page-header">
     <h2>Gestión de Transmisiones</h2>
-    <a href="<?= PUBLIC_URL ?>?url=transmisiones/crear" class="btn btn-primary">
-        <i class="bi bi-plus-circle"></i> Nueva Transmisión
-    </a>
+    <?php $puedeCrearTransmision = AuthController::esAdministrador() || AuthController::tienePermiso('transmisiones', 'crear'); ?>
+    <?php $puedeEditarTransmision = AuthController::esAdministrador() || AuthController::tienePermiso('transmisiones', 'editar'); ?>
+    <?php $puedeEliminarTransmision = AuthController::esAdministrador() || AuthController::tienePermiso('transmisiones', 'eliminar'); ?>
+    <?php $puedeGestionarTransmision = $puedeEditarTransmision || $puedeEliminarTransmision; ?>
+    <div class="page-actions">
+        <?php if ($puedeCrearTransmision): ?>
+        <a href="<?= PUBLIC_URL ?>?url=transmisiones/crear" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Nueva Transmisión
+        </a>
+        <?php endif; ?>
+    </div>
 </div>
+
+<?php if (!empty($_GET['success'])): ?>
+    <div class="alert alert-success" style="margin-bottom: 20px;">
+        <?= htmlspecialchars($_GET['success']) ?>
+    </div>
+<?php endif; ?>
+
+<?php if (!empty($_GET['error'])): ?>
+    <div class="alert alert-danger" style="margin-bottom: 20px;">
+        <?= htmlspecialchars($_GET['error']) ?>
+    </div>
+<?php endif; ?>
 
 <!-- Estadísticas -->
 <div class="dashboard-grid" style="margin-bottom: 30px;">
@@ -24,7 +44,8 @@
 </div>
 
 <!-- Lista de Transmisiones -->
-<div class="main-content">
+<div class="card">
+    <div class="card-body">
     <?php if (!empty($transmisiones)): ?>
         <table class="data-table">
             <thead>
@@ -34,7 +55,7 @@
                     <th>Hora</th>
                     <th>Estado</th>
                     <th>Descripción</th>
-                    <th>Acciones</th>
+                    <?php if ($puedeGestionarTransmision): ?><th>Acciones</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -75,31 +96,42 @@
                             ?>
                         </small>
                     </td>
+                    <?php if ($puedeGestionarTransmision): ?>
                     <td>
                         <div class="action-buttons">
+                            <?php if ($puedeEditarTransmision): ?>
                             <a href="<?= PUBLIC_URL ?>?url=transmisiones/editar&id=<?= $trans['Id_Transmision'] ?>" 
                                class="btn btn-sm btn-info" title="Editar">
                                 <i class="bi bi-pencil"></i>
                             </a>
+                            <?php endif; ?>
+                            <?php if ($puedeEliminarTransmision): ?>
                             <button type="button" class="btn btn-sm btn-danger" 
                                     onclick="eliminarTransmision(<?= $trans['Id_Transmision'] ?>, '<?= htmlspecialchars($trans['Nombre']) ?>')">
                                 <i class="bi bi-trash"></i>
                             </button>
+                            <?php endif; ?>
                             <a href="<?= PUBLIC_URL ?>?url=transmisiones-publico" 
                                class="btn btn-sm btn-success" title="Ver en sitio web">
                                 <i class="bi bi-play-circle"></i> Ver
                             </a>
                         </div>
                     </td>
+                    <?php endif; ?>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
         </table>
     <?php else: ?>
         <div class="alert alert-info">
-            <p>No hay transmisiones registradas. <a href="<?= PUBLIC_URL ?>?url=transmisiones/crear">Crear una nueva</a></p>
+            <?php if ($puedeCrearTransmision): ?>
+                <p>No hay transmisiones registradas. <a href="<?= PUBLIC_URL ?>?url=transmisiones/crear">Crear una nueva</a></p>
+            <?php else: ?>
+                <p>No hay transmisiones registradas.</p>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
+    </div>
 </div>
 
 <style>

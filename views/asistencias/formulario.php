@@ -2,7 +2,7 @@
 
 <div class="page-header">
     <h2>Registrar Asistencia</h2>
-    <div style="display: flex; gap: 8px;">
+    <div class="page-actions">
         <a id="persona_nueva_link" href="<?= PUBLIC_URL ?>index.php?url=personas/crear&return_to=asistencia<?= !empty($celula_preseleccionada) ? '&celula=' . (int)$celula_preseleccionada : '' ?>" class="btn btn-primary">Persona Nueva</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=asistencias" class="btn btn-secondary">Volver</a>
     </div>

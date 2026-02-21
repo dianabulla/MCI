@@ -2,7 +2,13 @@
 
 <div class="page-header">
     <h2>Peticiones de Oración</h2>
+    <?php $puedeCrearPeticion = AuthController::esAdministrador() || AuthController::tienePermiso('peticiones', 'crear'); ?>
+    <?php $puedeEditarPeticion = AuthController::esAdministrador() || AuthController::tienePermiso('peticiones', 'editar'); ?>
+    <?php $puedeEliminarPeticion = AuthController::esAdministrador() || AuthController::tienePermiso('peticiones', 'eliminar'); ?>
+    <?php $puedeGestionarPeticion = $puedeEditarPeticion || $puedeEliminarPeticion; ?>
+    <?php if ($puedeCrearPeticion): ?>
     <a href="<?= PUBLIC_URL ?>index.php?url=peticiones/crear" class="btn btn-primary">+ Nueva Petición</a>
+    <?php endif; ?>
 </div>
 
 <div class="table-container">
@@ -13,7 +19,7 @@
                 <th>Petición</th>
                 <th>Fecha</th>
                 <th>Estado</th>
-                <th>Acciones</th>
+                <?php if ($puedeGestionarPeticion): ?><th>Acciones</th><?php endif; ?>
             </tr>
         </thead>
         <tbody>
@@ -28,10 +34,16 @@
                                 <?= htmlspecialchars($peticion['Estado_Peticion']) ?>
                             </span>
                         </td>
+                        <?php if ($puedeGestionarPeticion): ?>
                         <td>
+                            <?php if ($puedeEditarPeticion): ?>
                             <a href="<?= PUBLIC_URL ?>index.php?url=peticiones/editar&id=<?= $peticion['Id_Peticion'] ?>" class="btn btn-sm btn-warning">Editar</a>
+                            <?php endif; ?>
+                            <?php if ($puedeEliminarPeticion): ?>
                             <a href="<?= PUBLIC_URL ?>index.php?url=peticiones/eliminar&id=<?= $peticion['Id_Peticion'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar esta petición?')">Eliminar</a>
+                            <?php endif; ?>
                         </td>
+                        <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
             <?php else: ?>

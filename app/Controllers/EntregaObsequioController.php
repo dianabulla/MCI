@@ -6,37 +6,82 @@
 
 require_once APP . '/Models/NinoNavidad.php';
 require_once APP . '/Models/Ministerio.php';
+require_once APP . '/Helpers/DataIsolation.php';
 
 class EntregaObsequioController extends BaseController {
     private $ninoModel;
     private $ministerioModel;
+
+    private function tienePermiso($accion = 'ver') {
+        return AuthController::esAdministrador() || AuthController::tienePermiso('entrega_obsequio', $accion);
+    }
 
     public function __construct() {
         $this->ninoModel = new NinoNavidad();
         $this->ministerioModel = new Ministerio();
     }
 
+    private function getContextoFiltroMinisterio() {
+        if (AuthController::esAdministrador() || DataIsolation::tieneAccesoTotal()) {
+            return [
+                'restringido' => false,
+                'ministerioId' => null,
+                'ministerios' => $this->ministerioModel->getAll()
+            ];
+        }
+
+        $idMinisterio = DataIsolation::getUsuarioMinisterioId();
+        $ministerios = [];
+        if ($idMinisterio) {
+            $ministerio = $this->ministerioModel->getById($idMinisterio);
+            if (!empty($ministerio)) {
+                $ministerios[] = $ministerio;
+            }
+        }
+
+        return [
+            'restringido' => true,
+            'ministerioId' => $idMinisterio ? (string)$idMinisterio : '',
+            'ministerios' => $ministerios
+        ];
+    }
+
     /**
      * Listar niños registrados
      */
     public function index() {
+        if (!$this->tienePermiso('ver')) {
+            header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
+            exit;
+        }
+
         // Obtener filtro de ministerio si existe
-        $filtroMinisterio = $_GET['ministerio'] ?? '';
-        
-        // Obtener lista de ministerios para el filtro
-        $ministerios = $this->ministerioModel->getAll();
-        
-        // Obtener niños con filtro opcional
-        if (!empty($filtroMinisterio)) {
-            $ninos = $this->ninoModel->getAllByMinisterio($filtroMinisterio);
+        $filtroMinisterio = isset($_GET['ministerio']) ? (string)$_GET['ministerio'] : '';
+
+        $contexto = $this->getContextoFiltroMinisterio();
+        $ministerios = $contexto['ministerios'];
+
+        if ($contexto['restringido']) {
+            if (!empty($contexto['ministerioId'])) {
+                $filtroMinisterio = $contexto['ministerioId'];
+                $ninos = $this->ninoModel->getAllByMinisterio($filtroMinisterio);
+            } else {
+                $filtroMinisterio = '';
+                $ninos = [];
+            }
         } else {
-            $ninos = $this->ninoModel->getAllWithMinisterio();
+            if (!empty($filtroMinisterio)) {
+                $ninos = $this->ninoModel->getAllByMinisterio($filtroMinisterio);
+            } else {
+                $ninos = $this->ninoModel->getAllWithMinisterio();
+            }
         }
         
         $data = [
             'ninos' => $ninos,
             'ministerios' => $ministerios,
             'filtroMinisterio' => $filtroMinisterio,
+            'filtroMinisterioRestringido' => $contexto['restringido'],
             'mensaje' => $_SESSION['mensaje'] ?? null,
             'tipo_mensaje' => $_SESSION['tipo_mensaje'] ?? null
         ];
@@ -53,6 +98,11 @@ class EntregaObsequioController extends BaseController {
      */
     public function marcarEntregado() {
         header('Content-Type: application/json');
+
+        if (!$this->tienePermiso('editar')) {
+            echo json_encode(['success' => false, 'message' => 'Acceso denegado']);
+            exit;
+        }
         
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             echo json_encode(['success' => false, 'message' => 'Método no permitido']);
@@ -75,8 +125,18 @@ class EntregaObsequioController extends BaseController {
      * Exportar lista de niños a Excel
      */
     public function exportarExcel() {
+        if (!$this->tienePermiso('ver')) {
+            header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
+            exit;
+        }
+
         // Obtener filtro de ministerio si existe
-        $filtroMinisterio = $_GET['ministerio'] ?? '';
+        $filtroMinisterio = isset($_GET['ministerio']) ? (string)$_GET['ministerio'] : '';
+
+        $contexto = $this->getContextoFiltroMinisterio();
+        if ($contexto['restringido']) {
+            $filtroMinisterio = (string)($contexto['ministerioId'] ?? '');
+        }
         
         // Obtener niños con filtro opcional
         if (!empty($filtroMinisterio)) {
@@ -141,8 +201,18 @@ class EntregaObsequioController extends BaseController {
      * Exportar lista de niños a PDF
      */
     public function exportarPDF() {
+        if (!$this->tienePermiso('ver')) {
+            header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
+            exit;
+        }
+
         // Obtener filtro de ministerio si existe
-        $filtroMinisterio = $_GET['ministerio'] ?? '';
+        $filtroMinisterio = isset($_GET['ministerio']) ? (string)$_GET['ministerio'] : '';
+
+        $contexto = $this->getContextoFiltroMinisterio();
+        if ($contexto['restringido']) {
+            $filtroMinisterio = (string)($contexto['ministerioId'] ?? '');
+        }
         
         // Obtener niños con filtro opcional
         if (!empty($filtroMinisterio)) {

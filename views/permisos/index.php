@@ -12,11 +12,11 @@
             <strong>Instrucciones:</strong> Haga clic en las casillas para otorgar o revocar permisos. Los cambios se guardan automáticamente.
         </div>
 
-        <div class="table-responsive">
-            <table class="table table-bordered table-hover">
+        <div class="table-responsive permissions-table-wrap">
+            <table class="table table-bordered table-hover table-no-card permisos-table">
                 <thead>
                     <tr>
-                        <th rowspan="2" style="vertical-align: middle; width: 200px;">Módulo</th>
+                        <th rowspan="2" class="perm-module-col align-middle">Módulo</th>
                         <?php foreach ($roles as $rol): ?>
                         <th colspan="4" class="text-center bg-primary text-white">
                             <?= htmlspecialchars($rol['Nombre_Rol']) ?>
@@ -25,10 +25,10 @@
                     </tr>
                     <tr>
                         <?php foreach ($roles as $rol): ?>
-                        <th class="text-center" style="width: 70px;"><small>Ver</small></th>
-                        <th class="text-center" style="width: 70px;"><small>Crear</small></th>
-                        <th class="text-center" style="width: 70px;"><small>Editar</small></th>
-                        <th class="text-center" style="width: 70px;"><small>Eliminar</small></th>
+                        <th class="text-center perm-action-col"><small>Ver</small></th>
+                        <th class="text-center perm-action-col"><small>Crear</small></th>
+                        <th class="text-center perm-action-col"><small>Editar</small></th>
+                        <th class="text-center perm-action-col"><small>Elim.</small></th>
                         <?php endforeach; ?>
                     </tr>
                 </thead>
@@ -88,47 +88,6 @@
         </div>
     </div>
 </div>
-
-<style>
-    .table th {
-        background-color: #f8f9fa;
-    }
-    .bg-primary {
-        background-color: #667eea !important;
-    }
-    .permiso-check {
-        cursor: pointer;
-        width: 20px;
-        height: 20px;
-    }
-    .alert {
-        border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 20px;
-    }
-    .alert-info {
-        background-color: #e7f3ff;
-        border: 1px solid #b3d9ff;
-        color: #004085;
-    }
-    .alert-success {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 9999;
-        animation: slideIn 0.3s ease-out;
-    }
-    @keyframes slideIn {
-        from {
-            transform: translateX(400px);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-</style>
 
 <script>
 document.querySelectorAll('.permiso-check').forEach(checkbox => {

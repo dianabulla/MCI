@@ -1,92 +1,39 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
-<style>
-    .card {
-        border-radius: 15px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-        margin-bottom: 20px;
-    }
-    .page-header {
-        background: #ffffff;
-        border-radius: 16px;
-        padding: 16px 20px;
-        box-shadow: 0 6px 20px rgba(11, 58, 138, 0.12);
-        border: 1px solid #eef1f6;
-        margin-bottom: 20px;
-    }
-    .page-title {
-        margin: 0;
-        font-weight: 700;
-        color: #0078D4;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    .page-title i {
-        background: #0078D4;
-        color: #fff;
-        width: 34px;
-        height: 34px;
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 16px;
-    }
-    .table th {
-        background: #0078D4;
-        color: white;
-        font-weight: 600;
-        padding: 8px 10px;
-        border: none;
-        white-space: nowrap;
-        font-size: 12px;
-    }
-    .table td {
-        padding: 8px 10px;
-        vertical-align: middle;
-        font-size: 12px;
-    }
-    .status-pill {
-        display: inline-block;
-        padding: 3px 10px;
-        border-radius: 999px;
-        font-size: 11px;
-        font-weight: 700;
-    }
-    .status-pending { background: #fff3cd; color: #856404; }
-    .status-yes { background: #d1e7dd; color: #0f5132; }
-    .status-no { background: #f8d7da; color: #842029; }
-    .upload-box {
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 12px;
-        padding: 18px;
-        margin-bottom: 20px;
-    }
-    .filter-box {
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 12px;
-        padding: 14px;
-        margin-bottom: 20px;
-    }
-    .btn-action {
-        border-radius: 999px;
-        padding: 4px 10px;
-        font-size: 11px;
-        font-weight: 700;
-    }
-</style>
+<?php
+$exportParams = [
+    'url' => 'nehemias/seremos1200/exportarExcel'
+];
+
+if (!empty($filtros['busqueda'])) {
+    $exportParams['busqueda'] = (string)$filtros['busqueda'];
+}
+if (($filtros['decision'] ?? '') !== '') {
+    $exportParams['decision'] = (string)$filtros['decision'];
+}
+if (($filtros['migrado'] ?? '') !== '') {
+    $exportParams['migrado'] = (string)$filtros['migrado'];
+}
+if (($filtros['lider'] ?? '') !== '') {
+    $exportParams['lider'] = (string)$filtros['lider'];
+}
+
+$exportUrl = '?' . http_build_query($exportParams);
+?>
 
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center page-header">
+    <div class="d-flex justify-content-between align-items-center module-header-card">
         <h2 class="page-title">
             <i class="bi bi-people-fill"></i> Nehemias - Seremos 1200
         </h2>
-        <a href="?url=nehemias/lista" class="btn btn-secondary">
-            <i class="bi bi-arrow-left"></i> Volver a Nehemias
-        </a>
+        <div class="d-flex gap-2">
+            <a href="<?= htmlspecialchars($exportUrl) ?>" class="btn btn-success">
+                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+            </a>
+            <a href="?url=nehemias/lista" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Volver a Nehemias
+            </a>
+        </div>
     </div>
 
     <?php if (!empty($mensaje)): ?>
@@ -123,13 +70,28 @@
                     placeholder="Nombre, cédula, teléfono, líder..."
                 >
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label mb-1 fw-bold">Estado</label>
                 <select name="decision" class="form-select">
                     <option value="" <?= (($filtros['decision'] ?? '') === '') ? 'selected' : '' ?>>Todos</option>
                     <option value="pendiente" <?= (($filtros['decision'] ?? '') === 'pendiente') ? 'selected' : '' ?>>Pendiente</option>
                     <option value="1" <?= (($filtros['decision'] ?? '') === '1') ? 'selected' : '' ?>>Sí acepta</option>
                     <option value="0" <?= (($filtros['decision'] ?? '') === '0') ? 'selected' : '' ?>>No acepta</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label mb-1 fw-bold">Líder</label>
+                <select name="lider" class="form-select">
+                    <?php if (empty($filtroLiderRestringido)): ?>
+                        <option value="" <?= (($filtros['lider'] ?? '') === '') ? 'selected' : '' ?>>Todos</option>
+                    <?php else: ?>
+                        <option value="" <?= (($filtros['lider'] ?? '') === '') ? 'selected' : '' ?>>Seleccione</option>
+                    <?php endif; ?>
+                    <?php foreach (($lideres ?? []) as $lider): ?>
+                        <option value="<?= htmlspecialchars($lider) ?>" <?= (($filtros['lider'] ?? '') === $lider) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($lider) ?>
+                        </option>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <div class="col-md-2">
@@ -149,8 +111,8 @@
 
     <div class="card">
         <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover">
+            <div class="table-responsive nehemias-table-wrap">
+                <table class="table table-hover table-no-card nehemias-table nehemias-table-secondary">
                     <thead>
                         <tr>
                             <th>ID</th>
@@ -173,14 +135,14 @@
                                 $migrado = (int)($registro['Fue_Migrado_Nehemias'] ?? 0) === 1;
                                 ?>
                                 <tr>
-                                    <td><?= (int)$registro['Id_Seremos1200'] ?></td>
-                                    <td><?= htmlspecialchars($registro['Nombres'] ?? '') ?></td>
-                                    <td><?= htmlspecialchars($registro['Apellidos'] ?? '') ?></td>
-                                    <td><?= htmlspecialchars($registro['Numero_Cedula'] ?? '') ?></td>
-                                    <td><?= htmlspecialchars($registro['Telefono'] ?? '') ?></td>
-                                    <td><?= htmlspecialchars($registro['Lider'] ?? '') ?></td>
-                                    <td><?= htmlspecialchars($registro['Lider_Nehemias'] ?? '') ?></td>
-                                    <td>
+                                    <td data-label="ID"><?= (int)$registro['Id_Seremos1200'] ?></td>
+                                    <td data-label="Nombres"><?= htmlspecialchars($registro['Nombres'] ?? '') ?></td>
+                                    <td data-label="Apellidos"><?= htmlspecialchars($registro['Apellidos'] ?? '') ?></td>
+                                    <td data-label="Cédula"><?= htmlspecialchars($registro['Numero_Cedula'] ?? '') ?></td>
+                                    <td data-label="Teléfono"><?= htmlspecialchars($registro['Telefono'] ?? '') ?></td>
+                                    <td data-label="Líder"><?= htmlspecialchars($registro['Lider'] ?? '') ?></td>
+                                    <td data-label="Líder Nehemias"><?= htmlspecialchars($registro['Lider_Nehemias'] ?? '') ?></td>
+                                    <td data-label="Estado">
                                         <?php if ($decision === null): ?>
                                             <span class="status-pill status-pending">Pendiente</span>
                                         <?php elseif ((int)$decision === 1): ?>
@@ -189,10 +151,10 @@
                                             <span class="status-pill status-no">No acepta</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td>
+                                    <td data-label="Migrado">
                                         <?= $migrado ? '<span class="status-pill status-yes">Sí</span>' : '<span class="status-pill status-pending">No</span>' ?>
                                     </td>
-                                    <td>
+                                    <td data-label="Acción">
                                         <div class="d-flex gap-1">
                                             <form method="POST" action="?url=nehemias/seremos1200/decision" style="display:inline;">
                                                 <input type="hidden" name="id" value="<?= (int)$registro['Id_Seremos1200'] ?>">

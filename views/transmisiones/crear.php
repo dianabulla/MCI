@@ -4,8 +4,14 @@
     <h2>Nueva Transmisión</h2>
 </div>
 
-<div class="main-content" style="max-width: 600px; margin: 0 auto;">
-    <form id="formCrearTransmision" class="form-container">
+<div class="content-narrow">
+    <?php if (!empty($_GET['error'])): ?>
+        <div class="alert alert-danger" style="margin-bottom: 20px;">
+            <?= htmlspecialchars($_GET['error']) ?>
+        </div>
+    <?php endif; ?>
+
+    <form id="formCrearTransmision" class="form-container" method="POST" action="<?= PUBLIC_URL ?>index.php?url=transmisiones/guardar">
         <div class="form-group">
             <label for="nombre">Nombre de la Transmisión *</label>
             <input type="text" id="nombre" name="nombre" class="form-control" 
@@ -49,7 +55,7 @@
                       rows="4" placeholder="Información adicional sobre la transmisión"></textarea>
         </div>
 
-        <div class="form-group" style="margin-top: 30px; display: flex; gap: 10px;">
+        <div class="form-group page-actions" style="margin-top: 30px;">
             <button type="submit" class="btn btn-primary">
                 <i class="bi bi-check-circle"></i> Crear Transmisión
             </button>
@@ -166,65 +172,88 @@
 </style>
 
 <script>
-document.getElementById('formCrearTransmision').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const nombre = document.getElementById('nombre').value.trim();
-    const url = document.getElementById('url').value.trim();
-    const fecha = document.getElementById('fecha').value;
-    const hora = document.getElementById('hora').value || '00:00';
-    const estado = document.getElementById('estado').value;
-    const descripcion = document.getElementById('descripcion').value.trim();
-    
-    // Validaciones
-    if (!nombre) {
-        alert('El nombre es requerido');
+(function () {
+    var form = document.getElementById('formCrearTransmision');
+    if (!form) {
         return;
     }
-    
-    if (!url) {
-        alert('La URL es requerida');
+
+    if (!window.fetch || !window.URLSearchParams) {
         return;
     }
-    
-    if (!fecha) {
-        alert('La fecha es requerida');
-        return;
-    }
-    
-    // Validar que sea una URL de YouTube
-    if (!url.includes('youtube.com') && !url.includes('youtu.be')) {
-        alert('Por favor ingresa una URL válida de YouTube');
-        return;
-    }
-    
-    try {
-        const formData = new FormData();
-        formData.append('nombre', nombre);
-        formData.append('url', url);
-        formData.append('fecha', fecha);
-        formData.append('hora', hora);
-        formData.append('estado', estado);
-        formData.append('descripcion', descripcion);
-        
-        const response = await fetch('<?= PUBLIC_URL ?>index.php?url=transmisiones/guardar', {
-            method: 'POST',
-            body: formData
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            alert('¡Transmisión creada exitosamente!');
-            window.location.href = '<?= PUBLIC_URL ?>?url=transmisiones';
-        } else {
-            alert('Error: ' + (data.error || 'Error desconocido'));
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        var nombre = document.getElementById('nombre').value.trim();
+        var url = document.getElementById('url').value.trim();
+        var fecha = document.getElementById('fecha').value;
+        var hora = document.getElementById('hora').value || '00:00';
+        var estado = document.getElementById('estado').value;
+        var descripcion = document.getElementById('descripcion').value.trim();
+
+        if (!nombre) {
+            alert('El nombre es requerido');
+            return;
         }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error al crear la transmisión');
-    }
-});
+
+        if (!url) {
+            alert('La URL es requerida');
+            return;
+        }
+
+        if (!fecha) {
+            alert('La fecha es requerida');
+            return;
+        }
+
+        var urlLower = url.toLowerCase();
+        if (urlLower.indexOf('youtube.com') === -1 && urlLower.indexOf('youtu.be') === -1) {
+            alert('Por favor ingresa una URL válida de YouTube');
+            return;
+        }
+
+        var payload = new URLSearchParams();
+        payload.append('nombre', nombre);
+        payload.append('url', url);
+        payload.append('fecha', fecha);
+        payload.append('hora', hora);
+        payload.append('estado', estado);
+        payload.append('descripcion', descripcion);
+
+        fetch('<?= PUBLIC_URL ?>index.php?url=transmisiones/guardar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: payload.toString()
+        })
+        .then(function(response) {
+            return response.text();
+        })
+        .then(function(text) {
+            var data;
+            try {
+                data = JSON.parse(text);
+            } catch (parseError) {
+                throw new Error('Respuesta inválida del servidor');
+            }
+
+            if (data.success) {
+                alert('¡Transmisión creada exitosamente!');
+                window.location.href = '<?= PUBLIC_URL ?>?url=transmisiones';
+                return;
+            }
+
+            alert('Error: ' + (data.error || 'Error desconocido'));
+        })
+        .catch(function(error) {
+            console.error('Error:', error);
+            form.submit();
+        });
+    });
+})();
 </script>
 
 <?php include VIEWS . '/layout/footer.php'; ?>

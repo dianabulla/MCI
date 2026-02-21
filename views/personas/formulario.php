@@ -276,8 +276,7 @@ $urlVolver = $returnToAsistencia
     </form>
 </div>
 
-<?php include VIEWS . '/layout/footer.php'; ?>
-style>
+<style>
 .form-section {
     background: #fff;
     border: 1px solid #e0e0e0;
@@ -559,4 +558,4 @@ liderInput.addEventListener('blur', function() {
 });
 </script>
 
-<
+<?php include VIEWS . '/layout/footer.php'; ?>

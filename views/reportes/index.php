@@ -6,7 +6,7 @@
 
 <!-- Filtro de Fechas -->
 <div class="card" style="margin-bottom: 30px;">
-    <form method="GET" action="<?= PUBLIC_URL ?>index.php" style="display: flex; gap: 15px; align-items: end;">
+    <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="filters-inline" style="padding: 16px;">
         <input type="hidden" name="url" value="reportes">
         
         <div class="form-group" style="margin: 0;">
@@ -18,9 +18,11 @@
             <label>Fecha Fin:</label>
             <input type="date" name="fecha_fin" class="form-control" value="<?= $fecha_fin ?>" required>
         </div>
-        
-        <button type="submit" class="btn btn-primary">Filtrar</button>
-        <a href="<?= PUBLIC_URL ?>index.php?url=reportes" class="btn btn-secondary">Resetear</a>
+
+        <div class="filters-actions">
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="<?= PUBLIC_URL ?>index.php?url=reportes" class="btn btn-secondary">Resetear</a>
+        </div>
     </form>
 </div>
 

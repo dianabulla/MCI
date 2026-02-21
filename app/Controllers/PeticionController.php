@@ -16,6 +16,23 @@ class PeticionController extends BaseController {
         $this->personaModel = new Persona();
     }
 
+    private function getPersonasPermitidas() {
+        $filtroPersonas = DataIsolation::generarFiltroPersonas();
+        return $this->personaModel->getAllWithRole($filtroPersonas);
+    }
+
+    private function personaEstaPermitida($idPersona) {
+        $idPersona = (int)$idPersona;
+        if ($idPersona <= 0) {
+            return false;
+        }
+
+        $filtroPersonas = DataIsolation::generarFiltroPersonas();
+        $sql = "SELECT p.Id_Persona FROM persona p WHERE p.Id_Persona = ? AND $filtroPersonas LIMIT 1";
+        $rows = $this->personaModel->query($sql, [$idPersona]);
+        return !empty($rows);
+    }
+
     public function index() {
         // Generar filtro según el rol del usuario
         $filtroPeticiones = DataIsolation::generarFiltroPeticiones();
@@ -33,8 +50,14 @@ class PeticionController extends BaseController {
         }
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $idPersona = (int)($_POST['id_persona'] ?? 0);
+            if (!$this->personaEstaPermitida($idPersona)) {
+                header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+                exit;
+            }
+
             $data = [
-                'Id_Persona' => $_POST['id_persona'],
+                'Id_Persona' => $idPersona,
                 'Descripcion_Peticion' => $_POST['descripcion_peticion'],
                 'Fecha_Peticion' => date('Y-m-d'),
                 'Estado_Peticion' => 'Pendiente'
@@ -44,7 +67,7 @@ class PeticionController extends BaseController {
             $this->redirect('peticiones');
         } else {
             $data = [
-                'personas' => $this->personaModel->getAll()
+                'personas' => $this->getPersonasPermitidas()
             ];
             $this->view('peticiones/formulario', $data);
         }
@@ -64,8 +87,14 @@ class PeticionController extends BaseController {
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $idPersona = (int)($_POST['id_persona'] ?? 0);
+            if (!$this->personaEstaPermitida($idPersona)) {
+                header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+                exit;
+            }
+
             $data = [
-                'Id_Persona' => $_POST['id_persona'],
+                'Id_Persona' => $idPersona,
                 'Descripcion_Peticion' => $_POST['descripcion_peticion'],
                 'Estado_Peticion' => $_POST['estado_peticion']
             ];
@@ -75,7 +104,7 @@ class PeticionController extends BaseController {
         } else {
             $data = [
                 'peticion' => $this->peticionModel->getById($id),
-                'personas' => $this->personaModel->getAll()
+                'personas' => $this->getPersonasPermitidas()
             ];
             $this->view('peticiones/formulario', $data);
         }

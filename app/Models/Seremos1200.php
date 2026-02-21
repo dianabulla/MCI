@@ -65,6 +65,11 @@ class Seremos1200 extends BaseModel {
             }
         }
 
+        if (isset($filtros['lider']) && trim((string)$filtros['lider']) !== '') {
+            $sql .= " AND Lider = ?";
+            $params[] = trim((string)$filtros['lider']);
+        }
+
         if (isset($filtros['migrado']) && $filtros['migrado'] !== '') {
             if ($filtros['migrado'] === '1' || $filtros['migrado'] === '0') {
                 $sql .= " AND Fue_Migrado_Nehemias = ?";
@@ -79,6 +84,15 @@ class Seremos1200 extends BaseModel {
             $stmt->execute($params);
             return $stmt->fetchAll();
         }
+
+        return $this->query($sql);
+    }
+
+    public function getLideresDistinct() {
+        $sql = "SELECT DISTINCT Lider
+                FROM {$this->table}
+                WHERE Lider IS NOT NULL AND TRIM(Lider) <> ''
+                ORDER BY Lider ASC";
 
         return $this->query($sql);
     }
@@ -102,8 +116,8 @@ class Seremos1200 extends BaseModel {
     public function marcarDecision($id, $acepta, $migrado = null, $nehemiasId = null) {
         $sql = "UPDATE {$this->table}
                 SET Decision_Acepta = ?,
-                    Fue_Migrado_Nehemias = COALESCE(?, Fue_Migrado_Nehemias),
-                    Nehemias_Id = COALESCE(?, Nehemias_Id),
+                    Fue_Migrado_Nehemias = ?,
+                    Nehemias_Id = ?,
                     Fecha_Decision = NOW()
                 WHERE {$this->primaryKey} = ?";
 

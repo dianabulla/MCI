@@ -4,7 +4,7 @@
     <h2>Editar Transmisión</h2>
 </div>
 
-<div class="main-content" style="max-width: 600px; margin: 0 auto;">
+<div class="content-narrow">
     <?php if ($transmision): ?>
         <form id="formEditarTransmision" class="form-container">
             <input type="hidden" name="id" id="id" value="<?= $transmision['Id_Transmision'] ?>">
@@ -64,7 +64,7 @@
                 <?php endif; ?>
             </div>
 
-            <div class="form-group" style="margin-top: 30px; display: flex; gap: 10px;">
+            <div class="form-group page-actions" style="margin-top: 30px;">
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-check-circle"></i> Actualizar
                 </button>

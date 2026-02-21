@@ -1,8 +1,14 @@
 <?php include VIEWS . '/layout/header.php'; ?>
+<?php
+$puedeVerPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver');
+$puedeEditarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
+$puedeEliminarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'eliminar');
+$mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPersona;
+?>
 
 <div class="page-header">
     <h2>Personas</h2>
-    <div style="display: flex; gap: 8px;">
+    <div class="page-actions">
         <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-success">Apartado Ganar</a>
         <?php if (AuthController::tienePermiso('personas', 'crear')): ?>
         <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="btn btn-primary">+ Nueva Persona</a>
@@ -26,20 +32,24 @@
         </div>
 
         <!-- Filtros adicionales -->
-        <form method="GET" action="<?= PUBLIC_URL ?>" style="display: flex; gap: 15px; align-items: end;">
+        <form method="GET" action="<?= PUBLIC_URL ?>" class="filters-inline">
             <input type="hidden" name="url" value="personas">
             
-            <div class="form-group" style="margin-bottom: 0; flex: 1;">
+            <div class="form-group">
                 <label for="filtro_ministerio" style="font-size: 14px; margin-bottom: 5px;">Ministerio</label>
                 <select id="filtro_ministerio" name="ministerio" class="form-control">
-                    <option value="">Todos los ministerios</option>
-                    <option value="0" <?= (isset($_GET['ministerio']) && $_GET['ministerio'] === '0') ? 'selected' : '' ?>>
-                        Sin ministerio
-                    </option>
+                    <?php if (empty($filtroRestringido)): ?>
+                        <option value="">Todos los ministerios</option>
+                        <option value="0" <?= (($filtroMinisterioActual ?? ($_GET['ministerio'] ?? '')) === '0') ? 'selected' : '' ?>>
+                            Sin ministerio
+                        </option>
+                    <?php else: ?>
+                        <option value="">Seleccione</option>
+                    <?php endif; ?>
                     <?php if (!empty($ministerios)): ?>
                         <?php foreach ($ministerios as $ministerio): ?>
                             <option value="<?= $ministerio['Id_Ministerio'] ?>" 
-                                    <?= (isset($_GET['ministerio']) && $_GET['ministerio'] == $ministerio['Id_Ministerio']) ? 'selected' : '' ?>>
+                                    <?= (($filtroMinisterioActual ?? ($_GET['ministerio'] ?? '')) == $ministerio['Id_Ministerio']) ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($ministerio['Nombre_Ministerio']) ?>
                             </option>
                         <?php endforeach; ?>
@@ -47,17 +57,21 @@
                 </select>
             </div>
 
-            <div class="form-group" style="margin-bottom: 0; flex: 1;">
+            <div class="form-group">
                 <label for="filtro_lider" style="font-size: 14px; margin-bottom: 5px;">Líder</label>
                 <select id="filtro_lider" name="lider" class="form-control">
-                    <option value="">Todos los líderes</option>
-                    <option value="0" <?= (isset($_GET['lider']) && $_GET['lider'] === '0') ? 'selected' : '' ?>>
-                        Sin líder
-                    </option>
+                    <?php if (empty($filtroRestringido)): ?>
+                        <option value="">Todos los líderes</option>
+                        <option value="0" <?= (($filtroLiderActual ?? ($_GET['lider'] ?? '')) === '0') ? 'selected' : '' ?>>
+                            Sin líder
+                        </option>
+                    <?php else: ?>
+                        <option value="">Seleccione</option>
+                    <?php endif; ?>
                     <?php if (!empty($lideres)): ?>
                         <?php foreach ($lideres as $lider): ?>
                             <option value="<?= $lider['Id_Persona'] ?>" 
-                                    <?= (isset($_GET['lider']) && $_GET['lider'] == $lider['Id_Persona']) ? 'selected' : '' ?>>
+                                    <?= (($filtroLiderActual ?? ($_GET['lider'] ?? '')) == $lider['Id_Persona']) ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($lider['Nombre'] . ' ' . $lider['Apellido']) ?>
                             </option>
                         <?php endforeach; ?>
@@ -65,7 +79,7 @@
                 </select>
             </div>
 
-            <div style="display: flex; gap: 10px;">
+            <div class="filters-actions">
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-funnel"></i> Filtrar
                 </button>
@@ -87,7 +101,7 @@
 <?php endif; ?>
 
 <div class="table-container">
-    <table class="data-table">
+    <table class="data-table ganar-table">
         <thead>
             <tr>
                 <th>Nombre Completo</th>
@@ -98,20 +112,40 @@
                 <th>Rol</th>
                 <th>Ministerio</th>
                 <th>Estado</th>
-                <th>Acciones</th>
+                <?php if ($mostrarAcciones): ?><th>Acciones</th><?php endif; ?>
             </tr>
         </thead>
         <tbody>
             <?php if (!empty($personas)): ?>
                 <?php foreach ($personas as $persona): ?>
                     <tr>
-                        <td><?= htmlspecialchars($persona['Nombre'] . ' ' . $persona['Apellido']) ?></td>
+                        <td>
+                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Nombre'] . ' ' . $persona['Apellido']) ?>">
+                                <?= htmlspecialchars($persona['Nombre'] . ' ' . $persona['Apellido']) ?>
+                            </span>
+                        </td>
                         <td><?= htmlspecialchars($persona['Numero_Documento'] ?? '') ?></td>
                         <td><?= htmlspecialchars($persona['Telefono'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($persona['Email'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($persona['Nombre_Celula'] ?? 'Sin célula') ?></td>
-                        <td><?= htmlspecialchars($persona['Nombre_Rol'] ?? 'Sin rol') ?></td>
-                        <td><?= htmlspecialchars($persona['Nombre_Ministerio'] ?? 'Sin ministerio') ?></td>
+                        <td>
+                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Email'] ?? '') ?>">
+                                <?= htmlspecialchars($persona['Email'] ?? '') ?>
+                            </span>
+                        </td>
+                        <td>
+                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Nombre_Celula'] ?? 'Sin célula') ?>">
+                                <?= htmlspecialchars($persona['Nombre_Celula'] ?? 'Sin célula') ?>
+                            </span>
+                        </td>
+                        <td>
+                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Nombre_Rol'] ?? 'Sin rol') ?>">
+                                <?= htmlspecialchars($persona['Nombre_Rol'] ?? 'Sin rol') ?>
+                            </span>
+                        </td>
+                        <td>
+                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Nombre_Ministerio'] ?? 'Sin ministerio') ?>">
+                                <?= htmlspecialchars($persona['Nombre_Ministerio'] ?? 'Sin ministerio') ?>
+                            </span>
+                        </td>
                         <td>
                             <?php 
                             $estado = $persona['Estado_Cuenta'] ?? 'Activo';
@@ -119,22 +153,26 @@
                             ?>
                             <span class="badge <?= $badgeClass ?>"><?= htmlspecialchars($estado) ?></span>
                         </td>
+                        <?php if ($mostrarAcciones): ?>
                         <td>
-                            <?php if (AuthController::tienePermiso('personas', 'ver')): ?>
+                            <div class="action-buttons">
+                            <?php if ($puedeVerPersona): ?>
                             <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= $persona['Id_Persona'] ?>" class="btn btn-sm btn-info">Ver</a>
                             <?php endif; ?>
-                            <?php if (AuthController::tienePermiso('personas', 'editar')): ?>
+                            <?php if ($puedeEditarPersona): ?>
                             <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $persona['Id_Persona'] ?>" class="btn btn-sm btn-warning">Editar</a>
                             <?php endif; ?>
-                            <?php if (AuthController::tienePermiso('personas', 'eliminar')): ?>
+                            <?php if ($puedeEliminarPersona): ?>
                             <a href="<?= PUBLIC_URL ?>?url=personas/eliminar&id=<?= $persona['Id_Persona'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar esta persona?')">Eliminar</a>
                             <?php endif; ?>
+                            </div>
                         </td>
+                        <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="9" class="text-center">No hay personas registradas</td>
+                    <td colspan="<?= $mostrarAcciones ? '9' : '8' ?>" class="text-center">No hay personas registradas</td>
                 </tr>
             <?php endif; ?>
         </tbody>

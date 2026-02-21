@@ -100,6 +100,7 @@ return [
     'nehemias/reparar-importacion' => 'NehemiasController@repararImportacion',
     'nehemias/seremos1200' => 'NehemiasController@seremos1200',
     'nehemias/seremos1200/importar' => 'NehemiasController@importarSeremos1200',
+    'nehemias/seremos1200/exportarExcel' => 'NehemiasController@exportarExcelSeremos1200',
     'nehemias/seremos1200/decision' => 'NehemiasController@decisionSeremos1200',
     
     // Transmisiones YouTube (Privadas - Requieren autenticación)

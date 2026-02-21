@@ -101,6 +101,10 @@ class PermisosController extends BaseController {
             'peticiones' => 'Peticiones',
             'asistencias' => 'Asistencias',
             'reportes' => 'Reportes',
+            'transmisiones' => 'Transmisiones',
+            'entrega_obsequio' => 'Entrega de Obsequios',
+            'registro_obsequio' => 'Registro de Obsequios',
+            'nehemias' => 'Nehemias',
             'permisos' => 'Permisos'
         ];
     }
