@@ -5,26 +5,125 @@
 
 require_once APP . '/Models/Celula.php';
 require_once APP . '/Models/Persona.php';
+require_once APP . '/Models/Ministerio.php';
 require_once APP . '/Helpers/DataIsolation.php';
 
 class CelulaController extends BaseController {
     private $celulaModel;
     private $personaModel;
+    private $ministerioModel;
 
     public function __construct() {
         $this->celulaModel = new Celula();
         $this->personaModel = new Persona();
+        $this->ministerioModel = new Ministerio();
     }
 
     public function index() {
         // Generar filtro según el rol del usuario
         $filtroCelulas = DataIsolation::generarFiltroCelulas();
-        
-        // Obtener células con aislamiento de rol
-        $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
 
-        
-        $this->view('celulas/lista', ['celulas' => $celulas]);
+        $filtroMinisterio = $_GET['ministerio'] ?? '';
+        $filtroLider = $_GET['lider'] ?? '';
+
+        // Base para opciones de filtros según visibilidad por rol
+        $celulasBase = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
+
+        $ministeriosDisponibles = [];
+        $ministerioIdsPermitidos = [];
+        $lideresDisponibles = [];
+        $liderIdsPermitidos = [];
+
+        foreach ($celulasBase as $celulaBase) {
+            $idMinisterioLider = (int)($celulaBase['Id_Ministerio_Lider'] ?? 0);
+            $nombreMinisterioLider = trim((string)($celulaBase['Nombre_Ministerio_Lider'] ?? ''));
+            if ($idMinisterioLider > 0 && $nombreMinisterioLider !== '') {
+                $ministeriosDisponibles[$idMinisterioLider] = [
+                    'Id_Ministerio' => $idMinisterioLider,
+                    'Nombre_Ministerio' => $nombreMinisterioLider
+                ];
+                $ministerioIdsPermitidos[$idMinisterioLider] = true;
+            }
+
+            $idLider = (int)($celulaBase['Id_Lider'] ?? 0);
+            $nombreLider = trim((string)($celulaBase['Nombre_Lider'] ?? ''));
+            $idMinisterioLider = (int)($celulaBase['Id_Ministerio_Lider'] ?? 0);
+            if ($idLider > 0 && $nombreLider !== '') {
+                $lideresDisponibles[$idLider] = [
+                    'Id_Persona' => $idLider,
+                    'Nombre_Completo' => $nombreLider,
+                    'Id_Ministerio' => $idMinisterioLider
+                ];
+                $liderIdsPermitidos[$idLider] = true;
+            }
+        }
+
+        ksort($ministeriosDisponibles);
+        ksort($lideresDisponibles);
+
+        $filtroMinisterio = ($filtroMinisterio !== '' && isset($ministerioIdsPermitidos[(int)$filtroMinisterio])) ? (int)$filtroMinisterio : '';
+        $filtroLider = ($filtroLider !== '' && isset($liderIdsPermitidos[(int)$filtroLider])) ? (int)$filtroLider : '';
+
+        // Obtener células con aislamiento y filtros
+        $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas, $filtroMinisterio, $filtroLider);
+
+        $celulaIds = array_map(static function ($celula) {
+            return (int)($celula['Id_Celula'] ?? 0);
+        }, $celulas);
+
+        $miembros = $this->personaModel->getActivosByCelulaIds($celulaIds);
+        $miembrosPorCelula = [];
+        foreach ($miembros as $miembro) {
+            $idCelula = (int)($miembro['Id_Celula'] ?? 0);
+            if ($idCelula <= 0) {
+                continue;
+            }
+
+            if (!isset($miembrosPorCelula[$idCelula])) {
+                $miembrosPorCelula[$idCelula] = [];
+            }
+            $miembrosPorCelula[$idCelula][] = $miembro;
+        }
+
+        $sections = [];
+        foreach ($celulas as $celula) {
+            $idCelula = (int)($celula['Id_Celula'] ?? 0);
+            $miembrosCelula = $miembrosPorCelula[$idCelula] ?? [];
+
+            $rows = [];
+            $nro = 1;
+            foreach ($miembrosCelula as $miembro) {
+                $nombreCompleto = trim(((string)($miembro['Nombre'] ?? '')) . ' ' . ((string)($miembro['Apellido'] ?? '')));
+                $rows[] = [
+                    'nro' => $nro++,
+                    'id_persona' => (int)$miembro['Id_Persona'],
+                    'nombre' => $nombreCompleto !== '' ? $nombreCompleto : 'Sin nombre',
+                    'telefono' => (string)($miembro['Telefono'] ?? ''),
+                    'documento' => (string)($miembro['Numero_Documento'] ?? '')
+                ];
+            }
+
+            $sections[] = [
+                'id_celula' => $idCelula,
+                'label' => (string)($celula['Nombre_Celula'] ?? 'Célula sin nombre'),
+                'lider' => (string)($celula['Nombre_Lider'] ?? 'Sin líder'),
+                'anfitrion' => (string)($celula['Nombre_Anfitrion'] ?? 'Sin anfitrión'),
+                'direccion' => (string)($celula['Direccion_Celula'] ?? ''),
+                'dia' => (string)($celula['Dia_Reunion'] ?? ''),
+                'hora' => (string)($celula['Hora_Reunion'] ?? ''),
+                'rows' => $rows,
+                'total_personas' => count($rows)
+            ];
+        }
+
+        $this->view('celulas/lista', [
+            'celulas' => $celulas,
+            'sections' => $sections,
+            'ministerios_disponibles' => array_values($ministeriosDisponibles),
+            'lideres_disponibles' => array_values($lideresDisponibles),
+            'filtro_ministerio_actual' => (string)$filtroMinisterio,
+            'filtro_lider_actual' => (string)$filtroLider
+        ]);
     }
 
     public function crear() {

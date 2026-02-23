@@ -4,13 +4,16 @@
  */
 
 require_once APP . '/Models/Ministerio.php';
+require_once APP . '/Models/Persona.php';
 require_once APP . '/Helpers/DataIsolation.php';
 
 class MinisterioController extends BaseController {
     private $ministerioModel;
+    private $personaModel;
 
     public function __construct() {
         $this->ministerioModel = new Ministerio();
+        $this->personaModel = new Persona();
     }
 
     public function index() {
@@ -19,7 +22,57 @@ class MinisterioController extends BaseController {
         
         // Obtener ministerios con aislamiento de rol
         $ministerios = $this->ministerioModel->getAllWithMemberCountAndRole($filtroMinisterios);
-        $this->view('ministerios/lista', ['ministerios' => $ministerios]);
+
+        $ministerioIds = array_map(static function ($ministerio) {
+            return (int)($ministerio['Id_Ministerio'] ?? 0);
+        }, $ministerios);
+
+        $miembros = $this->personaModel->getActivosByMinisterioIds($ministerioIds, 3);
+        $miembrosPorMinisterio = [];
+        foreach ($miembros as $miembro) {
+            $idMinisterio = (int)($miembro['Id_Ministerio'] ?? 0);
+            if ($idMinisterio <= 0) {
+                continue;
+            }
+
+            if (!isset($miembrosPorMinisterio[$idMinisterio])) {
+                $miembrosPorMinisterio[$idMinisterio] = [];
+            }
+            $miembrosPorMinisterio[$idMinisterio][] = $miembro;
+        }
+
+        $sections = [];
+        foreach ($ministerios as $ministerio) {
+            $idMinisterio = (int)($ministerio['Id_Ministerio'] ?? 0);
+            $miembrosMinisterio = $miembrosPorMinisterio[$idMinisterio] ?? [];
+
+            $rows = [];
+            $nro = 1;
+            foreach ($miembrosMinisterio as $miembro) {
+                $nombreCompleto = trim(((string)($miembro['Nombre'] ?? '')) . ' ' . ((string)($miembro['Apellido'] ?? '')));
+                $rows[] = [
+                    'nro' => $nro++,
+                    'id_persona' => (int)$miembro['Id_Persona'],
+                    'nombre' => $nombreCompleto !== '' ? $nombreCompleto : 'Sin nombre',
+                    'telefono' => (string)($miembro['Telefono'] ?? ''),
+                    'documento' => (string)($miembro['Numero_Documento'] ?? ''),
+                    'celula' => (string)($miembro['Nombre_Celula'] ?? '')
+                ];
+            }
+
+            $sections[] = [
+                'id_ministerio' => $idMinisterio,
+                'label' => (string)($ministerio['Nombre_Ministerio'] ?? 'Ministerio sin nombre'),
+                'descripcion' => (string)($ministerio['Descripcion'] ?? ''),
+                'rows' => $rows,
+                'total_personas' => count($rows)
+            ];
+        }
+
+        $this->view('ministerios/lista', [
+            'ministerios' => $ministerios,
+            'sections' => $sections
+        ]);
     }
 
     public function crear() {

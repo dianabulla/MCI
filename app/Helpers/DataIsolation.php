@@ -102,7 +102,12 @@ class DataIsolation {
      * Verificar si el usuario es administrador
      */
     public static function esAdmin() {
-        return self::getUsuarioRol() === self::ROL_ADMINISTRADOR;
+        if (self::getUsuarioRol() === self::ROL_ADMINISTRADOR) {
+            return true;
+        }
+
+        $rolNombre = self::getUsuarioRolNombre();
+        return strpos($rolNombre, 'admin') !== false;
     }
 
     /**
@@ -223,6 +228,13 @@ class DataIsolation {
                 return "c.Id_Lider IN (SELECT Id_Persona FROM persona WHERE Id_Ministerio = $idMinisterio)";
             }
             return "1=0";
+        }
+
+        // Fallback para roles personalizados:
+        // si tiene permiso explícito de ver células, permitir listado completo.
+        if (isset($_SESSION['permisos']['celulas'])
+            && !empty($_SESSION['permisos']['celulas']['ver'])) {
+            return "1=1";
         }
 
         return "1=0";

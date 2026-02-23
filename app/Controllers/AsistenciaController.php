@@ -22,11 +22,133 @@ class AsistenciaController extends BaseController {
     public function index() {
         // Generar filtro según el rol del usuario
         $filtroAsistencias = DataIsolation::generarFiltroAsistencias();
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+
+        $filtroMinisterio = $_GET['ministerio'] ?? '';
+        $filtroLider = $_GET['lider'] ?? '';
         
         // Obtener asistencias con aislamiento de rol
         $asistencias = $this->asistenciaModel->getAllWithInfoAndRole($filtroAsistencias);
-        
-        $this->view('asistencias/lista', ['asistencias' => $asistencias]);
+
+        // Base de células visibles para el usuario (opciones de filtros)
+        $celulasBase = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
+
+        $ministeriosDisponibles = [];
+        $ministerioIdsPermitidos = [];
+        $lideresDisponibles = [];
+        $liderIdsPermitidos = [];
+
+        foreach ($celulasBase as $celulaBase) {
+            $idMinisterioLider = (int)($celulaBase['Id_Ministerio_Lider'] ?? 0);
+            $nombreMinisterioLider = trim((string)($celulaBase['Nombre_Ministerio_Lider'] ?? ''));
+            if ($idMinisterioLider > 0 && $nombreMinisterioLider !== '') {
+                $ministeriosDisponibles[$idMinisterioLider] = [
+                    'Id_Ministerio' => $idMinisterioLider,
+                    'Nombre_Ministerio' => $nombreMinisterioLider
+                ];
+                $ministerioIdsPermitidos[$idMinisterioLider] = true;
+            }
+
+            $idLider = (int)($celulaBase['Id_Lider'] ?? 0);
+            $nombreLider = trim((string)($celulaBase['Nombre_Lider'] ?? ''));
+            if ($idLider > 0 && $nombreLider !== '') {
+                $lideresDisponibles[$idLider] = [
+                    'Id_Persona' => $idLider,
+                    'Nombre_Completo' => $nombreLider,
+                    'Id_Ministerio' => $idMinisterioLider
+                ];
+                $liderIdsPermitidos[$idLider] = true;
+            }
+        }
+
+        ksort($ministeriosDisponibles);
+        ksort($lideresDisponibles);
+
+        $filtroMinisterio = ($filtroMinisterio !== '' && isset($ministerioIdsPermitidos[(int)$filtroMinisterio])) ? (int)$filtroMinisterio : '';
+        $filtroLider = ($filtroLider !== '' && isset($liderIdsPermitidos[(int)$filtroLider])) ? (int)$filtroLider : '';
+
+        // Células visibles con filtros aplicados
+        $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas, $filtroMinisterio, $filtroLider);
+
+        // Agrupar asistencias por célula
+        $asistenciasPorCelula = [];
+        foreach ($asistencias as $asistencia) {
+            $idCelula = (int)($asistencia['Id_Celula'] ?? 0);
+            if ($idCelula <= 0) {
+                continue;
+            }
+
+            if (!isset($asistenciasPorCelula[$idCelula])) {
+                $asistenciasPorCelula[$idCelula] = [];
+            }
+
+            $asistenciasPorCelula[$idCelula][] = $asistencia;
+        }
+
+        $sections = [];
+        foreach ($celulas as $celula) {
+            $idCelula = (int)($celula['Id_Celula'] ?? 0);
+            $rowsAsistencia = $asistenciasPorCelula[$idCelula] ?? [];
+
+            usort($rowsAsistencia, static function ($a, $b) {
+                return strcmp((string)($b['Fecha_Asistencia'] ?? ''), (string)($a['Fecha_Asistencia'] ?? ''));
+            });
+
+            $fechaUltimoReporte = '';
+            if (!empty($rowsAsistencia)) {
+                $fechaUltimoReporte = (string)($rowsAsistencia[0]['Fecha_Asistencia'] ?? '');
+            }
+
+            $rowsUltimoReporte = [];
+            if ($fechaUltimoReporte !== '') {
+                $rowsUltimoReporte = array_values(array_filter($rowsAsistencia, static function ($registro) use ($fechaUltimoReporte) {
+                    return (string)($registro['Fecha_Asistencia'] ?? '') === $fechaUltimoReporte;
+                }));
+            }
+
+            $rows = [];
+            $nro = 1;
+            $totalSi = 0;
+            $totalNo = 0;
+
+            foreach ($rowsUltimoReporte as $registro) {
+                $asistio = (int)($registro['Asistio'] ?? 0) === 1;
+                if ($asistio) {
+                    $totalSi++;
+                } else {
+                    $totalNo++;
+                }
+
+                $rows[] = [
+                    'nro' => $nro++,
+                    'id_persona' => (int)($registro['Id_Persona'] ?? 0),
+                    'persona' => (string)($registro['Nombre_Persona'] ?? 'Sin nombre'),
+                    'fecha' => (string)($registro['Fecha_Asistencia'] ?? ''),
+                    'asistio' => $asistio
+                ];
+            }
+
+            $sections[] = [
+                'id_celula' => $idCelula,
+                'label' => (string)($celula['Nombre_Celula'] ?? 'Célula sin nombre'),
+                'lider' => (string)($celula['Nombre_Lider'] ?? 'Sin líder'),
+                'anfitrion' => (string)($celula['Nombre_Anfitrion'] ?? 'Sin anfitrión'),
+                'fecha_ultimo_reporte' => $fechaUltimoReporte,
+                'total_registros' => count($rows),
+                'total_si' => $totalSi,
+                'total_no' => $totalNo,
+                'rows' => $rows
+            ];
+        }
+
+        $this->view('asistencias/lista', [
+            'asistencias' => $asistencias,
+            'sections' => $sections,
+            'ministerios_disponibles' => array_values($ministeriosDisponibles),
+            'lideres_disponibles' => array_values($lideresDisponibles),
+            'filtro_ministerio_actual' => (string)$filtroMinisterio,
+            'filtro_lider_actual' => (string)$filtroLider
+        ]);
     }
 
     public function registrar() {

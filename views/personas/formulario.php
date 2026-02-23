@@ -2,9 +2,10 @@
 
 <?php
 $returnToAsistencia = ($return_to ?? '') === 'asistencia';
+$returnToCelulas = ($return_to ?? '') === 'celulas';
 $urlVolver = $returnToAsistencia
     ? (PUBLIC_URL . '?url=asistencias/registrar' . (!empty($celula_retorno) ? '&celula=' . (int)$celula_retorno : ''))
-    : (PUBLIC_URL . '?url=personas');
+    : ($returnToCelulas ? (PUBLIC_URL . '?url=celulas') : (PUBLIC_URL . '?url=personas'));
 ?>
 
 <div class="page-header">
@@ -23,6 +24,8 @@ $urlVolver = $returnToAsistencia
         <?php if ($returnToAsistencia): ?>
         <input type="hidden" name="return_to" value="asistencia">
         <input type="hidden" name="celula_retorno" value="<?= (int)($celula_retorno ?? 0) ?>">
+        <?php elseif ($returnToCelulas): ?>
+        <input type="hidden" name="return_to" value="celulas">
         <?php endif; ?>
 
         <!-- Sección: Información Personal -->
@@ -219,8 +222,11 @@ $urlVolver = $returnToAsistencia
 
         <!-- Acceso al Sistema - Solo Administradores -->
         <?php if (AuthController::esAdministrador()): ?>
-        <div class="form-section">
+        <div class="form-section" id="acceso_sistema_section">
             <h3 class="section-title">🔐 Acceso al Sistema</h3>
+            <div id="acceso_sistema_alerta" class="alert alert-warning" style="display:none; margin-bottom: 15px;">
+                El acceso al sistema no está disponible para personas con rol Asistente.
+            </div>
             
             <div class="form-row">
                 <div class="form-group">
@@ -364,6 +370,70 @@ const lideresDisponibles = [
         <?php endforeach; ?>
     <?php endif; ?>
 ];
+
+// Control de acceso al sistema según rol seleccionado
+const rolSelect = document.getElementById('id_rol');
+const accesoSistemaSection = document.getElementById('acceso_sistema_section');
+const accesoSistemaAlerta = document.getElementById('acceso_sistema_alerta');
+
+function normalizarTexto(texto) {
+    if (!texto) return '';
+    return texto
+        .toString()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+}
+
+function rolSeleccionadoEsAsistente() {
+    if (!rolSelect || rolSelect.selectedIndex < 0) {
+        return false;
+    }
+
+    const option = rolSelect.options[rolSelect.selectedIndex];
+    const textoRol = normalizarTexto(option ? option.text : '');
+    return textoRol.includes('asistente');
+}
+
+function actualizarAccesoSistemaPorRol() {
+    if (!accesoSistemaSection) {
+        return;
+    }
+
+    const esAsistente = rolSeleccionadoEsAsistente();
+    const camposAcceso = accesoSistemaSection.querySelectorAll('input, select, textarea');
+
+    if (esAsistente) {
+        accesoSistemaSection.style.display = 'none';
+        if (accesoSistemaAlerta) {
+            accesoSistemaAlerta.style.display = 'block';
+        }
+
+        camposAcceso.forEach(campo => {
+            campo.disabled = true;
+            if (campo.id === 'usuario' || campo.id === 'contrasena') {
+                campo.value = '';
+            }
+            if (campo.id === 'estado_cuenta') {
+                campo.value = 'Inactivo';
+            }
+        });
+        return;
+    }
+
+    accesoSistemaSection.style.display = 'block';
+    if (accesoSistemaAlerta) {
+        accesoSistemaAlerta.style.display = 'none';
+    }
+    camposAcceso.forEach(campo => {
+        campo.disabled = false;
+    });
+}
+
+if (rolSelect) {
+    rolSelect.addEventListener('change', actualizarAccesoSistemaPorRol);
+    actualizarAccesoSistemaPorRol();
+}
 
 // Autocompletar para célula
 const celulaInput = document.getElementById('celula_search');

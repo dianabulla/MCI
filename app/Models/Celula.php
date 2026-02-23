@@ -32,10 +32,12 @@ class Celula extends BaseModel {
     public function getAllWithMemberCount() {
         $sql = "SELECT c.*, 
                 COUNT(CASE WHEN p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL THEN 1 END) as Total_Miembros,
-                CONCAT(l.Nombre, ' ', l.Apellido) as Nombre_Lider
+                CONCAT(l.Nombre, ' ', l.Apellido) as Nombre_Lider,
+                CONCAT(an.Nombre, ' ', an.Apellido) as Nombre_Anfitrion
                 FROM {$this->table} c
                 LEFT JOIN persona p ON c.Id_Celula = p.Id_Celula
                 LEFT JOIN persona l ON c.Id_Lider = l.Id_Persona
+                LEFT JOIN persona an ON c.Id_Anfitrion = an.Id_Persona
                 GROUP BY c.Id_Celula
                 ORDER BY c.Nombre_Celula";
         return $this->query($sql);
@@ -47,10 +49,12 @@ class Celula extends BaseModel {
     public function getByMinisterioWithMemberCount($idMinisterio) {
         $sql = "SELECT c.*, 
                 COUNT(CASE WHEN p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL THEN 1 END) as Total_Miembros,
-                CONCAT(l.Nombre, ' ', l.Apellido) as Nombre_Lider
+                CONCAT(l.Nombre, ' ', l.Apellido) as Nombre_Lider,
+                CONCAT(an.Nombre, ' ', an.Apellido) as Nombre_Anfitrion
                 FROM {$this->table} c
                 LEFT JOIN persona p ON c.Id_Celula = p.Id_Celula
                 LEFT JOIN persona l ON c.Id_Lider = l.Id_Persona
+                LEFT JOIN persona an ON c.Id_Anfitrion = an.Id_Persona
                 WHERE l.Id_Ministerio = ?
                 GROUP BY c.Id_Celula
                 ORDER BY c.Nombre_Celula";
@@ -75,16 +79,38 @@ class Celula extends BaseModel {
     /**
      * Obtener células con contador de miembros y aislamiento de rol
      */
-    public function getAllWithMemberCountAndRole($filtroRol) {
+    public function getAllWithMemberCountAndRole($filtroRol, $idMinisterio = null, $idLider = null) {
         $sql = "SELECT c.*, 
                 COUNT(CASE WHEN p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL THEN 1 END) as Total_Miembros,
-                CONCAT(l.Nombre, ' ', l.Apellido) as Nombre_Lider
+                CONCAT(l.Nombre, ' ', l.Apellido) as Nombre_Lider,
+                CONCAT(an.Nombre, ' ', an.Apellido) as Nombre_Anfitrion,
+                l.Id_Ministerio as Id_Ministerio_Lider,
+                m.Nombre_Ministerio as Nombre_Ministerio_Lider
                 FROM {$this->table} c
                 LEFT JOIN persona p ON c.Id_Celula = p.Id_Celula
                 LEFT JOIN persona l ON c.Id_Lider = l.Id_Persona
-                WHERE $filtroRol
+                LEFT JOIN persona an ON c.Id_Anfitrion = an.Id_Persona
+                LEFT JOIN ministerio m ON l.Id_Ministerio = m.Id_Ministerio
+                WHERE $filtroRol";
+
+        $params = [];
+        $idMinisterio = $idMinisterio !== null && $idMinisterio !== '' ? (int)$idMinisterio : null;
+        $idLider = $idLider !== null && $idLider !== '' ? (int)$idLider : null;
+
+        if ($idMinisterio !== null && $idMinisterio > 0) {
+            $sql .= " AND l.Id_Ministerio = ?";
+            $params[] = $idMinisterio;
+        }
+
+        if ($idLider !== null && $idLider > 0) {
+            $sql .= " AND c.Id_Lider = ?";
+            $params[] = $idLider;
+        }
+
+        $sql .= "
                 GROUP BY c.Id_Celula
                 ORDER BY c.Nombre_Celula";
-        return $this->query($sql);
+
+        return $this->query($sql, $params);
     }
 }

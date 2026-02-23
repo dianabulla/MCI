@@ -115,6 +115,31 @@ class PersonaController extends BaseController {
         return [$filtroMinisterio, $filtroLider];
     }
 
+    private function esRolAsistente($idRol) {
+        $idRol = (int)$idRol;
+        if ($idRol <= 0) {
+            return false;
+        }
+
+        $rol = $this->rolModel->getById($idRol);
+        if (empty($rol['Nombre_Rol'])) {
+            return false;
+        }
+
+        $nombreRol = strtolower(trim((string)$rol['Nombre_Rol']));
+        $nombreRol = strtr($nombreRol, [
+            'á' => 'a',
+            'é' => 'e',
+            'í' => 'i',
+            'ó' => 'o',
+            'ú' => 'u',
+            'ü' => 'u',
+            'ñ' => 'n'
+        ]);
+
+        return strpos($nombreRol, 'asistente') !== false;
+    }
+
     public function index() {
         $filtroMinisterio = $_GET['ministerio'] ?? null;
         $filtroLider = $_GET['lider'] ?? null;
@@ -186,6 +211,9 @@ class PersonaController extends BaseController {
         $celulaRetorno = ($celulaRetorno !== null && $celulaRetorno !== '') ? (int) $celulaRetorno : null;
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $idRolSeleccionado = $_POST['id_rol'] ?: null;
+            $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
+
             $data = [
                 'Nombre' => $_POST['nombre'],
                 'Apellido' => $_POST['apellido'],
@@ -210,7 +238,7 @@ class PersonaController extends BaseController {
             ];
             
             // Agregar campos de acceso al sistema si se proporcionan (solo admin)
-            if (AuthController::esAdministrador()) {
+            if (AuthController::esAdministrador() && !$rolEsAsistente) {
                 if (!empty($_POST['usuario'])) {
                     $data['Usuario'] = $_POST['usuario'];
                 }
@@ -221,6 +249,9 @@ class PersonaController extends BaseController {
                     // Activar cuenta por defecto si se crea con contraseña
                     $data['Estado_Cuenta'] = 'Activo';
                 }
+            } elseif ($rolEsAsistente) {
+                // Regla de negocio: asistentes no deben tener acceso activo al sistema
+                $data['Estado_Cuenta'] = 'Inactivo';
             }
             
             try {
@@ -275,6 +306,10 @@ class PersonaController extends BaseController {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
+
+        $returnTo = $_POST['return_to'] ?? ($_GET['return_to'] ?? null);
+        $celulaRetorno = $_POST['celula_retorno'] ?? ($_GET['celula'] ?? null);
+        $celulaRetorno = ($celulaRetorno !== null && $celulaRetorno !== '') ? (int) $celulaRetorno : null;
         
         $id = $_GET['id'] ?? null;
         
@@ -283,6 +318,9 @@ class PersonaController extends BaseController {
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $idRolSeleccionado = $_POST['id_rol'] ?: null;
+            $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
+
             $data = [
                 'Nombre' => $_POST['nombre'],
                 'Apellido' => $_POST['apellido'],
@@ -305,7 +343,7 @@ class PersonaController extends BaseController {
             ];
             
             // Agregar campos de acceso al sistema si se proporcionan (solo admin)
-            if (AuthController::esAdministrador()) {
+            if (AuthController::esAdministrador() && !$rolEsAsistente) {
                 if (!empty($_POST['usuario'])) {
                     $data['Usuario'] = $_POST['usuario'];
                 }
@@ -319,10 +357,26 @@ class PersonaController extends BaseController {
                 if (isset($_POST['estado_cuenta'])) {
                     $data['Estado_Cuenta'] = $_POST['estado_cuenta'];
                 }
+            } elseif ($rolEsAsistente) {
+                // Regla de negocio: asistentes no deben tener acceso activo al sistema
+                $data['Estado_Cuenta'] = 'Inactivo';
             }
             
             try {
                 $this->personaModel->update($id, $data);
+
+                if ($returnTo === 'asistencia') {
+                    $urlRetorno = 'asistencias/registrar';
+                    if ($celulaRetorno) {
+                        $urlRetorno .= '&celula=' . $celulaRetorno;
+                    }
+                    $this->redirect($urlRetorno);
+                }
+
+                if ($returnTo === 'celulas') {
+                    $this->redirect('celulas');
+                }
+
                 $this->redirect('personas');
             } catch (PDOException $e) {
                 // Detectar error de duplicado
@@ -341,7 +395,9 @@ class PersonaController extends BaseController {
                     'personas_invitadores' => $this->personaModel->getAll(),
                     'personas_lideres' => $this->personaModel->getLideresYPastores(),
                     'error' => $error,
-                    'post_data' => $_POST
+                    'post_data' => $_POST,
+                    'return_to' => $returnTo,
+                    'celula_retorno' => $celulaRetorno
                 ];
                 $this->view('personas/formulario', $viewData);
             }
@@ -353,7 +409,9 @@ class PersonaController extends BaseController {
                 'ministerios' => $this->ministerioModel->getAll(),
                 'roles' => $this->rolModel->getAll(),
                 'personas_invitadores' => $this->personaModel->getAll(),
-                'personas_lideres' => $this->personaModel->getLideresYPastores()
+                'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                'return_to' => $returnTo,
+                'celula_retorno' => $celulaRetorno
             ];
             $this->view('personas/formulario', $data);
         }
@@ -361,13 +419,17 @@ class PersonaController extends BaseController {
 
     public function detalle() {
         $id = $_GET['id'] ?? null;
+        $returnTo = $_GET['return_to'] ?? null;
         
         if (!$id) {
             $this->redirect('personas');
         }
 
         $persona = $this->personaModel->getById($id);
-        $this->view('personas/detalle', ['persona' => $persona]);
+        $this->view('personas/detalle', [
+            'persona' => $persona,
+            'return_to' => $returnTo
+        ]);
     }
 
     public function eliminar() {

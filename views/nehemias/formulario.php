@@ -132,10 +132,14 @@
             <?php if (isset($mensaje) && !empty($mensaje)): ?>
                 <div class="alert alert-<?= $tipo_mensaje === 'success' ? 'success' : 'danger' ?>">
                     <?= htmlspecialchars($mensaje) ?>
+                    <?php if ($tipo_mensaje === 'success'): ?>
+                        <div class="mt-2">
+                            <a href="?url=nehemias/formulario" class="btn btn-sm btn-outline-success">Enviar otra respuesta</a>
+                        </div>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
 
-            <?php if (!isset($registro_exitoso) || !$registro_exitoso): ?>
             <form method="POST" action="?url=nehemias/guardar" id="formNehemias">
                 <div class="mb-3">
                     <label class="form-label">NOMBRES <span class="required">*</span></label>
@@ -185,7 +189,6 @@
 
                 <button type="submit" class="btn btn-primary w-100">Enviar formulario</button>
             </form>
-            <?php endif; ?>
         </div>
     </div>
 

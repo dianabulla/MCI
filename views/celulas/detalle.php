@@ -60,7 +60,7 @@
                                 <td><?= htmlspecialchars($miembro['Telefono'] ?? 'N/A') ?></td>
                                 <td><?= htmlspecialchars($miembro['Email'] ?? 'N/A') ?></td>
                                 <td>
-                                    <a href="<?= PUBLIC_URL ?>index.php?url=personas/detalle&id=<?= $miembro['Id_Persona'] ?>" class="btn btn-sm btn-info">Ver</a>
+                                    <a href="<?= PUBLIC_URL ?>index.php?url=personas/detalle&id=<?= $miembro['Id_Persona'] ?>&return_to=celulas" class="btn btn-sm btn-info">Ver</a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

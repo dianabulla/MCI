@@ -1,10 +1,23 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
+<?php
+$returnTo = $return_to ?? null;
+$editUrl = PUBLIC_URL . '?url=personas/editar&id=' . (int)$persona['Id_Persona'];
+$volverUrl = PUBLIC_URL . '?url=personas';
+
+if ($returnTo === 'celulas') {
+    $editUrl .= '&return_to=celulas';
+    $volverUrl = PUBLIC_URL . '?url=celulas';
+} elseif ($returnTo === 'asistencia') {
+    $editUrl .= '&return_to=asistencia';
+}
+?>
+
 <div class="page-header">
     <h2>Detalle de Persona</h2>
     <div>
-        <a href="<?= PUBLIC_URL ?>index.php?url=personas/editar&id=<?= $persona['Id_Persona'] ?>" class="btn btn-warning">Editar</a>
-        <a href="<?= PUBLIC_URL ?>index.php?url=personas" class="btn btn-secondary">Volver</a>
+        <a href="<?= $editUrl ?>" class="btn btn-warning">Editar</a>
+        <a href="<?= $volverUrl ?>" class="btn btn-secondary">Volver</a>
     </div>
 </div>
 

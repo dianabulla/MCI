@@ -371,4 +371,61 @@ class Persona extends BaseModel {
                 ORDER BY m.Nombre_Ministerio";
         return $this->query($sql, [$fechaInicio, $fechaFin]);
     }
+
+    /**
+     * Obtener miembros activos agrupables por múltiples células
+     */
+    public function getActivosByCelulaIds(array $celulaIds) {
+        $celulaIds = array_values(array_filter(array_map('intval', $celulaIds), function ($id) {
+            return $id > 0;
+        }));
+
+        if (empty($celulaIds)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($celulaIds), '?'));
+
+        $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Numero_Documento, p.Telefono, p.Id_Celula
+                FROM persona p
+                WHERE p.Id_Celula IN ($placeholders)
+                AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                ORDER BY p.Id_Celula, p.Apellido, p.Nombre";
+
+        return $this->query($sql, $celulaIds);
+    }
+
+    /**
+     * Obtener miembros activos agrupables por múltiples ministerios
+     */
+    public function getActivosByMinisterioIds(array $ministerioIds, $idRol = null) {
+        $ministerioIds = array_values(array_filter(array_map('intval', $ministerioIds), function ($id) {
+            return $id > 0;
+        }));
+
+        if (empty($ministerioIds)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ministerioIds), '?'));
+
+        $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Numero_Documento, p.Telefono, p.Id_Ministerio,
+                       c.Nombre_Celula
+                FROM persona p
+                LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
+                WHERE p.Id_Ministerio IN ($placeholders)
+                AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)";
+
+        $params = $ministerioIds;
+        $idRol = $idRol !== null ? (int)$idRol : null;
+        if ($idRol !== null && $idRol > 0) {
+            $sql .= " AND p.Id_Rol = ?";
+            $params[] = $idRol;
+        }
+
+        $sql .= "
+                ORDER BY p.Id_Ministerio, p.Apellido, p.Nombre";
+
+        return $this->query($sql, $params);
+    }
 }

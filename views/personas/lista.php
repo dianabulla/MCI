@@ -185,6 +185,18 @@ const busquedaInput = document.getElementById('busqueda_rapida');
 const tabla = document.querySelector('.data-table tbody');
 const filas = tabla.querySelectorAll('tr');
 
+const filtroMinisterio = document.getElementById('filtro_ministerio');
+const filtroLider = document.getElementById('filtro_lider');
+const filtroRestringido = <?= !empty($filtroRestringido) ? 'true' : 'false' ?>;
+const liderActual = '<?= htmlspecialchars((string)($filtroLiderActual ?? ($_GET['lider'] ?? '')), ENT_QUOTES) ?>';
+const lideresDisponibles = <?= json_encode(array_map(function ($lider) {
+    return [
+        'Id_Persona' => (int)($lider['Id_Persona'] ?? 0),
+        'Nombre' => trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? '')),
+        'Id_Ministerio' => (int)($lider['Id_Ministerio'] ?? 0)
+    ];
+}, $lideres ?? [])) ?>;
+
 // Guardar el contenido original
 const filasArray = Array.from(filas);
 
@@ -218,6 +230,52 @@ busquedaInput.addEventListener('input', function(e) {
         fila.style.display = coincide ? '' : 'none';
     });
 });
+
+function renderLideresDependiente() {
+    if (!filtroMinisterio || !filtroLider) return;
+
+    const ministerioSeleccionado = filtroMinisterio.value;
+    filtroLider.innerHTML = '';
+
+    const optionTodos = document.createElement('option');
+    optionTodos.value = '';
+    optionTodos.textContent = filtroRestringido ? 'Seleccione' : 'Todos los líderes';
+    filtroLider.appendChild(optionTodos);
+
+    if (!filtroRestringido) {
+        const optionSinLider = document.createElement('option');
+        optionSinLider.value = '0';
+        optionSinLider.textContent = 'Sin líder';
+        filtroLider.appendChild(optionSinLider);
+    }
+
+    const filtrados = lideresDisponibles.filter(function(lider) {
+        if (!ministerioSeleccionado || ministerioSeleccionado === '0') {
+            return true;
+        }
+        return String(lider.Id_Ministerio) === String(ministerioSeleccionado);
+    });
+
+    filtrados.forEach(function(lider) {
+        const option = document.createElement('option');
+        option.value = String(lider.Id_Persona);
+        option.textContent = lider.Nombre;
+        filtroLider.appendChild(option);
+    });
+
+    const valorDeseado = String(liderActual || '');
+    const existe = Array.from(filtroLider.options).some(function(opt) {
+        return opt.value === valorDeseado;
+    });
+    filtroLider.value = existe ? valorDeseado : '';
+}
+
+if (filtroMinisterio && filtroLider) {
+    filtroMinisterio.addEventListener('change', function() {
+        renderLideresDependiente();
+    });
+    renderLideresDependiente();
+}
 </script>
 
 <?php include VIEWS . '/layout/footer.php'; ?>
