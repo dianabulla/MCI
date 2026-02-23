@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $pageTitle ?? 'MCI Madrid Colombia' ?></title>
-    <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/styles.css?v=20260220-35">
+    <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/styles.css?v=20260223-36">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
 </head>
 <body>
@@ -41,12 +41,6 @@ $puedeVer = function(string $modulo) {
                 <i class="bi bi-house"></i> <span class="sidebar-link-text">Inicio</span>
             </a>
 
-            <?php if ($puedeVer('eventos')): ?>
-            <a class="sidebar-link <?= $isActive(['eventos']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=eventos">
-                <i class="bi bi-calendar-event"></i> <span class="sidebar-link-text">Eventos</span>
-            </a>
-            <?php endif; ?>
-
             <?php if ($puedeVer('personas')): ?>
             <a class="sidebar-link <?= $isActive(['personas', 'personas/ganar']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=personas/ganar">
                 <i class="bi bi-person-plus"></i> <span class="sidebar-link-text">Ganar</span>
@@ -80,6 +74,12 @@ $puedeVer = function(string $modulo) {
             <?php if ($puedeVer('transmisiones')): ?>
             <a class="sidebar-link <?= $isActive(['transmisiones']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=transmisiones">
                 <i class="bi bi-broadcast"></i> <span class="sidebar-link-text">Transmisiones</span>
+            </a>
+            <?php endif; ?>
+
+            <?php if ($puedeVer('eventos')): ?>
+            <a class="sidebar-link <?= $isActive(['eventos']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=eventos">
+                <i class="bi bi-calendar-event"></i> <span class="sidebar-link-text">Eventos</span>
             </a>
             <?php endif; ?>
 

@@ -6,9 +6,10 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
 ?>
 
 <div class="page-header">
-    <h2>Apartado Ganar</h2>
+    <h2>Pendiente por consolidar</h2>
     <div class="page-actions">
-        <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-secondary">Volver a Personas</a>
+        <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill">Ubicados en células</a>
+        <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill active">Pendiente por consolidar</a>
         <?php if (AuthController::tienePermiso('personas', 'crear')): ?>
         <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="btn btn-primary">+ Nueva Persona</a>
         <?php endif; ?>
@@ -96,7 +97,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
 
 <div class="alert alert-success" style="margin-bottom: 20px;">
     <i class="bi bi-check-circle"></i>
-    Total en seguimiento Ganar: <strong><?= count($personas) ?></strong> persona(s)
+    Total pendiente por consolidar: <strong><?= count($personas) ?></strong> persona(s)
 </div>
 
 <div class="table-container">
@@ -162,7 +163,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="<?= $mostrarAcciones ? '9' : '8' ?>" class="text-center">No hay personas en el apartado Ganar</td>
+                    <td colspan="<?= $mostrarAcciones ? '9' : '8' ?>" class="text-center">No hay personas pendientes por consolidar</td>
                 </tr>
             <?php endif; ?>
         </tbody>

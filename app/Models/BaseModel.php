@@ -101,3 +101,8 @@ class BaseModel {
         return $stmt->fetchAll();
     }
 }
+
+// Compatibilidad: permite usar BaseModel con namespace (App\Models\BaseModel)
+if (!class_exists('App\\Models\\BaseModel', false)) {
+    class_alias('BaseModel', 'App\\Models\\BaseModel');
+}

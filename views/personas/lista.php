@@ -9,7 +9,8 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 <div class="page-header">
     <h2>Personas</h2>
     <div class="page-actions">
-        <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-success">Apartado Ganar</a>
+        <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill active">Ubicados en células</a>
+        <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill">Pendiente por consolidar</a>
         <?php if (AuthController::tienePermiso('personas', 'crear')): ?>
         <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="btn btn-primary">+ Nueva Persona</a>
         <?php endif; ?>

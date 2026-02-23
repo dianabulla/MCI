@@ -27,6 +27,7 @@ return [
     'celulas/editar' => 'CelulaController@editar',
     'celulas/detalle' => 'CelulaController@detalle',
     'celulas/eliminar' => 'CelulaController@eliminar',
+    'celulas/materiales' => 'CelulaController@materiales',
     'celulas/buscarLideres' => 'CelulaController@buscarLideres',
     'celulas/buscarLideres12' => 'CelulaController@buscarLideres12',
     'celulas/buscarPastores' => 'CelulaController@buscarPastores',

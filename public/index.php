@@ -25,11 +25,44 @@ require_once ROOT . '/conexion.php';
 require_once APP . '/Config/config.php';
 require_once APP . '/Config/Database.php';
 
+// Fallback de URLs para entornos donde no estén definidas en config.php
+if (!defined('PUBLIC_URL')) {
+    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/public/index.php'));
+    $publicPath = rtrim(dirname($scriptName), '/');
+    define('PUBLIC_URL', $publicPath !== '' ? $publicPath : '/public');
+}
+
+if (!defined('BASE_URL')) {
+    $basePath = preg_replace('#/public$#', '', PUBLIC_URL);
+    define('BASE_URL', $basePath !== '' ? $basePath : '/');
+}
+
+if (!defined('ASSETS_URL')) {
+    define('ASSETS_URL', rtrim(PUBLIC_URL, '/') . '/assets');
+}
+
 // Cargar el controlador base
 require_once APP . '/Controllers/BaseController.php';
 
 // Cargar rutas
 $routes = require_once APP . '/Config/routes.php';
+
+if (!is_array($routes)) {
+    $routes = [];
+}
+
+// Fallback para produccion: asegurar rutas minimas de autenticacion
+$authRoutesFallback = [
+    'auth/login' => 'AuthController@login',
+    'auth/logout' => 'AuthController@logout',
+    'auth/acceso-denegado' => 'AuthController@accesoDenegado',
+];
+
+foreach ($authRoutesFallback as $routeKey => $routeTarget) {
+    if (!array_key_exists($routeKey, $routes)) {
+        $routes[$routeKey] = $routeTarget;
+    }
+}
 
 // Obtener la URL solicitada (soporta tanto 'url' como 'route')
 $url = isset($_GET['url']) ? trim($_GET['url'], '/') : (isset($_GET['route']) ? trim($_GET['route'], '/') : 'home');
@@ -52,7 +85,7 @@ if (!in_array($url, $rutasPublicas)) {
     require_once APP . '/Controllers/AuthController.php';
     
     if (!AuthController::estaAutenticado()) {
-        header('Location: ' . PUBLIC_URL . '?url=auth/login');
+        header('Location: ' . rtrim(PUBLIC_URL, '/') . '/index.php?url=auth/login');
         exit;
     }
 }

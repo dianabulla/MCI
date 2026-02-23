@@ -2,7 +2,12 @@
 
 <div class="page-header">
     <h2>Células</h2>
-    <a href="<?= PUBLIC_URL ?>index.php?url=celulas/crear" class="btn btn-primary">+ Nueva Célula</a>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <?php if (AuthController::tienePermiso('materiales_celulas', 'ver')): ?>
+            <a href="<?= PUBLIC_URL ?>?url=celulas/materiales" class="btn btn-secondary">Material Células (PDF)</a>
+        <?php endif; ?>
+        <a href="<?= PUBLIC_URL ?>index.php?url=celulas/crear" class="btn btn-primary">+ Nueva Célula</a>
+    </div>
 </div>
 
 <div class="form-container" style="margin-bottom: 20px;">

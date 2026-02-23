@@ -5,6 +5,7 @@
 
 require_once APP . '/Models/Rol.php';
 require_once APP . '/Controllers/AuthController.php';
+require_once APP . '/Config/Database.php';
 
 class PermisosController extends BaseController {
     private $rolModel;
@@ -18,7 +19,24 @@ class PermisosController extends BaseController {
         }
         
         $this->rolModel = new Rol();
-        $this->db = Database::getInstance()->getConnection();
+        $this->db = $this->obtenerConexionDb();
+    }
+
+    private function obtenerConexionDb() {
+        global $pdo;
+        if (isset($pdo) && $pdo instanceof PDO) {
+            return $pdo;
+        }
+
+        if (class_exists('Database')) {
+            return Database::getInstance()->getConnection();
+        }
+
+        if (class_exists('App\\Config\\Database')) {
+            return \App\Config\Database::getInstance()->getConnection();
+        }
+
+        throw new Exception('No se encontró la clase de base de datos (Database).');
     }
 
     /**
@@ -95,6 +113,7 @@ class PermisosController extends BaseController {
         return [
             'personas' => 'Personas',
             'celulas' => 'Células',
+            'materiales_celulas' => 'Materiales Células (PDF)',
             'ministerios' => 'Ministerios',
             'roles' => 'Roles',
             'eventos' => 'Eventos',

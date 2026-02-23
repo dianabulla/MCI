@@ -8,6 +8,8 @@ require_once APP . '/Models/Persona.php';
 class AuthController extends BaseController {
     private $personaModel;
 
+    private const ROL_ADMINISTRADOR_ID = 6;
+
     public function __construct() {
         $this->personaModel = new Persona();
     }
@@ -89,6 +91,10 @@ class AuthController extends BaseController {
      * Verificar si tiene permiso
      */
     public static function tienePermiso($modulo, $accion = 'ver') {
+        if (self::esAdministrador()) {
+            return true;
+        }
+
         if (!isset($_SESSION['permisos'][$modulo])) {
             return false;
         }
@@ -106,7 +112,26 @@ class AuthController extends BaseController {
      * Verificar si es administrador
      */
     public static function esAdministrador() {
-        return isset($_SESSION['usuario_rol']) && $_SESSION['usuario_rol'] == 6;
+        $rolId = isset($_SESSION['usuario_rol']) ? (int) $_SESSION['usuario_rol'] : 0;
+        if ($rolId === self::ROL_ADMINISTRADOR_ID) {
+            return true;
+        }
+
+        $rolNombre = self::normalizarTexto((string) ($_SESSION['usuario_rol_nombre'] ?? ''));
+        return strpos($rolNombre, 'admin') !== false;
+    }
+
+    private static function normalizarTexto($texto) {
+        $texto = strtolower(trim((string) $texto));
+        return strtr($texto, [
+            'á' => 'a',
+            'é' => 'e',
+            'í' => 'i',
+            'ó' => 'o',
+            'ú' => 'u',
+            'ü' => 'u',
+            'ñ' => 'n'
+        ]);
     }
 
     /**

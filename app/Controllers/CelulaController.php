@@ -227,6 +227,133 @@ class CelulaController extends BaseController {
         $this->redirect('celulas');
     }
 
+    public function materiales() {
+        if (!AuthController::tienePermiso('materiales_celulas', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $directorioMateriales = ROOT . '/public/assets/celulas_materiales';
+        if (!is_dir($directorioMateriales)) {
+            @mkdir($directorioMateriales, 0775, true);
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            try {
+                $accion = trim((string)($_POST['accion'] ?? 'subir'));
+
+                if ($accion === 'eliminar') {
+                    if (!AuthController::tienePermiso('materiales_celulas', 'eliminar')) {
+                        throw new Exception('No tienes permiso para eliminar material.');
+                    }
+
+                    $archivoEliminar = trim((string)($_POST['archivo'] ?? ''));
+                    $archivoEliminar = basename($archivoEliminar);
+
+                    if ($archivoEliminar === '' || strtolower(pathinfo($archivoEliminar, PATHINFO_EXTENSION)) !== 'pdf') {
+                        throw new Exception('Archivo inválido para eliminar.');
+                    }
+
+                    $rutaEliminar = $directorioMateriales . '/' . $archivoEliminar;
+                    if (!is_file($rutaEliminar)) {
+                        throw new Exception('El archivo no existe o ya fue eliminado.');
+                    }
+
+                    if (!@unlink($rutaEliminar)) {
+                        throw new Exception('No se pudo eliminar el archivo.');
+                    }
+
+                    $this->redirect('celulas/materiales&mensaje=' . urlencode('Material PDF eliminado correctamente') . '&tipo=success');
+                    return;
+                }
+
+                if (!AuthController::tienePermiso('materiales_celulas', 'crear')) {
+                    throw new Exception('No tienes permiso para subir material.');
+                }
+
+                if (!isset($_FILES['material_pdf'])) {
+                    throw new Exception('No se recibió el archivo PDF.');
+                }
+
+                $archivo = $_FILES['material_pdf'];
+                if (($archivo['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                    throw new Exception('Error al subir archivo. Intente nuevamente.');
+                }
+
+                $nombreOriginal = trim((string)($archivo['name'] ?? 'material.pdf'));
+                $extension = strtolower(pathinfo($nombreOriginal, PATHINFO_EXTENSION));
+                if ($extension !== 'pdf') {
+                    throw new Exception('Solo se permiten archivos PDF.');
+                }
+
+                $tamanio = (int)($archivo['size'] ?? 0);
+                if ($tamanio <= 0) {
+                    throw new Exception('El archivo está vacío.');
+                }
+
+                $maxBytes = 20 * 1024 * 1024;
+                if ($tamanio > $maxBytes) {
+                    throw new Exception('El PDF supera el tamaño máximo de 20MB.');
+                }
+
+                $tmp = (string)($archivo['tmp_name'] ?? '');
+                $finfo = function_exists('finfo_open') ? @finfo_open(FILEINFO_MIME_TYPE) : false;
+                $mime = $finfo ? (string)@finfo_file($finfo, $tmp) : '';
+                if ($finfo) {
+                    @finfo_close($finfo);
+                }
+
+                if ($mime !== '' && stripos($mime, 'pdf') === false) {
+                    throw new Exception('El archivo no es un PDF válido.');
+                }
+
+                $base = pathinfo($nombreOriginal, PATHINFO_FILENAME);
+                $base = preg_replace('/[^a-zA-Z0-9_\-\s]/', '', $base);
+                $base = preg_replace('/\s+/', '_', (string)$base);
+                $base = trim((string)$base, '_-');
+                if ($base === '') {
+                    $base = 'material_celula';
+                }
+
+                $nombreFinal = date('Ymd_His') . '_' . substr((string)md5(uniqid((string)mt_rand(), true)), 0, 8) . '_' . $base . '.pdf';
+                $destino = $directorioMateriales . '/' . $nombreFinal;
+
+                if (!move_uploaded_file($tmp, $destino)) {
+                    throw new Exception('No se pudo guardar el PDF en el servidor.');
+                }
+
+                $this->redirect('celulas/materiales&mensaje=' . urlencode('Material PDF subido correctamente') . '&tipo=success');
+            } catch (Exception $e) {
+                $this->redirect('celulas/materiales&mensaje=' . urlencode($e->getMessage()) . '&tipo=error');
+            }
+            return;
+        }
+
+        $materiales = [];
+        if (is_dir($directorioMateriales)) {
+            $archivos = glob($directorioMateriales . '/*.pdf') ?: [];
+            foreach ($archivos as $ruta) {
+                $nombre = basename((string)$ruta);
+                $materiales[] = [
+                    'nombre_archivo' => $nombre,
+                    'url' => ASSETS_URL . '/celulas_materiales/' . rawurlencode($nombre),
+                    'peso_kb' => round(((int)@filesize($ruta)) / 1024, 2),
+                    'fecha_modificacion' => @filemtime($ruta) ?: 0
+                ];
+            }
+        }
+
+        usort($materiales, static function ($a, $b) {
+            return ($b['fecha_modificacion'] ?? 0) <=> ($a['fecha_modificacion'] ?? 0);
+        });
+
+        $this->view('celulas/materiales', [
+            'materiales' => $materiales,
+            'mensaje' => $_GET['mensaje'] ?? '',
+            'tipo' => $_GET['tipo'] ?? ''
+        ]);
+    }
+
     /**
      * Buscar líderes para autocompletar (AJAX)
      */

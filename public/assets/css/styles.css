@@ -998,6 +998,34 @@ body {
     color: #fff;
 }
 
+.btn-nav-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    padding: 11px 14px;
+    font-weight: 600;
+    font-size: 0.94rem;
+    background: #ecf2f9;
+    color: #2c3f67;
+    border: 1px solid #c5d7ee;
+    transition: all 0.2s ease;
+}
+
+.btn-nav-pill:hover {
+    color: #fff;
+    background: linear-gradient(135deg, #325fa9 0%, #3f6cb6 100%);
+    border-color: #2d568f;
+    box-shadow: 0 10px 18px rgba(50, 95, 169, 0.3);
+}
+
+.btn-nav-pill.active {
+    color: #fff;
+    background: linear-gradient(135deg, #325fa9 0%, #3f6cb6 100%);
+    border-color: #2d568f;
+    box-shadow: 0 10px 18px rgba(50, 95, 169, 0.3);
+}
+
 .form-control,
 select.form-control,
 textarea.form-control {
