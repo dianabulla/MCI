@@ -103,6 +103,13 @@ return [
     'nehemias/seremos1200/importar' => 'NehemiasController@importarSeremos1200',
     'nehemias/seremos1200/exportarExcel' => 'NehemiasController@exportarExcelSeremos1200',
     'nehemias/seremos1200/decision' => 'NehemiasController@decisionSeremos1200',
+
+    // Nehemias WhatsApp Campañas
+    'nehemias/whatsapp-campanas' => 'WhatsappCampanaController@index',
+    'nehemias/whatsapp-campanas/crear' => 'WhatsappCampanaController@crear',
+    'nehemias/whatsapp-campanas/generar-cola' => 'WhatsappCampanaController@generarCola',
+    'nehemias/whatsapp-campanas/procesar-cola' => 'WhatsappCampanaController@procesarCola',
+    'nehemias/whatsapp/webhook' => 'WhatsappCampanaController@webhook',
     
     // Transmisiones YouTube (Privadas - Requieren autenticación)
     'transmisiones' => 'TransmisionController@listar',

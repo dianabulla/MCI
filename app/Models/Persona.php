@@ -278,7 +278,7 @@ class Persona extends BaseModel {
     /**
      * Obtener todas las personas con aislamiento de rol
      */
-    public function getAllWithRole($filtroRol, $soloGanar = false) {
+    public function getAllWithRole($filtroRol, $soloGanar = false, $estadoCuenta = null) {
         $sql = "SELECT p.*, 
                 c.Nombre_Celula, 
                 r.Nombre_Rol, 
@@ -297,15 +297,25 @@ class Persona extends BaseModel {
             $sql .= " AND p.Id_Ministerio IS NOT NULL AND p.Id_Lider IS NOT NULL";
         }
 
+        $params = [];
+        if ($estadoCuenta !== null && $estadoCuenta !== '') {
+            if ($estadoCuenta === 'Activo') {
+                $sql .= " AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)";
+            } else {
+                $sql .= " AND p.Estado_Cuenta = ?";
+                $params[] = $estadoCuenta;
+            }
+        }
+
         $sql .= "
                 ORDER BY p.Fecha_Registro DESC, p.Id_Persona DESC";
-        return $this->query($sql);
+        return $this->query($sql, $params);
     }
 
     /**
      * Obtener personas con filtros y aislamiento de rol
      */
-    public function getWithFiltersAndRole($filtroRol, $idMinisterio = null, $idLider = null, $soloGanar = false) {
+    public function getWithFiltersAndRole($filtroRol, $idMinisterio = null, $idLider = null, $soloGanar = false, $estadoCuenta = null) {
         $sql = "SELECT p.*, 
                 c.Nombre_Celula, 
                 r.Nombre_Rol, 
@@ -341,6 +351,15 @@ class Persona extends BaseModel {
             } else {
                 $sql .= " AND p.Id_Lider = ?";
                 $params[] = $idLider;
+            }
+        }
+
+        if ($estadoCuenta !== null && $estadoCuenta !== '') {
+            if ($estadoCuenta === 'Activo') {
+                $sql .= " AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)";
+            } else {
+                $sql .= " AND p.Estado_Cuenta = ?";
+                $params[] = $estadoCuenta;
             }
         }
 

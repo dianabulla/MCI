@@ -208,6 +208,21 @@ $urlVolver = $returnToAsistencia
                         <option value="Otro" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Otro' ? 'selected' : '' ?>>Otro</option>
                     </select>
                 </div>
+
+                <?php if (AuthController::esAdministrador()): ?>
+                <div class="form-group">
+                    <label for="estado_cuenta">Estado de Cuenta</label>
+                    <select id="estado_cuenta" name="estado_cuenta" class="form-control">
+                        <?php $estadoCuentaSeleccionado = $post_data['estado_cuenta'] ?? ($persona['Estado_Cuenta'] ?? 'Activo'); ?>
+                        <option value="Activo" <?= $estadoCuentaSeleccionado == 'Activo' ? 'selected' : '' ?>>Activo</option>
+                        <option value="Inactivo" <?= $estadoCuentaSeleccionado == 'Inactivo' ? 'selected' : '' ?>>Inactivo</option>
+                        <option value="Bloqueado" <?= $estadoCuentaSeleccionado == 'Bloqueado' ? 'selected' : '' ?>>Bloqueado</option>
+                    </select>
+                    <small class="form-text text-muted">
+                        Solo las cuentas activas pueden iniciar sesión
+                    </small>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -249,20 +264,6 @@ $urlVolver = $returnToAsistencia
                         Mínimo 6 caracteres
                     </small>
                 </div>
-
-                <?php if (isset($persona)): ?>
-                <div class="form-group">
-                    <label for="estado_cuenta">Estado de Cuenta</label>
-                    <select id="estado_cuenta" name="estado_cuenta" class="form-control">
-                        <option value="Activo" <?= isset($persona) && $persona['Estado_Cuenta'] == 'Activo' ? 'selected' : '' ?>>Activo</option>
-                        <option value="Inactivo" <?= isset($persona) && $persona['Estado_Cuenta'] == 'Inactivo' ? 'selected' : '' ?>>Inactivo</option>
-                        <option value="Bloqueado" <?= isset($persona) && $persona['Estado_Cuenta'] == 'Bloqueado' ? 'selected' : '' ?>>Bloqueado</option>
-                    </select>
-                    <small class="form-text text-muted">
-                        Solo las cuentas activas pueden iniciar sesión
-                    </small>
-                </div>
-                <?php endif; ?>
             </div>
 
             <?php if (isset($persona) && !empty($persona['Ultimo_Acceso'])): ?>
@@ -401,11 +402,18 @@ function actualizarAccesoSistemaPorRol() {
     }
 
     const esAsistente = rolSeleccionadoEsAsistente();
-    const camposAcceso = accesoSistemaSection.querySelectorAll('input, select, textarea');
+    const rolAsignado = rolSelect && rolSelect.value !== '';
+    const camposAcceso = [
+        document.getElementById('usuario'),
+        document.getElementById('contrasena')
+    ].filter(Boolean);
 
-    if (esAsistente) {
+    if (!rolAsignado || esAsistente) {
         accesoSistemaSection.style.display = 'none';
         if (accesoSistemaAlerta) {
+            accesoSistemaAlerta.textContent = !rolAsignado
+                ? 'Asigne un rol para habilitar el acceso al sistema.'
+                : 'El acceso al sistema no está disponible para personas con rol Asistente.';
             accesoSistemaAlerta.style.display = 'block';
         }
 
@@ -413,9 +421,6 @@ function actualizarAccesoSistemaPorRol() {
             campo.disabled = true;
             if (campo.id === 'usuario' || campo.id === 'contrasena') {
                 campo.value = '';
-            }
-            if (campo.id === 'estado_cuenta') {
-                campo.value = 'Inactivo';
             }
         });
         return;

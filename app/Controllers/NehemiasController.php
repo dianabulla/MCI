@@ -139,6 +139,34 @@ class NehemiasController extends BaseController {
         }));
     }
 
+    private function normalizarTextoPersona($valor) {
+        $valor = trim((string)$valor);
+        $valor = preg_replace('/\s+/', ' ', $valor);
+        return $valor;
+    }
+
+    private function limpiarSoloDigitos($valor) {
+        return preg_replace('/\D+/', '', (string)$valor);
+    }
+
+    private function normalizarTelefonoColombia($telefono) {
+        $digitos = $this->limpiarSoloDigitos($telefono);
+
+        if ($digitos === '') {
+            return null;
+        }
+
+        if (strpos($digitos, '57') === 0 && strlen($digitos) >= 12) {
+            $digitos = substr($digitos, -10);
+        }
+
+        if (strlen($digitos) !== 10) {
+            return null;
+        }
+
+        return '+57' . $digitos;
+    }
+
     public function index() {
         $this->formulario();
     }
@@ -169,12 +197,13 @@ class NehemiasController extends BaseController {
         }
 
         $errores = [];
-        $nombres = trim($_POST['nombres'] ?? '');
-        $apellidos = trim($_POST['apellidos'] ?? '');
-        $cedula = trim($_POST['numero_cedula'] ?? '');
-        $telefono = trim($_POST['telefono'] ?? '');
-        $lider = trim($_POST['lider'] ?? '');
-        $liderNehemias = trim($_POST['lider_nehemias'] ?? '');
+        $nombres = $this->normalizarTextoPersona($_POST['nombres'] ?? '');
+        $apellidos = $this->normalizarTextoPersona($_POST['apellidos'] ?? '');
+        $cedula = $this->limpiarSoloDigitos($_POST['numero_cedula'] ?? '');
+        $telefonoOriginal = trim((string)($_POST['telefono'] ?? ''));
+        $telefono = $this->normalizarTelefonoColombia($telefonoOriginal);
+        $lider = $this->normalizarTextoPersona($_POST['lider'] ?? '');
+        $liderNehemias = $this->normalizarTextoPersona($_POST['lider_nehemias'] ?? '');
         $acepta = isset($_POST['acepta']) && $_POST['acepta'] === '1';
 
         if ($nombres === '') {
@@ -186,8 +215,10 @@ class NehemiasController extends BaseController {
         if ($cedula === '') {
             $errores[] = 'El numero de cedula es requerido';
         }
-        if ($telefono === '') {
+        if ($telefonoOriginal === '') {
             $errores[] = 'El telefono es requerido';
+        } elseif ($telefono === null) {
+            $errores[] = 'El telefono no es valido. Debe tener 10 digitos en Colombia';
         }
         if ($lider === '') {
             $errores[] = 'El lider es requerido';
@@ -209,10 +240,12 @@ class NehemiasController extends BaseController {
             'Nombres' => $nombres,
             'Apellidos' => $apellidos,
             'Numero_Cedula' => $cedula,
-            'Telefono' => $telefono,
+            'Telefono' => $telefonoOriginal,
+            'Telefono_Normalizado' => $telefono,
             'Lider' => $lider,
             'Lider_Nehemias' => $liderNehemias,
             'Acepta' => $acepta ? 1 : 0,
+            'Consentimiento_Whatsapp' => $acepta ? 1 : 0,
             'Fecha_Registro' => date('Y-m-d H:i:s')
         ];
 

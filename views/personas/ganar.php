@@ -81,11 +81,21 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
                 </select>
             </div>
 
+            <div class="form-group">
+                <label for="filtro_estado" style="font-size: 14px; margin-bottom: 5px;">Estado</label>
+                <select id="filtro_estado" name="estado" class="form-control">
+                    <option value="">Todos los estados</option>
+                    <option value="Activo" <?= (($filtroEstadoActual ?? ($_GET['estado'] ?? '')) === 'Activo') ? 'selected' : '' ?>>Activo</option>
+                    <option value="Inactivo" <?= (($filtroEstadoActual ?? ($_GET['estado'] ?? '')) === 'Inactivo') ? 'selected' : '' ?>>Inactivo</option>
+                    <option value="Bloqueado" <?= (($filtroEstadoActual ?? ($_GET['estado'] ?? '')) === 'Bloqueado') ? 'selected' : '' ?>>Bloqueado</option>
+                </select>
+            </div>
+
             <div class="filters-actions">
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-funnel"></i> Filtrar
                 </button>
-                <?php if (!empty($_GET['ministerio']) || !empty($_GET['lider'])): ?>
+                <?php if (!empty($_GET['ministerio']) || !empty($_GET['lider']) || !empty($_GET['estado'])): ?>
                 <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-secondary">
                     <i class="bi bi-x-circle"></i> Limpiar
                 </a>

@@ -16,6 +16,9 @@
             <?php endif; ?>
         </h2>
         <div>
+            <a href="?url=nehemias/whatsapp-campanas" class="btn btn-success btn-action me-2">
+                <i class="bi bi-whatsapp"></i> WhatsApp Campañas
+            </a>
             <a href="?url=nehemias/seremos1200" class="btn btn-warning btn-action me-2">
                 <i class="bi bi-people"></i> Seremos 1200
             </a>

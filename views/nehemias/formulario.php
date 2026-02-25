@@ -151,11 +151,12 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">NUMERO DE CEDULA <span class="required">*</span></label>
-                    <input type="text" name="numero_cedula" class="form-control" required>
+                    <input type="text" name="numero_cedula" class="form-control" required inputmode="numeric" maxlength="20" pattern="[0-9]+" placeholder="Solo números">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">TELEFONO <span class="required">*</span></label>
-                    <input type="text" name="telefono" class="form-control" required>
+                    <input type="tel" name="telefono" class="form-control" required inputmode="tel" maxlength="20" placeholder="Ej: 3001234567">
+                    <small class="text-muted">Formato esperado: 10 dígitos (Colombia)</small>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">LIDER <span class="required">*</span></label>
@@ -176,6 +177,7 @@
 
                 <div class="privacy mb-3">
                     De conformidad con la Ley 1581 de 2012, el diligenciamiento de este formulario constituye una manifestacion inequivoca que permite concluir que la persona firmante del presente formulario otorga autorizacion previa, expresa e informada a SARA CASTELLANOS y YANCLY ESCOBAR para el tratamiento de sus datos personales aqui diligenciados con las finalidades, terminos y derechos expuestos en el Aviso de Privacidad disponible en saracastellanos.com.
+                    Esta autorizacion incluye el contacto y envio de mensajes informativos por WhatsApp relacionados con actividades de la campaña.
                     <br><br>
                     El titular podra, en cualquier momento, solicitar que la informacion sea modificada, actualizada o retirada de las bases de datos. Para mayor informacion podra consultar nuestra Politica de Tratamiento de Datos en: <a href="https://saracastellanos.com/politica-de-tratamientos-de-datos-personales/" target="_blank" rel="noopener noreferrer">https://saracastellanos.com/politica-de-tratamientos-de-datos-personales/</a>
                 </div>
@@ -183,7 +185,7 @@
                 <div class="form-check mb-4">
                     <input class="form-check-input" type="checkbox" name="acepta" value="1" id="acepta" required>
                     <label class="form-check-label" for="acepta">
-                        Aceptar <span class="required">*</span>
+                        Acepto el tratamiento de datos y el envio de mensajes por WhatsApp <span class="required">*</span>
                     </label>
                 </div>
 
@@ -191,6 +193,23 @@
             </form>
         </div>
     </div>
+
+    <script>
+        (function() {
+            var cedula = document.querySelector('input[name="numero_cedula"]');
+            var telefono = document.querySelector('input[name="telefono"]');
+
+            function soloDigitos(input) {
+                if (!input) return;
+                input.addEventListener('input', function() {
+                    this.value = this.value.replace(/\D+/g, '');
+                });
+            }
+
+            soloDigitos(cedula);
+            soloDigitos(telefono);
+        })();
+    </script>
 
 </body>
 </html>

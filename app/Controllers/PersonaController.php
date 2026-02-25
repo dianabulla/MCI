@@ -143,6 +143,7 @@ class PersonaController extends BaseController {
     public function index() {
         $filtroMinisterio = $_GET['ministerio'] ?? null;
         $filtroLider = $_GET['lider'] ?? null;
+        $filtroEstado = $_GET['estado'] ?? null;
 
         $contextoFiltros = $this->getContextoFiltrosVisibles();
         [$filtroMinisterio, $filtroLider] = $this->limpiarFiltrosNoPermitidos($filtroMinisterio, $filtroLider, $contextoFiltros);
@@ -151,10 +152,10 @@ class PersonaController extends BaseController {
         $filtroRol = DataIsolation::generarFiltroPersonas();
         
         // Obtener personas con filtros
-        if (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '')) {
-            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider);
+        if (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '') || ($filtroEstado !== null && $filtroEstado !== '')) {
+            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, false, $filtroEstado);
         } else {
-            $personas = $this->personaModel->getAllWithRole($filtroRol);
+            $personas = $this->personaModel->getAllWithRole($filtroRol, false, $filtroEstado);
         }
         
         // Obtener datos para los filtros
@@ -167,23 +168,25 @@ class PersonaController extends BaseController {
             'lideres' => $lideres,
             'filtroRestringido' => $contextoFiltros['restringido'],
             'filtroMinisterioActual' => (string)$filtroMinisterio,
-            'filtroLiderActual' => (string)$filtroLider
+            'filtroLiderActual' => (string)$filtroLider,
+            'filtroEstadoActual' => (string)$filtroEstado
         ]);
     }
 
     public function ganar() {
         $filtroMinisterio = $_GET['ministerio'] ?? null;
         $filtroLider = $_GET['lider'] ?? null;
+        $filtroEstado = $_GET['estado'] ?? null;
 
         $contextoFiltros = $this->getContextoFiltrosVisibles();
         [$filtroMinisterio, $filtroLider] = $this->limpiarFiltrosNoPermitidos($filtroMinisterio, $filtroLider, $contextoFiltros);
 
         $filtroRol = DataIsolation::generarFiltroPersonas();
 
-        if (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '')) {
-            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, true);
+        if (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '') || ($filtroEstado !== null && $filtroEstado !== '')) {
+            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, true, $filtroEstado);
         } else {
-            $personas = $this->personaModel->getAllWithRole($filtroRol, true);
+            $personas = $this->personaModel->getAllWithRole($filtroRol, true, $filtroEstado);
         }
 
         $ministerios = $contextoFiltros['ministerios'];
@@ -195,7 +198,8 @@ class PersonaController extends BaseController {
             'lideres' => $lideres,
             'filtroRestringido' => $contextoFiltros['restringido'],
             'filtroMinisterioActual' => (string)$filtroMinisterio,
-            'filtroLiderActual' => (string)$filtroLider
+            'filtroLiderActual' => (string)$filtroLider,
+            'filtroEstadoActual' => (string)$filtroEstado
         ]);
     }
 
@@ -242,16 +246,19 @@ class PersonaController extends BaseController {
                 if (!empty($_POST['usuario'])) {
                     $data['Usuario'] = $_POST['usuario'];
                 }
+
+                if (isset($_POST['estado_cuenta'])) {
+                    $data['Estado_Cuenta'] = $_POST['estado_cuenta'];
+                }
                 
                 // Si se proporciona contraseña, hashearla
                 if (!empty($_POST['contrasena'])) {
                     $data['Contrasena'] = password_hash($_POST['contrasena'], PASSWORD_BCRYPT);
-                    // Activar cuenta por defecto si se crea con contraseña
-                    $data['Estado_Cuenta'] = 'Activo';
+                    // Activar cuenta por defecto si se crea con contraseña y no se definió estado
+                    if (!isset($data['Estado_Cuenta'])) {
+                        $data['Estado_Cuenta'] = 'Activo';
+                    }
                 }
-            } elseif ($rolEsAsistente) {
-                // Regla de negocio: asistentes no deben tener acceso activo al sistema
-                $data['Estado_Cuenta'] = 'Inactivo';
             }
             
             try {
@@ -357,9 +364,10 @@ class PersonaController extends BaseController {
                 if (isset($_POST['estado_cuenta'])) {
                     $data['Estado_Cuenta'] = $_POST['estado_cuenta'];
                 }
-            } elseif ($rolEsAsistente) {
-                // Regla de negocio: asistentes no deben tener acceso activo al sistema
-                $data['Estado_Cuenta'] = 'Inactivo';
+            }
+
+            if (AuthController::esAdministrador() && isset($_POST['estado_cuenta'])) {
+                $data['Estado_Cuenta'] = $_POST['estado_cuenta'];
             }
             
             try {

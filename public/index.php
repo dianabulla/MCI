@@ -77,7 +77,8 @@ $rutasPublicas = [
     'transmisiones-publico',
     'nehemias',
     'nehemias/formulario',
-    'nehemias/guardar'
+    'nehemias/guardar',
+    'nehemias/whatsapp/webhook'
 ];
 
 // Verificar autenticación (excepto para rutas públicas)
