@@ -226,9 +226,30 @@
                                     <td data-label="Acepta"><?= $registro['Acepta'] ? 'Si' : 'No' ?></td>
                                     <td data-label="Fecha Registro"><?= htmlspecialchars($registro['Fecha_Registro']) ?></td>
                                     <td data-label="Acciones">
+                                        <?php
+                                            $telefonoRaw = (string)($registro['Telefono'] ?? '');
+                                            $telefonoDigits = preg_replace('/\D+/', '', $telefonoRaw);
+                                            $telefonoWhatsapp = '';
+
+                                            if (preg_match('/^3\d{9}$/', $telefonoDigits)) {
+                                                $telefonoWhatsapp = '57' . $telefonoDigits;
+                                            } elseif (preg_match('/^57(3\d{9})$/', $telefonoDigits)) {
+                                                $telefonoWhatsapp = $telefonoDigits;
+                                            } elseif (strlen($telefonoDigits) >= 10 && strlen($telefonoDigits) <= 15) {
+                                                $telefonoWhatsapp = $telefonoDigits;
+                                            }
+
+                                            $mensajeWhatsapp = urlencode('Hola ' . (string)($registro['Nombres'] ?? '') . ', te escribimos desde MCI Madrid.');
+                                        ?>
                                         <a class="btn btn-sm btn-edit" href="?url=nehemias/editar&id=<?= $registro['Id_Nehemias'] ?>">
                                             Editar
                                         </a>
+                                        <?php if ($telefonoWhatsapp !== ''): ?>
+                                            <a class="btn btn-sm btn-success" target="_blank" rel="noopener"
+                                               href="https://wa.me/<?= htmlspecialchars($telefonoWhatsapp) ?>?text=<?= $mensajeWhatsapp ?>">
+                                                WhatsApp
+                                            </a>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

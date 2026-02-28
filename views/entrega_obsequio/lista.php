@@ -1,5 +1,5 @@
 <?php include VIEWS . '/layout/header.php'; ?>
-<div class="container mt-4">
+<div class="container mt-4 obsequio-page">
     <div class="d-flex justify-content-between align-items-center module-header-card">
         <h2 class="module-title"><i class="bi bi-gift-fill"></i> Gestión de Entrega de Obsequios Navideños</h2>
         <div class="page-actions obsequio-actions">
@@ -79,7 +79,7 @@
     <div class="card">
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover mobile-persona-accordion">
                     <thead>
                         <tr>
                             <th>Nombre del Niño(a)</th>

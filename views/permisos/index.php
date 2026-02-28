@@ -2,7 +2,12 @@
 
 <div class="page-header">
     <h2><i class="bi bi-shield-check"></i> Administración de Permisos</h2>
-    <p>Gestionar permisos de acceso por rol</p>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <p style="margin:0;">Gestionar permisos de acceso por rol</p>
+        <a href="<?= PUBLIC_URL ?>?url=permisos/exportarExcel" class="btn btn-success btn-sm">
+            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
+        </a>
+    </div>
 </div>
 
 <div class="card">

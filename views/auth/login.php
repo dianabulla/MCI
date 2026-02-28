@@ -154,6 +154,49 @@
         .forgot-password a:hover {
             text-decoration: underline;
         }
+        .recent-accounts {
+            margin-bottom: 18px;
+            padding: 12px;
+            border: 1px solid #d8e4f7;
+            border-radius: 12px;
+            background: #f7faff;
+        }
+        .recent-accounts h6 {
+            margin: 0 0 10px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #46629a;
+        }
+        .recent-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .recent-account-btn {
+            border: 1px solid #c9dbf6;
+            background: #ffffff;
+            color: #355fa8;
+            border-radius: 999px;
+            padding: 6px 11px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .recent-account-btn:hover {
+            background: #edf4ff;
+        }
+        .recent-actions {
+            margin-top: 10px;
+            text-align: right;
+        }
+        .recent-clear {
+            border: none;
+            background: transparent;
+            color: #6f7ea0;
+            font-size: 12px;
+            text-decoration: underline;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -161,14 +204,29 @@
         <div class="login-header">
             <i class="bi bi-shield-lock"></i>
             <h2>MCI Madrid Colombia</h2>
-            <p>Misión Carismática Internacional</p>
+            <p><?= !empty($modo_agregar_cuenta) ? 'Agregar cuenta para cambio rápido' : 'Misión Carismática Internacional' ?></p>
         </div>
         <div class="login-body">
+            <?php if (isset($_SESSION['flash_info']) && $_SESSION['flash_info'] !== ''): ?>
+            <div class="alert alert-info" style="background:#edf5ff;border-color:#cfe1ff;color:#2f4f87;">
+                <i class="bi bi-info-circle"></i> <?= htmlspecialchars((string)$_SESSION['flash_info']) ?>
+            </div>
+            <?php unset($_SESSION['flash_info']); ?>
+            <?php endif; ?>
+
             <?php if (isset($error)): ?>
             <div class="alert alert-danger">
                 <i class="bi bi-exclamation-triangle"></i> <?php echo htmlspecialchars($error); ?>
             </div>
             <?php endif; ?>
+
+            <div class="recent-accounts" id="recentAccountsCard" style="display:none;">
+                <h6><i class="bi bi-clock-history"></i> Cuentas recientes en este navegador</h6>
+                <div class="recent-list" id="recentAccountsList"></div>
+                <div class="recent-actions">
+                    <button type="button" class="recent-clear" id="clearRecentAccounts">Limpiar historial</button>
+                </div>
+            </div>
             
             <?php
             // Debug: mostrar información de depuración
@@ -182,12 +240,15 @@
             }
             ?>
             
-            <form method="POST" action="">
+            <form method="POST" action="" id="loginForm">
+                <?php if (!empty($modo_agregar_cuenta)): ?>
+                    <input type="hidden" name="modo" value="agregar">
+                <?php endif; ?>
                 <div class="form-group">
                     <label class="form-label">Usuario</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-person"></i></span>
-                        <input type="text" name="usuario" class="form-control" placeholder="Ingrese su usuario" required autofocus>
+                        <input type="text" id="usuario" name="usuario" class="form-control" placeholder="Ingrese su usuario" value="<?= htmlspecialchars((string)($usuario ?? '')) ?>" required autofocus>
                     </div>
                 </div>
                 
@@ -212,6 +273,77 @@
         // Mostrar/ocultar contraseña
         const togglePassword = document.getElementById('togglePassword');
         const password = document.getElementById('password');
+        const usuarioInput = document.getElementById('usuario');
+        const loginForm = document.getElementById('loginForm');
+        const recentAccountsCard = document.getElementById('recentAccountsCard');
+        const recentAccountsList = document.getElementById('recentAccountsList');
+        const clearRecentAccounts = document.getElementById('clearRecentAccounts');
+        const recentAccountsKey = 'mci.recentAccounts';
+
+        function readRecentAccounts() {
+            try {
+                const raw = localStorage.getItem(recentAccountsKey);
+                const parsed = raw ? JSON.parse(raw) : [];
+                if (!Array.isArray(parsed)) {
+                    return [];
+                }
+                return parsed.filter(item => typeof item === 'string' && item.trim() !== '');
+            } catch (error) {
+                return [];
+            }
+        }
+
+        function writeRecentAccounts(accounts) {
+            try {
+                localStorage.setItem(recentAccountsKey, JSON.stringify(accounts.slice(0, 6)));
+            } catch (error) {
+                // Ignorar fallos de storage
+            }
+        }
+
+        function renderRecentAccounts() {
+            const accounts = readRecentAccounts();
+            if (!accounts.length) {
+                recentAccountsCard.style.display = 'none';
+                recentAccountsList.innerHTML = '';
+                return;
+            }
+
+            recentAccountsCard.style.display = 'block';
+            recentAccountsList.innerHTML = '';
+
+            accounts.forEach(function(account) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'recent-account-btn';
+                button.textContent = account;
+                button.addEventListener('click', function() {
+                    usuarioInput.value = account;
+                    password.focus();
+                });
+                recentAccountsList.appendChild(button);
+            });
+        }
+
+        if (loginForm) {
+            loginForm.addEventListener('submit', function() {
+                const currentUser = (usuarioInput.value || '').trim();
+                if (!currentUser) {
+                    return;
+                }
+
+                const accounts = readRecentAccounts().filter(acc => acc.toLowerCase() !== currentUser.toLowerCase());
+                accounts.unshift(currentUser);
+                writeRecentAccounts(accounts);
+            });
+        }
+
+        if (clearRecentAccounts) {
+            clearRecentAccounts.addEventListener('click', function() {
+                writeRecentAccounts([]);
+                renderRecentAccounts();
+            });
+        }
 
         togglePassword.addEventListener('click', function() {
             // Cambiar el tipo de input
@@ -222,6 +354,8 @@
             this.classList.toggle('bi-eye');
             this.classList.toggle('bi-eye-slash');
         });
+
+        renderRecentAccounts();
     </script>
 </body>
 </html>

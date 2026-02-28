@@ -144,18 +144,39 @@ class PersonaController extends BaseController {
         $filtroMinisterio = $_GET['ministerio'] ?? null;
         $filtroLider = $_GET['lider'] ?? null;
         $filtroEstado = $_GET['estado'] ?? null;
+        $filtroCelula = $_GET['celula'] ?? null;
 
         $contextoFiltros = $this->getContextoFiltrosVisibles();
         [$filtroMinisterio, $filtroLider] = $this->limpiarFiltrosNoPermitidos($filtroMinisterio, $filtroLider, $contextoFiltros);
+
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        $celulasDisponiblesRaw = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
+        $celulas = array_map(static function($celula) {
+            return [
+                'Id_Celula' => (int)($celula['Id_Celula'] ?? 0),
+                'Nombre_Celula' => (string)($celula['Nombre_Celula'] ?? ''),
+                'Id_Lider' => (int)($celula['Id_Lider'] ?? 0),
+                'Id_Ministerio' => (int)($celula['Id_Ministerio_Lider'] ?? 0)
+            ];
+        }, $celulasDisponiblesRaw);
+
+        $celulaIdsPermitidas = array_map(static function($celula) {
+            return (int)($celula['Id_Celula'] ?? 0);
+        }, $celulas);
+
+        $filtroCelula = $filtroCelula !== null ? (string)$filtroCelula : '';
+        if ($filtroCelula !== '' && $filtroCelula !== '0' && !in_array((int)$filtroCelula, $celulaIdsPermitidas, true)) {
+            $filtroCelula = '';
+        }
         
         // Aplicar filtro de aislamiento según el rol del usuario
         $filtroRol = DataIsolation::generarFiltroPersonas();
         
         // Obtener personas con filtros
-        if (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '') || ($filtroEstado !== null && $filtroEstado !== '')) {
-            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, false, $filtroEstado);
+        if (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '') || ($filtroEstado !== null && $filtroEstado !== '') || ($filtroCelula !== null && $filtroCelula !== '')) {
+            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, false, $filtroEstado, $filtroCelula);
         } else {
-            $personas = $this->personaModel->getAllWithRole($filtroRol, false, $filtroEstado);
+            $personas = $this->personaModel->getAllWithRole($filtroRol, false, $filtroEstado, $filtroCelula);
         }
         
         // Obtener datos para los filtros
@@ -166,10 +187,12 @@ class PersonaController extends BaseController {
             'personas' => $personas,
             'ministerios' => $ministerios,
             'lideres' => $lideres,
+            'celulas' => $celulas,
             'filtroRestringido' => $contextoFiltros['restringido'],
             'filtroMinisterioActual' => (string)$filtroMinisterio,
             'filtroLiderActual' => (string)$filtroLider,
-            'filtroEstadoActual' => (string)$filtroEstado
+            'filtroEstadoActual' => (string)$filtroEstado,
+            'filtroCelulaActual' => (string)$filtroCelula
         ]);
     }
 
@@ -177,16 +200,37 @@ class PersonaController extends BaseController {
         $filtroMinisterio = $_GET['ministerio'] ?? null;
         $filtroLider = $_GET['lider'] ?? null;
         $filtroEstado = $_GET['estado'] ?? null;
+        $filtroCelula = $_GET['celula'] ?? null;
 
         $contextoFiltros = $this->getContextoFiltrosVisibles();
         [$filtroMinisterio, $filtroLider] = $this->limpiarFiltrosNoPermitidos($filtroMinisterio, $filtroLider, $contextoFiltros);
 
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        $celulasDisponiblesRaw = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
+        $celulas = array_map(static function($celula) {
+            return [
+                'Id_Celula' => (int)($celula['Id_Celula'] ?? 0),
+                'Nombre_Celula' => (string)($celula['Nombre_Celula'] ?? ''),
+                'Id_Lider' => (int)($celula['Id_Lider'] ?? 0),
+                'Id_Ministerio' => (int)($celula['Id_Ministerio_Lider'] ?? 0)
+            ];
+        }, $celulasDisponiblesRaw);
+
+        $celulaIdsPermitidas = array_map(static function($celula) {
+            return (int)($celula['Id_Celula'] ?? 0);
+        }, $celulas);
+
+        $filtroCelula = $filtroCelula !== null ? (string)$filtroCelula : '';
+        if ($filtroCelula !== '' && $filtroCelula !== '0' && !in_array((int)$filtroCelula, $celulaIdsPermitidas, true)) {
+            $filtroCelula = '';
+        }
+
         $filtroRol = DataIsolation::generarFiltroPersonas();
 
-        if (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '') || ($filtroEstado !== null && $filtroEstado !== '')) {
-            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, true, $filtroEstado);
+        if (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '') || ($filtroEstado !== null && $filtroEstado !== '') || ($filtroCelula !== null && $filtroCelula !== '')) {
+            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, true, $filtroEstado, $filtroCelula);
         } else {
-            $personas = $this->personaModel->getAllWithRole($filtroRol, true, $filtroEstado);
+            $personas = $this->personaModel->getAllWithRole($filtroRol, true, $filtroEstado, $filtroCelula);
         }
 
         $ministerios = $contextoFiltros['ministerios'];
@@ -196,11 +240,71 @@ class PersonaController extends BaseController {
             'personas' => $personas,
             'ministerios' => $ministerios,
             'lideres' => $lideres,
+            'celulas' => $celulas,
             'filtroRestringido' => $contextoFiltros['restringido'],
             'filtroMinisterioActual' => (string)$filtroMinisterio,
             'filtroLiderActual' => (string)$filtroLider,
-            'filtroEstadoActual' => (string)$filtroEstado
+            'filtroEstadoActual' => (string)$filtroEstado,
+            'filtroCelulaActual' => (string)$filtroCelula
         ]);
+    }
+
+    public function exportarExcel() {
+        if (!AuthController::tienePermiso('personas', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $soloGanar = (string)($_GET['modo'] ?? '') === 'ganar';
+        $filtroMinisterio = $_GET['ministerio'] ?? null;
+        $filtroLider = $_GET['lider'] ?? null;
+        $filtroEstado = $_GET['estado'] ?? null;
+        $filtroCelula = $_GET['celula'] ?? null;
+
+        $contextoFiltros = $this->getContextoFiltrosVisibles();
+        [$filtroMinisterio, $filtroLider] = $this->limpiarFiltrosNoPermitidos($filtroMinisterio, $filtroLider, $contextoFiltros);
+
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        $celulasDisponiblesRaw = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
+        $celulaIdsPermitidas = array_map(static function($celula) {
+            return (int)($celula['Id_Celula'] ?? 0);
+        }, $celulasDisponiblesRaw);
+
+        $filtroCelula = $filtroCelula !== null ? (string)$filtroCelula : '';
+        if ($filtroCelula !== '' && $filtroCelula !== '0' && !in_array((int)$filtroCelula, $celulaIdsPermitidas, true)) {
+            $filtroCelula = '';
+        }
+
+        $filtroRol = DataIsolation::generarFiltroPersonas();
+
+        if (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '') || ($filtroEstado !== null && $filtroEstado !== '') || ($filtroCelula !== null && $filtroCelula !== '')) {
+            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, $soloGanar, $filtroEstado, $filtroCelula);
+        } else {
+            $personas = $this->personaModel->getAllWithRole($filtroRol, $soloGanar, $filtroEstado, $filtroCelula);
+        }
+
+        $rows = [];
+        foreach ($personas as $persona) {
+            $rows[] = [
+                (string)($persona['Nombre'] ?? ''),
+                (string)($persona['Apellido'] ?? ''),
+                (string)($persona['Numero_Documento'] ?? ''),
+                (string)($persona['Telefono'] ?? ''),
+                (string)($persona['Email'] ?? ''),
+                (string)($persona['Nombre_Celula'] ?? ''),
+                (string)($persona['Nombre_Lider'] ?? ''),
+                (string)($persona['Nombre_Ministerio'] ?? ''),
+                (string)($persona['Nombre_Rol'] ?? ''),
+                (string)($persona['Estado_Cuenta'] ?? ''),
+                (string)($persona['Fecha_Registro'] ?? '')
+            ];
+        }
+
+        $this->exportCsv(
+            $soloGanar ? 'personas_pendiente_consolidar_' . date('Ymd_His') : 'personas_' . date('Ymd_His'),
+            ['Nombre', 'Apellido', 'Documento', 'Telefono', 'Email', 'Celula', 'Lider', 'Ministerio', 'Rol', 'Estado', 'Fecha Registro'],
+            $rows
+        );
     }
 
     public function crear() {

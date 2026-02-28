@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $pageTitle ?? 'MCI Madrid Colombia' ?></title>
-    <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/styles.css?v=20260223-36">
+    <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/styles.css?v=20260223-38">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
 </head>
 <body>
@@ -31,9 +31,6 @@ $puedeVer = function(string $modulo) {
                 <i class="bi bi-shield-fill"></i>
                 <span class="sidebar-link-text">MCI Madrid</span>
             </div>
-            <button type="button" id="sidebarToggle" class="sidebar-toggle" aria-label="Mostrar/Ocultar menú" onclick="(function(){var s=document.querySelector('.app-shell');var c=document.body.classList.toggle('sidebar-collapsed');if(s){s.classList.toggle('sidebar-collapsed',c);}})();">
-                <i class="bi bi-list"></i>
-            </button>
         </div>
 
         <nav class="sidebar-nav">
@@ -116,12 +113,42 @@ $puedeVer = function(string $modulo) {
 
         <div class="sidebar-user-card">
             <div class="sidebar-user-meta">
-                <i class="bi bi-person-circle"></i>
+                <?php $linkedAccounts = $_SESSION['account_pool'] ?? []; ?>
+                <?php $hasLinkedAccounts = is_array($linkedAccounts) && count($linkedAccounts) > 1; ?>
+                <button type="button" class="account-menu-toggle" id="accountMenuToggle" aria-label="Ver cuentas vinculadas" title="Ver cuentas vinculadas">
+                    <i class="bi bi-person-circle"></i>
+                </button>
                 <div>
                     <div class="user-name"><?= $_SESSION['usuario_nombre'] ?? 'Usuario' ?></div>
                     <div class="user-role"><?= $_SESSION['usuario_rol_nombre'] ?? 'Sin Rol' ?></div>
                 </div>
+                <?php if ($hasLinkedAccounts): ?>
+                    <i class="bi bi-caret-down-fill account-menu-caret" aria-hidden="true"></i>
+                <?php endif; ?>
             </div>
+
+            <?php if ($hasLinkedAccounts): ?>
+                <div class="account-switch-menu" id="accountSwitchMenu" aria-hidden="true">
+                    <?php foreach ($linkedAccounts as $linkedAccount): ?>
+                        <?php $isCurrent = ((int)($linkedAccount['id'] ?? 0) === (int)($_SESSION['usuario_id'] ?? 0)); ?>
+                        <?php if ($isCurrent): ?>
+                            <div class="account-switch-item current">
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span><?= htmlspecialchars((string)($linkedAccount['nombre'] ?? 'Cuenta actual')) ?></span>
+                            </div>
+                        <?php else: ?>
+                            <a href="<?= PUBLIC_URL ?>?url=auth/cambiar-usuario&id=<?= (int)$linkedAccount['id'] ?>" class="account-switch-item">
+                                <i class="bi bi-person-check"></i>
+                                <span><?= htmlspecialchars((string)($linkedAccount['nombre'] ?? 'Cuenta')) ?></span>
+                            </a>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+            <a href="<?= PUBLIC_URL ?>?url=auth/login&modo=agregar" class="btn-logout sidebar-logout" style="margin-bottom: 8px;">
+                <i class="bi bi-person-plus"></i> <span class="sidebar-link-text">Agregar cuenta</span>
+            </a>
             <a href="<?= PUBLIC_URL ?>?url=auth/logout" class="btn-logout sidebar-logout">
                 <i class="bi bi-box-arrow-right"></i> <span class="sidebar-link-text">Salir</span>
             </a>
@@ -129,4 +156,7 @@ $puedeVer = function(string $modulo) {
     </aside>
 
     <div class="app-main">
+        <button type="button" id="sidebarArrowToggle" class="sidebar-arrow-toggle" aria-label="Ocultar menú lateral">
+            <i class="bi bi-chevron-left"></i>
+        </button>
         <main class="main-content">

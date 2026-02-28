@@ -64,6 +64,19 @@ class NehemiasController extends BaseController {
             ];
         }
 
+        $rolConAislamientoEstricto = DataIsolation::esLiderCelula() || DataIsolation::usaVisibilidadPorMinisterio();
+        $tienePermisoExplicitoNehemiasVer = isset($_SESSION['permisos']['nehemias'])
+            && !empty($_SESSION['permisos']['nehemias']['ver']);
+
+        // Para roles personalizados (no líderes/pastor/asistente), si tienen permiso explícito,
+        // permitir ver todo Nehemías.
+        if (!$rolConAislamientoEstricto && $tienePermisoExplicitoNehemiasVer) {
+            return [
+                'restringido' => false,
+                'lideres' => $lideresDisponibles
+            ];
+        }
+
         $usuarioId = isset($_SESSION['usuario_id']) ? (int)$_SESSION['usuario_id'] : 0;
         if ($usuarioId <= 0) {
             return [
@@ -1081,18 +1094,23 @@ class NehemiasController extends BaseController {
                 exit;
             }
 
+            $telefonoOriginal = trim((string)($registro['Telefono'] ?? ''));
+            $telefonoNormalizado = $this->normalizarTelefonoColombia($telefonoOriginal);
+
             $nehemiasId = $this->nehemiasModel->create([
-                'Nombres' => trim((string)($registro['Nombres'] ?? '')),
-                'Apellidos' => trim((string)($registro['Apellidos'] ?? '')),
-                'Numero_Cedula' => trim((string)($registro['Numero_Cedula'] ?? '')),
-                'Telefono' => trim((string)($registro['Telefono'] ?? '')),
-                'Lider' => trim((string)($registro['Lider'] ?? '')),
-                'Lider_Nehemias' => trim((string)($registro['Lider_Nehemias'] ?? '')),
+                'Nombres' => $this->normalizarTextoPersona($registro['Nombres'] ?? ''),
+                'Apellidos' => $this->normalizarTextoPersona($registro['Apellidos'] ?? ''),
+                'Numero_Cedula' => $this->limpiarSoloDigitos($registro['Numero_Cedula'] ?? ''),
+                'Telefono' => $telefonoOriginal,
+                'Telefono_Normalizado' => $telefonoNormalizado,
+                'Lider' => $this->normalizarTextoPersona($registro['Lider'] ?? ''),
+                'Lider_Nehemias' => $this->normalizarTextoPersona($registro['Lider_Nehemias'] ?? ''),
                 'Subido_Link' => trim((string)($registro['Subido_Link'] ?? '')),
                 'En_Bogota_Subio' => trim((string)($registro['En_Bogota_Subio'] ?? '')),
                 'Puesto_Votacion' => trim((string)($registro['Puesto_Votacion'] ?? '')),
                 'Mesa_Votacion' => trim((string)($registro['Mesa_Votacion'] ?? '')),
                 'Acepta' => 1,
+                'Consentimiento_Whatsapp' => 1,
                 'Fecha_Registro' => date('Y-m-d H:i:s')
             ]);
 

@@ -2,7 +2,12 @@
 
 <div class="page-header">
     <h2>Asistencias</h2>
-    <a href="<?= PUBLIC_URL ?>index.php?url=asistencias/registrar" class="btn btn-primary">+ Registrar Asistencia</a>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="<?= PUBLIC_URL ?>?url=asistencias/exportarExcel<?= !empty($_GET['ministerio']) ? '&ministerio=' . urlencode((string)$_GET['ministerio']) : '' ?><?= !empty($_GET['lider']) ? '&lider=' . urlencode((string)$_GET['lider']) : '' ?><?= !empty($_GET['celula']) ? '&celula=' . urlencode((string)$_GET['celula']) : '' ?><?= !empty($_GET['reporte']) ? '&reporte=' . urlencode((string)$_GET['reporte']) : '' ?>" class="btn btn-success">
+            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
+        </a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=asistencias/registrar" class="btn btn-primary">+ Registrar Asistencia</a>
+    </div>
 </div>
 
 <div class="form-container" style="margin-bottom: 20px;">
@@ -30,6 +35,28 @@
                         <?= htmlspecialchars($lider['Nombre_Completo']) ?>
                     </option>
                 <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="filtro_celula">Filtrar por Célula</label>
+            <select id="filtro_celula" name="celula" class="form-control">
+                <option value="">Todas</option>
+                <option value="0" <?= ((string)($filtro_celula_actual ?? '') === '0') ? 'selected' : '' ?>>Sin célula</option>
+                <?php foreach (($celulas_disponibles ?? []) as $celula): ?>
+                    <option value="<?= (int)$celula['Id_Celula'] ?>" <?= ((string)$filtro_celula_actual === (string)$celula['Id_Celula']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($celula['Nombre_Celula']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="filtro_reporte">Estado de reporte</label>
+            <select id="filtro_reporte" name="reporte" class="form-control">
+                <option value="" <?= (($filtro_reporte_actual ?? '') === '') ? 'selected' : '' ?>>Todos</option>
+                <option value="con" <?= (($filtro_reporte_actual ?? '') === 'con') ? 'selected' : '' ?>>Han reportado</option>
+                <option value="sin" <?= (($filtro_reporte_actual ?? '') === 'sin') ? 'selected' : '' ?>>No han reportado</option>
             </select>
         </div>
 
@@ -125,16 +152,20 @@
     (function() {
         const ministerioSelect = document.getElementById('filtro_ministerio');
         const liderSelect = document.getElementById('filtro_lider');
+        const celulaSelect = document.getElementById('filtro_celula');
 
-        if (!ministerioSelect || !liderSelect) {
+        if (!ministerioSelect || !liderSelect || !celulaSelect) {
             return;
         }
 
         const lideres = <?= json_encode($lideres_disponibles ?? []) ?>;
+        const celulas = <?= json_encode($celulas_disponibles ?? []) ?>;
         const liderActual = '<?= htmlspecialchars((string)($filtro_lider_actual ?? ''), ENT_QUOTES) ?>';
+        const celulaActual = '<?= htmlspecialchars((string)($filtro_celula_actual ?? ''), ENT_QUOTES) ?>';
 
         function renderLideres() {
             const ministerioSeleccionado = ministerioSelect.value;
+            const celulaSeleccionada = celulaSelect ? celulaSelect.value : '';
             liderSelect.innerHTML = '';
 
             const optionTodos = document.createElement('option');
@@ -143,10 +174,19 @@
             liderSelect.appendChild(optionTodos);
 
             const filtrados = lideres.filter(function(lider) {
-                if (!ministerioSeleccionado) {
-                    return true;
+                const coincideMinisterio = !ministerioSeleccionado
+                    ? true
+                    : String(lider.Id_Ministerio || '') === String(ministerioSeleccionado);
+
+                let coincideCelula = true;
+                if (celulaSeleccionada && celulaSeleccionada !== '0') {
+                    coincideCelula = celulas.some(function(celula) {
+                        return String(celula.Id_Celula || '') === String(celulaSeleccionada)
+                            && String(celula.Id_Lider || '') === String(lider.Id_Persona || '');
+                    });
                 }
-                return String(lider.Id_Ministerio || '') === String(ministerioSeleccionado);
+
+                return coincideMinisterio && coincideCelula;
             });
 
             filtrados.forEach(function(lider) {
@@ -168,11 +208,70 @@
             }
         }
 
+        function renderCelulas() {
+            const ministerioSeleccionado = ministerioSelect.value;
+            const liderSeleccionado = liderSelect.value;
+
+            celulaSelect.innerHTML = '';
+
+            const optionTodas = document.createElement('option');
+            optionTodas.value = '';
+            optionTodas.textContent = 'Todas';
+            celulaSelect.appendChild(optionTodas);
+
+            const optionSinCelula = document.createElement('option');
+            optionSinCelula.value = '0';
+            optionSinCelula.textContent = 'Sin célula';
+            celulaSelect.appendChild(optionSinCelula);
+
+            const filtradas = celulas.filter(function(celula) {
+                const coincideMinisterio = !ministerioSeleccionado || ministerioSeleccionado === '0'
+                    ? true
+                    : String(celula.Id_Ministerio || '') === String(ministerioSeleccionado);
+
+                const coincideLider = !liderSeleccionado || liderSeleccionado === '0'
+                    ? true
+                    : String(celula.Id_Lider || '') === String(liderSeleccionado);
+
+                return coincideMinisterio && coincideLider;
+            });
+
+            filtradas.forEach(function(celula) {
+                const option = document.createElement('option');
+                option.value = String(celula.Id_Celula);
+                option.textContent = celula.Nombre_Celula;
+                if (String(celula.Id_Celula) === String(celulaActual)) {
+                    option.selected = true;
+                }
+                celulaSelect.appendChild(option);
+            });
+
+            const seleccionadoValido = Array.from(celulaSelect.options).some(function(opt) {
+                return opt.value === celulaSelect.value;
+            });
+
+            if (!seleccionadoValido) {
+                celulaSelect.value = '';
+            }
+        }
+
         ministerioSelect.addEventListener('change', function() {
+            renderLideres();
+            renderCelulas();
+        });
+
+        liderSelect.addEventListener('change', function() {
+            renderCelulas();
             renderLideres();
         });
 
+        celulaSelect.addEventListener('change', function() {
+            renderLideres();
+            renderCelulas();
+        });
+
         renderLideres();
+        renderCelulas();
     })();
 </script>
 

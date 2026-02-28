@@ -22,6 +22,33 @@ class EventoController extends BaseController {
         $this->view('eventos/lista', ['eventos' => $eventos]);
     }
 
+    public function exportarExcel() {
+        if (!AuthController::tienePermiso('eventos', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $filtroEventos = DataIsolation::generarFiltroEventos();
+        $eventos = $this->eventoModel->getAllWithRole($filtroEventos);
+
+        $rows = [];
+        foreach ($eventos as $evento) {
+            $rows[] = [
+                (string)($evento['Nombre_Evento'] ?? ''),
+                (string)($evento['Fecha_Evento'] ?? ''),
+                (string)($evento['Hora_Evento'] ?? ''),
+                (string)($evento['Lugar_Evento'] ?? ''),
+                (string)($evento['Descripcion_Evento'] ?? '')
+            ];
+        }
+
+        $this->exportCsv(
+            'eventos_' . date('Ymd_His'),
+            ['Evento', 'Fecha', 'Hora', 'Lugar', 'Descripcion'],
+            $rows
+        );
+    }
+
     public function crear() {
         // Verificar permiso de crear
         if (!AuthController::tienePermiso('eventos', 'crear')) {

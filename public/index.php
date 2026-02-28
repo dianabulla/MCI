@@ -70,6 +70,7 @@ $url = isset($_GET['url']) ? trim($_GET['url'], '/') : (isset($_GET['route']) ? 
 // Rutas públicas que no requieren autenticación
 $rutasPublicas = [
     'auth/login',
+    'auth/cambiar-cuenta',
     'registro_obsequio',
     'registro_obsequio/guardar',
     'stream/live',

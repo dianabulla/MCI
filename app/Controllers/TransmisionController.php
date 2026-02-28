@@ -39,6 +39,33 @@ class TransmisionController extends BaseController {
         ]);
     }
 
+    public function exportarExcel() {
+        if (!$this->tienePermiso('ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $transmisiones = $this->transmision->obtenerTodas();
+
+        $rows = [];
+        foreach ($transmisiones as $transmision) {
+            $rows[] = [
+                (string)($transmision['Nombre'] ?? ''),
+                (string)($transmision['URL_YouTube'] ?? ''),
+                (string)($transmision['Fecha_Transmision'] ?? ''),
+                (string)($transmision['Hora_Transmision'] ?? ''),
+                (string)($transmision['Estado'] ?? ''),
+                (string)($transmision['Descripcion'] ?? '')
+            ];
+        }
+
+        $this->exportCsv(
+            'transmisiones_' . date('Ymd_His'),
+            ['Nombre', 'URL YouTube', 'Fecha', 'Hora', 'Estado', 'Descripcion'],
+            $rows
+        );
+    }
+
     /**
      * Vista para crear nueva transmisión (PRIVADA - Admin)
      */

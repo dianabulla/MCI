@@ -105,8 +105,28 @@ class WhatsappCampana extends BaseModel {
 
         $filtro = $campana['filtro'] ?? [];
         $lider = trim((string)($filtro['lider'] ?? ''));
+        $lideres = [];
+        if (!empty($filtro['lideres']) && is_array($filtro['lideres'])) {
+            foreach ($filtro['lideres'] as $liderFiltro) {
+                $valor = trim((string)$liderFiltro);
+                if ($valor !== '') {
+                    $lideres[] = $valor;
+                }
+            }
+            $lideres = array_values(array_unique($lideres));
+        }
         $liderNehemias = trim((string)($filtro['lider_nehemias'] ?? ''));
         $requiereConsentimientoWhatsapp = !empty($filtro['consentimiento_whatsapp']) ? 1 : 0;
+        $idsNehemiasSeleccionados = [];
+        if (!empty($filtro['ids_nehemias']) && is_array($filtro['ids_nehemias'])) {
+            foreach ($filtro['ids_nehemias'] as $id) {
+                $idInt = (int)$id;
+                if ($idInt > 0) {
+                    $idsNehemiasSeleccionados[] = $idInt;
+                }
+            }
+            $idsNehemiasSeleccionados = array_values(array_unique($idsNehemiasSeleccionados));
+        }
 
         $sql = "INSERT INTO whatsapp_cola_envio
                     (id_campana, id_nehemias, telefono, payload_json, estado, intentos, programado_en)
@@ -139,7 +159,13 @@ class WhatsappCampana extends BaseModel {
             $sql .= " AND n.Consentimiento_Whatsapp = 1";
         }
 
-        if ($lider !== '') {
+        if (!empty($lideres)) {
+            $placeholders = implode(',', array_fill(0, count($lideres), '?'));
+            $sql .= " AND n.Lider IN ($placeholders)";
+            foreach ($lideres as $liderItem) {
+                $params[] = $liderItem;
+            }
+        } elseif ($lider !== '') {
             $sql .= " AND n.Lider = ?";
             $params[] = $lider;
         }
@@ -147,6 +173,14 @@ class WhatsappCampana extends BaseModel {
         if ($liderNehemias !== '') {
             $sql .= " AND n.Lider_Nehemias LIKE ?";
             $params[] = '%' . $liderNehemias . '%';
+        }
+
+        if (!empty($idsNehemiasSeleccionados)) {
+            $placeholders = implode(',', array_fill(0, count($idsNehemiasSeleccionados), '?'));
+            $sql .= " AND n.Id_Nehemias IN ($placeholders)";
+            foreach ($idsNehemiasSeleccionados as $idNehemias) {
+                $params[] = $idNehemias;
+            }
         }
 
         $sql .= " AND NOT EXISTS (
@@ -161,6 +195,74 @@ class WhatsappCampana extends BaseModel {
         $stmt->execute($params);
 
         return $stmt->rowCount();
+    }
+
+    public function getDestinatariosDisponibles(array $filtro = [], $limit = 500) {
+        $lider = trim((string)($filtro['lider'] ?? ''));
+        $lideres = [];
+        if (!empty($filtro['lideres']) && is_array($filtro['lideres'])) {
+            foreach ($filtro['lideres'] as $liderFiltro) {
+                $valor = trim((string)$liderFiltro);
+                if ($valor !== '') {
+                    $lideres[] = $valor;
+                }
+            }
+            $lideres = array_values(array_unique($lideres));
+        }
+        $liderNehemias = trim((string)($filtro['lider_nehemias'] ?? ''));
+        $requiereConsentimientoWhatsapp = !empty($filtro['consentimiento_whatsapp']) ? 1 : 0;
+
+        $sql = "SELECT
+                    n.Id_Nehemias,
+                    n.Nombres,
+                    n.Apellidos,
+                    n.Numero_Cedula,
+                    n.Lider,
+                    n.Lider_Nehemias,
+                    n.Telefono_Normalizado,
+                    n.Consentimiento_Whatsapp
+                FROM nehemias n
+                LEFT JOIN whatsapp_optout o
+                    ON o.telefono = n.Telefono_Normalizado
+                   AND o.activo = 1
+                WHERE n.Acepta = 1
+                  AND n.Telefono_Normalizado IS NOT NULL
+                  AND n.Telefono_Normalizado <> ''
+                  AND o.id IS NULL";
+
+        $params = [];
+
+        if ($requiereConsentimientoWhatsapp) {
+            $sql .= " AND n.Consentimiento_Whatsapp = 1";
+        }
+
+        if (!empty($lideres)) {
+            $placeholders = implode(',', array_fill(0, count($lideres), '?'));
+            $sql .= " AND n.Lider IN ($placeholders)";
+            foreach ($lideres as $liderItem) {
+                $params[] = $liderItem;
+            }
+        } elseif ($lider !== '') {
+            $sql .= " AND n.Lider = ?";
+            $params[] = $lider;
+        }
+
+        if ($liderNehemias !== '') {
+            $sql .= " AND n.Lider_Nehemias LIKE ?";
+            $params[] = '%' . $liderNehemias . '%';
+        }
+
+        $sql .= " ORDER BY n.Nombres ASC, n.Apellidos ASC LIMIT ?";
+
+        $stmt = $this->db->prepare($sql);
+        $index = 1;
+        foreach ($params as $param) {
+            $stmt->bindValue($index++, $param, PDO::PARAM_STR);
+        }
+        $stmt->bindValue($index, (int)$limit, PDO::PARAM_INT);
+        $stmt->execute();
+
+        return $stmt->fetchAll();
     }
 
     public function obtenerConfigActiva() {
@@ -200,6 +302,7 @@ class WhatsappCampana extends BaseModel {
             }
 
             $mensaje = $this->aplicarVariables((string)$item['plantilla_cuerpo'], $payload);
+            $defTemplate = $this->parsearDefinicionTemplate((string)$item['plantilla_cuerpo']);
             $telefono = (string)$item['telefono'];
 
             if ($dryRun) {
@@ -223,7 +326,8 @@ class WhatsappCampana extends BaseModel {
                 $mensaje,
                 (string)$item['plantilla_tipo'],
                 (string)($item['plantilla_media_url'] ?? ''),
-                $payload
+                $payload,
+                $defTemplate
             );
 
             if (!empty($envio['ok'])) {
@@ -292,6 +396,27 @@ class WhatsappCampana extends BaseModel {
         ];
     }
 
+    public function reintentarFallidosPorCampana($idCampana) {
+        $idCampana = (int)$idCampana;
+        if ($idCampana <= 0) {
+            throw new Exception('Campaña inválida');
+        }
+
+        $sql = "UPDATE whatsapp_cola_envio
+                SET estado = 'pendiente',
+                    ultimo_error = NULL,
+                    procesado_en = NULL
+                WHERE id_campana = ?
+                  AND estado = 'fallido'";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$idCampana]);
+
+        $this->actualizarEstadoCampana($idCampana);
+
+        return $stmt->rowCount();
+    }
+
     private function obtenerPendientes($limite) {
         $sql = "SELECT q.*, c.id AS campana_id, c.estado AS campana_estado,
                        p.cuerpo AS plantilla_cuerpo, p.tipo AS plantilla_tipo, p.media_url AS plantilla_media_url
@@ -322,10 +447,57 @@ class WhatsappCampana extends BaseModel {
         return strtr((string)$texto, $reemplazos);
     }
 
-    private function enviarProveedor(array $config, $telefono, $mensaje, $tipo, $mediaUrl, array $payload = []) {
+    private function parsearDefinicionTemplate($plantillaCuerpo) {
+        $texto = trim((string)$plantillaCuerpo);
+        if ($texto === '' || ($texto[0] ?? '') !== '{') {
+            return null;
+        }
+
+        $decoded = json_decode($texto, true);
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        if (($decoded['modo'] ?? '') !== 'template') {
+            return null;
+        }
+
+        $nombre = trim((string)($decoded['template_nombre'] ?? ''));
+        if ($nombre === '') {
+            return null;
+        }
+
+        $idioma = trim((string)($decoded['template_idioma'] ?? 'es'));
+        if ($idioma === '') {
+            $idioma = 'es';
+        }
+
+        $parametros = [];
+        if (!empty($decoded['template_parametros']) && is_array($decoded['template_parametros'])) {
+            foreach ($decoded['template_parametros'] as $valor) {
+                $param = trim((string)$valor);
+                if ($param !== '') {
+                    $parametros[] = $param;
+                }
+            }
+        }
+
+        return [
+            'template_nombre' => $nombre,
+            'template_idioma' => $idioma,
+            'template_parametros' => $parametros
+        ];
+    }
+
+    private function enviarProveedor(array $config, $telefono, $mensaje, $tipo, $mediaUrl, array $payload = [], array $defTemplate = null) {
         $proveedor = strtolower(trim((string)($config['proveedor'] ?? '')));
         $endpoint = trim((string)($config['endpoint_base'] ?? ''));
+        $phoneNumberId = trim((string)($config['phone_number_id'] ?? ''));
         $apiKey = (string)($config['api_key_encriptada'] ?? '');
+
+        if ($proveedor === 'meta_cloud' && $endpoint === '' && $phoneNumberId !== '') {
+            $endpoint = 'https://graph.facebook.com/v18.0/' . $phoneNumberId . '/messages';
+        }
 
         if ($endpoint === '') {
             return ['ok' => false, 'error' => 'Endpoint de proveedor no configurado'];
@@ -335,13 +507,37 @@ class WhatsappCampana extends BaseModel {
             return ['ok' => false, 'error' => 'Extensión cURL no disponible'];
         }
 
-        if ($proveedor === 'meta_cloud') {
+        if ($proveedor === 'meta_cloud' || $proveedor === '360dialog') {
             $body = [
                 'messaging_product' => 'whatsapp',
                 'to' => ltrim((string)$telefono, '+')
             ];
 
-            if ($tipo === 'texto' || $mediaUrl === '') {
+            if (!empty($defTemplate)) {
+                $body['type'] = 'template';
+                $body['template'] = [
+                    'name' => (string)$defTemplate['template_nombre'],
+                    'language' => [
+                        'code' => (string)$defTemplate['template_idioma']
+                    ]
+                ];
+
+                $parametros = [];
+                foreach (($defTemplate['template_parametros'] ?? []) as $paramTemplate) {
+                    $textoParam = $this->aplicarVariables((string)$paramTemplate, $payload);
+                    $parametros[] = [
+                        'type' => 'text',
+                        'text' => $textoParam
+                    ];
+                }
+
+                if (!empty($parametros)) {
+                    $body['template']['components'] = [[
+                        'type' => 'body',
+                        'parameters' => $parametros
+                    ]];
+                }
+            } elseif ($tipo === 'texto' || $mediaUrl === '') {
                 $body['type'] = 'text';
                 $body['text'] = ['body' => (string)$mensaje];
             } else {
@@ -361,7 +557,11 @@ class WhatsappCampana extends BaseModel {
         $ch = curl_init($endpoint);
         $headers = ['Content-Type: application/json'];
         if ($apiKey !== '') {
-            $headers[] = 'Authorization: Bearer ' . $apiKey;
+            if ($proveedor === '360dialog') {
+                $headers[] = 'D360-API-KEY: ' . $apiKey;
+            } else {
+                $headers[] = 'Authorization: Bearer ' . $apiKey;
+            }
         }
 
         curl_setopt_array($ch, [

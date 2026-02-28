@@ -278,7 +278,7 @@ class Persona extends BaseModel {
     /**
      * Obtener todas las personas con aislamiento de rol
      */
-    public function getAllWithRole($filtroRol, $soloGanar = false, $estadoCuenta = null) {
+    public function getAllWithRole($filtroRol, $soloGanar = false, $estadoCuenta = null, $idCelula = null) {
         $sql = "SELECT p.*, 
                 c.Nombre_Celula, 
                 r.Nombre_Rol, 
@@ -298,6 +298,16 @@ class Persona extends BaseModel {
         }
 
         $params = [];
+
+        if ($idCelula !== null && $idCelula !== '') {
+            if ((string)$idCelula === '0') {
+                $sql .= " AND p.Id_Celula IS NULL";
+            } else {
+                $sql .= " AND p.Id_Celula = ?";
+                $params[] = $idCelula;
+            }
+        }
+
         if ($estadoCuenta !== null && $estadoCuenta !== '') {
             if ($estadoCuenta === 'Activo') {
                 $sql .= " AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)";
@@ -315,7 +325,7 @@ class Persona extends BaseModel {
     /**
      * Obtener personas con filtros y aislamiento de rol
      */
-    public function getWithFiltersAndRole($filtroRol, $idMinisterio = null, $idLider = null, $soloGanar = false, $estadoCuenta = null) {
+    public function getWithFiltersAndRole($filtroRol, $idMinisterio = null, $idLider = null, $soloGanar = false, $estadoCuenta = null, $idCelula = null) {
         $sql = "SELECT p.*, 
                 c.Nombre_Celula, 
                 r.Nombre_Rol, 
@@ -351,6 +361,15 @@ class Persona extends BaseModel {
             } else {
                 $sql .= " AND p.Id_Lider = ?";
                 $params[] = $idLider;
+            }
+        }
+
+        if ($idCelula !== null && $idCelula !== '') {
+            if ((string)$idCelula === '0') {
+                $sql .= " AND p.Id_Celula IS NULL";
+            } else {
+                $sql .= " AND p.Id_Celula = ?";
+                $params[] = $idCelula;
             }
         }
 

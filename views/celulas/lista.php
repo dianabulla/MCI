@@ -3,6 +3,9 @@
 <div class="page-header">
     <h2>Células</h2>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="<?= PUBLIC_URL ?>?url=celulas/exportarExcel<?= !empty($_GET['ministerio']) ? '&ministerio=' . urlencode((string)$_GET['ministerio']) : '' ?><?= !empty($_GET['lider']) ? '&lider=' . urlencode((string)$_GET['lider']) : '' ?>" class="btn btn-success">
+            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
+        </a>
         <?php if (AuthController::tienePermiso('materiales_celulas', 'ver')): ?>
             <a href="<?= PUBLIC_URL ?>?url=celulas/materiales" class="btn btn-secondary">Material Células (PDF)</a>
         <?php endif; ?>

@@ -17,6 +17,30 @@ class RolController extends BaseController {
         $this->view('roles/lista', ['roles' => $roles]);
     }
 
+    public function exportarExcel() {
+        if (!AuthController::tienePermiso('roles', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $roles = $this->rolModel->getAllWithPersonCount();
+
+        $rows = [];
+        foreach ($roles as $rol) {
+            $rows[] = [
+                (string)($rol['Nombre_Rol'] ?? ''),
+                (string)($rol['Descripcion'] ?? ''),
+                (string)($rol['Total_Personas'] ?? 0)
+            ];
+        }
+
+        $this->exportCsv(
+            'roles_' . date('Ymd_His'),
+            ['Rol', 'Descripcion', 'Total Personas'],
+            $rows
+        );
+    }
+
     public function crear() {
         // Verificar permiso de crear
         if (!AuthController::tienePermiso('roles', 'crear')) {

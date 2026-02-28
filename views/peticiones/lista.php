@@ -6,9 +6,38 @@
     <?php $puedeEditarPeticion = AuthController::esAdministrador() || AuthController::tienePermiso('peticiones', 'editar'); ?>
     <?php $puedeEliminarPeticion = AuthController::esAdministrador() || AuthController::tienePermiso('peticiones', 'eliminar'); ?>
     <?php $puedeGestionarPeticion = $puedeEditarPeticion || $puedeEliminarPeticion; ?>
-    <?php if ($puedeCrearPeticion): ?>
-    <a href="<?= PUBLIC_URL ?>index.php?url=peticiones/crear" class="btn btn-primary">+ Nueva Petición</a>
-    <?php endif; ?>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="<?= PUBLIC_URL ?>?url=peticiones/exportarExcel<?= !empty($_GET['celula']) ? '&celula=' . urlencode((string)$_GET['celula']) : '' ?>" class="btn btn-success">
+            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
+        </a>
+        <?php if ($puedeCrearPeticion): ?>
+        <a href="<?= PUBLIC_URL ?>index.php?url=peticiones/crear" class="btn btn-primary">+ Nueva Petición</a>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="form-container" style="margin-bottom: 20px;">
+    <form method="GET" class="filter-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: end;">
+        <input type="hidden" name="url" value="peticiones">
+
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="filtro_celula">Filtrar por Célula</label>
+            <select id="filtro_celula" name="celula" class="form-control">
+                <option value="">Todas</option>
+                <option value="0" <?= ((string)($filtro_celula_actual ?? '') === '0') ? 'selected' : '' ?>>Sin célula</option>
+                <?php foreach (($celulas_disponibles ?? []) as $celula): ?>
+                    <option value="<?= (int)$celula['Id_Celula'] ?>" <?= ((string)$filtro_celula_actual === (string)$celula['Id_Celula']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($celula['Nombre_Celula']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0; display: flex; gap: 8px;">
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="<?= PUBLIC_URL ?>?url=peticiones" class="btn btn-secondary">Limpiar</a>
+        </div>
+    </form>
 </div>
 
 <div class="table-container">
@@ -16,6 +45,7 @@
         <thead>
             <tr>
                 <th>Persona</th>
+                <th>Célula</th>
                 <th>Petición</th>
                 <th>Fecha</th>
                 <th>Estado</th>
@@ -27,6 +57,7 @@
                 <?php foreach ($peticiones as $peticion): ?>
                     <tr>
                         <td><?= htmlspecialchars($peticion['Nombre_Completo']) ?></td>
+                        <td><?= htmlspecialchars($peticion['Nombre_Celula'] ?? 'Sin célula') ?></td>
                         <td><?= htmlspecialchars($peticion['Descripcion_Peticion']) ?></td>
                         <td><?= htmlspecialchars($peticion['Fecha_Peticion']) ?></td>
                         <td>
@@ -48,7 +79,7 @@
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="5" class="text-center">No hay peticiones registradas</td>
+                    <td colspan="6" class="text-center">No hay peticiones registradas</td>
                 </tr>
             <?php endif; ?>
         </tbody>

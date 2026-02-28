@@ -67,6 +67,13 @@
                                            onclick="return confirm('¿Generar/actualizar cola para esta campaña?')">
                                             Generar cola
                                         </a>
+                                        <?php if ((int)($campana['fallidos'] ?? 0) > 0): ?>
+                                            <a href="?url=nehemias/whatsapp-campanas/reintentar-fallidos&id=<?= (int)$campana['id'] ?>"
+                                               class="btn btn-sm btn-warning"
+                                               onclick="return confirm('¿Reintentar solo los mensajes fallidos de esta campaña?')">
+                                                Reintentar fallidos
+                                            </a>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

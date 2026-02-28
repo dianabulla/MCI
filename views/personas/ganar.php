@@ -7,9 +7,12 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
 
 <div class="page-header">
     <h2>Pendiente por consolidar</h2>
-    <div class="page-actions">
+    <div class="page-actions personas-mobile-stack">
         <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill">Ubicados en células</a>
         <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill active">Pendiente por consolidar</a>
+        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel&modo=ganar<?= !empty($_GET['ministerio']) ? '&ministerio=' . urlencode((string)$_GET['ministerio']) : '' ?><?= !empty($_GET['lider']) ? '&lider=' . urlencode((string)$_GET['lider']) : '' ?><?= !empty($_GET['celula']) ? '&celula=' . urlencode((string)$_GET['celula']) : '' ?><?= !empty($_GET['estado']) ? '&estado=' . urlencode((string)$_GET['estado']) : '' ?>" class="btn btn-success">
+            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
+        </a>
         <?php if (AuthController::tienePermiso('personas', 'crear')): ?>
         <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="btn btn-primary">+ Nueva Persona</a>
         <?php endif; ?>
@@ -25,12 +28,12 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
     <div class="card-body">
         <div class="form-group" style="margin-bottom: 20px;">
             <label for="busqueda_rapida" style="font-size: 14px; margin-bottom: 5px;">
-                <i class="bi bi-search"></i> Búsqueda Rápida (nombre, cédula o teléfono)
+                <i class="bi bi-search"></i> Búsqueda Rápida (nombre, cédula, teléfono, célula, líder o ministerio)
             </label>
             <input type="text"
                    id="busqueda_rapida"
                    class="form-control"
-                   placeholder="Escribe para buscar por nombre, apellido, cédula o teléfono..."
+                   placeholder="Escribe para buscar por nombre, apellido, cédula, teléfono, célula, líder o ministerio..."
                    autocomplete="off">
         </div>
 
@@ -82,6 +85,22 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
             </div>
 
             <div class="form-group">
+                <label for="filtro_celula" style="font-size: 14px; margin-bottom: 5px;">Célula</label>
+                <select id="filtro_celula" name="celula" class="form-control">
+                    <option value="">Todas las células</option>
+                    <option value="0" <?= (($filtroCelulaActual ?? ($_GET['celula'] ?? '')) === '0') ? 'selected' : '' ?>>Sin célula</option>
+                    <?php if (!empty($celulas)): ?>
+                        <?php foreach ($celulas as $celula): ?>
+                            <option value="<?= $celula['Id_Celula'] ?>"
+                                    <?= (($filtroCelulaActual ?? ($_GET['celula'] ?? '')) == $celula['Id_Celula']) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($celula['Nombre_Celula']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </select>
+            </div>
+
+            <div class="form-group">
                 <label for="filtro_estado" style="font-size: 14px; margin-bottom: 5px;">Estado</label>
                 <select id="filtro_estado" name="estado" class="form-control">
                     <option value="">Todos los estados</option>
@@ -95,7 +114,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-funnel"></i> Filtrar
                 </button>
-                <?php if (!empty($_GET['ministerio']) || !empty($_GET['lider']) || !empty($_GET['estado'])): ?>
+                <?php if (!empty($_GET['ministerio']) || !empty($_GET['lider']) || !empty($_GET['celula']) || !empty($_GET['estado'])): ?>
                 <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-secondary">
                     <i class="bi bi-x-circle"></i> Limpiar
                 </a>
@@ -111,7 +130,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
 </div>
 
 <div class="table-container">
-    <table class="data-table ganar-table">
+    <table class="data-table ganar-table mobile-persona-accordion">
         <thead>
             <tr>
                 <th>Nombre Completo</th>
@@ -188,8 +207,10 @@ const filasArray = Array.from(filas);
 
 const filtroMinisterio = document.getElementById('filtro_ministerio');
 const filtroLider = document.getElementById('filtro_lider');
+const filtroCelula = document.getElementById('filtro_celula');
 const filtroRestringido = <?= !empty($filtroRestringido) ? 'true' : 'false' ?>;
 const liderActual = '<?= htmlspecialchars((string)($filtroLiderActual ?? ($_GET['lider'] ?? '')), ENT_QUOTES) ?>';
+const celulaActual = '<?= htmlspecialchars((string)($filtroCelulaActual ?? ($_GET['celula'] ?? '')), ENT_QUOTES) ?>';
 const lideresDisponibles = <?= json_encode(array_map(function ($lider) {
     return [
         'Id_Persona' => (int)($lider['Id_Persona'] ?? 0),
@@ -197,6 +218,14 @@ const lideresDisponibles = <?= json_encode(array_map(function ($lider) {
         'Id_Ministerio' => (int)($lider['Id_Ministerio'] ?? 0)
     ];
 }, $lideres ?? [])) ?>;
+const celulasDisponibles = <?= json_encode(array_map(function ($celula) {
+    return [
+        'Id_Celula' => (int)($celula['Id_Celula'] ?? 0),
+        'Nombre_Celula' => (string)($celula['Nombre_Celula'] ?? ''),
+        'Id_Lider' => (int)($celula['Id_Lider'] ?? 0),
+        'Id_Ministerio' => (int)($celula['Id_Ministerio'] ?? 0)
+    ];
+}, $celulas ?? [])) ?>;
 
 busquedaInput.addEventListener('input', function(e) {
     const textoBusqueda = e.target.value.toLowerCase().trim();
@@ -216,11 +245,17 @@ busquedaInput.addEventListener('input', function(e) {
         const cedula = celdas[1].textContent.toLowerCase();
         const telefono = celdas[2].textContent.toLowerCase();
         const email = celdas[3].textContent.toLowerCase();
+        const celula = celdas[4] ? celdas[4].textContent.toLowerCase() : '';
+        const lider = celdas[5] ? celdas[5].textContent.toLowerCase() : '';
+        const ministerio = celdas[6] ? celdas[6].textContent.toLowerCase() : '';
 
         const coincide = nombre.includes(textoBusqueda) ||
                         cedula.includes(textoBusqueda) ||
                         telefono.includes(textoBusqueda) ||
-                        email.includes(textoBusqueda);
+                email.includes(textoBusqueda) ||
+                celula.includes(textoBusqueda) ||
+                lider.includes(textoBusqueda) ||
+                ministerio.includes(textoBusqueda);
 
         fila.style.display = coincide ? '' : 'none';
     });
@@ -230,6 +265,7 @@ function renderLideresDependiente() {
     if (!filtroMinisterio || !filtroLider) return;
 
     const ministerioSeleccionado = filtroMinisterio.value;
+    const celulaSeleccionada = filtroCelula ? filtroCelula.value : '';
     filtroLider.innerHTML = '';
 
     const optionTodos = document.createElement('option');
@@ -245,10 +281,19 @@ function renderLideresDependiente() {
     }
 
     const filtrados = lideresDisponibles.filter(function(lider) {
-        if (!ministerioSeleccionado || ministerioSeleccionado === '0') {
-            return true;
+        const coincideMinisterio = (!ministerioSeleccionado || ministerioSeleccionado === '0')
+            ? true
+            : String(lider.Id_Ministerio) === String(ministerioSeleccionado);
+
+        let coincideCelula = true;
+        if (celulaSeleccionada && celulaSeleccionada !== '0') {
+            coincideCelula = celulasDisponibles.some(function(celula) {
+                return String(celula.Id_Celula) === String(celulaSeleccionada)
+                    && String(celula.Id_Lider || '') === String(lider.Id_Persona);
+            });
         }
-        return String(lider.Id_Ministerio) === String(ministerioSeleccionado);
+
+        return coincideMinisterio && coincideCelula;
     });
 
     filtrados.forEach(function(lider) {
@@ -265,11 +310,67 @@ function renderLideresDependiente() {
     filtroLider.value = existe ? valorDeseado : '';
 }
 
+function renderCelulasDependiente() {
+    if (!filtroCelula) return;
+
+    const ministerioSeleccionado = filtroMinisterio ? filtroMinisterio.value : '';
+    const liderSeleccionado = filtroLider ? filtroLider.value : '';
+
+    filtroCelula.innerHTML = '';
+
+    const optionTodas = document.createElement('option');
+    optionTodas.value = '';
+    optionTodas.textContent = 'Todas las células';
+    filtroCelula.appendChild(optionTodas);
+
+    const optionSinCelula = document.createElement('option');
+    optionSinCelula.value = '0';
+    optionSinCelula.textContent = 'Sin célula';
+    filtroCelula.appendChild(optionSinCelula);
+
+    const filtradas = celulasDisponibles.filter(function(celula) {
+        const coincideMinisterio = !ministerioSeleccionado || ministerioSeleccionado === '0'
+            ? true
+            : String(celula.Id_Ministerio || '') === String(ministerioSeleccionado);
+
+        const coincideLider = !liderSeleccionado || liderSeleccionado === '0'
+            ? true
+            : String(celula.Id_Lider || '') === String(liderSeleccionado);
+
+        return coincideMinisterio && coincideLider;
+    });
+
+    filtradas.forEach(function(celula) {
+        const option = document.createElement('option');
+        option.value = String(celula.Id_Celula);
+        option.textContent = celula.Nombre_Celula;
+        filtroCelula.appendChild(option);
+    });
+
+    const valorDeseado = String(celulaActual || '');
+    const existe = Array.from(filtroCelula.options).some(function(opt) {
+        return opt.value === valorDeseado;
+    });
+    filtroCelula.value = existe ? valorDeseado : '';
+}
+
 if (filtroMinisterio && filtroLider) {
     filtroMinisterio.addEventListener('change', function() {
         renderLideresDependiente();
+        renderCelulasDependiente();
     });
+    filtroLider.addEventListener('change', function() {
+        renderCelulasDependiente();
+        renderLideresDependiente();
+    });
+    if (filtroCelula) {
+        filtroCelula.addEventListener('change', function() {
+            renderLideresDependiente();
+            renderCelulasDependiente();
+        });
+    }
     renderLideresDependiente();
+    renderCelulasDependiente();
 }
 </script>
 

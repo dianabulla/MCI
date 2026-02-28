@@ -7,6 +7,9 @@
     <?php $puedeEliminarTransmision = AuthController::esAdministrador() || AuthController::tienePermiso('transmisiones', 'eliminar'); ?>
     <?php $puedeGestionarTransmision = $puedeEditarTransmision || $puedeEliminarTransmision; ?>
     <div class="page-actions">
+        <a href="<?= PUBLIC_URL ?>?url=transmisiones/exportarExcel" class="btn btn-success">
+            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
+        </a>
         <?php if ($puedeCrearTransmision): ?>
         <a href="<?= PUBLIC_URL ?>?url=transmisiones/crear" class="btn btn-primary">
             <i class="bi bi-plus-circle"></i> Nueva Transmisión

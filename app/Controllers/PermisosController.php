@@ -62,6 +62,39 @@ class PermisosController extends BaseController {
         $this->view('permisos/index', $data);
     }
 
+    public function exportarExcel() {
+        $roles = $this->rolModel->getAll();
+        $modulos = $this->getModulos();
+
+        $permisosPorRol = [];
+        foreach ($roles as $rol) {
+            $permisosPorRol[(int)$rol['Id_Rol']] = $this->getPermisosPorRol($rol['Id_Rol']);
+        }
+
+        $rows = [];
+        foreach ($modulos as $moduloKey => $moduloNombre) {
+            foreach ($roles as $rol) {
+                $idRol = (int)$rol['Id_Rol'];
+                $permiso = $permisosPorRol[$idRol][$moduloKey] ?? null;
+
+                $rows[] = [
+                    (string)$moduloNombre,
+                    (string)($rol['Nombre_Rol'] ?? ''),
+                    !empty($permiso['Puede_Ver']) ? 'Si' : 'No',
+                    !empty($permiso['Puede_Crear']) ? 'Si' : 'No',
+                    !empty($permiso['Puede_Editar']) ? 'Si' : 'No',
+                    !empty($permiso['Puede_Eliminar']) ? 'Si' : 'No'
+                ];
+            }
+        }
+
+        $this->exportCsv(
+            'permisos_' . date('Ymd_His'),
+            ['Modulo', 'Rol', 'Puede Ver', 'Puede Crear', 'Puede Editar', 'Puede Eliminar'],
+            $rows
+        );
+    }
+
     /**
      * Actualizar permisos
      */

@@ -31,11 +31,6 @@
         </div>
 
         <div class="form-group">
-            <label for="ofrenda">Ofrenda (COP)</label>
-            <input type="number" id="ofrenda" name="ofrenda" class="form-control" min="0" step="1" inputmode="numeric">
-        </div>
-
-        <div class="form-group">
             <label for="observaciones">Observaciones</label>
             <textarea id="observaciones" name="observaciones" class="form-control" rows="3"></textarea>
         </div>

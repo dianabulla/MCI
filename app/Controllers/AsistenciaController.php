@@ -26,6 +26,9 @@ class AsistenciaController extends BaseController {
 
         $filtroMinisterio = $_GET['ministerio'] ?? '';
         $filtroLider = $_GET['lider'] ?? '';
+        $filtroCelula = $_GET['celula'] ?? '';
+        $filtroReporte = $_GET['reporte'] ?? '';
+        $filtroReporte = in_array($filtroReporte, ['con', 'sin'], true) ? $filtroReporte : '';
         
         // Obtener asistencias con aislamiento de rol
         $asistencias = $this->asistenciaModel->getAllWithInfoAndRole($filtroAsistencias);
@@ -67,8 +70,36 @@ class AsistenciaController extends BaseController {
         $filtroMinisterio = ($filtroMinisterio !== '' && isset($ministerioIdsPermitidos[(int)$filtroMinisterio])) ? (int)$filtroMinisterio : '';
         $filtroLider = ($filtroLider !== '' && isset($liderIdsPermitidos[(int)$filtroLider])) ? (int)$filtroLider : '';
 
+        $celulasDisponibles = [];
+        $celulaIdsPermitidos = [];
+        foreach ($celulasBase as $celulaBase) {
+            $idCelula = (int)($celulaBase['Id_Celula'] ?? 0);
+            if ($idCelula <= 0) {
+                continue;
+            }
+            $celulasDisponibles[] = [
+                'Id_Celula' => $idCelula,
+                'Nombre_Celula' => (string)($celulaBase['Nombre_Celula'] ?? ''),
+                'Id_Lider' => (int)($celulaBase['Id_Lider'] ?? 0),
+                'Id_Ministerio' => (int)($celulaBase['Id_Ministerio_Lider'] ?? 0)
+            ];
+            $celulaIdsPermitidos[$idCelula] = true;
+        }
+        $filtroCelula = ($filtroCelula !== '' && isset($celulaIdsPermitidos[(int)$filtroCelula])) ? (int)$filtroCelula : (($filtroCelula === '0') ? '0' : '');
+
         // Células visibles con filtros aplicados
         $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas, $filtroMinisterio, $filtroLider);
+
+        if ($filtroCelula !== '') {
+            if ((string)$filtroCelula === '0') {
+                $celulas = [];
+            } else {
+                $idCelulaFiltro = (int)$filtroCelula;
+                $celulas = array_values(array_filter($celulas, static function($celula) use ($idCelulaFiltro) {
+                    return (int)($celula['Id_Celula'] ?? 0) === $idCelulaFiltro;
+                }));
+            }
+        }
 
         // Agrupar asistencias por célula
         $asistenciasPorCelula = [];
@@ -141,14 +172,99 @@ class AsistenciaController extends BaseController {
             ];
         }
 
+        if ($filtroReporte !== '') {
+            $sections = array_values(array_filter($sections, static function($section) use ($filtroReporte) {
+                $tieneReporte = !empty($section['fecha_ultimo_reporte']);
+                return $filtroReporte === 'con' ? $tieneReporte : !$tieneReporte;
+            }));
+        }
+
         $this->view('asistencias/lista', [
             'asistencias' => $asistencias,
             'sections' => $sections,
             'ministerios_disponibles' => array_values($ministeriosDisponibles),
             'lideres_disponibles' => array_values($lideresDisponibles),
+            'celulas_disponibles' => array_values($celulasDisponibles),
             'filtro_ministerio_actual' => (string)$filtroMinisterio,
-            'filtro_lider_actual' => (string)$filtroLider
+            'filtro_lider_actual' => (string)$filtroLider,
+            'filtro_celula_actual' => (string)$filtroCelula,
+            'filtro_reporte_actual' => (string)$filtroReporte
         ]);
+    }
+
+    public function exportarExcel() {
+        if (!AuthController::tienePermiso('asistencias', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $filtroAsistencias = DataIsolation::generarFiltroAsistencias();
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+
+        $filtroMinisterio = $_GET['ministerio'] ?? '';
+        $filtroLider = $_GET['lider'] ?? '';
+        $filtroCelula = $_GET['celula'] ?? '';
+        $filtroReporte = $_GET['reporte'] ?? '';
+        $filtroReporte = in_array($filtroReporte, ['con', 'sin'], true) ? $filtroReporte : '';
+
+        $asistencias = $this->asistenciaModel->getAllWithInfoAndRole($filtroAsistencias);
+
+        $celulasFiltradas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas, $filtroMinisterio, $filtroLider);
+        $celulaIdsPermitidas = array_map(static function($celula) {
+            return (int)($celula['Id_Celula'] ?? 0);
+        }, $celulasFiltradas);
+
+        if ($filtroCelula !== '') {
+            if ((string)$filtroCelula === '0') {
+                $celulaIdsPermitidas = [];
+            } else {
+                $idCelulaFiltro = (int)$filtroCelula;
+                $celulaIdsPermitidas = in_array($idCelulaFiltro, $celulaIdsPermitidas, true) ? [$idCelulaFiltro] : [];
+            }
+        }
+
+        $asistencias = array_values(array_filter($asistencias, static function($asistencia) use ($celulaIdsPermitidas) {
+            $idCelula = (int)($asistencia['Id_Celula'] ?? 0);
+            return in_array($idCelula, $celulaIdsPermitidas, true);
+        }));
+
+        if ($filtroReporte !== '') {
+            $celulasConReporte = [];
+            foreach ($asistencias as $asistencia) {
+                $idCelulaAsistencia = (int)($asistencia['Id_Celula'] ?? 0);
+                if ($idCelulaAsistencia > 0) {
+                    $celulasConReporte[$idCelulaAsistencia] = true;
+                }
+            }
+
+            if ($filtroReporte === 'con') {
+                $asistencias = array_values(array_filter($asistencias, static function($asistencia) use ($celulasConReporte) {
+                    $idCelulaAsistencia = (int)($asistencia['Id_Celula'] ?? 0);
+                    return isset($celulasConReporte[$idCelulaAsistencia]);
+                }));
+            } else {
+                $asistencias = [];
+            }
+        }
+
+        $rows = [];
+        foreach ($asistencias as $asistencia) {
+            $rows[] = [
+                (string)($asistencia['Nombre_Celula'] ?? ''),
+                (string)($asistencia['Nombre_Persona'] ?? ''),
+                (string)($asistencia['Fecha_Asistencia'] ?? ''),
+                ((int)($asistencia['Asistio'] ?? 0) === 1) ? 'Si' : 'No',
+                (string)($asistencia['Tema'] ?? ''),
+                (string)($asistencia['Tipo_Celula'] ?? ''),
+                (string)($asistencia['Observaciones'] ?? '')
+            ];
+        }
+
+        $this->exportCsv(
+            'asistencias_' . date('Ymd_His'),
+            ['Celula', 'Persona', 'Fecha', 'Asistio', 'Tema', 'Tipo Celula', 'Observaciones'],
+            $rows
+        );
     }
 
     public function registrar() {
@@ -163,7 +279,6 @@ class AsistenciaController extends BaseController {
             $fecha = $_POST['fecha'];
             $asistencias = $_POST['asistencias'] ?? [];
             $tema = $_POST['tema'] ?? null;
-            $ofrenda = ($_POST['ofrenda'] ?? '') !== '' ? $_POST['ofrenda'] : null;
             $tipoCelula = $_POST['tipo_celula'] ?? null;
             $observaciones = $_POST['observaciones'] ?? null;
             
@@ -176,7 +291,6 @@ class AsistenciaController extends BaseController {
                     $fecha,
                     $asistioValor,
                     $tema,
-                    $ofrenda,
                     $tipoCelula,
                     $observaciones
                 );

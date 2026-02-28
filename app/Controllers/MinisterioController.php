@@ -95,6 +95,31 @@ class MinisterioController extends BaseController {
         }
     }
 
+    public function exportarExcel() {
+        if (!AuthController::tienePermiso('ministerios', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $filtroMinisterios = DataIsolation::generarFiltroMinisterios();
+        $ministerios = $this->ministerioModel->getAllWithMemberCountAndRole($filtroMinisterios);
+
+        $rows = [];
+        foreach ($ministerios as $ministerio) {
+            $rows[] = [
+                (string)($ministerio['Nombre_Ministerio'] ?? ''),
+                (string)($ministerio['Descripcion'] ?? ''),
+                (string)($ministerio['Total_Miembros'] ?? 0)
+            ];
+        }
+
+        $this->exportCsv(
+            'ministerios_' . date('Ymd_His'),
+            ['Ministerio', 'Descripcion', 'Total Miembros'],
+            $rows
+        );
+    }
+
     public function editar() {
         // Verificar permiso de editar
         if (!AuthController::tienePermiso('ministerios', 'editar')) {

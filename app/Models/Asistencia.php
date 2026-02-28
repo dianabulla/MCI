@@ -59,14 +59,13 @@ class Asistencia extends BaseModel {
     /**
      * Registrar asistencia
      */
-    public function registrarAsistencia($idPersona, $idCelula, $fecha, $asistio, $tema = null, $ofrenda = null, $tipoCelula = null, $observaciones = null) {
+    public function registrarAsistencia($idPersona, $idCelula, $fecha, $asistio, $tema = null, $tipoCelula = null, $observaciones = null) {
         $data = [
             'Id_Persona' => $idPersona,
             'Id_Celula' => $idCelula,
             'Fecha_Asistencia' => $fecha,
             'Asistio' => $asistio,
             'Tema' => $tema,
-            'Ofrenda' => $ofrenda,
             'Tipo_Celula' => $tipoCelula,
             'Observaciones' => $observaciones
         ];

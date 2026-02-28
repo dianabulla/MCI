@@ -30,9 +30,14 @@
     <?php $puedeEditarMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'editar'); ?>
     <?php $puedeEliminarMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'eliminar'); ?>
     <?php $puedeGestionarMinisterio = $puedeEditarMinisterio || $puedeEliminarMinisterio; ?>
-    <?php if ($puedeCrearMinisterio): ?>
-    <a href="<?= PUBLIC_URL ?>index.php?url=ministerios/crear" class="btn btn-primary">+ Nuevo Ministerio</a>
-    <?php endif; ?>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="<?= PUBLIC_URL ?>?url=ministerios/exportarExcel" class="btn btn-success">
+            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
+        </a>
+        <?php if ($puedeCrearMinisterio): ?>
+        <a href="<?= PUBLIC_URL ?>index.php?url=ministerios/crear" class="btn btn-primary">+ Nuevo Ministerio</a>
+        <?php endif; ?>
+    </div>
 </div>
 
 <?php if (!empty($sections ?? [])): ?>

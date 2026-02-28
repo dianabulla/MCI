@@ -2,6 +2,9 @@
 
 <div class="page-header">
     <h2>Reportes y Estadísticas</h2>
+    <a href="<?= PUBLIC_URL ?>?url=reportes/exportarExcel&fecha_inicio=<?= urlencode((string)$fecha_inicio) ?>&fecha_fin=<?= urlencode((string)$fecha_fin) ?><?= !empty($filtro_celula) ? '&celula=' . urlencode((string)$filtro_celula) : '' ?>" class="btn btn-success">
+        <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
+    </a>
 </div>
 
 <!-- Filtro de Fechas -->
@@ -17,6 +20,18 @@
         <div class="form-group" style="margin: 0;">
             <label>Fecha Fin:</label>
             <input type="date" name="fecha_fin" class="form-control" value="<?= $fecha_fin ?>" required>
+        </div>
+
+        <div class="form-group" style="margin: 0;">
+            <label for="filtro_celula">Célula:</label>
+            <select id="filtro_celula" name="celula" class="form-control">
+                <option value="">Todas las células</option>
+                <?php foreach (($celulas_disponibles ?? []) as $celula): ?>
+                    <option value="<?= (int)$celula['Id_Celula'] ?>" <?= ((string)($filtro_celula ?? '') === (string)$celula['Id_Celula']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($celula['Nombre_Celula']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
         </div>
 
         <div class="filters-actions">

@@ -154,7 +154,7 @@ class DataIsolation {
      * Roles con acceso total a la información
      */
     public static function tieneAccesoTotal() {
-        return self::esAdmin() || self::esPastor() || self::esGanar();
+        return self::esAdmin() || self::esGanar();
     }
 
     /**
@@ -169,7 +169,40 @@ class DataIsolation {
      * Roles con visibilidad por ministerio
      */
     public static function usaVisibilidadPorMinisterio() {
-        return self::esLider12() || self::esPastor() || self::esAsistente();
+        return self::esAsistente();
+    }
+
+    /**
+     * Condición por anclaje de líder/pastor para personas
+     */
+    private static function generarCondicionAnclajePersonas($aliasPersona = 'p') {
+        $usuarioId = self::getUsuarioId();
+        if (!$usuarioId) {
+            return '1=0';
+        }
+
+        $aliasPersona = preg_replace('/[^a-zA-Z0-9_]/', '', (string)$aliasPersona);
+        if ($aliasPersona === '') {
+            $aliasPersona = 'p';
+        }
+
+        if (self::esLiderCelula() || self::esLider12()) {
+            return "($aliasPersona.Id_Lider = $usuarioId OR $aliasPersona.Id_Persona = $usuarioId)";
+        }
+
+        if (self::esPastor()) {
+            return "(
+                $aliasPersona.Id_Persona = $usuarioId
+                OR $aliasPersona.Id_Lider = $usuarioId
+                OR $aliasPersona.Id_Lider IN (
+                    SELECT DISTINCT c.Id_Lider
+                    FROM celula c
+                    WHERE c.Id_Lider_Inmediato = $usuarioId
+                )
+            )";
+        }
+
+        return '1=0';
     }
 
     /**
@@ -179,26 +212,28 @@ class DataIsolation {
      * Si es líder de 12: ver solo personas que lidera
      */
     public static function generarFiltroPersonas() {
-        $usuarioId = self::getUsuarioId();
         $idMinisterio = self::getUsuarioMinisterioId();
-        $idCelula = self::getUsuarioCelulaId();
 
         if (self::tieneAccesoTotal()) {
-            return "1=1"; // Sin restricciones para administrador
+            return "1=1";
         }
 
-        if (self::esLiderCelula()) {
-            if ($idCelula) {
-                return "p.Id_Celula = $idCelula";
-            }
-            return "1=0";
+        if (self::esLiderCelula() || self::esLider12() || self::esPastor()) {
+            return self::generarCondicionAnclajePersonas('p');
         }
 
-        if (self::usaVisibilidadPorMinisterio()) {
+        if (self::esAsistente()) {
             if ($idMinisterio) {
                 return "p.Id_Ministerio = $idMinisterio";
             }
             return "1=0";
+        }
+
+        // Fallback para roles personalizados:
+        // si tiene permiso explícito de ver personas, permitir listado completo.
+        if (isset($_SESSION['permisos']['personas'])
+            && !empty($_SESSION['permisos']['personas']['ver'])) {
+            return "1=1";
         }
 
         // Otros roles: sin acceso (restringir)
@@ -223,7 +258,21 @@ class DataIsolation {
             return "1=0";
         }
 
-        if (self::usaVisibilidadPorMinisterio()) {
+        if (self::esLider12()) {
+            if ($usuarioId) {
+                return "c.Id_Lider = $usuarioId";
+            }
+            return "1=0";
+        }
+
+        if (self::esPastor()) {
+            if ($usuarioId) {
+                return "(c.Id_Lider_Inmediato = $usuarioId OR c.Id_Lider = $usuarioId)";
+            }
+            return "1=0";
+        }
+
+        if (self::esAsistente()) {
             if ($idMinisterio) {
                 return "c.Id_Lider IN (SELECT Id_Persona FROM persona WHERE Id_Ministerio = $idMinisterio)";
             }
@@ -244,22 +293,18 @@ class DataIsolation {
      * Generar cláusula WHERE para asistencias según el rol
      */
     public static function generarFiltroAsistencias() {
-        $usuarioId = self::getUsuarioId();
         $idMinisterio = self::getUsuarioMinisterioId();
-        $idCelula = self::getUsuarioCelulaId();
 
         if (self::tieneAccesoTotal()) {
             return "1=1";
         }
 
-        if (self::esLiderCelula()) {
-            if ($idCelula) {
-                return "a.Id_Celula = $idCelula";
-            }
-            return "1=0";
+        if (self::esLiderCelula() || self::esLider12() || self::esPastor()) {
+            $condicionPersonas = self::generarCondicionAnclajePersonas('p');
+            return "a.Id_Persona IN (SELECT p.Id_Persona FROM persona p WHERE $condicionPersonas)";
         }
 
-        if (self::usaVisibilidadPorMinisterio()) {
+        if (self::esAsistente()) {
             if ($idMinisterio) {
                 return "a.Id_Persona IN (SELECT Id_Persona FROM persona WHERE Id_Ministerio = $idMinisterio)";
             }
@@ -281,17 +326,39 @@ class DataIsolation {
      * Generar cláusula WHERE para ministerios según el rol
      */
     public static function generarFiltroMinisterios() {
+        $usuarioId = self::getUsuarioId();
         $idMinisterio = self::getUsuarioMinisterioId();
 
         if (self::tieneAccesoTotal()) {
             return "1=1";
         }
 
-        if (self::esLiderCelula() || self::usaVisibilidadPorMinisterio()) {
+        if (self::esLiderCelula() || self::esLider12() || self::esAsistente()) {
             if ($idMinisterio) {
                 return "m.Id_Ministerio = $idMinisterio";
             }
             return "1=0";
+        }
+
+        if (self::esPastor()) {
+            if (!$usuarioId) {
+                return "1=0";
+            }
+
+            return "m.Id_Ministerio IN (
+                SELECT DISTINCT p.Id_Ministerio
+                FROM persona p
+                WHERE p.Id_Ministerio IS NOT NULL
+                AND (
+                    p.Id_Lider = $usuarioId
+                    OR p.Id_Lider IN (
+                        SELECT DISTINCT c.Id_Lider
+                        FROM celula c
+                        WHERE c.Id_Lider_Inmediato = $usuarioId
+                    )
+                    OR p.Id_Persona = $usuarioId
+                )
+            )";
         }
 
         return "1=0";
@@ -301,22 +368,18 @@ class DataIsolation {
      * Generar cláusula WHERE para peticiones según el rol
      */
     public static function generarFiltroPeticiones() {
-        $usuarioId = self::getUsuarioId();
         $idMinisterio = self::getUsuarioMinisterioId();
-        $idCelula = self::getUsuarioCelulaId();
 
         if (self::tieneAccesoTotal()) {
             return "1=1";
         }
 
-        if (self::esLiderCelula()) {
-            if ($idCelula) {
-                return "pet.Id_Persona IN (SELECT Id_Persona FROM persona WHERE Id_Celula = $idCelula)";
-            }
-            return "1=0";
+        if (self::esLiderCelula() || self::esLider12() || self::esPastor()) {
+            $condicionPersonas = self::generarCondicionAnclajePersonas('p');
+            return "pet.Id_Persona IN (SELECT p.Id_Persona FROM persona p WHERE $condicionPersonas)";
         }
 
-        if (self::usaVisibilidadPorMinisterio()) {
+        if (self::esAsistente()) {
             if ($idMinisterio) {
                 return "pet.Id_Persona IN (SELECT Id_Persona FROM persona WHERE Id_Ministerio = $idMinisterio)";
             }

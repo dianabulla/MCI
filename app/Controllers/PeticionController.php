@@ -5,15 +5,18 @@
 
 require_once APP . '/Models/Peticion.php';
 require_once APP . '/Models/Persona.php';
+require_once APP . '/Models/Celula.php';
 require_once APP . '/Helpers/DataIsolation.php';
 
 class PeticionController extends BaseController {
     private $peticionModel;
     private $personaModel;
+    private $celulaModel;
 
     public function __construct() {
         $this->peticionModel = new Peticion();
         $this->personaModel = new Persona();
+        $this->celulaModel = new Celula();
     }
 
     private function getPersonasPermitidas() {
@@ -36,10 +39,65 @@ class PeticionController extends BaseController {
     public function index() {
         // Generar filtro según el rol del usuario
         $filtroPeticiones = DataIsolation::generarFiltroPeticiones();
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        $filtroCelula = $_GET['celula'] ?? '';
+
+        $celulasBase = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
+        $celulasDisponibles = array_map(static function($celula) {
+            return [
+                'Id_Celula' => (int)($celula['Id_Celula'] ?? 0),
+                'Nombre_Celula' => (string)($celula['Nombre_Celula'] ?? '')
+            ];
+        }, $celulasBase);
+        $celulaIdsPermitidas = array_map(static function($celula) {
+            return (int)($celula['Id_Celula'] ?? 0);
+        }, $celulasDisponibles);
+
+        $filtroCelula = ($filtroCelula !== '' && in_array((int)$filtroCelula, $celulaIdsPermitidas, true)) ? (int)$filtroCelula : (($filtroCelula === '0') ? '0' : '');
         
         // Obtener peticiones con aislamiento de rol
-        $peticiones = $this->peticionModel->getAllWithPersonAndRole($filtroPeticiones);
-        $this->view('peticiones/lista', ['peticiones' => $peticiones]);
+        $peticiones = $this->peticionModel->getAllWithPersonAndRole($filtroPeticiones, $filtroCelula);
+        $this->view('peticiones/lista', [
+            'peticiones' => $peticiones,
+            'celulas_disponibles' => $celulasDisponibles,
+            'filtro_celula_actual' => (string)$filtroCelula
+        ]);
+    }
+
+    public function exportarExcel() {
+        if (!AuthController::tienePermiso('peticiones', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $filtroPeticiones = DataIsolation::generarFiltroPeticiones();
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        $filtroCelula = $_GET['celula'] ?? '';
+
+        $celulasBase = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
+        $celulaIdsPermitidas = array_map(static function($celula) {
+            return (int)($celula['Id_Celula'] ?? 0);
+        }, $celulasBase);
+        $filtroCelula = ($filtroCelula !== '' && in_array((int)$filtroCelula, $celulaIdsPermitidas, true)) ? (int)$filtroCelula : (($filtroCelula === '0') ? '0' : '');
+
+        $peticiones = $this->peticionModel->getAllWithPersonAndRole($filtroPeticiones, $filtroCelula);
+
+        $rows = [];
+        foreach ($peticiones as $peticion) {
+            $rows[] = [
+                (string)($peticion['Nombre_Completo'] ?? ''),
+                (string)($peticion['Nombre_Celula'] ?? ''),
+                (string)($peticion['Descripcion_Peticion'] ?? ''),
+                (string)($peticion['Fecha_Peticion'] ?? ''),
+                (string)($peticion['Estado_Peticion'] ?? '')
+            ];
+        }
+
+        $this->exportCsv(
+            'peticiones_' . date('Ymd_His'),
+            ['Persona', 'Celula', 'Peticion', 'Fecha', 'Estado'],
+            $rows
+        );
     }
 
     public function crear() {

@@ -211,6 +211,39 @@ class CelulaController extends BaseController {
         $this->view('celulas/detalle', ['celula' => $celula]);
     }
 
+    public function exportarExcel() {
+        if (!AuthController::tienePermiso('celulas', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        $filtroMinisterio = $_GET['ministerio'] ?? '';
+        $filtroLider = $_GET['lider'] ?? '';
+
+        $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas, $filtroMinisterio, $filtroLider);
+
+        $rows = [];
+        foreach ($celulas as $celula) {
+            $rows[] = [
+                (string)($celula['Nombre_Celula'] ?? ''),
+                (string)($celula['Nombre_Lider'] ?? ''),
+                (string)($celula['Nombre_Anfitrion'] ?? ''),
+                (string)($celula['Direccion_Celula'] ?? ''),
+                (string)($celula['Dia_Reunion'] ?? ''),
+                (string)($celula['Hora_Reunion'] ?? ''),
+                (string)($celula['Nombre_Ministerio_Lider'] ?? ''),
+                (string)($celula['Total_Miembros'] ?? 0)
+            ];
+        }
+
+        $this->exportCsv(
+            'celulas_' . date('Ymd_His'),
+            ['Celula', 'Lider', 'Anfitrion', 'Direccion', 'Dia Reunion', 'Hora Reunion', 'Ministerio', 'Total Miembros'],
+            $rows
+        );
+    }
+
     public function eliminar() {
         // Verificar permiso de eliminar
         if (!AuthController::tienePermiso('celulas', 'eliminar')) {

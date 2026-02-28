@@ -8,6 +8,9 @@ return [
     // Autenticación
     'auth/login' => 'AuthController@login',
     'auth/logout' => 'AuthController@logout',
+    'auth/cambiar-cuenta' => 'AuthController@cambiarCuenta',
+    'auth/cambiar-usuario' => 'AuthController@cambiarUsuario',
+    'auth/siguiente-cuenta' => 'AuthController@siguienteCuenta',
     'auth/acceso-denegado' => 'AuthController@accesoDenegado',
     
     // Home
@@ -20,6 +23,7 @@ return [
     'personas/editar' => 'PersonaController@editar',
     'personas/detalle' => 'PersonaController@detalle',
     'personas/eliminar' => 'PersonaController@eliminar',
+    'personas/exportarExcel' => 'PersonaController@exportarExcel',
     
     // Células
     'celulas' => 'CelulaController@index',
@@ -32,44 +36,52 @@ return [
     'celulas/buscarLideres12' => 'CelulaController@buscarLideres12',
     'celulas/buscarPastores' => 'CelulaController@buscarPastores',
     'celulas/buscarAnfitriones' => 'CelulaController@buscarAnfitriones',
+    'celulas/exportarExcel' => 'CelulaController@exportarExcel',
     
     // Ministerios
     'ministerios' => 'MinisterioController@index',
     'ministerios/crear' => 'MinisterioController@crear',
     'ministerios/editar' => 'MinisterioController@editar',
     'ministerios/eliminar' => 'MinisterioController@eliminar',
+    'ministerios/exportarExcel' => 'MinisterioController@exportarExcel',
     
     // Roles
     'roles' => 'RolController@index',
     'roles/crear' => 'RolController@crear',
     'roles/editar' => 'RolController@editar',
     'roles/eliminar' => 'RolController@eliminar',
+    'roles/exportarExcel' => 'RolController@exportarExcel',
     
     // Eventos
     'eventos' => 'EventoController@index',
     'eventos/crear' => 'EventoController@crear',
     'eventos/editar' => 'EventoController@editar',
     'eventos/eliminar' => 'EventoController@eliminar',
+    'eventos/exportarExcel' => 'EventoController@exportarExcel',
     
     // Peticiones
     'peticiones' => 'PeticionController@index',
     'peticiones/crear' => 'PeticionController@crear',
     'peticiones/editar' => 'PeticionController@editar',
     'peticiones/eliminar' => 'PeticionController@eliminar',
+    'peticiones/exportarExcel' => 'PeticionController@exportarExcel',
     
     // Asistencias
     'asistencias' => 'AsistenciaController@index',
     'asistencias/registrar' => 'AsistenciaController@registrar',
     'asistencias/porCelula' => 'AsistenciaController@porCelula',
+    'asistencias/exportarExcel' => 'AsistenciaController@exportarExcel',
     
     // Reportes
     'reportes' => 'ReporteController@index',
     'reportes/almasGanadas' => 'ReporteController@almasGanadas',
     'reportes/asistenciaCelulas' => 'ReporteController@asistenciaCelulas',
+    'reportes/exportarExcel' => 'ReporteController@exportarExcel',
     
     // Permisos
     'permisos' => 'PermisosController@index',
     'permisos/actualizar' => 'PermisosController@actualizar',
+    'permisos/exportarExcel' => 'PermisosController@exportarExcel',
     
     // Entrega de Obsequios (Requiere autenticación)
     'entrega_obsequio' => 'EntregaObsequioController@index',
@@ -108,6 +120,7 @@ return [
     'nehemias/whatsapp-campanas' => 'WhatsappCampanaController@index',
     'nehemias/whatsapp-campanas/crear' => 'WhatsappCampanaController@crear',
     'nehemias/whatsapp-campanas/generar-cola' => 'WhatsappCampanaController@generarCola',
+    'nehemias/whatsapp-campanas/reintentar-fallidos' => 'WhatsappCampanaController@reintentarFallidos',
     'nehemias/whatsapp-campanas/procesar-cola' => 'WhatsappCampanaController@procesarCola',
     'nehemias/whatsapp/webhook' => 'WhatsappCampanaController@webhook',
     
@@ -121,6 +134,7 @@ return [
     'transmisiones/eliminar' => 'TransmisionController@eliminar',
     'transmisiones/buscar' => 'TransmisionController@buscar',
     'transmisiones/obtenerEnVivo' => 'TransmisionController@obtenerEnVivo',
+    'transmisiones/exportarExcel' => 'TransmisionController@exportarExcel',
     
     // Transmisiones YouTube (Público - No requiere autenticación)
     'transmisiones-publico' => 'TransmisionController@verPublico',
