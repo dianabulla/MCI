@@ -14,15 +14,7 @@ define('DB_USER', getenv('DB_USER') ?: 'root');
 define('DB_PASS', getenv('DB_PASS') ?: '');
 define('DB_CHARSET', 'utf8mb4');
 
-// URLs
-$isHttps = (
-	(!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-	(isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443) ||
-	(isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower((string) $_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
-);
-
-$scheme = $isHttps ? 'https' : 'http';
-$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+// URLs (usar rutas relativas para evitar problemas en producción con proxy/SSL)
 $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/public/index.php'));
 $publicPath = rtrim(dirname($scriptName), '/');
 
@@ -31,8 +23,8 @@ if ($publicPath === '') {
 }
 
 $basePath = preg_replace('#/public$#', '', $publicPath);
-$baseUrl = $scheme . '://' . $host . $basePath;
-$publicUrl = $scheme . '://' . $host . $publicPath;
+$baseUrl = $basePath !== '' ? $basePath : '/';
+$publicUrl = rtrim($publicPath, '/') . '/';
 
 define('BASE_URL', $baseUrl);
 define('PUBLIC_URL', $publicUrl);

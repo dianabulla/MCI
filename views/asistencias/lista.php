@@ -160,12 +160,12 @@
 
         const lideres = <?= json_encode($lideres_disponibles ?? []) ?>;
         const celulas = <?= json_encode($celulas_disponibles ?? []) ?>;
-        const liderActual = '<?= htmlspecialchars((string)($filtro_lider_actual ?? ''), ENT_QUOTES) ?>';
-        const celulaActual = '<?= htmlspecialchars((string)($filtro_celula_actual ?? ''), ENT_QUOTES) ?>';
+        let liderActual = '<?= htmlspecialchars((string)($filtro_lider_actual ?? ''), ENT_QUOTES) ?>';
+        let celulaActual = '<?= htmlspecialchars((string)($filtro_celula_actual ?? ''), ENT_QUOTES) ?>';
 
         function renderLideres() {
             const ministerioSeleccionado = ministerioSelect.value;
-            const celulaSeleccionada = celulaSelect ? celulaSelect.value : '';
+            const valorPrevioLider = String(liderSelect.value || '');
             liderSelect.innerHTML = '';
 
             const optionTodos = document.createElement('option');
@@ -174,30 +174,25 @@
             liderSelect.appendChild(optionTodos);
 
             const filtrados = lideres.filter(function(lider) {
-                const coincideMinisterio = !ministerioSeleccionado
+                return !ministerioSeleccionado
                     ? true
                     : String(lider.Id_Ministerio || '') === String(ministerioSeleccionado);
-
-                let coincideCelula = true;
-                if (celulaSeleccionada && celulaSeleccionada !== '0') {
-                    coincideCelula = celulas.some(function(celula) {
-                        return String(celula.Id_Celula || '') === String(celulaSeleccionada)
-                            && String(celula.Id_Lider || '') === String(lider.Id_Persona || '');
-                    });
-                }
-
-                return coincideMinisterio && coincideCelula;
             });
 
             filtrados.forEach(function(lider) {
                 const option = document.createElement('option');
                 option.value = String(lider.Id_Persona);
                 option.textContent = lider.Nombre_Completo;
-                if (String(lider.Id_Persona) === String(liderActual)) {
-                    option.selected = true;
-                }
                 liderSelect.appendChild(option);
             });
+
+            const valorDeseado = valorPrevioLider !== '' ? valorPrevioLider : String(liderActual || '');
+            const existeDeseado = Array.from(liderSelect.options).some(function(opt) {
+                return opt.value === valorDeseado;
+            });
+            if (existeDeseado) {
+                liderSelect.value = valorDeseado;
+            }
 
             const seleccionadoValido = Array.from(liderSelect.options).some(function(opt) {
                 return opt.value === liderSelect.value;
@@ -211,6 +206,7 @@
         function renderCelulas() {
             const ministerioSeleccionado = ministerioSelect.value;
             const liderSeleccionado = liderSelect.value;
+            const valorPrevioCelula = String(celulaSelect.value || '');
 
             celulaSelect.innerHTML = '';
 
@@ -240,11 +236,16 @@
                 const option = document.createElement('option');
                 option.value = String(celula.Id_Celula);
                 option.textContent = celula.Nombre_Celula;
-                if (String(celula.Id_Celula) === String(celulaActual)) {
-                    option.selected = true;
-                }
                 celulaSelect.appendChild(option);
             });
+
+            const valorDeseado = valorPrevioCelula !== '' ? valorPrevioCelula : String(celulaActual || '');
+            const existeDeseado = Array.from(celulaSelect.options).some(function(opt) {
+                return opt.value === valorDeseado;
+            });
+            if (existeDeseado) {
+                celulaSelect.value = valorDeseado;
+            }
 
             const seleccionadoValido = Array.from(celulaSelect.options).some(function(opt) {
                 return opt.value === celulaSelect.value;
@@ -262,16 +263,12 @@
 
         liderSelect.addEventListener('change', function() {
             renderCelulas();
-            renderLideres();
-        });
-
-        celulaSelect.addEventListener('change', function() {
-            renderLideres();
-            renderCelulas();
         });
 
         renderLideres();
         renderCelulas();
+        liderActual = '';
+        celulaActual = '';
     })();
 </script>
 

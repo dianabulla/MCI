@@ -209,8 +209,8 @@ const filtroMinisterio = document.getElementById('filtro_ministerio');
 const filtroLider = document.getElementById('filtro_lider');
 const filtroCelula = document.getElementById('filtro_celula');
 const filtroRestringido = <?= !empty($filtroRestringido) ? 'true' : 'false' ?>;
-const liderActual = '<?= htmlspecialchars((string)($filtroLiderActual ?? ($_GET['lider'] ?? '')), ENT_QUOTES) ?>';
-const celulaActual = '<?= htmlspecialchars((string)($filtroCelulaActual ?? ($_GET['celula'] ?? '')), ENT_QUOTES) ?>';
+let liderActual = '<?= htmlspecialchars((string)($filtroLiderActual ?? ($_GET['lider'] ?? '')), ENT_QUOTES) ?>';
+let celulaActual = '<?= htmlspecialchars((string)($filtroCelulaActual ?? ($_GET['celula'] ?? '')), ENT_QUOTES) ?>';
 const lideresDisponibles = <?= json_encode(array_map(function ($lider) {
     return [
         'Id_Persona' => (int)($lider['Id_Persona'] ?? 0),
@@ -265,7 +265,7 @@ function renderLideresDependiente() {
     if (!filtroMinisterio || !filtroLider) return;
 
     const ministerioSeleccionado = filtroMinisterio.value;
-    const celulaSeleccionada = filtroCelula ? filtroCelula.value : '';
+    const valorPrevioLider = String(filtroLider.value || '');
     filtroLider.innerHTML = '';
 
     const optionTodos = document.createElement('option');
@@ -281,19 +281,9 @@ function renderLideresDependiente() {
     }
 
     const filtrados = lideresDisponibles.filter(function(lider) {
-        const coincideMinisterio = (!ministerioSeleccionado || ministerioSeleccionado === '0')
+        return (!ministerioSeleccionado || ministerioSeleccionado === '0')
             ? true
             : String(lider.Id_Ministerio) === String(ministerioSeleccionado);
-
-        let coincideCelula = true;
-        if (celulaSeleccionada && celulaSeleccionada !== '0') {
-            coincideCelula = celulasDisponibles.some(function(celula) {
-                return String(celula.Id_Celula) === String(celulaSeleccionada)
-                    && String(celula.Id_Lider || '') === String(lider.Id_Persona);
-            });
-        }
-
-        return coincideMinisterio && coincideCelula;
     });
 
     filtrados.forEach(function(lider) {
@@ -303,7 +293,7 @@ function renderLideresDependiente() {
         filtroLider.appendChild(option);
     });
 
-    const valorDeseado = String(liderActual || '');
+    const valorDeseado = valorPrevioLider !== '' ? valorPrevioLider : String(liderActual || '');
     const existe = Array.from(filtroLider.options).some(function(opt) {
         return opt.value === valorDeseado;
     });
@@ -315,6 +305,7 @@ function renderCelulasDependiente() {
 
     const ministerioSeleccionado = filtroMinisterio ? filtroMinisterio.value : '';
     const liderSeleccionado = filtroLider ? filtroLider.value : '';
+    const valorPrevioCelula = String(filtroCelula.value || '');
 
     filtroCelula.innerHTML = '';
 
@@ -347,7 +338,7 @@ function renderCelulasDependiente() {
         filtroCelula.appendChild(option);
     });
 
-    const valorDeseado = String(celulaActual || '');
+    const valorDeseado = valorPrevioCelula !== '' ? valorPrevioCelula : String(celulaActual || '');
     const existe = Array.from(filtroCelula.options).some(function(opt) {
         return opt.value === valorDeseado;
     });
@@ -361,16 +352,11 @@ if (filtroMinisterio && filtroLider) {
     });
     filtroLider.addEventListener('change', function() {
         renderCelulasDependiente();
-        renderLideresDependiente();
-    });
-    if (filtroCelula) {
-        filtroCelula.addEventListener('change', function() {
-            renderLideresDependiente();
-            renderCelulasDependiente();
-        });
     }
     renderLideresDependiente();
     renderCelulasDependiente();
+    liderActual = '';
+    celulaActual = '';
 }
 </script>
 

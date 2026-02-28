@@ -29,7 +29,8 @@ require_once APP . '/Config/Database.php';
 if (!defined('PUBLIC_URL')) {
     $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/public/index.php'));
     $publicPath = rtrim(dirname($scriptName), '/');
-    define('PUBLIC_URL', $publicPath !== '' ? $publicPath : '/public');
+    $publicBase = $publicPath !== '' ? $publicPath : '/public';
+    define('PUBLIC_URL', rtrim($publicBase, '/') . '/');
 }
 
 if (!defined('BASE_URL')) {
