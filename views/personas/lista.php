@@ -368,7 +368,7 @@ if (filtroMinisterio && filtroLider) {
     });
     filtroLider.addEventListener('change', function() {
         renderCelulasDependiente();
-    }
+    });
     renderLideresDependiente();
     renderCelulasDependiente();
     liderActual = '';

@@ -76,6 +76,7 @@ $rutasPublicas = [
     'registro_obsequio/guardar',
     'stream/live',
     'stream/gallery',
+    'eventos/proximos',
     'transmisiones-publico',
     'nehemias',
     'nehemias/formulario',

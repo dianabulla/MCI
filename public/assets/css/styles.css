@@ -2203,6 +2203,10 @@ body.sidebar-collapsed .sidebar-arrow-toggle,
 }
 
 @media (max-width: 980px) {
+    body {
+        font-size: 16px;
+    }
+
     .app-shell {
         grid-template-columns: 1fr;
     }
@@ -2254,7 +2258,7 @@ body.sidebar-collapsed .sidebar-arrow-toggle,
 
     .main-content {
         margin: 10px;
-        padding: 16px;
+        padding: 18px;
     }
 
     .app-footer {
@@ -2276,6 +2280,19 @@ body.sidebar-collapsed .sidebar-arrow-toggle,
     .filters-actions .btn {
         flex: 1;
         justify-content: center;
+        font-size: 0.98rem;
+        padding: 10px 14px;
+    }
+
+    .form-group label {
+        font-size: 0.95rem !important;
+    }
+
+    .form-control,
+    select.form-control,
+    textarea.form-control {
+        font-size: 1rem;
+        min-height: 42px;
     }
 
     .personas-mobile-stack {
@@ -2289,8 +2306,8 @@ body.sidebar-collapsed .sidebar-arrow-toggle,
         width: 100%;
         justify-content: center;
         margin: 0;
-        padding: 9px 12px;
-        font-size: 0.9rem;
+        padding: 10px 14px;
+        font-size: 0.98rem;
         border-radius: 12px;
     }
 
@@ -2314,7 +2331,7 @@ body.sidebar-collapsed .sidebar-arrow-toggle,
     }
 
     .module-title {
-        font-size: 1.05rem;
+        font-size: 1.12rem;
     }
 
     .module-title i {
@@ -2332,8 +2349,8 @@ body.sidebar-collapsed .sidebar-arrow-toggle,
     }
 
     .top-tab {
-        font-size: 0.84rem;
-        padding: 8px 12px;
+        font-size: 0.92rem;
+        padding: 10px 14px;
     }
 
     .table-container,
@@ -2378,8 +2395,8 @@ body.sidebar-collapsed .sidebar-arrow-toggle,
         gap: 10px;
         border: 0;
         border-bottom: 1px dashed #e7eef9;
-        padding: 8px 2px;
-        font-size: 0.86rem;
+        padding: 10px 4px;
+        font-size: 0.95rem;
         text-align: right;
         white-space: normal;
     }
@@ -2466,7 +2483,8 @@ body.sidebar-collapsed .sidebar-arrow-toggle,
         font-weight: 700;
         color: #1f3f77;
         text-align: left;
-        line-height: 1.2;
+        line-height: 1.3;
+        font-size: 0.98rem;
     }
 
     .mobile-persona-ver {
@@ -2481,8 +2499,8 @@ body.sidebar-collapsed .sidebar-arrow-toggle,
         border: 1px solid #cfdcf1;
         background: #f3f8ff;
         color: #2d4f88;
-        width: 30px;
-        height: 30px;
+        width: 34px;
+        height: 34px;
         border-radius: 999px;
         display: inline-flex;
         align-items: center;
@@ -2493,7 +2511,7 @@ body.sidebar-collapsed .sidebar-arrow-toggle,
     }
 
     .mobile-persona-toggle i {
-        font-size: 13px;
+        font-size: 15px;
         transition: transform 0.2s ease;
     }
 

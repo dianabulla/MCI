@@ -152,10 +152,53 @@ class NehemiasController extends BaseController {
         }));
     }
 
+    private function esLiderPermitidoNormalizado($liderSeleccionado, array $lideresDisponibles) {
+        $liderSeleccionadoNorm = $this->normalizarTextoFiltro($liderSeleccionado);
+        if ($liderSeleccionadoNorm === '') {
+            return false;
+        }
+
+        foreach ($lideresDisponibles as $liderDisponible) {
+            if ($this->normalizarTextoFiltro($liderDisponible) === $liderSeleccionadoNorm) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function normalizarTextoPersona($valor) {
         $valor = trim((string)$valor);
         $valor = preg_replace('/\s+/', ' ', $valor);
         return $valor;
+    }
+
+    private function obtenerMinisteriosParaFiltro() {
+        $ministerios = $this->ministerioModel->getAll();
+        $nombres = [];
+
+        foreach ($ministerios as $ministerio) {
+            $nombre = trim((string)($ministerio['Nombre_Ministerio'] ?? ''));
+            if ($nombre !== '') {
+                $nombres[$nombre] = true;
+            }
+        }
+
+        $lista = array_keys($nombres);
+
+        if (empty($lista)) {
+            $lista = array_map(
+                fn($row) => trim((string)($row['Lider'] ?? '')),
+                $this->nehemiasModel->getMinisteriosDistinct()
+            );
+            $lista = array_values(array_filter($lista, fn($valor) => $valor !== ''));
+        }
+
+        usort($lista, static function ($a, $b) {
+            return strcasecmp((string)$a, (string)$b);
+        });
+
+        return $lista;
     }
 
     private function limpiarSoloDigitos($valor) {
@@ -243,6 +286,26 @@ class NehemiasController extends BaseController {
             $errores[] = 'Debe aceptar la autorizacion de tratamiento de datos';
         }
 
+        if (empty($errores)) {
+            $duplicado = $this->nehemiasModel->findDuplicateByCedulaOrTelefono($cedula, (string)$telefono);
+            if ($duplicado) {
+                $duplicadoCedula = trim((string)($duplicado['Numero_Cedula'] ?? ''));
+                $duplicadoTelefono = trim((string)($duplicado['Telefono_Normalizado'] ?? ''));
+
+                if ($duplicadoCedula !== '' && $duplicadoCedula === $cedula) {
+                    $errores[] = 'Ya existe un registro con ese numero de cedula';
+                }
+
+                if ($duplicadoTelefono !== '' && $duplicadoTelefono === (string)$telefono) {
+                    $errores[] = 'Ya existe un registro con ese telefono';
+                }
+
+                if (empty($errores)) {
+                    $errores[] = 'Ya existe un registro similar con estos datos';
+                }
+            }
+        }
+
         if (!empty($errores)) {
             $mensaje = urlencode(implode('. ', $errores));
             header('Location: ' . PUBLIC_URL . '?url=nehemias/formulario&mensaje=' . $mensaje . '&tipo=error');
@@ -283,10 +346,7 @@ class NehemiasController extends BaseController {
             exit;
         }
 
-        $ministeriosNehemias = array_map(
-            fn($row) => $row['Lider'],
-            $this->nehemiasModel->getMinisteriosDistinct()
-        );
+        $ministeriosNehemias = $this->obtenerMinisteriosParaFiltro();
 
         $contextoFiltro = $this->getContextoFiltroLider($ministeriosNehemias);
         if ($contextoFiltro['restringido']) {
@@ -295,9 +355,9 @@ class NehemiasController extends BaseController {
 
         // Obtener filtros de la URL
         $filtros = [
-            'busqueda' => $_GET['busqueda'] ?? '',
-            'lider_nehemias' => $_GET['lider_nehemias'] ?? '',
-            'lider' => $_GET['lider'] ?? '',
+            'busqueda' => trim((string)($_GET['busqueda'] ?? '')),
+            'lider_nehemias' => trim((string)($_GET['lider_nehemias'] ?? '')),
+            'lider' => trim((string)($_GET['lider'] ?? '')),
             'lider_lista' => $ministeriosNehemias,
             'puesto_vacio' => $_GET['puesto_vacio'] ?? '',
             'puesto_lleno' => $_GET['puesto_lleno'] ?? '',
@@ -315,7 +375,7 @@ class NehemiasController extends BaseController {
             if ($filtros['lider'] === '__otros__') {
                 $filtros['lider'] = '';
             }
-            if ($filtros['lider'] !== '' && !in_array($filtros['lider'], $ministeriosNehemias, true)) {
+            if ($filtros['lider'] !== '' && !$this->esLiderPermitidoNormalizado($filtros['lider'], $ministeriosNehemias)) {
                 $filtros['lider'] = '';
             }
             $filtros['lider_lista'] = $ministeriosNehemias;
@@ -348,7 +408,9 @@ class NehemiasController extends BaseController {
             'registros' => $registros,
             'filtros' => $filtros,
             'ministeriosNehemias' => $ministeriosNehemias,
-            'filtroLiderRestringido' => $contextoFiltro['restringido']
+            'filtroLiderRestringido' => $contextoFiltro['restringido'],
+            'mensaje' => $_GET['mensaje'] ?? null,
+            'tipo' => $_GET['tipo'] ?? 'info'
         ]);
     }
 
@@ -402,6 +464,16 @@ class NehemiasController extends BaseController {
             }
         }
 
+        $ministeriosCatalogo = $this->ministerioModel->getAll();
+        $catalogoPorNormalizado = [];
+        foreach ($ministeriosCatalogo as $ministerioCatalogo) {
+            $nombreCatalogo = trim((string)($ministerioCatalogo['Nombre_Ministerio'] ?? ''));
+            if ($nombreCatalogo === '') {
+                continue;
+            }
+            $catalogoPorNormalizado[$normalize($nombreCatalogo)] = $nombreCatalogo;
+        }
+
         $conteos = $this->nehemiasModel->getVotantesPorLider();
         $totalVotantesGeneral = 0;
         foreach ($conteos as $row) {
@@ -409,7 +481,6 @@ class NehemiasController extends BaseController {
         }
 
         $ministerios = [];
-        $unknownCanonical = [];
         foreach ($conteos as $row) {
             $ministerioRaw = trim((string)($row['Lider'] ?? ''));
             $liderNehemias = trim((string)($row['Lider_Nehemias'] ?? ''));
@@ -421,11 +492,10 @@ class NehemiasController extends BaseController {
                 $ministerioNorm = $normalize($ministerioRaw);
                 if (isset($aliasToCanonical[$ministerioNorm])) {
                     $ministerio = $aliasToCanonical[$ministerioNorm];
+                } elseif (isset($catalogoPorNormalizado[$ministerioNorm])) {
+                    $ministerio = $catalogoPorNormalizado[$ministerioNorm];
                 } else {
-                    if (!isset($unknownCanonical[$ministerioNorm])) {
-                        $unknownCanonical[$ministerioNorm] = $ministerioRaw;
-                    }
-                    $ministerio = $unknownCanonical[$ministerioNorm];
+                    $ministerio = 'Otros ministerios';
                 }
             }
 
@@ -639,10 +709,7 @@ class NehemiasController extends BaseController {
 
         $registros = $this->nehemiasModel->getAllOrdered();
 
-        $ministeriosNehemias = array_map(
-            fn($row) => $row['Lider'],
-            $this->nehemiasModel->getMinisteriosDistinct()
-        );
+        $ministeriosNehemias = $this->obtenerMinisteriosParaFiltro();
         $contextoFiltro = $this->getContextoFiltroLider($ministeriosNehemias);
         if ($contextoFiltro['restringido']) {
             $registros = $this->filtrarRegistrosPorLiderPermitido($registros, $contextoFiltro['lideres']);
@@ -739,15 +806,67 @@ class NehemiasController extends BaseController {
             exit;
         }
 
+        $telefonoOriginal = trim((string)($_POST['telefono'] ?? ''));
+        $telefonoNormalizado = $this->normalizarTelefonoColombia($telefonoOriginal);
+        $aceptaInput = $_POST['acepta'] ?? 0;
+        $acepta = ($aceptaInput === '1' || $aceptaInput === 1 || $aceptaInput === true) ? 1 : 0;
+        $consentimientoInput = $_POST['consentimiento_whatsapp'] ?? 0;
+        $consentimientoWhatsapp = ($consentimientoInput === '1' || $consentimientoInput === 1 || $consentimientoInput === true) ? 1 : 0;
+
         $data = [
-            'Subido_Link' => trim($_POST['subido_link'] ?? ''),
-            'En_Bogota_Subio' => trim($_POST['en_bogota_subio'] ?? ''),
-            'Puesto_Votacion' => trim($_POST['puesto_votacion'] ?? ''),
-            'Mesa_Votacion' => trim($_POST['mesa_votacion'] ?? '')
+            'Nombres' => $this->normalizarTextoPersona($_POST['nombres'] ?? ''),
+            'Apellidos' => $this->normalizarTextoPersona($_POST['apellidos'] ?? ''),
+            'Numero_Cedula' => trim((string)($_POST['numero_cedula'] ?? '')),
+            'Telefono' => $telefonoOriginal,
+            'Telefono_Normalizado' => $telefonoNormalizado,
+            'Lider' => $this->normalizarTextoPersona($_POST['lider'] ?? ''),
+            'Lider_Nehemias' => $this->normalizarTextoPersona($_POST['lider_nehemias'] ?? ''),
+            'Subido_Link' => trim((string)($_POST['subido_link'] ?? '')),
+            'En_Bogota_Subio' => trim((string)($_POST['en_bogota_subio'] ?? '')),
+            'Puesto_Votacion' => trim((string)($_POST['puesto_votacion'] ?? '')),
+            'Mesa_Votacion' => trim((string)($_POST['mesa_votacion'] ?? '')),
+            'Acepta' => $acepta,
+            'Consentimiento_Whatsapp' => $consentimientoWhatsapp,
+            'Fecha_Registro' => trim((string)($_POST['fecha_registro'] ?? '')),
         ];
 
-        $this->nehemiasModel->update($id, $data);
-        header('Location: ' . PUBLIC_URL . '?url=nehemias/lista');
+        try {
+            $this->nehemiasModel->update($id, $data);
+            header('Location: ' . PUBLIC_URL . '?url=nehemias/lista&tipo=success&mensaje=' . urlencode('Registro actualizado correctamente.'));
+        } catch (Throwable $e) {
+            error_log('Error actualizando registro nehemias: ' . $e->getMessage());
+            header('Location: ' . PUBLIC_URL . '?url=nehemias/lista&tipo=error&mensaje=' . urlencode('No se pudo actualizar el registro.'));
+        }
+        exit;
+    }
+
+    /**
+     * Eliminar registro (admin)
+     */
+    public function eliminar() {
+        if (!$this->tienePermiso('editar')) {
+            header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . PUBLIC_URL . '?url=nehemias/lista');
+            exit;
+        }
+
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id <= 0) {
+            header('Location: ' . PUBLIC_URL . '?url=nehemias/lista&tipo=warning&mensaje=' . urlencode('Registro inválido para eliminar.'));
+            exit;
+        }
+
+        try {
+            $this->nehemiasModel->delete($id);
+            header('Location: ' . PUBLIC_URL . '?url=nehemias/lista&tipo=success&mensaje=' . urlencode('Registro eliminado correctamente.'));
+        } catch (Throwable $e) {
+            error_log('Error eliminando registro nehemias: ' . $e->getMessage());
+            header('Location: ' . PUBLIC_URL . '?url=nehemias/lista&tipo=error&mensaje=' . urlencode('No se pudo eliminar el registro.'));
+        }
         exit;
     }
 

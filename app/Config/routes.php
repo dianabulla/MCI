@@ -58,6 +58,7 @@ return [
     'eventos/editar' => 'EventoController@editar',
     'eventos/eliminar' => 'EventoController@eliminar',
     'eventos/exportarExcel' => 'EventoController@exportarExcel',
+    'eventos/proximos' => 'EventoController@proximosPublico',
     
     // Peticiones
     'peticiones' => 'PeticionController@index',
@@ -108,6 +109,7 @@ return [
     'nehemias/exportarExcel' => 'NehemiasController@exportarExcel',
     'nehemias/editar' => 'NehemiasController@editar',
     'nehemias/actualizar' => 'NehemiasController@actualizar',
+    'nehemias/eliminar' => 'NehemiasController@eliminar',
     'nehemias/importar' => 'NehemiasController@importar',
     'nehemias/importar-directo' => 'NehemiasController@importarDirecto',
     'nehemias/reparar-importacion' => 'NehemiasController@repararImportacion',

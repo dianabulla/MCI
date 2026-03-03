@@ -9,6 +9,10 @@ class Nehemias extends BaseModel {
     protected $table = 'nehemias';
     protected $primaryKey = 'Id_Nehemias';
 
+    private function sqlTextoNormalizado($campo) {
+        return "UPPER(TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE($campo, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n'), 'Á', 'A'), 'É', 'E'), 'Í', 'I'), 'Ó', 'O'), 'Ú', 'U'), 'Ñ', 'N')))";
+    }
+
     /**
      * Obtener registros ordenados por fecha
      */
@@ -48,7 +52,7 @@ class Nehemias extends BaseModel {
                     $params[] = $ministerio;
                 }
             } else {
-                $sql .= " AND Lider = ?";
+                $sql .= " AND " . $this->sqlTextoNormalizado('Lider') . " = " . $this->sqlTextoNormalizado('?');
                 $params[] = $filtros['lider'];
             }
         }
@@ -114,6 +118,43 @@ class Nehemias extends BaseModel {
         }
 
         return $this->query($sql);
+    }
+
+    /**
+     * Verificar si ya existe un registro por cédula o teléfono normalizado.
+     */
+    public function findDuplicateByCedulaOrTelefono($cedula, $telefonoNormalizado) {
+        $condiciones = [];
+        $params = [];
+
+        $cedula = trim((string)$cedula);
+        $telefonoNormalizado = trim((string)$telefonoNormalizado);
+
+        if ($cedula !== '') {
+            $condiciones[] = "(Numero_Cedula IS NOT NULL AND TRIM(Numero_Cedula) <> '' AND TRIM(Numero_Cedula) = TRIM(?))";
+            $params[] = $cedula;
+        }
+
+        if ($telefonoNormalizado !== '') {
+            $condiciones[] = "(Telefono_Normalizado IS NOT NULL AND TRIM(Telefono_Normalizado) <> '' AND TRIM(Telefono_Normalizado) = TRIM(?))";
+            $params[] = $telefonoNormalizado;
+        }
+
+        if (empty($condiciones)) {
+            return null;
+        }
+
+        $sql = "SELECT Id_Nehemias, Numero_Cedula, Telefono_Normalizado
+                FROM {$this->table}
+                WHERE " . implode(' OR ', $condiciones) . "
+                ORDER BY Id_Nehemias DESC
+                LIMIT 1";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $registro = $stmt->fetch();
+
+        return $registro ?: null;
     }
 
     /**
