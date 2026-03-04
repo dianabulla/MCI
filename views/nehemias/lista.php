@@ -1,4 +1,29 @@
 <?php include VIEWS . '/layout/header.php'; ?>
+<?php
+    $permisosUi = is_array($permisosUi ?? null) ? $permisosUi : [];
+    $puedeVerCedula = !empty($permisosUi['ver_cedula']);
+    $puedeVerTelefono = !empty($permisosUi['ver_telefono']);
+    $puedeVerSubidoLink = !empty($permisosUi['ver_subido_link']);
+    $puedeVerBogotaSubio = !empty($permisosUi['ver_bogota_subio']);
+    $puedeVerPuesto = !empty($permisosUi['ver_puesto']);
+    $puedeVerMesa = !empty($permisosUi['ver_mesa']);
+    $puedeVerAcepta = !empty($permisosUi['ver_acepta']);
+    $mostrarBotonEditar = !empty($permisosUi['mostrar_boton_editar']);
+    $mostrarBotonEliminar = !empty($permisosUi['mostrar_boton_eliminar']);
+    $mostrarAcciones = $mostrarBotonEditar || $mostrarBotonEliminar;
+    $totalColumnasTabla = 5
+        + ($puedeVerCedula ? 1 : 0)
+        + ($puedeVerTelefono ? 1 : 0)
+        + ($puedeVerSubidoLink ? 1 : 0)
+        + ($puedeVerBogotaSubio ? 1 : 0)
+        + ($puedeVerPuesto ? 1 : 0)
+        + ($puedeVerMesa ? 1 : 0)
+        + ($puedeVerAcepta ? 1 : 0)
+        + 1
+        + 1
+        + 1
+        + ($mostrarAcciones ? 1 : 0);
+?>
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center module-header-card">
         <h2 class="page-title">
@@ -9,7 +34,7 @@
                 if ($clave === 'lider_lista') {
                     continue;
                 }
-                if (!empty($filtro)) $totalFiltros++;
+                if ($filtro !== '' && $filtro !== null) $totalFiltros++;
             }
             if ($totalFiltros > 0): ?>
                 <span class="badge-filter"><?= $totalFiltros ?> filtro<?= $totalFiltros > 1 ? 's' : '' ?> activo<?= $totalFiltros > 1 ? 's' : '' ?></span>
@@ -141,48 +166,78 @@
                                 </label>
                             </div>
                         </div>
-                        <div class="col-md-3 mt-2">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="subido_link_vacio" value="1" 
-                                       id="subido_link_vacio" <?= !empty($filtros['subido_link_vacio']) ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="subido_link_vacio">
-                                    Subido link vacío
-                                </label>
+                        <?php if ($puedeVerSubidoLink): ?>
+                            <div class="col-md-3 mt-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="subido_link_vacio" value="1" 
+                                           id="subido_link_vacio" <?= !empty($filtros['subido_link_vacio']) ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="subido_link_vacio">
+                                        Subido link vacío
+                                    </label>
+                                </div>
                             </div>
-                        </div>
-                        <div class="col-md-3 mt-2">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="subido_link_lleno" value="1" 
-                                       id="subido_link_lleno" <?= !empty($filtros['subido_link_lleno']) ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="subido_link_lleno">
-                                    Subido link completo
-                                </label>
+                            <div class="col-md-3 mt-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="subido_link_lleno" value="1" 
+                                           id="subido_link_lleno" <?= !empty($filtros['subido_link_lleno']) ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="subido_link_lleno">
+                                        Subido link completo
+                                    </label>
+                                </div>
                             </div>
-                        </div>
-                        <div class="col-md-3 mt-2">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="bogota_subio_vacio" value="1" 
-                                       id="bogota_subio_vacio" <?= !empty($filtros['bogota_subio_vacio']) ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="bogota_subio_vacio">
-                                    En Bogotá se le subió vacío
-                                </label>
+                        <?php endif; ?>
+                        <?php if ($puedeVerBogotaSubio): ?>
+                            <div class="col-md-3 mt-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="bogota_subio_vacio" value="1" 
+                                           id="bogota_subio_vacio" <?= !empty($filtros['bogota_subio_vacio']) ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="bogota_subio_vacio">
+                                        En Bogotá se le subió vacío
+                                    </label>
+                                </div>
                             </div>
-                        </div>
-                        <div class="col-md-3 mt-2">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="bogota_subio_lleno" value="1" 
-                                       id="bogota_subio_lleno" <?= !empty($filtros['bogota_subio_lleno']) ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="bogota_subio_lleno">
-                                    En Bogotá se le subió completo
-                                </label>
+                            <div class="col-md-3 mt-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="bogota_subio_lleno" value="1" 
+                                           id="bogota_subio_lleno" <?= !empty($filtros['bogota_subio_lleno']) ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="bogota_subio_lleno">
+                                        En Bogotá se le subió completo
+                                    </label>
+                                </div>
                             </div>
-                        </div>
+                        <?php endif; ?>
+                        <?php if ($puedeVerAcepta): ?>
+                            <div class="col-md-3 mt-2">
+                                <label class="form-label mb-1" style="font-size: 12px;">Acepta</label>
+                                <select name="acepta" class="form-select form-select-sm">
+                                    <option value="">Todos</option>
+                                    <option value="1" <?= $filtros['acepta'] === '1' ? 'selected' : '' ?>>Sí</option>
+                                    <option value="0" <?= $filtros['acepta'] === '0' ? 'selected' : '' ?>>No</option>
+                                </select>
+                            </div>
+                        <?php endif; ?>
                         <div class="col-md-3 mt-2">
-                            <label class="form-label mb-1" style="font-size: 12px;">Acepta</label>
-                            <select name="acepta" class="form-select form-select-sm">
+                            <label class="form-label mb-1" style="font-size: 12px;">Mensaje 1 enviado</label>
+                            <select name="mesaje_1enviado" class="form-select form-select-sm">
                                 <option value="">Todos</option>
-                                <option value="1" <?= $filtros['acepta'] === '1' ? 'selected' : '' ?>>Sí</option>
-                                <option value="0" <?= $filtros['acepta'] === '0' ? 'selected' : '' ?>>No</option>
+                                <option value="1" <?= ($filtros['mesaje_1enviado'] ?? '') === '1' ? 'selected' : '' ?>>Sí</option>
+                                <option value="0" <?= ($filtros['mesaje_1enviado'] ?? '') === '0' ? 'selected' : '' ?>>No</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 mt-2">
+                            <label class="form-label mb-1" style="font-size: 12px;">No recibir más</label>
+                            <select name="no_recibir_mas" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                                <option value="1" <?= ($filtros['no_recibir_mas'] ?? '') === '1' ? 'selected' : '' ?>>Sí</option>
+                                <option value="0" <?= ($filtros['no_recibir_mas'] ?? '') === '0' ? 'selected' : '' ?>>No</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 mt-2">
+                            <label class="form-label mb-1" style="font-size: 12px;">Fecha envío mensaje 1</label>
+                            <select name="mesaje1_fehca_estado" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                                <option value="con_fecha" <?= ($filtros['mesaje1_fehca_estado'] ?? '') === 'con_fecha' ? 'selected' : '' ?>>Con fecha</option>
+                                <option value="sin_fecha" <?= ($filtros['mesaje1_fehca_estado'] ?? '') === 'sin_fecha' ? 'selected' : '' ?>>Sin fecha</option>
                             </select>
                         </div>
                     </div>
@@ -204,45 +259,44 @@
         </form>
     </div>
 
-    <div class="card mt-3">
-        <div class="card-body">
-            <h5 class="mb-2">Columnas visibles</h5>
-            <div class="d-flex flex-wrap gap-3" id="column-toggle-wrap">
-                <label><input type="checkbox" class="col-toggle" data-col="nombres" checked> Nombres</label>
-                <label><input type="checkbox" class="col-toggle" data-col="apellidos" checked> Apellidos</label>
-                <label><input type="checkbox" class="col-toggle" data-col="cedula" checked> Cédula</label>
-                <label><input type="checkbox" class="col-toggle" data-col="telefono" checked> Teléfono</label>
-                <label><input type="checkbox" class="col-toggle" data-col="lider" checked> Líder</label>
-                <label><input type="checkbox" class="col-toggle" data-col="lider-nehemias" checked> Líder Nehemías</label>
-                <label><input type="checkbox" class="col-toggle" data-col="subido-link" checked> Subido link</label>
-                <label><input type="checkbox" class="col-toggle" data-col="bogota-subio" checked> En Bogotá se le subió</label>
-                <label><input type="checkbox" class="col-toggle" data-col="puesto" checked> Puesto</label>
-                <label><input type="checkbox" class="col-toggle" data-col="mesa" checked> Mesa</label>
-                <label><input type="checkbox" class="col-toggle" data-col="acepta" checked> Acepta</label>
-                <label><input type="checkbox" class="col-toggle" data-col="fecha" checked> Fecha</label>
-            </div>
-        </div>
-    </div>
-
     <div class="card">
         <div class="card-body">
             <div class="table-responsive nehemias-table-wrap">
-                <table class="table table-hover table-no-card nehemias-table nehemias-table-main" id="nehemias-edit-table">
+                <table class="table table-sm table-hover table-no-card nehemias-table nehemias-table-main" id="nehemias-edit-table">
                     <thead>
                         <tr>
                             <th class="col-nombres">Nombres</th>
                             <th class="col-apellidos">Apellidos</th>
-                            <th class="col-cedula">Cedula</th>
-                            <th class="col-telefono">Telefono</th>
+                            <?php if ($puedeVerCedula): ?>
+                                <th class="col-cedula">Cedula</th>
+                            <?php endif; ?>
+                            <?php if ($puedeVerTelefono): ?>
+                                <th class="col-telefono">Telefono</th>
+                            <?php endif; ?>
                             <th class="col-lider">Lider</th>
-                            <th class="col-lider-nehemias">Lider Nehemias</th>
-                            <th class="col-subido-link">Subido link</th>
-                            <th class="col-bogota-subio">En Bogota se le subio</th>
-                            <th class="col-puesto">Puesto de votacion</th>
-                            <th class="col-mesa">Mesa de votacion</th>
-                            <th class="col-acepta">Acepta</th>
-                            <th class="col-fecha">Fecha Registro</th>
-                            <th>Acciones</th>
+                                <th class="col-lider-nehemias">Lider Neh.</th>
+                            <?php if ($puedeVerSubidoLink): ?>
+                                <th class="col-subido-link">Subido link</th>
+                            <?php endif; ?>
+                            <?php if ($puedeVerBogotaSubio): ?>
+                                <th class="col-bogota-subio">En Bogota se le subio</th>
+                            <?php endif; ?>
+                            <?php if ($puedeVerPuesto): ?>
+                                <th class="col-puesto">Puesto</th>
+                            <?php endif; ?>
+                            <?php if ($puedeVerMesa): ?>
+                                <th class="col-mesa">Mesa</th>
+                            <?php endif; ?>
+                            <?php if ($puedeVerAcepta): ?>
+                                <th class="col-acepta">Acepta</th>
+                            <?php endif; ?>
+                            <th class="col-mesaje-1enviado">Msg1 env.</th>
+                            <th class="col-no-recibir-mas">No recibir</th>
+                            <th class="col-mesaje1-fehca">Fecha msg1</th>
+                            <th class="col-fecha">Fecha reg.</th>
+                            <?php if ($mostrarAcciones): ?>
+                                <th class="col-acciones">Acciones</th>
+                            <?php endif; ?>
                         </tr>
                     </thead>
                     <tbody>
@@ -251,50 +305,92 @@
                                 <tr>
                                     <td class="col-nombres" data-label="Nombres"><?= htmlspecialchars($registro['Nombres']) ?></td>
                                     <td class="col-apellidos" data-label="Apellidos"><?= htmlspecialchars($registro['Apellidos']) ?></td>
-                                    <td class="col-cedula" data-label="Cedula"><?= htmlspecialchars($registro['Numero_Cedula']) ?></td>
-                                    <td class="col-telefono" data-label="Telefono"><?= htmlspecialchars($registro['Telefono']) ?></td>
+                                    <?php if ($puedeVerCedula): ?>
+                                        <td class="col-cedula" data-label="Cedula"><?= htmlspecialchars($registro['Numero_Cedula']) ?></td>
+                                    <?php endif; ?>
+                                    <?php if ($puedeVerTelefono): ?>
+                                        <td class="col-telefono" data-label="Telefono"><?= htmlspecialchars($registro['Telefono']) ?></td>
+                                    <?php endif; ?>
                                     <td class="col-lider" data-label="Lider"><?= htmlspecialchars($registro['Lider']) ?></td>
                                     <td class="col-lider-nehemias" data-label="Lider Nehemias"><?= htmlspecialchars($registro['Lider_Nehemias']) ?></td>
-                                    <td class="col-subido-link" data-label="Subido link"><?= htmlspecialchars($registro['Subido_Link'] ?? '') ?></td>
-                                    <td class="col-bogota-subio" data-label="En Bogota se le subio"><?= htmlspecialchars($registro['En_Bogota_Subio'] ?? '') ?></td>
-                                    <td class="col-puesto" data-label="Puesto de votacion"><?= htmlspecialchars($registro['Puesto_Votacion'] ?? '') ?></td>
-                                    <td class="col-mesa" data-label="Mesa de votacion"><?= htmlspecialchars($registro['Mesa_Votacion'] ?? '') ?></td>
-                                    <td class="col-acepta" data-label="Acepta"><?= ((int)($registro['Acepta'] ?? 0) === 1) ? 'Si' : 'No' ?></td>
-                                    <td class="col-fecha" data-label="Fecha Registro"><?= htmlspecialchars($registro['Fecha_Registro']) ?></td>
-                                    <td data-label="Acciones">
+                                    <?php if ($puedeVerSubidoLink): ?>
+                                        <td class="col-subido-link" data-label="Subido link"><?= htmlspecialchars($registro['Subido_Link'] ?? '') ?></td>
+                                    <?php endif; ?>
+                                    <?php if ($puedeVerBogotaSubio): ?>
+                                        <td class="col-bogota-subio" data-label="En Bogota se le subio"><?= htmlspecialchars($registro['En_Bogota_Subio'] ?? '') ?></td>
+                                    <?php endif; ?>
+                                    <?php if ($puedeVerPuesto): ?>
+                                        <td class="col-puesto" data-label="Puesto de votacion"><?= htmlspecialchars($registro['Puesto_Votacion'] ?? '') ?></td>
+                                    <?php endif; ?>
+                                    <?php if ($puedeVerMesa): ?>
+                                        <td class="col-mesa" data-label="Mesa de votacion"><?= htmlspecialchars($registro['Mesa_Votacion'] ?? '') ?></td>
+                                    <?php endif; ?>
+                                    <?php if ($puedeVerAcepta): ?>
+                                        <td class="col-acepta" data-label="Acepta"><?= ((int)($registro['Acepta'] ?? 0) === 1) ? 'Si' : 'No' ?></td>
+                                    <?php endif; ?>
+                                    <td class="col-mesaje-1enviado" data-label="Mensaje 1 enviado"><?= ((int)($registro['mesaje_1enviado'] ?? 0) === 1) ? 'Si' : 'No' ?></td>
+                                    <td class="col-no-recibir-mas" data-label="No recibir más"><?= ((int)($registro['no_recibir_mas'] ?? 0) === 1) ? 'Si' : 'No' ?></td>
+                                    <td class="col-mesaje1-fehca" data-label="Fecha envío mensaje 1">
                                         <?php
-                                            $registroPayload = [
-                                                'id' => (int)$registro['Id_Nehemias'],
-                                                'nombres' => (string)($registro['Nombres'] ?? ''),
-                                                'apellidos' => (string)($registro['Apellidos'] ?? ''),
-                                                'numero_cedula' => (string)($registro['Numero_Cedula'] ?? ''),
-                                                'telefono' => (string)($registro['Telefono'] ?? ''),
-                                                'telefono_normalizado' => (string)($registro['Telefono_Normalizado'] ?? ''),
-                                                'lider' => (string)($registro['Lider'] ?? ''),
-                                                'lider_nehemias' => (string)($registro['Lider_Nehemias'] ?? ''),
-                                                'subido_link' => (string)($registro['Subido_Link'] ?? ''),
-                                                'en_bogota_subio' => (string)($registro['En_Bogota_Subio'] ?? ''),
-                                                'puesto_votacion' => (string)($registro['Puesto_Votacion'] ?? ''),
-                                                'mesa_votacion' => (string)($registro['Mesa_Votacion'] ?? ''),
-                                                'acepta' => (int)($registro['Acepta'] ?? 0),
-                                                'consentimiento_whatsapp' => (int)($registro['Consentimiento_Whatsapp'] ?? 0),
-                                                'fecha_registro' => (string)($registro['Fecha_Registro'] ?? ''),
-                                            ];
-                                            $registroPayloadJson = htmlspecialchars(json_encode($registroPayload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                                            $valorFechaEnvioMensaje1 = (string)($registro['mesaje1_fehca'] ?? '');
+                                            $fechaEnvioMensaje1 = '';
+                                            if ($valorFechaEnvioMensaje1 !== '' && is_numeric($valorFechaEnvioMensaje1)) {
+                                                $timestampFechaEnvio = (int)$valorFechaEnvioMensaje1;
+                                                if ($timestampFechaEnvio > 9999999999) {
+                                                    $timestampFechaEnvio = (int)floor($timestampFechaEnvio / 1000);
+                                                }
+                                                if ($timestampFechaEnvio > 0) {
+                                                    $fechaEnvioMensaje1 = date('Y-m-d H:i:s', $timestampFechaEnvio);
+                                                }
+                                            }
+                                            echo htmlspecialchars($fechaEnvioMensaje1 !== '' ? $fechaEnvioMensaje1 : $valorFechaEnvioMensaje1);
                                         ?>
-                                        <button type="button" class="btn btn-sm btn-edit btn-open-edit-modal" data-record="<?= $registroPayloadJson ?>">
-                                            Editar
-                                        </button>
-                                        <form method="POST" action="?url=nehemias/eliminar" class="d-inline" onsubmit="return confirm('¿Seguro que quieres eliminar este registro?');">
-                                            <input type="hidden" name="id" value="<?= (int)$registro['Id_Nehemias'] ?>">
-                                            <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
-                                        </form>
                                     </td>
+                                    <td class="col-fecha" data-label="Fecha Registro"><?= htmlspecialchars($registro['Fecha_Registro']) ?></td>
+                                    <?php if ($mostrarAcciones): ?>
+                                        <td class="col-acciones" data-label="Acciones">
+                                            <div class="acciones-wrap">
+                                            <?php
+                                                $registroPayload = [
+                                                    'id' => (int)$registro['Id_Nehemias'],
+                                                    'nombres' => (string)($registro['Nombres'] ?? ''),
+                                                    'apellidos' => (string)($registro['Apellidos'] ?? ''),
+                                                    'numero_cedula' => (string)($registro['Numero_Cedula'] ?? ''),
+                                                    'telefono' => (string)($registro['Telefono'] ?? ''),
+                                                    'telefono_normalizado' => (string)($registro['Telefono_Normalizado'] ?? ''),
+                                                    'lider' => (string)($registro['Lider'] ?? ''),
+                                                    'lider_nehemias' => (string)($registro['Lider_Nehemias'] ?? ''),
+                                                    'subido_link' => (string)($registro['Subido_Link'] ?? ''),
+                                                    'en_bogota_subio' => (string)($registro['En_Bogota_Subio'] ?? ''),
+                                                    'puesto_votacion' => (string)($registro['Puesto_Votacion'] ?? ''),
+                                                    'mesa_votacion' => (string)($registro['Mesa_Votacion'] ?? ''),
+                                                    'acepta' => (int)($registro['Acepta'] ?? 0),
+                                                    'consentimiento_whatsapp' => (int)($registro['Consentimiento_Whatsapp'] ?? 0),
+                                                    'fecha_registro' => (string)($registro['Fecha_Registro'] ?? ''),
+                                                ];
+                                                $registroPayloadJson = htmlspecialchars(json_encode($registroPayload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                                            ?>
+                                            <?php if ($mostrarBotonEditar): ?>
+                                                <button type="button" class="btn btn-sm btn-edit btn-open-edit-modal btn-accion-icon" data-record="<?= $registroPayloadJson ?>" title="Editar" aria-label="Editar">
+                                                    <i class="bi bi-pencil-square"></i>
+                                                </button>
+                                            <?php endif; ?>
+                                            <?php if ($mostrarBotonEliminar): ?>
+                                                <form method="POST" action="?url=nehemias/eliminar" class="d-inline" onsubmit="return confirm('¿Seguro que quieres eliminar este registro?');">
+                                                    <input type="hidden" name="id" value="<?= (int)$registro['Id_Nehemias'] ?>">
+                                                    <button type="submit" class="btn btn-sm btn-danger btn-accion-icon" title="Eliminar" aria-label="Eliminar">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </form>
+                                            <?php endif; ?>
+                                            </div>
+                                        </td>
+                                    <?php endif; ?>
                                 </tr>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="13" class="text-center">No hay registros.</td>
+                                <td colspan="<?= $totalColumnasTabla ?>" class="text-center">No hay registros.</td>
                             </tr>
                         <?php endif; ?>
                     </tbody>
@@ -305,14 +401,105 @@
 </div>
 
 <style>
+    .nehemias-table-wrap {
+        overflow-x: auto !important;
+        overflow-y: auto !important;
+        max-height: min(68vh, calc(100vh - 260px));
+    }
+
     #nehemias-edit-table {
         table-layout: auto !important;
-        width: 100%;
+        width: max-content;
+        font-size: 12px;
     }
 
     #nehemias-edit-table th,
     #nehemias-edit-table td {
         white-space: nowrap;
+        word-break: break-word;
+        line-height: 1.15;
+        vertical-align: top;
+        padding: 0.3rem 0.4rem;
+    }
+
+    #nehemias-edit-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: #e9edf5;
+        box-shadow: inset 0 -1px 0 #cfd6e3;
+    }
+
+    #nehemias-edit-table .col-acciones {
+        position: sticky;
+        right: 0;
+        z-index: 6;
+        width: 72px;
+        min-width: 72px;
+        max-width: 72px;
+        background: #fff;
+        box-shadow: -1px 0 0 #d6dbe5;
+        padding-left: 0.25rem;
+        padding-right: 0.25rem;
+    }
+
+    #nehemias-edit-table thead .col-acciones {
+        z-index: 8;
+        background: #e9edf5;
+    }
+
+    #nehemias-edit-table .acciones-wrap {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+    }
+
+    #nehemias-edit-table .acciones-wrap form {
+        margin: 0;
+    }
+
+    #nehemias-edit-table .btn-accion-icon {
+        width: 26px;
+        height: 26px;
+        min-width: 26px;
+        max-width: 26px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        font-size: 13px;
+        line-height: 1;
+    }
+
+    #nehemias-edit-table .col-nombres,
+    #nehemias-edit-table .col-apellidos,
+    #nehemias-edit-table .col-lider,
+    #nehemias-edit-table .col-lider-nehemias {
+        min-width: 105px;
+    }
+
+    #nehemias-edit-table .col-subido-link,
+    #nehemias-edit-table .col-bogota-subio,
+    #nehemias-edit-table .col-puesto,
+    #nehemias-edit-table .col-mesa {
+        min-width: 68px;
+        max-width: 110px;
+        width: 78px;
+    }
+
+    #nehemias-edit-table .col-acepta,
+    #nehemias-edit-table .col-mesaje-1enviado,
+    #nehemias-edit-table .col-no-recibir-mas {
+        min-width: 70px;
+        text-align: center;
+    }
+
+    #nehemias-edit-table .col-mesaje1-fehca,
+    #nehemias-edit-table .col-fecha {
+        min-width: 105px;
     }
 
     #modalEditarNehemias .field-modified {
@@ -377,6 +564,7 @@
     }
 </style>
 
+<?php if ($mostrarBotonEditar): ?>
 <div id="modalEditarNehemias" aria-hidden="true">
     <div class="custom-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modalEditarTitulo">
             <form method="POST" action="?url=nehemias/actualizar" id="formEditarNehemiasModal">
@@ -402,25 +590,31 @@
                             <input type="text" class="form-control modal-editable" name="apellidos" id="edit-apellidos">
                         </div>
 
-                        <div class="col-md-4">
-                            <label class="form-label">Numero de Cedula</label>
-                            <input type="text" class="form-control modal-editable" name="numero_cedula" id="edit-numero-cedula">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Telefono</label>
-                            <input type="text" class="form-control modal-editable" name="telefono" id="edit-telefono">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Telefono normalizado</label>
-                            <input type="text" class="form-control" id="edit-telefono-normalizado" disabled>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Acepta</label>
-                            <select class="form-select modal-editable" name="acepta" id="edit-acepta">
-                                <option value="1">Si</option>
-                                <option value="0">No</option>
-                            </select>
-                        </div>
+                        <?php if ($puedeVerCedula): ?>
+                            <div class="col-md-4">
+                                <label class="form-label">Numero de Cedula</label>
+                                <input type="text" class="form-control modal-editable" name="numero_cedula" id="edit-numero-cedula">
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($puedeVerTelefono): ?>
+                            <div class="col-md-4">
+                                <label class="form-label">Telefono</label>
+                                <input type="text" class="form-control modal-editable" name="telefono" id="edit-telefono">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Telefono normalizado</label>
+                                <input type="text" class="form-control" id="edit-telefono-normalizado" disabled>
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($puedeVerAcepta): ?>
+                            <div class="col-md-4">
+                                <label class="form-label">Acepta</label>
+                                <select class="form-select modal-editable" name="acepta" id="edit-acepta">
+                                    <option value="1">Si</option>
+                                    <option value="0">No</option>
+                                </select>
+                            </div>
+                        <?php endif; ?>
                         <div class="col-md-4">
                             <label class="form-label">Consentimiento WhatsApp</label>
                             <select class="form-select modal-editable" name="consentimiento_whatsapp" id="edit-consentimiento-whatsapp">
@@ -443,23 +637,31 @@
                             <input type="text" class="form-control modal-editable" name="lider_nehemias" id="edit-lider-nehemias">
                         </div>
 
-                        <div class="col-md-6">
-                            <label class="form-label">Subido link</label>
-                            <input type="text" class="form-control modal-editable" name="subido_link" id="edit-subido-link">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">En Bogota se le subio</label>
-                            <input type="text" class="form-control modal-editable" name="en_bogota_subio" id="edit-en-bogota-subio">
-                        </div>
+                        <?php if ($puedeVerSubidoLink): ?>
+                            <div class="col-md-6">
+                                <label class="form-label">Subido link</label>
+                                <input type="text" class="form-control modal-editable" name="subido_link" id="edit-subido-link">
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($puedeVerBogotaSubio): ?>
+                            <div class="col-md-6">
+                                <label class="form-label">En Bogota se le subio</label>
+                                <input type="text" class="form-control modal-editable" name="en_bogota_subio" id="edit-en-bogota-subio">
+                            </div>
+                        <?php endif; ?>
 
-                        <div class="col-md-6">
-                            <label class="form-label">Puesto de votacion</label>
-                            <input type="text" class="form-control modal-editable" name="puesto_votacion" id="edit-puesto-votacion">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Mesa de votacion</label>
-                            <input type="text" class="form-control modal-editable" name="mesa_votacion" id="edit-mesa-votacion">
-                        </div>
+                        <?php if ($puedeVerPuesto): ?>
+                            <div class="col-md-6">
+                                <label class="form-label">Puesto de votacion</label>
+                                <input type="text" class="form-control modal-editable" name="puesto_votacion" id="edit-puesto-votacion">
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($puedeVerMesa): ?>
+                            <div class="col-md-6">
+                                <label class="form-label">Mesa de votacion</label>
+                                <input type="text" class="form-control modal-editable" name="mesa_votacion" id="edit-mesa-votacion">
+                            </div>
+                        <?php endif; ?>
 
                         <div class="col-md-6">
                             <label class="form-label">Fecha Registro</label>
@@ -474,6 +676,7 @@
             </form>
     </div>
 </div>
+<?php endif; ?>
 
 <script>
     (function () {
@@ -508,29 +711,6 @@
                 }
             });
         }
-
-        function applyColumnVisibility(columnKey, isVisible) {
-            var cells = document.querySelectorAll('.col-' + columnKey);
-            cells.forEach(function (cell) {
-                cell.style.display = isVisible ? '' : 'none';
-            });
-        }
-
-        document.querySelectorAll('.col-toggle').forEach(function (toggle) {
-            var columnKey = toggle.getAttribute('data-col') || '';
-            var storageKey = 'nehemias_cols_' + columnKey;
-            var saved = localStorage.getItem(storageKey);
-            if (saved === '0') {
-                toggle.checked = false;
-            }
-
-            applyColumnVisibility(columnKey, toggle.checked);
-
-            toggle.addEventListener('change', function () {
-                applyColumnVisibility(columnKey, toggle.checked);
-                localStorage.setItem(storageKey, toggle.checked ? '1' : '0');
-            });
-        });
 
         function setInputValue(id, value) {
             var input = document.getElementById(id);
@@ -570,34 +750,38 @@
             });
         }
 
+        function cargarRegistroEnModal(button) {
+            clearTempLiderOptions();
+            var raw = button.getAttribute('data-record') || '{}';
+            var record = {};
+            try {
+                record = JSON.parse(raw);
+            } catch (e) {
+                record = {};
+            }
+
+            setInputValue('edit-id', record.id || '');
+            setInputValue('edit-id-readonly', record.id || '');
+            setInputValue('edit-nombres', record.nombres || '');
+            setInputValue('edit-apellidos', record.apellidos || '');
+            setInputValue('edit-numero-cedula', record.numero_cedula || '');
+            setInputValue('edit-telefono', record.telefono || '');
+            setInputValue('edit-telefono-normalizado', record.telefono_normalizado || '');
+            ensureLiderOption(record.lider || '');
+            setInputValue('edit-lider-nehemias', record.lider_nehemias || '');
+            setInputValue('edit-subido-link', record.subido_link || '');
+            setInputValue('edit-en-bogota-subio', record.en_bogota_subio || '');
+            setInputValue('edit-puesto-votacion', record.puesto_votacion || '');
+            setInputValue('edit-mesa-votacion', record.mesa_votacion || '');
+            setInputValue('edit-fecha-registro', record.fecha_registro || '');
+            setInputValue('edit-acepta', String(record.acepta === 1 ? 1 : 0));
+            setInputValue('edit-consentimiento-whatsapp', String(record.consentimiento_whatsapp === 1 ? 1 : 0));
+            openModal();
+        }
+
         document.querySelectorAll('.btn-open-edit-modal').forEach(function (button) {
             button.addEventListener('click', function () {
-                clearTempLiderOptions();
-                var raw = button.getAttribute('data-record') || '{}';
-                var record = {};
-                try {
-                    record = JSON.parse(raw);
-                } catch (e) {
-                    record = {};
-                }
-
-                setInputValue('edit-id', record.id || '');
-                setInputValue('edit-id-readonly', record.id || '');
-                setInputValue('edit-nombres', record.nombres || '');
-                setInputValue('edit-apellidos', record.apellidos || '');
-                setInputValue('edit-numero-cedula', record.numero_cedula || '');
-                setInputValue('edit-telefono', record.telefono || '');
-                setInputValue('edit-telefono-normalizado', record.telefono_normalizado || '');
-                ensureLiderOption(record.lider || '');
-                setInputValue('edit-lider-nehemias', record.lider_nehemias || '');
-                setInputValue('edit-subido-link', record.subido_link || '');
-                setInputValue('edit-en-bogota-subio', record.en_bogota_subio || '');
-                setInputValue('edit-puesto-votacion', record.puesto_votacion || '');
-                setInputValue('edit-mesa-votacion', record.mesa_votacion || '');
-                setInputValue('edit-fecha-registro', record.fecha_registro || '');
-                setInputValue('edit-acepta', String(record.acepta === 1 ? 1 : 0));
-                setInputValue('edit-consentimiento-whatsapp', String(record.consentimiento_whatsapp === 1 ? 1 : 0));
-                openModal();
+                cargarRegistroEnModal(button);
             });
         });
 

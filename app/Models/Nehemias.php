@@ -108,6 +108,27 @@ class Nehemias extends BaseModel {
             $params[] = $filtros['acepta'];
         }
 
+        // Filtro por mensaje 1 enviado
+        if (isset($filtros['mesaje_1enviado']) && $filtros['mesaje_1enviado'] !== '') {
+            $sql .= " AND COALESCE(mesaje_1enviado, 0) = ?";
+            $params[] = $filtros['mesaje_1enviado'];
+        }
+
+        // Filtro por no recibir más
+        if (isset($filtros['no_recibir_mas']) && $filtros['no_recibir_mas'] !== '') {
+            $sql .= " AND COALESCE(no_recibir_mas, 0) = ?";
+            $params[] = $filtros['no_recibir_mas'];
+        }
+
+        // Filtro por estado de fecha de envío del mensaje 1
+        if (isset($filtros['mesaje1_fehca_estado']) && $filtros['mesaje1_fehca_estado'] !== '') {
+            if ($filtros['mesaje1_fehca_estado'] === 'con_fecha') {
+                $sql .= " AND mesaje1_fehca IS NOT NULL AND mesaje1_fehca != 0";
+            } elseif ($filtros['mesaje1_fehca_estado'] === 'sin_fecha') {
+                $sql .= " AND (mesaje1_fehca IS NULL OR mesaje1_fehca = 0)";
+            }
+        }
+
         $sql .= " ORDER BY Fecha_Registro DESC, Id_Nehemias DESC";
 
         // Ejecutar consulta preparada con PDO

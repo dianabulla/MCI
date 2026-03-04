@@ -19,6 +19,56 @@ class NehemiasController extends BaseController {
         return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias', $accion);
     }
 
+    private function puedeVerCedulaNehemias() {
+        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_cols_cedula', 'ver');
+    }
+
+    private function puedeVerTelefonoNehemias() {
+        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_cols_telefono', 'ver');
+    }
+
+    private function puedeVerSubidoLinkNehemias() {
+        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_cols_subido_link', 'ver');
+    }
+
+    private function puedeVerBogotaSubioNehemias() {
+        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_cols_bogota_subio', 'ver');
+    }
+
+    private function puedeVerPuestoNehemias() {
+        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_cols_puesto', 'ver');
+    }
+
+    private function puedeVerMesaNehemias() {
+        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_cols_mesa', 'ver');
+    }
+
+    private function puedeVerAceptaNehemias() {
+        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_cols_acepta', 'ver');
+    }
+
+    private function puedeEditarRegistrosNehemias() {
+        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_acciones_editar', 'ver');
+    }
+
+    private function puedeEliminarRegistrosNehemias() {
+        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_acciones_eliminar', 'ver');
+    }
+
+    private function getPermisosUiListaNehemias() {
+        return [
+            'ver_cedula' => $this->puedeVerCedulaNehemias(),
+            'ver_telefono' => $this->puedeVerTelefonoNehemias(),
+            'ver_subido_link' => $this->puedeVerSubidoLinkNehemias(),
+            'ver_bogota_subio' => $this->puedeVerBogotaSubioNehemias(),
+            'ver_puesto' => $this->puedeVerPuestoNehemias(),
+            'ver_mesa' => $this->puedeVerMesaNehemias(),
+            'ver_acepta' => $this->puedeVerAceptaNehemias(),
+            'mostrar_boton_editar' => $this->tienePermiso('editar') && $this->puedeEditarRegistrosNehemias(),
+            'mostrar_boton_eliminar' => $this->tienePermiso('editar') && $this->puedeEliminarRegistrosNehemias(),
+        ];
+    }
+
     public function __construct() {
         $this->nehemiasModel = new Nehemias();
         $this->ministerioModel = new Ministerio();
@@ -368,7 +418,10 @@ class NehemiasController extends BaseController {
             'subido_link_lleno' => $_GET['subido_link_lleno'] ?? '',
             'bogota_subio_vacio' => $_GET['bogota_subio_vacio'] ?? '',
             'bogota_subio_lleno' => $_GET['bogota_subio_lleno'] ?? '',
-            'acepta' => $_GET['acepta'] ?? ''
+            'acepta' => $_GET['acepta'] ?? '',
+            'mesaje_1enviado' => $_GET['mesaje_1enviado'] ?? '',
+            'no_recibir_mas' => $_GET['no_recibir_mas'] ?? '',
+            'mesaje1_fehca_estado' => $_GET['mesaje1_fehca_estado'] ?? ''
         ];
 
         if ($contextoFiltro['restringido']) {
@@ -387,7 +440,7 @@ class NehemiasController extends BaseController {
             if ($clave === 'lider_lista') {
                 continue;
             }
-            if (!empty($filtro)) {
+            if ($filtro !== '' && $filtro !== null) {
                 $hayFiltros = true;
                 break;
             }
@@ -409,6 +462,7 @@ class NehemiasController extends BaseController {
             'filtros' => $filtros,
             'ministeriosNehemias' => $ministeriosNehemias,
             'filtroLiderRestringido' => $contextoFiltro['restringido'],
+            'permisosUi' => $this->getPermisosUiListaNehemias(),
             'mensaje' => $_GET['mensaje'] ?? null,
             'tipo' => $_GET['tipo'] ?? 'info'
         ]);
@@ -790,7 +844,7 @@ class NehemiasController extends BaseController {
      * Actualizar registro (admin)
      */
     public function actualizar() {
-        if (!$this->tienePermiso('editar')) {
+        if (!$this->tienePermiso('editar') || !$this->puedeEditarRegistrosNehemias()) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -806,25 +860,70 @@ class NehemiasController extends BaseController {
             exit;
         }
 
-        $telefonoOriginal = trim((string)($_POST['telefono'] ?? ''));
-        $telefonoNormalizado = $this->normalizarTelefonoColombia($telefonoOriginal);
-        $aceptaInput = $_POST['acepta'] ?? 0;
-        $acepta = ($aceptaInput === '1' || $aceptaInput === 1 || $aceptaInput === true) ? 1 : 0;
+        $registroActual = $this->nehemiasModel->getById($id);
+        if (!$registroActual) {
+            header('Location: ' . PUBLIC_URL . '?url=nehemias/lista&tipo=warning&mensaje=' . urlencode('Registro no encontrado.'));
+            exit;
+        }
+
+        $puedeVerCedula = $this->puedeVerCedulaNehemias();
+        $puedeVerTelefono = $this->puedeVerTelefonoNehemias();
+        $puedeVerSubidoLink = $this->puedeVerSubidoLinkNehemias();
+        $puedeVerBogotaSubio = $this->puedeVerBogotaSubioNehemias();
+        $puedeVerPuesto = $this->puedeVerPuestoNehemias();
+        $puedeVerMesa = $this->puedeVerMesaNehemias();
+        $puedeVerAcepta = $this->puedeVerAceptaNehemias();
+
+        if ($puedeVerTelefono) {
+            $telefonoOriginal = trim((string)($_POST['telefono'] ?? ''));
+            $telefonoNormalizado = $this->normalizarTelefonoColombia($telefonoOriginal);
+        } else {
+            $telefonoOriginal = trim((string)($registroActual['Telefono'] ?? ''));
+            $telefonoNormalizado = $registroActual['Telefono_Normalizado'] ?? null;
+        }
+
+        $numeroCedula = $puedeVerCedula
+            ? trim((string)($_POST['numero_cedula'] ?? ''))
+            : trim((string)($registroActual['Numero_Cedula'] ?? ''));
+
+        if ($puedeVerAcepta) {
+            $aceptaInput = $_POST['acepta'] ?? 0;
+            $acepta = ($aceptaInput === '1' || $aceptaInput === 1 || $aceptaInput === true) ? 1 : 0;
+        } else {
+            $acepta = (int)($registroActual['Acepta'] ?? 0);
+        }
+
         $consentimientoInput = $_POST['consentimiento_whatsapp'] ?? 0;
         $consentimientoWhatsapp = ($consentimientoInput === '1' || $consentimientoInput === 1 || $consentimientoInput === true) ? 1 : 0;
+
+        $subidoLink = $puedeVerSubidoLink
+            ? trim((string)($_POST['subido_link'] ?? ''))
+            : trim((string)($registroActual['Subido_Link'] ?? ''));
+
+        $enBogotaSubio = $puedeVerBogotaSubio
+            ? trim((string)($_POST['en_bogota_subio'] ?? ''))
+            : trim((string)($registroActual['En_Bogota_Subio'] ?? ''));
+
+        $puestoVotacion = $puedeVerPuesto
+            ? trim((string)($_POST['puesto_votacion'] ?? ''))
+            : trim((string)($registroActual['Puesto_Votacion'] ?? ''));
+
+        $mesaVotacion = $puedeVerMesa
+            ? trim((string)($_POST['mesa_votacion'] ?? ''))
+            : trim((string)($registroActual['Mesa_Votacion'] ?? ''));
 
         $data = [
             'Nombres' => $this->normalizarTextoPersona($_POST['nombres'] ?? ''),
             'Apellidos' => $this->normalizarTextoPersona($_POST['apellidos'] ?? ''),
-            'Numero_Cedula' => trim((string)($_POST['numero_cedula'] ?? '')),
+            'Numero_Cedula' => $numeroCedula,
             'Telefono' => $telefonoOriginal,
             'Telefono_Normalizado' => $telefonoNormalizado,
             'Lider' => $this->normalizarTextoPersona($_POST['lider'] ?? ''),
             'Lider_Nehemias' => $this->normalizarTextoPersona($_POST['lider_nehemias'] ?? ''),
-            'Subido_Link' => trim((string)($_POST['subido_link'] ?? '')),
-            'En_Bogota_Subio' => trim((string)($_POST['en_bogota_subio'] ?? '')),
-            'Puesto_Votacion' => trim((string)($_POST['puesto_votacion'] ?? '')),
-            'Mesa_Votacion' => trim((string)($_POST['mesa_votacion'] ?? '')),
+            'Subido_Link' => $subidoLink,
+            'En_Bogota_Subio' => $enBogotaSubio,
+            'Puesto_Votacion' => $puestoVotacion,
+            'Mesa_Votacion' => $mesaVotacion,
             'Acepta' => $acepta,
             'Consentimiento_Whatsapp' => $consentimientoWhatsapp,
             'Fecha_Registro' => trim((string)($_POST['fecha_registro'] ?? '')),
@@ -844,7 +943,7 @@ class NehemiasController extends BaseController {
      * Eliminar registro (admin)
      */
     public function eliminar() {
-        if (!$this->tienePermiso('editar')) {
+        if (!$this->tienePermiso('editar') || !$this->puedeEliminarRegistrosNehemias()) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
