@@ -1,29 +1,103 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
+<?php
+$procesoGanar = $proceso_ganar ?? [
+    'Ganar' => 0,
+    'Consolidar' => 0,
+    'Discipular' => 0,
+    'Enviar' => 0,
+    'Sin_Proceso' => 0,
+    'Total' => 0
+];
+
+$resumenOrigen = $resumen_origen_ganados ?? [
+    'Ganados_Celula' => 0,
+    'Ganados_Domingo' => 0,
+    'Total' => 0
+];
+
+$almasPorEdades = $almas_por_edades ?? [
+    'Kids' => 0,
+    'Teens' => 0,
+    'Rocas' => 0,
+    'Jovenes' => 0,
+    'Adultos' => 0,
+    'Adultos_Mayores' => 0,
+    'Sin_Dato' => 0
+];
+
+$sumEsperadas = 0;
+$sumReales = 0;
+foreach (($asistencia_celulas ?? []) as $filaCelula) {
+    $sumEsperadas += (int)($filaCelula['Asistencias_Esperadas'] ?? 0);
+    $sumReales += (int)($filaCelula['Asistencias_Reales'] ?? 0);
+}
+$promedioAsistencia = $sumEsperadas > 0 ? round(($sumReales / $sumEsperadas) * 100, 1) : 0;
+
+$cumplimientoMetas = $cumplimiento_metas ?? [
+    'titulo' => 'GANAR',
+    'inicio' => '',
+    'fin' => '',
+    'meses' => [],
+    'rows' => [],
+    'totales' => ['meta' => 0, 'pendiente' => 0, 'ganados' => 0, 'meses' => []]
+];
+
+$filtroMesMeta = (string)($filtro_mes_meta ?? '');
+$mesesTabla = $cumplimientoMetas['meses'] ?? [];
+if ($filtroMesMeta !== '' && $filtroMesMeta !== 'all') {
+    $mesesTabla = array_values(array_filter($mesesTabla, static function($mes) use ($filtroMesMeta) {
+        return (string)($mes['key'] ?? '') === $filtroMesMeta;
+    }));
+}
+
+$tablaEsCompacta = $filtroMesMeta !== 'all';
+
+?>
+
 <div class="page-header">
-    <h2>Reportes y Estadísticas</h2>
-    <a href="<?= PUBLIC_URL ?>?url=reportes/exportarExcel&fecha_inicio=<?= urlencode((string)$fecha_inicio) ?>&fecha_fin=<?= urlencode((string)$fecha_fin) ?><?= !empty($filtro_celula) ? '&celula=' . urlencode((string)$filtro_celula) : '' ?>" class="btn btn-success">
-        <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
+    <h2>Reportes Semanales</h2>
+    <a href="<?= PUBLIC_URL ?>?url=reportes/exportarExcel&fecha_referencia=<?= urlencode((string)$fecha_referencia) ?>&ministerio=<?= urlencode((string)$filtro_ministerio) ?>&lider=<?= urlencode((string)$filtro_lider) ?>&celula=<?= urlencode((string)$filtro_celula) ?>" class="btn btn-success">
+        Exportar Excel
     </a>
 </div>
 
-<!-- Filtro de Fechas -->
-<div class="card" style="margin-bottom: 30px;">
-    <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="filters-inline" style="padding: 16px;">
+<div class="card report-card" style="margin-bottom: 18px;">
+    <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="filters-inline" style="padding: 14px;">
         <input type="hidden" name="url" value="reportes">
-        
+
         <div class="form-group" style="margin: 0;">
-            <label>Fecha Inicio:</label>
-            <input type="date" name="fecha_inicio" class="form-control" value="<?= $fecha_inicio ?>" required>
-        </div>
-        
-        <div class="form-group" style="margin: 0;">
-            <label>Fecha Fin:</label>
-            <input type="date" name="fecha_fin" class="form-control" value="<?= $fecha_fin ?>" required>
+            <label for="fecha_referencia">Semana (domingo a domingo)</label>
+            <input type="date" id="fecha_referencia" name="fecha_referencia" class="form-control" value="<?= htmlspecialchars((string)$fecha_referencia) ?>" required>
+            <small style="color:#637087;">Rango aplicado: <?= date('d/m/Y', strtotime($fecha_inicio)) ?> - <?= date('d/m/Y', strtotime($fecha_fin)) ?></small>
         </div>
 
         <div class="form-group" style="margin: 0;">
-            <label for="filtro_celula">Célula:</label>
+            <label for="filtro_ministerio">Ministerio (opcional)</label>
+            <select id="filtro_ministerio" name="ministerio" class="form-control">
+                <option value="">Todos los ministerios</option>
+                <?php foreach (($ministerios_disponibles ?? []) as $ministerio): ?>
+                    <option value="<?= (int)$ministerio['Id_Ministerio'] ?>" <?= ((string)($filtro_ministerio ?? '') === (string)$ministerio['Id_Ministerio']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($ministerio['Nombre_Ministerio']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="form-group" style="margin: 0;">
+            <label for="filtro_lider">Líder de célula (opcional)</label>
+            <select id="filtro_lider" name="lider" class="form-control">
+                <option value="">Todos los líderes</option>
+                <?php foreach (($lideres_disponibles ?? []) as $lider): ?>
+                    <option value="<?= (int)$lider['Id_Persona'] ?>" <?= ((string)($filtro_lider ?? '') === (string)$lider['Id_Persona']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($lider['Nombre_Completo']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="form-group" style="margin: 0;">
+            <label for="filtro_celula">Célula (opcional)</label>
             <select id="filtro_celula" name="celula" class="form-control">
                 <option value="">Todas las células</option>
                 <?php foreach (($celulas_disponibles ?? []) as $celula): ?>
@@ -34,140 +108,113 @@
             </select>
         </div>
 
+        <div class="form-group" style="margin: 0;">
+            <label for="filtro_mes_meta">Mes de metas</label>
+            <select id="filtro_mes_meta" name="mes_meta" class="form-control">
+                <option value="all" <?= ($filtroMesMeta === 'all') ? 'selected' : '' ?>>Todo el semestre</option>
+                <?php foreach (($cumplimientoMetas['meses'] ?? []) as $mesMeta): ?>
+                    <option value="<?= htmlspecialchars((string)($mesMeta['key'] ?? '')) ?>" <?= ($filtroMesMeta === (string)($mesMeta['key'] ?? '')) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars((string)($mesMeta['label'] ?? 'MES')) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
         <div class="filters-actions">
-            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <button type="submit" class="btn btn-primary">Aplicar</button>
             <a href="<?= PUBLIC_URL ?>index.php?url=reportes" class="btn btn-secondary">Resetear</a>
         </div>
     </form>
 </div>
 
-<!-- Gráfico de Almas Ganadas por Ministerio -->
-<div class="card" style="margin-bottom: 30px;">
-    <h3 style="margin-bottom: 20px; color: #0078D4;">📊 Almas Ganadas por Ministerio</h3>
-    <p style="color: #666; margin-bottom: 20px;">
-        Período: <strong><?= date('d/m/Y', strtotime($fecha_inicio)) ?></strong> - <strong><?= date('d/m/Y', strtotime($fecha_fin)) ?></strong>
-    </p>
-    <div id="chartAlmasGanadas"></div>
-</div>
-
-<!-- Tabla de Detalle de Almas Ganadas -->
-<div class="card" style="margin-bottom: 30px;">
-    <h4 style="margin-bottom: 15px; color: #0078D4;">Detalle por Ministerio</h4>
-    <div class="table-container">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Ministerio</th>
-                    <th>Hombres</th>
-                    <th>Mujeres</th>
-                    <th>Jóvenes Hombres</th>
-                    <th>Jóvenes Mujeres</th>
-                    <th>Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (!empty($almas_ganadas)): ?>
-                    <?php 
-                    $totalGeneral = 0;
-                    $totalHombres = 0;
-                    $totalMujeres = 0;
-                    $totalJovenesH = 0;
-                    $totalJovenesM = 0;
-                    ?>
-                    <?php foreach ($almas_ganadas as $ministerio): ?>
-                        <?php
-                        $totalHombres += $ministerio['Hombres'];
-                        $totalMujeres += $ministerio['Mujeres'];
-                        $totalJovenesH += $ministerio['Jovenes_Hombres'];
-                        $totalJovenesM += $ministerio['Jovenes_Mujeres'];
-                        $totalGeneral += $ministerio['Total'];
-                        ?>
-                        <tr>
-                            <td><?= htmlspecialchars($ministerio['Nombre_Ministerio'] ?? 'Sin ministerio') ?></td>
-                            <td><?= $ministerio['Hombres'] ?></td>
-                            <td><?= $ministerio['Mujeres'] ?></td>
-                            <td><?= $ministerio['Jovenes_Hombres'] ?></td>
-                            <td><?= $ministerio['Jovenes_Mujeres'] ?></td>
-                            <td><strong><?= $ministerio['Total'] ?></strong></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    <tr style="background: #f0f0f0; font-weight: bold;">
-                        <td>TOTAL</td>
-                        <td><?= $totalHombres ?></td>
-                        <td><?= $totalMujeres ?></td>
-                        <td><?= $totalJovenesH ?></td>
-                        <td><?= $totalJovenesM ?></td>
-                        <td><?= $totalGeneral ?></td>
-                    </tr>
-                <?php else: ?>
-                    <tr>
-                        <td colspan="6" class="text-center">No hay datos en este período</td>
-                    </tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
+<div class="report-kpi-grid" style="margin-bottom: 18px;">
+    <div class="report-kpi-card kpi-celula">
+        <div class="report-kpi-label">Ganados en célula</div>
+        <div class="report-kpi-value"><?= (int)$resumenOrigen['Ganados_Celula'] ?></div>
+    </div>
+    <div class="report-kpi-card kpi-domingo">
+        <div class="report-kpi-label">Ganados en domingo</div>
+        <div class="report-kpi-value"><?= (int)$resumenOrigen['Ganados_Domingo'] ?></div>
+    </div>
+    <div class="report-kpi-card kpi-escalera">
+        <div class="report-kpi-label">Total en escalera</div>
+        <div class="report-kpi-value"><?= (int)$procesoGanar['Total'] ?></div>
+    </div>
+    <div class="report-kpi-card kpi-asistencia">
+        <div class="report-kpi-label">Promedio asistencia</div>
+        <div class="report-kpi-value"><?= $promedioAsistencia ?>%</div>
     </div>
 </div>
 
-<!-- Gráfico de Asistencia a Células -->
-<div class="card" style="margin-bottom: 30px;">
-    <h3 style="margin-bottom: 20px; color: #0078D4;">📈 Asistencia a Células</h3>
-    <p style="color: #666; margin-bottom: 20px;">
-        Período: <strong><?= date('d/m/Y', strtotime($fecha_inicio)) ?></strong> - <strong><?= date('d/m/Y', strtotime($fecha_fin)) ?></strong>
-    </p>
-    
-    <!-- Filtro por Líder -->
-    <div style="margin-bottom: 20px;">
-        <label style="font-weight: 600; margin-bottom: 10px; display: block; color: #0078D4;">
-            🔍 Filtrar por Líder:
-        </label>
-        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-            <button onclick="seleccionarTodosLideres()" class="btn btn-sm btn-secondary">Todos</button>
-            <button onclick="limpiarLideres()" class="btn btn-sm btn-secondary">Ninguno</button>
-            <div id="filtrosLideres" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
+<div class="card report-card report-metas-card" style="margin-bottom: 22px;">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap; margin-bottom:10px;">
+        <div>
+            <h3 style="margin-bottom:4px;"><?= htmlspecialchars((string)($cumplimientoMetas['titulo'] ?? 'GANAR')) ?></h3>
+            <small style="color:#60708a;">Periodo semestral: <?= htmlspecialchars((string)($cumplimientoMetas['inicio'] ?? '')) ?> a <?= htmlspecialchars((string)($cumplimientoMetas['fin'] ?? '')) ?></small>
         </div>
+        <a href="<?= PUBLIC_URL ?>?url=ministerios" class="btn btn-secondary btn-sm">Editar metas por ministerio</a>
     </div>
-    
-    <div id="chartAsistenciaCelulas"></div>
-</div>
 
-<!-- Tabla de Detalle de Asistencia -->
-<div class="card" style="margin-bottom: 30px;">
-    <h4 style="margin-bottom: 15px; color: #0078D4;">Detalle por Célula</h4>
-    <div class="table-container">
-        <table class="data-table">
+    <div class="table-container reporte-metas-wrap">
+        <table class="data-table reporte-metas-table <?= $tablaEsCompacta ? 'reporte-metas-table--compacta' : '' ?>">
             <thead>
                 <tr>
-                    <th>Célula</th>
-                    <th>Líder</th>
-                    <th>Miembros Inscritos</th>
-                    <th>Reuniones Realizadas</th>
-                    <th>Asistencias Esperadas</th>
-                    <th>Asistencias Reales</th>
-                    <th>% Asistencia</th>
+                    <th rowspan="2" style="width:48px;">N°</th>
+                    <th rowspan="2" style="width:230px;">MINISTERIO</th>
+                    <?php foreach ($mesesTabla as $mes): ?>
+                        <th colspan="2"><?= htmlspecialchars((string)($mes['label'] ?? 'MES')) ?></th>
+                    <?php endforeach; ?>
+                    <th rowspan="2" style="width:78px;">META</th>
+                    <th rowspan="2" style="width:94px;">PENDIENTE</th>
+                    <th rowspan="2" style="width:84px;">GANADOS</th>
+                </tr>
+                <tr>
+                    <?php foreach ($mesesTabla as $mes): ?>
+                        <th>Celula</th>
+                        <th>Iglesia</th>
+                    <?php endforeach; ?>
                 </tr>
             </thead>
             <tbody>
-                <?php if (!empty($asistencia_celulas)): ?>
-                    <?php foreach ($asistencia_celulas as $celula): ?>
-                        <?php 
-                        $esperadas = $celula['Asistencias_Esperadas'];
-                        $reales = $celula['Asistencias_Reales'];
-                        $porcentaje = $esperadas > 0 ? round(($reales / $esperadas) * 100, 1) : 0;
+                <?php if (!empty($cumplimientoMetas['rows'])): ?>
+                    <?php $nroMeta = 1; ?>
+                    <?php foreach ($cumplimientoMetas['rows'] as $row): ?>
+                        <?php
+                        $metaRow = (int)($row['meta'] ?? 0);
+                        $ganadosRow = (int)($row['ganados'] ?? 0);
+                        $pendienteRow = (int)($row['pendiente'] ?? 0);
+                        $cumplimiento = $metaRow > 0 ? (($ganadosRow / $metaRow) * 100) : 0;
+                        $claseGanados = $cumplimiento >= 100 ? 'ganado-ok' : ($cumplimiento >= 50 ? 'ganado-medio' : 'ganado-bajo');
+                        $clasePendiente = $pendienteRow <= 0 ? 'pendiente-ok' : ($cumplimiento >= 50 ? 'pendiente-medio' : 'pendiente-alto');
                         ?>
                         <tr>
-                            <td><?= htmlspecialchars($celula['Nombre_Celula']) ?></td>
-                            <td><?= htmlspecialchars(trim($celula['Nombre_Lider']) ?: 'Sin líder') ?></td>
-                            <td><?= $celula['Total_Inscritos'] ?></td>
-                            <td><?= $celula['Reuniones_Realizadas'] ?></td>
-                            <td><?= $esperadas ?></td>
-                            <td><?= $reales ?></td>
-                            <td><?= $porcentaje ?>%</td>
+                            <td><?= $nroMeta++ ?></td>
+                            <td><?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio')) ?></td>
+                            <?php foreach ($mesesTabla as $mes): ?>
+                                <?php $mesKey = (string)($mes['key'] ?? ''); ?>
+                                <td><?= (int)($row['meses'][$mesKey]['celula'] ?? 0) ?></td>
+                                <td><?= (int)($row['meses'][$mesKey]['iglesia'] ?? 0) ?></td>
+                            <?php endforeach; ?>
+                            <td><?= $metaRow ?></td>
+                            <td><span class="meta-pill-cell <?= $clasePendiente ?>"><?= $pendienteRow ?></span></td>
+                            <td><span class="meta-pill-cell <?= $claseGanados ?>"><strong><?= $ganadosRow ?></strong></span></td>
                         </tr>
                     <?php endforeach; ?>
+
+                    <tr class="reporte-metas-total-row">
+                        <td colspan="2"><strong>TOTAL</strong></td>
+                        <?php foreach ($mesesTabla as $mes): ?>
+                            <?php $mesKey = (string)($mes['key'] ?? ''); ?>
+                            <td><strong><?= (int)($cumplimientoMetas['totales']['meses'][$mesKey]['celula'] ?? 0) ?></strong></td>
+                            <td><strong><?= (int)($cumplimientoMetas['totales']['meses'][$mesKey]['iglesia'] ?? 0) ?></strong></td>
+                        <?php endforeach; ?>
+                        <td><strong><?= (int)($cumplimientoMetas['totales']['meta'] ?? 0) ?></strong></td>
+                        <td><strong><?= (int)($cumplimientoMetas['totales']['pendiente'] ?? 0) ?></strong></td>
+                        <td><strong><?= (int)($cumplimientoMetas['totales']['ganados'] ?? 0) ?></strong></td>
+                    </tr>
                 <?php else: ?>
                     <tr>
-                        <td colspan="7" class="text-center">No hay datos de asistencia en este período</td>
+                        <td colspan="99" class="text-center">Sin datos para construir el cumplimiento de metas en este periodo</td>
                     </tr>
                 <?php endif; ?>
             </tbody>
@@ -175,448 +222,325 @@
     </div>
 </div>
 
-<!-- ApexCharts Library -->
+<div class="card report-card" style="margin-bottom: 22px;">
+    <h3>Escalera del Éxito (semanal)</h3>
+    <div id="chartEscalera"></div>
+</div>
+
+<div class="card report-card" style="margin-bottom: 22px;">
+    <h3>Almas ganadas por edades</h3>
+    <div id="chartEdades"></div>
+</div>
+
+<div class="card report-card" style="margin-bottom: 22px;">
+    <h3>Almas ganadas por ministerio</h3>
+    <div id="chartAlmasMinisterio"></div>
+    <details style="margin-top: 14px;">
+        <summary>Ver detalle por ministerio</summary>
+        <div class="table-container" style="margin-top: 10px;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Ministerio</th>
+                        <th>Hombres</th>
+                        <th>Mujeres</th>
+                        <th>Jóvenes H.</th>
+                        <th>Jóvenes M.</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($almas_ganadas)): ?>
+                        <?php foreach ($almas_ganadas as $item): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($item['Nombre_Ministerio'] ?? 'Sin ministerio') ?></td>
+                                <td><?= (int)($item['Hombres'] ?? 0) ?></td>
+                                <td><?= (int)($item['Mujeres'] ?? 0) ?></td>
+                                <td><?= (int)($item['Jovenes_Hombres'] ?? 0) ?></td>
+                                <td><?= (int)($item['Jovenes_Mujeres'] ?? 0) ?></td>
+                                <td><strong><?= (int)($item['Total'] ?? 0) ?></strong></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="6" class="text-center">Sin datos para el rango seleccionado</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </details>
+</div>
+
+<div class="card report-card" style="margin-bottom: 22px;">
+    <h3>Asistencia a células</h3>
+    <div id="chartAsistencia"></div>
+    <details style="margin-top: 14px;">
+        <summary>Ver detalle por célula</summary>
+        <div class="table-container" style="margin-top: 10px;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Célula</th>
+                        <th>Líder</th>
+                        <th>Inscritos</th>
+                        <th>Reuniones</th>
+                        <th>Esperadas</th>
+                        <th>Reales</th>
+                        <th>%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($asistencia_celulas)): ?>
+                        <?php foreach ($asistencia_celulas as $celula): ?>
+                            <?php
+                            $esperadas = (int)($celula['Asistencias_Esperadas'] ?? 0);
+                            $reales = (int)($celula['Asistencias_Reales'] ?? 0);
+                            $porcentaje = $esperadas > 0 ? round(($reales / $esperadas) * 100, 1) : 0;
+                            ?>
+                            <tr>
+                                <td><?= htmlspecialchars($celula['Nombre_Celula'] ?? '') ?></td>
+                                <td><?= htmlspecialchars(trim((string)($celula['Nombre_Lider'] ?? '')) ?: 'Sin líder') ?></td>
+                                <td><?= (int)($celula['Total_Inscritos'] ?? 0) ?></td>
+                                <td><?= (int)($celula['Reuniones_Realizadas'] ?? 0) ?></td>
+                                <td><?= $esperadas ?></td>
+                                <td><?= $reales ?></td>
+                                <td><?= $porcentaje ?>%</td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="7" class="text-center">Sin datos de asistencia</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </details>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-
 <script>
-// Datos para Almas Ganadas
-const almasGanadasData = <?= json_encode($almas_ganadas) ?>;
+const procesoGanar = <?= json_encode($procesoGanar) ?>;
+const almasPorEdades = <?= json_encode($almasPorEdades) ?>;
+const almasGanadas = <?= json_encode($almas_ganadas ?? []) ?>;
+const asistencia = <?= json_encode($asistencia_celulas ?? []) ?>;
 
-const ministerios = almasGanadasData.map(m => m.Nombre_Ministerio || 'Sin ministerio');
-const hombres = almasGanadasData.map(m => parseInt(m.Hombres));
-const mujeres = almasGanadasData.map(m => parseInt(m.Mujeres));
-const jovenesH = almasGanadasData.map(m => parseInt(m.Jovenes_Hombres));
-const jovenesM = almasGanadasData.map(m => parseInt(m.Jovenes_Mujeres));
+new ApexCharts(document.querySelector('#chartEscalera'), {
+    chart: { type: 'bar', height: 320 },
+    series: [{
+        name: 'Personas',
+        data: [
+            parseInt(procesoGanar.Ganar || 0, 10),
+            parseInt(procesoGanar.Consolidar || 0, 10),
+            parseInt(procesoGanar.Discipular || 0, 10),
+            parseInt(procesoGanar.Enviar || 0, 10)
+        ]
+    }],
+    xaxis: { categories: ['Ganar', 'Consolidar', 'Discipular', 'Enviar'] },
+    colors: ['#3f8efc']
+}).render();
 
-// Gráfico de Almas Ganadas - ApexCharts
-const optionsAlmas = {
+new ApexCharts(document.querySelector('#chartEdades'), {
+    chart: { type: 'pie', height: 320 },
+    labels: ['Kids (3-8)', 'Teens (9-12)', 'Rocas (13-17)', 'Jóvenes (18-30)', 'Adultos (31-59)', 'Adultos mayores (60+)', 'Sin dato'],
+    colors: ['#FFB703', '#8ECAE6', '#3A86FF', '#06D6A0', '#8338EC', '#EF476F', '#ADB5BD'],
+    series: [
+        parseInt(almasPorEdades.Kids || 0, 10),
+        parseInt(almasPorEdades.Teens || 0, 10),
+        parseInt(almasPorEdades.Rocas || 0, 10),
+        parseInt(almasPorEdades.Jovenes || 0, 10),
+        parseInt(almasPorEdades.Adultos || 0, 10),
+        parseInt(almasPorEdades.Adultos_Mayores || 0, 10),
+        parseInt(almasPorEdades.Sin_Dato || 0, 10)
+    ],
+    legend: {
+        position: 'bottom'
+    }
+}).render();
+
+new ApexCharts(document.querySelector('#chartAlmasMinisterio'), {
+    chart: { type: 'bar', height: 330 },
+    series: [{
+        name: 'Total',
+        data: almasGanadas.map(x => parseInt(x.Total || 0, 10))
+    }],
+    xaxis: { categories: almasGanadas.map(x => x.Nombre_Ministerio || 'Sin ministerio') },
+    colors: ['#02a66f']
+}).render();
+
+new ApexCharts(document.querySelector('#chartAsistencia'), {
+    chart: { type: 'line', height: 340 },
     series: [
         {
-            name: 'Hombres',
-            data: hombres
+            name: 'Esperadas',
+            type: 'column',
+            data: asistencia.map(x => parseInt(x.Asistencias_Esperadas || 0, 10))
         },
         {
-            name: 'Mujeres',
-            data: mujeres
-        },
-        {
-            name: 'Jóvenes Hombres',
-            data: jovenesH
-        },
-        {
-            name: 'Jóvenes Mujeres',
-            data: jovenesM
+            name: 'Reales',
+            type: 'column',
+            data: asistencia.map(x => parseInt(x.Asistencias_Reales || 0, 10))
         }
     ],
-    chart: {
-        type: 'bar',
-        height: 400,
-        stacked: false,
-        toolbar: {
-            show: true,
-            tools: {
-                download: true,
-                zoom: true,
-                zoomin: true,
-                zoomout: true,
-                pan: true,
-                reset: true
-            }
-        },
-        animations: {
-            enabled: true,
-            easing: 'easeinout',
-            speed: 800
-        }
-    },
-    plotOptions: {
-        bar: {
-            horizontal: false,
-            columnWidth: '70%',
-            borderRadius: 6,
-            dataLabels: {
-                position: 'top'
-            }
-        }
-    },
-    dataLabels: {
-        enabled: false
-    },
-    stroke: {
-        show: true,
-        width: 2,
-        colors: ['transparent']
-    },
-    xaxis: {
-        categories: ministerios,
-        labels: {
-            style: {
-                fontSize: '12px'
-            }
-        }
-    },
-    yaxis: {
-        title: {
-            text: 'Cantidad de Personas'
-        },
-        labels: {
-            formatter: function(val) {
-                return Math.floor(val);
-            }
-        }
-    },
-    colors: ['#0078D4', '#FF6B9D', '#4FC3F7', '#FFB6C1'],
-    fill: {
-        opacity: 1
-    },
-    tooltip: {
-        y: {
-            formatter: function(val) {
-                return val + " personas";
-            }
-        },
-        theme: 'light'
-    },
-    legend: {
-        position: 'top',
-        horizontalAlign: 'left',
-        offsetY: 0,
-        fontSize: '13px',
-        markers: {
-            width: 12,
-            height: 12,
-            radius: 3
-        }
-    },
-    grid: {
-        borderColor: '#e7e7e7',
-        strokeDashArray: 4
-    }
-};
-
-const chartAlmas = new ApexCharts(document.querySelector("#chartAlmasGanadas"), optionsAlmas);
-chartAlmas.render();
-
-// Datos para Asistencia a Células
-const asistenciaDataFull = <?= json_encode($asistencia_celulas) ?>;
-let asistenciaData = [...asistenciaDataFull];
-let lideresFiltrados = new Set();
-
-// Crear filtros de líderes
-function crearFiltrosLideres() {
-    const lideres = [...new Set(asistenciaDataFull.map(c => {
-        const lider = c.Nombre_Lider ? c.Nombre_Lider.trim() : '';
-        return lider || 'Sin líder';
-    }))].sort();
-    
-    const contenedor = document.getElementById('filtrosLideres');
-    contenedor.innerHTML = '';
-    
-    lideres.forEach(lider => {
-        const checkbox = document.createElement('label');
-        checkbox.className = 'filtro-lider';
-        checkbox.innerHTML = `
-            <input type="checkbox" value="${lider}" checked onchange="filtrarPorLider()">
-            <span>${lider}</span>
-        `;
-        contenedor.appendChild(checkbox);
-        lideresFiltrados.add(lider);
-    });
-}
-
-function seleccionarTodosLideres() {
-    document.querySelectorAll('#filtrosLideres input[type="checkbox"]').forEach(cb => {
-        cb.checked = true;
-        lideresFiltrados.add(cb.value);
-    });
-    filtrarPorLider();
-}
-
-function limpiarLideres() {
-    document.querySelectorAll('#filtrosLideres input[type="checkbox"]').forEach(cb => {
-        cb.checked = false;
-    });
-    lideresFiltrados.clear();
-    filtrarPorLider();
-}
-
-function filtrarPorLider() {
-    // Actualizar conjunto de líderes filtrados
-    lideresFiltrados.clear();
-    document.querySelectorAll('#filtrosLideres input[type="checkbox"]:checked').forEach(cb => {
-        lideresFiltrados.add(cb.value);
-    });
-    
-    // Filtrar datos
-    asistenciaData = asistenciaDataFull.filter(c => {
-        const lider = c.Nombre_Lider ? c.Nombre_Lider.trim() : '';
-        const nombreLider = lider || 'Sin líder';
-        return lideresFiltrados.has(nombreLider);
-    });
-    
-    // Actualizar gráfico
-    actualizarGraficoAsistencia();
-}
-
-const celulas = asistenciaData.map(c => c.Nombre_Celula);
-const esperadas = asistenciaData.map(c => parseInt(c.Asistencias_Esperadas));
-const reales = asistenciaData.map(c => parseInt(c.Asistencias_Reales));
-const porcentajes = asistenciaData.map(c => {
-    const esp = parseInt(c.Asistencias_Esperadas);
-    const real = parseInt(c.Asistencias_Reales);
-    return esp > 0 ? Math.round((real / esp) * 100) : 0;
-});
-
-// Gráfico de Asistencia - ApexCharts
-const optionsAsistencia = {
-    series: [
-        {
-            name: 'Asistencias Esperadas',
-            type: 'column',
-            data: esperadas
-        },
-        {
-            name: 'Asistencias Reales',
-            type: 'column',
-            data: reales
-        },
-        {
-            name: '% Asistencia',
-            type: 'line',
-            data: porcentajes
-        }
-    ],
-    chart: {
-        type: 'line',
-        height: 400,
-        toolbar: {
-            show: true,
-            tools: {
-                download: true,
-                zoom: true,
-                zoomin: true,
-                zoomout: true,
-                pan: true,
-                reset: true
-            }
-        },
-        animations: {
-            enabled: true,
-            easing: 'easeinout',
-            speed: 800
-        }
-    },
-    plotOptions: {
-        bar: {
-            horizontal: false,
-            columnWidth: '60%',
-            borderRadius: 6
-        }
-    },
-    dataLabels: {
-        enabled: true,
-        enabledOnSeries: [2],
-        formatter: function(val) {
-            return val + "%";
-        },
-        offsetY: -10,
-        style: {
-            fontSize: '12px',
-            fontWeight: 'bold',
-            colors: ["#28a745"]
-        }
-    },
-    stroke: {
-        width: [0, 0, 3],
-        curve: 'smooth'
-    },
-    xaxis: {
-        categories: celulas,
-        labels: {
-            style: {
-                fontSize: '12px'
-            }
-        }
-    },
-    yaxis: [
-        {
-            seriesName: 'Asistencias Esperadas',
-            title: {
-                text: 'Cantidad de Asistencias'
-            },
-            labels: {
-                formatter: function(val) {
-                    return Math.floor(val);
-                }
-            }
-        },
-        {
-            seriesName: 'Asistencias Esperadas',
-            show: false
-        },
-        {
-            seriesName: '% Asistencia',
-            opposite: true,
-            title: {
-                text: 'Porcentaje (%)'
-            },
-            min: 0,
-            max: 100,
-            labels: {
-                formatter: function(val) {
-                    return Math.floor(val) + "%";
-                }
-            }
-        }
-    ],
-    colors: ['#005BA1', '#0078D4', '#28a745'],
-    fill: {
-        opacity: [0.85, 0.85, 1],
-        type: ['gradient', 'gradient', 'solid'],
-        gradient: {
-            shade: 'light',
-            type: "vertical",
-            shadeIntensity: 0.3,
-            gradientToColors: ['#0078D4', '#4FC3F7', '#28a745'],
-            inverseColors: false,
-            opacityFrom: 0.9,
-            opacityTo: 0.8,
-            stops: [0, 100]
-        }
-    },
-    tooltip: {
-        shared: true,
-        intersect: false,
-        y: [
-            {
-                formatter: function(val) {
-                    return val + " asistencias";
-                }
-            },
-            {
-                formatter: function(val) {
-                    return val + " asistencias";
-                }
-            },
-            {
-                formatter: function(val) {
-                    return val + "%";
-                }
-            }
-        ],
-        theme: 'light'
-    },
-    legend: {
-        position: 'top',
-        horizontalAlign: 'left',
-        offsetY: 0,
-        fontSize: '13px',
-        markers: {
-            width: 12,
-            height: 12,
-            radius: 3
-        }
-    },
-    grid: {
-        borderColor: '#e7e7e7',
-        strokeDashArray: 4
-    },
-    markers: {
-        size: [0, 0, 5],
-        strokeWidth: 0,
-        hover: {
-            size: 7
-        }
-    }
-};
-
-let chartAsistencia = new ApexCharts(document.querySelector("#chartAsistenciaCelulas"), optionsAsistencia);
-chartAsistencia.render();
-
-// Función para actualizar el gráfico
-function actualizarGraficoAsistencia() {
-    const celulasFiltradas = asistenciaData.map(c => c.Nombre_Celula);
-    const esperadasFiltradas = asistenciaData.map(c => parseInt(c.Asistencias_Esperadas));
-    const realesFiltradas = asistenciaData.map(c => parseInt(c.Asistencias_Reales));
-    const porcentajesFiltrados = asistenciaData.map(c => {
-        const esp = parseInt(c.Asistencias_Esperadas);
-        const real = parseInt(c.Asistencias_Reales);
-        return esp > 0 ? Math.round((real / esp) * 100) : 0;
-    });
-    
-    chartAsistencia.updateOptions({
-        xaxis: {
-            categories: celulasFiltradas
-        }
-    });
-    
-    chartAsistencia.updateSeries([
-        {
-            name: 'Asistencias Esperadas',
-            type: 'column',
-            data: esperadasFiltradas
-        },
-        {
-            name: 'Asistencias Reales',
-            type: 'column',
-            data: realesFiltradas
-        },
-        {
-            name: '% Asistencia',
-            type: 'line',
-            data: porcentajesFiltrados
-        }
-    ]);
-}
-
-// Inicializar filtros
-crearFiltrosLideres();
-
+    xaxis: { categories: asistencia.map(x => x.Nombre_Celula || 'Sin célula') },
+    colors: ['#f59e0b', '#2563eb']
+}).render();
 </script>
 
 <style>
-.card {
-    background: white;
-    padding: 25px;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+.report-card {
+    background: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
 }
 
-.apexcharts-tooltip {
-    background: white !important;
-    border: 1px solid #e3e3e3 !important;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.15) !important;
+.report-metas-card {
+    padding: 14px;
 }
 
-.filtro-lider {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 6px 12px;
-    background: #f0f8ff;
-    border: 1px solid #0078D4;
-    border-radius: 5px;
+.report-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.report-kpi-card {
+    border-radius: 12px;
+    padding: 14px;
+    color: #10233d;
+}
+
+.kpi-celula { background: #eef7ff; border: 1px solid #c7dfff; }
+.kpi-domingo { background: #fff8e8; border: 1px solid #ffe2a8; }
+.kpi-escalera { background: #eefbf1; border: 1px solid #bfe8c9; }
+.kpi-asistencia { background: #f8f2ff; border: 1px solid #ddcbff; }
+
+.report-kpi-label { font-size: .82rem; color: #475569; }
+.report-kpi-value { font-size: 1.8rem; font-weight: 800; }
+
+details summary {
     cursor: pointer;
-    transition: all 0.3s ease;
+    color: #1f3f74;
+    font-weight: 600;
+}
+
+.reporte-metas-wrap {
+    overflow-x: auto;
+}
+
+.reporte-metas-table {
+    min-width: 1180px;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.reporte-metas-table--compacta {
+    min-width: 820px;
+}
+
+.reporte-metas-table thead tr:first-child th {
+    background: #f0f3f8;
+    text-align: center;
+    font-weight: 800;
+    font-size: 13px;
+    white-space: nowrap;
+    word-break: normal;
+    overflow-wrap: normal;
+    writing-mode: horizontal-tb;
+    text-orientation: mixed;
+    letter-spacing: 0.2px;
+}
+
+.reporte-metas-table thead tr:nth-child(2) th {
+    background: #f8fafc;
+    text-align: center;
+    font-weight: 700;
+    font-size: 12px;
+    white-space: nowrap;
+    word-break: normal;
+    overflow-wrap: normal;
+}
+
+.reporte-metas-table td {
+    text-align: center;
+    vertical-align: middle;
+    padding: 7px 8px;
     font-size: 14px;
 }
 
-.filtro-lider:hover {
-    background: #e3f2fd;
-    border-color: #005BA1;
+.reporte-metas-table td:nth-child(2),
+.reporte-metas-table th:nth-child(2) {
+    text-align: left;
+    min-width: 210px;
+    white-space: normal;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    line-height: 1.25;
 }
 
-.filtro-lider input[type="checkbox"] {
-    cursor: pointer;
-    width: 16px;
-    height: 16px;
-    accent-color: #0078D4;
+.reporte-metas-table tbody tr:nth-child(even):not(.reporte-metas-total-row) {
+    background: #fafcff;
 }
 
-.filtro-lider span {
-    color: #333;
-    font-weight: 500;
+.meta-pill-cell {
+    display: inline-flex;
+    min-width: 52px;
+    justify-content: center;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: 700;
 }
+
+.ganado-ok {
+    background: #d9fbe5;
+    color: #116738;
+}
+
+.ganado-medio {
+    background: #fff176;
+    color: #3f2f00;
+}
+
+.ganado-bajo {
+    background: #ff4d4f;
+    color: #ffffff;
+}
+
+.pendiente-ok {
+    background: #d9fbe5;
+    color: #116738;
+}
+
+.pendiente-medio {
+    background: #fff6cc;
+    color: #7f6000;
+}
+
+.pendiente-alto {
+    background: #ffe0e0;
+    color: #8f1d1d;
+}
+
+.reporte-metas-total-row {
+    background: #000000;
+}
+
+.reporte-metas-total-row td {
+    color: #ffffff;
+    font-weight: 800;
+}
+
+@media (max-width: 1000px) {
+    .report-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+    .report-kpi-grid { grid-template-columns: 1fr; }
+}
+
 </style>
 
 <?php include VIEWS . '/layout/footer.php'; ?>
