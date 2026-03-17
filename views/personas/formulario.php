@@ -193,21 +193,30 @@ $urlVolver = $returnToAsistencia
                 </div>
 
                 <div class="form-group">
-                    <label for="tipo_reunion">Primera Reunión</label>
+                    <label for="tipo_reunion">Ganado en</label>
                     <select id="tipo_reunion" name="tipo_reunion" class="form-control">
                         <option value="">Seleccionar...</option>
-                        <option value="Domingo" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Domingo' ? 'selected' : '' ?>>Domingo</option>
                         <option value="Celula" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Celula' ? 'selected' : '' ?>>Célula</option>
-                        <option value="Reu Jovenes" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Reu Jovenes' ? 'selected' : '' ?>>Reunión Jóvenes</option>
-                        <option value="Reu Hombre" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Reu Hombre' ? 'selected' : '' ?>>Reunión Hombre</option>
-                        <option value="Reu Mujeres" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Reu Mujeres' ? 'selected' : '' ?>>Reunión Mujeres</option>
-                        <option value="Grupo Go" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Grupo Go' ? 'selected' : '' ?>>Grupo Go</option>
-                        <option value="Seminario" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Seminario' ? 'selected' : '' ?>>Seminario</option>
-                        <option value="Pesca" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Pesca' ? 'selected' : '' ?>>Pesca</option>
-                        <option value="Semana Santa" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Semana Santa' ? 'selected' : '' ?>>Semana Santa</option>
-                        <option value="Otro" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Otro' ? 'selected' : '' ?>>Otro</option>
+                        <option value="Domingo" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Domingo' ? 'selected' : '' ?>>Domingo</option>
+                        <option value="Migrados" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Migrados' ? 'selected' : '' ?>>Migrados</option>
+                        <option value="Asignados" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Asignados' ? 'selected' : '' ?>>Asignados</option>
                     </select>
                 </div>
+
+                <?php if (!empty($soportaProceso)): ?>
+                <div class="form-group">
+                    <label for="proceso">Escalera del Éxito</label>
+                    <?php $procesoSeleccionado = $post_data['proceso'] ?? ($persona['Proceso'] ?? 'Ganar'); ?>
+                    <select id="proceso" name="proceso" class="form-control">
+                        <option value="">Seleccionar...</option>
+                        <option value="Ganar" <?= $procesoSeleccionado === 'Ganar' ? 'selected' : '' ?>>Ganar</option>
+                        <option value="Consolidar" <?= $procesoSeleccionado === 'Consolidar' ? 'selected' : '' ?>>Consolidar</option>
+                        <option value="Discipular" <?= $procesoSeleccionado === 'Discipular' ? 'selected' : '' ?>>Discipular</option>
+                        <option value="Enviar" <?= $procesoSeleccionado === 'Enviar' ? 'selected' : '' ?>>Enviar</option>
+                    </select>
+                    <small class="form-text text-muted">Etapa actual de la Escalera del Éxito: Ganar, Consolidar, Discipular o Enviar.</small>
+                </div>
+                <?php endif; ?>
 
                 <?php if (AuthController::esAdministrador()): ?>
                 <div class="form-group">
@@ -376,6 +385,42 @@ const lideresDisponibles = [
 const rolSelect = document.getElementById('id_rol');
 const accesoSistemaSection = document.getElementById('acceso_sistema_section');
 const accesoSistemaAlerta = document.getElementById('acceso_sistema_alerta');
+const fechaNacimientoInput = document.getElementById('fecha_nacimiento');
+const edadInput = document.getElementById('edad');
+
+function calcularEdadDesdeFecha(fechaTexto) {
+    if (!fechaTexto) {
+        return '';
+    }
+
+    const fechaNac = new Date(fechaTexto + 'T00:00:00');
+    if (Number.isNaN(fechaNac.getTime())) {
+        return '';
+    }
+
+    const hoy = new Date();
+    let edad = hoy.getFullYear() - fechaNac.getFullYear();
+    const mes = hoy.getMonth() - fechaNac.getMonth();
+
+    if (mes < 0 || (mes === 0 && hoy.getDate() < fechaNac.getDate())) {
+        edad--;
+    }
+
+    if (edad < 0) {
+        return '';
+    }
+
+    return edad;
+}
+
+function actualizarEdadAutomatica() {
+    if (!fechaNacimientoInput || !edadInput) {
+        return;
+    }
+
+    const edadCalculada = calcularEdadDesdeFecha(fechaNacimientoInput.value);
+    edadInput.value = edadCalculada;
+}
 
 function normalizarTexto(texto) {
     if (!texto) return '';
@@ -438,6 +483,12 @@ function actualizarAccesoSistemaPorRol() {
 if (rolSelect) {
     rolSelect.addEventListener('change', actualizarAccesoSistemaPorRol);
     actualizarAccesoSistemaPorRol();
+}
+
+if (fechaNacimientoInput && edadInput) {
+    fechaNacimientoInput.addEventListener('change', actualizarEdadAutomatica);
+    fechaNacimientoInput.addEventListener('input', actualizarEdadAutomatica);
+    actualizarEdadAutomatica();
 }
 
 // Autocompletar para célula

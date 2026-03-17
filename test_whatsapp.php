@@ -3,10 +3,10 @@
  * Prueba directa de WhatsApp Cloud API (hello_world)
  *
  * URL de ejemplo:
- * http://localhost/mcimadrid/test_whatsapp.php?token=TU_TOKEN&to=573001112233
+ * http://localhost/mcimadrid/test_whatsapp.php?to=573001112233
  *
  * Opcionales:
- * - phone_id=1061529400372298
+ * - phone_id=1026869523838926
  * - template=hello_world
  * - lang=en_US
  */
@@ -15,8 +15,8 @@ ini_set('display_errors', 1);
 error_reporting(E_ALL);
 header('Content-Type: text/html; charset=UTF-8');
 
-$token = trim((string)($_GET['token'] ?? 'EAAhNJ1hCbaYBQZCmqWuBLBcsvBI7BOFm5LwQMFPy8xxxGHRDZAZAHp69B20wZCOiP1qqR6FBrg9Aq4rUNwxQnIF02Jc37vzZC4IoKsCAvgYB0eThKMYhqGKq0ldmjVlnKAgV78xILrJiZACDaabQKJZCeCioK7of3m6fC8ZBm0HNYAkA8ExB4tqw5z0ESYWr3TvGR0Ypa2B1eq67F493GoJAHD11lUqfuIzGPqiDq8ZC0leaMhdHJGXKob2mTIj1zatsZCbvlzpvZBDxfN8XARZC52tpGQZDZD'));
-$phoneId = trim((string)($_GET['phone_id'] ?? '1061529400372298'));
+$token = trim((string)($_GET['token'] ?? getenv('WHATSAPP_TOKEN') ?? ''));
+$phoneId = trim((string)($_GET['phone_id'] ?? '1026869523838926'));
 $numeroDestino = trim((string)($_GET['to'] ?? ''));
 $template = trim((string)($_GET['template'] ?? 'hello_world'));
 $lang = trim((string)($_GET['lang'] ?? 'en_US'));
@@ -53,7 +53,8 @@ if ($token === '' || $phoneId === '' || $numeroDestino === '') {
         <div class="box warn">
             <p><strong>Faltan parámetros obligatorios.</strong></p>
             <p>Usa esta URL:</p>
-            <p><code>http://localhost/mcimadrid/test_whatsapp.php?token=TU_TOKEN&to=573001112233</code></p>
+            <p><code>http://localhost/mcimadrid/test_whatsapp.php?to=573001112233</code></p>
+            <p>Define token en entorno: <code>WHATSAPP_TOKEN</code> (o usa <code>?token=...</code> solo temporalmente).</p>
             <p>Opcionales: <code>&phone_id=1061529400372298&template=hello_world&lang=en_US</code></p>
         </div>
     </body>
@@ -62,7 +63,7 @@ if ($token === '' || $phoneId === '' || $numeroDestino === '') {
     exit;
 }
 
-$url = "https://graph.facebook.com/v18.0/{$phoneId}/messages";
+$url = "https://graph.facebook.com/v22.0/{$phoneId}/messages";
 
 $payload = [
     'messaging_product' => 'whatsapp',

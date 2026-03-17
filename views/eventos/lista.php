@@ -29,7 +29,34 @@
     </div>
 </div>
 
+<div class="card" style="padding:16px; margin-bottom:16px;">
+    <h3 style="margin-top:0;">Mini-módulos de formación</h3>
+    <p style="margin-bottom:10px;">Administra contenidos públicos específicos con su propio QR para compartir.</p>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <a href="<?= PUBLIC_URL ?>index.php?url=eventos/universidad-vida" class="btn btn-primary">Universidad de la vida</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=eventos/capacitacion-destino" class="btn btn-primary">Capacitación destino</a>
+    </div>
+</div>
+
 <div class="table-container">
+    <style>
+        .evento-media-img {
+            width: 96px;
+            height: 64px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #d9e2ef;
+            display: block;
+        }
+
+        .evento-media-video {
+            width: 140px;
+            max-width: 100%;
+            border-radius: 8px;
+            border: 1px solid #d9e2ef;
+            display: block;
+        }
+    </style>
     <table class="data-table">
         <thead>
             <tr>
@@ -54,14 +81,24 @@
                         <td><?= htmlspecialchars($evento['Descripcion_Evento']) ?></td>
                         <td>
                             <?php if (!empty($evento['Imagen_Evento'])): ?>
-                                <a href="<?= rtrim(PUBLIC_URL, '/') . '/uploads/eventos/' . rawurlencode($evento['Imagen_Evento']) ?>" target="_blank">Ver imagen</a>
+                                <a href="<?= rtrim(PUBLIC_URL, '/') . '/uploads/eventos/' . rawurlencode($evento['Imagen_Evento']) ?>" target="_blank" rel="noopener noreferrer">
+                                    <img
+                                        src="<?= rtrim(PUBLIC_URL, '/') . '/uploads/eventos/' . rawurlencode($evento['Imagen_Evento']) ?>"
+                                        alt="Imagen de <?= htmlspecialchars($evento['Nombre_Evento']) ?>"
+                                        class="evento-media-img"
+                                        loading="lazy"
+                                    >
+                                </a>
                             <?php else: ?>
                                 -
                             <?php endif; ?>
                         </td>
                         <td>
                             <?php if (!empty($evento['Video_Evento'])): ?>
-                                <a href="<?= rtrim(PUBLIC_URL, '/') . '/uploads/eventos/' . rawurlencode($evento['Video_Evento']) ?>" target="_blank">Ver video</a>
+                                <video class="evento-media-video" controls preload="metadata">
+                                    <source src="<?= rtrim(PUBLIC_URL, '/') . '/uploads/eventos/' . rawurlencode($evento['Video_Evento']) ?>">
+                                    Tu navegador no soporta video.
+                                </video>
                             <?php else: ?>
                                 -
                             <?php endif; ?>

@@ -181,13 +181,33 @@ class DataIsolation {
             return '1=0';
         }
 
+        $idMinisterio = self::getUsuarioMinisterioId();
+
         $aliasPersona = preg_replace('/[^a-zA-Z0-9_]/', '', (string)$aliasPersona);
         if ($aliasPersona === '') {
             $aliasPersona = 'p';
         }
 
-        if (self::esLiderCelula() || self::esLider12()) {
+        if (self::esLiderCelula()) {
             return "($aliasPersona.Id_Lider = $usuarioId OR $aliasPersona.Id_Persona = $usuarioId)";
+        }
+
+        if (self::esLider12()) {
+            $condicion = "(
+                $aliasPersona.Id_Persona = $usuarioId
+                OR $aliasPersona.Id_Lider = $usuarioId
+                OR $aliasPersona.Id_Lider IN (
+                    SELECT DISTINCT c.Id_Lider
+                    FROM celula c
+                    WHERE c.Id_Lider_Inmediato = $usuarioId
+                )
+            )";
+
+            if ($idMinisterio) {
+                $condicion = "($condicion OR $aliasPersona.Id_Ministerio = $idMinisterio)";
+            }
+
+            return $condicion;
         }
 
         if (self::esPastor()) {
@@ -203,6 +223,50 @@ class DataIsolation {
         }
 
         return '1=0';
+    }
+
+    /**
+     * Obtener ministerios visibles por cobertura de liderazgo.
+     *
+     * Incluye el ministerio propio del usuario (si existe) y los ministerios
+     * de líderes de células bajo su cobertura (líder inmediato).
+     */
+    private static function getMinisterioIdsCoberturaLiderazgo() {
+        $ids = [];
+
+        $idMinisterioPropio = self::getUsuarioMinisterioId();
+        if (!empty($idMinisterioPropio)) {
+            $ids[] = (int)$idMinisterioPropio;
+        }
+
+        $usuarioId = self::getUsuarioId();
+        if (!$usuarioId) {
+            return array_values(array_unique(array_filter($ids)));
+        }
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return array_values(array_unique(array_filter($ids)));
+        }
+
+        $sql = "SELECT DISTINCT l.Id_Ministerio
+                FROM celula c
+                INNER JOIN persona l ON c.Id_Lider = l.Id_Persona
+                WHERE l.Id_Ministerio IS NOT NULL
+                AND (c.Id_Lider_Inmediato = ? OR c.Id_Lider = ?)";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$usuarioId, $usuarioId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($rows as $row) {
+            $id = isset($row['Id_Ministerio']) ? (int)$row['Id_Ministerio'] : 0;
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+
+        return array_values(array_unique(array_filter($ids)));
     }
 
     /**
@@ -241,6 +305,51 @@ class DataIsolation {
     }
 
     /**
+     * Filtro especializado para el apartado "Pendiente por consolidar".
+     *
+     * Mantiene el anclaje habitual por líder/pastor, pero permite además
+     * visualizar personas del mismo ministerio que aún no tienen líder asignado.
+     */
+    public static function generarFiltroPersonasPendienteConsolidar() {
+        $idMinisterio = self::getUsuarioMinisterioId();
+
+        if (self::tieneAccesoTotal()) {
+            return "1=1";
+        }
+
+        if (self::esLiderCelula() || self::esLider12() || self::esPastor()) {
+            $condicionAnclaje = self::generarCondicionAnclajePersonas('p');
+
+            $ministerioIds = self::getMinisterioIdsCoberturaLiderazgo();
+
+            if (!empty($ministerioIds)) {
+                $ministerioIdsSql = implode(',', array_map('intval', $ministerioIds));
+                return "($condicionAnclaje OR (p.Id_Ministerio IN ($ministerioIdsSql) AND p.Id_Lider IS NULL))";
+            }
+
+            if ($idMinisterio) {
+                return "($condicionAnclaje OR (p.Id_Ministerio = $idMinisterio AND p.Id_Lider IS NULL))";
+            }
+
+            return $condicionAnclaje;
+        }
+
+        if (self::esAsistente()) {
+            if ($idMinisterio) {
+                return "p.Id_Ministerio = $idMinisterio";
+            }
+            return "1=0";
+        }
+
+        if (isset($_SESSION['permisos']['personas'])
+            && !empty($_SESSION['permisos']['personas']['ver'])) {
+            return "1=1";
+        }
+
+        return "1=0";
+    }
+
+    /**
      * Generar cláusula WHERE para células según el rol
      */
     public static function generarFiltroCelulas() {
@@ -260,7 +369,22 @@ class DataIsolation {
 
         if (self::esLider12()) {
             if ($usuarioId) {
-                return "c.Id_Lider = $usuarioId";
+                $ministerioIds = self::getMinisterioIdsCoberturaLiderazgo();
+
+                if (!empty($ministerioIds)) {
+                    $ministerioIdsSql = implode(',', array_map('intval', $ministerioIds));
+                    return "(
+                        c.Id_Lider = $usuarioId
+                        OR c.Id_Lider_Inmediato = $usuarioId
+                        OR c.Id_Lider IN (
+                            SELECT Id_Persona
+                            FROM persona
+                            WHERE Id_Ministerio IN ($ministerioIdsSql)
+                        )
+                    )";
+                }
+
+                return "(c.Id_Lider = $usuarioId OR c.Id_Lider_Inmediato = $usuarioId)";
             }
             return "1=0";
         }

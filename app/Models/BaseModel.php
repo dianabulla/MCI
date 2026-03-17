@@ -100,6 +100,14 @@ class BaseModel {
         $stmt->execute($params);
         return $stmt->fetchAll();
     }
+
+    /**
+     * Ejecutar una consulta de escritura (INSERT/UPDATE/DELETE) y devolver true/false.
+     */
+    public function execute($sql, $params = []) {
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute($params);
+    }
 }
 
 // Compatibilidad: permite usar BaseModel con namespace (App\Models\BaseModel)

@@ -116,20 +116,33 @@ if ($returnTo === 'celulas') {
             </div>
 
             <div class="detail-item">
-                <span class="detail-label">Primera Reunión:</span>
+                <span class="detail-label">Ganado en:</span>
                 <span class="detail-value"><?= htmlspecialchars($persona['Tipo_Reunion'] ?? 'No especificado') ?></span>
+            </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Escalera del Éxito:</span>
+                <span class="detail-value"><?= htmlspecialchars($persona['Proceso'] ?? 'No especificado') ?></span>
+            </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Estado de Cuenta:</span>
+                <span class="detail-value"><?= htmlspecialchars($persona['Estado_Cuenta'] ?? 'Activo') ?></span>
+            </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Usuario de acceso:</span>
+                <span class="detail-value"><?= htmlspecialchars($persona['Usuario'] ?? 'No asignado') ?></span>
             </div>
         </div>
     </div>
 
-    <?php if (!empty($persona['Peticion'])): ?>
     <div class="detail-section">
         <h3>Petición de Oración</h3>
         <div class="detail-full">
-            <p><?= nl2br(htmlspecialchars($persona['Peticion'])) ?></p>
+            <p><?= !empty($persona['Peticion']) ? nl2br(htmlspecialchars($persona['Peticion'])) : 'No especificada' ?></p>
         </div>
     </div>
-    <?php endif; ?>
 </div>
 
 <?php include VIEWS . '/layout/footer.php'; ?>

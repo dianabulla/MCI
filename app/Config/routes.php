@@ -11,19 +11,25 @@ return [
     'auth/cambiar-cuenta' => 'AuthController@cambiarCuenta',
     'auth/cambiar-usuario' => 'AuthController@cambiarUsuario',
     'auth/siguiente-cuenta' => 'AuthController@siguienteCuenta',
+    'auth/mi-cuenta' => 'AuthController@miCuenta',
     'auth/acceso-denegado' => 'AuthController@accesoDenegado',
     
     // Home
     'home' => 'HomeController@index',
+    'home/lideres-celula' => 'HomeController@lideresCelula',
     
     // Personas
     'personas' => 'PersonaController@index',
     'personas/ganar' => 'PersonaController@ganar',
+    'personas/escalera' => 'PersonaController@escalera',
+    'personas/actualizarChecklistEscalera' => 'PersonaController@actualizarChecklistEscalera',
+    'personas/plantillas-whatsapp' => 'PersonaController@plantillasWhatsapp',
     'personas/crear' => 'PersonaController@crear',
     'personas/editar' => 'PersonaController@editar',
     'personas/detalle' => 'PersonaController@detalle',
     'personas/eliminar' => 'PersonaController@eliminar',
     'personas/exportarExcel' => 'PersonaController@exportarExcel',
+    'personas/guardarPlantillasWhatsapp' => 'PersonaController@guardarPlantillasWhatsapp',
     
     // Células
     'celulas' => 'CelulaController@index',
@@ -32,6 +38,7 @@ return [
     'celulas/detalle' => 'CelulaController@detalle',
     'celulas/eliminar' => 'CelulaController@eliminar',
     'celulas/materiales' => 'CelulaController@materiales',
+    'celulas/materiales/ver' => 'CelulaController@verMaterial',
     'celulas/buscarLideres' => 'CelulaController@buscarLideres',
     'celulas/buscarLideres12' => 'CelulaController@buscarLideres12',
     'celulas/buscarPastores' => 'CelulaController@buscarPastores',
@@ -42,6 +49,7 @@ return [
     'ministerios' => 'MinisterioController@index',
     'ministerios/crear' => 'MinisterioController@crear',
     'ministerios/editar' => 'MinisterioController@editar',
+    'ministerios/actualizarMeta' => 'MinisterioController@actualizarMeta',
     'ministerios/eliminar' => 'MinisterioController@eliminar',
     'ministerios/exportarExcel' => 'MinisterioController@exportarExcel',
     
@@ -59,6 +67,13 @@ return [
     'eventos/eliminar' => 'EventoController@eliminar',
     'eventos/exportarExcel' => 'EventoController@exportarExcel',
     'eventos/proximos' => 'EventoController@proximosPublico',
+    'eventos/universidad-vida' => 'EventoController@universidadVida',
+    'eventos/capacitacion-destino' => 'EventoController@capacitacionDestino',
+    'eventos/modulo/guardar' => 'EventoController@guardarModuloContenido',
+    'eventos/modulo/duplicar' => 'EventoController@duplicarModuloContenido',
+    'eventos/modulo/eliminar' => 'EventoController@eliminarModuloContenido',
+    'eventos/universidad-vida/publico' => 'EventoController@universidadVidaPublico',
+    'eventos/capacitacion-destino/publico' => 'EventoController@capacitacionDestinoPublico',
     
     // Peticiones
     'peticiones' => 'PeticionController@index',
@@ -102,6 +117,8 @@ return [
     'nehemias' => 'NehemiasController@index',
     'nehemias/formulario' => 'NehemiasController@formulario',
     'nehemias/guardar' => 'NehemiasController@guardar',
+    'nehemias/testigos-electorales/formulario' => 'NehemiasController@formularioTestigosElectorales',
+    'nehemias/testigos-electorales/guardar' => 'NehemiasController@guardarTestigoElectoral',
 
     // Nehemias (Privado - Administrador)
     'nehemias/lista' => 'NehemiasController@lista',
@@ -113,6 +130,7 @@ return [
     'nehemias/importar' => 'NehemiasController@importar',
     'nehemias/importar-directo' => 'NehemiasController@importarDirecto',
     'nehemias/reparar-importacion' => 'NehemiasController@repararImportacion',
+    'nehemias/testigos-electorales' => 'NehemiasController@testigosElectorales',
     'nehemias/seremos1200' => 'NehemiasController@seremos1200',
     'nehemias/seremos1200/importar' => 'NehemiasController@importarSeremos1200',
     'nehemias/seremos1200/exportarExcel' => 'NehemiasController@exportarExcelSeremos1200',

@@ -113,4 +113,22 @@ class Celula extends BaseModel {
 
         return $this->query($sql, $params);
     }
+
+    /**
+     * Verifica si una célula existe dentro del alcance de un filtro de rol.
+     */
+    public function existsByIdWithRole($idCelula, $filtroRol) {
+        $idCelula = (int)$idCelula;
+        if ($idCelula <= 0) {
+            return false;
+        }
+
+        $sql = "SELECT c.Id_Celula
+                FROM {$this->table} c
+                WHERE c.Id_Celula = ? AND ($filtroRol)
+                LIMIT 1";
+
+        $rows = $this->query($sql, [$idCelula]);
+        return !empty($rows);
+    }
 }

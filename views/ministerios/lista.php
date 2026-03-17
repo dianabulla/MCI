@@ -263,6 +263,17 @@
             </summary>
 
             <div class="collapse-content">
+                <?php if ($puedeGestionarMinisterio): ?>
+                <div class="ministerio-actions-row">
+                    <?php if ($puedeEditarMinisterio): ?>
+                        <a href="<?= PUBLIC_URL ?>?url=ministerios/editar&id=<?= (int)$section['id_ministerio'] ?>" class="btn btn-sm btn-warning">Editar</a>
+                    <?php endif; ?>
+                    <?php if ($puedeEliminarMinisterio): ?>
+                        <a href="<?= PUBLIC_URL ?>?url=ministerios/eliminar&id=<?= (int)$section['id_ministerio'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar este ministerio?')">Eliminar</a>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
+
                 <?php if (!empty($section['descripcion'])): ?>
                     <div class="section-meta">
                         <span class="meta-pill">Descripción: <?= htmlspecialchars($section['descripcion']) ?></span>
@@ -299,17 +310,6 @@
                         <span>Ganados en domingo</span>
                     </div>
                 </div>
-
-                <?php if ($puedeGestionarMinisterio): ?>
-                <div class="ministerio-actions-row">
-                    <?php if ($puedeEditarMinisterio): ?>
-                        <a href="<?= PUBLIC_URL ?>?url=ministerios/editar&id=<?= (int)$section['id_ministerio'] ?>" class="btn btn-sm btn-warning">Editar</a>
-                    <?php endif; ?>
-                    <?php if ($puedeEliminarMinisterio): ?>
-                        <a href="<?= PUBLIC_URL ?>?url=ministerios/eliminar&id=<?= (int)$section['id_ministerio'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar este ministerio?')">Eliminar</a>
-                    <?php endif; ?>
-                </div>
-                <?php endif; ?>
 
                 <?php if (!empty($metricas['escalera'])): ?>
                     <div class="card" style="margin-bottom: 12px;">

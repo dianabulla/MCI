@@ -33,6 +33,13 @@ class AsistenciaController extends BaseController {
         // Obtener asistencias con aislamiento de rol
         $asistencias = $this->asistenciaModel->getAllWithInfoAndRole($filtroAsistencias);
 
+        // Semana actual (lunes a domingo)
+        $hoy = new DateTimeImmutable('today');
+        $inicioSemana = $hoy->modify('monday this week');
+        $finSemana = $inicioSemana->modify('+6 days');
+        $inicioSemanaStr = $inicioSemana->format('Y-m-d');
+        $finSemanaStr = $finSemana->format('Y-m-d');
+
         // Base de células visibles para el usuario (opciones de filtros)
         $celulasBase = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
 
@@ -101,48 +108,54 @@ class AsistenciaController extends BaseController {
             }
         }
 
-        // Agrupar asistencias por célula
-        $asistenciasPorCelula = [];
+        // Agrupar asistencias de la semana por célula
+        $asistenciasSemanaPorCelula = [];
         foreach ($asistencias as $asistencia) {
             $idCelula = (int)($asistencia['Id_Celula'] ?? 0);
             if ($idCelula <= 0) {
                 continue;
             }
 
-            if (!isset($asistenciasPorCelula[$idCelula])) {
-                $asistenciasPorCelula[$idCelula] = [];
+            $fechaAsistencia = substr((string)($asistencia['Fecha_Asistencia'] ?? ''), 0, 10);
+            if ($fechaAsistencia < $inicioSemanaStr || $fechaAsistencia > $finSemanaStr) {
+                continue;
             }
 
-            $asistenciasPorCelula[$idCelula][] = $asistencia;
+            if (!isset($asistenciasSemanaPorCelula[$idCelula])) {
+                $asistenciasSemanaPorCelula[$idCelula] = [];
+            }
+
+            $asistenciasSemanaPorCelula[$idCelula][] = $asistencia;
         }
 
         $sections = [];
+        $reportaron = [];
+        $noReportaron = [];
+
         foreach ($celulas as $celula) {
             $idCelula = (int)($celula['Id_Celula'] ?? 0);
-            $rowsAsistencia = $asistenciasPorCelula[$idCelula] ?? [];
+            $rowsAsistencia = $asistenciasSemanaPorCelula[$idCelula] ?? [];
 
             usort($rowsAsistencia, static function ($a, $b) {
                 return strcmp((string)($b['Fecha_Asistencia'] ?? ''), (string)($a['Fecha_Asistencia'] ?? ''));
             });
 
-            $fechaUltimoReporte = '';
-            if (!empty($rowsAsistencia)) {
-                $fechaUltimoReporte = (string)($rowsAsistencia[0]['Fecha_Asistencia'] ?? '');
+            $fechasReporteMap = [];
+            foreach ($rowsAsistencia as $registro) {
+                $fechaRegistro = substr((string)($registro['Fecha_Asistencia'] ?? ''), 0, 10);
+                if ($fechaRegistro !== '') {
+                    $fechasReporteMap[$fechaRegistro] = true;
+                }
             }
-
-            $rowsUltimoReporte = [];
-            if ($fechaUltimoReporte !== '') {
-                $rowsUltimoReporte = array_values(array_filter($rowsAsistencia, static function ($registro) use ($fechaUltimoReporte) {
-                    return (string)($registro['Fecha_Asistencia'] ?? '') === $fechaUltimoReporte;
-                }));
-            }
+            $fechasReporte = array_keys($fechasReporteMap);
+            rsort($fechasReporte);
 
             $rows = [];
             $nro = 1;
             $totalSi = 0;
             $totalNo = 0;
 
-            foreach ($rowsUltimoReporte as $registro) {
+            foreach ($rowsAsistencia as $registro) {
                 $asistio = (int)($registro['Asistio'] ?? 0) === 1;
                 if ($asistio) {
                     $totalSi++;
@@ -159,22 +172,33 @@ class AsistenciaController extends BaseController {
                 ];
             }
 
-            $sections[] = [
+            $siReportoSemana = !empty($rowsAsistencia);
+
+            $sectionData = [
                 'id_celula' => $idCelula,
                 'label' => (string)($celula['Nombre_Celula'] ?? 'Célula sin nombre'),
                 'lider' => (string)($celula['Nombre_Lider'] ?? 'Sin líder'),
                 'anfitrion' => (string)($celula['Nombre_Anfitrion'] ?? 'Sin anfitrión'),
-                'fecha_ultimo_reporte' => $fechaUltimoReporte,
+                'si_reporto_semana' => $siReportoSemana,
+                'fechas_reporte_semana' => $fechasReporte,
                 'total_registros' => count($rows),
                 'total_si' => $totalSi,
                 'total_no' => $totalNo,
                 'rows' => $rows
             ];
+
+            $sections[] = $sectionData;
+
+            if ($siReportoSemana) {
+                $reportaron[] = $sectionData;
+            } else {
+                $noReportaron[] = $sectionData;
+            }
         }
 
         if ($filtroReporte !== '') {
             $sections = array_values(array_filter($sections, static function($section) use ($filtroReporte) {
-                $tieneReporte = !empty($section['fecha_ultimo_reporte']);
+                $tieneReporte = !empty($section['si_reporto_semana']);
                 return $filtroReporte === 'con' ? $tieneReporte : !$tieneReporte;
             }));
         }
@@ -182,6 +206,10 @@ class AsistenciaController extends BaseController {
         $this->view('asistencias/lista', [
             'asistencias' => $asistencias,
             'sections' => $sections,
+            'reportaron' => $reportaron,
+            'no_reportaron' => $noReportaron,
+            'semana_inicio' => $inicioSemanaStr,
+            'semana_fin' => $finSemanaStr,
             'ministerios_disponibles' => array_values($ministeriosDisponibles),
             'lideres_disponibles' => array_values($lideresDisponibles),
             'celulas_disponibles' => array_values($celulasDisponibles),
@@ -302,6 +330,10 @@ class AsistenciaController extends BaseController {
             $filtroPersonas = DataIsolation::generarFiltroPersonas();
             $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
             $personas = $this->personaModel->getAllWithRole($filtroPersonas);
+            $idsPersonas = array_map(static function($persona) {
+                return (int)($persona['Id_Persona'] ?? 0);
+            }, $personas);
+            $conteoAsistenciasPorPersona = $this->asistenciaModel->getConteoAsistenciasCompletasPorPersona($idsPersonas);
 
             $celulaPreseleccionada = null;
             if (isset($_GET['celula']) && $_GET['celula'] !== '') {
@@ -317,7 +349,8 @@ class AsistenciaController extends BaseController {
             $data = [
                 'celulas' => $celulas,
                 'personas' => $personas,
-                'celula_preseleccionada' => $celulaPreseleccionada
+                'celula_preseleccionada' => $celulaPreseleccionada,
+                'conteo_asistencias_por_persona' => $conteoAsistenciasPorPersona
             ];
             $this->view('asistencias/formulario', $data);
         }

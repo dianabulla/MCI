@@ -6,6 +6,7 @@
 require_once APP . '/Models/Nehemias.php';
 require_once APP . '/Models/Ministerio.php';
 require_once APP . '/Models/Seremos1200.php';
+require_once APP . '/Models/TestigoElectoral.php';
 require_once APP . '/Models/Persona.php';
 require_once APP . '/Helpers/DataIsolation.php';
 require_once APP . '/Controllers/AuthController.php';
@@ -14,6 +15,8 @@ class NehemiasController extends BaseController {
     private $nehemiasModel;
     private $ministerioModel;
     private $seremos1200Model;
+    private $testigoElectoralModel;
+    private $testigosUploadDir;
 
     private function tienePermiso($accion = 'ver') {
         return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias', $accion);
@@ -73,11 +76,19 @@ class NehemiasController extends BaseController {
         $this->nehemiasModel = new Nehemias();
         $this->ministerioModel = new Ministerio();
         $this->seremos1200Model = new Seremos1200();
+        $this->testigoElectoralModel = new TestigoElectoral();
+        $this->testigosUploadDir = ROOT . '/public/uploads/testigos_electorales';
 
         try {
             $this->seremos1200Model->ensureTableExists();
         } catch (Exception $e) {
             error_log('No se pudo verificar/crear tabla seremos_1200: ' . $e->getMessage());
+        }
+
+        try {
+            $this->testigoElectoralModel->ensureTableExists();
+        } catch (Exception $e) {
+            error_log('No se pudo verificar/crear tabla testigos_electorales: ' . $e->getMessage());
         }
     }
 
@@ -273,8 +284,291 @@ class NehemiasController extends BaseController {
         return '+57' . $digitos;
     }
 
+    private function procesarFotoTestigoElectoral($campo = 'foto_evidencia', $esObligatoria = false) {
+        if (!isset($_FILES[$campo]) || !is_array($_FILES[$campo])) {
+            if ($esObligatoria) {
+                throw new Exception('Debes subir una foto clara');
+            }
+            return null;
+        }
+
+        $archivo = $_FILES[$campo];
+        if (($archivo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            if ($esObligatoria) {
+                throw new Exception('Debes subir una foto clara');
+            }
+            return null;
+        }
+
+        if (($archivo['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+            throw new Exception('No se pudo subir la foto. Intenta nuevamente.');
+        }
+
+        $tamano = (int)($archivo['size'] ?? 0);
+        if ($tamano <= 0 || $tamano > 8 * 1024 * 1024) {
+            throw new Exception('La foto supera el tamaño permitido (8MB).');
+        }
+
+        $extension = strtolower(pathinfo((string)($archivo['name'] ?? ''), PATHINFO_EXTENSION));
+        $extensionesPermitidas = ['jpg', 'jpeg', 'png', 'webp'];
+        if (!in_array($extension, $extensionesPermitidas, true)) {
+            throw new Exception('Formato de foto no permitido. Usa JPG, PNG o WEBP.');
+        }
+
+        $infoImagen = @getimagesize((string)$archivo['tmp_name']);
+        if ($infoImagen === false) {
+            throw new Exception('El archivo subido no es una imagen válida.');
+        }
+
+        if (!is_dir($this->testigosUploadDir) && !mkdir($this->testigosUploadDir, 0755, true) && !is_dir($this->testigosUploadDir)) {
+            throw new Exception('No se pudo crear la carpeta para guardar la foto.');
+        }
+
+        $nombre = 'testigo_' . date('YmdHis') . '_' . bin2hex(random_bytes(6)) . '.' . $extension;
+        $destino = $this->testigosUploadDir . '/' . $nombre;
+
+        if (!move_uploaded_file((string)$archivo['tmp_name'], $destino)) {
+            throw new Exception('No se pudo guardar la foto subida.');
+        }
+
+        return $nombre;
+    }
+
+    private function getPuestosVotacionTestigos() {
+        return [
+            'BLOQUE 2 - COLEGIO TECNOLOGICO',
+            'COLEGIO SAN JOSE',
+            'COLEGIO DEPTAL SERREZUELA',
+            'COLEGIO GABRIEL ECHAVARRIA',
+            'COLEGIO LA MAGNOLIA',
+            'COLEGIO LA PROSPERIDAD',
+            'COLEGIO MARIA TERESA ORTIZ',
+            'COLEGIO PEDAGOGICO INGLES',
+            'COLEGIO SAN PEDRO',
+            'COLEGIO SANTO TOMAS',
+            'COLEGIO TECNOLOGICO DE MADRID',
+            'COLEGIO TIBAITATA',
+            'COLISEO CUBIERTO MUNICIPAL',
+            'CONCENTRACION URBANA ANTONIO NARIÑO',
+            'CONCENTRACION URBANA EL CORTIJO',
+            'I.E. NUESTRA SRA DEL LORETO',
+            'IE DEPTAL SAN PATRICIO PUENTE DE PIEDRA',
+            'JARDIN INFANTIL CAMPO DE ILUSIONES',
+            'LICEO HACIENDA CASABLANCA',
+            'PARQUE DE LAS FLORES',
+            'SALON COMUNAL ALCAPARROS',
+            'OTROS'
+        ];
+    }
+
     public function index() {
         $this->formulario();
+    }
+
+    /**
+     * Listado administrativo de testigos electorales
+     */
+    public function testigosElectorales() {
+        if (!$this->tienePermiso('ver')) {
+            header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $tipoFiltro = strtoupper(trim((string)($_GET['tipo_votacion'] ?? '')));
+        $tiposPermitidos = ['CAMARA', 'SENADO'];
+        if ($tipoFiltro !== '' && !in_array($tipoFiltro, $tiposPermitidos, true)) {
+            $tipoFiltro = '';
+        }
+
+        $registrosTodos = $this->testigoElectoralModel->getAllOrdered();
+
+        $resumenTipos = [
+            'total' => 0,
+            'CAMARA' => 0,
+            'SENADO' => 0,
+        ];
+
+        foreach ($registrosTodos as $registroResumen) {
+            $tipo = strtoupper(trim((string)($registroResumen['Tipo_Votacion'] ?? '')));
+            $votos = max(0, (int)($registroResumen['Votos_Contados'] ?? 0));
+
+            $resumenTipos['total'] += $votos;
+            if (isset($resumenTipos[$tipo])) {
+                $resumenTipos[$tipo] += $votos;
+            }
+        }
+
+        $registros = $registrosTodos;
+        if ($tipoFiltro !== '') {
+            $registros = array_values(array_filter($registrosTodos, static function ($registro) use ($tipoFiltro) {
+                return strtoupper(trim((string)($registro['Tipo_Votacion'] ?? ''))) === $tipoFiltro;
+            }));
+        }
+
+        $registrosAgrupadosMap = [];
+        foreach ($registros as $registro) {
+            $codigoEnvio = trim((string)($registro['Codigo_Envio'] ?? ''));
+            $claveAgrupacion = $codigoEnvio !== ''
+                ? 'ENVIO|' . $codigoEnvio
+                : implode('|', [
+                    trim((string)($registro['Testigo_Nombre'] ?? '')),
+                    trim((string)($registro['Puesto_Votacion'] ?? '')),
+                    trim((string)($registro['Mesa_Votacion'] ?? '')),
+                    trim((string)($registro['Observaciones'] ?? '')),
+                    trim((string)($registro['Fecha_Registro'] ?? '')),
+                ]);
+
+            if (!isset($registrosAgrupadosMap[$claveAgrupacion])) {
+                $registrosAgrupadosMap[$claveAgrupacion] = [
+                    'Id_Camara' => null,
+                    'Id_Senado' => null,
+                    'Codigo_Envio' => $codigoEnvio,
+                    'Testigo_Nombre' => $registro['Testigo_Nombre'] ?? '',
+                    'Puesto_Votacion' => $registro['Puesto_Votacion'] ?? '',
+                    'Mesa_Votacion' => $registro['Mesa_Votacion'] ?? '',
+                    'Observaciones' => $registro['Observaciones'] ?? '',
+                    'Votos_Camara' => null,
+                    'Votos_Senado' => null,
+                    'Foto_Camara' => null,
+                    'Foto_Senado' => null,
+                    'Fecha_Registro' => $registro['Fecha_Registro'] ?? '',
+                ];
+            }
+
+            $tipoRegistro = strtoupper(trim((string)($registro['Tipo_Votacion'] ?? '')));
+            if ($tipoRegistro === 'CAMARA') {
+                $registrosAgrupadosMap[$claveAgrupacion]['Id_Camara'] = $registro['Id_TestigoElectoral'] ?? null;
+                $registrosAgrupadosMap[$claveAgrupacion]['Votos_Camara'] = $registro['Votos_Contados'] ?? null;
+                $registrosAgrupadosMap[$claveAgrupacion]['Foto_Camara'] = $registro['Foto_Evidencia'] ?? null;
+            } elseif ($tipoRegistro === 'SENADO') {
+                $registrosAgrupadosMap[$claveAgrupacion]['Id_Senado'] = $registro['Id_TestigoElectoral'] ?? null;
+                $registrosAgrupadosMap[$claveAgrupacion]['Votos_Senado'] = $registro['Votos_Contados'] ?? null;
+                $registrosAgrupadosMap[$claveAgrupacion]['Foto_Senado'] = $registro['Foto_Evidencia'] ?? null;
+            }
+        }
+
+        $registrosAgrupados = array_values($registrosAgrupadosMap);
+
+        $this->view('nehemias/testigos_electorales', [
+            'registros' => $registrosAgrupados,
+            'tipoFiltro' => $tipoFiltro,
+            'resumenTipos' => $resumenTipos,
+            'mensaje' => $_GET['mensaje'] ?? null,
+            'tipo' => $_GET['tipo'] ?? 'info'
+        ]);
+    }
+
+    /**
+     * Formulario público de testigos electorales
+     */
+    public function formularioTestigosElectorales() {
+        $this->view('nehemias/testigos_electorales_formulario', [
+            'puestosVotacion' => $this->getPuestosVotacionTestigos(),
+            'mensaje' => $_GET['mensaje'] ?? null,
+            'tipo_mensaje' => $_GET['tipo'] ?? null,
+        ]);
+    }
+
+    /**
+     * Guardar registro de testigo electoral desde formulario público
+     */
+    public function guardarTestigoElectoral() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . PUBLIC_URL . '?url=nehemias/testigos-electorales/formulario');
+            exit;
+        }
+
+        $errores = [];
+        $testigoNombre = $this->normalizarTextoPersona($_POST['testigo_nombre'] ?? '');
+        $puestoVotacion = trim((string)($_POST['puesto_votacion'] ?? ''));
+        $mesaVotacion = $this->normalizarTextoPersona($_POST['mesa_votacion'] ?? '');
+        $observaciones = $this->normalizarTextoPersona($_POST['observaciones'] ?? '');
+        $votosCamaraRaw = trim((string)($_POST['votos_camara'] ?? ''));
+        $votosSenadoRaw = trim((string)($_POST['votos_senado'] ?? ''));
+        $puestosPermitidos = $this->getPuestosVotacionTestigos();
+
+        if ($testigoNombre === '') {
+            $errores[] = 'El nombre del testigo es requerido';
+        }
+
+        if ($puestoVotacion === '') {
+            $errores[] = 'El puesto de votación es requerido';
+        } elseif (!in_array($puestoVotacion, $puestosPermitidos, true)) {
+            $errores[] = 'El puesto de votación seleccionado no es válido';
+        }
+
+        if ($mesaVotacion === '') {
+            $errores[] = 'La mesa de votación es requerida';
+        }
+
+        if ($puestoVotacion === 'OTROS' && $observaciones === '') {
+            $errores[] = 'Debes agregar observaciones cuando eliges OTROS';
+        }
+
+        if ($votosCamaraRaw === '' || !preg_match('/^\d+$/', $votosCamaraRaw)) {
+            $errores[] = 'Los votos de CAMARA (Yancly Escobar) deben ser un número válido';
+        }
+
+        if ($votosSenadoRaw === '' || !preg_match('/^\d+$/', $votosSenadoRaw)) {
+            $errores[] = 'Los votos de SENADO (Sara Castellanos) deben ser un número válido';
+        }
+
+        $votosCamara = (int)$votosCamaraRaw;
+        $votosSenado = (int)$votosSenadoRaw;
+
+        if ($votosCamara < 0) {
+            $errores[] = 'Los votos de CAMARA no pueden ser negativos';
+        }
+
+        if ($votosSenado < 0) {
+            $errores[] = 'Los votos de SENADO no pueden ser negativos';
+        }
+
+        if (!empty($errores)) {
+            $mensaje = urlencode(implode('. ', $errores));
+            header('Location: ' . PUBLIC_URL . '?url=nehemias/testigos-electorales/formulario&mensaje=' . $mensaje . '&tipo=error');
+            exit;
+        }
+
+        try {
+            $fotoCamara = $this->procesarFotoTestigoElectoral('foto_camara', false);
+            $fotoSenado = $this->procesarFotoTestigoElectoral('foto_senado', false);
+            $fechaRegistro = date('Y-m-d H:i:s');
+            $codigoEnvio = 'TE-' . date('YmdHis') . '-' . bin2hex(random_bytes(4));
+
+            $this->testigoElectoralModel->create([
+                'Codigo_Envio' => $codigoEnvio,
+                'Testigo_Nombre' => $testigoNombre,
+                'Tipo_Votacion' => 'CAMARA',
+                'Puesto_Votacion' => $puestoVotacion,
+                'Mesa_Votacion' => $mesaVotacion,
+                'Observaciones' => $observaciones !== '' ? $observaciones : null,
+                'Foto_Evidencia' => $fotoCamara,
+                'Votos_Contados' => $votosCamara,
+                'Fecha_Registro' => $fechaRegistro
+            ]);
+
+            $this->testigoElectoralModel->create([
+                'Codigo_Envio' => $codigoEnvio,
+                'Testigo_Nombre' => $testigoNombre,
+                'Tipo_Votacion' => 'SENADO',
+                'Puesto_Votacion' => $puestoVotacion,
+                'Mesa_Votacion' => $mesaVotacion,
+                'Observaciones' => $observaciones !== '' ? $observaciones : null,
+                'Foto_Evidencia' => $fotoSenado,
+                'Votos_Contados' => $votosSenado,
+                'Fecha_Registro' => $fechaRegistro
+            ]);
+
+            $mensaje = urlencode('Registros enviados correctamente para CAMARA y SENADO. Gracias por reportar.');
+            header('Location: ' . PUBLIC_URL . '?url=nehemias/testigos-electorales/formulario&mensaje=' . $mensaje . '&tipo=success');
+            exit;
+        } catch (Exception $e) {
+            error_log('Error guardando testigo electoral: ' . $e->getMessage());
+            $mensaje = urlencode($e->getMessage() !== '' ? $e->getMessage() : 'No se pudo guardar el registro. Intenta de nuevo.');
+            header('Location: ' . PUBLIC_URL . '?url=nehemias/testigos-electorales/formulario&mensaje=' . $mensaje . '&tipo=error');
+            exit;
+        }
     }
 
     /**
@@ -372,6 +666,8 @@ class NehemiasController extends BaseController {
             'Lider_Nehemias' => $liderNehemias,
             'Acepta' => $acepta ? 1 : 0,
             'Consentimiento_Whatsapp' => $acepta ? 1 : 0,
+            'mesaje_1enviado' => 0,
+            'no_recibir_mas' => 0,
             'Fecha_Registro' => date('Y-m-d H:i:s')
         ];
 
@@ -401,6 +697,37 @@ class NehemiasController extends BaseController {
         $contextoFiltro = $this->getContextoFiltroLider($ministeriosNehemias);
         if ($contextoFiltro['restringido']) {
             $ministeriosNehemias = $contextoFiltro['lideres'];
+        }
+
+        $registrosBaseEstadistica = $this->nehemiasModel->getAllOrdered();
+        if ($contextoFiltro['restringido']) {
+            $registrosBaseEstadistica = $this->filtrarRegistrosPorLiderPermitido($registrosBaseEstadistica, $ministeriosNehemias);
+        }
+
+        $estadisticasFiltros = [
+            'acepta' => ['1' => 0, '0' => 0],
+            'mesaje_1enviado' => ['1' => 0, '0' => 0],
+            'no_recibir_mas' => ['1' => 0, '0' => 0],
+            'mesaje1_fehca_estado' => ['con_fecha' => 0, 'sin_fecha' => 0],
+        ];
+
+        foreach ($registrosBaseEstadistica as $registroBase) {
+            $valorAcepta = ((int)($registroBase['Acepta'] ?? 0) === 1) ? '1' : '0';
+            $estadisticasFiltros['acepta'][$valorAcepta]++;
+
+            $valorMensaje1Enviado = ((int)($registroBase['mesaje_1enviado'] ?? 0) === 1) ? '1' : '0';
+            $estadisticasFiltros['mesaje_1enviado'][$valorMensaje1Enviado]++;
+
+            $valorNoRecibirMas = ((int)($registroBase['no_recibir_mas'] ?? 0) === 1) ? '1' : '0';
+            $estadisticasFiltros['no_recibir_mas'][$valorNoRecibirMas]++;
+
+            $valorFechaMensaje1 = trim((string)($registroBase['mesaje1_fehca'] ?? ''));
+            $tieneFechaMensaje1 = $valorFechaMensaje1 !== '' && $valorFechaMensaje1 !== '0';
+            if ($tieneFechaMensaje1) {
+                $estadisticasFiltros['mesaje1_fehca_estado']['con_fecha']++;
+            } else {
+                $estadisticasFiltros['mesaje1_fehca_estado']['sin_fecha']++;
+            }
         }
 
         // Obtener filtros de la URL
@@ -460,6 +787,7 @@ class NehemiasController extends BaseController {
         $this->view('nehemias/lista', [
             'registros' => $registros,
             'filtros' => $filtros,
+            'estadisticasFiltros' => $estadisticasFiltros,
             'ministeriosNehemias' => $ministeriosNehemias,
             'filtroLiderRestringido' => $contextoFiltro['restringido'],
             'permisosUi' => $this->getPermisosUiListaNehemias(),
@@ -778,36 +1106,38 @@ class NehemiasController extends BaseController {
         $output = fopen('php://output', 'w');
         fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
 
-        fputcsv($output, [
-            'Nombres',
-            'Apellidos',
-            'Numero de Cedula',
-            'Telefono',
-            'Lider',
-            'Lider Nehemias',
-            'Subido link de Nehemias',
-            'En Bogota se le subio',
-            'Puesto de votacion',
-            'Mesa de votacion',
-            'Acepta',
-            'Fecha de Registro'
-        ], ';');
+        $columnas = [];
+        if (!empty($registros) && is_array($registros[0])) {
+            foreach (array_keys($registros[0]) as $key) {
+                if (is_string($key)) {
+                    $columnas[] = $key;
+                }
+            }
+        }
+
+        if (empty($columnas)) {
+            $columnas = [
+                'Id_Nehemias', 'Nombres', 'Apellidos', 'Numero_Cedula', 'Telefono',
+                'Lider', 'Lider_Nehemias', 'Subido_Link', 'En_Bogota_Subio',
+                'Puesto_Votacion', 'Mesa_Votacion', 'Acepta', 'Fecha_Registro'
+            ];
+        }
+
+        fputcsv($output, $columnas, ';');
 
         foreach ($registros as $registro) {
-            fputcsv($output, [
-                $registro['Nombres'],
-                $registro['Apellidos'],
-                $registro['Numero_Cedula'],
-                $registro['Telefono'],
-                $registro['Lider'],
-                $registro['Lider_Nehemias'],
-                $registro['Subido_Link'] ?? '',
-                $registro['En_Bogota_Subio'] ?? '',
-                $registro['Puesto_Votacion'] ?? '',
-                $registro['Mesa_Votacion'] ?? '',
-                $registro['Acepta'] ? 'Si' : 'No',
-                $registro['Fecha_Registro']
-            ], ';');
+            $fila = [];
+            foreach ($columnas as $columna) {
+                $valor = $registro[$columna] ?? '';
+                if ($valor === null) {
+                    $valor = '';
+                }
+                if ($columna === 'Acepta') {
+                    $valor = ((int)$valor === 1) ? 'Si' : 'No';
+                }
+                $fila[] = $valor;
+            }
+            fputcsv($output, $fila, ';');
         }
 
         fclose($output);
@@ -1329,6 +1659,8 @@ class NehemiasController extends BaseController {
                 'Mesa_Votacion' => trim((string)($registro['Mesa_Votacion'] ?? '')),
                 'Acepta' => 1,
                 'Consentimiento_Whatsapp' => 1,
+                'mesaje_1enviado' => 0,
+                'no_recibir_mas' => 0,
                 'Fecha_Registro' => date('Y-m-d H:i:s')
             ]);
 

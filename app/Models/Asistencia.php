@@ -121,7 +121,7 @@ class Asistencia extends BaseModel {
     /**
      * Obtener asistencia por célula con aislamiento de rol
      */
-    public function getAsistenciaPorCelulaWithRole($fechaInicio, $fechaFin, $filtroRol) {
+    public function getAsistenciaPorCelulaWithRole($fechaInicio, $fechaFin, $filtroRol, $idMinisterio = '', $idLider = '') {
         $sql = "SELECT 
                     c.Nombre_Celula,
                     c.Id_Celula,
@@ -145,8 +145,58 @@ class Asistencia extends BaseModel {
                      AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)) as Asistencias_Reales
                 FROM celula c
                 LEFT JOIN persona l ON c.Id_Lider = l.Id_Persona
-                WHERE $filtroRol
+                WHERE $filtroRol";
+
+        $params = [$fechaInicio, $fechaFin, $fechaInicio, $fechaFin, $fechaInicio, $fechaFin];
+
+        if ($idMinisterio !== null && $idMinisterio !== '' && (int)$idMinisterio > 0) {
+            $sql .= " AND l.Id_Ministerio = ?";
+            $params[] = (int)$idMinisterio;
+        }
+
+        if ($idLider !== null && $idLider !== '' && (int)$idLider > 0) {
+            $sql .= " AND c.Id_Lider = ?";
+            $params[] = (int)$idLider;
+        }
+
+        $sql .= "
                 ORDER BY c.Nombre_Celula";
-        return $this->query($sql, [$fechaInicio, $fechaFin, $fechaInicio, $fechaFin, $fechaInicio, $fechaFin]);
+        return $this->query($sql, $params);
+    }
+
+    /**
+     * Obtener conteo de asistencias completas (Asistio = 1) por persona.
+     *
+     * @param array $idsPersona
+     * @return array [Id_Persona => total_asistencias]
+     */
+    public function getConteoAsistenciasCompletasPorPersona(array $idsPersona) {
+        $idsPersona = array_values(array_unique(array_filter(array_map('intval', $idsPersona), static function($id) {
+            return $id > 0;
+        })));
+
+        if (empty($idsPersona)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsPersona), '?'));
+        $sql = "SELECT Id_Persona, SUM(CASE WHEN Asistio = 1 THEN 1 ELSE 0 END) AS Total
+                FROM {$this->table}
+                WHERE Id_Persona IN ({$placeholders})
+                GROUP BY Id_Persona";
+
+        $rows = $this->query($sql, $idsPersona);
+        $resultado = [];
+
+        foreach ($rows as $row) {
+            $idPersona = (int)($row['Id_Persona'] ?? 0);
+            if ($idPersona <= 0) {
+                continue;
+            }
+
+            $resultado[$idPersona] = (int)($row['Total'] ?? 0);
+        }
+
+        return $resultado;
     }
 }

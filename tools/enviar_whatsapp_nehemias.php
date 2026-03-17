@@ -25,6 +25,11 @@ $token = getenv('WHATSAPP_TOKEN') ?: '';            // Recomendado: variable de 
 $phoneId = getenv('WHATSAPP_PHONE_ID') ?: '';       // Phone Number ID de Meta
 $templateName = getenv('WHATSAPP_TEMPLATE') ?: 'info_actualizacion_01';
 $templateLang = getenv('WHATSAPP_TEMPLATE_LANG') ?: 'es_CO';
+$templateHeaderType = strtolower(trim((string)($_GET['header_type'] ?? getenv('WHATSAPP_TEMPLATE_HEADER_TYPE') ?? '')));
+$templateHeaderMediaId = trim((string)($_GET['header_media_id'] ?? getenv('WHATSAPP_TEMPLATE_HEADER_MEDIA_ID') ?? ''));
+$sendBodyParam = isset($_GET['send_body_param'])
+    ? ((int)$_GET['send_body_param'] === 1)
+    : (((string)(getenv('WHATSAPP_TEMPLATE_SEND_BODY_PARAM') ?: '1')) !== '0');
 
 // Seguridad operativa: por defecto NO envía
 $dryRun = isset($_GET['dry_run']) ? ((int)$_GET['dry_run'] === 1) : true;
@@ -63,8 +68,47 @@ function normalizePhoneCO(string $raw): ?string {
     return null;
 }
 
-function sendTemplateMessage(string $token, string $phoneId, string $templateName, string $templateLang, string $to, string $nombre): array {
-    $url = "https://graph.facebook.com/v18.0/{$phoneId}/messages";
+function sendTemplateMessage(
+    string $token,
+    string $phoneId,
+    string $templateName,
+    string $templateLang,
+    string $to,
+    string $nombre,
+    bool $sendBodyParam = true,
+    string $headerType = '',
+    string $headerMediaId = ''
+): array {
+    $url = "https://graph.facebook.com/v22.0/{$phoneId}/messages";
+
+    $components = [];
+
+    if ($sendBodyParam) {
+        $components[] = [
+            'type' => 'body',
+            'parameters' => [
+                [
+                    'type' => 'text',
+                    'text' => $nombre
+                ]
+            ]
+        ];
+    }
+
+    if ($headerType !== '' && $headerMediaId !== '') {
+        $mediaKey = $headerType;
+        if (in_array($mediaKey, ['video', 'image', 'document'], true)) {
+            $components[] = [
+                'type' => 'header',
+                'parameters' => [
+                    [
+                        'type' => $mediaKey,
+                        $mediaKey => ['id' => $headerMediaId]
+                    ]
+                ]
+            ];
+        }
+    }
 
     $payload = [
         'messaging_product' => 'whatsapp',
@@ -72,20 +116,13 @@ function sendTemplateMessage(string $token, string $phoneId, string $templateNam
         'type' => 'template',
         'template' => [
             'name' => $templateName,
-            'language' => ['code' => $templateLang],
-            'components' => [
-                [
-                    'type' => 'body',
-                    'parameters' => [
-                        [
-                            'type' => 'text',
-                            'text' => $nombre
-                        ]
-                    ]
-                ]
-            ]
+            'language' => ['code' => $templateLang]
         ]
     ];
+
+    if (!empty($components)) {
+        $payload['template']['components'] = $components;
+    }
 
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_POST, true);
@@ -209,6 +246,9 @@ header('Content-Type: text/html; charset=UTF-8');
         <div><strong>Modo:</strong> <?= $dryRun ? 'DRY RUN (simulación, no envía)' : 'ENVÍO REAL' ?></div>
         <div><strong>Lote:</strong> limit=<?= (int)$limit ?>, offset=<?= (int)$offset ?></div>
         <div><strong>Template:</strong> <?= htmlspecialchars($templateName) ?> (<?= htmlspecialchars($templateLang) ?>)</div>
+        <div><strong>Template body param:</strong> <?= $sendBodyParam ? 'Sí ({{1}})' : 'No' ?></div>
+        <div><strong>Template header media:</strong> <?= htmlspecialchars($templateHeaderType !== '' ? $templateHeaderType : '(sin header)') ?></div>
+        <div><strong>Header media id:</strong> <?= htmlspecialchars($templateHeaderMediaId !== '' ? $templateHeaderMediaId : '(vacío)') ?></div>
         <div><strong>Registros cargados:</strong> <?= (int)$total ?></div>
         <?php if ($testPhone !== ''): ?>
             <div><strong>Test phone override:</strong> <?= htmlspecialchars($testPhone) ?></div>
@@ -252,7 +292,17 @@ foreach ($contactos as $c) {
         continue;
     }
 
-    $result = sendTemplateMessage($token, $phoneId, $templateName, $templateLang, $to, $nombre);
+    $result = sendTemplateMessage(
+        $token,
+        $phoneId,
+        $templateName,
+        $templateLang,
+        $to,
+        $nombre,
+        $sendBodyParam,
+        $templateHeaderType,
+        $templateHeaderMediaId
+    );
 
     if ($result['status'] >= 200 && $result['status'] < 300) {
         $enviados++;

@@ -496,7 +496,7 @@ class WhatsappCampana extends BaseModel {
         $apiKey = (string)($config['api_key_encriptada'] ?? '');
 
         if ($proveedor === 'meta_cloud' && $endpoint === '' && $phoneNumberId !== '') {
-            $endpoint = 'https://graph.facebook.com/v18.0/' . $phoneNumberId . '/messages';
+            $endpoint = 'https://graph.facebook.com/v22.0/' . $phoneNumberId . '/messages';
         }
 
         if ($endpoint === '') {

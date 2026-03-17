@@ -77,10 +77,14 @@ $rutasPublicas = [
     'stream/live',
     'stream/gallery',
     'eventos/proximos',
+    'eventos/universidad-vida/publico',
+    'eventos/capacitacion-destino/publico',
     'transmisiones-publico',
     'nehemias',
     'nehemias/formulario',
     'nehemias/guardar',
+    'nehemias/testigos-electorales/formulario',
+    'nehemias/testigos-electorales/guardar',
     'nehemias/whatsapp/webhook'
 ];
 

@@ -149,6 +149,9 @@ $puedeVer = function(string $modulo) {
             <a href="<?= PUBLIC_URL ?>?url=auth/login&modo=agregar" class="btn-logout sidebar-logout" style="margin-bottom: 8px;">
                 <i class="bi bi-person-plus"></i> <span class="sidebar-link-text">Agregar cuenta</span>
             </a>
+            <a href="<?= PUBLIC_URL ?>?url=auth/mi-cuenta" class="btn-logout sidebar-logout" style="margin-bottom: 8px;">
+                <i class="bi bi-person-gear"></i> <span class="sidebar-link-text">Mi cuenta</span>
+            </a>
             <a href="<?= PUBLIC_URL ?>?url=auth/logout" class="btn-logout sidebar-logout">
                 <i class="bi bi-box-arrow-right"></i> <span class="sidebar-link-text">Salir</span>
             </a>

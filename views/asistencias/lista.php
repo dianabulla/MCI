@@ -1,17 +1,38 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
 <div class="page-header">
-    <h2>Asistencias</h2>
+    <h2>Reporte Semanal de Asistencias</h2>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="<?= PUBLIC_URL ?>?url=asistencias/exportarExcel<?= !empty($_GET['ministerio']) ? '&ministerio=' . urlencode((string)$_GET['ministerio']) : '' ?><?= !empty($_GET['lider']) ? '&lider=' . urlencode((string)$_GET['lider']) : '' ?><?= !empty($_GET['celula']) ? '&celula=' . urlencode((string)$_GET['celula']) : '' ?><?= !empty($_GET['reporte']) ? '&reporte=' . urlencode((string)$_GET['reporte']) : '' ?>" class="btn btn-success">
+        <a href="<?= PUBLIC_URL ?>?url=asistencias/exportarExcel<?= !empty($_GET['ministerio']) ? '&ministerio=' . urlencode((string)$_GET['ministerio']) : '' ?><?= !empty($_GET['lider']) ? '&lider=' . urlencode((string)$_GET['lider']) : '' ?><?= !empty($_GET['reporte']) ? '&reporte=' . urlencode((string)$_GET['reporte']) : '' ?>" class="btn btn-success">
             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
         </a>
-        <a href="<?= PUBLIC_URL ?>index.php?url=asistencias/registrar" class="btn btn-primary">+ Registrar Asistencia</a>
+        <a href="<?= PUBLIC_URL ?>?url=celulas" class="btn btn-secondary">Ir a Células (registrar)</a>
+    </div>
+</div>
+
+<?php
+$sectionsVisibles = is_array($sections ?? null) ? $sections : [];
+$seccionesReportaron = array_values(array_filter($sectionsVisibles, static function ($section) {
+    return !empty($section['si_reporto_semana']);
+}));
+$seccionesNoReportaron = array_values(array_filter($sectionsVisibles, static function ($section) {
+    return empty($section['si_reporto_semana']);
+}));
+?>
+
+<div class="card" style="margin-bottom: 16px;">
+    <div class="card-body" style="padding: 12px 16px;">
+        <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+            <span class="meta-pill"><strong>Semana:</strong> <?= htmlspecialchars((string)($semana_inicio ?? '')) ?> al <?= htmlspecialchars((string)($semana_fin ?? '')) ?></span>
+            <span class="meta-pill" style="background:#e9f8ef; border-color:#c6ebd4; color:#1f7a44;">Reportaron: <?= (int)count($seccionesReportaron) ?></span>
+            <span class="meta-pill" style="background:#fff0f1; border-color:#f0d0d4; color:#9b2e3a;">No reportaron: <?= (int)count($seccionesNoReportaron) ?></span>
+            <span class="meta-pill">Total células: <?= (int)count($sectionsVisibles) ?></span>
+        </div>
     </div>
 </div>
 
 <div class="form-container" style="margin-bottom: 20px;">
-    <form method="GET" class="filter-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: end;">
+    <form method="GET" class="filter-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; align-items: end;">
         <input type="hidden" name="url" value="asistencias">
 
         <div class="form-group" style="margin-bottom: 0;">
@@ -39,24 +60,11 @@
         </div>
 
         <div class="form-group" style="margin-bottom: 0;">
-            <label for="filtro_celula">Filtrar por Célula</label>
-            <select id="filtro_celula" name="celula" class="form-control">
-                <option value="">Todas</option>
-                <option value="0" <?= ((string)($filtro_celula_actual ?? '') === '0') ? 'selected' : '' ?>>Sin célula</option>
-                <?php foreach (($celulas_disponibles ?? []) as $celula): ?>
-                    <option value="<?= (int)$celula['Id_Celula'] ?>" <?= ((string)$filtro_celula_actual === (string)$celula['Id_Celula']) ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($celula['Nombre_Celula']) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-
-        <div class="form-group" style="margin-bottom: 0;">
-            <label for="filtro_reporte">Estado de reporte</label>
+            <label for="filtro_reporte">Estado semanal</label>
             <select id="filtro_reporte" name="reporte" class="form-control">
                 <option value="" <?= (($filtro_reporte_actual ?? '') === '') ? 'selected' : '' ?>>Todos</option>
-                <option value="con" <?= (($filtro_reporte_actual ?? '') === 'con') ? 'selected' : '' ?>>Han reportado</option>
-                <option value="sin" <?= (($filtro_reporte_actual ?? '') === 'sin') ? 'selected' : '' ?>>No han reportado</option>
+                <option value="sin" <?= (($filtro_reporte_actual ?? '') === 'sin') ? 'selected' : '' ?>>Pendientes por reportar</option>
+                <option value="con" <?= (($filtro_reporte_actual ?? '') === 'con') ? 'selected' : '' ?>>Con reporte esta semana</option>
             </select>
         </div>
 
@@ -67,80 +75,63 @@
     </form>
 </div>
 
-<?php if (!empty($sections ?? [])): ?>
-<div class="sections-grid">
-    <?php foreach ($sections as $section): ?>
-        <details class="section-collapse">
-            <summary>
-                <div class="collapse-title">
-                    <i class="bi bi-check2-square"></i> <?= htmlspecialchars($section['label']) ?>
-                </div>
-                <div class="section-meta mb-0">
-                    <a class="view-group-btn" href="<?= PUBLIC_URL ?>?url=asistencias/porCelula&id=<?= (int)$section['id_celula'] ?>" onclick="event.stopPropagation();">Ver asistencias</a>
-                    <span class="meta-pill">Líder: <?= htmlspecialchars($section['lider']) ?></span>
-                    <span class="meta-pill">Anfitrión: <?= htmlspecialchars($section['anfitrion']) ?></span>
-                    <span class="meta-pill">Último reporte: <?= htmlspecialchars($section['fecha_ultimo_reporte'] !== '' ? $section['fecha_ultimo_reporte'] : 'Sin reporte') ?></span>
-                    <span class="meta-pill">Registros: <?= number_format((int)$section['total_registros']) ?></span>
-                    <span class="meta-pill">Sí: <?= number_format((int)$section['total_si']) ?></span>
-                    <span class="meta-pill">No: <?= number_format((int)$section['total_no']) ?></span>
-                    <span class="collapse-arrow">▶</span>
-                </div>
-            </summary>
+<?php if (!empty($sectionsVisibles)): ?>
+<div class="asistencia-semanal-columns">
+    <div class="asistencia-semanal-column">
+        <div class="asistencia-semanal-column-title">
+            <i class="bi bi-check2-circle"></i> Reportaron esta semana (<?= (int)count($seccionesReportaron) ?>)
+        </div>
 
-            <div class="collapse-content">
-                <div class="mb-3">
-                    <a href="<?= PUBLIC_URL ?>?url=asistencias/registrar&celula=<?= (int)$section['id_celula'] ?>" class="btn btn-sm btn-primary">Registrar asistencia</a>
-                </div>
+        <?php if (!empty($seccionesReportaron)): ?>
+            <?php foreach ($seccionesReportaron as $section): ?>
+                <div class="section-collapse asistencia-simple-card">
+                    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                        <div class="collapse-title" style="margin-bottom:0;">
+                            <i class="bi bi-check2-square"></i> <?= htmlspecialchars($section['label']) ?>
+                        </div>
+                        <a class="view-group-btn" href="<?= PUBLIC_URL ?>?url=asistencias/porCelula&id=<?= (int)$section['id_celula'] ?>">Ver detalle</a>
+                    </div>
 
-                <?php if ($section['fecha_ultimo_reporte'] !== ''): ?>
-                <div class="section-meta">
-                    <span class="meta-pill">Mostrando último reporte de fecha: <?= htmlspecialchars($section['fecha_ultimo_reporte']) ?></span>
+                    <div class="section-meta" style="margin-top:10px;">
+                        <span class="meta-pill">Registros semana: <?= number_format((int)$section['total_registros']) ?></span>
+                        <span class="meta-pill" style="background:#e9f8ef; border-color:#c6ebd4; color:#1f7a44;">Reportó esta semana</span>
+                    </div>
                 </div>
-                <?php endif; ?>
-
-                <div class="table-responsive ministerio-table-wrap">
-                    <table class="table table-hover ministerio-detail-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 60px;">Nro</th>
-                                <th>Persona</th>
-                                <th style="width: 150px;">Fecha</th>
-                                <th style="width: 100px;">Asistió</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (!empty($section['rows'])): ?>
-                                <?php foreach ($section['rows'] as $row): ?>
-                                    <tr>
-                                        <td><?= (int)$row['nro'] ?></td>
-                                        <td>
-                                            <?php if ((int)$row['id_persona'] > 0): ?>
-                                                <a class="group-link" href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= (int)$row['id_persona'] ?>">
-                                                    <?= htmlspecialchars($row['persona']) ?>
-                                                </a>
-                                            <?php else: ?>
-                                                <?= htmlspecialchars($row['persona']) ?>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td><?= htmlspecialchars($row['fecha']) ?></td>
-                                        <td>
-                                            <span class="badge <?= $row['asistio'] ? 'badge-success' : 'badge-danger' ?>">
-                                                <?= $row['asistio'] ? 'Sí' : 'No' ?>
-                                            </span>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <tr>
-                                    <td colspan="4" class="text-center">No hay asistencias registradas para el último reporte de esta célula</td>
-                                </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
+            <?php endforeach; ?>
+        <?php else: ?>
+            <div class="section-collapse asistencia-simple-card">
+                <div class="section-meta"><span class="meta-pill">No hay células en esta lista</span></div>
             </div>
-        </details>
-    <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
+
+    <div class="asistencia-semanal-column">
+        <div class="asistencia-semanal-column-title" style="color:#9b2e3a; border-color:#f0d0d4; background:#fff4f5;">
+            <i class="bi bi-x-circle"></i> No reportaron esta semana (<?= (int)count($seccionesNoReportaron) ?>)
+        </div>
+
+        <?php if (!empty($seccionesNoReportaron)): ?>
+            <?php foreach ($seccionesNoReportaron as $section): ?>
+                <div class="section-collapse asistencia-simple-card">
+                    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                        <div class="collapse-title" style="margin-bottom:0;">
+                            <i class="bi bi-check2-square"></i> <?= htmlspecialchars($section['label']) ?>
+                        </div>
+                        <a class="view-group-btn" href="<?= PUBLIC_URL ?>?url=asistencias/porCelula&id=<?= (int)$section['id_celula'] ?>">Ver detalle</a>
+                    </div>
+
+                    <div class="section-meta" style="margin-top:10px;">
+                        <span class="meta-pill">Registros semana: <?= number_format((int)$section['total_registros']) ?></span>
+                        <span class="meta-pill" style="background:#fff0f1; border-color:#f0d0d4; color:#9b2e3a;">No reportó esta semana</span>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        <?php else: ?>
+            <div class="section-collapse asistencia-simple-card">
+                <div class="section-meta"><span class="meta-pill">No hay células en esta lista</span></div>
+            </div>
+        <?php endif; ?>
+    </div>
 </div>
 <?php else: ?>
     <div class="table-container">
@@ -148,20 +139,46 @@
     </div>
 <?php endif; ?>
 
+<style>
+.asistencia-semanal-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.asistencia-semanal-column {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.asistencia-semanal-column-title {
+    border: 1px solid #c6ebd4;
+    background: #f1fbf4;
+    color: #1f7a44;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-weight: 700;
+}
+
+@media (max-width: 980px) {
+    .asistencia-semanal-columns {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
 <script>
     (function() {
         const ministerioSelect = document.getElementById('filtro_ministerio');
         const liderSelect = document.getElementById('filtro_lider');
-        const celulaSelect = document.getElementById('filtro_celula');
 
-        if (!ministerioSelect || !liderSelect || !celulaSelect) {
+        if (!ministerioSelect || !liderSelect) {
             return;
         }
 
         const lideres = <?= json_encode($lideres_disponibles ?? []) ?>;
-        const celulas = <?= json_encode($celulas_disponibles ?? []) ?>;
         let liderActual = '<?= htmlspecialchars((string)($filtro_lider_actual ?? ''), ENT_QUOTES) ?>';
-        let celulaActual = '<?= htmlspecialchars((string)($filtro_celula_actual ?? ''), ENT_QUOTES) ?>';
 
         function renderLideres() {
             const ministerioSeleccionado = ministerioSelect.value;
@@ -203,72 +220,12 @@
             }
         }
 
-        function renderCelulas() {
-            const ministerioSeleccionado = ministerioSelect.value;
-            const liderSeleccionado = liderSelect.value;
-            const valorPrevioCelula = String(celulaSelect.value || '');
-
-            celulaSelect.innerHTML = '';
-
-            const optionTodas = document.createElement('option');
-            optionTodas.value = '';
-            optionTodas.textContent = 'Todas';
-            celulaSelect.appendChild(optionTodas);
-
-            const optionSinCelula = document.createElement('option');
-            optionSinCelula.value = '0';
-            optionSinCelula.textContent = 'Sin célula';
-            celulaSelect.appendChild(optionSinCelula);
-
-            const filtradas = celulas.filter(function(celula) {
-                const coincideMinisterio = !ministerioSeleccionado || ministerioSeleccionado === '0'
-                    ? true
-                    : String(celula.Id_Ministerio || '') === String(ministerioSeleccionado);
-
-                const coincideLider = !liderSeleccionado || liderSeleccionado === '0'
-                    ? true
-                    : String(celula.Id_Lider || '') === String(liderSeleccionado);
-
-                return coincideMinisterio && coincideLider;
-            });
-
-            filtradas.forEach(function(celula) {
-                const option = document.createElement('option');
-                option.value = String(celula.Id_Celula);
-                option.textContent = celula.Nombre_Celula;
-                celulaSelect.appendChild(option);
-            });
-
-            const valorDeseado = valorPrevioCelula !== '' ? valorPrevioCelula : String(celulaActual || '');
-            const existeDeseado = Array.from(celulaSelect.options).some(function(opt) {
-                return opt.value === valorDeseado;
-            });
-            if (existeDeseado) {
-                celulaSelect.value = valorDeseado;
-            }
-
-            const seleccionadoValido = Array.from(celulaSelect.options).some(function(opt) {
-                return opt.value === celulaSelect.value;
-            });
-
-            if (!seleccionadoValido) {
-                celulaSelect.value = '';
-            }
-        }
-
         ministerioSelect.addEventListener('change', function() {
             renderLideres();
-            renderCelulas();
-        });
-
-        liderSelect.addEventListener('change', function() {
-            renderCelulas();
         });
 
         renderLideres();
-        renderCelulas();
         liderActual = '';
-        celulaActual = '';
     })();
 </script>
 

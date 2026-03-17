@@ -9,111 +9,53 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 <div class="page-header">
     <h2>Personas</h2>
     <div class="page-actions personas-mobile-stack">
-        <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill active">Ubicados en células</a>
+        <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill active">Personas</a>
         <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill">Pendiente por consolidar</a>
-        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel<?= !empty($_GET['ministerio']) ? '&ministerio=' . urlencode((string)$_GET['ministerio']) : '' ?><?= !empty($_GET['lider']) ? '&lider=' . urlencode((string)$_GET['lider']) : '' ?><?= !empty($_GET['celula']) ? '&celula=' . urlencode((string)$_GET['celula']) : '' ?><?= !empty($_GET['estado']) ? '&estado=' . urlencode((string)$_GET['estado']) : '' ?>" class="btn btn-success">
+        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel<?= !empty($_GET['perfil']) ? '&perfil=' . urlencode((string)$_GET['perfil']) : '' ?><?= !empty($_GET['buscar']) ? '&buscar=' . urlencode((string)$_GET['buscar']) : '' ?>" class="btn btn-success">
             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
         </a>
+        <?php if (AuthController::esAdministrador()): ?>
+        <a href="<?= PUBLIC_URL ?>?url=personas/plantillas-whatsapp" class="btn btn-secondary">
+            <i class="bi bi-chat-dots"></i> Plantilla mensaje what
+        </a>
+        <?php endif; ?>
         <?php if (AuthController::tienePermiso('personas', 'crear')): ?>
         <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="btn btn-primary">+ Nueva Persona</a>
         <?php endif; ?>
     </div>
 </div>
 
-<!-- Filtros -->
-<div class="card" style="margin-bottom: 20px;">
+<div class="card" style="margin-bottom: 16px;">
     <div class="card-body">
-        <!-- Búsqueda rápida -->
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label for="busqueda_rapida" style="font-size: 14px; margin-bottom: 5px;">
-                <i class="bi bi-search"></i> Búsqueda Rápida (nombre, cédula, teléfono, célula, líder o ministerio)
-            </label>
-            <input type="text" 
-                   id="busqueda_rapida" 
-                   class="form-control" 
-                   placeholder="Escribe para buscar por nombre, apellido, cédula, teléfono, célula, líder o ministerio..."
-                   autocomplete="off">
-        </div>
-
-        <!-- Filtros adicionales -->
-        <form method="GET" action="<?= PUBLIC_URL ?>" class="filters-inline">
+        <form method="GET" action="<?= PUBLIC_URL ?>" class="filters-inline" id="filtro_perfil_form">
             <input type="hidden" name="url" value="personas">
-            
             <div class="form-group">
-                <label for="filtro_ministerio" style="font-size: 14px; margin-bottom: 5px;">Ministerio</label>
-                <select id="filtro_ministerio" name="ministerio" class="form-control">
-                    <?php if (empty($filtroRestringido)): ?>
-                        <option value="">Todos los ministerios</option>
-                        <option value="0" <?= (($filtroMinisterioActual ?? ($_GET['ministerio'] ?? '')) === '0') ? 'selected' : '' ?>>
-                            Sin ministerio
-                        </option>
-                    <?php else: ?>
-                        <option value="">Seleccione</option>
-                    <?php endif; ?>
-                    <?php if (!empty($ministerios)): ?>
-                        <?php foreach ($ministerios as $ministerio): ?>
-                            <option value="<?= $ministerio['Id_Ministerio'] ?>" 
-                                    <?= (($filtroMinisterioActual ?? ($_GET['ministerio'] ?? '')) == $ministerio['Id_Ministerio']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($ministerio['Nombre_Ministerio']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
+                <label for="filtro_perfil" style="font-size: 14px; margin-bottom: 5px;">Filtro por rol</label>
+                <select id="filtro_perfil" name="perfil" class="form-control">
+                    <option value="" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === '') ? 'selected' : '' ?>>Todos</option>
+                    <option value="lideres_12" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'lideres_12') ? 'selected' : '' ?>>Líder de 12</option>
+                    <option value="lideres_celula" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'lideres_celula') ? 'selected' : '' ?>>Líderes de célula</option>
+                    <option value="asistentes" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'asistentes') ? 'selected' : '' ?>>Asistentes</option>
+                    <option value="pastores" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'pastores') ? 'selected' : '' ?>>Pastores</option>
+                    <option value="sin_rol" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'sin_rol') ? 'selected' : '' ?>>Sin rol</option>
                 </select>
             </div>
-
-            <div class="form-group">
-                <label for="filtro_lider" style="font-size: 14px; margin-bottom: 5px;">Líder</label>
-                <select id="filtro_lider" name="lider" class="form-control">
-                    <?php if (empty($filtroRestringido)): ?>
-                        <option value="">Todos los líderes</option>
-                        <option value="0" <?= (($filtroLiderActual ?? ($_GET['lider'] ?? '')) === '0') ? 'selected' : '' ?>>
-                            Sin líder
-                        </option>
-                    <?php else: ?>
-                        <option value="">Seleccione</option>
-                    <?php endif; ?>
-                    <?php if (!empty($lideres)): ?>
-                        <?php foreach ($lideres as $lider): ?>
-                            <option value="<?= $lider['Id_Persona'] ?>" 
-                                    <?= (($filtroLiderActual ?? ($_GET['lider'] ?? '')) == $lider['Id_Persona']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($lider['Nombre'] . ' ' . $lider['Apellido']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </select>
+            <div class="form-group" style="min-width: 240px;">
+                <label for="filtro_nombre" style="font-size: 14px; margin-bottom: 5px;">Buscar por nombre</label>
+                <input
+                    type="text"
+                    id="filtro_nombre"
+                    name="buscar"
+                    class="form-control"
+                    placeholder="Ej: Juan Perez"
+                    value="<?= htmlspecialchars((string)($filtroNombreActual ?? ($_GET['buscar'] ?? ''))) ?>"
+                >
             </div>
-
-            <div class="form-group">
-                <label for="filtro_celula" style="font-size: 14px; margin-bottom: 5px;">Célula</label>
-                <select id="filtro_celula" name="celula" class="form-control">
-                    <option value="">Todas las células</option>
-                    <option value="0" <?= (($filtroCelulaActual ?? ($_GET['celula'] ?? '')) === '0') ? 'selected' : '' ?>>Sin célula</option>
-                    <?php if (!empty($celulas)): ?>
-                        <?php foreach ($celulas as $celula): ?>
-                            <option value="<?= $celula['Id_Celula'] ?>"
-                                    <?= (($filtroCelulaActual ?? ($_GET['celula'] ?? '')) == $celula['Id_Celula']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($celula['Nombre_Celula']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="filtro_estado" style="font-size: 14px; margin-bottom: 5px;">Estado</label>
-                <select id="filtro_estado" name="estado" class="form-control">
-                    <option value="">Todos los estados</option>
-                    <option value="Activo" <?= (($filtroEstadoActual ?? ($_GET['estado'] ?? '')) === 'Activo') ? 'selected' : '' ?>>Activo</option>
-                    <option value="Inactivo" <?= (($filtroEstadoActual ?? ($_GET['estado'] ?? '')) === 'Inactivo') ? 'selected' : '' ?>>Inactivo</option>
-                    <option value="Bloqueado" <?= (($filtroEstadoActual ?? ($_GET['estado'] ?? '')) === 'Bloqueado') ? 'selected' : '' ?>>Bloqueado</option>
-                </select>
-            </div>
-
             <div class="filters-actions">
                 <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-funnel"></i> Filtrar
+                    <i class="bi bi-search"></i> Buscar
                 </button>
-                <?php if (!empty($_GET['ministerio']) || !empty($_GET['lider']) || !empty($_GET['celula']) || !empty($_GET['estado'])): ?>
+                <?php if (!empty($_GET['perfil']) || !empty($_GET['buscar'])): ?>
                 <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-secondary">
                     <i class="bi bi-x-circle"></i> Limpiar
                 </a>
@@ -123,26 +65,37 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
     </div>
 </div>
 
-<?php if (!empty($_GET['ministerio']) || !empty($_GET['lider']) || !empty($_GET['celula']) || !empty($_GET['estado'])): ?>
-<div class="alert alert-info" style="margin-bottom: 20px;">
-    <i class="bi bi-info-circle"></i> 
-    Mostrando resultados filtrados. Total: <strong><?= count($personas) ?></strong> persona(s)
+<div class="card" style="margin-bottom: 16px;">
+    <div class="card-body" style="padding: 12px 16px;">
+        <div class="personas-resumen-roles">
+            <div class="resumen-role-item">
+                <span class="resumen-role-label">Líder de 12</span>
+                <strong class="resumen-role-value"><?= (int)($totalesPerfil['lideres_12'] ?? 0) ?></strong>
+            </div>
+            <div class="resumen-role-item">
+                <span class="resumen-role-label">Líder de célula</span>
+                <strong class="resumen-role-value"><?= (int)($totalesPerfil['lideres_celula'] ?? 0) ?></strong>
+            </div>
+            <div class="resumen-role-item">
+                <span class="resumen-role-label">Asistentes</span>
+                <strong class="resumen-role-value"><?= (int)($totalesPerfil['asistentes'] ?? 0) ?></strong>
+            </div>
+            <div class="resumen-role-item">
+                <span class="resumen-role-label">Otros roles</span>
+                <strong class="resumen-role-value"><?= (int)($totalesPerfil['otros'] ?? 0) ?></strong>
+            </div>
+        </div>
+    </div>
 </div>
-<?php endif; ?>
 
 <div class="table-container">
     <table class="data-table ganar-table mobile-persona-accordion">
         <thead>
             <tr>
-                <th>Nombre Completo</th>
-                <th>Cédula</th>
+                <th>Nombre</th>
                 <th>Teléfono</th>
-                <th>Email</th>
-                <th>Célula</th>
                 <th>Rol</th>
-                <th>Ministerio</th>
-                <th>Estado</th>
-                <?php if ($mostrarAcciones): ?><th>Acciones</th><?php endif; ?>
+                <?php if ($mostrarAcciones): ?><th class="action-col">Acciones</th><?php endif; ?>
             </tr>
         </thead>
         <tbody>
@@ -150,51 +103,43 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                 <?php foreach ($personas as $persona): ?>
                     <tr>
                         <td>
-                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Nombre'] . ' ' . $persona['Apellido']) ?>">
+                            <span class="ganar-cell-truncate persona-nombre-cell" title="<?= htmlspecialchars($persona['Nombre'] . ' ' . $persona['Apellido']) ?>">
                                 <?= htmlspecialchars($persona['Nombre'] . ' ' . $persona['Apellido']) ?>
                             </span>
                         </td>
-                        <td><?= htmlspecialchars($persona['Numero_Documento'] ?? '') ?></td>
                         <td><?= htmlspecialchars($persona['Telefono'] ?? '') ?></td>
-                        <td>
-                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Email'] ?? '') ?>">
-                                <?= htmlspecialchars($persona['Email'] ?? '') ?>
-                            </span>
-                        </td>
-                        <td>
-                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Nombre_Celula'] ?? 'Sin célula') ?>">
-                                <?= htmlspecialchars($persona['Nombre_Celula'] ?? 'Sin célula') ?>
-                            </span>
-                        </td>
-                        <td>
-                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Nombre_Rol'] ?? 'Sin rol') ?>">
-                                <?= htmlspecialchars($persona['Nombre_Rol'] ?? 'Sin rol') ?>
-                            </span>
-                        </td>
-                        <td>
-                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Nombre_Ministerio'] ?? 'Sin ministerio') ?>">
-                                <?= htmlspecialchars($persona['Nombre_Ministerio'] ?? 'Sin ministerio') ?>
-                            </span>
-                        </td>
-                        <td>
-                            <?php 
-                            $estado = $persona['Estado_Cuenta'] ?? 'Activo';
-                            $badgeClass = $estado == 'Activo' ? 'badge-success' : ($estado == 'Inactivo' ? 'badge-secondary' : 'badge-danger');
-                            ?>
-                            <span class="badge <?= $badgeClass ?>"><?= htmlspecialchars($estado) ?></span>
-                        </td>
+                        <td><?= htmlspecialchars($persona['Nombre_Rol'] ?? 'Sin rol') ?></td>
                         <?php if ($mostrarAcciones): ?>
-                        <td>
-                            <div class="action-buttons">
-                            <?php if ($puedeVerPersona): ?>
-                            <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= $persona['Id_Persona'] ?>" class="btn btn-sm btn-info">Ver</a>
-                            <?php endif; ?>
-                            <?php if ($puedeEditarPersona): ?>
-                            <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $persona['Id_Persona'] ?>" class="btn btn-sm btn-warning">Editar</a>
-                            <?php endif; ?>
-                            <?php if ($puedeEliminarPersona): ?>
-                            <a href="<?= PUBLIC_URL ?>?url=personas/eliminar&id=<?= $persona['Id_Persona'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar esta persona?')">Eliminar</a>
-                            <?php endif; ?>
+                        <td class="action-col">
+                            <div class="action-buttons action-buttons-compact">
+                                <?php if ($puedeVerPersona): ?>
+                                <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= $persona['Id_Persona'] ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <button
+                                    type="button"
+                                    class="action-icon-btn action-icon-escalera js-escalera-btn"
+                                    title="Escalera del Éxito"
+                                    aria-label="Escalera del Éxito"
+                                    data-persona-id="<?= (int)($persona['Id_Persona'] ?? 0) ?>"
+                                    data-persona-asignado="<?= (!empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']) && !empty($persona['Id_Celula'])) ? '1' : '0' ?>"
+                                    data-persona-nombre="<?= htmlspecialchars(trim(($persona['Nombre'] ?? '') . ' ' . ($persona['Apellido'] ?? ''))) ?>"
+                                    data-persona-proceso="<?= htmlspecialchars((string)($persona['Proceso'] ?? '')) ?>"
+                                    data-persona-checklist='<?= htmlspecialchars((string)($persona['Escalera_Checklist'] ?? ''), ENT_QUOTES, 'UTF-8') ?>'
+                                >
+                                    <i class="bi bi-bar-chart-steps"></i>
+                                </button>
+                                <?php endif; ?>
+                                <?php if ($puedeEditarPersona): ?>
+                                <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $persona['Id_Persona'] ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <?php endif; ?>
+                                <?php if ($puedeEliminarPersona): ?>
+                                <a href="<?= PUBLIC_URL ?>?url=personas/eliminar&id=<?= $persona['Id_Persona'] ?>" class="action-icon-btn action-icon-danger" title="Eliminar" aria-label="Eliminar" onclick="return confirm('¿Eliminar esta persona?')">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                                <?php endif; ?>
                             </div>
                         </td>
                         <?php endif; ?>
@@ -202,178 +147,766 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="<?= $mostrarAcciones ? '9' : '8' ?>" class="text-center">No hay personas registradas</td>
+                    <td colspan="<?= $mostrarAcciones ? '4' : '3' ?>" class="text-center">No hay personas registradas</td>
                 </tr>
             <?php endif; ?>
         </tbody>
     </table>
 </div>
 
+<style>
+.persona-nombre-cell {
+    font-weight: 700;
+}
+
+.personas-resumen-roles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+}
+
+.resumen-role-item {
+    border: 1px solid #d8e2f1;
+    border-radius: 10px;
+    background: #f8fbff;
+    padding: 10px 12px;
+}
+
+.resumen-role-label {
+    display: block;
+    font-size: 12px;
+    color: #5b6b84;
+    margin-bottom: 2px;
+}
+
+.resumen-role-value {
+    font-size: 20px;
+    color: #244a84;
+}
+
+.action-buttons-compact {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+
+.ganar-table th.action-col,
+.ganar-table td.action-col {
+    white-space: nowrap;
+    min-width: 156px;
+}
+
+.ganar-table .action-buttons.action-buttons-compact {
+    flex-wrap: nowrap !important;
+    justify-content: flex-start;
+}
+
+.ganar-table .action-buttons.action-buttons-compact .action-icon-btn {
+    flex: 0 0 auto;
+}
+
+.action-icon-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    border: 1px solid transparent;
+    font-size: 14px;
+}
+
+.action-icon-info {
+    background: #e6f2ff;
+    color: #0d6efd;
+    border-color: #b7d7ff;
+}
+
+.action-icon-warning {
+    background: #fff4dd;
+    color: #9a6700;
+    border-color: #ffd98a;
+}
+
+.action-icon-danger {
+    background: #ffe8ea;
+    color: #c82333;
+    border-color: #ffc1c7;
+}
+
+.action-icon-escalera {
+    background: #ebe9ff;
+    color: #4a3cc9;
+    border-color: #cfc8ff;
+    cursor: pointer;
+}
+
+.escalera-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 14px;
+}
+
+.escalera-modal-backdrop.show {
+    display: flex;
+}
+
+.escalera-modal {
+    width: min(1120px, 96vw);
+    max-height: 90vh;
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #dbe3f4;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.22);
+    overflow: hidden;
+}
+
+.escalera-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    background: #f4f8ff;
+    border-bottom: 1px solid #dbe3f4;
+}
+
+.escalera-modal-title {
+    margin: 0;
+    font-size: 18px;
+    color: #1f365f;
+}
+
+.escalera-modal-close {
+    border: 0;
+    background: transparent;
+    font-size: 20px;
+    line-height: 1;
+    color: #6b7a90;
+    cursor: pointer;
+}
+
+.escalera-modal-body {
+    padding: 16px;
+    overflow: auto;
+}
+
+.escalera-level-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #eef4ff;
+    color: #244a84;
+    border: 1px solid #cfe0ff;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.escalera-modal-matrix-wrap {
+    border: 1px solid #dbe3f4;
+    border-radius: 10px;
+    overflow: auto;
+}
+
+.escalera-modal-matrix {
+    width: 100%;
+    min-width: 940px;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.escalera-modal-matrix th,
+.escalera-modal-matrix td {
+    border: 1px solid #e4ebf7;
+    padding: 10px 8px;
+    vertical-align: middle;
+}
+
+.escalera-modal-matrix th {
+    text-align: center;
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.escalera-modal-stage-ganar {
+    background: #fff7dd;
+    color: #8a6500;
+}
+
+.escalera-modal-stage-consolidar {
+    background: #eaf9ee;
+    color: #176636;
+}
+
+.escalera-modal-stage-discipular {
+    background: #ecf5ff;
+    color: #1e65b6;
+}
+
+.escalera-modal-stage-enviar {
+    background: #ffeaf2;
+    color: #a30f43;
+}
+
+.escalera-modal-sub-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #4b5f7f;
+    margin-bottom: 4px;
+}
+
+.escalera-check-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: #425573;
+    justify-content: center;
+}
+
+.escalera-check-label input {
+    width: 14px;
+    height: 14px;
+}
+
+.escalera-check-item.done .escalera-check-label {
+    color: #1e7f39;
+    font-weight: 700;
+}
+
+.escalera-check-label.disabled {
+    opacity: 0.65;
+}
+
+.escalera-check-icon {
+    font-size: 13px;
+    color: #1e7f39;
+    margin-right: 2px;
+}
+
+.escalera-empty-cell {
+    background: #f8fafc;
+}
+
+.no-disponible-panel {
+    margin-top: 12px;
+    border: 1px solid #f7d4a0;
+    background: #fff8ed;
+    border-radius: 10px;
+    padding: 10px;
+}
+
+.no-disponible-panel label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #9a6700;
+    margin-bottom: 6px;
+}
+
+.no-disponible-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.no-disponible-header label {
+    margin-bottom: 0;
+}
+
+.no-disponible-panel textarea {
+    width: 100%;
+    min-height: 90px;
+    resize: vertical;
+    border: 1px solid #dfc7a0;
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 13px;
+}
+
+.no-disponible-actions {
+    margin-top: 8px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.escalera-modal-footer-actions {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #e4ebf7;
+    display: flex;
+    justify-content: flex-end;
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+}
+
+.no-disponible-save-btn {
+    border: 1px solid #c38a1d;
+    background: #d89a22;
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.no-disponible-save-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.escalera-status-msg {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #5b6b84;
+    min-height: 18px;
+}
+
+.escalera-status-msg.error {
+    color: #b42318;
+}
+
+.escalera-status-msg.success {
+    color: #1e7f39;
+}
+</style>
+
+<div class="escalera-modal-backdrop" id="escaleraModalBackdrop" aria-hidden="true">
+    <div class="escalera-modal" role="dialog" aria-modal="true" aria-labelledby="escaleraModalTitle">
+        <div class="escalera-modal-header">
+            <h3 class="escalera-modal-title" id="escaleraModalTitle">Escalera del Éxito</h3>
+            <button type="button" class="escalera-modal-close" id="escaleraModalClose" aria-label="Cerrar">&times;</button>
+        </div>
+        <div class="escalera-modal-body" id="escaleraModalBody"></div>
+    </div>
+</div>
+
 <script>
-// Búsqueda en tiempo real
-const busquedaInput = document.getElementById('busqueda_rapida');
-const tabla = document.querySelector('.data-table tbody');
-const filas = tabla.querySelectorAll('tr');
+const filtroPerfil = document.getElementById('filtro_perfil');
+const filtroNombre = document.getElementById('filtro_nombre');
+const filtroPerfilForm = document.getElementById('filtro_perfil_form');
 
-const filtroMinisterio = document.getElementById('filtro_ministerio');
-const filtroLider = document.getElementById('filtro_lider');
-const filtroCelula = document.getElementById('filtro_celula');
-const filtroRestringido = <?= !empty($filtroRestringido) ? 'true' : 'false' ?>;
-let liderActual = '<?= htmlspecialchars((string)($filtroLiderActual ?? ($_GET['lider'] ?? '')), ENT_QUOTES) ?>';
-let celulaActual = '<?= htmlspecialchars((string)($filtroCelulaActual ?? ($_GET['celula'] ?? '')), ENT_QUOTES) ?>';
-const lideresDisponibles = <?= json_encode(array_map(function ($lider) {
-    return [
-        'Id_Persona' => (int)($lider['Id_Persona'] ?? 0),
-        'Nombre' => trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? '')),
-        'Id_Ministerio' => (int)($lider['Id_Ministerio'] ?? 0)
-    ];
-}, $lideres ?? [])) ?>;
-const celulasDisponibles = <?= json_encode(array_map(function ($celula) {
-    return [
-        'Id_Celula' => (int)($celula['Id_Celula'] ?? 0),
-        'Nombre_Celula' => (string)($celula['Nombre_Celula'] ?? ''),
-        'Id_Lider' => (int)($celula['Id_Lider'] ?? 0),
-        'Id_Ministerio' => (int)($celula['Id_Ministerio'] ?? 0)
-    ];
-}, $celulas ?? [])) ?>;
+if (filtroPerfil && filtroPerfilForm) {
+    filtroPerfil.addEventListener('change', function() {
+        if (typeof filtroPerfilForm.requestSubmit === 'function') {
+            filtroPerfilForm.requestSubmit();
+            return;
+        }
 
-// Guardar el contenido original
-const filasArray = Array.from(filas);
+        filtroPerfilForm.submit();
+    });
+}
 
-busquedaInput.addEventListener('input', function(e) {
-    const textoBusqueda = e.target.value.toLowerCase().trim();
-    
-    if (textoBusqueda === '') {
-        // Mostrar todas las filas
-        filasArray.forEach(fila => {
-            fila.style.display = '';
+if (filtroNombre && filtroPerfilForm) {
+    let timerBusquedaNombre = null;
+
+    filtroNombre.addEventListener('input', function() {
+        if (timerBusquedaNombre) {
+            clearTimeout(timerBusquedaNombre);
+        }
+
+        timerBusquedaNombre = setTimeout(function() {
+            if (typeof filtroPerfilForm.requestSubmit === 'function') {
+                filtroPerfilForm.requestSubmit();
+                return;
+            }
+
+            filtroPerfilForm.submit();
+        }, 350);
+    });
+}
+
+(function() {
+    const etapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
+    const subprocesos = {
+        Ganar: ['Asignado a lider', 'Primer contacto', 'Ubicado en celula', 'No se dispone'],
+        Consolidar: ['Universidad de la vida', 'Encuentro', 'Bautismo'],
+        Discipular: ['Proyeccion', 'Equipo G12', 'Capacitacion destino nivel 1'],
+        Enviar: ['Capacitacion destino nivel 2', 'Capacitacion destino nivel 3', 'Celula']
+    };
+
+    const backdrop = document.getElementById('escaleraModalBackdrop');
+    const closeBtn = document.getElementById('escaleraModalClose');
+    const body = document.getElementById('escaleraModalBody');
+    const title = document.getElementById('escaleraModalTitle');
+    const endpoint = '<?= PUBLIC_URL ?>?url=personas/actualizarChecklistEscalera';
+
+    const modalState = {
+        personaId: 0,
+        personaNombre: '',
+        proceso: 'Ganar',
+        checklist: null,
+        meta: {
+            no_disponible_observacion: ''
+        },
+        asignadoALider: false,
+        botonOrigen: null,
+        guardando: false
+    };
+
+    function construirChecklistDesdeProceso(proceso) {
+        const resultado = {};
+        const indiceActual = etapas.indexOf(proceso);
+        etapas.forEach((etapa, idx) => {
+            const totalSubprocesos = (subprocesos[etapa] || []).length;
+            resultado[etapa] = Array(totalSubprocesos).fill(false);
+            if (idx < indiceActual) {
+                const limiteCompletado = Math.min(3, totalSubprocesos);
+                for (let i = 0; i < limiteCompletado; i++) {
+                    resultado[etapa][i] = true;
+                }
+            }
+            if (idx === indiceActual) {
+                resultado[etapa][0] = true;
+            }
         });
-        return;
-    }
-    
-    // Filtrar filas
-    filasArray.forEach(fila => {
-        const celdas = fila.querySelectorAll('td');
-        if (celdas.length === 0) return; // Saltar fila de "No hay personas"
-        
-        const nombre = celdas[0].textContent.toLowerCase();
-        const cedula = celdas[1].textContent.toLowerCase();
-        const telefono = celdas[2].textContent.toLowerCase();
-        const email = celdas[3].textContent.toLowerCase();
-        const celula = celdas[4] ? celdas[4].textContent.toLowerCase() : '';
-        const lider = celdas[5] ? celdas[5].textContent.toLowerCase() : '';
-        const ministerio = celdas[6] ? celdas[6].textContent.toLowerCase() : '';
-        
-        // Buscar en nombre, cédula, teléfono, email, célula, líder y ministerio
-        const coincide = nombre.includes(textoBusqueda) || 
-                        cedula.includes(textoBusqueda) || 
-                        telefono.includes(textoBusqueda) ||
-                email.includes(textoBusqueda) ||
-                celula.includes(textoBusqueda) ||
-                lider.includes(textoBusqueda) ||
-                ministerio.includes(textoBusqueda);
-        
-        fila.style.display = coincide ? '' : 'none';
-    });
-});
-
-function renderLideresDependiente() {
-    if (!filtroMinisterio || !filtroLider) return;
-
-    const ministerioSeleccionado = filtroMinisterio.value;
-    const valorPrevioLider = String(filtroLider.value || '');
-    filtroLider.innerHTML = '';
-
-    const optionTodos = document.createElement('option');
-    optionTodos.value = '';
-    optionTodos.textContent = filtroRestringido ? 'Seleccione' : 'Todos los líderes';
-    filtroLider.appendChild(optionTodos);
-
-    if (!filtroRestringido) {
-        const optionSinLider = document.createElement('option');
-        optionSinLider.value = '0';
-        optionSinLider.textContent = 'Sin líder';
-        filtroLider.appendChild(optionSinLider);
+        if (indiceActual < 0) {
+            resultado.Ganar = [false, false, false, false];
+        }
+        return resultado;
     }
 
-    const filtrados = lideresDisponibles.filter(function(lider) {
-        return (!ministerioSeleccionado || ministerioSeleccionado === '0')
-            ? true
-            : String(lider.Id_Ministerio) === String(ministerioSeleccionado);
+    function combinarChecklist(base, persistido) {
+        const combinado = JSON.parse(JSON.stringify(base));
+        if (!persistido || typeof persistido !== 'object') {
+            return combinado;
+        }
+
+        etapas.forEach(etapa => {
+            if (!Array.isArray(persistido[etapa])) {
+                return;
+            }
+            for (let i = 0; i < (subprocesos[etapa] || []).length; i++) {
+                if (typeof persistido[etapa][i] !== 'undefined') {
+                    combinado[etapa][i] = !!persistido[etapa][i];
+                }
+            }
+        });
+
+        return combinado;
+    }
+
+    function extraerMetaChecklist(persistido) {
+        const metaBase = {
+            no_disponible_observacion: ''
+        };
+
+        if (!persistido || typeof persistido !== 'object' || !persistido._meta || typeof persistido._meta !== 'object') {
+            return metaBase;
+        }
+
+        metaBase.no_disponible_observacion = (persistido._meta.no_disponible_observacion || '').toString().trim();
+        return metaBase;
+    }
+
+    function abrirModal(personaId, nombre, proceso, checklistRaw, botonOrigen, asignadoALider) {
+        let checklistPersistido = null;
+        if (checklistRaw) {
+            try {
+                checklistPersistido = JSON.parse(checklistRaw);
+            } catch (e) {
+                checklistPersistido = null;
+            }
+        }
+
+        modalState.personaId = Number(personaId || 0);
+        modalState.personaNombre = nombre || 'Persona';
+        modalState.proceso = etapas.includes(proceso) ? proceso : 'Ganar';
+        modalState.checklist = combinarChecklist(construirChecklistDesdeProceso(modalState.proceso), checklistPersistido);
+        modalState.meta = extraerMetaChecklist(checklistPersistido);
+        modalState.asignadoALider = !!asignadoALider;
+        if (modalState.checklist.Ganar && modalState.checklist.Ganar.length > 0) {
+            modalState.checklist.Ganar[0] = modalState.asignadoALider;
+        }
+        modalState.botonOrigen = botonOrigen || null;
+        modalState.guardando = false;
+
+        renderModal();
+        backdrop.classList.add('show');
+        backdrop.setAttribute('aria-hidden', 'false');
+    }
+
+    function renderModal(mensaje, esError) {
+        const procesoActual = etapas.includes(modalState.proceso) ? modalState.proceso : 'Ganar';
+        const indiceProceso = etapas.indexOf(procesoActual);
+        const noDisponibleMarcado = !!(modalState.checklist.Ganar && modalState.checklist.Ganar[3]);
+
+        title.textContent = 'Escalera del Exito - ' + modalState.personaNombre;
+        let html = '<div class="escalera-level-pill">Nivel actual: <strong>' + escapeHtml(procesoActual) + '</strong></div>';
+        html += '<div class="escalera-modal-matrix-wrap">';
+        html += '<table class="escalera-modal-matrix"><thead><tr>';
+        html += '<th class="escalera-modal-stage-ganar">Ganar</th>';
+        html += '<th class="escalera-modal-stage-consolidar">Consolidar</th>';
+        html += '<th class="escalera-modal-stage-discipular">Discipular</th>';
+        html += '<th class="escalera-modal-stage-enviar">Enviar</th>';
+        html += '</tr></thead><tbody>';
+
+        const totalFilas = Math.max(...etapas.map(etapa => (subprocesos[etapa] || []).length));
+        for (let i = 0; i < totalFilas; i++) {
+            html += '<tr>';
+
+            etapas.forEach((etapa, etapaIndex) => {
+                const nombreSub = (subprocesos[etapa] && subprocesos[etapa][i]) ? subprocesos[etapa][i] : '';
+                if (!nombreSub) {
+                    html += '<td class="escalera-empty-cell"></td>';
+                    return;
+                }
+
+                const done = !!(modalState.checklist[etapa] && modalState.checklist[etapa][i]);
+                let editable = etapaIndex === indiceProceso;
+                if (etapa === 'Ganar' && i === 0) {
+                    editable = false;
+                }
+                if (noDisponibleMarcado && !(etapa === 'Ganar' && i === 3)) {
+                    editable = false;
+                }
+                html += '<td class="escalera-check-item ' + (done ? 'done' : '') + '">';
+                html += '<span class="escalera-modal-sub-label">' + escapeHtml(nombreSub) + '</span>';
+                html += '<label class="escalera-check-label ' + (editable ? '' : 'disabled') + '">';
+                html += '<input type="checkbox" class="js-escalera-check" data-etapa="' + escapeHtml(etapa) + '" data-indice="' + i + '" ' + (done ? 'checked' : '') + ' ' + (editable && !modalState.guardando ? '' : 'disabled') + '>';
+                html += '<span>' + (done ? '<span class="escalera-check-icon">&#10003;</span>Completado' : 'Pendiente') + '</span>';
+                html += '</label>';
+                html += '</td>';
+            });
+
+            html += '</tr>';
+        }
+
+        html += '</tbody></table></div>';
+
+        if (noDisponibleMarcado) {
+            html += '<div class="no-disponible-panel">';
+            html += '<div class="no-disponible-header">';
+            html += '<label for="js-no-disponible-observacion">Observacion de No se dispone</label>';
+            html += '<button type="button" class="no-disponible-save-btn js-guardar-no-disponible" ' + (modalState.guardando ? 'disabled' : '') + '>Guardar observacion</button>';
+            html += '</div>';
+            html += '<textarea id="js-no-disponible-observacion" ' + (modalState.guardando ? 'disabled' : '') + ' placeholder="Describe por que no se logro concretar esta persona...">' + escapeHtml(modalState.meta.no_disponible_observacion || '') + '</textarea>';
+            html += '<div class="no-disponible-actions">';
+            html += '<button type="button" class="no-disponible-save-btn js-guardar-no-disponible" ' + (modalState.guardando ? 'disabled' : '') + '>Guardar observacion</button>';
+            html += '</div></div>';
+            html += '<div class="escalera-modal-footer-actions">';
+            html += '<button type="button" class="no-disponible-save-btn js-guardar-no-disponible" ' + (modalState.guardando ? 'disabled' : '') + '>Guardar observacion</button>';
+            html += '</div>';
+        }
+
+        html += '<div class="escalera-status-msg ' + (mensaje ? (esError ? 'error' : 'success') : '') + '">' + (mensaje ? escapeHtml(mensaje) : '') + '</div>';
+        body.innerHTML = html;
+        enlazarBotonesGuardarNoDisponible();
+    }
+
+    function guardarNoDisponibleDesdeUI() {
+        if (modalState.guardando) {
+            alert('Ya se esta guardando la informacion.');
+            return;
+        }
+
+        const textarea = document.getElementById('js-no-disponible-observacion');
+        const observacion = textarea ? textarea.value.trim() : '';
+        if (observacion === '') {
+            alert('Debes escribir una observacion para guardar.');
+            renderModal('La observacion es obligatoria para No se dispone', true);
+            return;
+        }
+
+        modalState.meta.no_disponible_observacion = observacion;
+        guardarChecklist('Ganar', 3, true, observacion, {
+            cerrarModalExito: true,
+            recargarDespues: true,
+            mensajeExito: 'Se guardo la informacion con exito'
+        });
+    }
+
+    function enlazarBotonesGuardarNoDisponible() {
+        body.querySelectorAll('.js-guardar-no-disponible').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                guardarNoDisponibleDesdeUI();
+            });
+        });
+    }
+
+    async function guardarChecklist(etapa, indice, marcado, observacionNoDisponible, opciones) {
+        if (!modalState.personaId || modalState.guardando) {
+            if (modalState.guardando) {
+                renderModal('Guardando informacion, espera un momento...');
+            }
+            return;
+        }
+
+        const opts = Object.assign({
+            cerrarModalExito: false,
+            recargarDespues: false,
+            mensajeExito: 'Checklist actualizado'
+        }, opciones || {});
+
+        modalState.guardando = true;
+        renderModal('Guardando cambios...');
+
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    id_persona: modalState.personaId,
+                    etapa: etapa,
+                    indice: indice,
+                    marcado: marcado ? 1 : 0,
+                    observacion_no_disponible: (etapa === 'Ganar' && indice === 3) ? (observacionNoDisponible || '') : ''
+                })
+            });
+
+            const contentType = (response.headers.get('content-type') || '').toLowerCase();
+            if (contentType.indexOf('application/json') === -1) {
+                const raw = await response.text();
+                throw new Error('Respuesta invalida del servidor: ' + raw.substring(0, 120));
+            }
+
+            const data = await response.json();
+            if (!response.ok || !data || !data.success) {
+                throw new Error((data && data.message) ? data.message : 'No se pudo guardar el checklist');
+            }
+
+            if (data.checklist && typeof data.checklist === 'object') {
+                modalState.checklist = combinarChecklist(modalState.checklist, data.checklist);
+                modalState.meta = extraerMetaChecklist(data.checklist);
+            }
+            if (data.proceso && etapas.includes(data.proceso)) {
+                modalState.proceso = data.proceso;
+            }
+
+            if (modalState.checklist.Ganar && modalState.checklist.Ganar.length > 0) {
+                modalState.checklist.Ganar[0] = modalState.asignadoALider;
+            }
+
+            if (modalState.botonOrigen) {
+                modalState.botonOrigen.setAttribute('data-persona-proceso', modalState.proceso);
+                modalState.botonOrigen.setAttribute('data-persona-checklist', JSON.stringify(Object.assign({}, modalState.checklist, { _meta: modalState.meta })));
+            }
+
+            modalState.guardando = false;
+
+            if (opts.cerrarModalExito) {
+                alert(opts.mensajeExito);
+                cerrarModal();
+                if (opts.recargarDespues) {
+                    window.location.reload();
+                }
+                return;
+            }
+
+            renderModal(opts.mensajeExito);
+        } catch (error) {
+            modalState.guardando = false;
+            if (opts.cerrarModalExito) {
+                alert('No se pudo guardar: ' + (error.message || 'Error inesperado'));
+            }
+            renderModal(error.message || 'Error al guardar', true);
+        }
+    }
+
+    function cerrarModal() {
+        backdrop.classList.remove('show');
+        backdrop.setAttribute('aria-hidden', 'true');
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+    }
+
+    document.querySelectorAll('.js-escalera-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            abrirModal(
+                this.getAttribute('data-persona-id') || '0',
+                this.getAttribute('data-persona-nombre') || '',
+                this.getAttribute('data-persona-proceso') || '',
+                this.getAttribute('data-persona-checklist') || '',
+                this,
+                this.getAttribute('data-persona-asignado') === '1'
+            );
+        });
     });
 
-    filtrados.forEach(function(lider) {
-        const option = document.createElement('option');
-        option.value = String(lider.Id_Persona);
-        option.textContent = lider.Nombre;
-        filtroLider.appendChild(option);
+    if (body) {
+        body.addEventListener('change', function(e) {
+            const target = e.target;
+            if (!target || !target.classList.contains('js-escalera-check')) {
+                return;
+            }
+
+            const etapa = target.getAttribute('data-etapa') || '';
+            const indice = parseInt(target.getAttribute('data-indice') || '-1', 10);
+            if (!etapa || indice < 0) {
+                target.checked = !target.checked;
+                return;
+            }
+
+            if (etapa === 'Ganar' && indice === 3 && target.checked) {
+                modalState.checklist.Ganar[3] = true;
+                renderModal('Escribe la observacion y guardala para marcar No se dispone');
+                return;
+            }
+
+            if (etapa === 'Ganar' && indice === 3 && !target.checked) {
+                modalState.meta.no_disponible_observacion = '';
+                guardarChecklist(etapa, indice, false, '');
+                return;
+            }
+
+            guardarChecklist(etapa, indice, !!target.checked);
+        });
+
+        body.addEventListener('keydown', function(e) {
+            const target = e.target;
+            if (!target || target.id !== 'js-no-disponible-observacion') {
+                return;
+            }
+
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                guardarNoDisponibleDesdeUI();
+            }
+        });
+    }
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', cerrarModal);
+    }
+
+    if (backdrop) {
+        backdrop.addEventListener('click', function(e) {
+            if (e.target === backdrop) {
+                cerrarModal();
+            }
+        });
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && backdrop && backdrop.classList.contains('show')) {
+            cerrarModal();
+        }
     });
-
-    const valorDeseado = valorPrevioLider !== '' ? valorPrevioLider : String(liderActual || '');
-    const existe = Array.from(filtroLider.options).some(function(opt) {
-        return opt.value === valorDeseado;
-    });
-    filtroLider.value = existe ? valorDeseado : '';
-}
-
-function renderCelulasDependiente() {
-    if (!filtroCelula) return;
-
-    const ministerioSeleccionado = filtroMinisterio ? filtroMinisterio.value : '';
-    const liderSeleccionado = filtroLider ? filtroLider.value : '';
-    const valorPrevioCelula = String(filtroCelula.value || '');
-
-    filtroCelula.innerHTML = '';
-
-    const optionTodas = document.createElement('option');
-    optionTodas.value = '';
-    optionTodas.textContent = 'Todas las células';
-    filtroCelula.appendChild(optionTodas);
-
-    const optionSinCelula = document.createElement('option');
-    optionSinCelula.value = '0';
-    optionSinCelula.textContent = 'Sin célula';
-    filtroCelula.appendChild(optionSinCelula);
-
-    const filtradas = celulasDisponibles.filter(function(celula) {
-        const coincideMinisterio = !ministerioSeleccionado || ministerioSeleccionado === '0'
-            ? true
-            : String(celula.Id_Ministerio || '') === String(ministerioSeleccionado);
-
-        const coincideLider = !liderSeleccionado || liderSeleccionado === '0'
-            ? true
-            : String(celula.Id_Lider || '') === String(liderSeleccionado);
-
-        return coincideMinisterio && coincideLider;
-    });
-
-    filtradas.forEach(function(celula) {
-        const option = document.createElement('option');
-        option.value = String(celula.Id_Celula);
-        option.textContent = celula.Nombre_Celula;
-        filtroCelula.appendChild(option);
-    });
-
-    const valorDeseado = valorPrevioCelula !== '' ? valorPrevioCelula : String(celulaActual || '');
-    const existe = Array.from(filtroCelula.options).some(function(opt) {
-        return opt.value === valorDeseado;
-    });
-    filtroCelula.value = existe ? valorDeseado : '';
-}
-
-if (filtroMinisterio && filtroLider) {
-    filtroMinisterio.addEventListener('change', function() {
-        renderLideresDependiente();
-        renderCelulasDependiente();
-    });
-    filtroLider.addEventListener('change', function() {
-        renderCelulasDependiente();
-    });
-    renderLideresDependiente();
-    renderCelulasDependiente();
-    liderActual = '';
-    celulaActual = '';
-}
+})();
 </script>
 
 <?php include VIEWS . '/layout/footer.php'; ?>
+

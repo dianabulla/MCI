@@ -3,18 +3,18 @@
  * Lista plantillas de WhatsApp Cloud API para verificar nombre + idioma exactos.
  *
  * Uso:
- * http://localhost/mcimadrid/test_whatsapp_templates.php?waba_id=912285834724033
+ * http://localhost/mcimadrid/test_whatsapp_templates.php?waba_id=966067799083663
  *
  * Opcional:
- * - token=... (si no se envía, usa el temporal por defecto)
+ * - token=... (si no se envía, toma WHATSAPP_TOKEN del entorno)
  */
 
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 header('Content-Type: text/html; charset=UTF-8');
 
-$token = trim((string)($_GET['token'] ?? 'EAAhNJ1hCbaYBQZCmqWuBLBcsvBI7BOFm5LwQMFPy8xxxGHRDZAZAHp69B20wZCOiP1qqR6FBrg9Aq4rUNwxQnIF02Jc37vzZC4IoKsCAvgYB0eThKMYhqGKq0ldmjVlnKAgV78xILrJiZACDaabQKJZCeCioK7of3m6fC8ZBm0HNYAkA8ExB4tqw5z0ESYWr3TvGR0Ypa2B1eq67F493GoJAHD11lUqfuIzGPqiDq8ZC0leaMhdHJGXKob2mTIj1zatsZCbvlzpvZBDxfN8XARZC52tpGQZDZD'));
-$wabaId = trim((string)($_GET['waba_id'] ?? '912285834724033'));
+$token = trim((string)($_GET['token'] ?? getenv('WHATSAPP_TOKEN') ?? ''));
+$wabaId = trim((string)($_GET['waba_id'] ?? '966067799083663'));
 
 function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); }
 function onlyDigits(string $v): string { return preg_replace('/\D+/', '', $v) ?: ''; }
@@ -23,7 +23,8 @@ $wabaId = onlyDigits($wabaId);
 
 if ($token === '' || $wabaId === '') {
     echo '<h2>Faltan datos</h2>';
-    echo '<p>Usa: http://localhost/mcimadrid/test_whatsapp_templates.php?waba_id=912285834724033</p>';
+  echo '<p>Usa: http://localhost/mcimadrid/test_whatsapp_templates.php?waba_id=966067799083663</p>';
+  echo '<p>Define token en entorno: WHATSAPP_TOKEN (o usa ?token=... solo temporalmente).</p>';
     exit;
 }
 

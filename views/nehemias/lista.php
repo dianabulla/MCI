@@ -1,6 +1,7 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 <?php
     $permisosUi = is_array($permisosUi ?? null) ? $permisosUi : [];
+    $estadisticasFiltros = is_array($estadisticasFiltros ?? null) ? $estadisticasFiltros : [];
     $puedeVerCedula = !empty($permisosUi['ver_cedula']);
     $puedeVerTelefono = !empty($permisosUi['ver_telefono']);
     $puedeVerSubidoLink = !empty($permisosUi['ver_subido_link']);
@@ -11,6 +12,14 @@
     $mostrarBotonEditar = !empty($permisosUi['mostrar_boton_editar']);
     $mostrarBotonEliminar = !empty($permisosUi['mostrar_boton_eliminar']);
     $mostrarAcciones = $mostrarBotonEditar || $mostrarBotonEliminar;
+    $conteoAceptaSi = (int)($estadisticasFiltros['acepta']['1'] ?? 0);
+    $conteoAceptaNo = (int)($estadisticasFiltros['acepta']['0'] ?? 0);
+    $conteoMensaje1Si = (int)($estadisticasFiltros['mesaje_1enviado']['1'] ?? 0);
+    $conteoMensaje1No = (int)($estadisticasFiltros['mesaje_1enviado']['0'] ?? 0);
+    $conteoNoRecibirMasSi = (int)($estadisticasFiltros['no_recibir_mas']['1'] ?? 0);
+    $conteoNoRecibirMasNo = (int)($estadisticasFiltros['no_recibir_mas']['0'] ?? 0);
+    $conteoFechaCon = (int)($estadisticasFiltros['mesaje1_fehca_estado']['con_fecha'] ?? 0);
+    $conteoFechaSin = (int)($estadisticasFiltros['mesaje1_fehca_estado']['sin_fecha'] ?? 0);
     $totalColumnasTabla = 5
         + ($puedeVerCedula ? 1 : 0)
         + ($puedeVerTelefono ? 1 : 0)
@@ -43,6 +52,9 @@
         <div>
             <a href="?url=nehemias/whatsapp-campanas" class="btn btn-success btn-action me-2">
                 <i class="bi bi-whatsapp"></i> WhatsApp Campañas
+            </a>
+            <a href="?url=nehemias/testigos-electorales" class="btn btn-info btn-action me-2">
+                <i class="bi bi-person-badge"></i> Testigos Electorales
             </a>
             <a href="?url=nehemias/seremos1200" class="btn btn-warning btn-action me-2">
                 <i class="bi bi-people"></i> Seremos 1200
@@ -211,8 +223,8 @@
                                 <label class="form-label mb-1" style="font-size: 12px;">Acepta</label>
                                 <select name="acepta" class="form-select form-select-sm">
                                     <option value="">Todos</option>
-                                    <option value="1" <?= $filtros['acepta'] === '1' ? 'selected' : '' ?>>Sí</option>
-                                    <option value="0" <?= $filtros['acepta'] === '0' ? 'selected' : '' ?>>No</option>
+                                    <option value="1" <?= $filtros['acepta'] === '1' ? 'selected' : '' ?>>Sí (<?= $conteoAceptaSi ?>)</option>
+                                    <option value="0" <?= $filtros['acepta'] === '0' ? 'selected' : '' ?>>No (<?= $conteoAceptaNo ?>)</option>
                                 </select>
                             </div>
                         <?php endif; ?>
@@ -220,24 +232,24 @@
                             <label class="form-label mb-1" style="font-size: 12px;">Mensaje 1 enviado</label>
                             <select name="mesaje_1enviado" class="form-select form-select-sm">
                                 <option value="">Todos</option>
-                                <option value="1" <?= ($filtros['mesaje_1enviado'] ?? '') === '1' ? 'selected' : '' ?>>Sí</option>
-                                <option value="0" <?= ($filtros['mesaje_1enviado'] ?? '') === '0' ? 'selected' : '' ?>>No</option>
+                                <option value="1" <?= ($filtros['mesaje_1enviado'] ?? '') === '1' ? 'selected' : '' ?>>Sí (<?= $conteoMensaje1Si ?>)</option>
+                                <option value="0" <?= ($filtros['mesaje_1enviado'] ?? '') === '0' ? 'selected' : '' ?>>No (<?= $conteoMensaje1No ?>)</option>
                             </select>
                         </div>
                         <div class="col-md-3 mt-2">
                             <label class="form-label mb-1" style="font-size: 12px;">No recibir más</label>
                             <select name="no_recibir_mas" class="form-select form-select-sm">
                                 <option value="">Todos</option>
-                                <option value="1" <?= ($filtros['no_recibir_mas'] ?? '') === '1' ? 'selected' : '' ?>>Sí</option>
-                                <option value="0" <?= ($filtros['no_recibir_mas'] ?? '') === '0' ? 'selected' : '' ?>>No</option>
+                                <option value="1" <?= ($filtros['no_recibir_mas'] ?? '') === '1' ? 'selected' : '' ?>>Sí (<?= $conteoNoRecibirMasSi ?>)</option>
+                                <option value="0" <?= ($filtros['no_recibir_mas'] ?? '') === '0' ? 'selected' : '' ?>>No (<?= $conteoNoRecibirMasNo ?>)</option>
                             </select>
                         </div>
                         <div class="col-md-3 mt-2">
                             <label class="form-label mb-1" style="font-size: 12px;">Fecha envío mensaje 1</label>
                             <select name="mesaje1_fehca_estado" class="form-select form-select-sm">
                                 <option value="">Todos</option>
-                                <option value="con_fecha" <?= ($filtros['mesaje1_fehca_estado'] ?? '') === 'con_fecha' ? 'selected' : '' ?>>Con fecha</option>
-                                <option value="sin_fecha" <?= ($filtros['mesaje1_fehca_estado'] ?? '') === 'sin_fecha' ? 'selected' : '' ?>>Sin fecha</option>
+                                <option value="con_fecha" <?= ($filtros['mesaje1_fehca_estado'] ?? '') === 'con_fecha' ? 'selected' : '' ?>>Con fecha (<?= $conteoFechaCon ?>)</option>
+                                <option value="sin_fecha" <?= ($filtros['mesaje1_fehca_estado'] ?? '') === 'sin_fecha' ? 'selected' : '' ?>>Sin fecha (<?= $conteoFechaSin ?>)</option>
                             </select>
                         </div>
                     </div>

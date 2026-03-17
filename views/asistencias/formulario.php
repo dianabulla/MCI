@@ -93,6 +93,9 @@ const celulasDisponibles = <?= json_encode($celulas ?? []) ?>;
 // Datos de personas desde PHP
 const personas = <?= json_encode($personas ?? []) ?>;
 
+// Conteo de asistencias completas por persona (Asistio = 1)
+const conteoAsistenciasPorPersona = <?= json_encode($conteo_asistencias_por_persona ?? []) ?>;
+
 // Célula preseleccionada (opcional)
 const celulaPreseleccionada = <?= json_encode($celula_preseleccionada ?? null) ?>;
 
@@ -226,31 +229,61 @@ function cargarMiembrosCelula(celulaId) {
         return;
     }
 
-    // Generar lista de checkboxes para cada miembro
-    let html = '<div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">';
-    html += '<table style="width: 100%;">';
-    html += '<thead><tr><th style="text-align: left; padding: 10px;">Nombre</th><th style="text-align: center; padding: 10px;">Asistió</th></tr></thead>';
-    html += '<tbody>';
-    
+    const miembrosNuevos = [];
+    const miembrosFrecuentes = [];
+
     miembrosCelula.forEach(miembro => {
-        html += '<tr style="border-bottom: 1px solid #dee2e6;">';
-        html += '<td style="padding: 10px;">';
-        html += '<strong>' + escapeHtml(miembro.Nombre + ' ' + miembro.Apellido) + '</strong>';
-        html += '</td>';
-        html += '<td style="text-align: center; padding: 10px;">';
-        // Campo hidden para enviar siempre el ID (valor 0 = no asistió)
-        html += '<input type="hidden" name="asistencias[' + miembro.Id_Persona + ']" value="0">';
-        // Checkbox que sobrescribe con 1 si está marcado
-        html += '<input type="checkbox" name="asistencias[' + miembro.Id_Persona + ']" value="1" ';
-        html += 'style="width: 20px; height: 20px; cursor: pointer;">';
-        html += '</td>';
-        html += '</tr>';
+        const idPersona = parseInt(miembro.Id_Persona, 10);
+        const totalAsistencias = parseInt(conteoAsistenciasPorPersona[idPersona] || 0, 10);
+        if (totalAsistencias >= 3) {
+            miembrosFrecuentes.push({ ...miembro, totalAsistencias });
+        } else {
+            miembrosNuevos.push({ ...miembro, totalAsistencias });
+        }
     });
-    
-    html += '</tbody></table>';
-    html += '<p style="margin-top: 15px; color: #666; font-size: 0.9em;">';
-    html += '<strong>Total de miembros:</strong> ' + miembrosCelula.length;
-    html += '</p></div>';
+
+    const construirTablaSeccion = (titulo, miembros, tipo) => {
+        let bloque = '<div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 14px;">';
+        bloque += '<h4 style="margin: 0 0 10px; color: #2d405f;">' + escapeHtml(titulo) + ' (' + miembros.length + ')</h4>';
+
+        if (!miembros.length) {
+            bloque += '<p style="margin: 0; color: #6c7a90; font-size: 0.92em;">Sin personas en esta lista.</p>';
+            bloque += '</div>';
+            return bloque;
+        }
+
+        bloque += '<table style="width: 100%;">';
+        bloque += '<thead><tr><th style="text-align: left; padding: 8px;">Nombre</th><th style="text-align: left; padding: 8px;">Estado</th><th style="text-align: center; padding: 8px;">Asistió</th></tr></thead>';
+        bloque += '<tbody>';
+
+        miembros.forEach(miembro => {
+            const nombreCompleto = (miembro.Nombre || '') + ' ' + (miembro.Apellido || '');
+            const estado = tipo === 'nuevo'
+                ? ('Nuevo (' + (miembro.totalAsistencias || 0) + '/3)')
+                : ('Frecuente (' + (miembro.totalAsistencias || 0) + ')');
+
+            bloque += '<tr style="border-bottom: 1px solid #dee2e6;">';
+            bloque += '<td style="padding: 8px;"><strong>' + escapeHtml(nombreCompleto.trim()) + '</strong></td>';
+            bloque += '<td style="padding: 8px; color: #5a6b86;">' + escapeHtml(estado) + '</td>';
+            bloque += '<td style="text-align: center; padding: 8px;">';
+            bloque += '<input type="hidden" name="asistencias[' + miembro.Id_Persona + ']" value="0">';
+            bloque += '<input type="checkbox" name="asistencias[' + miembro.Id_Persona + ']" value="1" style="width: 20px; height: 20px; cursor: pointer;">';
+            bloque += '</td>';
+            bloque += '</tr>';
+        });
+
+        bloque += '</tbody></table>';
+        bloque += '</div>';
+        return bloque;
+    };
+
+    let html = '';
+    html += construirTablaSeccion('Asistentes nuevos', miembrosNuevos, 'nuevo');
+    html += construirTablaSeccion('Asistentes frecuentes', miembrosFrecuentes, 'frecuente');
+    html += '<p style="margin-top: 6px; color: #666; font-size: 0.9em;">';
+    html += '<strong>Total de miembros:</strong> ' + miembrosCelula.length + ' | '; 
+    html += '<strong>Regla:</strong> al completar 3 asistencias, pasa de Nuevo a Frecuente.';
+    html += '</p>';
     
     listaMiembros.innerHTML = html;
     miembrosContainer.style.display = 'block';

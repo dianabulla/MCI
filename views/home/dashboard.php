@@ -36,6 +36,14 @@
         <a href="<?= PUBLIC_URL ?>?url=eventos" class="btn btn-primary btn-sm">Ver todos</a>
     </div>
     <?php endif; ?>
+
+    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver')): ?>
+    <div class="dashboard-card" style="border-left-color: #6f42c1;">
+        <h3>Líderes de Célula</h3>
+        <div class="value" style="color: #6f42c1;"><?= (int)($totalLideresCelula ?? 0) ?></div>
+        <a href="<?= PUBLIC_URL ?>?url=home/lideres-celula" class="btn btn-primary btn-sm">Ver actividad</a>
+    </div>
+    <?php endif; ?>
 </div>
 
 <?php if (!empty($eventosProximos) && (AuthController::esAdministrador() || AuthController::tienePermiso('eventos', 'ver'))): ?>

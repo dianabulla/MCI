@@ -8,6 +8,40 @@ require_once APP . '/Models/BaseModel.php';
 class Nehemias extends BaseModel {
     protected $table = 'nehemias';
     protected $primaryKey = 'Id_Nehemias';
+    private $columnasDisponibles = null;
+
+    private function obtenerColumnasDisponibles() {
+        if (is_array($this->columnasDisponibles)) {
+            return $this->columnasDisponibles;
+        }
+
+        $this->columnasDisponibles = [];
+
+        try {
+            $stmt = $this->db->query("SHOW COLUMNS FROM {$this->table}");
+            $rows = $stmt ? $stmt->fetchAll() : [];
+            foreach ($rows as $row) {
+                $nombre = (string)($row['Field'] ?? '');
+                if ($nombre !== '') {
+                    $this->columnasDisponibles[$nombre] = true;
+                }
+            }
+        } catch (Exception $e) {
+            $this->columnasDisponibles = [];
+        }
+
+        return $this->columnasDisponibles;
+    }
+
+    private function primeraColumnaDisponible(array $candidatas) {
+        $columnas = $this->obtenerColumnasDisponibles();
+        foreach ($candidatas as $columna) {
+            if (isset($columnas[$columna])) {
+                return $columna;
+            }
+        }
+        return null;
+    }
 
     private function sqlTextoNormalizado($campo) {
         return "UPPER(TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE($campo, 'á', 'a'), 'é', 'e'), 'í', 'i'), 'ó', 'o'), 'ú', 'u'), 'ñ', 'n'), 'Á', 'A'), 'É', 'E'), 'Í', 'I'), 'Ó', 'O'), 'Ú', 'U'), 'Ñ', 'N')))";
@@ -110,22 +144,31 @@ class Nehemias extends BaseModel {
 
         // Filtro por mensaje 1 enviado
         if (isset($filtros['mesaje_1enviado']) && $filtros['mesaje_1enviado'] !== '') {
-            $sql .= " AND COALESCE(mesaje_1enviado, 0) = ?";
-            $params[] = $filtros['mesaje_1enviado'];
+            $colMensaje1 = $this->primeraColumnaDisponible(['mesaje_1enviado', 'mesaje1_enviado']);
+            if ($colMensaje1 !== null) {
+                $sql .= " AND COALESCE({$colMensaje1}, 0) = ?";
+                $params[] = $filtros['mesaje_1enviado'];
+            }
         }
 
         // Filtro por no recibir más
         if (isset($filtros['no_recibir_mas']) && $filtros['no_recibir_mas'] !== '') {
-            $sql .= " AND COALESCE(no_recibir_mas, 0) = ?";
-            $params[] = $filtros['no_recibir_mas'];
+            $colNoRecibir = $this->primeraColumnaDisponible(['no_recibir_mas']);
+            if ($colNoRecibir !== null) {
+                $sql .= " AND COALESCE({$colNoRecibir}, 0) = ?";
+                $params[] = $filtros['no_recibir_mas'];
+            }
         }
 
         // Filtro por estado de fecha de envío del mensaje 1
         if (isset($filtros['mesaje1_fehca_estado']) && $filtros['mesaje1_fehca_estado'] !== '') {
-            if ($filtros['mesaje1_fehca_estado'] === 'con_fecha') {
-                $sql .= " AND mesaje1_fehca IS NOT NULL AND mesaje1_fehca != 0";
-            } elseif ($filtros['mesaje1_fehca_estado'] === 'sin_fecha') {
-                $sql .= " AND (mesaje1_fehca IS NULL OR mesaje1_fehca = 0)";
+            $colFechaMensaje1 = $this->primeraColumnaDisponible(['mesaje1_fehca', 'mesaje1_fecha']);
+            if ($colFechaMensaje1 !== null) {
+                if ($filtros['mesaje1_fehca_estado'] === 'con_fecha') {
+                    $sql .= " AND {$colFechaMensaje1} IS NOT NULL AND {$colFechaMensaje1} != 0";
+                } elseif ($filtros['mesaje1_fehca_estado'] === 'sin_fecha') {
+                    $sql .= " AND ({$colFechaMensaje1} IS NULL OR {$colFechaMensaje1} = 0)";
+                }
             }
         }
 

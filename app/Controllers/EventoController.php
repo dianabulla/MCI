@@ -4,17 +4,88 @@
  */
 
 require_once APP . '/Models/Evento.php';
+require_once APP . '/Models/EventoModulo.php';
 require_once APP . '/Helpers/DataIsolation.php';
 
 class EventoController extends BaseController {
     private $eventoModel;
+    private $eventoModuloModel;
     private $uploadDir;
     private $uploadUrlBase;
 
     public function __construct() {
         $this->eventoModel = new Evento();
+        $this->eventoModuloModel = new EventoModulo();
         $this->uploadDir = ROOT . '/public/uploads/eventos';
         $this->uploadUrlBase = rtrim(PUBLIC_URL, '/') . '/uploads/eventos';
+    }
+
+    private function getModuloConfig($tipo) {
+        $tipo = strtolower(trim((string)$tipo));
+        $map = [
+            'universidad_vida' => [
+                'tipo' => 'universidad_vida',
+                'titulo' => 'Universidad de la vida',
+                'route_privada' => 'eventos/universidad-vida',
+                'route_publica' => 'eventos/universidad-vida/publico'
+            ],
+            'capacitacion_destino' => [
+                'tipo' => 'capacitacion_destino',
+                'titulo' => 'Capacitación destino',
+                'route_privada' => 'eventos/capacitacion-destino',
+                'route_publica' => 'eventos/capacitacion-destino/publico'
+            ]
+        ];
+
+        return $map[$tipo] ?? null;
+    }
+
+    private function redirigirModulo($tipo) {
+        $config = $this->getModuloConfig($tipo);
+        if (!$config) {
+            $this->redirect('eventos');
+            return;
+        }
+
+        $this->redirect($config['route_privada']);
+    }
+
+    private function renderModuloContenido($tipo) {
+        if (!AuthController::tienePermiso('eventos', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $config = $this->getModuloConfig($tipo);
+        if (!$config) {
+            $this->redirect('eventos');
+            return;
+        }
+
+        $items = $this->eventoModuloModel->getByModulo($config['tipo']);
+        $idEditar = (int)($_GET['editar'] ?? 0);
+        $itemEditar = null;
+        if ($idEditar > 0) {
+            $item = $this->eventoModuloModel->getById($idEditar);
+            if (!empty($item) && (string)($item['Tipo_Modulo'] ?? '') === $config['tipo']) {
+                $itemEditar = $item;
+            }
+        }
+
+        $urlPublica = $this->buildAbsolutePublicUrl($config['route_publica']);
+        $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=' . urlencode($urlPublica);
+
+        $error = $_SESSION['evento_modulo_error'] ?? null;
+        unset($_SESSION['evento_modulo_error']);
+
+        $this->view('eventos/modulo_contenido', [
+            'modulo' => $config,
+            'items' => $items,
+            'itemEditar' => $itemEditar,
+            'urlPublica' => $urlPublica,
+            'qrUrl' => $qrUrl,
+            'error' => $error
+        ]);
     }
 
     public function index() {
@@ -189,6 +260,175 @@ class EventoController extends BaseController {
     public function proximosPublico() {
         $eventos = $this->eventoModel->getUpcoming();
         $this->view('eventos/proximos_publico', ['eventos' => $eventos]);
+    }
+
+    public function universidadVida() {
+        $this->renderModuloContenido('universidad_vida');
+    }
+
+    public function capacitacionDestino() {
+        $this->renderModuloContenido('capacitacion_destino');
+    }
+
+    public function guardarModuloContenido() {
+        if (!AuthController::tienePermiso('eventos', 'crear') && !AuthController::tienePermiso('eventos', 'editar')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('eventos');
+            return;
+        }
+
+        $tipo = (string)($_POST['tipo_modulo'] ?? '');
+        $config = $this->getModuloConfig($tipo);
+        if (!$config) {
+            $this->redirect('eventos');
+            return;
+        }
+
+        $idContenido = (int)($_POST['id_contenido'] ?? 0);
+
+        try {
+            $nuevaImagen = $this->procesarArchivo('imagen_modulo', ['jpg', 'jpeg', 'png', 'webp', 'gif'], 5 * 1024 * 1024);
+            $nuevoVideo = $this->procesarArchivo('video_modulo', ['mp4', 'webm', 'mov', 'm4v'], 25 * 1024 * 1024);
+
+            $data = [
+                'Tipo_Modulo' => $config['tipo'],
+                'Titulo' => trim((string)($_POST['titulo'] ?? '')),
+                'Parrafo' => trim((string)($_POST['parrafo'] ?? '')),
+                'Orden' => max(0, (int)($_POST['orden'] ?? 0)),
+                'Estado_Activo' => !empty($_POST['estado_activo']) ? 1 : 0,
+                'Fecha_Publicacion_Desde' => trim((string)($_POST['fecha_publicacion_desde'] ?? '')),
+                'Fecha_Publicacion_Hasta' => trim((string)($_POST['fecha_publicacion_hasta'] ?? ''))
+            ];
+
+            $data['Fecha_Publicacion_Desde'] = $data['Fecha_Publicacion_Desde'] !== '' ? $data['Fecha_Publicacion_Desde'] : null;
+            $data['Fecha_Publicacion_Hasta'] = $data['Fecha_Publicacion_Hasta'] !== '' ? $data['Fecha_Publicacion_Hasta'] : null;
+
+            if ($data['Fecha_Publicacion_Desde'] && $data['Fecha_Publicacion_Hasta']
+                && $data['Fecha_Publicacion_Desde'] > $data['Fecha_Publicacion_Hasta']) {
+                throw new Exception('La fecha de publicación desde no puede ser mayor que hasta.');
+            }
+
+            if ($data['Titulo'] === '' || $data['Parrafo'] === '') {
+                throw new Exception('Título y párrafo son obligatorios.');
+            }
+
+            if ($idContenido > 0) {
+                $actual = $this->eventoModuloModel->getById($idContenido);
+                if (empty($actual) || (string)($actual['Tipo_Modulo'] ?? '') !== $config['tipo']) {
+                    throw new Exception('Contenido no válido para este módulo.');
+                }
+
+                $data['Imagen'] = $actual['Imagen'] ?? null;
+                $data['Video'] = $actual['Video'] ?? null;
+
+                if (!empty($_POST['eliminar_imagen'])) {
+                    $this->eliminarArchivoFisico($actual['Imagen'] ?? null);
+                    $data['Imagen'] = null;
+                }
+
+                if (!empty($_POST['eliminar_video'])) {
+                    $this->eliminarArchivoFisico($actual['Video'] ?? null);
+                    $data['Video'] = null;
+                }
+
+                if ($nuevaImagen !== null) {
+                    $this->eliminarArchivoFisico($actual['Imagen'] ?? null);
+                    $data['Imagen'] = $nuevaImagen;
+                }
+
+                if ($nuevoVideo !== null) {
+                    $this->eliminarArchivoFisico($actual['Video'] ?? null);
+                    $data['Video'] = $nuevoVideo;
+                }
+
+                $this->eventoModuloModel->update($idContenido, $data);
+            } else {
+                $data['Imagen'] = $nuevaImagen;
+                $data['Video'] = $nuevoVideo;
+                $this->eventoModuloModel->create($data);
+            }
+        } catch (Exception $e) {
+            $_SESSION['evento_modulo_error'] = $e->getMessage();
+        }
+
+        $this->redirigirModulo($config['tipo']);
+    }
+
+    public function duplicarModuloContenido() {
+        if (!AuthController::tienePermiso('eventos', 'crear')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $tipo = (string)($_GET['tipo'] ?? '');
+        $config = $this->getModuloConfig($tipo);
+        if (!$config) {
+            $this->redirect('eventos');
+            return;
+        }
+
+        $idContenido = (int)($_GET['id'] ?? 0);
+        if ($idContenido > 0) {
+            $item = $this->eventoModuloModel->getById($idContenido);
+            if (!empty($item) && (string)($item['Tipo_Modulo'] ?? '') === $config['tipo']) {
+                $this->eventoModuloModel->duplicar($idContenido);
+            }
+        }
+
+        $this->redirigirModulo($config['tipo']);
+    }
+
+    public function eliminarModuloContenido() {
+        if (!AuthController::tienePermiso('eventos', 'eliminar')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $tipo = (string)($_GET['tipo'] ?? '');
+        $config = $this->getModuloConfig($tipo);
+        if (!$config) {
+            $this->redirect('eventos');
+            return;
+        }
+
+        $idContenido = (int)($_GET['id'] ?? 0);
+        if ($idContenido > 0) {
+            $actual = $this->eventoModuloModel->getById($idContenido);
+            if (!empty($actual) && (string)($actual['Tipo_Modulo'] ?? '') === $config['tipo']) {
+                $this->eliminarArchivoFisico($actual['Imagen'] ?? null);
+                $this->eliminarArchivoFisico($actual['Video'] ?? null);
+                $this->eventoModuloModel->delete($idContenido);
+            }
+        }
+
+        $this->redirigirModulo($config['tipo']);
+    }
+
+    private function renderModuloPublico($tipo) {
+        $config = $this->getModuloConfig($tipo);
+        if (!$config) {
+            http_response_code(404);
+            echo 'Módulo no encontrado';
+            return;
+        }
+
+        $items = $this->eventoModuloModel->getByModuloPublico($config['tipo']);
+        $this->view('eventos/modulo_publico', [
+            'modulo' => $config,
+            'items' => $items
+        ]);
+    }
+
+    public function universidadVidaPublico() {
+        $this->renderModuloPublico('universidad_vida');
+    }
+
+    public function capacitacionDestinoPublico() {
+        $this->renderModuloPublico('capacitacion_destino');
     }
 
     private function procesarArchivo($campo, $extensionesPermitidas, $maxBytes) {

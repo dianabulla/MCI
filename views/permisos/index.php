@@ -95,6 +95,13 @@
 </div>
 
 <script>
+console.info('Permisos AJAX build: 2026-03-02-2');
+
+function getPermisosActualizarEndpoint() {
+    const endpointFromServer = <?= json_encode((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . strtok(($_SERVER['REQUEST_URI'] ?? '/public/'), '?') . '?url=permisos/actualizar') ?>;
+    return endpointFromServer;
+}
+
 document.querySelectorAll('.permiso-check').forEach(checkbox => {
     checkbox.addEventListener('change', function() {
         const idRol = this.dataset.rol;
@@ -102,15 +109,25 @@ document.querySelectorAll('.permiso-check').forEach(checkbox => {
         const campo = this.dataset.campo;
         const valor = this.checked ? 1 : 0;
 
+        const endpoint = getPermisosActualizarEndpoint();
+
         // Enviar actualización vía AJAX
-        fetch('<?= BASE_URL ?>/public/?url=permisos/actualizar', {
+        fetch(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json'
             },
-            body: `id_rol=${idRol}&modulo=${modulo}&campo=${campo}&valor=${valor}`
+            body: `id_rol=${encodeURIComponent(idRol)}&modulo=${encodeURIComponent(modulo)}&campo=${encodeURIComponent(campo)}&valor=${encodeURIComponent(valor)}`
         })
-        .then(response => response.json())
+        .then(response => response.text())
+        .then(text => {
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                throw new Error('Respuesta no válida del servidor: ' + text.substring(0, 120));
+            }
+        })
         .then(data => {
             if (data.success) {
                 // Mostrar mensaje de éxito
@@ -126,7 +143,7 @@ document.querySelectorAll('.permiso-check').forEach(checkbox => {
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Error de conexión');
+            alert('Error de conexión al guardar permisos.\nEndpoint: ' + endpoint);
             this.checked = !this.checked; // Revertir el cambio
         });
     });

@@ -19,6 +19,26 @@ class CelulaController extends BaseController {
         $this->ministerioModel = new Ministerio();
     }
 
+    /**
+     * Verifica si la célula está dentro de la cobertura del usuario actual.
+     */
+    private function puedeAccederCelula($idCelula) {
+        $idCelula = (int)$idCelula;
+        if ($idCelula <= 0) {
+            return false;
+        }
+
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        return $this->celulaModel->existsByIdWithRole($idCelula, $filtroCelulas);
+    }
+
+    /**
+     * Filtro de personas visibles para búsquedas AJAX.
+     */
+    private function getFiltroPersonasBusqueda() {
+        return DataIsolation::generarFiltroPersonas();
+    }
+
     public function index() {
         // Generar filtro según el rol del usuario
         $filtroCelulas = DataIsolation::generarFiltroCelulas();
@@ -175,6 +195,11 @@ class CelulaController extends BaseController {
             $this->redirect('celulas');
         }
 
+        if (!$this->puedeAccederCelula($id)) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = [
                 'Nombre_Celula' => $_POST['nombre_celula'],
@@ -205,6 +230,11 @@ class CelulaController extends BaseController {
         
         if (!$id) {
             $this->redirect('celulas');
+        }
+
+        if (!$this->puedeAccederCelula($id)) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
         }
 
         $celula = $this->celulaModel->getWithMembers($id);
@@ -254,10 +284,87 @@ class CelulaController extends BaseController {
         $id = $_GET['id'] ?? null;
         
         if ($id) {
+            if (!$this->puedeAccederCelula($id)) {
+                header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+                exit;
+            }
             $this->celulaModel->delete($id);
         }
         
         $this->redirect('celulas');
+    }
+
+    /**
+     * Asegurar tabla para tracking de vistas de materiales.
+     */
+    private function asegurarTablaVistasMateriales() {
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return;
+        }
+
+        $sql = "CREATE TABLE IF NOT EXISTS material_celula_vista (
+                    Id_Vista INT AUTO_INCREMENT PRIMARY KEY,
+                    Archivo VARCHAR(255) NOT NULL,
+                    Id_Persona INT NOT NULL,
+                    Total_Vistas INT NOT NULL DEFAULT 1,
+                    Fecha_Primera_Vista DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    Fecha_Ultima_Vista DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_archivo_persona (Archivo, Id_Persona),
+                    KEY idx_archivo (Archivo),
+                    KEY idx_persona (Id_Persona)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $pdo->exec($sql);
+    }
+
+    /**
+     * Obtener mapa de vistas únicas por archivo.
+     */
+    private function obtenerConteoVistasMateriales() {
+        $this->asegurarTablaVistasMateriales();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return [];
+        }
+
+        $rows = $pdo->query("SELECT Archivo, COUNT(DISTINCT Id_Persona) AS Personas_Vieron FROM material_celula_vista GROUP BY Archivo")
+                    ->fetchAll(PDO::FETCH_ASSOC);
+
+        $map = [];
+        foreach ($rows as $row) {
+            $archivo = (string)($row['Archivo'] ?? '');
+            if ($archivo === '') {
+                continue;
+            }
+            $map[$archivo] = (int)($row['Personas_Vieron'] ?? 0);
+        }
+
+        return $map;
+    }
+
+    /**
+     * Registrar visualización de material por persona.
+     */
+    private function registrarVistaMaterial($archivo, $idPersona) {
+        $archivo = basename((string)$archivo);
+        $idPersona = (int)$idPersona;
+        if ($archivo === '' || $idPersona <= 0) {
+            return;
+        }
+
+        $this->asegurarTablaVistasMateriales();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return;
+        }
+
+        $sql = "INSERT INTO material_celula_vista (Archivo, Id_Persona, Total_Vistas)
+                VALUES (?, ?, 1)
+                ON DUPLICATE KEY UPDATE Total_Vistas = Total_Vistas + 1, Fecha_Ultima_Vista = NOW()";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$archivo, $idPersona]);
     }
 
     public function materiales() {
@@ -363,15 +470,23 @@ class CelulaController extends BaseController {
         }
 
         $materiales = [];
+        $vistasPorArchivo = [];
+        try {
+            $vistasPorArchivo = $this->obtenerConteoVistasMateriales();
+        } catch (Throwable $e) {
+            $vistasPorArchivo = [];
+        }
+
         if (is_dir($directorioMateriales)) {
             $archivos = glob($directorioMateriales . '/*.pdf') ?: [];
             foreach ($archivos as $ruta) {
                 $nombre = basename((string)$ruta);
                 $materiales[] = [
                     'nombre_archivo' => $nombre,
-                    'url' => ASSETS_URL . '/celulas_materiales/' . rawurlencode($nombre),
+                    'url' => PUBLIC_URL . '?url=celulas/materiales/ver&archivo=' . rawurlencode($nombre),
                     'peso_kb' => round(((int)@filesize($ruta)) / 1024, 2),
-                    'fecha_modificacion' => @filemtime($ruta) ?: 0
+                    'fecha_modificacion' => @filemtime($ruta) ?: 0,
+                    'personas_vieron' => (int)($vistasPorArchivo[$nombre] ?? 0)
                 ];
             }
         }
@@ -388,6 +503,39 @@ class CelulaController extends BaseController {
     }
 
     /**
+     * Abrir material PDF y registrar visualización.
+     */
+    public function verMaterial() {
+        if (!AuthController::tienePermiso('materiales_celulas', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $archivo = basename((string)($_GET['archivo'] ?? ''));
+        if ($archivo === '' || strtolower(pathinfo($archivo, PATHINFO_EXTENSION)) !== 'pdf') {
+            $this->redirect('celulas/materiales&mensaje=' . urlencode('Archivo inválido') . '&tipo=error');
+            return;
+        }
+
+        $directorioMateriales = ROOT . '/public/assets/celulas_materiales';
+        $ruta = $directorioMateriales . '/' . $archivo;
+        if (!is_file($ruta)) {
+            $this->redirect('celulas/materiales&mensaje=' . urlencode('El archivo no existe') . '&tipo=error');
+            return;
+        }
+
+        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+        try {
+            $this->registrarVistaMaterial($archivo, $idPersona);
+        } catch (Throwable $e) {
+            // No bloquear la apertura del PDF por fallo de tracking.
+        }
+
+        header('Location: ' . ASSETS_URL . '/celulas_materiales/' . rawurlencode($archivo));
+        exit;
+    }
+
+    /**
      * Buscar líderes para autocompletar (AJAX)
      */
     public function buscarLideres() {
@@ -401,6 +549,8 @@ class CelulaController extends BaseController {
         }
         
         try {
+            $filtroPersonas = $this->getFiltroPersonasBusqueda();
+
             // Buscar líderes específicos: Líder de célula (3), Pastores (6), Líder de 12 (8)
             $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono, r.Nombre_Rol as Rol
                     FROM persona p
@@ -408,6 +558,7 @@ class CelulaController extends BaseController {
                     WHERE p.Id_Rol IN (3, 6, 8)
                     AND (p.Nombre LIKE ? OR p.Apellido LIKE ?)
                     AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                AND ($filtroPersonas)
                     ORDER BY p.Nombre, p.Apellido
                     LIMIT 20";
             
@@ -441,11 +592,14 @@ class CelulaController extends BaseController {
         }
         
         try {
+            $filtroPersonas = $this->getFiltroPersonasBusqueda();
+
             $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono
                     FROM persona p
                     WHERE p.Id_Rol = 8
                     AND (p.Nombre LIKE ? OR p.Apellido LIKE ?)
                     AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                AND ($filtroPersonas)
                     ORDER BY p.Nombre, p.Apellido
                     LIMIT 20";
             
@@ -479,12 +633,15 @@ class CelulaController extends BaseController {
         }
         
         try {
+            $filtroPersonas = $this->getFiltroPersonasBusqueda();
+
             $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono, r.Nombre_Rol as Rol
                     FROM persona p
                     LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
                     WHERE p.Id_Rol = 6
                     AND (p.Nombre LIKE ? OR p.Apellido LIKE ?)
                     AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                AND ($filtroPersonas)
                     ORDER BY p.Nombre, p.Apellido
                     LIMIT 20";
             
@@ -518,10 +675,13 @@ class CelulaController extends BaseController {
         }
         
         try {
+            $filtroPersonas = $this->getFiltroPersonasBusqueda();
+
             $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono
                     FROM persona p
                     WHERE (p.Nombre LIKE ? OR p.Apellido LIKE ?)
                     AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                AND ($filtroPersonas)
                     ORDER BY p.Nombre, p.Apellido
                     LIMIT 20";
             

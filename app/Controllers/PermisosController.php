@@ -14,7 +14,7 @@ class PermisosController extends BaseController {
     public function __construct() {
         // Verificar que sea administrador
         if (!AuthController::esAdministrador()) {
-            header('Location: ' . BASE_URL . '/auth/acceso-denegado');
+            header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
         
@@ -157,6 +157,12 @@ class PermisosController extends BaseController {
             'entrega_obsequio' => 'Entrega de Obsequios',
             'registro_obsequio' => 'Registro de Obsequios',
             'nehemias' => 'Nehemias',
+            'nehemias_cols_bogota_subio' => 'Nehemias: Ver En Bogotá se le subió',
+            'nehemias_cols_puesto' => 'Nehemias: Ver Puesto',
+            'nehemias_cols_mesa' => 'Nehemias: Ver Mesa',
+            'nehemias_cols_acepta' => 'Nehemias: Ver Acepta',
+            'nehemias_acciones_editar' => 'Nehemias: Botón editar',
+            'nehemias_acciones_eliminar' => 'Nehemias: Botón eliminar',
             'permisos' => 'Permisos'
         ];
     }

@@ -1,3 +1,4 @@
+
 <?php include VIEWS . '/layout/header.php'; ?>
 
 <div class="page-header">
@@ -33,6 +34,7 @@
                 <tr>
                     <th>Archivo</th>
                     <th style="width:140px;">Tamaño (KB)</th>
+                    <th style="width:170px;">Personas que lo vieron</th>
                     <th style="width:190px;">Fecha</th>
                     <th style="width:200px;">Acciones</th>
                 </tr>
@@ -42,6 +44,7 @@
                     <tr>
                         <td><?= htmlspecialchars((string)$material['nombre_archivo']) ?></td>
                         <td><?= number_format((float)$material['peso_kb'], 2) ?></td>
+                        <td><?= (int)($material['personas_vieron'] ?? 0) ?></td>
                         <td>
                             <?php
                             $ts = (int)($material['fecha_modificacion'] ?? 0);

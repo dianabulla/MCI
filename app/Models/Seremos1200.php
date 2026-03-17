@@ -46,14 +46,22 @@ class Seremos1200 extends BaseModel {
         $params = [];
 
         if (!empty($filtros['busqueda'])) {
-            $sql .= " AND (Nombres LIKE ? OR Apellidos LIKE ? OR Numero_Cedula LIKE ? OR Telefono LIKE ? OR Lider LIKE ? OR Lider_Nehemias LIKE ?)";
-            $termino = '%' . $filtros['busqueda'] . '%';
-            $params[] = $termino;
-            $params[] = $termino;
-            $params[] = $termino;
-            $params[] = $termino;
-            $params[] = $termino;
-            $params[] = $termino;
+            $busqueda = trim((string)$filtros['busqueda']);
+            $terminos = preg_split('/\s+/', $busqueda) ?: [];
+            $terminos = array_values(array_filter(array_map(static function ($termino) {
+                return trim((string)$termino);
+            }, $terminos)));
+
+            foreach ($terminos as $termino) {
+                $sql .= " AND (Nombres LIKE ? OR Apellidos LIKE ? OR Numero_Cedula LIKE ? OR Telefono LIKE ? OR Lider LIKE ? OR Lider_Nehemias LIKE ?)";
+                $valorLike = '%' . $termino . '%';
+                $params[] = $valorLike;
+                $params[] = $valorLike;
+                $params[] = $valorLike;
+                $params[] = $valorLike;
+                $params[] = $valorLike;
+                $params[] = $valorLike;
+            }
         }
 
         if (isset($filtros['decision']) && $filtros['decision'] !== '') {
