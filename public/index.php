@@ -74,6 +74,8 @@ $rutasPublicas = [
     'auth/cambiar-cuenta',
     'registro_obsequio',
     'registro_obsequio/guardar',
+    'registro_personas',
+    'registro_personas/guardar',
     'stream/live',
     'stream/gallery',
     'eventos/proximos',

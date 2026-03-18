@@ -59,9 +59,6 @@
             <a href="?url=nehemias/seremos1200" class="btn btn-warning btn-action me-2">
                 <i class="bi bi-people"></i> Seremos 1200
             </a>
-            <a href="?url=nehemias/exportarExcel" class="btn btn-success btn-action">
-                <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
-            </a>
             <a href="?url=nehemias/reportes" class="btn btn-primary btn-action ms-2">
                 <i class="bi bi-graph-up"></i> Reportes
             </a>

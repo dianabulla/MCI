@@ -7,10 +7,7 @@
                class="btn btn-danger me-2 btn-obsequio-pdf" target="_blank">
                 <i class="bi bi-file-pdf-fill"></i> Exportar PDF
             </a>
-            <a href="?url=entrega_obsequio/exportarExcel<?= $filtroMinisterio ? '&ministerio=' . $filtroMinisterio : '' ?>" 
-               class="btn btn-success btn-obsequio-excel">
-                <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
-            </a>
+
         </div>
     </div>
 

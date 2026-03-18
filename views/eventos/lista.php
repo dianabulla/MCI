@@ -7,9 +7,6 @@
     <?php $puedeEliminarEvento = AuthController::esAdministrador() || AuthController::tienePermiso('eventos', 'eliminar'); ?>
     <?php $puedeGestionarEvento = $puedeEditarEvento || $puedeEliminarEvento; ?>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="<?= PUBLIC_URL ?>?url=eventos/exportarExcel" class="btn btn-success">
-            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
-        </a>
         <?php if ($puedeCrearEvento): ?>
         <a href="<?= PUBLIC_URL ?>index.php?url=eventos/crear" class="btn btn-primary">+ Nuevo Evento</a>
         <?php endif; ?>

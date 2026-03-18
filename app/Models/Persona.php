@@ -67,6 +67,23 @@ class Persona extends BaseModel {
         }
     }
 
+    public function ensureConvencionColumnExists() {
+        if ($this->tieneColumna('Convencion')) {
+            return true;
+        }
+
+        try {
+            $sql = "ALTER TABLE {$this->table} ADD COLUMN Convencion ENUM('Convencion Enero','Convencion Mujeres','Convencion Jovenes','Convencion Hombres') NULL AFTER Tipo_Reunion";
+            $this->db->exec($sql);
+            $this->columnasCache['Convencion'] = true;
+            return true;
+        } catch (Exception $e) {
+            error_log('No se pudo crear columna Convencion en persona: ' . $e->getMessage());
+            $this->columnasCache['Convencion'] = false;
+            return false;
+        }
+    }
+
     public function ensureEscaleraChecklistColumnExists() {
         if ($this->tieneColumna('Escalera_Checklist')) {
             return true;
@@ -80,6 +97,23 @@ class Persona extends BaseModel {
         } catch (Exception $e) {
             error_log('No se pudo crear columna Escalera_Checklist en persona: ' . $e->getMessage());
             $this->columnasCache['Escalera_Checklist'] = false;
+            return false;
+        }
+    }
+
+    public function ensureFechaAsignacionLiderColumnExists() {
+        if ($this->tieneColumna('Fecha_Asignacion_Lider')) {
+            return true;
+        }
+
+        try {
+            $sql = "ALTER TABLE {$this->table} ADD COLUMN Fecha_Asignacion_Lider DATETIME NULL AFTER Id_Lider";
+            $this->db->exec($sql);
+            $this->columnasCache['Fecha_Asignacion_Lider'] = true;
+            return true;
+        } catch (Exception $e) {
+            error_log('No se pudo crear columna Fecha_Asignacion_Lider en persona: ' . $e->getMessage());
+            $this->columnasCache['Fecha_Asignacion_Lider'] = false;
             return false;
         }
     }
@@ -116,6 +150,71 @@ class Persona extends BaseModel {
         $sql = "UPDATE {$this->table} SET Escalera_Checklist = ? WHERE {$this->primaryKey} = ?";
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([$checklistJson, $idPersona]);
+    }
+
+    /**
+     * Obtener personas con líder y ministerio asignados que superaron el límite
+     * de horas para registrar el primer contacto.
+     */
+    public function getCandidatosReasignacionPrimerContacto($horasLimite = 48) {
+        $horasLimite = max(1, (int)$horasLimite);
+
+        $campoTiempoControl = $this->tieneColumna('Fecha_Asignacion_Lider')
+            ? "COALESCE(p.Fecha_Asignacion_Lider, p.Fecha_Registro)"
+            : "p.Fecha_Registro";
+
+        $sql = "SELECT p.Id_Persona, p.Id_Lider, p.Id_Ministerio, p.Fecha_Registro, p.Fecha_Asignacion_Lider, p.Escalera_Checklist, p.Proceso, p.Estado_Cuenta
+            FROM {$this->table} p
+            WHERE p.Id_Lider IS NOT NULL
+              AND p.Id_Ministerio IS NOT NULL
+              AND {$campoTiempoControl} IS NOT NULL
+              AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+              AND (p.Proceso = 'Ganar' OR p.Proceso IS NULL OR p.Proceso = '')
+              AND TIMESTAMPDIFF(HOUR, {$campoTiempoControl}, NOW()) >= ?
+            ORDER BY {$campoTiempoControl} ASC, p.Id_Persona ASC";
+
+        return $this->query($sql, [$horasLimite]);
+    }
+
+    /**
+     * Quitar asignación de líder/ministerio y marcar persona como reasignada.
+     */
+    public function aplicarReasignacionAutomatica($idPersona, $checklistJson, $proceso = 'Ganar') {
+        $idPersona = (int)$idPersona;
+        if ($idPersona <= 0) {
+            return false;
+        }
+
+        $camposUpdate = [
+            'Id_Lider = NULL',
+            'Id_Ministerio = NULL',
+            'Escalera_Checklist = ?'
+        ];
+
+        if ($this->tieneColumna('Fecha_Asignacion_Lider')) {
+            $camposUpdate[] = 'Fecha_Asignacion_Lider = NULL';
+        }
+
+        if ($this->tieneColumna('Proceso')) {
+            $camposConProceso = $camposUpdate;
+            $camposConProceso[] = 'Proceso = ?';
+
+            $sql = "UPDATE {$this->table}
+                    SET " . implode(",\n                        ", $camposConProceso) . "
+                    WHERE {$this->primaryKey} = ?
+                      AND Id_Lider IS NOT NULL
+                      AND Id_Ministerio IS NOT NULL";
+
+            return $this->execute($sql, [$checklistJson, $proceso, $idPersona]);
+        }
+
+        $sql = "UPDATE {$this->table}
+                SET " . implode(",\n                    ", $camposUpdate) . "
+                WHERE {$this->primaryKey} = ?
+                  AND Id_Lider IS NOT NULL
+                  AND Id_Ministerio IS NOT NULL";
+
+        return $this->execute($sql, [$checklistJson, $idPersona]);
     }
 
     /**
@@ -636,10 +735,12 @@ class Persona extends BaseModel {
 
     public function getResumenGanadosOrigenWithRole($fechaInicio, $fechaFin, $filtroRol, $idMinisterio = '', $idLider = '') {
         $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
+        $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
 
         $sql = "SELECT
                     SUM(CASE WHEN {$tipoReunionExpr} LIKE '%celula%' THEN 1 ELSE 0 END) AS Ganados_Celula,
                     SUM(CASE WHEN {$tipoReunionExpr} LIKE '%domingo%' THEN 1 ELSE 0 END) AS Ganados_Domingo,
+                    SUM(CASE WHEN {$tipoReunionExpr} LIKE '%domingo%' AND {$invitadoExpr} = '' THEN 1 ELSE 0 END) AS Asignados,
                     COUNT(*) AS Total
                 FROM persona p
                 WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
@@ -664,7 +765,80 @@ class Persona extends BaseModel {
         return [
             'Ganados_Celula' => (int)($row['Ganados_Celula'] ?? 0),
             'Ganados_Domingo' => (int)($row['Ganados_Domingo'] ?? 0),
+            'Asignados' => (int)($row['Asignados'] ?? 0),
             'Total' => (int)($row['Total'] ?? 0)
+        ];
+    }
+
+    /**
+     * Resumen por ministerio para el reporte de fin de semana anterior.
+     * Ganados: domingo con invitador.
+     * Asignados: domingo sin invitador.
+     * Por verificar: domingo sin líder asignado.
+     */
+    public function getResumenGanadosFinSemanaAnteriorPorMinisterioWithRole($fechaInicio, $fechaFin, $filtroRol, $idMinisterio = '', $idLider = '') {
+        $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
+        $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
+
+        $sql = "SELECT
+                    COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
+                    SUM(CASE WHEN {$tipoReunionExpr} LIKE '%domingo%' AND {$invitadoExpr} <> '' THEN 1 ELSE 0 END) AS Ganados,
+                    SUM(CASE WHEN {$tipoReunionExpr} LIKE '%domingo%' AND {$invitadoExpr} = '' THEN 1 ELSE 0 END) AS Asignados,
+                    SUM(CASE WHEN {$tipoReunionExpr} LIKE '%domingo%' AND (p.Id_Lider IS NULL OR p.Id_Lider = 0) THEN 1 ELSE 0 END) AS Por_Verificar,
+                    SUM(CASE WHEN {$tipoReunionExpr} LIKE '%domingo%' THEN 1 ELSE 0 END) AS Total_Domingo
+                FROM persona p
+                LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
+                WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
+                AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                AND (p.Proceso = 'Ganar' OR p.Proceso IS NULL OR p.Proceso = '')
+                AND $filtroRol";
+
+        $params = [$fechaInicio, $fechaFin];
+
+        if ($idMinisterio !== null && $idMinisterio !== '' && (int)$idMinisterio > 0) {
+            $sql .= " AND p.Id_Ministerio = ?";
+            $params[] = (int)$idMinisterio;
+        }
+
+        if ($idLider !== null && $idLider !== '' && (int)$idLider > 0) {
+            $sql .= " AND p.Id_Lider = ?";
+            $params[] = (int)$idLider;
+        }
+
+        $sql .= "
+                GROUP BY m.Id_Ministerio, m.Nombre_Ministerio
+                HAVING Total_Domingo > 0
+                ORDER BY m.Nombre_Ministerio";
+
+        $rows = $this->query($sql, $params);
+
+        $resultadoRows = [];
+        $totales = [
+            'ganados' => 0,
+            'asignados' => 0,
+            'por_verificar' => 0,
+            'total_domingo' => 0
+        ];
+
+        foreach ($rows as $row) {
+            $item = [
+                'ministerio' => (string)($row['Nombre_Ministerio'] ?? 'Sin ministerio'),
+                'ganados' => (int)($row['Ganados'] ?? 0),
+                'asignados' => (int)($row['Asignados'] ?? 0),
+                'por_verificar' => (int)($row['Por_Verificar'] ?? 0),
+                'total_domingo' => (int)($row['Total_Domingo'] ?? 0)
+            ];
+
+            $resultadoRows[] = $item;
+            $totales['ganados'] += $item['ganados'];
+            $totales['asignados'] += $item['asignados'];
+            $totales['por_verificar'] += $item['por_verificar'];
+            $totales['total_domingo'] += $item['total_domingo'];
+        }
+
+        return [
+            'rows' => $resultadoRows,
+            'totales' => $totales
         ];
     }
 
@@ -747,9 +921,12 @@ class Persona extends BaseModel {
         $placeholders = implode(',', array_fill(0, count($ministerioIds), '?'));
 
         $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Numero_Documento, p.Telefono, p.Id_Ministerio,
-                       c.Nombre_Celula
+                   p.Id_Rol, p.Tipo_Reunion, p.Fecha_Registro, p.Proceso, p.Escalera_Checklist, p.Convencion,
+                   c.Nombre_Celula,
+                   r.Nombre_Rol
                 FROM persona p
                 LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
+            LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
                 WHERE p.Id_Ministerio IN ($placeholders)
                 AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)";
 
@@ -772,7 +949,17 @@ class Persona extends BaseModel {
     public function getTotalLideresCelulaWithRole($filtroRol) {
         $sql = "SELECT COUNT(*) AS Total
                 FROM persona p
-                WHERE p.Id_Rol = 3
+                WHERE (
+                    EXISTS (
+                        SELECT 1 FROM celula c
+                        WHERE c.Id_Lider = p.Id_Persona
+                    )
+                    OR EXISTS (
+                        SELECT 1 FROM persona p2
+                        WHERE p2.Id_Lider = p.Id_Persona
+                          AND (p2.Estado_Cuenta = 'Activo' OR p2.Estado_Cuenta IS NULL)
+                    )
+                )
                 AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
                 AND $filtroRol";
 
@@ -788,12 +975,33 @@ class Persona extends BaseModel {
                     p.Id_Persona,
                     p.Nombre,
                     p.Apellido,
+                    p.Genero,
+                    p.Id_Ministerio,
                     p.Ultimo_Acceso,
                     m.Nombre_Ministerio,
+                    CASE WHEN cel.Id_Persona IS NULL THEN 0 ELSE 1 END AS Es_Lider_Celula,
+                    CASE WHEN l12.Id_Persona IS NULL THEN 0 ELSE 1 END AS Es_Lider_12,
+                    CASE
+                        WHEN cel.Id_Persona IS NOT NULL AND l12.Id_Persona IS NOT NULL THEN 'Ambos'
+                        WHEN cel.Id_Persona IS NOT NULL THEN 'Líder de célula'
+                        WHEN l12.Id_Persona IS NOT NULL THEN 'Líder de 12'
+                        ELSE 'Sin clasificación'
+                    END AS Tipo_Liderazgo,
                     COALESCE(per.Total_Personas, 0) AS Total_Personas,
                     rep.Ultimo_Reporte_Celula
                 FROM persona p
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
+                LEFT JOIN (
+                    SELECT DISTINCT Id_Lider AS Id_Persona
+                    FROM celula
+                    WHERE Id_Lider IS NOT NULL
+                ) cel ON cel.Id_Persona = p.Id_Persona
+                LEFT JOIN (
+                    SELECT DISTINCT Id_Lider AS Id_Persona
+                    FROM persona
+                    WHERE Id_Lider IS NOT NULL
+                      AND (Estado_Cuenta = 'Activo' OR Estado_Cuenta IS NULL)
+                ) l12 ON l12.Id_Persona = p.Id_Persona
                 LEFT JOIN (
                     SELECT Id_Lider, COUNT(*) AS Total_Personas
                     FROM persona
@@ -807,7 +1015,7 @@ class Persona extends BaseModel {
                     INNER JOIN celula c ON c.Id_Celula = a.Id_Celula
                     GROUP BY c.Id_Lider
                 ) rep ON rep.Id_Lider = p.Id_Persona
-                WHERE p.Id_Rol = 3
+                WHERE (cel.Id_Persona IS NOT NULL OR l12.Id_Persona IS NOT NULL)
                 AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
                 AND $filtroRol
                 ORDER BY p.Apellido, p.Nombre";

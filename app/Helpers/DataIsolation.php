@@ -151,10 +151,32 @@ class DataIsolation {
     }
 
     /**
-     * Roles con acceso total a la información
+     * Roles con acceso total a la información.
+     *
+     * Retorna true para:
+     *  - Admin y Ganar (hardcoded por definición ministerial)
+     *  - Pastor (ve toda la información del sistema)
+     *  - Cualquier otro rol que tenga Ver=1 en los THREE módulos clave
+     *    (configurable desde el módulo de Permisos por el administrador)
      */
     public static function tieneAccesoTotal() {
-        return self::esAdmin() || self::esGanar();
+        if (self::esAdmin() || self::esGanar() || self::esPastor()) {
+            return true;
+        }
+
+        // Rol configurado como "acceso total" desde el módulo de Permisos:
+        // si tiene Ver=1 en los módulos clave → se trata como acceso total.
+        $modulosClave = ['personas', 'celulas', 'ministerios'];
+        $permisos = $_SESSION['permisos'] ?? [];
+        if (empty($permisos)) {
+            return false;
+        }
+        foreach ($modulosClave as $modulo) {
+            if (empty($permisos[$modulo]['ver'])) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

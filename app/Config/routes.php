@@ -39,6 +39,7 @@ return [
     'celulas/eliminar' => 'CelulaController@eliminar',
     'celulas/materiales' => 'CelulaController@materiales',
     'celulas/materiales/ver' => 'CelulaController@verMaterial',
+    'celulas/detalleVistasMaterial' => 'CelulaController@detalleVistasMaterial',
     'celulas/buscarLideres' => 'CelulaController@buscarLideres',
     'celulas/buscarLideres12' => 'CelulaController@buscarLideres12',
     'celulas/buscarPastores' => 'CelulaController@buscarPastores',
@@ -86,6 +87,7 @@ return [
     'asistencias' => 'AsistenciaController@index',
     'asistencias/registrar' => 'AsistenciaController@registrar',
     'asistencias/porCelula' => 'AsistenciaController@porCelula',
+    'asistencias/actualizarEntregoSobre' => 'AsistenciaController@actualizarEntregoSobre',
     'asistencias/exportarExcel' => 'AsistenciaController@exportarExcel',
     
     // Reportes
@@ -108,6 +110,10 @@ return [
     // Registro de Obsequios (Público - No requiere autenticación)
     'registro_obsequio' => 'RegistroObsequioController@index',
     'registro_obsequio/guardar' => 'RegistroObsequioController@guardar',
+
+    // Registro de Personas (Público - No requiere autenticación)
+    'registro_personas' => 'RegistroPersonaController@index',
+    'registro_personas/guardar' => 'RegistroPersonaController@guardar',
     
     // Stream ESP32-CAM (Público - No requiere autenticación)
     'stream/live' => 'StreamController@live',

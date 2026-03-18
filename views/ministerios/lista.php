@@ -4,6 +4,7 @@
     .ministerio-personas-table {
         min-width: 860px;
         table-layout: auto;
+        font-size: 13px;
     }
 
     .ministerio-personas-table th,
@@ -11,6 +12,8 @@
         white-space: nowrap;
         word-break: normal;
         overflow-wrap: normal;
+        padding: 8px 10px;
+        line-height: 1.2;
     }
 
     .ministerio-personas-table th:nth-child(2),
@@ -35,6 +38,22 @@
         border-radius: 10px;
         background: #f8fbff;
         padding: 8px 10px;
+    }
+
+    .ministerio-kpi--clickable {
+        cursor: pointer;
+        transition: border-color .15s, background .15s, box-shadow .15s;
+    }
+
+    .ministerio-kpi--clickable:hover {
+        border-color: #a8c2ea;
+        background: #eef5ff;
+    }
+
+    .ministerio-kpi--active {
+        border-color: #4f8edc;
+        background: #e7f1ff;
+        box-shadow: inset 0 0 0 1px rgba(79, 142, 220, 0.25);
     }
 
     .ministerio-kpi strong {
@@ -64,6 +83,22 @@
         align-items: center;
     }
 
+    .ministerio-chip--clickable {
+        cursor: pointer;
+        transition: border-color .15s, background .15s, box-shadow .15s;
+    }
+
+    .ministerio-chip--clickable:hover {
+        border-color: #a8c2ea;
+        background: #eef5ff;
+    }
+
+    .ministerio-chip--active {
+        border-color: #4f8edc !important;
+        background: #e7f1ff !important;
+        box-shadow: inset 0 0 0 1px rgba(79, 142, 220, 0.25);
+    }
+
     .convenciones-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -87,11 +122,75 @@
         font-size: 16px;
     }
 
+    .convencion-item--clickable {
+        cursor: pointer;
+        transition: border-color .15s, background .15s, box-shadow .15s;
+    }
+
+    .convencion-item--clickable:hover {
+        border-color: #a8c2ea;
+        background: #eef5ff;
+    }
+
     .ministerio-actions-row {
         display: flex;
         justify-content: flex-end;
         gap: 8px;
         margin-bottom: 10px;
+    }
+
+    .ministerio-personas-panel {
+        margin-top: 12px;
+        border: 1px solid #d8e2f1;
+        border-radius: 10px;
+        background: #fff;
+        overflow: hidden;
+        display: none;
+    }
+
+    .ministerio-personas-panel.is-visible {
+        display: block;
+    }
+
+    .ministerio-personas-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 9px 12px;
+        background: #f8fbff;
+        border-bottom: 1px solid #d8e2f1;
+    }
+
+    .ministerio-personas-panel-title {
+        font-size: 13px;
+        color: #415772;
+        margin: 0;
+    }
+
+    .ministerio-personas-count {
+        font-weight: 700;
+        color: #1f4f93;
+    }
+
+    .ministerio-personas-clear {
+        border: 1px solid #c7d7ef;
+        border-radius: 8px;
+        padding: 4px 8px;
+        background: #fff;
+        color: #35598a;
+        font-size: 12px;
+        cursor: pointer;
+    }
+
+    .ministerio-personas-table thead th {
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+
+    .ministerio-personas-table tbody td {
+        padding-top: 7px;
+        padding-bottom: 7px;
     }
 
     .ministerio-card > .collapse-content {
@@ -220,9 +319,6 @@
     <?php $puedeEliminarMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'eliminar'); ?>
     <?php $puedeGestionarMinisterio = $puedeEditarMinisterio || $puedeEliminarMinisterio; ?>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="<?= PUBLIC_URL ?>?url=ministerios/exportarExcel" class="btn btn-success">
-            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
-        </a>
         <?php if ($puedeCrearMinisterio): ?>
         <a href="<?= PUBLIC_URL ?>index.php?url=ministerios/crear" class="btn btn-primary">+ Nuevo Ministerio</a>
         <?php endif; ?>
@@ -281,33 +377,100 @@
                 <?php endif; ?>
 
                 <div class="ministerio-kpi-grid">
-                    <div class="ministerio-kpi">
+                    <div class="ministerio-kpi ministerio-kpi--clickable" data-kpi-filter="total_personas">
                         <strong><?= number_format((int)$section['total_personas']) ?></strong>
                         <span>Personas activas del ministerio</span>
                     </div>
-                    <div class="ministerio-kpi">
+                    <div class="ministerio-kpi ministerio-kpi--clickable" data-kpi-filter="celulas">
                         <strong><?= (int)($metricas['celulas'] ?? 0) ?></strong>
                         <span>Células del ministerio</span>
                     </div>
-                    <div class="ministerio-kpi">
+                    <div class="ministerio-kpi ministerio-kpi--clickable" data-kpi-filter="lideres_celula">
                         <strong><?= (int)($metricas['lideres_celula'] ?? 0) ?></strong>
                         <span>Líderes de célula</span>
                     </div>
-                    <div class="ministerio-kpi">
+                    <div class="ministerio-kpi ministerio-kpi--clickable" data-kpi-filter="asistentes_celula">
                         <strong><?= (int)($metricas['asistentes_celula'] ?? 0) ?></strong>
                         <span>Asistentes de célula</span>
                     </div>
-                    <div class="ministerio-kpi">
+                    <div class="ministerio-kpi ministerio-kpi--clickable" data-kpi-filter="ganados_semana_total">
                         <strong><?= (int)($metricas['ganados_semana_total'] ?? 0) ?></strong>
                         <span>Ganados en la semana</span>
                     </div>
-                    <div class="ministerio-kpi">
+                    <div class="ministerio-kpi ministerio-kpi--clickable" data-kpi-filter="ganados_semana_celula">
                         <strong><?= (int)($metricas['ganados_semana_celula'] ?? 0) ?></strong>
                         <span>Ganados en célula</span>
                     </div>
-                    <div class="ministerio-kpi">
+                    <div class="ministerio-kpi ministerio-kpi--clickable" data-kpi-filter="ganados_semana_domingo">
                         <strong><?= (int)($metricas['ganados_semana_domingo'] ?? 0) ?></strong>
                         <span>Ganados en domingo</span>
+                    </div>
+                </div>
+
+                <div class="ministerio-personas-panel" data-ministerio-personas-panel="1">
+                    <div class="ministerio-personas-panel-header">
+                        <p class="ministerio-personas-panel-title">Listado de personas: <strong data-ministerio-filtro-label="1">Todas</strong> · <span class="ministerio-personas-count" data-ministerio-count="1"><?= (int)count($section['rows'] ?? []) ?></span></p>
+                        <button type="button" class="ministerio-personas-clear" data-ministerio-clear="1">Quitar filtro</button>
+                    </div>
+                    <div class="table-container" style="margin:0; border-radius:0; border:0;">
+                        <div style="overflow-x:auto;">
+                            <table class="data-table ministerio-personas-table" style="margin:0;">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Nombre</th>
+                                        <th>Rol</th>
+                                        <th>Teléfono</th>
+                                        <th>Célula</th>
+                                        <th>Ganado en</th>
+                                        <th>Fecha registro</th>
+                                    </tr>
+                                </thead>
+                                <tbody data-ministerio-personas-body="1">
+                                    <?php if (!empty($section['rows'])): ?>
+                                        <?php foreach ($section['rows'] as $row): ?>
+                                            <tr
+                                                data-match-total-personas="<?= !empty($row['match_total_personas']) ? '1' : '0' ?>"
+                                                data-match-celulas="<?= !empty($row['match_celulas']) ? '1' : '0' ?>"
+                                                data-match-lideres-celula="<?= !empty($row['match_lideres_celula']) ? '1' : '0' ?>"
+                                                data-match-asistentes-celula="<?= !empty($row['match_asistentes_celula']) ? '1' : '0' ?>"
+                                                data-match-ganados-semana-total="<?= !empty($row['match_ganados_semana_total']) ? '1' : '0' ?>"
+                                                data-match-ganados-semana-celula="<?= !empty($row['match_ganados_semana_celula']) ? '1' : '0' ?>"
+                                                data-match-ganados-semana-domingo="<?= !empty($row['match_ganados_semana_domingo']) ? '1' : '0' ?>"
+                                                data-match-escalera-uv="<?= !empty($row['match_escalera_uv']) ? '1' : '0' ?>"
+                                                data-match-escalera-encuentro="<?= !empty($row['match_escalera_encuentro']) ? '1' : '0' ?>"
+                                                data-match-escalera-destino-n1="<?= !empty($row['match_escalera_destino_n1']) ? '1' : '0' ?>"
+                                                data-match-escalera-destino-n2="<?= !empty($row['match_escalera_destino_n2']) ? '1' : '0' ?>"
+                                                data-match-escalera-destino-n3="<?= !empty($row['match_escalera_destino_n3']) ? '1' : '0' ?>"
+                                                data-match-convencion-enero="<?= !empty($row['match_convencion_enero']) ? '1' : '0' ?>"
+                                                data-match-convencion-mujeres="<?= !empty($row['match_convencion_mujeres']) ? '1' : '0' ?>"
+                                                data-match-convencion-jovenes="<?= !empty($row['match_convencion_jovenes']) ? '1' : '0' ?>"
+                                                data-match-convencion-hombres="<?= !empty($row['match_convencion_hombres']) ? '1' : '0' ?>"
+                                                data-match-convencion-total="<?= !empty($row['match_convencion_total']) ? '1' : '0' ?>"
+                                            >
+                                                <td><?= (int)($row['nro'] ?? 0) ?></td>
+                                                <td><?= htmlspecialchars((string)($row['nombre'] ?? '')) ?></td>
+                                                <td><?= htmlspecialchars((string)($row['rol'] ?? 'Sin rol')) ?></td>
+                                                <td><?= htmlspecialchars((string)($row['telefono'] ?? '')) ?></td>
+                                                <td><?= htmlspecialchars((string)($row['celula'] ?? '')) ?></td>
+                                                <td><?= htmlspecialchars((string)($row['tipo_reunion'] ?? '')) ?></td>
+                                                <td>
+                                                    <?php $fechaRegistro = (string)($row['fecha_registro'] ?? ''); ?>
+                                                    <?= $fechaRegistro !== '' ? htmlspecialchars(date('d/m/Y', strtotime($fechaRegistro))) : '' ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <tr data-ministerio-empty-row="1">
+                                            <td colspan="7" class="text-center">No hay personas en este ministerio</td>
+                                        </tr>
+                                    <?php endif; ?>
+                                    <tr data-ministerio-no-match-row="1" style="display:none;">
+                                        <td colspan="7" class="text-center">No hay personas para este indicador</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
@@ -324,37 +487,43 @@
                             <strong style="display:block; margin-bottom:8px;">Reporte Escalera del Éxito (Ministerio)</strong>
 
                             <div class="escalera-resumen-ministerio">
-                                <span class="meta-pill">Universidad de la vida <strong><?= $uv ?></strong></span>
-                                <span class="meta-pill">Encuentro <strong><?= $encuentro ?></strong></span>
-                                <span class="meta-pill">Capacitación destino N1 <strong><?= $destinoN1 ?></strong></span>
-                                <span class="meta-pill">Capacitación destino N2 <strong><?= $destinoN2 ?></strong></span>
-                                <span class="meta-pill">Capacitación destino N3 <strong><?= $destinoN3 ?></strong></span>
+                                <span class="meta-pill ministerio-chip--clickable" data-kpi-filter="escalera_uv">Universidad de la vida <strong><?= $uv ?></strong></span>
+                                <span class="meta-pill ministerio-chip--clickable" data-kpi-filter="escalera_encuentro">Encuentro <strong><?= $encuentro ?></strong></span>
+                                <span class="meta-pill ministerio-chip--clickable" data-kpi-filter="escalera_destino_n1">Capacitación destino N1 <strong><?= $destinoN1 ?></strong></span>
+                                <span class="meta-pill ministerio-chip--clickable" data-kpi-filter="escalera_destino_n2">Capacitación destino N2 <strong><?= $destinoN2 ?></strong></span>
+                                <span class="meta-pill ministerio-chip--clickable" data-kpi-filter="escalera_destino_n3">Capacitación destino N3 <strong><?= $destinoN3 ?></strong></span>
                             </div>
                         </div>
                     </div>
 
                     <div class="card" style="margin-bottom: 12px;">
                         <div class="card-body" style="padding: 10px 12px;">
-                            <?php $totalConvenciones = $encuentro + $destinoN1 + $destinoN2 + $destinoN3; ?>
+                            <?php
+                            $convencionEnero = (int)($metricas['convenciones']['enero'] ?? 0);
+                            $convencionMujeres = (int)($metricas['convenciones']['mujeres'] ?? 0);
+                            $convencionJovenes = (int)($metricas['convenciones']['jovenes'] ?? 0);
+                            $convencionHombres = (int)($metricas['convenciones']['hombres'] ?? 0);
+                            $totalConvenciones = $convencionEnero + $convencionMujeres + $convencionJovenes + $convencionHombres;
+                            ?>
                             <strong style="display:block; margin-bottom:8px;">Reporte de convenciones</strong>
                             <div class="convenciones-grid">
-                                <div class="convencion-item">
-                                    <span>Encuentro</span>
-                                    <strong><?= $encuentro ?></strong>
+                                <div class="convencion-item convencion-item--clickable" data-kpi-filter="convencion_enero">
+                                    <span>Convención Enero</span>
+                                    <strong><?= $convencionEnero ?></strong>
                                 </div>
-                                <div class="convencion-item">
-                                    <span>Convención N1</span>
-                                    <strong><?= $destinoN1 ?></strong>
+                                <div class="convencion-item convencion-item--clickable" data-kpi-filter="convencion_mujeres">
+                                    <span>Convención Mujeres</span>
+                                    <strong><?= $convencionMujeres ?></strong>
                                 </div>
-                                <div class="convencion-item">
-                                    <span>Convención N2</span>
-                                    <strong><?= $destinoN2 ?></strong>
+                                <div class="convencion-item convencion-item--clickable" data-kpi-filter="convencion_jovenes">
+                                    <span>Convención Jóvenes</span>
+                                    <strong><?= $convencionJovenes ?></strong>
                                 </div>
-                                <div class="convencion-item">
-                                    <span>Convención N3</span>
-                                    <strong><?= $destinoN3 ?></strong>
+                                <div class="convencion-item convencion-item--clickable" data-kpi-filter="convencion_hombres">
+                                    <span>Convención Hombres</span>
+                                    <strong><?= $convencionHombres ?></strong>
                                 </div>
-                                <div class="convencion-item">
+                                <div class="convencion-item convencion-item--clickable" data-kpi-filter="convencion_total">
                                     <span>Total convenciones</span>
                                     <strong><?= $totalConvenciones ?></strong>
                                 </div>
@@ -400,6 +569,7 @@
             modal.classList.add('is-open');
             modal.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
+            inicializarFiltroIndicadores(modalBody);
         }
 
         function cerrarModal() {
@@ -440,6 +610,99 @@
                 cerrarModal();
             }
         });
+
+        const filtroLabels = {
+            'total_personas': 'Personas activas del ministerio',
+            'celulas': 'Personas con célula',
+            'lideres_celula': 'Líderes de célula',
+            'asistentes_celula': 'Asistentes de célula',
+            'ganados_semana_total': 'Ganados en la semana',
+            'ganados_semana_celula': 'Ganados en célula',
+            'ganados_semana_domingo': 'Ganados en domingo',
+            'escalera_uv': 'Universidad de la vida',
+            'escalera_encuentro': 'Encuentro',
+            'escalera_destino_n1': 'Capacitación destino N1',
+            'escalera_destino_n2': 'Capacitación destino N2',
+            'escalera_destino_n3': 'Capacitación destino N3',
+            'convencion_enero': 'Convención Enero',
+            'convencion_mujeres': 'Convención Mujeres',
+            'convencion_jovenes': 'Convención Jóvenes',
+            'convencion_hombres': 'Convención Hombres',
+            'convencion_total': 'Total convenciones'
+        };
+
+        function inicializarFiltroIndicadores(scope) {
+            const panel = scope.querySelector('[data-ministerio-personas-panel="1"]');
+            if (!panel) {
+                return;
+            }
+
+            const rows = Array.from(panel.querySelectorAll('tbody tr:not([data-ministerio-empty-row="1"]):not([data-ministerio-no-match-row="1"])'));
+            const noMatchRow = panel.querySelector('[data-ministerio-no-match-row="1"]');
+            const countNode = panel.querySelector('[data-ministerio-count="1"]');
+            const labelNode = panel.querySelector('[data-ministerio-filtro-label="1"]');
+            const clearBtn = panel.querySelector('[data-ministerio-clear="1"]');
+            const kpis = Array.from(scope.querySelectorAll('.ministerio-kpi--clickable, .ministerio-chip--clickable, .convencion-item--clickable'));
+
+            function desplazarAPanel() {
+                try {
+                    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } catch (e) {
+                    panel.scrollIntoView(true);
+                }
+            }
+
+            function aplicarFiltro(key) {
+                let visibles = 0;
+
+                if (key) {
+                    panel.classList.add('is-visible');
+                } else {
+                    panel.classList.remove('is-visible');
+                }
+
+                rows.forEach(function(row) {
+                    const mostrar = !key || row.getAttribute('data-match-' + key.replace(/_/g, '-')) === '1';
+                    row.style.display = mostrar ? '' : 'none';
+                    if (mostrar) {
+                        visibles++;
+                    }
+                });
+
+                if (countNode) {
+                    countNode.textContent = String(visibles);
+                }
+
+                if (labelNode) {
+                    labelNode.textContent = key ? (filtroLabels[key] || 'Indicador') : 'Todas';
+                }
+
+                if (noMatchRow) {
+                    noMatchRow.style.display = key && visibles === 0 ? '' : 'none';
+                }
+            }
+
+            kpis.forEach(function(kpi) {
+                    kpi.addEventListener('click', function() {
+                    const key = String(kpi.getAttribute('data-kpi-filter') || '');
+                    kpis.forEach(function(other) {
+                        other.classList.remove('ministerio-kpi--active', 'ministerio-chip--active');
+                    });
+                    kpi.classList.add('ministerio-kpi--active', 'ministerio-chip--active');
+                    aplicarFiltro(key);
+                    desplazarAPanel();
+                });
+            });
+
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function() {
+                    kpis.forEach(function(kpi) { kpi.classList.remove('ministerio-kpi--active', 'ministerio-chip--active'); });
+                    aplicarFiltro('');
+                });
+            }
+
+            aplicarFiltro('');
+        }
     })();
 </script>
 

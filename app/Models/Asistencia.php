@@ -9,6 +9,20 @@ class Asistencia extends BaseModel {
     protected $table = 'asistencia_celula';
     protected $primaryKey = 'Id_Asistencia';
 
+    public function ensureEntregaSobreTableExists() {
+        $sql = "CREATE TABLE IF NOT EXISTS asistencia_entrega_sobre_semana (
+                    Id_Entrega INT AUTO_INCREMENT PRIMARY KEY,
+                    Id_Celula INT NOT NULL,
+                    Semana_Inicio DATE NOT NULL,
+                    Entrego_Sobre TINYINT(1) NOT NULL DEFAULT 0,
+                    Actualizado_En DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_celula_semana (Id_Celula, Semana_Inicio),
+                    INDEX idx_semana (Semana_Inicio)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+        return $this->execute($sql);
+    }
+
     /**
      * Obtener asistencias con información completa
      */
@@ -198,5 +212,51 @@ class Asistencia extends BaseModel {
         }
 
         return $resultado;
+    }
+
+    public function getEstadoEntregoSobrePorCelulaSemana(array $idsCelula, $semanaInicio) {
+        $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function($id) {
+            return $id > 0;
+        })));
+
+        $semanaInicio = trim((string)$semanaInicio);
+        if (empty($idsCelula) || $semanaInicio === '') {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));
+        $sql = "SELECT Id_Celula, Entrego_Sobre
+                FROM asistencia_entrega_sobre_semana
+                WHERE Semana_Inicio = ?
+                  AND Id_Celula IN ({$placeholders})";
+
+        $rows = $this->query($sql, array_merge([$semanaInicio], $idsCelula));
+        $estado = [];
+
+        foreach ($rows as $row) {
+            $idCelula = (int)($row['Id_Celula'] ?? 0);
+            if ($idCelula <= 0) {
+                continue;
+            }
+            $estado[$idCelula] = (int)($row['Entrego_Sobre'] ?? 0) === 1;
+        }
+
+        return $estado;
+    }
+
+    public function guardarEntregoSobreSemana($idCelula, $semanaInicio, $entregoSobre) {
+        $idCelula = (int)$idCelula;
+        $semanaInicio = trim((string)$semanaInicio);
+        $entregoSobre = !empty($entregoSobre) ? 1 : 0;
+
+        if ($idCelula <= 0 || $semanaInicio === '') {
+            return false;
+        }
+
+        $sql = "INSERT INTO asistencia_entrega_sobre_semana (Id_Celula, Semana_Inicio, Entrego_Sobre)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE Entrego_Sobre = VALUES(Entrego_Sobre), Actualizado_En = NOW()";
+
+        return $this->execute($sql, [$idCelula, $semanaInicio, $entregoSobre]);
     }
 }

@@ -10,6 +10,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
     <div class="page-actions personas-mobile-stack">
         <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill">Personas</a>
         <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill active">Pendiente por consolidar</a>
+
         <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel&modo=ganar" class="btn btn-success">
             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
         </a>
@@ -21,7 +22,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
 
 <div class="alert alert-info" style="margin-bottom: 20px;">
     <i class="bi bi-info-circle"></i>
-    Este apartado muestra personas nuevas en seguimiento de consolidación y separa una lista de <strong>No se dispone</strong> para casos no concretados.
+    Este apartado muestra personas nuevas en seguimiento de consolidación, separa <strong>Reasignados</strong> (sin primer contacto en 48 horas) y una lista de <strong>No se dispone</strong> para casos no concretados.
 </div>
 
 <div class="card" style="margin-bottom: 20px;">
@@ -49,6 +50,14 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
                     <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['asignados'] ?? 0) ?></span>
                 </a>
                 <small class="ganar-shortcut-help">Domingo + Invitado por vacío</small>
+            </div>
+
+            <div class="ganar-shortcut-item">
+                <a href="<?= PUBLIC_URL ?>?url=personas/ganar&origen=reasignados" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'reasignados') ? 'active' : '' ?>">
+                    <span class="ganar-shortcut-title"><i class="bi bi-arrow-repeat"></i> Reasignados</span>
+                    <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['reasignados'] ?? 0) ?></span>
+                </a>
+                <small class="ganar-shortcut-help">Sin primer contacto en 48 horas</small>
             </div>
 
             <div class="ganar-shortcut-item">
@@ -94,6 +103,11 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
                             <?php if (!empty($persona['Seguimiento_Observacion']) && (($filtroOrigenActual ?? '') === 'no_disponible')): ?>
                             <div class="no-disponible-note" title="<?= htmlspecialchars($persona['Seguimiento_Observacion']) ?>">
                                 Obs: <?= htmlspecialchars($persona['Seguimiento_Observacion']) ?>
+                            </div>
+                            <?php endif; ?>
+                            <?php if (!empty($persona['Seguimiento_Reasignado'])): ?>
+                            <div class="reasignado-note">
+                                Reasignado automático por falta de primer contacto (48h)
                             </div>
                             <?php endif; ?>
                         </td>
@@ -544,6 +558,13 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
     white-space: normal;
 }
 
+.reasignado-note {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #0f4d92;
+    white-space: normal;
+}
+
 .escalera-status-msg {
     margin-top: 10px;
     font-size: 12px;
@@ -571,6 +592,43 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
 </div>
 
 <script>
+(function() {
+    const btnCopiar = document.getElementById('btnCopiarUrlRegistroPersonas');
+    if (!btnCopiar) {
+        return;
+    }
+
+    const baseRuta = String(btnCopiar.getAttribute('data-url') || '').trim();
+    const urlRegistro = new URL(baseRuta, window.location.origin).toString();
+    const textoOriginal = btnCopiar.innerHTML;
+
+    function feedback(texto) {
+        btnCopiar.innerHTML = texto;
+        setTimeout(function() {
+            btnCopiar.innerHTML = textoOriginal;
+        }, 1800);
+    }
+
+    btnCopiar.addEventListener('click', async function() {
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(urlRegistro);
+            } else {
+                const tempInput = document.createElement('input');
+                tempInput.value = urlRegistro;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+            }
+
+            feedback('<i class="bi bi-check2"></i> URL copiada');
+        } catch (e) {
+            feedback('<i class="bi bi-x-circle"></i> No se pudo copiar');
+        }
+    });
+})();
+
 (function() {
     const etapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
     const subprocesos = {

@@ -27,9 +27,6 @@ $exportUrl = '?' . http_build_query($exportParams);
             <i class="bi bi-people-fill"></i> Nehemias - Seremos 1200
         </h2>
         <div class="d-flex gap-2">
-            <a href="<?= htmlspecialchars($exportUrl) ?>" class="btn btn-success">
-                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
-            </a>
             <a href="?url=nehemias/lista" class="btn btn-secondary">
                 <i class="bi bi-arrow-left"></i> Volver a Nehemias
             </a>

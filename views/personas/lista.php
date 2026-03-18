@@ -11,6 +11,9 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
     <div class="page-actions personas-mobile-stack">
         <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill active">Personas</a>
         <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill">Pendiente por consolidar</a>
+        <a href="<?= PUBLIC_URL ?>?url=registro_personas" class="btn btn-primary" target="_blank" rel="noopener">
+            <i class="bi bi-box-arrow-up-right"></i> Formulario público
+        </a>
         <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel<?= !empty($_GET['perfil']) ? '&perfil=' . urlencode((string)$_GET['perfil']) : '' ?><?= !empty($_GET['buscar']) ? '&buscar=' . urlencode((string)$_GET['buscar']) : '' ?>" class="btn btn-success">
             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
         </a>
@@ -36,6 +39,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                     <option value="lideres_12" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'lideres_12') ? 'selected' : '' ?>>Líder de 12</option>
                     <option value="lideres_celula" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'lideres_celula') ? 'selected' : '' ?>>Líderes de célula</option>
                     <option value="asistentes" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'asistentes') ? 'selected' : '' ?>>Asistentes</option>
+                    <option value="otros" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'otros') ? 'selected' : '' ?>>Otros roles</option>
                     <option value="pastores" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'pastores') ? 'selected' : '' ?>>Pastores</option>
                     <option value="sin_rol" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'sin_rol') ? 'selected' : '' ?>>Sin rol</option>
                 </select>
@@ -67,23 +71,28 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 
 <div class="card" style="margin-bottom: 16px;">
     <div class="card-body" style="padding: 12px 16px;">
+        <?php $perfilActivo = (string)($filtroPerfilActual ?? ($_GET['perfil'] ?? '')); ?>
+        <?php $totalResumenRoles = (int)($totalesPerfil['lideres_12'] ?? 0) + (int)($totalesPerfil['lideres_celula'] ?? 0) + (int)($totalesPerfil['asistentes'] ?? 0) + (int)($totalesPerfil['otros'] ?? 0); ?>
+        <div class="resumen-roles-total">
+            Total en listado actual: <strong><?= $totalResumenRoles ?></strong>
+        </div>
         <div class="personas-resumen-roles">
-            <div class="resumen-role-item">
+            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=lideres_12<?= !empty($filtroNombreActual) ? '&buscar=' . urlencode((string)$filtroNombreActual) : '' ?>" class="resumen-role-item <?= $perfilActivo === 'lideres_12' ? 'active' : '' ?>">
                 <span class="resumen-role-label">Líder de 12</span>
                 <strong class="resumen-role-value"><?= (int)($totalesPerfil['lideres_12'] ?? 0) ?></strong>
-            </div>
-            <div class="resumen-role-item">
+            </a>
+            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=lideres_celula<?= !empty($filtroNombreActual) ? '&buscar=' . urlencode((string)$filtroNombreActual) : '' ?>" class="resumen-role-item <?= $perfilActivo === 'lideres_celula' ? 'active' : '' ?>">
                 <span class="resumen-role-label">Líder de célula</span>
                 <strong class="resumen-role-value"><?= (int)($totalesPerfil['lideres_celula'] ?? 0) ?></strong>
-            </div>
-            <div class="resumen-role-item">
+            </a>
+            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=asistentes<?= !empty($filtroNombreActual) ? '&buscar=' . urlencode((string)$filtroNombreActual) : '' ?>" class="resumen-role-item <?= $perfilActivo === 'asistentes' ? 'active' : '' ?>">
                 <span class="resumen-role-label">Asistentes</span>
                 <strong class="resumen-role-value"><?= (int)($totalesPerfil['asistentes'] ?? 0) ?></strong>
-            </div>
-            <div class="resumen-role-item">
+            </a>
+            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=otros<?= !empty($filtroNombreActual) ? '&buscar=' . urlencode((string)$filtroNombreActual) : '' ?>" class="resumen-role-item <?= $perfilActivo === 'otros' ? 'active' : '' ?>">
                 <span class="resumen-role-label">Otros roles</span>
                 <strong class="resumen-role-value"><?= (int)($totalesPerfil['otros'] ?? 0) ?></strong>
-            </div>
+            </a>
         </div>
     </div>
 </div>
@@ -93,8 +102,8 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
         <thead>
             <tr>
                 <th>Nombre</th>
-                <th>Teléfono</th>
-                <th>Rol</th>
+                <th>Ministerio</th>
+                <th>Líder</th>
                 <?php if ($mostrarAcciones): ?><th class="action-col">Acciones</th><?php endif; ?>
             </tr>
         </thead>
@@ -107,8 +116,8 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                                 <?= htmlspecialchars($persona['Nombre'] . ' ' . $persona['Apellido']) ?>
                             </span>
                         </td>
-                        <td><?= htmlspecialchars($persona['Telefono'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($persona['Nombre_Rol'] ?? 'Sin rol') ?></td>
+                        <td><?= htmlspecialchars($persona['Nombre_Ministerio'] ?? 'Sin ministerio') ?></td>
+                        <td><?= htmlspecialchars(trim((string)($persona['Nombre_Lider'] ?? '')) ?: 'Sin líder') ?></td>
                         <?php if ($mostrarAcciones): ?>
                         <td class="action-col">
                             <div class="action-buttons action-buttons-compact">
@@ -165,11 +174,30 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
     gap: 10px;
 }
 
+.resumen-roles-total {
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: #3d4f6a;
+}
+
 .resumen-role-item {
     border: 1px solid #d8e2f1;
     border-radius: 10px;
     background: #f8fbff;
     padding: 10px 12px;
+    text-decoration: none;
+    transition: background .15s, border-color .15s, box-shadow .15s;
+}
+
+.resumen-role-item:hover {
+    background: #eef5ff;
+    border-color: #b9cdee;
+}
+
+.resumen-role-item.active {
+    background: #e7f1ff;
+    border-color: #4f8edc;
+    box-shadow: inset 0 0 0 1px rgba(79, 142, 220, 0.25);
 }
 
 .resumen-role-label {
@@ -497,6 +525,40 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 </div>
 
 <script>
+const btnCopiarUrlRegistroPersonas = document.getElementById('btnCopiarUrlRegistroPersonas');
+
+if (btnCopiarUrlRegistroPersonas) {
+    const baseRutaRegistroPersonas = String(btnCopiarUrlRegistroPersonas.getAttribute('data-url') || '').trim();
+    const urlRegistroPersonas = new URL(baseRutaRegistroPersonas, window.location.origin).toString();
+    const textoOriginalBtnRegistro = btnCopiarUrlRegistroPersonas.innerHTML;
+
+    const mostrarFeedbackBtnRegistro = function(texto) {
+        btnCopiarUrlRegistroPersonas.innerHTML = texto;
+        setTimeout(function() {
+            btnCopiarUrlRegistroPersonas.innerHTML = textoOriginalBtnRegistro;
+        }, 1800);
+    };
+
+    btnCopiarUrlRegistroPersonas.addEventListener('click', async function() {
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(urlRegistroPersonas);
+            } else {
+                const inputTemporal = document.createElement('input');
+                inputTemporal.value = urlRegistroPersonas;
+                document.body.appendChild(inputTemporal);
+                inputTemporal.select();
+                document.execCommand('copy');
+                document.body.removeChild(inputTemporal);
+            }
+
+            mostrarFeedbackBtnRegistro('<i class="bi bi-check2"></i> URL copiada');
+        } catch (e) {
+            mostrarFeedbackBtnRegistro('<i class="bi bi-x-circle"></i> No se pudo copiar');
+        }
+    });
+}
+
 const filtroPerfil = document.getElementById('filtro_perfil');
 const filtroNombre = document.getElementById('filtro_nombre');
 const filtroPerfilForm = document.getElementById('filtro_perfil_form');

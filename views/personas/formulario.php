@@ -194,14 +194,29 @@ $urlVolver = $returnToAsistencia
 
                 <div class="form-group">
                     <label for="tipo_reunion">Ganado en</label>
+                    <?php $tipoReunionSeleccionado = $post_data['tipo_reunion'] ?? ($persona['Tipo_Reunion'] ?? ''); ?>
                     <select id="tipo_reunion" name="tipo_reunion" class="form-control">
                         <option value="">Seleccionar...</option>
-                        <option value="Celula" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Celula' ? 'selected' : '' ?>>Célula</option>
-                        <option value="Domingo" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Domingo' ? 'selected' : '' ?>>Domingo</option>
-                        <option value="Migrados" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Migrados' ? 'selected' : '' ?>>Migrados</option>
-                        <option value="Asignados" <?= isset($persona) && $persona['Tipo_Reunion'] == 'Asignados' ? 'selected' : '' ?>>Asignados</option>
+                        <option value="Celula" <?= $tipoReunionSeleccionado === 'Celula' ? 'selected' : '' ?>>Célula</option>
+                        <option value="Domingo" <?= $tipoReunionSeleccionado === 'Domingo' ? 'selected' : '' ?>>Domingo</option>
+                        <option value="Migrados" <?= $tipoReunionSeleccionado === 'Migrados' ? 'selected' : '' ?>>Migrados</option>
+                        <option value="Asignados" <?= $tipoReunionSeleccionado === 'Asignados' ? 'selected' : '' ?>>Asignados</option>
                     </select>
                 </div>
+
+                <?php if (!empty($soportaConvencion)): ?>
+                <div class="form-group">
+                    <label for="convencion">Convenciones</label>
+                    <?php $convencionSeleccionada = $post_data['convencion'] ?? ($persona['Convencion'] ?? ''); ?>
+                    <select id="convencion" name="convencion" class="form-control">
+                        <option value="">Seleccionar...</option>
+                        <option value="Convencion Enero" <?= $convencionSeleccionada === 'Convencion Enero' ? 'selected' : '' ?>>Convención Enero</option>
+                        <option value="Convencion Mujeres" <?= $convencionSeleccionada === 'Convencion Mujeres' ? 'selected' : '' ?>>Convención Mujeres</option>
+                        <option value="Convencion Jovenes" <?= $convencionSeleccionada === 'Convencion Jovenes' ? 'selected' : '' ?>>Convención Jóvenes</option>
+                        <option value="Convencion Hombres" <?= $convencionSeleccionada === 'Convencion Hombres' ? 'selected' : '' ?>>Convención Hombres</option>
+                    </select>
+                </div>
+                <?php endif; ?>
 
                 <?php if (!empty($soportaProceso)): ?>
                 <div class="form-group">

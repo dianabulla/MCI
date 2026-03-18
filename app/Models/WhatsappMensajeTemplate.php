@@ -10,9 +10,14 @@ class WhatsappMensajeTemplate extends BaseModel {
     protected $primaryKey = 'clave';
 
     private $defaults = [
-        'bienvenida_persona' => 'Hola {persona_nombre}, bienvenido(a) a MCI Madrid Colombia. Estamos felices de recibirte. Muy pronto te compartiremos información de crecimiento y eventos.',
+        'bienvenida_persona' => 'Hola {persona_nombre}, bienvenido(a) a MCI Madrid Colombia. Estamos felices de recibirte. Muy pronto te compartiremos información de crecimiento y eventos. 📍 Peticiones: {url_peticiones}',
         'asignacion_lider' => 'Hola {lider_nombre}, tienes una persona nueva asignada: {persona_nombre}.',
-        'asignacion_ministerio' => 'Hola {destinatario_nombre}, se asignó una persona nueva al ministerio: {persona_nombre}.'
+        'asignacion_ministerio' => 'Hola {destinatario_nombre}, se asignó una persona nueva al ministerio: {persona_nombre}.',
+        'asignacion_celula_universidad' => 'Hola {persona_nombre}, ¡bienvenido a tu célula {celula_nombre}! 
+
+{universidad_vida_info}
+
+📚 Accede aquí: {url_universidad_vida}'
     ];
 
     public function __construct() {
@@ -165,7 +170,12 @@ class WhatsappMensajeTemplate extends BaseModel {
             '{persona_id}',
             '{lider_nombre}',
             '{destinatario_nombre}',
-            '{ministerio_nombre}'
+            '{ministerio_nombre}',
+            '{celula_nombre}',
+            '{celula_id}',
+            '{universidad_vida_info}',
+            '{url_peticiones}',
+            '{url_universidad_vida}'
         ];
     }
 }

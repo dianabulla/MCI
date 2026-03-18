@@ -287,3 +287,16 @@ function validatePhone(phone) {
     const re = /^[0-9]{10}$/;
     return re.test(phone.replace(/\s/g, ''));
 }
+
+// Dropdown de botón en page-actions
+function toggleBtnDropdown(id) {
+    const wrap = document.getElementById(id);
+    const isOpen = wrap.classList.contains('open');
+    document.querySelectorAll('.btn-dropdown-wrap.open').forEach(function(el) { el.classList.remove('open'); });
+    if (!isOpen) wrap.classList.add('open');
+}
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.btn-dropdown-wrap')) {
+        document.querySelectorAll('.btn-dropdown-wrap.open').forEach(function(el) { el.classList.remove('open'); });
+    }
+});

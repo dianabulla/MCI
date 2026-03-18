@@ -700,4 +700,62 @@ class CelulaController extends BaseController {
         }
         exit;
     }
+
+    /**
+     * Obtener detalles de quiénes vieron un material específico (AJAX)
+     */
+    public function detalleVistasMaterial() {
+        if (!AuthController::tienePermiso('materiales_celulas', 'ver')) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Acceso denegado']);
+            exit;
+        }
+
+        header('Content-Type: application/json');
+        
+        $archivo = basename((string)($_GET['archivo'] ?? ''));
+        if ($archivo === '' || strtolower(pathinfo($archivo, PATHINFO_EXTENSION)) !== 'pdf') {
+            echo json_encode(['success' => false, 'message' => 'Archivo inválido']);
+            exit;
+        }
+
+        try {
+            $this->asegurarTablaVistasMateriales();
+
+            global $pdo;
+            if (!isset($pdo) || !($pdo instanceof PDO)) {
+                echo json_encode(['success' => false, 'message' => 'Error de conexión']);
+                exit;
+            }
+
+            $sql = "SELECT 
+                        mv.Id_Persona,
+                        p.Nombre,
+                        p.Apellido,
+                        p.Telefono,
+                        m.Nombre_Ministerio,
+                        mv.Total_Vistas,
+                        mv.Fecha_Primera_Vista,
+                        mv.Fecha_Ultima_Vista
+                    FROM material_celula_vista mv
+                    LEFT JOIN persona p ON mv.Id_Persona = p.Id_Persona
+                    LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
+                    WHERE mv.Archivo = ?
+                    ORDER BY mv.Fecha_Ultima_Vista DESC";
+            
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$archivo]);
+            $vistas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            echo json_encode([
+                'success' => true,
+                'archivo' => htmlspecialchars($archivo),
+                'total_personas' => count($vistas),
+                'vistas' => $vistas
+            ]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => 'Error al obtener datos']);
+        }
+        exit;
+    }
 }

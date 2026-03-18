@@ -63,6 +63,19 @@
                 </div>
             </div>
 
+            <div class="form-group" style="margin-bottom: 14px;">
+                <label for="tpl_asignacion_celula_universidad" style="font-weight: 600;">Asignación a célula - Universidad de la vida</label>
+                <textarea id="tpl_asignacion_celula_universidad" name="tpl_asignacion_celula_universidad" class="form-control" rows="3" required><?= htmlspecialchars((string)($plantillasWhatsapp['asignacion_celula_universidad']['plantilla'] ?? '')) ?></textarea>
+                <small style="display:block; margin-top:6px; color:#666;">Nota: Se incluye automáticamente el próximo contenido de Universidad de la Vida</small>
+                <div style="margin-top:8px;">
+                    <input type="file" name="media_asignacion_celula_universidad" class="form-control" accept="image/*,video/*">
+                    <?php if (!empty($plantillasWhatsapp['asignacion_celula_universidad']['media_url'])): ?>
+                        <a href="<?= htmlspecialchars((string)$plantillasWhatsapp['asignacion_celula_universidad']['media_url']) ?>" target="_blank" class="btn btn-sm btn-info" style="margin-top:6px;">Ver media actual</a>
+                        <label style="display:block; margin-top:6px;"><input type="checkbox" name="quitar_media_asignacion_celula_universidad" value="1"> Quitar media</label>
+                    <?php endif; ?>
+                </div>
+            </div>
+
             <button type="submit" class="btn btn-primary">Guardar plantillas</button>
         </form>
     </div>

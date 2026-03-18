@@ -7,9 +7,6 @@
     <?php $puedeEliminarRoles = AuthController::esAdministrador() || AuthController::tienePermiso('roles', 'eliminar'); ?>
     <?php $puedeGestionarRoles = $puedeEditarRoles || $puedeEliminarRoles; ?>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="<?= PUBLIC_URL ?>?url=roles/exportarExcel" class="btn btn-success">
-            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
-        </a>
         <?php if ($puedeCrearRoles): ?>
         <a href="<?= PUBLIC_URL ?>index.php?url=roles/crear" class="btn btn-primary">+ Nuevo Rol</a>
         <?php endif; ?>

@@ -9,6 +9,56 @@ class Celula extends BaseModel {
     protected $table = 'celula';
     protected $primaryKey = 'Id_Celula';
 
+    public function __construct() {
+        parent::__construct();
+        $this->ensureCamposReporteCelulas();
+    }
+
+    private function columnExists($columnName) {
+        $columnName = trim((string)$columnName);
+        if ($columnName === '') {
+            return false;
+        }
+
+        $sql = "SHOW COLUMNS FROM {$this->table} LIKE ?";
+        $rows = $this->query($sql, [$columnName]);
+        return !empty($rows);
+    }
+
+    private function ensureCamposReporteCelulas() {
+        try {
+            if (!$this->columnExists('Fecha_Apertura')) {
+                $this->execute("ALTER TABLE {$this->table} ADD COLUMN Fecha_Apertura DATETIME NULL DEFAULT NULL");
+            }
+
+            if (!$this->columnExists('Estado_Celula')) {
+                $this->execute("ALTER TABLE {$this->table} ADD COLUMN Estado_Celula ENUM('Activa','Cerrada') NOT NULL DEFAULT 'Activa'");
+            }
+
+            if (!$this->columnExists('Fecha_Cierre')) {
+                $this->execute("ALTER TABLE {$this->table} ADD COLUMN Fecha_Cierre DATETIME NULL DEFAULT NULL");
+            }
+        } catch (Throwable $e) {
+            // Evita bloquear la aplicación si el motor no permite alter en este momento.
+            error_log('No fue posible asegurar campos de reporte en celula: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Crear célula estableciendo metadatos de apertura cuando existen las columnas.
+     */
+    public function create($data) {
+        if ($this->columnExists('Fecha_Apertura') && empty($data['Fecha_Apertura'])) {
+            $data['Fecha_Apertura'] = date('Y-m-d H:i:s');
+        }
+
+        if ($this->columnExists('Estado_Celula') && empty($data['Estado_Celula'])) {
+            $data['Estado_Celula'] = 'Activa';
+        }
+
+        return parent::create($data);
+    }
+
     /**
      * Obtener célula por ID con nombre del líder
      */

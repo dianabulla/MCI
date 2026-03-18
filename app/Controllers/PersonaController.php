@@ -21,6 +21,8 @@ class PersonaController extends BaseController {
     private $whatsappMensajeTemplateModel;
     private $soportaProceso = false;
     private $soportaChecklistEscalera = false;
+    private $soportaConvencion = false;
+    private $soportaFechaAsignacionLider = false;
 
     public function __construct() {
         $this->personaModel = new Persona();
@@ -31,9 +33,26 @@ class PersonaController extends BaseController {
         $this->whatsappMensajeTemplateModel = new WhatsappMensajeTemplate();
 
         $this->personaModel->ensureProcesoColumnExists();
+        $this->personaModel->ensureConvencionColumnExists();
         $this->personaModel->ensureEscaleraChecklistColumnExists();
+        $this->personaModel->ensureFechaAsignacionLiderColumnExists();
         $this->soportaProceso = $this->personaModel->tieneColumna('Proceso');
         $this->soportaChecklistEscalera = $this->personaModel->tieneColumna('Escalera_Checklist');
+        $this->soportaConvencion = $this->personaModel->tieneColumna('Convencion');
+        $this->soportaFechaAsignacionLider = $this->personaModel->tieneColumna('Fecha_Asignacion_Lider');
+    }
+
+    /**
+     * Construir URL pública absoluta (compatible con proxy)
+     */
+    private function buildAbsolutePublicUrl($route) {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $scheme = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
+        }
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $base = rtrim(PUBLIC_URL, '/');
+        return $scheme . '://' . $host . $base . '/index.php?url=' . urlencode($route);
     }
 
     private function obtenerDestinatariosMinisterio($idMinisterio, $idPersonaExcluir = 0) {
@@ -83,11 +102,14 @@ class PersonaController extends BaseController {
             $nombreMinisterio = (string)($ministerio['Nombre_Ministerio'] ?? '');
         }
 
+        $urlPeticiones = $this->buildAbsolutePublicUrl('peticiones/crear');
+
         $varsBase = [
             'persona_nombre' => $nombrePersona,
             'persona_telefono' => $telefonoPersona,
             'persona_id' => $idPersona,
-            'ministerio_nombre' => $nombreMinisterio
+            'ministerio_nombre' => $nombreMinisterio,
+            'url_peticiones' => $urlPeticiones
         ];
 
         if ($telefonoPersona !== '' && $idPersona > 0) {
@@ -224,6 +246,84 @@ class PersonaController extends BaseController {
                 );
             }
         }
+
+        // Detectar cambio de célula y enviar mensaje con Universidad de la Vida
+        $celulaAntes = (int)($personaAntes['Id_Celula'] ?? 0);
+        $celulaDespues = (int)($personaDespues['Id_Celula'] ?? 0);
+        if ($celulaDespues > 0 && $celulaDespues !== $celulaAntes) {
+            $this->encolarMensajeAsignacionCelulaConUniversidad($personaDespues);
+        }
+    }
+
+    /**
+     * Encolar mensaje de asignación a célula con información de Universidad de la Vida
+     */
+    private function encolarMensajeAsignacionCelulaConUniversidad(array $persona) {
+        if (!$this->whatsappLocalQueueModel) {
+            return;
+        }
+
+        $idPersona = (int)($persona['Id_Persona'] ?? 0);
+        $telefonoPersona = (string)($persona['Telefono'] ?? '');
+        $idCelula = (int)($persona['Id_Celula'] ?? 0);
+
+        if ($idPersona <= 0 || $telefonoPersona === '' || $idCelula <= 0) {
+            return;
+        }
+
+        // Obtener próximo contenido de Universidad de la Vida
+        require_once APP . '/Models/EventoModulo.php';
+        $eventoModuloModel = new EventoModulo();
+        $itemsUniversidad = $eventoModuloModel->getByModuloPublico('universidad_vida', date('Y-m-d'));
+
+        $nombrePersona = trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? ''));
+        $nombreCelula = '';
+        if (!empty($persona['Nombre_Celula'])) {
+            $nombreCelula = (string)$persona['Nombre_Celula'];
+        } elseif ($idCelula > 0) {
+            $celula = $this->celulaModel->getById($idCelula);
+            $nombreCelula = (string)($celula['Nombre_Celula'] ?? '');
+        }
+
+        // URL pública de Universidad de la Vida
+        $urlUniversidad = $this->buildAbsolutePublicUrl('eventos/universidad-vida/publico');
+
+        $varsBase = [
+            'persona_nombre' => $nombrePersona,
+            'celula_nombre' => $nombreCelula,
+            'persona_id' => $idPersona,
+            'celula_id' => $idCelula,
+            'url_universidad_vida' => $urlUniversidad
+        ];
+
+        // Obtener información de Universidad de la Vida para incluir en el mensaje
+        $infoUniversidad = '';
+        if (!empty($itemsUniversidad)) {
+            $primerItem = $itemsUniversidad[0];
+            $infoUniversidad = "📚 Universidad de la Vida: " . (string)($primerItem['Titulo'] ?? '');
+            if (!empty($primerItem['Parrafo'])) {
+                $parrafo = trim((string)$primerItem['Parrafo']);
+                if (strlen($parrafo) > 200) {
+                    $parrafo = substr($parrafo, 0, 197) . '...';
+                }
+                $infoUniversidad .= "\n\n" . $parrafo;
+            }
+        }
+
+        $varsBase['universidad_vida_info'] = $infoUniversidad;
+
+        // Obtener plantilla y encolar
+        $payload = $this->whatsappMensajeTemplateModel->getTemplatePayload('asignacion_celula_universidad', $varsBase);
+        if (!empty($payload['mensaje'])) {
+            $this->whatsappLocalQueueModel->encolar(
+                $telefonoPersona,
+                (string)($payload['mensaje'] ?? ''),
+                'asignacion_celula_universidad',
+                'persona:' . $idPersona . ':celula:' . $idCelula . ':asignacion',
+                $payload['media_url'] ?? null,
+                $payload['media_tipo'] ?? null
+            );
+        }
     }
 
     private function normalizarProceso($proceso) {
@@ -232,17 +332,69 @@ class PersonaController extends BaseController {
         return in_array($proceso, $procesosPermitidos, true) ? $proceso : null;
     }
 
+    private function normalizarConvencion($convencion) {
+        $convencion = trim((string)$convencion);
+        $permitidas = [
+            'Convencion Enero',
+            'Convencion Mujeres',
+            'Convencion Jovenes',
+            'Convencion Hombres'
+        ];
+
+        if (in_array($convencion, $permitidas, true)) {
+            return $convencion;
+        }
+
+        return null;
+    }
+
     private function normalizarEtapaFiltro($etapa) {
         return $this->normalizarProceso($etapa);
     }
 
     private function normalizarOrigenFiltro($origen) {
         $origen = strtolower(trim((string)$origen));
-        return in_array($origen, ['domingo', 'celula', 'asignados', 'no_disponible'], true) ? $origen : '';
+        return in_array($origen, ['domingo', 'celula', 'asignados', 'reasignados', 'no_disponible'], true) ? $origen : '';
     }
 
     private function personaTieneAsignacionCompleta(array $persona) {
         return !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']) && !empty($persona['Id_Celula']);
+    }
+
+    private function resolverFechaAsignacionLider(array $data, $personaAntes = null) {
+        $idLiderNuevo = (int)($data['Id_Lider'] ?? 0);
+        $idMinisterioNuevo = (int)($data['Id_Ministerio'] ?? 0);
+
+        // El temporizador de primer contacto corre cuando ya existe asignación
+        // completa de ministerio + líder.
+        if ($idLiderNuevo <= 0 || $idMinisterioNuevo <= 0) {
+            return null;
+        }
+
+        if (!is_array($personaAntes) || empty($personaAntes)) {
+            return date('Y-m-d H:i:s');
+        }
+
+        $idLiderAnterior = (int)($personaAntes['Id_Lider'] ?? 0);
+        $idMinisterioAnterior = (int)($personaAntes['Id_Ministerio'] ?? 0);
+        $fechaAnterior = trim((string)($personaAntes['Fecha_Asignacion_Lider'] ?? ''));
+
+        // Si no estaba asignado antes, inicia el conteo ahora.
+        if ($idLiderAnterior <= 0 || $idMinisterioAnterior <= 0) {
+            return date('Y-m-d H:i:s');
+        }
+
+        // Si cambia líder o ministerio, reinicia ventana de 48 horas.
+        if ($idLiderAnterior !== $idLiderNuevo || $idMinisterioAnterior !== $idMinisterioNuevo) {
+            return date('Y-m-d H:i:s');
+        }
+
+        // Si no cambió asignación, conserva la fecha previa.
+        if ($fechaAnterior !== '') {
+            return $fechaAnterior;
+        }
+
+        return date('Y-m-d H:i:s');
     }
 
     private function enriquecerChecklistPersona(array $persona) {
@@ -263,8 +415,61 @@ class PersonaController extends BaseController {
         $persona['Escalera_Checklist'] = json_encode($checklist, JSON_UNESCAPED_UNICODE);
         $persona['Seguimiento_No_Disponible'] = !empty($checklist['Ganar'][3]);
         $persona['Seguimiento_Observacion'] = (string)($checklist['_meta']['no_disponible_observacion'] ?? '');
+        $persona['Seguimiento_Reasignado'] = !empty($checklist['_meta']['reasignado_automatico']);
+        $persona['Seguimiento_Reasignado_At'] = (string)($checklist['_meta']['reasignado_automatico_at'] ?? '');
 
         return $persona;
+    }
+
+    private function aplicarReglaReasignacionPrimerContacto($horasLimite = 48) {
+        if (!$this->soportaChecklistEscalera) {
+            return;
+        }
+
+        $candidatos = $this->personaModel->getCandidatosReasignacionPrimerContacto($horasLimite);
+        if (empty($candidatos)) {
+            return;
+        }
+
+        foreach ($candidatos as $persona) {
+            $idPersona = (int)($persona['Id_Persona'] ?? 0);
+            if ($idPersona <= 0) {
+                continue;
+            }
+
+            $checklistRaw = (string)($persona['Escalera_Checklist'] ?? '');
+            $checklistActual = [];
+            if ($checklistRaw !== '') {
+                $tmp = json_decode($checklistRaw, true);
+                if (is_array($tmp)) {
+                    $checklistActual = $tmp;
+                }
+            }
+
+            $checklist = $this->normalizarChecklistEscalera($checklistActual);
+
+            // Si ya hubo primer contacto, no se reasigna.
+            if (!empty($checklist['Ganar'][1])) {
+                continue;
+            }
+
+            // No mover casos cerrados como "No se dispone".
+            if (!empty($checklist['Ganar'][3])) {
+                continue;
+            }
+
+            $checklist['Ganar'][0] = false;
+            $checklist['_meta']['reasignado_automatico'] = true;
+            $checklist['_meta']['reasignado_automatico_at'] = date('Y-m-d H:i:s');
+            $checklist['_meta']['reasignado_automatico_motivo'] = 'Sin primer contacto en 48 horas';
+
+            $checklistJson = json_encode($checklist, JSON_UNESCAPED_UNICODE);
+            if ($checklistJson === false) {
+                continue;
+            }
+
+            $this->personaModel->aplicarReasignacionAutomatica($idPersona, $checklistJson, 'Ganar');
+        }
     }
 
     private function enriquecerChecklistPersonas(array $personas) {
@@ -275,7 +480,7 @@ class PersonaController extends BaseController {
 
     private function normalizarPerfilListado($perfil) {
         $perfil = strtolower(trim((string)$perfil));
-        return in_array($perfil, ['', 'lideres_12', 'lideres_celula', 'asistentes', 'pastores', 'sin_rol'], true) ? $perfil : '';
+        return in_array($perfil, ['', 'lideres_12', 'lideres_celula', 'asistentes', 'otros', 'pastores', 'sin_rol'], true) ? $perfil : '';
     }
 
     private function textoSinAcentos($texto) {
@@ -331,6 +536,12 @@ class PersonaController extends BaseController {
                 return $rol === '' || $rol === 'sin rol';
             }
 
+            if ($perfil === 'otros') {
+                return !$this->esLider12($persona)
+                    && strpos($rol, 'lider de celula') === false
+                    && strpos($rol, 'asistente') === false;
+            }
+
             return true;
         }));
     }
@@ -383,6 +594,10 @@ class PersonaController extends BaseController {
     }
 
     private function obtenerCategoriaOrigenPendiente(array $persona) {
+        if (!empty($persona['Seguimiento_Reasignado'])) {
+            return 'reasignados';
+        }
+
         if (!empty($persona['Seguimiento_No_Disponible'])) {
             return 'no_disponible';
         }
@@ -406,6 +621,7 @@ class PersonaController extends BaseController {
             'celula' => 0,
             'domingo' => 0,
             'asignados' => 0,
+            'reasignados' => 0,
             'no_disponible' => 0,
             'otros' => 0
         ];
@@ -628,9 +844,10 @@ class PersonaController extends BaseController {
         $filtroRol = DataIsolation::generarFiltroPersonas();
         // Base general: solo personas ya asignadas (ministerio, lider y celula).
         $personasBase = $this->personaModel->getAllWithRole($filtroRol, false);
-        $totalesPerfil = $this->contarPerfilesListado($personasBase);
-        $personas = $this->filtrarPersonasPorPerfilListado($personasBase, $filtroPerfil);
-        $personas = $this->filtrarPersonasPorNombreListado($personas, $filtroNombre);
+        // El resumen por rol respeta la búsqueda por nombre actual.
+        $personasBaseFiltradasPorNombre = $this->filtrarPersonasPorNombreListado($personasBase, $filtroNombre);
+        $totalesPerfil = $this->contarPerfilesListado($personasBaseFiltradasPorNombre);
+        $personas = $this->filtrarPersonasPorPerfilListado($personasBaseFiltradasPorNombre, $filtroPerfil);
 
         $this->view('personas/lista', [
             'personas' => $personas,
@@ -729,15 +946,18 @@ class PersonaController extends BaseController {
         $this->whatsappMensajeTemplateModel->actualizarPlantilla('bienvenida_persona', $_POST['tpl_bienvenida_persona'] ?? '');
         $this->whatsappMensajeTemplateModel->actualizarPlantilla('asignacion_lider', $_POST['tpl_asignacion_lider'] ?? '');
         $this->whatsappMensajeTemplateModel->actualizarPlantilla('asignacion_ministerio', $_POST['tpl_asignacion_ministerio'] ?? '');
+        $this->whatsappMensajeTemplateModel->actualizarPlantilla('asignacion_celula_universidad', $_POST['tpl_asignacion_celula_universidad'] ?? '');
 
         $plantillas = $this->whatsappMensajeTemplateModel->getPlantillas();
         $bienvenidaMedia = $this->subirMediaPlantilla('bienvenida_persona', 'media_bienvenida_persona', $plantillas['bienvenida_persona']['media_url'] ?? null);
         $liderMedia = $this->subirMediaPlantilla('asignacion_lider', 'media_asignacion_lider', $plantillas['asignacion_lider']['media_url'] ?? null);
         $ministerioMedia = $this->subirMediaPlantilla('asignacion_ministerio', 'media_asignacion_ministerio', $plantillas['asignacion_ministerio']['media_url'] ?? null);
+        $celulaUniversidadMedia = $this->subirMediaPlantilla('asignacion_celula_universidad', 'media_asignacion_celula_universidad', $plantillas['asignacion_celula_universidad']['media_url'] ?? null);
 
         $this->whatsappMensajeTemplateModel->actualizarMedia('bienvenida_persona', $bienvenidaMedia['media_url'], $bienvenidaMedia['media_tipo']);
         $this->whatsappMensajeTemplateModel->actualizarMedia('asignacion_lider', $liderMedia['media_url'], $liderMedia['media_tipo']);
         $this->whatsappMensajeTemplateModel->actualizarMedia('asignacion_ministerio', $ministerioMedia['media_url'], $ministerioMedia['media_tipo']);
+        $this->whatsappMensajeTemplateModel->actualizarMedia('asignacion_celula_universidad', $celulaUniversidadMedia['media_url'], $celulaUniversidadMedia['media_tipo']);
 
         $this->redirect('personas/plantillas-whatsapp&tpl_msg=ok');
     }
@@ -751,6 +971,9 @@ class PersonaController extends BaseController {
         $filtroProceso = (string)($_GET['proceso'] ?? '');
         $filtroEtapa = $this->normalizarEtapaFiltro($_GET['etapa'] ?? null);
         $filtroOrigen = $this->normalizarOrigenFiltro($_GET['origen'] ?? null);
+
+        // Regla de negocio: si en 48 horas no hay primer contacto, liberar líder/ministerio.
+        $this->aplicarReglaReasignacionPrimerContacto(48);
 
         // Pendientes por consolidar: mostrar siempre personas nuevas en etapa Ganar.
         if ($filtroEtapa === null || $filtroEtapa === '') {
@@ -823,10 +1046,20 @@ class PersonaController extends BaseController {
             $personas = array_values(array_filter($personas, static function($persona) {
                 return !empty($persona['Seguimiento_No_Disponible']);
             }));
+        } elseif ($filtroOrigen === 'reasignados') {
+            $personas = array_values(array_filter($personas, static function($persona) {
+                return empty($persona['Seguimiento_No_Disponible']) && !empty($persona['Seguimiento_Reasignado']);
+            }));
         } else {
             $personas = array_values(array_filter($personas, static function($persona) {
                 return empty($persona['Seguimiento_No_Disponible']);
             }));
+
+            if ($filtroOrigen !== '') {
+                $personas = array_values(array_filter($personas, static function($persona) {
+                    return empty($persona['Seguimiento_Reasignado']);
+                }));
+            }
         }
 
         $ministerios = $contextoFiltros['ministerios'];
@@ -869,7 +1102,10 @@ class PersonaController extends BaseController {
         }
 
         $normalizado['_meta'] = [
-            'no_disponible_observacion' => ''
+            'no_disponible_observacion' => '',
+            'reasignado_automatico' => false,
+            'reasignado_automatico_at' => '',
+            'reasignado_automatico_motivo' => ''
         ];
 
         if (!is_array($checklist)) {
@@ -889,6 +1125,9 @@ class PersonaController extends BaseController {
 
         if (isset($checklist['_meta']) && is_array($checklist['_meta'])) {
             $normalizado['_meta']['no_disponible_observacion'] = trim((string)($checklist['_meta']['no_disponible_observacion'] ?? ''));
+            $normalizado['_meta']['reasignado_automatico'] = !empty($checklist['_meta']['reasignado_automatico']);
+            $normalizado['_meta']['reasignado_automatico_at'] = trim((string)($checklist['_meta']['reasignado_automatico_at'] ?? ''));
+            $normalizado['_meta']['reasignado_automatico_motivo'] = trim((string)($checklist['_meta']['reasignado_automatico_motivo'] ?? ''));
         }
 
         return $normalizado;
@@ -1156,6 +1395,10 @@ class PersonaController extends BaseController {
                 'Fecha_Registro_Unix' => time()
             ];
 
+            if ($this->soportaConvencion) {
+                $data['Convencion'] = $this->normalizarConvencion($_POST['convencion'] ?? null);
+            }
+
             if ($this->soportaProceso) {
                     // Regla ministerial: toda persona nueva inicia en la etapa Ganar.
                     $data['Proceso'] = 'Ganar';
@@ -1165,6 +1408,10 @@ class PersonaController extends BaseController {
             // a la célula/líder/ministerio de origen de ese registro.
             if ($returnTo === 'asistencia') {
                 $data = $this->resolverAnclajeDesdeAsistencia($celulaRetorno, $data);
+            }
+
+            if ($this->soportaFechaAsignacionLider) {
+                $data['Fecha_Asignacion_Lider'] = $this->resolverFechaAsignacionLider($data, null);
             }
             
             // Agregar campos de acceso al sistema si se proporcionan (solo admin)
@@ -1222,6 +1469,7 @@ class PersonaController extends BaseController {
                     'personas_lideres' => $this->personaModel->getLideresYPastores(),
                     'error' => $error,
                     'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
                     'soportaProceso' => $this->soportaProceso,
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
@@ -1235,6 +1483,7 @@ class PersonaController extends BaseController {
                 'roles' => $this->rolModel->getAll(),
                 'personas_invitadores' => $this->personaModel->getAll(),
                 'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                'soportaConvencion' => $this->soportaConvencion,
                 'soportaProceso' => $this->soportaProceso,
                 'return_to' => $returnTo,
                 'celula_retorno' => $celulaRetorno
@@ -1286,8 +1535,16 @@ class PersonaController extends BaseController {
                 'Id_Ministerio' => $_POST['id_ministerio'] ?: null
             ];
 
+            if ($this->soportaConvencion) {
+                $data['Convencion'] = $this->normalizarConvencion($_POST['convencion'] ?? null);
+            }
+
             if ($this->soportaProceso) {
                 $data['Proceso'] = $this->normalizarProceso($_POST['proceso'] ?? null);
+            }
+
+            if ($this->soportaFechaAsignacionLider) {
+                $data['Fecha_Asignacion_Lider'] = $this->resolverFechaAsignacionLider($data, $personaAntes);
             }
             
             // Agregar campos de acceso al sistema si se proporcionan (solo admin)
@@ -1350,6 +1607,7 @@ class PersonaController extends BaseController {
                     'personas_lideres' => $this->personaModel->getLideresYPastores(),
                     'error' => $error,
                     'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
                     'soportaProceso' => $this->soportaProceso,
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
@@ -1365,6 +1623,7 @@ class PersonaController extends BaseController {
                 'roles' => $this->rolModel->getAll(),
                 'personas_invitadores' => $this->personaModel->getAll(),
                 'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                'soportaConvencion' => $this->soportaConvencion,
                 'soportaProceso' => $this->soportaProceso,
                 'return_to' => $returnTo,
                 'celula_retorno' => $celulaRetorno

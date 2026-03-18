@@ -100,10 +100,17 @@ class PermisosController extends BaseController {
      */
     public function actualizar() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $idRol = $_POST['id_rol'];
-            $modulo = $_POST['modulo'];
-            $campo = $_POST['campo']; // puede_ver, puede_crear, puede_editar, puede_eliminar
-            $valor = $_POST['valor']; // 0 o 1
+            $idRol = (int)$_POST['id_rol'];
+            $modulo = $_POST['modulo'] ?? '';
+            $campo  = $_POST['campo'] ?? '';
+            $valor  = (int)$_POST['valor'];
+
+            // Validar campo para evitar inyección SQL (whitelist)
+            $campoDb = $this->getCampoDb($campo);
+            if ($campoDb === null) {
+                echo json_encode(['success' => false, 'error' => 'Campo no válido']);
+                return;
+            }
 
             try {
                 // Verificar si existe el permiso
@@ -114,19 +121,17 @@ class PermisosController extends BaseController {
 
                 if ($permiso) {
                     // Actualizar
-                    $campoDb = $this->getCampoDb($campo);
                     $sql = "UPDATE permisos SET $campoDb = ? WHERE Id_Permiso = ?";
                     $stmt = $this->db->prepare($sql);
                     $stmt->execute([$valor, $permiso['Id_Permiso']]);
                 } else {
-                    // Crear nuevo permiso
+                    // Crear nuevo permiso con todo en 0
                     $sql = "INSERT INTO permisos (Id_Rol, Modulo, Puede_Ver, Puede_Crear, Puede_Editar, Puede_Eliminar) 
                             VALUES (?, ?, 0, 0, 0, 0)";
                     $stmt = $this->db->prepare($sql);
                     $stmt->execute([$idRol, $modulo]);
-                    
+
                     // Actualizar el campo específico
-                    $campoDb = $this->getCampoDb($campo);
                     $sql = "UPDATE permisos SET $campoDb = ? WHERE Id_Rol = ? AND Modulo = ?";
                     $stmt = $this->db->prepare($sql);
                     $stmt->execute([$valor, $idRol, $modulo]);
@@ -193,6 +198,6 @@ class PermisosController extends BaseController {
             'puede_editar' => 'Puede_Editar',
             'puede_eliminar' => 'Puede_Eliminar'
         ];
-        return $map[$campo] ?? 'Puede_Ver';
+        return $map[$campo] ?? null;
     }
 }

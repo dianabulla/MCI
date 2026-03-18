@@ -4,6 +4,7 @@
  */
 
 require_once APP . '/Models/Persona.php';
+require_once APP . '/Helpers/DataIsolation.php';
 
 class AuthController extends BaseController {
     private $personaModel;
@@ -233,6 +234,13 @@ class AuthController extends BaseController {
      */
     public static function tienePermiso($modulo, $accion = 'ver') {
         if (self::esAdministrador()) {
+            return true;
+        }
+
+        // Roles con acceso total (Pastor, Ganar, o cualquier rol configurado
+        // con Ver=1 en módulos clave desde el módulo de Permisos) bypass
+        // la verificación individual de módulo.
+        if (DataIsolation::tieneAccesoTotal()) {
             return true;
         }
 

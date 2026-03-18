@@ -1,153 +1,451 @@
-<?php require_once VIEWS . '/layout/header.php'; ?>
+﻿<?php require_once VIEWS . '/layout/header.php'; ?>
 
-<div class="page-header">
-    <h2><i class="bi bi-shield-check"></i> Administración de Permisos</h2>
-    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-        <p style="margin:0;">Gestionar permisos de acceso por rol</p>
-        <a href="<?= PUBLIC_URL ?>?url=permisos/exportarExcel" class="btn btn-success btn-sm">
-            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
-        </a>
-    </div>
-</div>
+<style>
+/* â”€â”€ PÃ¡gina de permisos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+.perm-page { max-width: 960px; margin: 0 auto; }
 
-<div class="card">
-    <div class="card-body">
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle"></i> 
-            <strong>Instrucciones:</strong> Haga clic en las casillas para otorgar o revocar permisos. Los cambios se guardan automáticamente.
-        </div>
+/* PestaÃ±as de roles */
+.perm-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    margin-bottom: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+}
+.perm-tab-btn {
+    padding: 8px 18px;
+    border: 2px solid #d1d5db;
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    background: #f3f4f6;
+    color: #374151;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    position: relative;
+    bottom: -2px;
+}
+.perm-tab-btn:hover { background: #e0e7ff; color: #1d4ed8; border-color: #a5b4fc; }
+.perm-tab-btn.active {
+    background: #fff;
+    color: #1d4ed8;
+    border-color: #2563eb;
+    border-bottom-color: #fff;
+    z-index: 1;
+}
+.perm-tab-btn .perm-tab-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 10px;
+    margin-left: 4px;
+    background: #dbeafe;
+    color: #1e40af;
+    font-weight: 700;
+}
+.perm-tab-btn.active .perm-tab-badge { background: #2563eb; color: #fff; }
 
-        <div class="table-responsive permissions-table-wrap">
-            <table class="table table-bordered table-hover table-no-card permisos-table">
-                <thead>
-                    <tr>
-                        <th rowspan="2" class="perm-module-col align-middle">Módulo</th>
-                        <?php foreach ($roles as $rol): ?>
-                        <th colspan="4" class="text-center bg-primary text-white">
-                            <?= htmlspecialchars($rol['Nombre_Rol']) ?>
-                        </th>
-                        <?php endforeach; ?>
-                    </tr>
-                    <tr>
-                        <?php foreach ($roles as $rol): ?>
-                        <th class="text-center perm-action-col"><small>Ver</small></th>
-                        <th class="text-center perm-action-col"><small>Crear</small></th>
-                        <th class="text-center perm-action-col"><small>Editar</small></th>
-                        <th class="text-center perm-action-col"><small>Elim.</small></th>
-                        <?php endforeach; ?>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($modulos as $moduloKey => $moduloNombre): ?>
-                    <tr>
-                        <td><strong><?= $moduloNombre ?></strong></td>
-                        <?php foreach ($roles as $rol): ?>
-                            <?php 
-                            $permiso = $permisos[$rol['Id_Rol']][$moduloKey] ?? null;
-                            $puedeVer = $permiso ? $permiso['Puede_Ver'] : 0;
-                            $puedeCrear = $permiso ? $permiso['Puede_Crear'] : 0;
-                            $puedeEditar = $permiso ? $permiso['Puede_Editar'] : 0;
-                            $puedeEliminar = $permiso ? $permiso['Puede_Eliminar'] : 0;
-                            ?>
-                            <td class="text-center">
-                                <input type="checkbox" 
-                                       class="form-check-input permiso-check" 
-                                       data-rol="<?= $rol['Id_Rol'] ?>" 
-                                       data-modulo="<?= $moduloKey ?>" 
-                                       data-campo="puede_ver"
-                                       <?= $puedeVer ? 'checked' : '' ?>>
-                            </td>
-                            <td class="text-center">
-                                <input type="checkbox" 
-                                       class="form-check-input permiso-check" 
-                                       data-rol="<?= $rol['Id_Rol'] ?>" 
-                                       data-modulo="<?= $moduloKey ?>" 
-                                       data-campo="puede_crear"
-                                       <?= $puedeCrear ? 'checked' : '' ?>>
-                            </td>
-                            <td class="text-center">
-                                <input type="checkbox" 
-                                       class="form-check-input permiso-check" 
-                                       data-rol="<?= $rol['Id_Rol'] ?>" 
-                                       data-modulo="<?= $moduloKey ?>" 
-                                       data-campo="puede_editar"
-                                       <?= $puedeEditar ? 'checked' : '' ?>>
-                            </td>
-                            <td class="text-center">
-                                <input type="checkbox" 
-                                       class="form-check-input permiso-check" 
-                                       data-rol="<?= $rol['Id_Rol'] ?>" 
-                                       data-modulo="<?= $moduloKey ?>" 
-                                       data-campo="puede_eliminar"
-                                       <?= $puedeEliminar ? 'checked' : '' ?>>
-                            </td>
-                        <?php endforeach; ?>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
+/* Panel por rol */
+.perm-panel {
+    display: none;
+    border: 2px solid #2563eb;
+    border-radius: 0 8px 8px 8px;
+    background: #fff;
+    padding: 20px 20px 12px;
+}
+.perm-panel.active { display: block; }
 
-        <div id="mensaje-guardado" class="alert alert-success" style="display: none;">
-            <i class="bi bi-check-circle"></i> Permiso actualizado correctamente
-        </div>
-    </div>
-</div>
+/* Barra superior del panel */
+.perm-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e5e7eb;
+}
+.perm-panel-title { font-size: 17px; font-weight: 700; color: #1e3a8a; margin: 0; }
+.perm-panel-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-<script>
-console.info('Permisos AJAX build: 2026-03-02-2');
+.btn-perm-all {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 6px 14px; border-radius: 6px; border: none;
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity .15s;
+}
+.btn-perm-all:hover { opacity: .85; }
+.btn-perm-activar  { background: #2563eb; color: #fff; }
+.btn-perm-quitar   { background: #dc2626; color: #fff; }
+.btn-perm-solo-ver { background: #059669; color: #fff; }
 
-function getPermisosActualizarEndpoint() {
-    const endpointFromServer = <?= json_encode((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . strtok(($_SERVER['REQUEST_URI'] ?? '/public/'), '?') . '?url=permisos/actualizar') ?>;
-    return endpointFromServer;
+/* Acceso total badge */
+.perm-acceso-total-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 5px 12px; border-radius: 20px;
+    background: #dcfce7; color: #15803d;
+    font-size: 12px; font-weight: 700;
+    border: 1px solid #86efac;
 }
 
-document.querySelectorAll('.permiso-check').forEach(checkbox => {
-    checkbox.addEventListener('change', function() {
-        const idRol = this.dataset.rol;
-        const modulo = this.dataset.modulo;
-        const campo = this.dataset.campo;
-        const valor = this.checked ? 1 : 0;
+/* Tabla de mÃ³dulos */
+.perm-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.perm-table thead th {
+    background: #1e3a8a;
+    color: #fff;
+    text-align: center;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .3px;
+}
+.perm-table thead th:first-child { text-align: left; width: 44%; }
+.perm-table tbody tr { border-bottom: 1px solid #e5e7eb; }
+.perm-table tbody tr:last-child { border-bottom: none; }
+.perm-table tbody tr:hover { background: #f0f4ff; }
+.perm-table tbody tr.perm-group-header td {
+    background: #f1f5f9;
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    padding: 5px 10px;
+    border-top: 2px solid #e2e8f0;
+}
+.perm-table td { padding: 9px 10px; vertical-align: middle; }
+.perm-table td.perm-check-cell { text-align: center; width: 14%; }
+.perm-table td.perm-name { font-size: 13px; color: #1e293b; }
+.perm-table td.perm-name small { display: block; color: #94a3b8; font-size: 11px; margin-top: 1px; }
 
-        const endpoint = getPermisosActualizarEndpoint();
+/* Checkbox estilo toggle */
+.perm-cb {
+    width: 18px; height: 18px;
+    cursor: pointer;
+    accent-color: #2563eb;
+}
+.perm-cb:disabled { opacity: .4; cursor: not-allowed; }
 
-        // Enviar actualización vía AJAX
-        fetch(endpoint, {
+/* Toast */
+#perm-toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: #15803d;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 4px 14px rgba(0,0,0,.18);
+    display: none;
+    z-index: 9999;
+    transition: opacity .3s;
+}
+#perm-toast.error { background: #dc2626; }
+</style>
+
+<div class="page-header">
+    <h2><i class="bi bi-shield-check"></i> AdministraciÃ³n de Permisos</h2>
+</div>
+
+<div class="perm-page">
+
+    <!-- Aviso roles con acceso total -->
+    <div class="alert alert-warning" style="margin-bottom:18px; font-size:13px;">
+        <i class="bi bi-shield-fill-exclamation"></i>
+        <strong>Administrador</strong>, <strong>Pastor</strong> y <strong>Ganar</strong> tienen acceso total garantizado por el sistema, sin importar lo que se marque aquÃ­.<br>
+        Para que <strong>otro rol</strong> vea todo, active <strong>Ver</strong> en <em>Personas</em>, <em>CÃ©lulas</em> y <em>Ministerios</em> â€” o use <strong>Activar Todo</strong>.
+    </div>
+
+    <!-- PestaÃ±as de roles -->
+    <div class="perm-tabs">
+        <?php foreach ($roles as $i => $rol):
+            $idRol = $rol['Id_Rol'];
+            $nombreRol = htmlspecialchars($rol['Nombre_Rol']);
+            // Contar permisos activos (Ver=1) para el badge
+            $activos = 0;
+            foreach ($modulos as $mk => $mn) {
+                if (!empty($permisos[$idRol][$mk]['Puede_Ver'])) $activos++;
+            }
+        ?>
+        <button type="button"
+            class="perm-tab-btn <?= $i === 0 ? 'active' : '' ?>"
+            data-tab="rol-<?= $idRol ?>">
+            <?= $nombreRol ?>
+            <span class="perm-tab-badge"><?= $activos ?>/<?= count($modulos) ?></span>
+        </button>
+        <?php endforeach; ?>
+    </div>
+
+    <!-- Paneles por rol -->
+    <?php
+    $rolesConAccesoTotal = [];
+    foreach ($roles as $r) {
+        $rn = strtolower(trim(strtr($r['Nombre_Rol'], ['Ã¡'=>'a','Ã©'=>'e','Ã­'=>'i','Ã³'=>'o','Ãº'=>'u','Ã±'=>'n'])));
+        if (strpos($rn,'admin')!==false || strpos($rn,'pastor')!==false || strpos($rn,'ganar')!==false) {
+            $rolesConAccesoTotal[] = (int)$r['Id_Rol'];
+        }
+    }
+
+    // Grupos visuales de mÃ³dulos
+    $gruposModulos = [
+        'Principal' => [
+            'personas'         => ['Personas',         'Ver, crear, editar y eliminar personas'],
+            'celulas'          => ['CÃ©lulas',           'GestiÃ³n de cÃ©lulas y miembros'],
+            'materiales_celulas'=> ['Materiales CÃ©lulas','Archivos PDF para cÃ©lulas'],
+            'ministerios'      => ['Ministerios',       'Ver y gestionar ministerios'],
+            'asistencias'      => ['Asistencias',       'Registro de asistencias a cÃ©lulas'],
+            'eventos'          => ['Eventos',           'Eventos y actividades generales'],
+            'peticiones'       => ['Peticiones',        'Peticiones de oraciÃ³n'],
+            'reportes'         => ['Reportes',          'Reportes y estadÃ­sticas'],
+            'transmisiones'    => ['Transmisiones',     'Transmisiones en vivo'],
+        ],
+        'Obsequios' => [
+            'entrega_obsequio'   => ['Entrega de Obsequios',  'Registrar entrega de obsequios'],
+            'registro_obsequio'  => ['Registro de Obsequios', 'Consultar registros de obsequios'],
+        ],
+        'Nehemias' => [
+            'nehemias'                => ['Nehemias (general)',             'Acceso al mÃ³dulo Nehemias'],
+            'nehemias_cols_bogota_subio'=> ['Ver: En BogotÃ¡ se le subiÃ³',  'Columna especÃ­fica del reporte'],
+            'nehemias_cols_puesto'    => ['Ver: Puesto',                   'Columna puesto en Nehemias'],
+            'nehemias_cols_mesa'      => ['Ver: Mesa',                     'Columna mesa en Nehemias'],
+            'nehemias_cols_acepta'    => ['Ver: Acepta',                   'Columna acepta en Nehemias'],
+            'nehemias_acciones_editar'=> ['BotÃ³n Editar',                  'Permite editar registros Nehemias'],
+            'nehemias_acciones_eliminar'=> ['BotÃ³n Eliminar',              'Permite eliminar registros Nehemias'],
+        ],
+        'Sistema' => [
+            'roles'    => ['Roles',    'GestiÃ³n de roles de usuario'],
+            'permisos' => ['Permisos', 'AdministraciÃ³n de permisos'],
+        ],
+    ];
+    ?>
+
+    <?php foreach ($roles as $i => $rol):
+        $idRol = $rol['Id_Rol'];
+        $esAccesoTotal = in_array($idRol, $rolesConAccesoTotal, true);
+    ?>
+    <div class="perm-panel <?= $i === 0 ? 'active' : '' ?>" id="rol-<?= $idRol ?>">
+
+        <!-- Cabecera del panel -->
+        <div class="perm-panel-header">
+            <h3 class="perm-panel-title">
+                <i class="bi bi-person-badge"></i>
+                <?= htmlspecialchars($rol['Nombre_Rol']) ?>
+            </h3>
+            <div class="perm-panel-actions">
+                <?php if ($esAccesoTotal): ?>
+                <span class="perm-acceso-total-badge">
+                    <i class="bi bi-shield-fill-check"></i> Acceso total garantizado
+                </span>
+                <?php else: ?>
+                <button type="button" class="btn-perm-all btn-perm-solo-ver"
+                    data-rol="<?= $idRol ?>" data-accion="solo_ver">
+                    <i class="bi bi-eye"></i> SÃ³lo leer todo
+                </button>
+                <button type="button" class="btn-perm-all btn-perm-activar"
+                    data-rol="<?= $idRol ?>" data-accion="activar">
+                    <i class="bi bi-check-all"></i> Activar Todo
+                </button>
+                <button type="button" class="btn-perm-all btn-perm-quitar"
+                    data-rol="<?= $idRol ?>" data-accion="desactivar">
+                    <i class="bi bi-slash-circle"></i> Quitar Todo
+                </button>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Tabla de mÃ³dulos -->
+        <table class="perm-table">
+            <thead>
+                <tr>
+                    <th>MÃ³dulo</th>
+                    <th>Ver</th>
+                    <th>Crear</th>
+                    <th>Editar</th>
+                    <th>Eliminar</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($gruposModulos as $grupoNombre => $grupoItems):
+                    // Filtrar solo los mÃ³dulos que existen en $modulos
+                    $itemsVis = array_filter($grupoItems, fn($k) => isset($modulos[$k]), ARRAY_FILTER_USE_KEY);
+                    if (empty($itemsVis)) continue;
+                ?>
+                <tr class="perm-group-header">
+                    <td colspan="5"><?= $grupoNombre ?></td>
+                </tr>
+                <?php foreach ($itemsVis as $mk => [$mnombre, $mdesc]):
+                    $permiso = $permisos[$idRol][$mk] ?? null;
+                    $pVer  = $permiso ? (int)$permiso['Puede_Ver']    : 0;
+                    $pCre  = $permiso ? (int)$permiso['Puede_Crear']  : 0;
+                    $pEdi  = $permiso ? (int)$permiso['Puede_Editar'] : 0;
+                    $pEli  = $permiso ? (int)$permiso['Puede_Eliminar']:0;
+                ?>
+                <tr>
+                    <td class="perm-name">
+                        <?= htmlspecialchars($mnombre) ?>
+                        <small><?= htmlspecialchars($mdesc) ?></small>
+                    </td>
+                    <?php foreach ([
+                        ['puede_ver',      $pVer, 'Ver'],
+                        ['puede_crear',    $pCre, 'Crear'],
+                        ['puede_editar',   $pEdi, 'Editar'],
+                        ['puede_eliminar', $pEli, 'Eliminar'],
+                    ] as [$campo, $val, $label]): ?>
+                    <td class="perm-check-cell">
+                        <input type="checkbox"
+                            class="perm-cb permiso-check"
+                            data-rol="<?= $idRol ?>"
+                            data-modulo="<?= $mk ?>"
+                            data-campo="<?= $campo ?>"
+                            title="<?= $label ?> â€” <?= htmlspecialchars($mnombre) ?> (<?= htmlspecialchars($rol['Nombre_Rol']) ?>)"
+                            <?= $val ? 'checked' : '' ?>
+                            <?= $esAccesoTotal ? 'disabled' : '' ?>>
+                    </td>
+                    <?php endforeach; ?>
+                </tr>
+                <?php endforeach; ?>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php endforeach; ?>
+
+</div><!-- .perm-page -->
+
+<!-- Toast de confirmaciÃ³n -->
+<div id="perm-toast"><i class="bi bi-check-circle"></i> <span id="perm-toast-msg">Permiso actualizado</span></div>
+
+<script>
+(function () {
+    const ENDPOINT = <?= json_encode(
+        (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http')
+        . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost')
+        . strtok($_SERVER['REQUEST_URI'] ?? '/public/', '?')
+        . '?url=permisos/actualizar'
+    ) ?>;
+
+    /* â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    let toastTimer = null;
+    function showToast(msg, tipo) {
+        const el = document.getElementById('perm-toast');
+        const msgEl = document.getElementById('perm-toast-msg');
+        msgEl.textContent = msg;
+        el.classList.toggle('error', tipo === 'error');
+        el.style.display = 'block';
+        el.style.opacity = '1';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { el.style.opacity = '0'; setTimeout(() => { el.style.display = 'none'; el.style.opacity = '1'; }, 300); }, 2500);
+    }
+
+    /* â”€â”€ Actualizar badge de pestaÃ±a â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    function actualizarBadge(idRol) {
+        const panel = document.getElementById('rol-' + idRol);
+        if (!panel) return;
+        const total   = panel.querySelectorAll('.permiso-check[data-campo="puede_ver"]').length;
+        const activos = panel.querySelectorAll('.permiso-check[data-campo="puede_ver"]:checked').length;
+        const tab = document.querySelector(`.perm-tab-btn[data-tab="rol-${idRol}"] .perm-tab-badge`);
+        if (tab) tab.textContent = activos + '/' + total;
+    }
+
+    /* â”€â”€ Guardar un permiso â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    function guardarPermiso(cb, onError) {
+        const { rol, modulo, campo } = cb.dataset;
+        const valor = cb.checked ? 1 : 0;
+
+        fetch(ENDPOINT, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Accept': 'application/json'
-            },
-            body: `id_rol=${encodeURIComponent(idRol)}&modulo=${encodeURIComponent(modulo)}&campo=${encodeURIComponent(campo)}&valor=${encodeURIComponent(valor)}`
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+            body: `id_rol=${encodeURIComponent(rol)}&modulo=${encodeURIComponent(modulo)}&campo=${encodeURIComponent(campo)}&valor=${encodeURIComponent(valor)}`
         })
-        .then(response => response.text())
-        .then(text => {
-            try {
-                return JSON.parse(text);
-            } catch (e) {
-                throw new Error('Respuesta no válida del servidor: ' + text.substring(0, 120));
+        .then(r => r.text()).then(txt => {
+            const data = JSON.parse(txt);
+            if (!data.success) throw new Error(data.error || 'Error desconocido');
+            actualizarBadge(rol);
+            showToast('Permiso actualizado correctamente');
+        })
+        .catch(err => {
+            cb.checked = !cb.checked;
+            showToast('Error: ' + err.message, 'error');
+            if (onError) onError();
+        });
+    }
+
+    /* â”€â”€ Checkbox individual â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    document.querySelectorAll('.permiso-check').forEach(cb => {
+        cb.addEventListener('change', function () { guardarPermiso(this); });
+    });
+
+    /* â”€â”€ Botones masivos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    document.querySelectorAll('.btn-perm-all').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const idRol = this.dataset.rol;
+            const accion = this.dataset.accion;
+
+            const labels = { activar: 'Activar TODO', desactivar: 'Quitar TODO', solo_ver: 'Dejar solo lectura' };
+            if (!confirm('Â¿' + (labels[accion] || accion) + ' para este rol?')) return;
+
+            const panel = document.getElementById('rol-' + idRol);
+            const cbs   = panel.querySelectorAll('.permiso-check');
+
+            let lista = [];
+
+            if (accion === 'activar') {
+                cbs.forEach(cb => { cb.checked = true; lista.push(cb); });
+            } else if (accion === 'desactivar') {
+                cbs.forEach(cb => { cb.checked = false; lista.push(cb); });
+            } else if (accion === 'solo_ver') {
+                cbs.forEach(cb => {
+                    cb.checked = (cb.dataset.campo === 'puede_ver');
+                    lista.push(cb);
+                });
             }
-        })
-        .then(data => {
-            if (data.success) {
-                // Mostrar mensaje de éxito
-                const mensaje = document.getElementById('mensaje-guardado');
-                mensaje.style.display = 'block';
-                setTimeout(() => {
-                    mensaje.style.display = 'none';
-                }, 2000);
-            } else {
-                alert('Error al actualizar permiso: ' + (data.error || 'Error desconocido'));
-                this.checked = !this.checked; // Revertir el cambio
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error de conexión al guardar permisos.\nEndpoint: ' + endpoint);
-            this.checked = !this.checked; // Revertir el cambio
+
+            cbs.forEach(cb => { cb.disabled = true; });
+
+            const promesas = lista.map(cb => {
+                const { rol, modulo, campo } = cb.dataset;
+                const valor = cb.checked ? 1 : 0;
+                return fetch(ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+                    body: `id_rol=${encodeURIComponent(rol)}&modulo=${encodeURIComponent(modulo)}&campo=${encodeURIComponent(campo)}&valor=${encodeURIComponent(valor)}`
+                });
+            });
+
+            Promise.all(promesas)
+                .then(() => {
+                    cbs.forEach(cb => { cb.disabled = false; });
+                    actualizarBadge(idRol);
+                    showToast('Permisos actualizados correctamente');
+                })
+                .catch(err => {
+                    cbs.forEach(cb => { cb.disabled = false; });
+                    showToast('Error al actualizar: ' + err.message, 'error');
+                });
         });
     });
-});
+
+    /* â”€â”€ PestaÃ±as â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    document.querySelectorAll('.perm-tab-btn').forEach(tab => {
+        tab.addEventListener('click', function () {
+            document.querySelectorAll('.perm-tab-btn').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.perm-panel').forEach(p => p.classList.remove('active'));
+            this.classList.add('active');
+            const panel = document.getElementById(this.dataset.tab);
+            if (panel) panel.classList.add('active');
+        });
+    });
+
+})();
 </script>
 
 <?php require_once VIEWS . '/layout/footer.php'; ?>
