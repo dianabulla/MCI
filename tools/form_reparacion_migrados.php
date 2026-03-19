@@ -227,6 +227,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .msg.err { background: #fdecea; color: #9e2a1c; border: 1px solid #f5bcbc; }
         .hint { font-size: 11px; color: #555; margin-top: 4px; }
         .hint.warn { color: #b45309; }
+        .notice { margin: 8px 0 0; padding: 9px 12px; border-radius: 4px; font-size: 13px; display:none; }
+        .notice.info  { background: #e8f0fe; color: #1a43a0; border: 1px solid #b3c6f7; }
+        .notice.alert { background: #fff8e1; color: #7a5200; border: 1px solid #ffe082; }
+        .notice.ok    { background: #e6f4ea; color: #1a5e2a; border: 1px solid #b7dfbe; }
         .ac-wrap { position: relative; }
         .ac-drop { display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #bbb; border-top:none; border-radius:0 0 5px 5px; max-height:220px; overflow-y:auto; z-index:9999; box-shadow:0 6px 14px rgba(0,0,0,.14); }
         .ac-item { padding:9px 12px; cursor:pointer; font-size:13px; border-bottom:1px solid #f0f0f0; }
@@ -263,6 +267,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 
 <form method="post" id="frm" autocomplete="off">
+
+<div id="info_busqueda" class="notice"></div>
 
 <div class="sec">2. Datos personales</div>
 <div class="grid3">
@@ -519,21 +525,40 @@ async function preloadCelula(idCelula){
     }catch(e){}
 }
 
+var infoBusqueda = document.getElementById('info_busqueda');
+
+function showNotice(msg, type) {
+    infoBusqueda.textContent = msg;
+    infoBusqueda.className = 'notice ' + type;
+    infoBusqueda.style.display = 'block';
+}
+function hideNotice() {
+    infoBusqueda.style.display = 'none';
+}
+
 btnBuscar.addEventListener('click', async function(){
     var doc=bdEl.value.trim(), tel=btEl.value.trim();
-    if(!doc&&!tel){ alert('Ingresa documento o teléfono.'); return; }
+    if(!doc&&!tel){ showNotice('Ingresa documento o teléfono para buscar.','alert'); return; }
+    hideNotice();
     try{
         var url='?action=buscar_persona&documento='+encodeURIComponent(doc)+'&telefono='+encodeURIComponent(tel);
         var data=await(await fetch(url)).json();
-        if(!data.ok){ alert(data.error||'Error al buscar.'); return; }
-        if(!data.found){ alert('No encontrada en BD. Completa y guarda para crearla.'); numDocEl.value=doc; telEl.value=tel; return; }
+        if(!data.ok){ showNotice(data.error||'Error al buscar.','alert'); return; }
+        if(!data.found){
+            showNotice('⚠ No se encontró en la BD. Completa los datos y guarda para crearla como nueva persona.','alert');
+            numDocEl.value=doc; telEl.value=tel; return;
+        }
         var p=data.persona;
         nombreEl.value=p.nombre||''; apellidoEl.value=p.apellido||'';
         tipoDocEl.value=p.tipo_documento||'Cedula de Ciudadania';
         numDocEl.value=p.numero_documento||doc; telEl.value=p.telefono||tel;
-        if(p.id_celula) await preloadCelula(p.id_celula);
-        alert('Persona encontrada. Revisa y guarda para reparar.');
-    }catch(e){ alert('Error de red.'); }
+        if(p.id_celula){
+            await preloadCelula(p.id_celula);
+            showNotice('✔ Persona encontrada con célula asignada. Revisa y guarda para reparar.','ok');
+        } else {
+            showNotice('✔ Persona encontrada pero SIN ministerio, célula ni líder asignados. Selecciona el ministerio y la célula abajo para asignarlos.','info');
+        }
+    }catch(e){ showNotice('Error de red al buscar.','alert'); }
 });
 
 btnLimpiar.addEventListener('click', function(){
