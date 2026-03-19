@@ -24,10 +24,17 @@ require_once '../app/Config/Database.php';
 $tokenValido = false;
 $usuarioAutenticado = false;
 
-// Verificar si hay token en GET
-$tokenEsperado = hash('sha256', md5('marcar_ganar_completo_' . date('Y-m-d')));
+// Verificar si hay token en GET (token de una sola ejecución por día)
+$tokenEsperado = hash('sha256', 'marcar_ganar_completo_' . date('Y-m-d'));
 if (!empty($_GET['token']) && $_GET['token'] === $tokenEsperado) {
     $tokenValido = true;
+}
+
+// Verificar si hay un IP whitelist
+$ip_cliente = $_SERVER['REMOTE_ADDR'] ?? '';
+$ips_permitidas = ['127.0.0.1', 'localhost']; // Agregar IPs de tu red local si es necesario
+if (in_array($ip_cliente, $ips_permitidas)) {
+    $usuarioAutenticado = true;
 }
 
 // Verificar si el usuario está autenticado en la aplicación
@@ -37,7 +44,13 @@ if (!empty($_SESSION['usuario'])) {
 
 if (!$tokenValido && !$usuarioAutenticado) {
     http_response_code(403);
-    die('<h2>Acceso Denegado</h2><p>Se requiere autenticación.</p>');
+    $tokenRequerido = hash('sha256', 'marcar_ganar_completo_' . date('Y-m-d'));
+    die('
+        <h2>Acceso Requerido</h2>
+        <p>Use este link:</p>
+        <p><code>' . $_SERVER['PHP_SELF'] . '?token=' . $tokenRequerido . '</code></p>
+        <p>O inicie sesión en la aplicación.</p>
+    ');
 }
 
 ?>
