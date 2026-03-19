@@ -4,6 +4,7 @@
  */
 
 require_once APP . '/Models/Rol.php';
+require_once APP . '/Controllers/AuthController.php';
 
 class RolController extends BaseController {
     private $rolModel;
@@ -13,6 +14,11 @@ class RolController extends BaseController {
     }
 
     public function index() {
+        if (!AuthController::tienePermiso('roles', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
         $roles = $this->rolModel->getAllWithPersonCount();
         $this->view('roles/lista', ['roles' => $roles]);
     }

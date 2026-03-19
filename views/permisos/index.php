@@ -161,8 +161,8 @@
     <!-- Aviso roles con acceso total -->
     <div class="alert alert-warning" style="margin-bottom:18px; font-size:13px;">
         <i class="bi bi-shield-fill-exclamation"></i>
-        <strong>Administrador</strong>, <strong>Pastor</strong> y <strong>Ganar</strong> tienen acceso total garantizado por el sistema, sin importar lo que se marque aquÃ­.<br>
-        Para que <strong>otro rol</strong> vea todo, active <strong>Ver</strong> en <em>Personas</em>, <em>CÃ©lulas</em> y <em>Ministerios</em> â€” o use <strong>Activar Todo</strong>.
+        El rol <strong>Administrador</strong> se mantiene protegido por el sistema.<br>
+        En los demas roles, los checks de esta pantalla definen la visibilidad real de cada modulo.
     </div>
 
     <!-- PestaÃ±as de roles -->
@@ -187,18 +187,18 @@
 
     <!-- Paneles por rol -->
     <?php
-    $rolesConAccesoTotal = [];
+    $rolesProtegidos = [];
     foreach ($roles as $r) {
         $rn = strtolower(trim(strtr($r['Nombre_Rol'], ['Ã¡'=>'a','Ã©'=>'e','Ã­'=>'i','Ã³'=>'o','Ãº'=>'u','Ã±'=>'n'])));
-        if (strpos($rn,'admin')!==false || strpos($rn,'pastor')!==false || strpos($rn,'ganar')!==false) {
-            $rolesConAccesoTotal[] = (int)$r['Id_Rol'];
+        if ((int)$r['Id_Rol'] === 6 || strpos($rn, 'admin') !== false) {
+            $rolesProtegidos[] = (int)$r['Id_Rol'];
         }
     }
 
     // Grupos visuales de mÃ³dulos
     $gruposModulos = [
         'Principal' => [
-            'personas'         => ['Personas',         'Ver, crear, editar y eliminar personas'],
+            'personas'         => ['Personas',         'Crear: Formulario publico/+Nueva Persona. Editar: Exportar Excel, Plantilla WhatsApp y atajos Asignados/Reasignados.'],
             'celulas'          => ['CÃ©lulas',           'GestiÃ³n de cÃ©lulas y miembros'],
             'materiales_celulas'=> ['Materiales CÃ©lulas','Archivos PDF para cÃ©lulas'],
             'ministerios'      => ['Ministerios',       'Ver y gestionar ministerios'],
@@ -230,7 +230,7 @@
 
     <?php foreach ($roles as $i => $rol):
         $idRol = $rol['Id_Rol'];
-        $esAccesoTotal = in_array($idRol, $rolesConAccesoTotal, true);
+        $esRolProtegido = in_array($idRol, $rolesProtegidos, true);
     ?>
     <div class="perm-panel <?= $i === 0 ? 'active' : '' ?>" id="rol-<?= $idRol ?>">
 
@@ -241,9 +241,9 @@
                 <?= htmlspecialchars($rol['Nombre_Rol']) ?>
             </h3>
             <div class="perm-panel-actions">
-                <?php if ($esAccesoTotal): ?>
+                <?php if ($esRolProtegido): ?>
                 <span class="perm-acceso-total-badge">
-                    <i class="bi bi-shield-fill-check"></i> Acceso total garantizado
+                    <i class="bi bi-shield-fill-check"></i> Rol protegido por sistema
                 </span>
                 <?php else: ?>
                 <button type="button" class="btn-perm-all btn-perm-solo-ver"
@@ -308,7 +308,7 @@
                             data-campo="<?= $campo ?>"
                             title="<?= $label ?> â€” <?= htmlspecialchars($mnombre) ?> (<?= htmlspecialchars($rol['Nombre_Rol']) ?>)"
                             <?= $val ? 'checked' : '' ?>
-                            <?= $esAccesoTotal ? 'disabled' : '' ?>>
+                            <?= $esRolProtegido ? 'disabled' : '' ?>>
                     </td>
                     <?php endforeach; ?>
                 </tr>

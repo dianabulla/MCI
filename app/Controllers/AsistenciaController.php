@@ -6,6 +6,7 @@
 require_once APP . '/Models/Asistencia.php';
 require_once APP . '/Models/Celula.php';
 require_once APP . '/Models/Persona.php';
+require_once APP . '/Controllers/AuthController.php';
 require_once APP . '/Helpers/DataIsolation.php';
 
 class AsistenciaController extends BaseController {
@@ -41,7 +42,12 @@ class AsistenciaController extends BaseController {
     }
 
     public function index() {
-        // Generar filtro según el rol del usuario
+        if (!AuthController::tienePermiso('asistencias', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        // Generar filtro segun el rol del usuario
         $filtroAsistencias = DataIsolation::generarFiltroAsistencias();
         $filtroCelulas = DataIsolation::generarFiltroCelulas();
 

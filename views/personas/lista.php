@@ -3,6 +3,9 @@
 $puedeVerPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver');
 $puedeEditarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
 $puedeEliminarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'eliminar');
+$puedeCrearPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'crear');
+$puedeExportarPersonas = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
+$puedeGestionPlantillas = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
 $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPersona;
 ?>
 
@@ -11,18 +14,22 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
     <div class="page-actions personas-mobile-stack">
         <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill active">Personas</a>
         <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill">Pendiente por consolidar</a>
+        <?php if ($puedeCrearPersona): ?>
         <a href="<?= PUBLIC_URL ?>?url=registro_personas" class="btn btn-primary" target="_blank" rel="noopener">
             <i class="bi bi-box-arrow-up-right"></i> Formulario público
         </a>
+        <?php endif; ?>
+        <?php if ($puedeExportarPersonas): ?>
         <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel<?= !empty($_GET['perfil']) ? '&perfil=' . urlencode((string)$_GET['perfil']) : '' ?><?= !empty($_GET['buscar']) ? '&buscar=' . urlencode((string)$_GET['buscar']) : '' ?>" class="btn btn-success">
             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
         </a>
-        <?php if (AuthController::esAdministrador()): ?>
+        <?php endif; ?>
+        <?php if ($puedeGestionPlantillas): ?>
         <a href="<?= PUBLIC_URL ?>?url=personas/plantillas-whatsapp" class="btn btn-secondary">
             <i class="bi bi-chat-dots"></i> Plantilla mensaje what
         </a>
         <?php endif; ?>
-        <?php if (AuthController::tienePermiso('personas', 'crear')): ?>
+        <?php if ($puedeCrearPersona): ?>
         <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="btn btn-primary">+ Nueva Persona</a>
         <?php endif; ?>
     </div>

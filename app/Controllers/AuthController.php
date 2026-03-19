@@ -237,17 +237,24 @@ class AuthController extends BaseController {
             return true;
         }
 
-        // Roles con acceso total (Pastor, Ganar, o cualquier rol configurado
-        // con Ver=1 en módulos clave desde el módulo de Permisos) bypass
-        // la verificación individual de módulo.
+        $accion = strtolower(trim((string)$accion));
+        if ($accion === '') {
+            $accion = 'ver';
+        }
+
+        // Si existe permiso explicito de modulo, SIEMPRE manda lo configurado
+        // por el administrador.
+        if (isset($_SESSION['permisos'][$modulo]) && is_array($_SESSION['permisos'][$modulo])) {
+            return !empty($_SESSION['permisos'][$modulo][$accion]);
+        }
+
+        // Compatibilidad: para roles con acceso total de datos, permitir acceso
+        // cuando aun no exista configuracion explicita del modulo.
         if (DataIsolation::tieneAccesoTotal()) {
             return true;
         }
 
-        if (!isset($_SESSION['permisos'][$modulo])) {
-            return false;
-        }
-        return $_SESSION['permisos'][$modulo][$accion] ?? false;
+        return false;
     }
 
     /**

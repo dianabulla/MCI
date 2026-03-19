@@ -2,6 +2,8 @@
 <?php
 $puedeVerPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver');
 $puedeEditarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
+$puedeExportarPersonas = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
+$puedeVerAtajosGestion = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
 $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
 ?>
 
@@ -10,10 +12,11 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
     <div class="page-actions personas-mobile-stack">
         <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill">Personas</a>
         <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill active">Pendiente por consolidar</a>
-
+        <?php if ($puedeExportarPersonas): ?>
         <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel&modo=ganar" class="btn btn-success">
             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
         </a>
+        <?php endif; ?>
         <?php if (AuthController::tienePermiso('personas', 'crear')): ?>
         <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="btn btn-primary">+ Nueva Persona</a>
         <?php endif; ?>
@@ -44,6 +47,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
                 <small class="ganar-shortcut-help">Domingo + Invitado por con dato</small>
             </div>
 
+            <?php if ($puedeVerAtajosGestion): ?>
             <div class="ganar-shortcut-item">
                 <a href="<?= PUBLIC_URL ?>?url=personas/ganar&origen=asignados" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'asignados') ? 'active' : '' ?>">
                     <span class="ganar-shortcut-title"><i class="bi bi-person-check"></i> Asignados</span>
@@ -59,6 +63,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
                 </a>
                 <small class="ganar-shortcut-help">Sin primer contacto en 48 horas</small>
             </div>
+            <?php endif; ?>
 
             <div class="ganar-shortcut-item">
                 <a href="<?= PUBLIC_URL ?>?url=personas/ganar&origen=no_disponible" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'no_disponible') ? 'active' : '' ?>">

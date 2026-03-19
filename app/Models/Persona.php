@@ -984,11 +984,11 @@ class Persona extends BaseModel {
                     p.Ultimo_Acceso,
                     m.Nombre_Ministerio,
                     CASE WHEN cel.Id_Persona IS NULL THEN 0 ELSE 1 END AS Es_Lider_Celula,
-                    CASE WHEN l12.Id_Persona IS NULL THEN 0 ELSE 1 END AS Es_Lider_12,
+                    CASE WHEN l12r.Id_Persona IS NULL THEN 0 ELSE 1 END AS Es_Lider_12,
                     CASE
-                        WHEN cel.Id_Persona IS NOT NULL AND l12.Id_Persona IS NOT NULL THEN 'Ambos'
+                        WHEN cel.Id_Persona IS NOT NULL AND l12r.Id_Persona IS NOT NULL THEN 'Ambos'
                         WHEN cel.Id_Persona IS NOT NULL THEN 'Líder de célula'
-                        WHEN l12.Id_Persona IS NOT NULL THEN 'Líder de 12'
+                        WHEN l12r.Id_Persona IS NOT NULL THEN 'Líder de 12'
                         ELSE 'Sin clasificación'
                     END AS Tipo_Liderazgo,
                     COALESCE(per.Total_Personas, 0) AS Total_Personas,
@@ -1001,11 +1001,15 @@ class Persona extends BaseModel {
                     WHERE Id_Lider IS NOT NULL
                 ) cel ON cel.Id_Persona = p.Id_Persona
                 LEFT JOIN (
-                    SELECT DISTINCT Id_Lider AS Id_Persona
-                    FROM persona
-                    WHERE Id_Lider IS NOT NULL
-                      AND (Estado_Cuenta = 'Activo' OR Estado_Cuenta IS NULL)
-                ) l12 ON l12.Id_Persona = p.Id_Persona
+                    SELECT p12.Id_Persona
+                    FROM persona p12
+                    LEFT JOIN rol r12 ON r12.Id_Rol = p12.Id_Rol
+                    WHERE p12.Id_Rol = 8
+                       OR LOWER(COALESCE(r12.Nombre_Rol, '')) LIKE '%lider de 12%'
+                       OR LOWER(COALESCE(r12.Nombre_Rol, '')) LIKE '%lider 12%'
+                       OR LOWER(COALESCE(r12.Nombre_Rol, '')) LIKE '%lideres de 12%'
+                    GROUP BY p12.Id_Persona
+                ) l12r ON l12r.Id_Persona = p.Id_Persona
                 LEFT JOIN (
                     SELECT Id_Lider, COUNT(*) AS Total_Personas
                     FROM persona
@@ -1019,7 +1023,7 @@ class Persona extends BaseModel {
                     INNER JOIN celula c ON c.Id_Celula = a.Id_Celula
                     GROUP BY c.Id_Lider
                 ) rep ON rep.Id_Lider = p.Id_Persona
-                WHERE (cel.Id_Persona IS NOT NULL OR l12.Id_Persona IS NOT NULL)
+                WHERE (cel.Id_Persona IS NOT NULL OR l12r.Id_Persona IS NOT NULL)
                 AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
                 AND $filtroRol
                 ORDER BY p.Apellido, p.Nombre";

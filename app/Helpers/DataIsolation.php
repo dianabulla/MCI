@@ -119,7 +119,10 @@ class DataIsolation {
         }
 
         $rolNombre = self::getUsuarioRolNombre();
-        return strpos($rolNombre, 'lider de celula') !== false;
+        // Aceptar variantes de nombre: "lider de celula", "lider celula", etc.
+        return (strpos($rolNombre, 'lider de celula') !== false)
+            || (strpos($rolNombre, 'lider celula') !== false)
+            || (strpos($rolNombre, 'lider') !== false && strpos($rolNombre, 'celula') !== false);
     }
 
     /**
@@ -131,7 +134,10 @@ class DataIsolation {
         }
 
         $rolNombre = self::getUsuarioRolNombre();
-        return strpos($rolNombre, 'lider de 12') !== false;
+        // Aceptar variantes de nombre: "lider de 12", "lider 12".
+        return (strpos($rolNombre, 'lider de 12') !== false)
+            || (strpos($rolNombre, 'lider 12') !== false)
+            || (strpos($rolNombre, 'lider') !== false && strpos($rolNombre, '12') !== false);
     }
 
     /**
@@ -140,6 +146,15 @@ class DataIsolation {
     public static function esPastor() {
         $rolNombre = self::getUsuarioRolNombre();
         return strpos($rolNombre, 'pastor') !== false;
+    }
+
+    /**
+     * Verificar si el usuario pertenece al rol funcional "Celulas"
+     * (distinto a "lider de celula").
+     */
+    public static function esRolCelulas() {
+        $rolNombre = self::getUsuarioRolNombre();
+        return $rolNombre === 'celulas';
     }
 
     /**
@@ -160,8 +175,13 @@ class DataIsolation {
      *    (configurable desde el módulo de Permisos por el administrador)
      */
     public static function tieneAccesoTotal() {
-        if (self::esAdmin() || self::esGanar() || self::esPastor()) {
+        if (self::esAdmin() || self::esGanar() || self::esPastor() || self::esRolCelulas()) {
             return true;
+        }
+
+        // Nunca elevar a acceso total los roles jerarquicos que deben ir aislados.
+        if (self::esRolJerarquicoRestringido()) {
+            return false;
         }
 
         // Rol configurado como "acceso total" desde el módulo de Permisos:
@@ -185,6 +205,13 @@ class DataIsolation {
     public static function esAsistente() {
         $rolNombre = self::getUsuarioRolNombre();
         return strpos($rolNombre, 'asistente') !== false;
+    }
+
+    /**
+     * Roles que SIEMPRE deben respetar aislamiento por jerarquia.
+     */
+    private static function esRolJerarquicoRestringido() {
+        return self::esLiderCelula() || self::esLider12() || self::esAsistente();
     }
 
     /**

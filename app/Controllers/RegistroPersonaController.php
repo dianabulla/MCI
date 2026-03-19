@@ -6,22 +6,77 @@
 
 require_once APP . '/Models/Persona.php';
 require_once APP . '/Models/Ministerio.php';
+require_once APP . '/Models/WhatsappLocalQueue.php';
+require_once APP . '/Models/WhatsappMensajeTemplate.php';
 
 class RegistroPersonaController extends BaseController {
     private $personaModel;
     private $ministerioModel;
+    private $whatsappLocalQueueModel;
+    private $whatsappMensajeTemplateModel;
     private $soportaProceso = false;
     private $soportaOrigenGanar = false;
 
     public function __construct() {
         $this->personaModel = new Persona();
         $this->ministerioModel = new Ministerio();
+        $this->whatsappLocalQueueModel = new WhatsappLocalQueue();
+        $this->whatsappMensajeTemplateModel = new WhatsappMensajeTemplate();
 
         $this->personaModel->ensureProcesoColumnExists();
         $this->personaModel->ensureOrigenGanarColumnExists();
 
         $this->soportaProceso = $this->personaModel->tieneColumna('Proceso');
         $this->soportaOrigenGanar = $this->personaModel->tieneColumna('Origen_Ganar');
+    }
+
+    private function buildAbsolutePublicUrl($route) {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $scheme = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
+        }
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $base = rtrim(PUBLIC_URL, '/');
+        return $scheme . '://' . $host . $base . '/index.php?url=' . urlencode($route);
+    }
+
+    private function encolarMensajeBienvenida(array $personaNueva) {
+        if (!$this->whatsappLocalQueueModel || !$this->whatsappMensajeTemplateModel) {
+            return;
+        }
+
+        $idPersona = (int)($personaNueva['Id_Persona'] ?? 0);
+        $telefonoPersona = (string)($personaNueva['Telefono'] ?? '');
+        if ($idPersona <= 0 || trim($telefonoPersona) === '') {
+            return;
+        }
+
+        $nombrePersona = trim((string)($personaNueva['Nombre'] ?? '') . ' ' . (string)($personaNueva['Apellido'] ?? ''));
+        $nombreMinisterio = '';
+
+        if (!empty($personaNueva['Nombre_Ministerio'])) {
+            $nombreMinisterio = (string)$personaNueva['Nombre_Ministerio'];
+        } elseif (!empty($personaNueva['Id_Ministerio'])) {
+            $ministerio = $this->ministerioModel->getById((int)$personaNueva['Id_Ministerio']);
+            $nombreMinisterio = (string)($ministerio['Nombre_Ministerio'] ?? '');
+        }
+
+        $payload = $this->whatsappMensajeTemplateModel->getTemplatePayload('bienvenida_persona', [
+            'persona_nombre' => $nombrePersona,
+            'persona_telefono' => $telefonoPersona,
+            'persona_id' => $idPersona,
+            'ministerio_nombre' => $nombreMinisterio,
+            'url_peticiones' => $this->buildAbsolutePublicUrl('peticiones/crear')
+        ]);
+
+        $this->whatsappLocalQueueModel->encolar(
+            $telefonoPersona,
+            (string)($payload['mensaje'] ?? ''),
+            'bienvenida_persona',
+            'persona:' . $idPersona,
+            $payload['media_url'] ?? null,
+            $payload['media_tipo'] ?? null
+        );
     }
 
     public function index() {
@@ -120,6 +175,11 @@ class RegistroPersonaController extends BaseController {
                 ]);
                 header('Location: ' . PUBLIC_URL . '?' . $query);
                 exit;
+            }
+
+            $personaCreada = $this->personaModel->getById($idNuevaPersona);
+            if (!empty($personaCreada)) {
+                $this->encolarMensajeBienvenida($personaCreada);
             }
 
             $query = http_build_query([

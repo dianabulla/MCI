@@ -6,6 +6,7 @@
 require_once APP . '/Models/Ministerio.php';
 require_once APP . '/Models/Persona.php';
 require_once APP . '/Models/Celula.php';
+require_once APP . '/Controllers/AuthController.php';
 require_once APP . '/Helpers/DataIsolation.php';
 
 class MinisterioController extends BaseController {
@@ -250,6 +251,11 @@ class MinisterioController extends BaseController {
     }
 
     public function index() {
+        if (!AuthController::tienePermiso('ministerios', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
         $fechaReferencia = $_GET['fecha_referencia'] ?? date('Y-m-d');
         [$fechaInicio, $fechaFin] = $this->calcularRangoSemanaDomingoADomingo($fechaReferencia);
 

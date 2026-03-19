@@ -837,6 +837,11 @@ class PersonaController extends BaseController {
     }
 
     public function index() {
+        if (!AuthController::tienePermiso('personas', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
         $filtroPerfil = $this->normalizarPerfilListado($_GET['perfil'] ?? '');
         $filtroNombre = trim((string)($_GET['buscar'] ?? ''));
 
@@ -858,7 +863,7 @@ class PersonaController extends BaseController {
     }
 
     public function plantillasWhatsapp() {
-        if (!AuthController::esAdministrador()) {
+        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('personas', 'editar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -938,7 +943,7 @@ class PersonaController extends BaseController {
             $this->redirect('personas/plantillas-whatsapp');
         }
 
-        if (!AuthController::esAdministrador()) {
+        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('personas', 'editar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -963,6 +968,11 @@ class PersonaController extends BaseController {
     }
 
     public function ganar() {
+        if (!AuthController::tienePermiso('personas', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
         $soloGanar = true;
         $filtroMinisterio = $_GET['ministerio'] ?? null;
         $filtroLider = $_GET['lider'] ?? null;
@@ -971,6 +981,11 @@ class PersonaController extends BaseController {
         $filtroProceso = (string)($_GET['proceso'] ?? '');
         $filtroEtapa = $this->normalizarEtapaFiltro($_GET['etapa'] ?? null);
         $filtroOrigen = $this->normalizarOrigenFiltro($_GET['origen'] ?? null);
+        $puedeVerAtajosGestion = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
+
+        if (in_array($filtroOrigen, ['asignados', 'reasignados'], true) && !$puedeVerAtajosGestion) {
+            $filtroOrigen = '';
+        }
 
         // Regla de negocio: si en 48 horas no hay primer contacto, liberar líder/ministerio.
         // Seguridad: solo aplicar cuando existe soporte de fecha de asignación.
@@ -1277,7 +1292,7 @@ class PersonaController extends BaseController {
     }
 
     public function exportarExcel() {
-        if (!AuthController::tienePermiso('personas', 'ver')) {
+        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('personas', 'editar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -1291,6 +1306,11 @@ class PersonaController extends BaseController {
         $filtroProceso = (string)($_GET['proceso'] ?? '');
         $filtroEtapa = $this->normalizarEtapaFiltro($_GET['etapa'] ?? null);
         $filtroOrigen = $this->normalizarOrigenFiltro($_GET['origen'] ?? null);
+        $puedeVerAtajosGestion = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
+
+        if (in_array($filtroOrigen, ['asignados', 'reasignados'], true) && !$puedeVerAtajosGestion) {
+            $filtroOrigen = '';
+        }
 
         if ($esModoGanar && ($filtroEtapa === null || $filtroEtapa === '')) {
             $filtroEtapa = 'Ganar';
