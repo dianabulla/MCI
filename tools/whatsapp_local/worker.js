@@ -38,8 +38,10 @@ const BATCH_LIMIT = Math.max(1, parseInt(process.env.WA_BATCH_LIMIT || '20', 10)
 const DELAY_MS = Math.max(500, parseInt(process.env.WA_DELAY_MS || '3500', 10));
 const POLL_MS = Math.max(3000, parseInt(process.env.WA_POLL_MS || '5000', 10));
 const MAX_ATTEMPTS = Math.max(1, parseInt(process.env.WA_MAX_ATTEMPTS || '3', 10));
+const DEFAULT_TEMPLATE_CUMPLEANOS = 'Hoy celebramos tu vida y damos gracias a Dios por tu corazón tan dispuesto para servir.\n\nTu esfuerzo, tu amor por las personas y tu entrega han dejado huellas profundas en nuestra iglesia. Gracias por guiar, apoyar y nunca rendirte.\n\nOramos para que este nuevo año llegue lleno de bendición, fuerzas renovadas y mucha alegría.\n\n¡Feliz cumpleaños te desea MCI Madrid! 🎉 Te honramos y te agradecemos de corazón.';
 
 let procesando = false;
+let ultimaFechaCumpleanosProcesada = null;
 
 async function asegurarTabla() {
   await pool.query(
@@ -84,6 +86,130 @@ function normalizarTelefono(telefono) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getFechaHoyBogotaYmd() {
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+
+  const map = {};
+  for (const p of partes) {
+    if (p && p.type && p.value) {
+      map[p.type] = p.value;
+    }
+  }
+
+  return `${map.year}-${map.month}-${map.day}`;
+}
+
+function renderTemplate(template, vars = {}) {
+  if (!template) return '';
+  return String(template).replace(/\{([^}]+)\}/g, (_, key) => {
+    const value = Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : '';
+    return String(value == null ? '' : value);
+  }).trim();
+}
+
+async function obtenerTemplateCumpleanos() {
+  const [rows] = await pool.query(
+    `SELECT plantilla, media_url, media_tipo
+     FROM whatsapp_mensaje_template
+     WHERE clave = 'felicitacion_cumpleanos'
+     LIMIT 1`
+  );
+
+  if (!Array.isArray(rows) || !rows.length) {
+    return {
+      plantilla: DEFAULT_TEMPLATE_CUMPLEANOS,
+      media_url: null,
+      media_tipo: null,
+    };
+  }
+
+  const row = rows[0] || {};
+  return {
+    plantilla: String(row.plantilla || DEFAULT_TEMPLATE_CUMPLEANOS),
+    media_url: row.media_url ? String(row.media_url) : null,
+    media_tipo: row.media_tipo ? String(row.media_tipo) : null,
+  };
+}
+
+async function obtenerCumpleanerosDelDia(month, day) {
+  const [rows] = await pool.query(
+    `SELECT Id_Persona, Nombre, Apellido, Telefono
+     FROM persona
+     WHERE Fecha_Nacimiento IS NOT NULL
+       AND Fecha_Nacimiento <> '0000-00-00'
+       AND MONTH(Fecha_Nacimiento) = ?
+       AND DAY(Fecha_Nacimiento) = ?
+       AND (Estado_Cuenta = 'Activo' OR Estado_Cuenta IS NULL)`,
+    [month, day]
+  );
+
+  return Array.isArray(rows) ? rows : [];
+}
+
+async function encolarCumpleanosDelDiaSiAplica() {
+  const fechaHoy = getFechaHoyBogotaYmd();
+  if (ultimaFechaCumpleanosProcesada === fechaHoy) {
+    return;
+  }
+
+  const [year, monthStr, dayStr] = fechaHoy.split('-');
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  if (!month || !day) {
+    return;
+  }
+
+  const template = await obtenerTemplateCumpleanos();
+  const cumpleaneros = await obtenerCumpleanerosDelDia(month, day);
+  let encolados = 0;
+
+  for (const persona of cumpleaneros) {
+    const idPersona = Number(persona.Id_Persona || 0);
+    const telefonoNormalizado = normalizarTelefono(persona.Telefono);
+    if (!idPersona || !telefonoNormalizado) {
+      continue;
+    }
+
+    const nombreCompleto = `${String(persona.Nombre || '').trim()} ${String(persona.Apellido || '').trim()}`.trim();
+    const mensaje = renderTemplate(template.plantilla, {
+      persona_nombre: nombreCompleto,
+      fecha_hoy: `${dayStr}/${monthStr}/${year}`,
+    });
+
+    if (!mensaje) {
+      continue;
+    }
+
+    const referencia = `cumpleanos:${fechaHoy}:persona:${idPersona}`;
+    const [result] = await pool.query(
+      `INSERT INTO whatsapp_local_queue
+         (telefono, mensaje, media_url, media_tipo, tipo_evento, referencia, estado, intentos)
+       VALUES (?, ?, ?, ?, 'felicitacion_cumpleanos', ?, 'pendiente', 0)
+       ON DUPLICATE KEY UPDATE
+         mensaje = VALUES(mensaje),
+         media_url = VALUES(media_url),
+         media_tipo = VALUES(media_tipo),
+         estado = IF(estado = 'enviado', 'enviado', 'pendiente'),
+         ultimo_error = NULL`,
+      [telefonoNormalizado, mensaje, template.media_url, template.media_tipo, referencia]
+    );
+
+    if (result && result.affectedRows > 0) {
+      encolados += 1;
+    }
+  }
+
+  ultimaFechaCumpleanosProcesada = fechaHoy;
+  if (encolados > 0) {
+    console.log(`[CUMPLEANOS] ${encolados} mensaje(s) encolado(s) para ${fechaHoy}.`);
+  }
 }
 
 async function obtenerPendientes(limit) {
@@ -139,6 +265,8 @@ async function procesarCola(client) {
   procesando = true;
 
   try {
+    await encolarCumpleanosDelDiaSiAplica();
+
     const pendientes = await obtenerPendientes(BATCH_LIMIT);
     if (!pendientes.length) {
       return;

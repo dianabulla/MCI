@@ -5,7 +5,16 @@ $puedeEditarPersona = AuthController::esAdministrador() || AuthController::tiene
 $puedeEliminarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'eliminar');
 $puedeCrearPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'crear');
 $puedeExportarPersonas = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
-$puedeGestionPlantillas = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
+$tienePermisoPlantillasExplicito = isset($_SESSION['permisos']['personas_plantillas_whatsapp']) && is_array($_SESSION['permisos']['personas_plantillas_whatsapp']);
+$puedeGestionPlantillas = AuthController::esAdministrador()
+    || ($tienePermisoPlantillasExplicito
+        ? AuthController::tienePermiso('personas_plantillas_whatsapp', 'ver')
+        : AuthController::tienePermiso('personas', 'editar'));
+$tienePermisoFormularioPublicoExplicito = isset($_SESSION['permisos']['personas_formulario_publico']) && is_array($_SESSION['permisos']['personas_formulario_publico']);
+$puedeVerFormularioPublico = AuthController::esAdministrador()
+    || ($tienePermisoFormularioPublicoExplicito
+        ? AuthController::tienePermiso('personas_formulario_publico', 'ver')
+        : $puedeCrearPersona);
 $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPersona;
 ?>
 
@@ -14,7 +23,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
     <div class="page-actions personas-mobile-stack">
         <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill active">Personas</a>
         <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill">Pendiente por consolidar</a>
-        <?php if ($puedeCrearPersona): ?>
+        <?php if ($puedeVerFormularioPublico): ?>
         <a href="<?= PUBLIC_URL ?>?url=registro_personas" class="btn btn-primary" target="_blank" rel="noopener">
             <i class="bi bi-box-arrow-up-right"></i> Formulario público
         </a>

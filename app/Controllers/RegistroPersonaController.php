@@ -6,12 +6,14 @@
 
 require_once APP . '/Models/Persona.php';
 require_once APP . '/Models/Ministerio.php';
+require_once APP . '/Models/Peticion.php';
 require_once APP . '/Models/WhatsappLocalQueue.php';
 require_once APP . '/Models/WhatsappMensajeTemplate.php';
 
 class RegistroPersonaController extends BaseController {
     private $personaModel;
     private $ministerioModel;
+    private $peticionModel;
     private $whatsappLocalQueueModel;
     private $whatsappMensajeTemplateModel;
     private $soportaProceso = false;
@@ -20,6 +22,7 @@ class RegistroPersonaController extends BaseController {
     public function __construct() {
         $this->personaModel = new Persona();
         $this->ministerioModel = new Ministerio();
+        $this->peticionModel = new Peticion();
         $this->whatsappLocalQueueModel = new WhatsappLocalQueue();
         $this->whatsappMensajeTemplateModel = new WhatsappMensajeTemplate();
 
@@ -79,6 +82,32 @@ class RegistroPersonaController extends BaseController {
         );
     }
 
+    private function registrarPeticionSiAplica($idPersona, $peticionTexto) {
+        $idPersona = (int)$idPersona;
+        $peticionTexto = trim((string)$peticionTexto);
+
+        if ($idPersona <= 0 || $peticionTexto === '') {
+            return;
+        }
+
+        $fechaHoy = date('Y-m-d');
+        $existe = $this->peticionModel->query(
+            "SELECT Id_Peticion FROM peticion WHERE Id_Persona = ? AND Descripcion_Peticion = ? AND Fecha_Peticion = ? LIMIT 1",
+            [$idPersona, $peticionTexto, $fechaHoy]
+        );
+
+        if (!empty($existe)) {
+            return;
+        }
+
+        $this->peticionModel->create([
+            'Id_Persona' => $idPersona,
+            'Descripcion_Peticion' => $peticionTexto,
+            'Fecha_Peticion' => $fechaHoy,
+            'Estado_Peticion' => 'Pendiente'
+        ]);
+    }
+
     public function index() {
         $data = [
             'ministerios' => $this->ministerioModel->getAll(),
@@ -91,7 +120,11 @@ class RegistroPersonaController extends BaseController {
                 'telefono' => (string)($_GET['telefono'] ?? ''),
                 'id_ministerio' => (string)($_GET['id_ministerio'] ?? ''),
                 'invitado_por' => (string)($_GET['invitado_por'] ?? ''),
-                'ganado_en' => (string)($_GET['ganado_en'] ?? '')
+                'ganado_en' => (string)($_GET['ganado_en'] ?? ''),
+                'fecha_nacimiento' => (string)($_GET['fecha_nacimiento'] ?? ''),
+                'barrio' => (string)($_GET['barrio'] ?? ''),
+                'peticion' => (string)($_GET['peticion'] ?? ''),
+                'cedula' => (string)($_GET['cedula'] ?? '')
             ]
         ];
 
@@ -107,9 +140,14 @@ class RegistroPersonaController extends BaseController {
         $nombre = trim((string)($_POST['nombre'] ?? ''));
         $apellido = trim((string)($_POST['apellido'] ?? ''));
         $telefono = $this->normalizarTelefono((string)($_POST['telefono'] ?? ''));
-        $idMinisterio = isset($_POST['id_ministerio']) ? (int)$_POST['id_ministerio'] : 0;
+        $idMinisterioRaw = trim((string)($_POST['id_ministerio'] ?? ''));
+        $idMinisterio = ctype_digit($idMinisterioRaw) ? (int)$idMinisterioRaw : 0;
         $invitadoPor = trim((string)($_POST['invitado_por'] ?? ''));
         $ganadoEnRaw = strtolower(trim((string)($_POST['ganado_en'] ?? '')));
+        $fechaNacimiento = trim((string)($_POST['fecha_nacimiento'] ?? ''));
+        $barrio = trim((string)($_POST['barrio'] ?? ''));
+        $peticion = trim((string)($_POST['peticion'] ?? ''));
+        $cedula = trim((string)($_POST['cedula'] ?? ''));
 
         $errores = [];
 
@@ -125,8 +163,8 @@ class RegistroPersonaController extends BaseController {
             $errores[] = 'Si registra teléfono, debe tener al menos 7 dígitos';
         }
 
-        if (!in_array($ganadoEnRaw, ['domingo', 'celula'], true)) {
-            $errores[] = 'Debe seleccionar si fue ganado en domingo o en célula';
+        if (!in_array($ganadoEnRaw, ['domingo', 'celula', 'viernes', 'otro'], true)) {
+            $errores[] = 'Debe seleccionar en qué reunión fue ganado (domingo, célula, viernes u otro)';
         }
 
         if (!empty($errores)) {
@@ -134,18 +172,33 @@ class RegistroPersonaController extends BaseController {
                 'nombre' => $nombre,
                 'apellido' => $apellido,
                 'telefono' => $telefono,
-                'id_ministerio' => (string)$idMinisterio,
+                'id_ministerio' => $idMinisterioRaw,
                 'invitado_por' => $invitadoPor,
-                'ganado_en' => $ganadoEnRaw
+                'ganado_en' => $ganadoEnRaw,
+                'fecha_nacimiento' => $fechaNacimiento,
+                'barrio' => $barrio,
+                'peticion' => $peticion,
+                'cedula' => $cedula
             ]);
         }
 
-        $tipoReunion = $ganadoEnRaw === 'domingo' ? 'Domingo' : 'Celula';
+        $mapTipoReunion = [
+            'domingo' => 'Domingo',
+            'celula' => 'Celula',
+            'viernes' => 'Viernes',
+            'otro' => 'Otro'
+        ];
+        $tipoReunion = $mapTipoReunion[$ganadoEnRaw] ?? 'Domingo';
 
         $data = [
             'Nombre' => $nombre,
             'Apellido' => $apellido,
+            'Tipo_Documento' => $cedula !== '' ? 'Cedula de Ciudadania' : null,
+            'Numero_Documento' => $cedula !== '' ? $cedula : null,
+            'Fecha_Nacimiento' => $fechaNacimiento !== '' ? $fechaNacimiento : null,
             'Telefono' => $telefono !== '' ? $telefono : null,
+            'Barrio' => $barrio !== '' ? $barrio : null,
+            'Peticion' => $peticion !== '' ? $peticion : null,
             'Id_Ministerio' => $idMinisterio > 0 ? $idMinisterio : null,
             'Invitado_Por' => $invitadoPor !== '' ? $invitadoPor : null,
             'Tipo_Reunion' => $tipoReunion,
@@ -181,6 +234,8 @@ class RegistroPersonaController extends BaseController {
             if (!empty($personaCreada)) {
                 $this->encolarMensajeBienvenida($personaCreada);
             }
+
+            $this->registrarPeticionSiAplica($idNuevaPersona, $peticion);
 
             $query = http_build_query([
                 'url' => 'registro_personas',

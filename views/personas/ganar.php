@@ -3,7 +3,16 @@
 $puedeVerPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver');
 $puedeEditarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
 $puedeExportarPersonas = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
-$puedeVerAtajosGestion = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
+$tienePermisoAsignadosExplicito = isset($_SESSION['permisos']['personas_ganar_asignados']) && is_array($_SESSION['permisos']['personas_ganar_asignados']);
+$tienePermisoReasignadosExplicito = isset($_SESSION['permisos']['personas_ganar_reasignados']) && is_array($_SESSION['permisos']['personas_ganar_reasignados']);
+$puedeVerAtajoAsignados = AuthController::esAdministrador()
+    || ($tienePermisoAsignadosExplicito
+        ? AuthController::tienePermiso('personas_ganar_asignados', 'ver')
+        : AuthController::tienePermiso('personas', 'editar'));
+$puedeVerAtajoReasignados = AuthController::esAdministrador()
+    || ($tienePermisoReasignadosExplicito
+        ? AuthController::tienePermiso('personas_ganar_reasignados', 'ver')
+        : AuthController::tienePermiso('personas', 'editar'));
 $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
 ?>
 
@@ -13,13 +22,65 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
         <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill">Personas</a>
         <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill active">Pendiente por consolidar</a>
         <?php if ($puedeExportarPersonas): ?>
-        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel&modo=ganar" class="btn btn-success">
+        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel&modo=ganar<?= ($filtroMinisterioActual ?? '') !== '' ? '&ministerio=' . urlencode((string)$filtroMinisterioActual) : '' ?><?= !empty($filtroSinLiderActual) ? '&sin_lider=1' : '' ?><?= !empty($filtroSinCelulaActual) ? '&sin_celula=1' : '' ?><?= ($filtroOrigenActual ?? '') !== '' ? '&origen=' . urlencode((string)$filtroOrigenActual) : '' ?>" class="btn btn-success">
             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
         </a>
         <?php endif; ?>
         <?php if (AuthController::tienePermiso('personas', 'crear')): ?>
         <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="btn btn-primary">+ Nueva Persona</a>
         <?php endif; ?>
+    </div>
+</div>
+
+<?php
+$filtroMinisterioPendiente = (string)($filtroMinisterioActual ?? '');
+$filtroSinLiderPendiente = !empty($filtroSinLiderActual);
+$filtroSinCelulaPendiente = !empty($filtroSinCelulaActual);
+$hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPendiente || $filtroSinCelulaPendiente;
+?>
+
+<div class="card" style="margin-bottom: 16px;">
+    <div class="card-body">
+        <form method="GET" action="<?= PUBLIC_URL ?>" class="filters-inline">
+            <input type="hidden" name="url" value="personas/ganar">
+            <?php if (($filtroOrigenActual ?? '') !== ''): ?>
+            <input type="hidden" name="origen" value="<?= htmlspecialchars((string)$filtroOrigenActual) ?>">
+            <?php endif; ?>
+
+            <div class="form-group" style="min-width: 240px;">
+                <label for="filtro_ministerio" style="font-size: 14px; margin-bottom: 5px;">Filtrar por ministerio</label>
+                <select id="filtro_ministerio" name="ministerio" class="form-control">
+                    <option value="" <?= $filtroMinisterioPendiente === '' ? 'selected' : '' ?>>Todos</option>
+                    <option value="0" <?= $filtroMinisterioPendiente === '0' ? 'selected' : '' ?>>Sin ministerio</option>
+                    <?php foreach (($ministerios ?? []) as $ministerio): ?>
+                    <option value="<?= (int)$ministerio['Id_Ministerio'] ?>" <?= $filtroMinisterioPendiente === (string)$ministerio['Id_Ministerio'] ? 'selected' : '' ?>>
+                        <?= htmlspecialchars((string)$ministerio['Nombre_Ministerio']) ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="form-group" style="align-self:flex-end; margin-bottom: 8px; min-width: 250px;">
+                <label style="display:block; font-size: 14px; margin-bottom: 5px;">Filtros rápidos</label>
+                <label style="display:block; margin: 0 0 4px 0; font-weight: 500;">
+                    <input type="checkbox" name="sin_lider" value="1" <?= $filtroSinLiderPendiente ? 'checked' : '' ?>> Sin líder
+                </label>
+                <label style="display:block; margin: 0; font-weight: 500;">
+                    <input type="checkbox" name="sin_celula" value="1" <?= $filtroSinCelulaPendiente ? 'checked' : '' ?>> Sin célula
+                </label>
+            </div>
+
+            <div class="filters-actions" style="align-self:flex-end;">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-funnel"></i> Filtrar
+                </button>
+                <?php if ($hayFiltrosPendiente): ?>
+                <a href="<?= PUBLIC_URL ?>?url=personas/ganar<?= ($filtroOrigenActual ?? '') !== '' ? '&origen=' . urlencode((string)$filtroOrigenActual) : '' ?>" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Limpiar
+                </a>
+                <?php endif; ?>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -47,7 +108,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
                 <small class="ganar-shortcut-help">Domingo + Invitado por con dato</small>
             </div>
 
-            <?php if ($puedeVerAtajosGestion): ?>
+            <?php if ($puedeVerAtajoAsignados): ?>
             <div class="ganar-shortcut-item">
                 <a href="<?= PUBLIC_URL ?>?url=personas/ganar&origen=asignados" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'asignados') ? 'active' : '' ?>">
                     <span class="ganar-shortcut-title"><i class="bi bi-person-check"></i> Asignados</span>
@@ -55,7 +116,9 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
                 </a>
                 <small class="ganar-shortcut-help">Domingo + Invitado por vacío</small>
             </div>
+            <?php endif; ?>
 
+            <?php if ($puedeVerAtajoReasignados): ?>
             <div class="ganar-shortcut-item">
                 <a href="<?= PUBLIC_URL ?>?url=personas/ganar&origen=reasignados" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'reasignados') ? 'active' : '' ?>">
                     <span class="ganar-shortcut-title"><i class="bi bi-arrow-repeat"></i> Reasignados</span>

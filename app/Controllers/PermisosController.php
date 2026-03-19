@@ -150,6 +150,10 @@ class PermisosController extends BaseController {
     private function getModulos() {
         return [
             'personas' => 'Personas',
+            'personas_formulario_publico' => 'Personas: Ver formulario publico',
+            'personas_plantillas_whatsapp' => 'Personas: Ver plantillas WhatsApp',
+            'personas_ganar_asignados' => 'Personas: Ver atajo Asignados (Pendiente)',
+            'personas_ganar_reasignados' => 'Personas: Ver atajo Reasignados (Pendiente)',
             'celulas' => 'Células',
             'materiales_celulas' => 'Materiales Células (PDF)',
             'ministerios' => 'Ministerios',

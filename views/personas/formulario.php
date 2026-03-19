@@ -49,19 +49,20 @@ $urlVolver = $returnToAsistencia
             <div class="form-row">
                 <div class="form-group">
                     <label for="tipo_documento">Tipo de Documento</label>
+                    <?php $tipoDocumentoSeleccionado = $post_data['tipo_documento'] ?? ($persona['Tipo_Documento'] ?? ''); ?>
                     <select id="tipo_documento" name="tipo_documento" class="form-control">
                         <option value="">Seleccionar...</option>
-                        <option value="Registro Civil" <?= isset($persona) && $persona['Tipo_Documento'] == 'Registro Civil' ? 'selected' : '' ?>>Registro Civil</option>
-                        <option value="Cedula de Ciudadania" <?= isset($persona) && $persona['Tipo_Documento'] == 'Cedula de Ciudadania' ? 'selected' : '' ?>>Cédula de Ciudadanía</option>
-                        <option value="Cedula Extranjera" <?= isset($persona) && $persona['Tipo_Documento'] == 'Cedula Extranjera' ? 'selected' : '' ?>>Cédula Extranjera</option>
-                        <option value="Tarjeta de Identidad" <?= isset($persona) && $persona['Tipo_Documento'] == 'Tarjeta de Identidad' ? 'selected' : '' ?>>Tarjeta de Identidad</option>
+                        <option value="Registro Civil" <?= $tipoDocumentoSeleccionado === 'Registro Civil' ? 'selected' : '' ?>>Registro Civil</option>
+                        <option value="Cedula de Ciudadania" <?= $tipoDocumentoSeleccionado === 'Cedula de Ciudadania' ? 'selected' : '' ?>>Cédula de Ciudadanía</option>
+                        <option value="Cedula Extranjera" <?= $tipoDocumentoSeleccionado === 'Cedula Extranjera' ? 'selected' : '' ?>>Cédula Extranjera</option>
+                        <option value="Tarjeta de Identidad" <?= $tipoDocumentoSeleccionado === 'Tarjeta de Identidad' ? 'selected' : '' ?>>Tarjeta de Identidad</option>
                     </select>
                 </div>
 
                 <div class="form-group">
                     <label for="numero_documento">Número de Documento</label>
                     <input type="text" id="numero_documento" name="numero_documento" class="form-control" 
-                           value="<?= htmlspecialchars($persona['Numero_Documento'] ?? '') ?>">
+                           value="<?= htmlspecialchars($post_data['numero_documento'] ?? $persona['Numero_Documento'] ?? '') ?>">
                 </div>
             </div>
 
@@ -69,7 +70,7 @@ $urlVolver = $returnToAsistencia
                 <div class="form-group">
                     <label for="fecha_nacimiento">Fecha de Nacimiento</label>
                     <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" class="form-control" 
-                           value="<?= htmlspecialchars($persona['Fecha_Nacimiento'] ?? '') ?>">
+                           value="<?= htmlspecialchars($post_data['fecha_nacimiento'] ?? $persona['Fecha_Nacimiento'] ?? '') ?>">
                 </div>
 
                 <div class="form-group">
@@ -119,7 +120,7 @@ $urlVolver = $returnToAsistencia
                 <div class="form-group">
                     <label for="barrio">Barrio</label>
                     <input type="text" id="barrio" name="barrio" class="form-control" 
-                           value="<?= htmlspecialchars($persona['Barrio'] ?? '') ?>">
+                           value="<?= htmlspecialchars($post_data['barrio'] ?? $persona['Barrio'] ?? '') ?>">
                 </div>
             </div>
         </div>
@@ -158,16 +159,18 @@ $urlVolver = $returnToAsistencia
 
                 <div class="form-group">
                     <label for="id_ministerio">Ministerio</label>
+                    <?php $ministerioSeleccionado = $post_data['id_ministerio'] ?? ($persona['Id_Ministerio'] ?? ''); ?>
                     <select id="id_ministerio" name="id_ministerio" class="form-control">
                         <option value="">Sin ministerio</option>
                         <?php if (!empty($ministerios)): ?>
                             <?php foreach ($ministerios as $ministerio): ?>
                                 <option value="<?= $ministerio['Id_Ministerio'] ?>" 
-                                        <?= isset($persona) && $persona['Id_Ministerio'] == $ministerio['Id_Ministerio'] ? 'selected' : '' ?>>
+                                        <?= (string)$ministerioSeleccionado === (string)$ministerio['Id_Ministerio'] ? 'selected' : '' ?>>
                                     <?= htmlspecialchars($ministerio['Nombre_Ministerio']) ?>
                                 </option>
                             <?php endforeach; ?>
                         <?php endif; ?>
+                        <option value="otro" <?= (string)$ministerioSeleccionado === 'otro' ? 'selected' : '' ?>>Otro</option>
                     </select>
                 </div>
             </div>
@@ -199,6 +202,8 @@ $urlVolver = $returnToAsistencia
                         <option value="">Seleccionar...</option>
                         <option value="Celula" <?= $tipoReunionSeleccionado === 'Celula' ? 'selected' : '' ?>>Célula</option>
                         <option value="Domingo" <?= $tipoReunionSeleccionado === 'Domingo' ? 'selected' : '' ?>>Domingo</option>
+                        <option value="Viernes" <?= $tipoReunionSeleccionado === 'Viernes' ? 'selected' : '' ?>>Viernes</option>
+                        <option value="Otro" <?= $tipoReunionSeleccionado === 'Otro' ? 'selected' : '' ?>>Otro</option>
                         <option value="Migrados" <?= $tipoReunionSeleccionado === 'Migrados' ? 'selected' : '' ?>>Migrados</option>
                         <option value="Asignados" <?= $tipoReunionSeleccionado === 'Asignados' ? 'selected' : '' ?>>Asignados</option>
                     </select>
@@ -255,7 +260,7 @@ $urlVolver = $returnToAsistencia
             <h3 class="section-title">🙏 Petición de Oración</h3>
             <div class="form-group">
                 <label for="peticion">Petición</label>
-                <textarea id="peticion" name="peticion" class="form-control" rows="4" placeholder="Escriba aquí la petición de oración..."><?= htmlspecialchars($persona['Peticion'] ?? '') ?></textarea>
+                <textarea id="peticion" name="peticion" class="form-control" rows="4" placeholder="Escriba aquí la petición de oración..."><?= htmlspecialchars($post_data['peticion'] ?? $persona['Peticion'] ?? '') ?></textarea>
             </div>
         </div>
 

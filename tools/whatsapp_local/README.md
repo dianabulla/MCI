@@ -85,6 +85,12 @@ Los mensajes se encolan desde PersonaController en estos eventos:
 - Creación de persona: bienvenida + notificaciones de asignación.
 - Edición de persona: notificaciones cuando cambia líder y/o ministerio.
 
+Además, el worker encola automáticamente felicitaciones de cumpleaños cada día:
+
+- Revisa personas con fecha de nacimiento del día.
+- Usa la plantilla felicitacion_cumpleanos (editable en Personas > Plantillas mensaje what).
+- Evita duplicados por persona y fecha.
+
 ## 7) Notas operativas
 
 - Este flujo no usa API de Meta, Twilio ni 360dialog.

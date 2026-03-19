@@ -7,6 +7,7 @@ require_once APP . '/Models/Persona.php';
 require_once APP . '/Models/Celula.php';
 require_once APP . '/Models/Ministerio.php';
 require_once APP . '/Models/Rol.php';
+require_once APP . '/Models/Peticion.php';
 require_once APP . '/Models/WhatsappLocalQueue.php';
 require_once APP . '/Models/WhatsappMensajeTemplate.php';
 require_once APP . '/Controllers/AuthController.php';
@@ -17,6 +18,7 @@ class PersonaController extends BaseController {
     private $celulaModel;
     private $ministerioModel;
     private $rolModel;
+    private $peticionModel;
     private $whatsappLocalQueueModel;
     private $whatsappMensajeTemplateModel;
     private $soportaProceso = false;
@@ -29,6 +31,7 @@ class PersonaController extends BaseController {
         $this->celulaModel = new Celula();
         $this->ministerioModel = new Ministerio();
         $this->rolModel = new Rol();
+        $this->peticionModel = new Peticion();
         $this->whatsappLocalQueueModel = new WhatsappLocalQueue();
         $this->whatsappMensajeTemplateModel = new WhatsappMensajeTemplate();
 
@@ -53,6 +56,46 @@ class PersonaController extends BaseController {
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $base = rtrim(PUBLIC_URL, '/');
         return $scheme . '://' . $host . $base . '/index.php?url=' . urlencode($route);
+    }
+
+    private function tieneModuloPermisoExplicito($modulo) {
+        return isset($_SESSION['permisos'][$modulo]) && is_array($_SESSION['permisos'][$modulo]);
+    }
+
+    private function puedeVerPlantillasWhatsapp() {
+        if (AuthController::esAdministrador()) {
+            return true;
+        }
+
+        if ($this->tieneModuloPermisoExplicito('personas_plantillas_whatsapp')) {
+            return AuthController::tienePermiso('personas_plantillas_whatsapp', 'ver');
+        }
+
+        return AuthController::tienePermiso('personas', 'editar');
+    }
+
+    private function puedeVerAtajoAsignados() {
+        if (AuthController::esAdministrador()) {
+            return true;
+        }
+
+        if ($this->tieneModuloPermisoExplicito('personas_ganar_asignados')) {
+            return AuthController::tienePermiso('personas_ganar_asignados', 'ver');
+        }
+
+        return AuthController::tienePermiso('personas', 'editar');
+    }
+
+    private function puedeVerAtajoReasignados() {
+        if (AuthController::esAdministrador()) {
+            return true;
+        }
+
+        if ($this->tieneModuloPermisoExplicito('personas_ganar_reasignados')) {
+            return AuthController::tienePermiso('personas_ganar_reasignados', 'ver');
+        }
+
+        return AuthController::tienePermiso('personas', 'editar');
     }
 
     private function obtenerDestinatariosMinisterio($idMinisterio, $idPersonaExcluir = 0) {
@@ -836,6 +879,41 @@ class PersonaController extends BaseController {
         return $data;
     }
 
+    private function normalizarIdMinisterioPost($idMinisterioRaw) {
+        $idMinisterioRaw = trim((string)$idMinisterioRaw);
+        if ($idMinisterioRaw === '' || strtolower($idMinisterioRaw) === 'otro') {
+            return null;
+        }
+
+        return ctype_digit($idMinisterioRaw) ? (int)$idMinisterioRaw : null;
+    }
+
+    private function registrarPeticionSiAplica($idPersona, $peticionTexto) {
+        $idPersona = (int)$idPersona;
+        $peticionTexto = trim((string)$peticionTexto);
+
+        if ($idPersona <= 0 || $peticionTexto === '') {
+            return;
+        }
+
+        $fechaHoy = date('Y-m-d');
+        $existe = $this->peticionModel->query(
+            "SELECT Id_Peticion FROM peticion WHERE Id_Persona = ? AND Descripcion_Peticion = ? AND Fecha_Peticion = ? LIMIT 1",
+            [$idPersona, $peticionTexto, $fechaHoy]
+        );
+
+        if (!empty($existe)) {
+            return;
+        }
+
+        $this->peticionModel->create([
+            'Id_Persona' => $idPersona,
+            'Descripcion_Peticion' => $peticionTexto,
+            'Fecha_Peticion' => $fechaHoy,
+            'Estado_Peticion' => 'Pendiente'
+        ]);
+    }
+
     public function index() {
         if (!AuthController::tienePermiso('personas', 'ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
@@ -863,7 +941,7 @@ class PersonaController extends BaseController {
     }
 
     public function plantillasWhatsapp() {
-        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('personas', 'editar')) {
+        if (!$this->puedeVerPlantillasWhatsapp()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -943,7 +1021,7 @@ class PersonaController extends BaseController {
             $this->redirect('personas/plantillas-whatsapp');
         }
 
-        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('personas', 'editar')) {
+        if (!$this->puedeVerPlantillasWhatsapp()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -951,17 +1029,20 @@ class PersonaController extends BaseController {
         $this->whatsappMensajeTemplateModel->actualizarPlantilla('bienvenida_persona', $_POST['tpl_bienvenida_persona'] ?? '');
         $this->whatsappMensajeTemplateModel->actualizarPlantilla('asignacion_lider', $_POST['tpl_asignacion_lider'] ?? '');
         $this->whatsappMensajeTemplateModel->actualizarPlantilla('asignacion_ministerio', $_POST['tpl_asignacion_ministerio'] ?? '');
+        $this->whatsappMensajeTemplateModel->actualizarPlantilla('felicitacion_cumpleanos', $_POST['tpl_felicitacion_cumpleanos'] ?? '');
         $this->whatsappMensajeTemplateModel->actualizarPlantilla('asignacion_celula_universidad', $_POST['tpl_asignacion_celula_universidad'] ?? '');
 
         $plantillas = $this->whatsappMensajeTemplateModel->getPlantillas();
         $bienvenidaMedia = $this->subirMediaPlantilla('bienvenida_persona', 'media_bienvenida_persona', $plantillas['bienvenida_persona']['media_url'] ?? null);
         $liderMedia = $this->subirMediaPlantilla('asignacion_lider', 'media_asignacion_lider', $plantillas['asignacion_lider']['media_url'] ?? null);
         $ministerioMedia = $this->subirMediaPlantilla('asignacion_ministerio', 'media_asignacion_ministerio', $plantillas['asignacion_ministerio']['media_url'] ?? null);
+        $cumpleanosMedia = $this->subirMediaPlantilla('felicitacion_cumpleanos', 'media_felicitacion_cumpleanos', $plantillas['felicitacion_cumpleanos']['media_url'] ?? null);
         $celulaUniversidadMedia = $this->subirMediaPlantilla('asignacion_celula_universidad', 'media_asignacion_celula_universidad', $plantillas['asignacion_celula_universidad']['media_url'] ?? null);
 
         $this->whatsappMensajeTemplateModel->actualizarMedia('bienvenida_persona', $bienvenidaMedia['media_url'], $bienvenidaMedia['media_tipo']);
         $this->whatsappMensajeTemplateModel->actualizarMedia('asignacion_lider', $liderMedia['media_url'], $liderMedia['media_tipo']);
         $this->whatsappMensajeTemplateModel->actualizarMedia('asignacion_ministerio', $ministerioMedia['media_url'], $ministerioMedia['media_tipo']);
+        $this->whatsappMensajeTemplateModel->actualizarMedia('felicitacion_cumpleanos', $cumpleanosMedia['media_url'], $cumpleanosMedia['media_tipo']);
         $this->whatsappMensajeTemplateModel->actualizarMedia('asignacion_celula_universidad', $celulaUniversidadMedia['media_url'], $celulaUniversidadMedia['media_tipo']);
 
         $this->redirect('personas/plantillas-whatsapp&tpl_msg=ok');
@@ -979,11 +1060,17 @@ class PersonaController extends BaseController {
         $filtroEstado = $_GET['estado'] ?? null;
         $filtroCelula = $_GET['celula'] ?? null;
         $filtroProceso = (string)($_GET['proceso'] ?? '');
+        $filtroSinLider = (string)($_GET['sin_lider'] ?? '') === '1';
+        $filtroSinCelula = (string)($_GET['sin_celula'] ?? '') === '1';
         $filtroEtapa = $this->normalizarEtapaFiltro($_GET['etapa'] ?? null);
         $filtroOrigen = $this->normalizarOrigenFiltro($_GET['origen'] ?? null);
-        $puedeVerAtajosGestion = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
+        $puedeVerAtajoAsignados = $this->puedeVerAtajoAsignados();
+        $puedeVerAtajoReasignados = $this->puedeVerAtajoReasignados();
 
-        if (in_array($filtroOrigen, ['asignados', 'reasignados'], true) && !$puedeVerAtajosGestion) {
+        if ($filtroOrigen === 'asignados' && !$puedeVerAtajoAsignados) {
+            $filtroOrigen = '';
+        }
+        if ($filtroOrigen === 'reasignados' && !$puedeVerAtajoReasignados) {
             $filtroOrigen = '';
         }
 
@@ -1005,8 +1092,16 @@ class PersonaController extends BaseController {
         if ($filtroProceso === 'sin_ministerio') {
             $filtroMinisterio = '0';
         } elseif ($filtroProceso === 'sin_lider') {
-            $filtroLider = '0';
+            $filtroSinLider = true;
         } elseif ($filtroProceso === 'sin_celula') {
+            $filtroSinCelula = true;
+        }
+
+        if ($filtroSinLider) {
+            $filtroLider = '0';
+        }
+
+        if ($filtroSinCelula) {
             $filtroCelula = '0';
         }
 
@@ -1094,6 +1189,8 @@ class PersonaController extends BaseController {
             'filtroEstadoActual' => (string)$filtroEstado,
             'filtroCelulaActual' => (string)$filtroCelula,
             'filtroProcesoActual' => $filtroProceso,
+            'filtroSinLiderActual' => $filtroSinLider,
+            'filtroSinCelulaActual' => $filtroSinCelula,
             'filtroEtapaActual' => (string)($filtroEtapa ?? ''),
             'filtroOrigenActual' => (string)$filtroOrigen,
             'totalesOrigenPendiente' => $totalesOrigenPendiente
@@ -1304,11 +1401,17 @@ class PersonaController extends BaseController {
         $filtroEstado = $_GET['estado'] ?? null;
         $filtroCelula = $_GET['celula'] ?? null;
         $filtroProceso = (string)($_GET['proceso'] ?? '');
+        $filtroSinLider = (string)($_GET['sin_lider'] ?? '') === '1';
+        $filtroSinCelula = (string)($_GET['sin_celula'] ?? '') === '1';
         $filtroEtapa = $this->normalizarEtapaFiltro($_GET['etapa'] ?? null);
         $filtroOrigen = $this->normalizarOrigenFiltro($_GET['origen'] ?? null);
-        $puedeVerAtajosGestion = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
+        $puedeVerAtajoAsignados = $this->puedeVerAtajoAsignados();
+        $puedeVerAtajoReasignados = $this->puedeVerAtajoReasignados();
 
-        if (in_array($filtroOrigen, ['asignados', 'reasignados'], true) && !$puedeVerAtajosGestion) {
+        if ($filtroOrigen === 'asignados' && !$puedeVerAtajoAsignados) {
+            $filtroOrigen = '';
+        }
+        if ($filtroOrigen === 'reasignados' && !$puedeVerAtajoReasignados) {
             $filtroOrigen = '';
         }
 
@@ -1324,8 +1427,16 @@ class PersonaController extends BaseController {
         if ($filtroProceso === 'sin_ministerio') {
             $filtroMinisterio = '0';
         } elseif ($filtroProceso === 'sin_lider') {
-            $filtroLider = '0';
+            $filtroSinLider = true;
         } elseif ($filtroProceso === 'sin_celula') {
+            $filtroSinCelula = true;
+        }
+
+        if ($filtroSinLider) {
+            $filtroLider = '0';
+        }
+
+        if ($filtroSinCelula) {
             $filtroCelula = '0';
         }
 
@@ -1394,6 +1505,7 @@ class PersonaController extends BaseController {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $idRolSeleccionado = $_POST['id_rol'] ?: null;
             $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
+            $idMinisterioNormalizado = $this->normalizarIdMinisterioPost($_POST['id_ministerio'] ?? null);
 
             $data = [
                 'Nombre' => $_POST['nombre'],
@@ -1413,7 +1525,7 @@ class PersonaController extends BaseController {
                 'Id_Lider' => $_POST['id_lider'] ?: null,
                 'Id_Celula' => $_POST['id_celula'] ?: null,
                 'Id_Rol' => $_POST['id_rol'] ?: null,
-                'Id_Ministerio' => $_POST['id_ministerio'] ?: null,
+                'Id_Ministerio' => $idMinisterioNormalizado,
                 'Fecha_Registro' => date('Y-m-d H:i:s'),
                 'Fecha_Registro_Unix' => time()
             ];
@@ -1465,6 +1577,8 @@ class PersonaController extends BaseController {
                     if (!empty($personaCreada)) {
                         $this->encolarMensajeBienvenidaYAsignacion($personaCreada);
                     }
+
+                    $this->registrarPeticionSiAplica($idPersonaNueva, $data['Peticion'] ?? '');
                 }
 
                 if ($returnTo === 'asistencia') {
@@ -1536,6 +1650,7 @@ class PersonaController extends BaseController {
             $personaAntes = $this->personaModel->getById($id);
             $idRolSeleccionado = $_POST['id_rol'] ?: null;
             $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
+            $idMinisterioNormalizado = $this->normalizarIdMinisterioPost($_POST['id_ministerio'] ?? null);
 
             $data = [
                 'Nombre' => $_POST['nombre'],
@@ -1555,7 +1670,7 @@ class PersonaController extends BaseController {
                 'Id_Lider' => $_POST['id_lider'] ?: null,
                 'Id_Celula' => $_POST['id_celula'] ?: null,
                 'Id_Rol' => $_POST['id_rol'] ?: null,
-                'Id_Ministerio' => $_POST['id_ministerio'] ?: null
+                'Id_Ministerio' => $idMinisterioNormalizado
             ];
 
             if ($this->soportaConvencion) {
@@ -1593,6 +1708,12 @@ class PersonaController extends BaseController {
             
             try {
                 $this->personaModel->update($id, $data);
+
+                $peticionAntes = trim((string)($personaAntes['Peticion'] ?? ''));
+                $peticionDespues = trim((string)($data['Peticion'] ?? ''));
+                if ($peticionDespues !== '' && $peticionDespues !== $peticionAntes) {
+                    $this->registrarPeticionSiAplica($id, $peticionDespues);
+                }
 
                 $personaDespues = $this->personaModel->getById($id);
                 if (!empty($personaAntes) && !empty($personaDespues)) {

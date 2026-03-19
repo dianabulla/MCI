@@ -247,7 +247,23 @@
                                     <?= htmlspecialchars((string)$ministerio['Nombre_Ministerio']) ?>
                                 </option>
                             <?php endforeach; ?>
+                            <option value="otro" <?= (string)($old['id_ministerio'] ?? '') === 'otro' ? 'selected' : '' ?>>Otro</option>
                         </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="cedula">Cédula</label>
+                        <input type="text" id="cedula" name="cedula" value="<?= htmlspecialchars((string)($old['cedula'] ?? '')) ?>" placeholder="Número de cédula (opcional)">
+                    </div>
+
+                    <div class="field">
+                        <label for="fecha_nacimiento">Fecha de nacimiento</label>
+                        <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" value="<?= htmlspecialchars((string)($old['fecha_nacimiento'] ?? '')) ?>">
+                    </div>
+
+                    <div class="field">
+                        <label for="barrio">Barrio</label>
+                        <input type="text" id="barrio" name="barrio" value="<?= htmlspecialchars((string)($old['barrio'] ?? '')) ?>" placeholder="Barrio (opcional)">
                     </div>
 
                     <div class="field full">
@@ -261,7 +277,14 @@
                             <option value="">Seleccione...</option>
                             <option value="domingo" <?= (string)($old['ganado_en'] ?? '') === 'domingo' ? 'selected' : '' ?>>Domingo</option>
                             <option value="celula" <?= (string)($old['ganado_en'] ?? '') === 'celula' ? 'selected' : '' ?>>Célula</option>
+                            <option value="viernes" <?= (string)($old['ganado_en'] ?? '') === 'viernes' ? 'selected' : '' ?>>Viernes</option>
+                            <option value="otro" <?= (string)($old['ganado_en'] ?? '') === 'otro' ? 'selected' : '' ?>>Otro</option>
                         </select>
+                    </div>
+
+                    <div class="field full">
+                        <label for="peticion">Petición</label>
+                        <input type="text" id="peticion" name="peticion" value="<?= htmlspecialchars((string)($old['peticion'] ?? '')) ?>" placeholder="Petición de oración (opcional)">
                     </div>
                 </div>
 

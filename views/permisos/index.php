@@ -198,7 +198,11 @@
     // Grupos visuales de mÃ³dulos
     $gruposModulos = [
         'Principal' => [
-            'personas'         => ['Personas',         'Crear: Formulario publico/+Nueva Persona. Editar: Exportar Excel, Plantilla WhatsApp y atajos Asignados/Reasignados.'],
+            'personas'         => ['Personas',         'Permisos generales del modulo (listado y CRUD principal).'],
+            'personas_formulario_publico' => ['Personas: Formulario publico', 'Controla la visibilidad del boton Formulario publico en Personas.'],
+            'personas_plantillas_whatsapp' => ['Personas: Plantillas WhatsApp', 'Controla acceso a Plantillas WhatsApp de Personas.'],
+            'personas_ganar_asignados' => ['Pendiente: Atajo Asignados', 'Controla la visibilidad del atajo Asignados en Pendiente por consolidar.'],
+            'personas_ganar_reasignados' => ['Pendiente: Atajo Reasignados', 'Controla la visibilidad del atajo Reasignados en Pendiente por consolidar.'],
             'celulas'          => ['CÃ©lulas',           'GestiÃ³n de cÃ©lulas y miembros'],
             'materiales_celulas'=> ['Materiales CÃ©lulas','Archivos PDF para cÃ©lulas'],
             'ministerios'      => ['Ministerios',       'Ver y gestionar ministerios'],
