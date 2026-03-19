@@ -159,9 +159,13 @@ class Persona extends BaseModel {
     public function getCandidatosReasignacionPrimerContacto($horasLimite = 48) {
         $horasLimite = max(1, (int)$horasLimite);
 
-        $campoTiempoControl = $this->tieneColumna('Fecha_Asignacion_Lider')
-            ? "COALESCE(p.Fecha_Asignacion_Lider, p.Fecha_Registro)"
-            : "p.Fecha_Registro";
+        // Regla de seguridad: sin Fecha_Asignacion_Lider no se ejecuta
+        // la reasignación automática para evitar efectos retroactivos.
+        if (!$this->tieneColumna('Fecha_Asignacion_Lider')) {
+            return [];
+        }
+
+        $campoTiempoControl = "p.Fecha_Asignacion_Lider";
 
         $sql = "SELECT p.Id_Persona, p.Id_Lider, p.Id_Ministerio, p.Fecha_Registro, p.Fecha_Asignacion_Lider, p.Escalera_Checklist, p.Proceso, p.Estado_Cuenta
             FROM {$this->table} p

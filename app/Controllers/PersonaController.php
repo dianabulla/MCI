@@ -973,7 +973,10 @@ class PersonaController extends BaseController {
         $filtroOrigen = $this->normalizarOrigenFiltro($_GET['origen'] ?? null);
 
         // Regla de negocio: si en 48 horas no hay primer contacto, liberar líder/ministerio.
-        $this->aplicarReglaReasignacionPrimerContacto(48);
+        // Seguridad: solo aplicar cuando existe soporte de fecha de asignación.
+        if ($this->soportaFechaAsignacionLider) {
+            $this->aplicarReglaReasignacionPrimerContacto(48);
+        }
 
         // Pendientes por consolidar: mostrar siempre personas nuevas en etapa Ganar.
         if ($filtroEtapa === null || $filtroEtapa === '') {
