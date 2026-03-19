@@ -1,56 +1,174 @@
 <?php
 /**
  * Script Web: Marcar Ganar completo para personas antiguas asignadas
- * 
- * Acceso: [producción]/tools/marcar_ganar_completo_web.php
- * 
- * Actualiza el Escalera_Checklist de todas las personas que ya tienen:
- * - Id_Lider asignado
- * - Id_Ministerio asignado  
- * - Id_Celula asignada
- * 
- * Marca como completados automáticamente:
- * - Ganar[0] = "Asignado a líder" ✓
- * - Ganar[1] = "Primer contacto" ✓
- * - Ganar[2] = "Ubicado en célula" ✓
+ * Acceso: /public/marcar_ganar_completo_web.php
  */
 
 session_start();
 
+// Cargar configuración
 require_once '../app/Config/config.php';
 require_once '../app/Config/Database.php';
 
-// Seguridad: Solo permitir acceso autenticado o con token específico
+// ============================================================================
+// VALIDACIÓN DE ACCESO
+// ============================================================================
+
 $tokenValido = false;
 $usuarioAutenticado = false;
 
-// Verificar si hay token en GET (token de una sola ejecución por día)
+// Token diario
 $tokenEsperado = hash('sha256', 'marcar_ganar_completo_' . date('Y-m-d'));
 if (!empty($_GET['token']) && $_GET['token'] === $tokenEsperado) {
     $tokenValido = true;
 }
 
-// Verificar si hay un IP whitelist
-$ip_cliente = $_SERVER['REMOTE_ADDR'] ?? '';
-$ips_permitidas = ['127.0.0.1', 'localhost']; // Agregar IPs de tu red local si es necesario
-if (in_array($ip_cliente, $ips_permitidas)) {
-    $usuarioAutenticado = true;
-}
-
-// Verificar si el usuario está autenticado en la aplicación
+// Verificar sesión
 if (!empty($_SESSION['usuario'])) {
     $usuarioAutenticado = true;
 }
 
+// ============================================================================
+// MANEJAR ACCIONES AJAX
+// ============================================================================
+
+if (!empty($_GET['action']) && ($tokenValido || $usuarioAutenticado)) {
+    header('Content-Type: application/json; charset=utf-8');
+    
+    $action = $_GET['action'];
+    
+    try {
+        $db = Database::getInstance()->getConnection();
+        
+        if ($action === 'preview') {
+            $query = "
+                SELECT 
+                    p.Id_Persona as id,
+                    CONCAT(p.Nombre, ' ', p.Apellido) as nombre,
+                    p.Id_Lider,
+                    p.Id_Ministerio,
+                    p.Id_Celula
+                FROM persona p
+                WHERE p.Id_Lider IS NOT NULL AND p.Id_Lider > 0
+                  AND p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0
+                  AND p.Id_Celula IS NOT NULL AND p.Id_Celula > 0
+                  AND p.Proceso = 'Ganar'
+                ORDER BY p.Id_Persona
+            ";
+            
+            $stmt = $db->prepare($query);
+            $stmt->execute();
+            $personas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            echo json_encode([
+                'success' => true,
+                'cantidad' => count($personas),
+                'personas' => $personas
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        
+        if ($action === 'ejecutar') {
+            $query = "
+                SELECT 
+                    p.Id_Persona,
+                    p.Escalera_Checklist,
+                    p.Nombre,
+                    p.Apellido,
+                    p.Id_Lider,
+                    p.Id_Ministerio,
+                    p.Id_Celula
+                FROM persona p
+                WHERE p.Id_Lider IS NOT NULL AND p.Id_Lider > 0
+                  AND p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0
+                  AND p.Id_Celula IS NOT NULL AND p.Id_Celula > 0
+                  AND p.Proceso = 'Ganar'
+                ORDER BY p.Id_Persona
+            ";
+            
+            $stmt = $db->prepare($query);
+            $stmt->execute();
+            $personas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            $actualizadas = 0;
+            $errores = 0;
+            
+            foreach ($personas as $persona) {
+                $idPersona = (int)$persona['Id_Persona'];
+                
+                $escalerRaw = $persona['Escalera_Checklist'] ?? '';
+                $escalera = [];
+                
+                if (!empty($escalerRaw)) {
+                    $tmp = json_decode($escalerRaw, true);
+                    if (is_array($tmp)) {
+                        $escalera = $tmp;
+                    }
+                }
+                
+                if (!isset($escalera['Ganar']) || !is_array($escalera['Ganar'])) {
+                    $escalera['Ganar'] = [false, false, false, false];
+                } else {
+                    while (count($escalera['Ganar']) < 4) {
+                        $escalera['Ganar'][] = false;
+                    }
+                }
+                
+                if (!isset($escalera['_meta'])) {
+                    $escalera['_meta'] = [];
+                }
+                
+                $escalera['Ganar'][0] = true;
+                $escalera['Ganar'][1] = true;
+                $escalera['Ganar'][2] = true;
+                
+                $escalera['_meta']['actualizado_automatico'] = true;
+                $escalera['_meta']['actualizado_automatico_at'] = date('Y-m-d H:i:s');
+                $escalera['_meta']['actualizado_automatico_nota'] = 'Marcar Ganar completo (asignación histórica)';
+                
+                $escalerJson = json_encode($escalera, JSON_UNESCAPED_UNICODE);
+                if ($escalerJson === false) {
+                    $errores++;
+                    continue;
+                }
+                
+                $updateStmt = $db->prepare("UPDATE persona SET Escalera_Checklist = ? WHERE Id_Persona = ?");
+                
+                try {
+                    $updateStmt->execute([$escalerJson, $idPersona]);
+                    $actualizadas++;
+                } catch (Exception $e) {
+                    $errores++;
+                }
+            }
+            
+            echo json_encode([
+                'success' => true,
+                'actualizadas' => $actualizadas,
+                'errores' => $errores,
+                'total' => count($personas)
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        
+        echo json_encode(['success' => false, 'error' => 'Acción no válida'], JSON_UNESCAPED_UNICODE);
+        exit;
+        
+    } catch (Exception $e) {
+        header('Content-Type: application/json; charset=utf-8', true, 500);
+        echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+}
+
+// ============================================================================
+// VALIDAR ACCESO PARA MOSTRAR HTML
+// ============================================================================
+
 if (!$tokenValido && !$usuarioAutenticado) {
     http_response_code(403);
     $tokenRequerido = hash('sha256', 'marcar_ganar_completo_' . date('Y-m-d'));
-    die('
-        <h2>Acceso Requerido</h2>
-        <p>Use este link:</p>
-        <p><code>' . $_SERVER['PHP_SELF'] . '?token=' . $tokenRequerido . '</code></p>
-        <p>O inicie sesión en la aplicación.</p>
-    ');
+    die('<h2>Acceso Requerido</h2><p>Use este link:<br/><code>' . htmlspecialchars($_SERVER['PHP_SELF']) . '?token=' . htmlspecialchars($tokenRequerido) . '</code></p>');
 }
 
 ?>
@@ -137,13 +255,6 @@ if (!$tokenValido && !$usuarioAutenticado) {
         }
         .btn-secondary:hover {
             background: #5a6268;
-        }
-        .btn-danger {
-            background: #dc3545;
-            color: white;
-        }
-        .btn-danger:hover {
-            background: #c82333;
         }
         #resultado {
             margin-top: 30px;
@@ -330,135 +441,3 @@ if (!$tokenValido && !$usuarioAutenticado) {
     </script>
 </body>
 </html>
-
-<?php
-// Procesar acciones AJAX
-if (!empty($_GET['action'])) {
-    header('Content-Type: application/json');
-    $action = $_GET['action'];
-    
-    try {
-        $db = Database::getInstance()->getConnection();
-        
-        if ($action === 'preview') {
-            $query = "
-                SELECT 
-                    p.Id_Persona as id,
-                    CONCAT(p.Nombre, ' ', p.Apellido) as nombre,
-                    p.Id_Lider,
-                    p.Id_Ministerio,
-                    p.Id_Celula
-                FROM persona p
-                WHERE p.Id_Lider IS NOT NULL AND p.Id_Lider > 0
-                  AND p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0
-                  AND p.Id_Celula IS NOT NULL AND p.Id_Celula > 0
-                  AND p.Proceso = 'Ganar'
-                ORDER BY p.Id_Persona
-            ";
-            
-            $stmt = $db->prepare($query);
-            $stmt->execute();
-            $personas = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            echo json_encode([
-                'success' => true,
-                'cantidad' => count($personas),
-                'personas' => $personas
-            ]);
-            exit;
-        }
-        
-        if ($action === 'ejecutar') {
-            $query = "
-                SELECT 
-                    p.Id_Persona,
-                    p.Escalera_Checklist,
-                    p.Nombre,
-                    p.Apellido,
-                    p.Id_Lider,
-                    p.Id_Ministerio,
-                    p.Id_Celula
-                FROM persona p
-                WHERE p.Id_Lider IS NOT NULL AND p.Id_Lider > 0
-                  AND p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0
-                  AND p.Id_Celula IS NOT NULL AND p.Id_Celula > 0
-                  AND p.Proceso = 'Ganar'
-                ORDER BY p.Id_Persona
-            ";
-            
-            $stmt = $db->prepare($query);
-            $stmt->execute();
-            $personas = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            $actualizadas = 0;
-            $errores = 0;
-            
-            foreach ($personas as $persona) {
-                $idPersona = (int)$persona['Id_Persona'];
-                
-                $escalerRaw = $persona['Escalera_Checklist'] ?? '';
-                $escalera = [];
-                
-                if (!empty($escalerRaw)) {
-                    $tmp = json_decode($escalerRaw, true);
-                    if (is_array($tmp)) {
-                        $escalera = $tmp;
-                    }
-                }
-                
-                if (!isset($escalera['Ganar']) || !is_array($escalera['Ganar'])) {
-                    $escalera['Ganar'] = [false, false, false, false];
-                } else {
-                    while (count($escalera['Ganar']) < 4) {
-                        $escalera['Ganar'][] = false;
-                    }
-                }
-                
-                if (!isset($escalera['_meta'])) {
-                    $escalera['_meta'] = [];
-                }
-                
-                // Marcar los 3 primeros pasos
-                $escalera['Ganar'][0] = true;
-                $escalera['Ganar'][1] = true;
-                $escalera['Ganar'][2] = true;
-                
-                $escalera['_meta']['actualizado_automatico'] = true;
-                $escalera['_meta']['actualizado_automatico_at'] = date('Y-m-d H:i:s');
-                $escalera['_meta']['actualizado_automatico_nota'] = 'Marcar Ganar completo (asignación histórica)';
-                
-                $escalerJson = json_encode($escalera, JSON_UNESCAPED_UNICODE);
-                if ($escalerJson === false) {
-                    $errores++;
-                    continue;
-                }
-                
-                $updateStmt = $db->prepare("UPDATE persona SET Escalera_Checklist = ? WHERE Id_Persona = ?");
-                
-                try {
-                    $updateStmt->execute([$escalerJson, $idPersona]);
-                    $actualizadas++;
-                } catch (Exception $e) {
-                    $errores++;
-                }
-            }
-            
-            echo json_encode([
-                'success' => true,
-                'actualizadas' => $actualizadas,
-                'errores' => $errores,
-                'total' => count($personas)
-            ]);
-            exit;
-        }
-        
-        echo json_encode(['success' => false, 'error' => 'Acción no válida']);
-        exit;
-        
-    } catch (Exception $e) {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
-        exit;
-    }
-}
-?>
