@@ -39,7 +39,7 @@ class PeticionController extends BaseController {
 
     public function index() {
         if (!AuthController::tienePermiso('peticiones', 'ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
 
@@ -72,7 +72,7 @@ class PeticionController extends BaseController {
 
     public function exportarExcel() {
         if (!AuthController::tienePermiso('peticiones', 'ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
 
@@ -114,7 +114,7 @@ class PeticionController extends BaseController {
     public function guardarPublico() {
         // Guardar petición sin autenticación
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: ' . BASE_URL . '/public/?url=peticiones_publica');
+            header('Location: ' . PUBLIC_URL . '?url=peticiones_publica');
             exit;
         }
 
@@ -125,12 +125,12 @@ class PeticionController extends BaseController {
             $descripcion = trim((string)($_POST['descripcion_peticion'] ?? ''));
 
             if (empty($nombre) || empty($descripcion)) {
-                header('Location: ' . BASE_URL . '/public/?url=peticiones_publica&error=faltan-campos');
+                header('Location: ' . PUBLIC_URL . '?url=peticiones_publica&error=faltan-campos');
                 exit;
             }
 
             if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                header('Location: ' . BASE_URL . '/public/?url=peticiones_publica&error=email-invalido');
+                header('Location: ' . PUBLIC_URL . '?url=peticiones_publica&error=email-invalido');
                 exit;
             }
 
@@ -145,10 +145,10 @@ class PeticionController extends BaseController {
             ];
             
             $this->peticionModel->create($data);
-            header('Location: ' . BASE_URL . '/public/?url=peticiones_publica&exito=1');
+            header('Location: ' . PUBLIC_URL . '?url=peticiones_publica&exito=1');
             exit;
         } catch (Exception $e) {
-            header('Location: ' . BASE_URL . '/public/?url=peticiones_publica&error=guardar');
+            header('Location: ' . PUBLIC_URL . '?url=peticiones_publica&error=guardar');
             exit;
         }
     }
@@ -156,14 +156,14 @@ class PeticionController extends BaseController {
     public function crear() {
         // Verificar permiso de crear
         if (!AuthController::tienePermiso('peticiones', 'crear')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $idPersona = (int)($_POST['id_persona'] ?? 0);
             if (!$this->personaEstaPermitida($idPersona)) {
-                header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+                header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
                 exit;
             }
 
@@ -187,7 +187,7 @@ class PeticionController extends BaseController {
     public function editar() {
         // Verificar permiso de editar
         if (!AuthController::tienePermiso('peticiones', 'editar')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
         
@@ -200,7 +200,7 @@ class PeticionController extends BaseController {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $idPersona = (int)($_POST['id_persona'] ?? 0);
             if (!$this->personaEstaPermitida($idPersona)) {
-                header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+                header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
                 exit;
             }
 
