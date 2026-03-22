@@ -11,15 +11,15 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         :root {
-            --primary-color: #2f4f87;
-            --secondary-color: #1e7a51;
+            --primary-color: #325fa9;
+            --secondary-color: #3f6cb6;
             --success-color: #1e7a51;
             --danger-color: #a92d48;
             --warning-color: #9a6708;
         }
 
         body {
-            background: linear-gradient(135deg, var(--primary-color) 0%, #1a3a5a 100%);
+            background: #f3f7ff;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -76,8 +76,8 @@
         }
 
         .form-control:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+            border-color: #325fa9;
+            box-shadow: 0 0 0 3px rgba(50, 95, 169, 0.1);
             outline: none;
         }
 
@@ -94,7 +94,7 @@
         }
 
         .btn-submit {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background: linear-gradient(135deg, #325fa9 0%, #3f6cb6 100%);
             color: white;
             border: none;
             border-radius: 8px;
@@ -109,7 +109,7 @@
 
         .btn-submit:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
+            box-shadow: 0 10px 18px rgba(50, 95, 169, 0.3);
             color: white;
             text-decoration: none;
         }
