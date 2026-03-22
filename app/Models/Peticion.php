@@ -9,6 +9,40 @@ class Peticion extends BaseModel {
     protected $table = 'peticion';
     protected $primaryKey = 'Id_Peticion';
 
+    public function __construct() {
+        parent::__construct();
+        $this->asegurarCamposContacto();
+    }
+
+    private function asegurarCamposContacto() {
+        try {
+            // Verificar si los campos de contacto existen, si no agregarlos
+            $columnas = $this->query("SHOW COLUMNS FROM {$this->table}");
+            $columnasNombres = array_column($columnas, 'Field');
+            
+            if (!in_array('nombre_contacto', $columnasNombres, true)) {
+                $this->execute("ALTER TABLE {$this->table} ADD COLUMN nombre_contacto VARCHAR(100) NULL");
+            }
+            
+            if (!in_array('email_contacto', $columnasNombres, true)) {
+                $this->execute("ALTER TABLE {$this->table} ADD COLUMN email_contacto VARCHAR(150) NULL");
+            }
+            
+            if (!in_array('telefono_contacto', $columnasNombres, true)) {
+                $this->execute("ALTER TABLE {$this->table} ADD COLUMN telefono_contacto VARCHAR(20) NULL");
+            }
+
+            // Verificar si Id_Persona es nullable, si no actualizarlo
+            $columnInfo = $this->query("SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ? AND COLUMN_NAME = 'Id_Persona'", [$this->table]);
+            if (!empty($columnInfo) && $columnInfo[0]['IS_NULLABLE'] === 'NO') {
+                $this->execute("ALTER TABLE {$this->table} MODIFY COLUMN Id_Persona INT(11) NULL");
+            }
+        } catch (Exception $e) {
+            // Silenciar errores de alteración de tabla
+            error_log('Error asegurando campos de contacto en tabla ' . $this->table . ': ' . $e->getMessage());
+        }
+    }
+
     /**
      * Obtener peticiones con información de la persona
      */

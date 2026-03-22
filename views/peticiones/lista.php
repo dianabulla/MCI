@@ -10,6 +10,9 @@
         <a href="<?= PUBLIC_URL ?>?url=peticiones/exportarExcel<?= !empty($_GET['celula']) ? '&celula=' . urlencode((string)$_GET['celula']) : '' ?>" class="btn btn-success">
             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
         </a>
+        <a href="<?= PUBLIC_URL ?>?url=peticiones_publica" class="btn btn-info" target="_blank" title="Abre en nueva pestaña">
+            <i class="bi bi-link-45deg"></i> Formulario Público
+        </a>
         <?php if ($puedeCrearPeticion): ?>
         <a href="<?= PUBLIC_URL ?>index.php?url=peticiones/crear" class="btn btn-primary">+ Nueva Petición</a>
         <?php endif; ?>
@@ -56,7 +59,21 @@
             <?php if (!empty($peticiones)): ?>
                 <?php foreach ($peticiones as $peticion): ?>
                     <tr>
-                        <td><?= htmlspecialchars($peticion['Nombre_Completo']) ?></td>
+                        <td>
+                            <?php 
+                                $nombreMostrar = $peticion['Nombre_Completo'] ?? '';
+                                if (empty($nombreMostrar) && !empty($peticion['nombre_contacto'])) {
+                                    $nombreMostrar = htmlspecialchars($peticion['nombre_contacto']);
+                                    if (!empty($peticion['email_contacto'])) {
+                                        $nombreMostrar .= ' (' . htmlspecialchars($peticion['email_contacto']) . ')';
+                                    }
+                                    if (!empty($peticion['telefono_contacto'])) {
+                                        $nombreMostrar .= ' ' . htmlspecialchars($peticion['telefono_contacto']);
+                                    }
+                                }
+                                echo htmlspecialchars($nombreMostrar);
+                            ?>
+                        </td>
                         <td><?= htmlspecialchars($peticion['Nombre_Celula'] ?? 'Sin célula') ?></td>
                         <td><?= htmlspecialchars($peticion['Descripcion_Peticion']) ?></td>
                         <td><?= htmlspecialchars($peticion['Fecha_Peticion']) ?></td>

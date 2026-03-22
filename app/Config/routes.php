@@ -83,6 +83,10 @@ return [
     'peticiones/eliminar' => 'PeticionController@eliminar',
     'peticiones/exportarExcel' => 'PeticionController@exportarExcel',
     
+    // Peticiones Públicas (No requiere autenticación)
+    'peticiones_publica' => 'PeticionController@formularioPublico',
+    'peticiones_publica/guardar' => 'PeticionController@guardarPublico',
+    
     // Asistencias
     'asistencias' => 'AsistenciaController@index',
     'asistencias/registrar' => 'AsistenciaController@registrar',

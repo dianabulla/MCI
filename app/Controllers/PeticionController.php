@@ -106,6 +106,53 @@ class PeticionController extends BaseController {
         );
     }
 
+    public function formularioPublico() {
+        // Formulario público - sin autenticación requerida
+        $this->view('peticiones/formulario_publico', []);
+    }
+
+    public function guardarPublico() {
+        // Guardar petición sin autenticación
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . BASE_URL . '/public/?url=peticiones_publica');
+            exit;
+        }
+
+        try {
+            $nombre = trim((string)($_POST['nombre'] ?? ''));
+            $email = trim((string)($_POST['email'] ?? ''));
+            $telefono = trim((string)($_POST['telefono'] ?? ''));
+            $descripcion = trim((string)($_POST['descripcion_peticion'] ?? ''));
+
+            if (empty($nombre) || empty($descripcion)) {
+                header('Location: ' . BASE_URL . '/public/?url=peticiones_publica&error=faltan-campos');
+                exit;
+            }
+
+            if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                header('Location: ' . BASE_URL . '/public/?url=peticiones_publica&error=email-invalido');
+                exit;
+            }
+
+            $data = [
+                'Id_Persona' => null,
+                'Descripcion_Peticion' => $descripcion,
+                'Fecha_Peticion' => date('Y-m-d'),
+                'Estado_Peticion' => 'Pendiente',
+                'nombre_contacto' => $nombre,
+                'email_contacto' => !empty($email) ? $email : null,
+                'telefono_contacto' => !empty($telefono) ? $telefono : null
+            ];
+            
+            $this->peticionModel->create($data);
+            header('Location: ' . BASE_URL . '/public/?url=peticiones_publica&exito=1');
+            exit;
+        } catch (Exception $e) {
+            header('Location: ' . BASE_URL . '/public/?url=peticiones_publica&error=guardar');
+            exit;
+        }
+    }
+
     public function crear() {
         // Verificar permiso de crear
         if (!AuthController::tienePermiso('peticiones', 'crear')) {
