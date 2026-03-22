@@ -12,7 +12,8 @@ param(
     [ValidateSet('true','false')]
     [string]$WaHeadless = 'true',
     [int]$WaBatchLimit = 20,
-    [int]$WaDelayMs = 3500,
+    [int]$WaDelayMinMs = 60000,
+    [int]$WaDelayMaxMs = 180000,
     [int]$WaPollMs = 5000
 )
 
@@ -53,7 +54,8 @@ $envContent = @(
     "WA_CLIENT_ID=$WaClientId"
     "WA_HEADLESS=$WaHeadless"
     "WA_BATCH_LIMIT=$WaBatchLimit"
-    "WA_DELAY_MS=$WaDelayMs"
+    "WA_DELAY_MIN_MS=$WaDelayMinMs"
+    "WA_DELAY_MAX_MS=$WaDelayMaxMs"
     "WA_POLL_MS=$WaPollMs"
 ) -join [Environment]::NewLine
 

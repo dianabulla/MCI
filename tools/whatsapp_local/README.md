@@ -64,6 +64,17 @@ Esto crea la tarea MCIMadrid-WhatsappLocalWorker.
 Logs del worker:
 
 - logs/worker.log
+- logs/autostart.log
+
+Si Windows bloquea la creación de la tarea por permisos, el instalador intenta un fallback con `schtasks` para el usuario actual.
+Si también falla, configura autoarranque por usuario con clave `HKCU\...\Run` y acceso directo en la carpeta Inicio.
+
+Verificación rápida después de instalar:
+
+```powershell
+schtasks /Query /TN "MCIMadrid-WhatsappLocalWorker" /V /FO LIST
+Get-Content .\logs\autostart.log -Tail 50
+```
 
 Para quitar la tarea:
 
@@ -96,3 +107,13 @@ Además, el worker encola automáticamente felicitaciones de cumpleaños cada d�
 - Este flujo no usa API de Meta, Twilio ni 360dialog.
 - Si tu PC está apagado, los mensajes quedan en cola y salen al volver a encender.
 - Asegura en Hostinger que la base acepte conexiones remotas desde la IP de tu PC.
+
+## 8) Control de ritmo de envíos
+
+Para evitar que salgan todos los mensajes de una vez, el worker aplica una pausa aleatoria entre mensajes.
+
+- Por defecto: entre 1 y 3 minutos.
+- Variables en `.env`:
+	- `WA_DELAY_MIN_MS=60000`
+	- `WA_DELAY_MAX_MS=180000`
+- Si prefieres tiempo fijo, puedes usar `WA_DELAY_MS` (compatibilidad), por ejemplo `WA_DELAY_MS=120000`.

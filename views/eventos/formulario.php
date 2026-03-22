@@ -46,6 +46,7 @@
         <div class="form-group">
             <label for="imagen_evento">Imagen del Evento (opcional)</label>
             <input type="file" id="imagen_evento" name="imagen_evento" class="form-control" accept="image/*">
+            <small style="display:block; margin-top:6px; color:#666;">Máximo recomendado: 50MB.</small>
             <?php if (!empty($evento['Imagen_Evento'])): ?>
                 <div style="margin-top:10px;">
                     <img src="<?= rtrim(PUBLIC_URL, '/') . '/uploads/eventos/' . rawurlencode($evento['Imagen_Evento']) ?>" alt="Imagen evento" style="max-width:220px; border-radius:8px;">
@@ -59,6 +60,7 @@
         <div class="form-group">
             <label for="video_evento">Video del Evento (opcional)</label>
             <input type="file" id="video_evento" name="video_evento" class="form-control" accept="video/mp4,video/webm,video/quicktime,video/x-m4v">
+            <small style="display:block; margin-top:6px; color:#666;">Máximo recomendado: 500MB.</small>
             <?php if (!empty($evento['Video_Evento'])): ?>
                 <div style="margin-top:10px;">
                     <video controls style="max-width:320px; border-radius:8px;">

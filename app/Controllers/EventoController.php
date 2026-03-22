@@ -12,6 +12,8 @@ class EventoController extends BaseController {
     private $eventoModuloModel;
     private $uploadDir;
     private $uploadUrlBase;
+    private const MAX_IMAGE_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
+    private const MAX_VIDEO_UPLOAD_BYTES = 500 * 1024 * 1024; // 500MB
 
     public function __construct() {
         $this->eventoModel = new Evento();
@@ -140,8 +142,8 @@ class EventoController extends BaseController {
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
-                $rutaImagen = $this->procesarArchivo('imagen_evento', ['jpg', 'jpeg', 'png', 'webp', 'gif'], 5 * 1024 * 1024);
-                $rutaVideo = $this->procesarArchivo('video_evento', ['mp4', 'webm', 'mov', 'm4v'], 25 * 1024 * 1024);
+                $rutaImagen = $this->procesarArchivo('imagen_evento', ['jpg', 'jpeg', 'png', 'webp', 'gif'], self::MAX_IMAGE_UPLOAD_BYTES);
+                $rutaVideo = $this->procesarArchivo('video_evento', ['mp4', 'webm', 'mov', 'm4v'], self::MAX_VIDEO_UPLOAD_BYTES);
 
                 $data = [
                     'Nombre_Evento' => trim($_POST['nombre_evento'] ?? ''),
@@ -194,8 +196,8 @@ class EventoController extends BaseController {
                 $eliminarImagen = !empty($_POST['eliminar_imagen']);
                 $eliminarVideo = !empty($_POST['eliminar_video']);
 
-                $nuevaImagen = $this->procesarArchivo('imagen_evento', ['jpg', 'jpeg', 'png', 'webp', 'gif'], 5 * 1024 * 1024);
-                $nuevoVideo = $this->procesarArchivo('video_evento', ['mp4', 'webm', 'mov', 'm4v'], 25 * 1024 * 1024);
+                $nuevaImagen = $this->procesarArchivo('imagen_evento', ['jpg', 'jpeg', 'png', 'webp', 'gif'], self::MAX_IMAGE_UPLOAD_BYTES);
+                $nuevoVideo = $this->procesarArchivo('video_evento', ['mp4', 'webm', 'mov', 'm4v'], self::MAX_VIDEO_UPLOAD_BYTES);
 
                 $data['Imagen_Evento'] = $eventoActual['Imagen_Evento'] ?? null;
                 $data['Video_Evento'] = $eventoActual['Video_Evento'] ?? null;
@@ -291,8 +293,8 @@ class EventoController extends BaseController {
         $idContenido = (int)($_POST['id_contenido'] ?? 0);
 
         try {
-            $nuevaImagen = $this->procesarArchivo('imagen_modulo', ['jpg', 'jpeg', 'png', 'webp', 'gif'], 5 * 1024 * 1024);
-            $nuevoVideo = $this->procesarArchivo('video_modulo', ['mp4', 'webm', 'mov', 'm4v'], 25 * 1024 * 1024);
+            $nuevaImagen = $this->procesarArchivo('imagen_modulo', ['jpg', 'jpeg', 'png', 'webp', 'gif'], self::MAX_IMAGE_UPLOAD_BYTES);
+            $nuevoVideo = $this->procesarArchivo('video_modulo', ['mp4', 'webm', 'mov', 'm4v'], self::MAX_VIDEO_UPLOAD_BYTES);
 
             $data = [
                 'Tipo_Modulo' => $config['tipo'],
@@ -442,13 +444,29 @@ class EventoController extends BaseController {
             return null;
         }
 
-        if (($archivo['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        $errorUpload = (int)($archivo['error'] ?? UPLOAD_ERR_OK);
+        if ($errorUpload !== UPLOAD_ERR_OK) {
+            $limiteServidorBytes = $this->getPhpUploadLimitBytes();
+            $limiteServidorTexto = $limiteServidorBytes > 0 ? $this->formatBytes($limiteServidorBytes) : null;
+
+            if ($errorUpload === UPLOAD_ERR_INI_SIZE || $errorUpload === UPLOAD_ERR_FORM_SIZE) {
+                if ($limiteServidorTexto !== null) {
+                    throw new Exception('El archivo de ' . str_replace('_', ' ', $campo) . ' supera el límite del servidor (' . $limiteServidorTexto . ').');
+                }
+
+                throw new Exception('El archivo de ' . str_replace('_', ' ', $campo) . ' supera el límite del servidor.');
+            }
+
+            if ($errorUpload === UPLOAD_ERR_PARTIAL) {
+                throw new Exception('La carga del archivo de ' . str_replace('_', ' ', $campo) . ' quedó incompleta. Intenta nuevamente.');
+            }
+
             throw new Exception('No se pudo subir el archivo de ' . str_replace('_', ' ', $campo) . '.');
         }
 
         $tamano = (int)($archivo['size'] ?? 0);
         if ($tamano <= 0 || $tamano > $maxBytes) {
-            throw new Exception('El archivo de ' . str_replace('_', ' ', $campo) . ' supera el tamaño permitido.');
+            throw new Exception('El archivo de ' . str_replace('_', ' ', $campo) . ' supera el tamaño permitido (' . $this->formatBytes((int)$maxBytes) . ').');
         }
 
         $extension = strtolower(pathinfo((string)($archivo['name'] ?? ''), PATHINFO_EXTENSION));
@@ -468,6 +486,67 @@ class EventoController extends BaseController {
         }
 
         return $nombre;
+    }
+
+    private function getPhpUploadLimitBytes() {
+        $uploadMax = $this->parseIniSizeToBytes((string)ini_get('upload_max_filesize'));
+        $postMax = $this->parseIniSizeToBytes((string)ini_get('post_max_size'));
+
+        if ($uploadMax <= 0 && $postMax <= 0) {
+            return 0;
+        }
+
+        if ($uploadMax <= 0) {
+            return $postMax;
+        }
+
+        if ($postMax <= 0) {
+            return $uploadMax;
+        }
+
+        return min($uploadMax, $postMax);
+    }
+
+    private function parseIniSizeToBytes($valor) {
+        $valor = trim((string)$valor);
+        if ($valor === '') {
+            return 0;
+        }
+
+        if (!preg_match('/^([0-9]+(?:\.[0-9]+)?)\s*([KMGTP]?)/i', $valor, $m)) {
+            return (int)$valor;
+        }
+
+        $numero = (float)$m[1];
+        $unidad = strtoupper($m[2] ?? '');
+        $factor = 1;
+        if ($unidad === 'K') {
+            $factor = 1024;
+        } elseif ($unidad === 'M') {
+            $factor = 1024 * 1024;
+        } elseif ($unidad === 'G') {
+            $factor = 1024 * 1024 * 1024;
+        } elseif ($unidad === 'T') {
+            $factor = 1024 * 1024 * 1024 * 1024;
+        } elseif ($unidad === 'P') {
+            $factor = 1024 * 1024 * 1024 * 1024 * 1024;
+        }
+
+        return (int)round($numero * $factor);
+    }
+
+    private function formatBytes($bytes) {
+        $bytes = max(0, (int)$bytes);
+        if ($bytes === 0) {
+            return '0 B';
+        }
+
+        $unidades = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $indice = (int)floor(log($bytes, 1024));
+        $indice = min($indice, count($unidades) - 1);
+        $valor = $bytes / pow(1024, $indice);
+
+        return number_format($valor, $indice === 0 ? 0 : 1, '.', '') . ' ' . $unidades[$indice];
     }
 
     private function eliminarArchivoFisico($archivo) {

@@ -598,10 +598,70 @@ class PersonaController extends BaseController {
         $terminoNormalizado = $this->textoSinAcentos($termino);
 
         return array_values(array_filter($personas, function($persona) use ($terminoNormalizado) {
-            $nombreCompleto = trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? ''));
-            $nombreNormalizado = $this->textoSinAcentos($nombreCompleto);
-            return strpos($nombreNormalizado, $terminoNormalizado) !== false;
+            $nombre = trim((string)($persona['Nombre'] ?? ''));
+            $apellido = trim((string)($persona['Apellido'] ?? ''));
+            $nombreCompleto = trim($nombre . ' ' . $apellido);
+
+            $nombreNormalizado = $this->textoSinAcentos($nombre);
+            $apellidoNormalizado = $this->textoSinAcentos($apellido);
+            $nombreCompletoNormalizado = $this->textoSinAcentos($nombreCompleto);
+
+            return $nombreNormalizado === $terminoNormalizado
+                || $apellidoNormalizado === $terminoNormalizado
+                || $nombreCompletoNormalizado === $terminoNormalizado;
         }));
+    }
+
+    private function filtrarPersonasPorMinisterioListado(array $personas, $idMinisterio) {
+        $idMinisterio = trim((string)$idMinisterio);
+        if ($idMinisterio === '') {
+            return $personas;
+        }
+
+        if ($idMinisterio === '0') {
+            return array_values(array_filter($personas, static function($persona) {
+                return empty($persona['Id_Ministerio']);
+            }));
+        }
+
+        if (!ctype_digit($idMinisterio)) {
+            return $personas;
+        }
+
+        $idMinisterioInt = (int)$idMinisterio;
+
+        return array_values(array_filter($personas, static function($persona) use ($idMinisterioInt) {
+            return (int)($persona['Id_Ministerio'] ?? 0) === $idMinisterioInt;
+        }));
+    }
+
+    private function obtenerSugerenciasNombreListado(array $personas, $limite = 200) {
+        $sugerencias = [];
+        $vistos = [];
+
+        foreach ($personas as $persona) {
+            $nombreCompleto = trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? ''));
+            if ($nombreCompleto === '') {
+                continue;
+            }
+
+            $clave = $this->textoSinAcentos($nombreCompleto);
+            if ($clave === '' || isset($vistos[$clave])) {
+                continue;
+            }
+
+            $vistos[$clave] = true;
+            $sugerencias[] = $nombreCompleto;
+        }
+
+        natcasesort($sugerencias);
+        if ($limite > 0 && count($sugerencias) > $limite) {
+            $sugerencias = array_slice(array_values($sugerencias), 0, $limite);
+        } else {
+            $sugerencias = array_values($sugerencias);
+        }
+
+        return $sugerencias;
     }
 
     private function contarPerfilesListado(array $personas) {
@@ -921,22 +981,41 @@ class PersonaController extends BaseController {
         }
 
         $filtroPerfil = $this->normalizarPerfilListado($_GET['perfil'] ?? '');
+        $filtroMinisterio = isset($_GET['ministerio']) ? trim((string)$_GET['ministerio']) : '';
         $filtroNombre = trim((string)($_GET['buscar'] ?? ''));
+        if ($filtroMinisterio !== '' && $filtroMinisterio !== '0' && !ctype_digit($filtroMinisterio)) {
+            $filtroMinisterio = '';
+        }
 
         // Aplicar aislamiento por rol del usuario conectado.
         $filtroRol = DataIsolation::generarFiltroPersonas();
-        // Base general: solo personas ya asignadas (ministerio, lider y celula).
-        $personasBase = $this->personaModel->getAllWithRole($filtroRol, false);
+        $contextoFiltros = $this->getContextoFiltrosVisibles();
+        $ministerios = $contextoFiltros['ministerios'] ?? [];
+
+        if ($contextoFiltros['restringido']) {
+            $ministerioIdsPermitidos = $contextoFiltros['ministerioIdsPermitidos'] ?? [];
+            if ($filtroMinisterio !== '' && $filtroMinisterio !== '0' && !in_array((int)$filtroMinisterio, $ministerioIdsPermitidos, true)) {
+                $filtroMinisterio = '';
+            }
+        }
+
+        // Base general: todas las personas visibles (incluye asignadas y pendientes).
+        $personasBase = $this->personaModel->getAllWithRole($filtroRol, null);
+        $personasBaseFiltradasPorMinisterio = $this->filtrarPersonasPorMinisterioListado($personasBase, $filtroMinisterio);
         // El resumen por rol respeta la búsqueda por nombre actual.
-        $personasBaseFiltradasPorNombre = $this->filtrarPersonasPorNombreListado($personasBase, $filtroNombre);
+        $personasBaseFiltradasPorNombre = $this->filtrarPersonasPorNombreListado($personasBaseFiltradasPorMinisterio, $filtroNombre);
         $totalesPerfil = $this->contarPerfilesListado($personasBaseFiltradasPorNombre);
         $personas = $this->filtrarPersonasPorPerfilListado($personasBaseFiltradasPorNombre, $filtroPerfil);
+        $sugerenciasNombre = $this->obtenerSugerenciasNombreListado($personasBaseFiltradasPorMinisterio);
 
         $this->view('personas/lista', [
             'personas' => $personas,
+            'ministerios' => $ministerios,
             'filtroPerfilActual' => $filtroPerfil,
+            'filtroMinisterioActual' => $filtroMinisterio,
             'filtroNombreActual' => $filtroNombre,
-            'totalesPerfil' => $totalesPerfil
+            'totalesPerfil' => $totalesPerfil,
+            'sugerenciasNombre' => $sugerenciasNombre
         ]);
     }
 
@@ -1640,7 +1719,7 @@ class PersonaController extends BaseController {
         $celulaRetorno = $_POST['celula_retorno'] ?? ($_GET['celula'] ?? null);
         $celulaRetorno = ($celulaRetorno !== null && $celulaRetorno !== '') ? (int) $celulaRetorno : null;
         
-        $id = $_GET['id'] ?? null;
+        $id = $_GET['id'] ?? ($_POST['id'] ?? null);
         
         if (!$id) {
             $this->redirect('personas');

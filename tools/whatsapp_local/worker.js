@@ -35,7 +35,10 @@ const pool = mysql.createPool({
 });
 
 const BATCH_LIMIT = Math.max(1, parseInt(process.env.WA_BATCH_LIMIT || '20', 10));
-const DELAY_MS = Math.max(500, parseInt(process.env.WA_DELAY_MS || '3500', 10));
+const delayMinRaw = parseInt(process.env.WA_DELAY_MIN_MS || process.env.WA_DELAY_MS || '60000', 10);
+const delayMaxRaw = parseInt(process.env.WA_DELAY_MAX_MS || process.env.WA_DELAY_MS || '180000', 10);
+const DELAY_MIN_MS = Math.max(500, Number.isFinite(delayMinRaw) ? delayMinRaw : 60000);
+const DELAY_MAX_MS = Math.max(DELAY_MIN_MS, Number.isFinite(delayMaxRaw) ? delayMaxRaw : 180000);
 const POLL_MS = Math.max(3000, parseInt(process.env.WA_POLL_MS || '5000', 10));
 const MAX_ATTEMPTS = Math.max(1, parseInt(process.env.WA_MAX_ATTEMPTS || '3', 10));
 const DEFAULT_TEMPLATE_CUMPLEANOS = 'Hoy celebramos tu vida y damos gracias a Dios por tu corazón tan dispuesto para servir.\n\nTu esfuerzo, tu amor por las personas y tu entrega han dejado huellas profundas en nuestra iglesia. Gracias por guiar, apoyar y nunca rendirte.\n\nOramos para que este nuevo año llegue lleno de bendición, fuerzas renovadas y mucha alegría.\n\n¡Feliz cumpleaños te desea MCI Madrid! 🎉 Te honramos y te agradecemos de corazón.';
@@ -86,6 +89,13 @@ function normalizarTelefono(telefono) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRandomDelayMs() {
+  if (DELAY_MIN_MS === DELAY_MAX_MS) {
+    return DELAY_MIN_MS;
+  }
+  return Math.floor(Math.random() * (DELAY_MAX_MS - DELAY_MIN_MS + 1)) + DELAY_MIN_MS;
 }
 
 function getFechaHoyBogotaYmd() {
@@ -310,7 +320,9 @@ async function procesarCola(client) {
         }
       }
 
-      await sleep(DELAY_MS);
+      const delayMs = getRandomDelayMs();
+      console.log(`[WAIT] Pausa de ${Math.round(delayMs / 1000)}s antes del siguiente envío.`);
+      await sleep(delayMs);
     }
   } catch (err) {
     console.error('Error procesando cola:', err && err.message ? err.message : err);
@@ -348,6 +360,7 @@ client.on('qr', (qr) => {
 
 client.on('ready', () => {
   console.log('WhatsApp conectado. Worker activo.');
+  console.log(`[CONFIG] Delay aleatorio entre ${Math.round(DELAY_MIN_MS / 1000)}s y ${Math.round(DELAY_MAX_MS / 1000)}s.`);
   iniciarProcesamiento(client)
     .catch((err) => {
       console.error('No se pudo asegurar tabla whatsapp_local_queue:', err && err.message ? err.message : err);

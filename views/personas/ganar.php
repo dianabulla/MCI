@@ -2,6 +2,7 @@
 <?php
 $puedeVerPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver');
 $puedeEditarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
+$puedeEliminarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'eliminar');
 $puedeExportarPersonas = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
 $tienePermisoAsignadosExplicito = isset($_SESSION['permisos']['personas_ganar_asignados']) && is_array($_SESSION['permisos']['personas_ganar_asignados']);
 $tienePermisoReasignadosExplicito = isset($_SESSION['permisos']['personas_ganar_reasignados']) && is_array($_SESSION['permisos']['personas_ganar_reasignados']);
@@ -13,7 +14,7 @@ $puedeVerAtajoReasignados = AuthController::esAdministrador()
     || ($tienePermisoReasignadosExplicito
         ? AuthController::tienePermiso('personas_ganar_reasignados', 'ver')
         : AuthController::tienePermiso('personas', 'editar'));
-$mostrarAcciones = $puedeVerPersona || $puedeEditarPersona;
+$mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPersona;
 ?>
 
 <div class="page-header">
@@ -149,14 +150,10 @@ $hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPen
         <thead>
             <tr>
                 <th>Nombre Completo</th>
-                <th>Cédula</th>
-                <th>Teléfono</th>
-                <th>Email</th>
                 <th>Célula</th>
                 <th>Líder</th>
                 <th>Ministerio</th>
                 <th>Ganado en</th>
-                <th>Fecha Registro</th>
                 <?php if ($mostrarAcciones): ?><th class="action-col">Acciones</th><?php endif; ?>
             </tr>
         </thead>
@@ -178,13 +175,6 @@ $hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPen
                                 Reasignado automático por falta de primer contacto (48h)
                             </div>
                             <?php endif; ?>
-                        </td>
-                        <td><?= htmlspecialchars($persona['Numero_Documento'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($persona['Telefono'] ?? '') ?></td>
-                        <td>
-                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Email'] ?? '') ?>">
-                                <?= htmlspecialchars($persona['Email'] ?? '') ?>
-                            </span>
                         </td>
                         <td>
                             <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Nombre_Celula'] ?? 'Sin célula') ?>">
@@ -212,7 +202,6 @@ $hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPen
                                 <?= htmlspecialchars($ganadoEn) ?>
                             </span>
                         </td>
-                        <td><?= !empty($persona['Fecha_Registro']) ? date('d/m/Y H:i', strtotime($persona['Fecha_Registro'])) : '' ?></td>
                         <?php if ($mostrarAcciones): ?>
                         <td class="action-col">
                             <div class="action-buttons action-buttons-compact">
@@ -239,6 +228,11 @@ $hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPen
                                 <i class="bi bi-pencil"></i>
                             </a>
                             <?php endif; ?>
+                            <?php if ($puedeEliminarPersona): ?>
+                            <a href="<?= PUBLIC_URL ?>?url=personas/eliminar&id=<?= $persona['Id_Persona'] ?>" class="action-icon-btn action-icon-danger" title="Eliminar" aria-label="Eliminar" onclick="return confirm('¿Eliminar esta persona?')">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                            <?php endif; ?>
                             </div>
                         </td>
                         <?php endif; ?>
@@ -246,7 +240,7 @@ $hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPen
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="<?= $mostrarAcciones ? '10' : '9' ?>" class="text-center">No hay personas pendientes por consolidar</td>
+                    <td colspan="<?= $mostrarAcciones ? '6' : '5' ?>" class="text-center">No hay personas pendientes por consolidar</td>
                 </tr>
             <?php endif; ?>
         </tbody>

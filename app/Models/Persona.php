@@ -9,6 +9,30 @@ class Persona extends BaseModel {
     protected $table = 'persona';
     protected $primaryKey = 'Id_Persona';
     private $columnasCache = [];
+    private $tablasCache = [];
+
+    private function tieneTabla($tabla) {
+        $tabla = trim((string)$tabla);
+        if ($tabla === '') {
+            return false;
+        }
+
+        if (array_key_exists($tabla, $this->tablasCache)) {
+            return $this->tablasCache[$tabla];
+        }
+
+        try {
+            $stmt = $this->db->prepare("SHOW TABLES LIKE ?");
+            $stmt->execute([$tabla]);
+            $existe = (bool)$stmt->fetch();
+            $this->tablasCache[$tabla] = $existe;
+            return $existe;
+        } catch (Exception $e) {
+            error_log('Error verificando tabla en persona: ' . $e->getMessage());
+            $this->tablasCache[$tabla] = false;
+            return false;
+        }
+    }
 
     public function tieneColumna($columna) {
         $columna = trim((string)$columna);
@@ -225,16 +249,33 @@ class Persona extends BaseModel {
      * Obtener persona por ID con relaciones
      */
     public function getById($id) {
+        $joinReporte = '';
+        $campoReporte = 'NULL AS Ultimo_Reporte_Celula';
+
+        if ($this->tieneTabla('asistencia') && $this->tieneTabla('celula')) {
+            $campoReporte = 'rep.Ultimo_Reporte_Celula';
+            $joinReporte = "
+                LEFT JOIN (
+                    SELECT c.Id_Lider, MAX(a.Fecha_Asistencia) AS Ultimo_Reporte_Celula
+                    FROM asistencia a
+                    INNER JOIN celula c ON c.Id_Celula = a.Id_Celula
+                    WHERE c.Id_Lider IS NOT NULL
+                    GROUP BY c.Id_Lider
+                ) rep ON rep.Id_Lider = p.Id_Persona";
+        }
+
         $sql = "SELECT p.*, 
                 c.Nombre_Celula, 
                 r.Nombre_Rol, 
                 m.Nombre_Ministerio,
-                CONCAT(lid.Nombre, ' ', lid.Apellido) AS Nombre_Lider
+                CONCAT(lid.Nombre, ' ', lid.Apellido) AS Nombre_Lider,
+                {$campoReporte}
                 FROM persona p
                 LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
                 LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
                 LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
+                {$joinReporte}
                 WHERE p.{$this->primaryKey} = ?";
         $result = $this->query($sql, [$id]);
         return $result[0] ?? null;

@@ -21,6 +21,10 @@ $urlVolver = $returnToAsistencia
 
 <div class="form-container">
     <form method="POST">
+        <?php if (isset($persona['Id_Persona'])): ?>
+        <input type="hidden" name="id" value="<?= (int)$persona['Id_Persona'] ?>">
+        <?php endif; ?>
+
         <?php if ($returnToAsistencia): ?>
         <input type="hidden" name="return_to" value="asistencia">
         <input type="hidden" name="celula_retorno" value="<?= (int)($celula_retorno ?? 0) ?>">
@@ -128,6 +132,10 @@ $urlVolver = $returnToAsistencia
         <!-- Sección: Información Ministerial -->
         <div class="form-section">
             <h3 class="section-title">⛪ Información Ministerial</h3>
+            
+            <div id="alerta_pastor" class="alert alert-info" style="display:none; margin-bottom: 15px;">
+                <i class="bi bi-shield-check"></i> <strong>⭐ Esta persona es un Líder (Pastor)</strong> - Será tratada como líder en el sistema y reportará actividades de liderazgo.
+            </div>
             
             <div class="form-row">
                 <div class="form-group autocomplete-wrapper">
@@ -405,8 +413,11 @@ const lideresDisponibles = [
 const rolSelect = document.getElementById('id_rol');
 const accesoSistemaSection = document.getElementById('acceso_sistema_section');
 const accesoSistemaAlerta = document.getElementById('acceso_sistema_alerta');
+const alertaPastor = document.getElementById('alerta_pastor');
 const fechaNacimientoInput = document.getElementById('fecha_nacimiento');
 const edadInput = document.getElementById('edad');
+const liderSearchInput = document.getElementById('lider_search');
+const liderHiddenInput = document.getElementById('id_lider');
 
 function calcularEdadDesdeFecha(fechaTexto) {
     if (!fechaTexto) {
@@ -461,6 +472,16 @@ function rolSeleccionadoEsAsistente() {
     return textoRol.includes('asistente');
 }
 
+function rolSeleccionadoEsPastor() {
+    if (!rolSelect || rolSelect.selectedIndex < 0) {
+        return false;
+    }
+
+    const option = rolSelect.options[rolSelect.selectedIndex];
+    const textoRol = normalizarTexto(option ? option.text : '');
+    return textoRol.includes('pastor');
+}
+
 function actualizarAccesoSistemaPorRol() {
     if (!accesoSistemaSection) {
         return;
@@ -500,9 +521,36 @@ function actualizarAccesoSistemaPorRol() {
     });
 }
 
+function actualizarFormularioPorRolPastor() {
+    const esPastor = rolSeleccionadoEsPastor();
+    
+    // Mostrar/ocultar indicador de Pastor
+    if (alertaPastor) {
+        alertaPastor.style.display = esPastor ? 'block' : 'none';
+    }
+    
+    // Desabilitar/habilitar campo Líder Asignado
+    if (liderSearchInput) {
+        if (esPastor) {
+            liderSearchInput.disabled = true;
+            liderSearchInput.value = '';
+            liderSearchInput.placeholder = 'No aplica (Esta persona es un Líder)';
+        } else {
+            liderSearchInput.disabled = false;
+            liderSearchInput.placeholder = 'Buscar líder...';
+        }
+    }
+    
+    if (esPastor && liderHiddenInput) {
+        liderHiddenInput.value = '';
+    }
+}
+
 if (rolSelect) {
     rolSelect.addEventListener('change', actualizarAccesoSistemaPorRol);
+    rolSelect.addEventListener('change', actualizarFormularioPorRolPastor);
     actualizarAccesoSistemaPorRol();
+    actualizarFormularioPorRolPastor();
 }
 
 if (fechaNacimientoInput && edadInput) {

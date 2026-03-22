@@ -100,9 +100,8 @@
                         <th>Líder</th>
                         <th>Ministerio</th>
                         <th>Tipo liderazgo</th>
-                        <th>Última vez que ingresó</th>
-                        <th>Última vez que reportó célula</th>
                         <th>Personas asignadas</th>
+                        <th class="action-col">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -114,26 +113,24 @@
                                 <td>
                                     <span class="liderazgo-badge"><?= htmlspecialchars((string)($lider['Tipo_Liderazgo'] ?? 'Sin clasificación')) ?></span>
                                 </td>
-                                <td>
-                                    <?php if (!empty($lider['Ultimo_Acceso'])): ?>
-                                        <?= date('d/m/Y H:i', strtotime((string)$lider['Ultimo_Acceso'])) ?>
-                                    <?php else: ?>
-                                        <span class="text-muted">Sin registro</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?php if (!empty($lider['Ultimo_Reporte_Celula'])): ?>
-                                        <?= date('d/m/Y', strtotime((string)$lider['Ultimo_Reporte_Celula'])) ?>
-                                    <?php else: ?>
-                                        <span class="text-muted">Sin reportes</span>
-                                    <?php endif; ?>
-                                </td>
                                 <td><?= (int)($lider['Total_Personas'] ?? 0) ?></td>
+                                <td class="action-col">
+                                    <div class="action-buttons action-buttons-compact">
+                                        <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= (int)($lider['Id_Persona'] ?? 0) ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <?php if (AuthController::tienePermiso('personas', 'editar')): ?>
+                                        <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= (int)($lider['Id_Persona'] ?? 0) ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                                <td colspan="6" class="text-center">No hay líderes de célula para mostrar.</td>
+                                <td colspan="5" class="text-center">No hay líderes de célula para mostrar.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -152,9 +149,8 @@
                         <th>Líder</th>
                         <th>Ministerio</th>
                         <th>Tipo liderazgo</th>
-                        <th>Última vez que ingresó</th>
-                        <th>Última vez que reportó célula</th>
                         <th>Personas asignadas</th>
+                        <th class="action-col">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -166,26 +162,24 @@
                                 <td>
                                     <span class="liderazgo-badge"><?= htmlspecialchars((string)($lider['Tipo_Liderazgo'] ?? 'Sin clasificación')) ?></span>
                                 </td>
-                                <td>
-                                    <?php if (!empty($lider['Ultimo_Acceso'])): ?>
-                                        <?= date('d/m/Y H:i', strtotime((string)$lider['Ultimo_Acceso'])) ?>
-                                    <?php else: ?>
-                                        <span class="text-muted">Sin registro</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?php if (!empty($lider['Ultimo_Reporte_Celula'])): ?>
-                                        <?= date('d/m/Y', strtotime((string)$lider['Ultimo_Reporte_Celula'])) ?>
-                                    <?php else: ?>
-                                        <span class="text-muted">Sin reportes</span>
-                                    <?php endif; ?>
-                                </td>
                                 <td><?= (int)($lider['Total_Personas'] ?? 0) ?></td>
+                                <td class="action-col">
+                                    <div class="action-buttons action-buttons-compact">
+                                        <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= (int)($lider['Id_Persona'] ?? 0) ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <?php if (AuthController::tienePermiso('personas', 'editar')): ?>
+                                        <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= (int)($lider['Id_Persona'] ?? 0) ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="6" class="text-center">Sin líderes hombres para mostrar.</td>
+                            <td colspan="5" class="text-center">Sin líderes hombres para mostrar.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -204,9 +198,8 @@
                         <th>Líder</th>
                         <th>Ministerio</th>
                         <th>Tipo liderazgo</th>
-                        <th>Última vez que ingresó</th>
-                        <th>Última vez que reportó célula</th>
                         <th>Personas asignadas</th>
+                        <th class="action-col">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -218,26 +211,24 @@
                                 <td>
                                     <span class="liderazgo-badge"><?= htmlspecialchars((string)($lider['Tipo_Liderazgo'] ?? 'Sin clasificación')) ?></span>
                                 </td>
-                                <td>
-                                    <?php if (!empty($lider['Ultimo_Acceso'])): ?>
-                                        <?= date('d/m/Y H:i', strtotime((string)$lider['Ultimo_Acceso'])) ?>
-                                    <?php else: ?>
-                                        <span class="text-muted">Sin registro</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?php if (!empty($lider['Ultimo_Reporte_Celula'])): ?>
-                                        <?= date('d/m/Y', strtotime((string)$lider['Ultimo_Reporte_Celula'])) ?>
-                                    <?php else: ?>
-                                        <span class="text-muted">Sin reportes</span>
-                                    <?php endif; ?>
-                                </td>
                                 <td><?= (int)($lider['Total_Personas'] ?? 0) ?></td>
+                                <td class="action-col">
+                                    <div class="action-buttons action-buttons-compact">
+                                        <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= (int)($lider['Id_Persona'] ?? 0) ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <?php if (AuthController::tienePermiso('personas', 'editar')): ?>
+                                        <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= (int)($lider['Id_Persona'] ?? 0) ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="6" class="text-center">Sin líderes mujeres para mostrar.</td>
+                            <td colspan="5" class="text-center">Sin líderes mujeres para mostrar.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -310,6 +301,41 @@
     color: #1f3f74;
     font-size: 12px;
     font-weight: 700;
+}
+
+.action-buttons-compact {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.action-col {
+    white-space: nowrap;
+    min-width: 94px;
+}
+
+.action-icon-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    border: 1px solid transparent;
+    font-size: 14px;
+}
+
+.action-icon-info {
+    background: #e6f2ff;
+    color: #0d6efd;
+    border-color: #b7d7ff;
+}
+
+.action-icon-warning {
+    background: #fff4dd;
+    color: #9a6700;
+    border-color: #ffd98a;
 }
 
 @media (max-width: 960px) {

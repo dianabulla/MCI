@@ -29,7 +29,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
         </a>
         <?php endif; ?>
         <?php if ($puedeExportarPersonas): ?>
-        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel<?= !empty($_GET['perfil']) ? '&perfil=' . urlencode((string)$_GET['perfil']) : '' ?><?= !empty($_GET['buscar']) ? '&buscar=' . urlencode((string)$_GET['buscar']) : '' ?>" class="btn btn-success">
+        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel<?= !empty($_GET['perfil']) ? '&perfil=' . urlencode((string)$_GET['perfil']) : '' ?><?= !empty($_GET['ministerio']) ? '&ministerio=' . urlencode((string)$_GET['ministerio']) : '' ?><?= !empty($_GET['buscar']) ? '&buscar=' . urlencode((string)$_GET['buscar']) : '' ?>" class="btn btn-success">
             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
         </a>
         <?php endif; ?>
@@ -48,16 +48,19 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
     <div class="card-body">
         <form method="GET" action="<?= PUBLIC_URL ?>" class="filters-inline" id="filtro_perfil_form">
             <input type="hidden" name="url" value="personas">
+            <?php $filtroPerfilListado = (string)($filtroPerfilActual ?? ($_GET['perfil'] ?? '')); ?>
+            <input type="hidden" name="perfil" value="<?= htmlspecialchars($filtroPerfilListado) ?>">
             <div class="form-group">
-                <label for="filtro_perfil" style="font-size: 14px; margin-bottom: 5px;">Filtro por rol</label>
-                <select id="filtro_perfil" name="perfil" class="form-control">
-                    <option value="" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === '') ? 'selected' : '' ?>>Todos</option>
-                    <option value="lideres_12" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'lideres_12') ? 'selected' : '' ?>>Líder de 12</option>
-                    <option value="lideres_celula" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'lideres_celula') ? 'selected' : '' ?>>Líderes de célula</option>
-                    <option value="asistentes" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'asistentes') ? 'selected' : '' ?>>Asistentes</option>
-                    <option value="otros" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'otros') ? 'selected' : '' ?>>Otros roles</option>
-                    <option value="pastores" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'pastores') ? 'selected' : '' ?>>Pastores</option>
-                    <option value="sin_rol" <?= (($filtroPerfilActual ?? ($_GET['perfil'] ?? '')) === 'sin_rol') ? 'selected' : '' ?>>Sin rol</option>
+                <label for="filtro_ministerio" style="font-size: 14px; margin-bottom: 5px;">Filtro por ministerio</label>
+                <select id="filtro_ministerio" name="ministerio" class="form-control">
+                    <option value="" <?= (($filtroMinisterioActual ?? ($_GET['ministerio'] ?? '')) === '') ? 'selected' : '' ?>>Todos</option>
+                    <option value="0" <?= ((string)($filtroMinisterioActual ?? ($_GET['ministerio'] ?? '')) === '0') ? 'selected' : '' ?>>Sin ministerio</option>
+                    <?php foreach (($ministerios ?? []) as $ministerio): ?>
+                        <?php $idMinisterio = (string)($ministerio['Id_Ministerio'] ?? ''); ?>
+                        <option value="<?= htmlspecialchars($idMinisterio) ?>" <?= ((string)($filtroMinisterioActual ?? ($_GET['ministerio'] ?? '')) === $idMinisterio) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars((string)($ministerio['Nombre_Ministerio'] ?? '')) ?>
+                        </option>
+                    <?php endforeach; ?>
                 </select>
             </div>
             <div class="form-group" style="min-width: 240px;">
@@ -68,14 +71,21 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                     name="buscar"
                     class="form-control"
                     placeholder="Ej: Juan Perez"
+                    list="sugerencias_nombres_personas"
+                    autocomplete="off"
                     value="<?= htmlspecialchars((string)($filtroNombreActual ?? ($_GET['buscar'] ?? ''))) ?>"
                 >
+                <datalist id="sugerencias_nombres_personas">
+                    <?php foreach (($sugerenciasNombre ?? []) as $sugerenciaNombre): ?>
+                        <option value="<?= htmlspecialchars((string)$sugerenciaNombre) ?>"></option>
+                    <?php endforeach; ?>
+                </datalist>
             </div>
             <div class="filters-actions">
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-search"></i> Buscar
                 </button>
-                <?php if (!empty($_GET['perfil']) || !empty($_GET['buscar'])): ?>
+                <?php if (!empty($_GET['perfil']) || !empty($_GET['buscar']) || !empty($_GET['ministerio'])): ?>
                 <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-secondary">
                     <i class="bi bi-x-circle"></i> Limpiar
                 </a>
@@ -88,24 +98,26 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 <div class="card" style="margin-bottom: 16px;">
     <div class="card-body" style="padding: 12px 16px;">
         <?php $perfilActivo = (string)($filtroPerfilActual ?? ($_GET['perfil'] ?? '')); ?>
+        <?php $qsMinisterio = ((string)($filtroMinisterioActual ?? '') !== '') ? '&ministerio=' . urlencode((string)$filtroMinisterioActual) : ''; ?>
+        <?php $qsBuscar = !empty($filtroNombreActual) ? '&buscar=' . urlencode((string)$filtroNombreActual) : ''; ?>
         <?php $totalResumenRoles = (int)($totalesPerfil['lideres_12'] ?? 0) + (int)($totalesPerfil['lideres_celula'] ?? 0) + (int)($totalesPerfil['asistentes'] ?? 0) + (int)($totalesPerfil['otros'] ?? 0); ?>
         <div class="resumen-roles-total">
             Total en listado actual: <strong><?= $totalResumenRoles ?></strong>
         </div>
         <div class="personas-resumen-roles">
-            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=lideres_12<?= !empty($filtroNombreActual) ? '&buscar=' . urlencode((string)$filtroNombreActual) : '' ?>" class="resumen-role-item <?= $perfilActivo === 'lideres_12' ? 'active' : '' ?>">
+            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=lideres_12<?= $qsMinisterio ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'lideres_12' ? 'active' : '' ?>">
                 <span class="resumen-role-label">Líder de 12</span>
                 <strong class="resumen-role-value"><?= (int)($totalesPerfil['lideres_12'] ?? 0) ?></strong>
             </a>
-            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=lideres_celula<?= !empty($filtroNombreActual) ? '&buscar=' . urlencode((string)$filtroNombreActual) : '' ?>" class="resumen-role-item <?= $perfilActivo === 'lideres_celula' ? 'active' : '' ?>">
+            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=lideres_celula<?= $qsMinisterio ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'lideres_celula' ? 'active' : '' ?>">
                 <span class="resumen-role-label">Líder de célula</span>
                 <strong class="resumen-role-value"><?= (int)($totalesPerfil['lideres_celula'] ?? 0) ?></strong>
             </a>
-            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=asistentes<?= !empty($filtroNombreActual) ? '&buscar=' . urlencode((string)$filtroNombreActual) : '' ?>" class="resumen-role-item <?= $perfilActivo === 'asistentes' ? 'active' : '' ?>">
+            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=asistentes<?= $qsMinisterio ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'asistentes' ? 'active' : '' ?>">
                 <span class="resumen-role-label">Asistentes</span>
                 <strong class="resumen-role-value"><?= (int)($totalesPerfil['asistentes'] ?? 0) ?></strong>
             </a>
-            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=otros<?= !empty($filtroNombreActual) ? '&buscar=' . urlencode((string)$filtroNombreActual) : '' ?>" class="resumen-role-item <?= $perfilActivo === 'otros' ? 'active' : '' ?>">
+            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=otros<?= $qsMinisterio ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'otros' ? 'active' : '' ?>">
                 <span class="resumen-role-label">Otros roles</span>
                 <strong class="resumen-role-value"><?= (int)($totalesPerfil['otros'] ?? 0) ?></strong>
             </a>
@@ -575,12 +587,12 @@ if (btnCopiarUrlRegistroPersonas) {
     });
 }
 
-const filtroPerfil = document.getElementById('filtro_perfil');
+const filtroMinisterio = document.getElementById('filtro_ministerio');
 const filtroNombre = document.getElementById('filtro_nombre');
 const filtroPerfilForm = document.getElementById('filtro_perfil_form');
 
-if (filtroPerfil && filtroPerfilForm) {
-    filtroPerfil.addEventListener('change', function() {
+if (filtroMinisterio && filtroPerfilForm) {
+    filtroMinisterio.addEventListener('change', function() {
         if (typeof filtroPerfilForm.requestSubmit === 'function') {
             filtroPerfilForm.requestSubmit();
             return;
@@ -591,21 +603,13 @@ if (filtroPerfil && filtroPerfilForm) {
 }
 
 if (filtroNombre && filtroPerfilForm) {
-    let timerBusquedaNombre = null;
-
-    filtroNombre.addEventListener('input', function() {
-        if (timerBusquedaNombre) {
-            clearTimeout(timerBusquedaNombre);
+    filtroNombre.addEventListener('change', function() {
+        if (typeof filtroPerfilForm.requestSubmit === 'function') {
+            filtroPerfilForm.requestSubmit();
+            return;
         }
 
-        timerBusquedaNombre = setTimeout(function() {
-            if (typeof filtroPerfilForm.requestSubmit === 'function') {
-                filtroPerfilForm.requestSubmit();
-                return;
-            }
-
-            filtroPerfilForm.submit();
-        }, 350);
+        filtroPerfilForm.submit();
     });
 }
 

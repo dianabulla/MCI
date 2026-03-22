@@ -1,6 +1,13 @@
 # Habilitar reescritura de URLs
 RewriteEngine On
 
+# Limites PHP para permitir cargas grandes en modulos de eventos.
+php_value upload_max_filesize 520M
+php_value post_max_size 530M
+php_value max_execution_time 300
+php_value max_input_time 300
+php_value memory_limit 768M
+
 # Permitir acceso directo a archivos estáticos (assets)
 RewriteCond %{REQUEST_URI} ^/public/assets/
 RewriteRule ^ - [L]

@@ -134,6 +134,28 @@ if ($returnTo === 'celulas') {
                 <span class="detail-label">Usuario de acceso:</span>
                 <span class="detail-value"><?= htmlspecialchars($persona['Usuario'] ?? 'No asignado') ?></span>
             </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Última vez que ingresó:</span>
+                <span class="detail-value">
+                    <?php if (!empty($persona['Ultimo_Acceso'])): ?>
+                        <?= htmlspecialchars(date('d/m/Y H:i', strtotime((string)$persona['Ultimo_Acceso']))) ?>
+                    <?php else: ?>
+                        Sin registro
+                    <?php endif; ?>
+                </span>
+            </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Última vez que reportó célula:</span>
+                <span class="detail-value">
+                    <?php if (!empty($persona['Ultimo_Reporte_Celula'])): ?>
+                        <?= htmlspecialchars(date('d/m/Y', strtotime((string)$persona['Ultimo_Reporte_Celula']))) ?>
+                    <?php else: ?>
+                        Sin reportes
+                    <?php endif; ?>
+                </span>
+            </div>
         </div>
     </div>
 
