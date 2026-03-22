@@ -11,15 +11,15 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         :root {
-            --primary-color: #6366f1;
-            --secondary-color: #ec4899;
-            --success-color: #10b981;
-            --danger-color: #ef4444;
-            --warning-color: #f59e0b;
+            --primary-color: #2f4f87;
+            --secondary-color: #1e7a51;
+            --success-color: #1e7a51;
+            --danger-color: #a92d48;
+            --warning-color: #9a6708;
         }
 
         body {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            background: linear-gradient(135deg, var(--primary-color) 0%, #1a3a5a 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -125,18 +125,18 @@
         }
 
         .alert-success {
-            background: #d1fae5;
-            color: #065f46;
+            background: #e3f4eb;
+            color: #1e7a51;
         }
 
         .alert-danger {
-            background: #fee2e2;
-            color: #7f1d1d;
+            background: #fff0f3;
+            color: #a92d48;
         }
 
         .alert-warning {
-            background: #fef3c7;
-            color: #92400e;
+            background: #fff4df;
+            color: #9a6708;
         }
 
         .icon-header {
@@ -148,7 +148,7 @@
         .footer-text {
             text-align: center;
             font-size: 12px;
-            color: #999;
+            color: #666;
             margin-top: 20px;
         }
 
