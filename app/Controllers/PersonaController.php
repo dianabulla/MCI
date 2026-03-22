@@ -168,7 +168,7 @@ class PersonaController extends BaseController {
         }
 
         $idLider = (int)($personaNueva['Id_Lider'] ?? 0);
-        if ($idLider > 0) {
+        if ($idLider > 0 && $idLider !== $idPersona) {
             $lider = $this->personaModel->getById($idLider);
             if (!empty($lider) && !empty($lider['Telefono'])) {
                 $nombreLider = trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? ''));
@@ -402,6 +402,20 @@ class PersonaController extends BaseController {
 
     private function personaTieneAsignacionCompleta(array $persona) {
         return !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']) && !empty($persona['Id_Celula']);
+    }
+    private function normalizarIdLiderPost($idLiderRaw, $idPersonaActual = null) {
+        $idLider = (int)($idLiderRaw ?: 0);
+        $idPersonaActual = $idPersonaActual !== null ? (int)$idPersonaActual : 0;
+
+        if ($idLider <= 0) {
+            return null;
+        }
+
+        if ($idPersonaActual > 0 && $idLider === $idPersonaActual) {
+            return null;
+        }
+
+        return $idLider;
     }
 
     private function resolverFechaAsignacionLider(array $data, $personaAntes = null) {
@@ -991,7 +1005,6 @@ class PersonaController extends BaseController {
         $filtroRol = DataIsolation::generarFiltroPersonas();
         $contextoFiltros = $this->getContextoFiltrosVisibles();
         $ministerios = $contextoFiltros['ministerios'] ?? [];
-
         if ($contextoFiltros['restringido']) {
             $ministerioIdsPermitidos = $contextoFiltros['ministerioIdsPermitidos'] ?? [];
             if ($filtroMinisterio !== '' && $filtroMinisterio !== '0' && !in_array((int)$filtroMinisterio, $ministerioIdsPermitidos, true)) {
@@ -1585,6 +1598,7 @@ class PersonaController extends BaseController {
             $idRolSeleccionado = $_POST['id_rol'] ?: null;
             $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
             $idMinisterioNormalizado = $this->normalizarIdMinisterioPost($_POST['id_ministerio'] ?? null);
+            $idLiderNormalizado = $this->normalizarIdLiderPost($_POST['id_lider'] ?? null);
 
             $data = [
                 'Nombre' => $_POST['nombre'],
@@ -1601,7 +1615,7 @@ class PersonaController extends BaseController {
                 'Peticion' => $_POST['peticion'] ?: null,
                 'Invitado_Por' => $_POST['invitado_por'] ?: null,
                 'Tipo_Reunion' => $_POST['tipo_reunion'] ?: null,
-                'Id_Lider' => $_POST['id_lider'] ?: null,
+                'Id_Lider' => $idLiderNormalizado,
                 'Id_Celula' => $_POST['id_celula'] ?: null,
                 'Id_Rol' => $_POST['id_rol'] ?: null,
                 'Id_Ministerio' => $idMinisterioNormalizado,
@@ -1730,6 +1744,7 @@ class PersonaController extends BaseController {
             $idRolSeleccionado = $_POST['id_rol'] ?: null;
             $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
             $idMinisterioNormalizado = $this->normalizarIdMinisterioPost($_POST['id_ministerio'] ?? null);
+            $idLiderNormalizado = $this->normalizarIdLiderPost($_POST['id_lider'] ?? null, $id);
 
             $data = [
                 'Nombre' => $_POST['nombre'],
@@ -1746,7 +1761,7 @@ class PersonaController extends BaseController {
                 'Peticion' => $_POST['peticion'] ?: null,
                 'Invitado_Por' => $_POST['invitado_por'] ?: null,
                 'Tipo_Reunion' => $_POST['tipo_reunion'] ?: null,
-                'Id_Lider' => $_POST['id_lider'] ?: null,
+                'Id_Lider' => $idLiderNormalizado,
                 'Id_Celula' => $_POST['id_celula'] ?: null,
                 'Id_Rol' => $_POST['id_rol'] ?: null,
                 'Id_Ministerio' => $idMinisterioNormalizado
