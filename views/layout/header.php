@@ -86,6 +86,12 @@ $puedeVer = function(string $modulo) {
             </a>
             <?php endif; ?>
 
+            <?php if ($puedeVer('teen')): ?>
+            <a class="sidebar-link <?= $isActive(['teen']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=teen">
+                <i class="bi bi-book"></i> <span class="sidebar-link-text">Material Teens</span>
+            </a>
+            <?php endif; ?>
+
             <?php if ($puedeVer('nehemias')): ?>
             <a class="sidebar-link <?= $isActive(['nehemias']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=nehemias/lista">
                 <i class="bi bi-clipboard-data"></i> <span class="sidebar-link-text">Nehemias</span>

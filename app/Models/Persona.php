@@ -531,7 +531,7 @@ class Persona extends BaseModel {
     /**
      * Obtener todas las personas con aislamiento de rol
      */
-    public function getAllWithRole($filtroRol, $soloGanar = false, $estadoCuenta = null, $idCelula = null, $proceso = null, $origen = null) {
+    public function getAllWithRole($filtroRol, $soloGanar = false, $estadoCuenta = null, $idCelula = null, $proceso = null, $origen = null, $fechaInicioRegistro = null, $fechaFinRegistro = null) {
         $sql = "SELECT p.*, 
                 c.Nombre_Celula, 
                 r.Nombre_Rol, 
@@ -590,6 +590,12 @@ class Persona extends BaseModel {
             }
         }
 
+        if ($fechaInicioRegistro !== null && $fechaInicioRegistro !== '' && $fechaFinRegistro !== null && $fechaFinRegistro !== '') {
+            $sql .= " AND DATE(p.Fecha_Registro) BETWEEN ? AND ?";
+            $params[] = $fechaInicioRegistro;
+            $params[] = $fechaFinRegistro;
+        }
+
         $sql .= "
                 ORDER BY p.Fecha_Registro DESC, p.Id_Persona DESC";
         return $this->query($sql, $params);
@@ -598,7 +604,7 @@ class Persona extends BaseModel {
     /**
      * Obtener personas con filtros y aislamiento de rol
      */
-    public function getWithFiltersAndRole($filtroRol, $idMinisterio = null, $idLider = null, $soloGanar = false, $estadoCuenta = null, $idCelula = null, $proceso = null, $origen = null) {
+    public function getWithFiltersAndRole($filtroRol, $idMinisterio = null, $idLider = null, $soloGanar = false, $estadoCuenta = null, $idCelula = null, $proceso = null, $origen = null, $fechaInicioRegistro = null, $fechaFinRegistro = null) {
         $sql = "SELECT p.*, 
                 c.Nombre_Celula, 
                 r.Nombre_Rol, 
@@ -673,6 +679,12 @@ class Persona extends BaseModel {
                 // Asignados: llegaron domingo y no registran invitador.
                 $sql .= " AND {$tipoReunionExpr} LIKE '%domingo%' AND {$invitadoExpr} = ''";
             }
+        }
+
+        if ($fechaInicioRegistro !== null && $fechaInicioRegistro !== '' && $fechaFinRegistro !== null && $fechaFinRegistro !== '') {
+            $sql .= " AND DATE(p.Fecha_Registro) BETWEEN ? AND ?";
+            $params[] = $fechaInicioRegistro;
+            $params[] = $fechaFinRegistro;
         }
 
         $sql .= " ORDER BY p.Fecha_Registro DESC, p.Id_Persona DESC";
@@ -813,6 +825,54 @@ class Persona extends BaseModel {
             'Asignados' => (int)($row['Asignados'] ?? 0),
             'Total' => (int)($row['Total'] ?? 0)
         ];
+    }
+
+    public function getDetalleGanadosOrigenWithRole($fechaInicio, $fechaFin, $filtroRol, $origen, $idMinisterio = '', $idLider = '') {
+        $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
+        $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
+
+        $sql = "SELECT
+                    p.Id_Persona,
+                    p.Nombre,
+                    p.Apellido,
+                    p.Fecha_Registro,
+                    p.Tipo_Reunion,
+                    COALESCE(c.Nombre_Celula, 'Sin célula') AS Nombre_Celula,
+                    COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
+                    COALESCE(CONCAT(lid.Nombre, ' ', lid.Apellido), 'Sin líder') AS Nombre_Lider
+                FROM persona p
+                LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
+                LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
+                LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
+                WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
+                AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                AND $filtroRol";
+
+        $params = [$fechaInicio, $fechaFin];
+
+        if ($idMinisterio !== null && $idMinisterio !== '' && (int)$idMinisterio > 0) {
+            $sql .= " AND p.Id_Ministerio = ?";
+            $params[] = (int)$idMinisterio;
+        }
+
+        if ($idLider !== null && $idLider !== '' && (int)$idLider > 0) {
+            $sql .= " AND p.Id_Lider = ?";
+            $params[] = (int)$idLider;
+        }
+
+        if ($origen === 'celula') {
+            $sql .= " AND {$tipoReunionExpr} LIKE '%celula%'";
+        } elseif ($origen === 'domingo') {
+            $sql .= " AND {$tipoReunionExpr} LIKE '%domingo%'";
+        } elseif ($origen === 'asignados') {
+            $sql .= " AND {$tipoReunionExpr} LIKE '%domingo%' AND {$invitadoExpr} = ''";
+        } else {
+            return [];
+        }
+
+        $sql .= " ORDER BY p.Fecha_Registro DESC, p.Id_Persona DESC";
+
+        return $this->query($sql, $params);
     }
 
     /**

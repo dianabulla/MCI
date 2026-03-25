@@ -165,6 +165,7 @@ class PermisosController extends BaseController {
             'transmisiones' => 'Transmisiones',
             'entrega_obsequio' => 'Entrega de Obsequios',
             'registro_obsequio' => 'Registro de Obsequios',
+            'teen' => 'Material Teens',
             'nehemias' => 'Nehemias',
             'nehemias_cols_bogota_subio' => 'Nehemias: Ver En Bogotá se le subió',
             'nehemias_cols_puesto' => 'Nehemias: Ver Puesto',

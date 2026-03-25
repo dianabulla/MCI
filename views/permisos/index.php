@@ -211,6 +211,7 @@
             'peticiones'       => ['Peticiones',        'Peticiones de oraciÃ³n'],
             'reportes'         => ['Reportes',          'Reportes y estadÃ­sticas'],
             'transmisiones'    => ['Transmisiones',     'Transmisiones en vivo'],
+            'teen'             => ['Material Teens',     'Material educativo para adolescentes'],
         ],
         'Obsequios' => [
             'entrega_obsequio'   => ['Entrega de Obsequios',  'Registrar entrega de obsequios'],

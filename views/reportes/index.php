@@ -93,6 +93,8 @@ $escalaGanar = (string)($escala_ganar ?? 'semanal');
 $ganarLabel = (string)($ganar_label ?? 'Semanal');
 $ganarInicio = (string)($ganar_inicio ?? $fecha_inicio ?? '');
 $ganarFin = (string)($ganar_fin ?? $fecha_fin ?? '');
+$fechaInicioFiltro = (string)($fecha_inicio_filtro ?? '');
+$fechaFinFiltro = (string)($fecha_fin_filtro ?? '');
 
 $filtroMesMeta = (string)($filtro_mes_meta ?? '');
 $mesesTabla = $cumplimientoMetas['meses'] ?? [];
@@ -115,10 +117,10 @@ $tablaEsCompacta = $filtroMesMeta !== 'all';
 </div>
 
 <div class="report-switcher" style="margin-bottom: 18px;">
-    <a href="<?= PUBLIC_URL ?>index.php?url=reportes&tipo=personas&escala_ganar=<?= urlencode($escalaGanar) ?>&fecha_referencia=<?= urlencode((string)$fecha_referencia) ?>&ministerio=<?= urlencode((string)$filtro_ministerio) ?>&lider=<?= urlencode((string)$filtro_lider) ?>&mes_meta=<?= urlencode((string)$filtroMesMeta) ?>" class="report-switcher-tab <?= $esReportePersonas ? 'is-active' : '' ?>">
+    <a href="<?= PUBLIC_URL ?>index.php?url=reportes&tipo=personas&escala_ganar=<?= urlencode($escalaGanar) ?>&fecha_referencia=<?= urlencode((string)$fecha_referencia) ?>&fecha_inicio=<?= urlencode($fechaInicioFiltro) ?>&fecha_fin=<?= urlencode($fechaFinFiltro) ?>&ministerio=<?= urlencode((string)$filtro_ministerio) ?>&lider=<?= urlencode((string)$filtro_lider) ?>&mes_meta=<?= urlencode((string)$filtroMesMeta) ?>" class="report-switcher-tab <?= $esReportePersonas ? 'is-active' : '' ?>">
         Ganar
     </a>
-    <a href="<?= PUBLIC_URL ?>index.php?url=reportes&tipo=celulas&fecha_referencia=<?= urlencode((string)$fecha_referencia) ?>&ministerio=<?= urlencode((string)$filtro_ministerio) ?>&lider=<?= urlencode((string)$filtro_lider) ?>&celula=<?= urlencode((string)$filtro_celula) ?>" class="report-switcher-tab <?= !$esReportePersonas ? 'is-active' : '' ?>">
+    <a href="<?= PUBLIC_URL ?>index.php?url=reportes&tipo=celulas&fecha_referencia=<?= urlencode((string)$fecha_referencia) ?>&fecha_inicio=<?= urlencode($fechaInicioFiltro) ?>&fecha_fin=<?= urlencode($fechaFinFiltro) ?>&ministerio=<?= urlencode((string)$filtro_ministerio) ?>&lider=<?= urlencode((string)$filtro_lider) ?>&celula=<?= urlencode((string)$filtro_celula) ?>" class="report-switcher-tab <?= !$esReportePersonas ? 'is-active' : '' ?>">
         Célula
     </a>
 </div>
@@ -128,10 +130,24 @@ $tablaEsCompacta = $filtroMesMeta !== 'all';
         <input type="hidden" name="url" value="reportes">
         <input type="hidden" name="tipo" value="<?= htmlspecialchars($tipoReporte) ?>">
 
+        <?php if (!$esReportePersonas): ?>
         <div class="form-group" style="margin: 0;">
             <label for="fecha_referencia">Semana (domingo a domingo)</label>
             <input type="date" id="fecha_referencia" name="fecha_referencia" class="form-control" value="<?= htmlspecialchars((string)$fecha_referencia) ?>" required>
             <small style="color:#637087;">Rango aplicado: <?= date('d/m/Y', strtotime($fecha_inicio)) ?> - <?= date('d/m/Y', strtotime($fecha_fin)) ?></small>
+        </div>
+        <?php else: ?>
+        <input type="hidden" name="fecha_referencia" value="<?= htmlspecialchars((string)$fecha_referencia) ?>">
+        <?php endif; ?>
+
+        <div class="form-group" style="margin: 0;">
+            <label for="fecha_inicio">Fecha inicio (personalizada)</label>
+            <input type="date" id="fecha_inicio" name="fecha_inicio" class="form-control" value="<?= htmlspecialchars($fechaInicioFiltro) ?>">
+        </div>
+
+        <div class="form-group" style="margin: 0;">
+            <label for="fecha_fin">Fecha fin (personalizada)</label>
+            <input type="date" id="fecha_fin" name="fecha_fin" class="form-control" value="<?= htmlspecialchars($fechaFinFiltro) ?>">
         </div>
 
         <div class="form-group" style="margin: 0;">
@@ -210,17 +226,43 @@ $tablaEsCompacta = $filtroMesMeta !== 'all';
 </div>
 
 <div class="report-kpi-grid report-kpi-grid--ganar" style="margin-bottom: 18px;">
-    <div class="report-kpi-card kpi-celula">
+    <button type="button" class="report-kpi-card report-kpi-button kpi-celula js-kpi-detalle" data-origen="celula">
         <div class="report-kpi-label">Ganados en célula</div>
         <div class="report-kpi-value"><?= (int)$resumenOrigen['Ganados_Celula'] ?></div>
-    </div>
-    <div class="report-kpi-card kpi-domingo">
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button kpi-domingo js-kpi-detalle" data-origen="domingo">
         <div class="report-kpi-label">Ganados en domingo</div>
         <div class="report-kpi-value"><?= (int)$resumenOrigen['Ganados_Domingo'] ?></div>
-    </div>
-    <div class="report-kpi-card kpi-asistencia">
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button kpi-asistencia js-kpi-detalle" data-origen="asignados">
         <div class="report-kpi-label">Asignados</div>
         <div class="report-kpi-value"><?= (int)($resumenOrigen['Asignados'] ?? 0) ?></div>
+    </button>
+</div>
+
+<div id="reporteDetalleModal" class="celula-modal" aria-hidden="true">
+    <div class="celula-modal__overlay" data-reporte-close="1"></div>
+    <div class="celula-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="reporteDetalleModalTitle">
+        <div class="celula-modal__header">
+            <h3 id="reporteDetalleModalTitle" class="celula-modal__title">Detalle del reporte</h3>
+            <button type="button" class="celula-modal__close" data-reporte-close="1" aria-label="Cerrar">×</button>
+        </div>
+        <div class="celula-modal__body">
+            <div class="table-container">
+                <table class="data-table data-table--compacta-celula">
+                    <thead>
+                        <tr>
+                            <th>Persona</th>
+                            <th>Líder</th>
+                            <th>Célula</th>
+                            <th>Ministerio</th>
+                            <th>Fecha registro</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reporteDetalleModalBody"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -678,6 +720,7 @@ $tablaEsCompacta = $filtroMesMeta !== 'all';
 const procesoGanar = <?= json_encode($procesoGanar) ?>;
 const almasPorEdades = <?= json_encode($almasPorEdades) ?>;
 const almasGanadas = <?= json_encode($almas_ganadas ?? []) ?>;
+const detalleOrigenGanados = <?= json_encode($detalle_origen_ganados ?? []) ?>;
 const asistencia = <?= json_encode($asistencia_celulas ?? []) ?>;
 const indicadoresCelulas = <?= json_encode($indicadoresCelulas ?? []) ?>;
 const detalleLideresAperturas = <?= json_encode($tablaAperturasCelulas['detalle_lideres'] ?? []) ?>;
@@ -717,6 +760,75 @@ if (tipoReporte === 'personas') {
         xaxis: { categories: almasGanadas.map(x => x.Nombre_Ministerio || 'Sin ministerio') },
         colors: ['#02a66f']
     }).render();
+
+    const botonesKpiDetalle = document.querySelectorAll('.js-kpi-detalle');
+    const reporteDetalleModal = document.querySelector('#reporteDetalleModal');
+    const reporteDetalleModalBody = document.querySelector('#reporteDetalleModalBody');
+    const reporteDetalleModalTitle = document.querySelector('#reporteDetalleModalTitle');
+    const reporteDetalleModalClose = document.querySelectorAll('[data-reporte-close="1"]');
+
+    const escaparHtml = (valor) => String(valor || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const etiquetasOrigen = {
+        celula: 'Ganados en célula',
+        domingo: 'Ganados en domingo',
+        asignados: 'Asignados'
+    };
+
+    const abrirDetalleKpi = (origen) => {
+        if (!reporteDetalleModal || !reporteDetalleModalBody || !reporteDetalleModalTitle) {
+            return;
+        }
+
+        const filas = Array.isArray(detalleOrigenGanados[origen]) ? detalleOrigenGanados[origen] : [];
+        reporteDetalleModalTitle.textContent = etiquetasOrigen[origen] || 'Detalle del reporte';
+
+        if (!filas.length) {
+            reporteDetalleModalBody.innerHTML = '<tr><td colspan="5" class="text-center">Sin registros para este rango</td></tr>';
+        } else {
+            reporteDetalleModalBody.innerHTML = filas.map((item) => {
+                const persona = escaparHtml(`${item.Nombre || ''} ${item.Apellido || ''}`.trim() || 'Sin nombre');
+                const lider = escaparHtml(item.Nombre_Lider || 'Sin líder');
+                const celula = escaparHtml(item.Nombre_Celula || 'Sin célula');
+                const ministerio = escaparHtml(item.Nombre_Ministerio || 'Sin ministerio');
+                const fecha = escaparHtml(item.Fecha_Registro || '');
+
+                return `<tr><td>${persona}</td><td>${lider}</td><td>${celula}</td><td>${ministerio}</td><td>${fecha}</td></tr>`;
+            }).join('');
+        }
+
+        reporteDetalleModal.classList.add('is-open');
+        reporteDetalleModal.setAttribute('aria-hidden', 'false');
+    };
+
+    const cerrarDetalleKpi = () => {
+        if (!reporteDetalleModal) {
+            return;
+        }
+        reporteDetalleModal.classList.remove('is-open');
+        reporteDetalleModal.setAttribute('aria-hidden', 'true');
+    };
+
+    botonesKpiDetalle.forEach((boton) => {
+        boton.addEventListener('click', () => {
+            abrirDetalleKpi(String(boton.dataset.origen || ''));
+        });
+    });
+
+    reporteDetalleModalClose.forEach((boton) => {
+        boton.addEventListener('click', cerrarDetalleKpi);
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && reporteDetalleModal && reporteDetalleModal.classList.contains('is-open')) {
+            cerrarDetalleKpi();
+        }
+    });
 
     const botonesMinisterioGanar = document.querySelectorAll('.js-ministerio-ganar');
     const panelDetalleGanar = document.querySelector('#detalleMinisterioGanar');
@@ -939,6 +1051,26 @@ if (tipoReporte === 'personas') {
     color: #10233d;
 }
 
+.report-kpi-button {
+    appearance: none;
+    width: 100%;
+    border-width: 1px;
+    border-style: solid;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.report-kpi-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(15, 35, 61, 0.08);
+}
+
+.report-kpi-button:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.22);
+    outline-offset: 2px;
+}
+
 .kpi-celula { background: #eef7ff; border: 1px solid #c7dfff; }
 .kpi-domingo { background: #fff8e8; border: 1px solid #ffe2a8; }
 .kpi-escalera { background: #eefbf1; border: 1px solid #bfe8c9; }
@@ -982,6 +1114,90 @@ if (tipoReporte === 'personas') {
     border-radius: 10px;
     background: #f9fcff;
     padding: 12px;
+}
+
+.celula-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.celula-modal.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.celula-modal__overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 27, 46, 0.58);
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.celula-modal__dialog {
+    position: relative;
+    width: min(1100px, calc(100vw - 36px));
+    max-height: calc(100vh - 36px);
+    margin: 18px auto;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 18px 45px rgba(20, 39, 72, 0.24);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(22px) scale(0.985);
+    opacity: 0;
+    transition: transform 0.24s ease, opacity 0.24s ease;
+}
+
+.celula-modal.is-open .celula-modal__overlay {
+    opacity: 1;
+}
+
+.celula-modal.is-open .celula-modal__dialog {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+}
+
+.celula-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid #d9e4f2;
+    background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+}
+
+.celula-modal__title {
+    margin: 0;
+    color: #21457e;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.celula-modal__close {
+    border: 0;
+    background: #dbe6f8;
+    color: #1e4a89;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.celula-modal__body {
+    padding: 14px 18px 18px;
+    overflow: auto;
 }
 
 .reporte-celulas-abiertas-table {
@@ -1146,6 +1362,22 @@ details summary {
 
 @media (max-width: 640px) {
     .report-kpi-grid { grid-template-columns: 1fr; }
+
+    .celula-modal__dialog {
+        width: calc(100vw - 16px);
+        max-height: calc(100vh - 16px);
+        margin: 8px auto;
+    }
+
+    .celula-modal__header,
+    .celula-modal__body {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .celula-modal__title {
+        font-size: 18px;
+    }
 }
 
 </style>

@@ -35,6 +35,16 @@ class ReporteController extends BaseController {
         return [date('Y-m-d', $inicio), date('Y-m-d', $fin)];
     }
 
+    private function normalizarFechaYmd($valor) {
+        $valor = trim((string)$valor);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $valor)) {
+            return '';
+        }
+
+        $fecha = DateTimeImmutable::createFromFormat('Y-m-d', $valor);
+        return $fecha ? $fecha->format('Y-m-d') : '';
+    }
+
     private function construirOpcionesFiltroMinisterioLider($filtroCelulas) {
         $celulasBase = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
 
@@ -745,19 +755,46 @@ class ReporteController extends BaseController {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
-        
-        $fechaReferencia = $_GET['fecha_referencia'] ?? date('Y-m-d');
+
+        $tipoReporte = $this->resolverTipoReporte($_GET['tipo'] ?? 'personas');
+        $fechaReferencia = $this->normalizarFechaYmd($_GET['fecha_referencia'] ?? '');
+        if ($fechaReferencia === '') {
+            $fechaReferencia = date('Y-m-d', strtotime('-7 days'));
+        }
         [$fechaInicio, $fechaFin] = $this->calcularRangoSemanaDomingoADomingo($fechaReferencia);
+        $fechaInicioPersonalizada = $this->normalizarFechaYmd($_GET['fecha_inicio'] ?? '');
+        $fechaFinPersonalizada = $this->normalizarFechaYmd($_GET['fecha_fin'] ?? '');
+        if ($fechaInicioPersonalizada !== '' && $fechaFinPersonalizada !== '' && strcmp($fechaInicioPersonalizada, $fechaFinPersonalizada) > 0) {
+            [$fechaInicioPersonalizada, $fechaFinPersonalizada] = [$fechaFinPersonalizada, $fechaInicioPersonalizada];
+        }
+        if ($tipoReporte === 'personas' && $fechaInicioPersonalizada === '' && $fechaFinPersonalizada === '') {
+            $fechaInicioPersonalizada = $fechaInicio;
+            $fechaFinPersonalizada = $fechaFin;
+        }
+        $usarRangoPersonalizado = ($fechaInicioPersonalizada !== '' && $fechaFinPersonalizada !== '');
+        if ($usarRangoPersonalizado) {
+            $fechaInicio = $fechaInicioPersonalizada;
+            $fechaFin = $fechaFinPersonalizada;
+            $fechaReferencia = $fechaFinPersonalizada;
+        }
 
         $filtroCelula = $_GET['celula'] ?? '';
         $filtroMinisterio = $_GET['ministerio'] ?? '';
         $filtroLider = $_GET['lider'] ?? '';
         $filtroMesMeta = $_GET['mes_meta'] ?? '';
-        $tipoReporte = $this->resolverTipoReporte($_GET['tipo'] ?? 'personas');
         $escalaGanar = $this->resolverEscalaGanar($_GET['escala_ganar'] ?? 'semanal');
         $rangoGanar = $this->construirRangoGanar($fechaReferencia, $escalaGanar);
         $fechaInicioGanar = (string)$rangoGanar['inicio'];
         $fechaFinGanar = (string)$rangoGanar['fin'];
+        if ($usarRangoPersonalizado) {
+            $rangoGanar = [
+                'inicio' => $fechaInicio,
+                'fin' => $fechaFin,
+                'label' => 'Personalizado'
+            ];
+            $fechaInicioGanar = $fechaInicio;
+            $fechaFinGanar = $fechaFin;
+        }
 
         // Generar filtros según el rol del usuario
         $filtroRol = DataIsolation::generarFiltroPersonas();
@@ -779,6 +816,11 @@ class ReporteController extends BaseController {
         $almasGanadas = $this->personaModel->getAlmasGanadasPorMinisterioWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, $filtroMinisterio, $filtroLider);
 
         $resumenOrigenGanados = $this->personaModel->getResumenGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, $filtroMinisterio, $filtroLider);
+        $detalleOrigenGanados = [
+            'celula' => $this->personaModel->getDetalleGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, 'celula', $filtroMinisterio, $filtroLider),
+            'domingo' => $this->personaModel->getDetalleGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, 'domingo', $filtroMinisterio, $filtroLider),
+            'asignados' => $this->personaModel->getDetalleGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, 'asignados', $filtroMinisterio, $filtroLider),
+        ];
 
         $almasPorEdades = $this->personaModel->getAlmasGanadasPorEdadesWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, $filtroMinisterio, $filtroLider);
 
@@ -860,6 +902,9 @@ class ReporteController extends BaseController {
             'fecha_referencia' => $fechaReferencia,
             'fecha_inicio' => $fechaInicio,
             'fecha_fin' => $fechaFin,
+            'fecha_inicio_filtro' => $fechaInicioPersonalizada,
+            'fecha_fin_filtro' => $fechaFinPersonalizada,
+            'rango_personalizado' => $usarRangoPersonalizado,
             'filtro_celula' => (string)$filtroCelula,
             'filtro_celula_ganar' => (string)$filtroCelulaGanar,
             'filtro_ministerio' => (string)$filtroMinisterio,
@@ -874,6 +919,7 @@ class ReporteController extends BaseController {
             'lideres_disponibles' => $opcionesFiltro['lideres_disponibles'],
             'almas_ganadas' => $almasGanadas,
             'resumen_origen_ganados' => $resumenOrigenGanados,
+            'detalle_origen_ganados' => $detalleOrigenGanados,
             'almas_por_edades' => $almasPorEdades,
             'proceso_ganar' => $procesoGanar,
             'asistencia_celulas' => $asistenciaCelulas,
@@ -895,6 +941,17 @@ class ReporteController extends BaseController {
 
         $fechaReferencia = $_GET['fecha_referencia'] ?? date('Y-m-d');
         [$fechaInicio, $fechaFin] = $this->calcularRangoSemanaDomingoADomingo($fechaReferencia);
+        $fechaInicioPersonalizada = $this->normalizarFechaYmd($_GET['fecha_inicio'] ?? '');
+        $fechaFinPersonalizada = $this->normalizarFechaYmd($_GET['fecha_fin'] ?? '');
+        if ($fechaInicioPersonalizada !== '' && $fechaFinPersonalizada !== '' && strcmp($fechaInicioPersonalizada, $fechaFinPersonalizada) > 0) {
+            [$fechaInicioPersonalizada, $fechaFinPersonalizada] = [$fechaFinPersonalizada, $fechaInicioPersonalizada];
+        }
+        $usarRangoPersonalizado = ($fechaInicioPersonalizada !== '' && $fechaFinPersonalizada !== '');
+        if ($usarRangoPersonalizado) {
+            $fechaInicio = $fechaInicioPersonalizada;
+            $fechaFin = $fechaFinPersonalizada;
+            $fechaReferencia = $fechaFinPersonalizada;
+        }
         $filtroCelula = $_GET['celula'] ?? '';
         $filtroMinisterio = $_GET['ministerio'] ?? '';
         $filtroLider = $_GET['lider'] ?? '';
@@ -903,6 +960,10 @@ class ReporteController extends BaseController {
         $rangoGanar = $this->construirRangoGanar($fechaReferencia, $escalaGanar);
         $fechaInicioGanar = (string)$rangoGanar['inicio'];
         $fechaFinGanar = (string)$rangoGanar['fin'];
+        if ($usarRangoPersonalizado) {
+            $fechaInicioGanar = $fechaInicio;
+            $fechaFinGanar = $fechaFin;
+        }
 
         $filtroRol = DataIsolation::generarFiltroPersonas();
         $filtroCelulas = DataIsolation::generarFiltroCelulas();

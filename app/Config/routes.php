@@ -45,6 +45,13 @@ return [
     'celulas/buscarPastores' => 'CelulaController@buscarPastores',
     'celulas/buscarAnfitriones' => 'CelulaController@buscarAnfitriones',
     'celulas/exportarExcel' => 'CelulaController@exportarExcel',
+
+    // Teen
+    'teen' => 'TeenController@index',
+    'teen/verPdf' => 'TeenController@verPdf',
+    'teen/editar' => 'TeenController@editar',
+    'teen/eliminar' => 'TeenController@eliminar',
+    'teen/detalleVistas' => 'TeenController@detalleVistas',
     
     // Ministerios
     'ministerios' => 'MinisterioController@index',

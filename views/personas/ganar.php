@@ -23,7 +23,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
         <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill">Personas</a>
         <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill active">Pendiente por consolidar</a>
         <?php if ($puedeExportarPersonas): ?>
-        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel&modo=ganar<?= ($filtroMinisterioActual ?? '') !== '' ? '&ministerio=' . urlencode((string)$filtroMinisterioActual) : '' ?><?= !empty($filtroSinLiderActual) ? '&sin_lider=1' : '' ?><?= !empty($filtroSinCelulaActual) ? '&sin_celula=1' : '' ?><?= ($filtroOrigenActual ?? '') !== '' ? '&origen=' . urlencode((string)$filtroOrigenActual) : '' ?>" class="btn btn-success">
+        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel&modo=ganar<?= ($filtroMinisterioActual ?? '') !== '' ? '&ministerio=' . urlencode((string)$filtroMinisterioActual) : '' ?><?= !empty($filtroSinLiderActual) ? '&sin_lider=1' : '' ?><?= !empty($filtroSinCelulaActual) ? '&sin_celula=1' : '' ?><?= ($filtroFechaInicioActual ?? '') !== '' ? '&fecha_inicio=' . urlencode((string)$filtroFechaInicioActual) : '' ?><?= ($filtroFechaFinActual ?? '') !== '' ? '&fecha_fin=' . urlencode((string)$filtroFechaFinActual) : '' ?><?= ($filtroOrigenActual ?? '') !== '' ? '&origen=' . urlencode((string)$filtroOrigenActual) : '' ?>" class="btn btn-success">
             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
         </a>
         <?php endif; ?>
@@ -37,7 +37,30 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 $filtroMinisterioPendiente = (string)($filtroMinisterioActual ?? '');
 $filtroSinLiderPendiente = !empty($filtroSinLiderActual);
 $filtroSinCelulaPendiente = !empty($filtroSinCelulaActual);
+$filtroFechaInicioPendiente = (string)($filtroFechaInicioActual ?? '');
+$filtroFechaFinPendiente = (string)($filtroFechaFinActual ?? '');
 $hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPendiente || $filtroSinCelulaPendiente;
+$hayFiltrosPendiente = $hayFiltrosPendiente || ($filtroFechaInicioPendiente !== '' && $filtroFechaFinPendiente !== '');
+
+$queryBasePendientes = [
+    'url' => 'personas/ganar',
+    'ministerio' => $filtroMinisterioPendiente,
+    'sin_lider' => $filtroSinLiderPendiente ? '1' : '',
+    'sin_celula' => $filtroSinCelulaPendiente ? '1' : '',
+    'fecha_inicio' => $filtroFechaInicioPendiente,
+    'fecha_fin' => $filtroFechaFinPendiente,
+];
+if (($filtroOrigenActual ?? '') !== '') {
+    $queryBasePendientes['origen'] = (string)$filtroOrigenActual;
+}
+
+$buildPendientesUrl = static function(array $extra = []) use ($queryBasePendientes) {
+    $params = array_merge($queryBasePendientes, $extra);
+    $params = array_filter($params, static function($value) {
+        return $value !== null && $value !== '';
+    });
+    return PUBLIC_URL . '?' . http_build_query($params);
+};
 ?>
 
 <div class="card" style="margin-bottom: 16px;">
@@ -71,6 +94,16 @@ $hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPen
                 </label>
             </div>
 
+            <div class="form-group" style="min-width: 180px;">
+                <label for="filtro_fecha_inicio" style="font-size: 14px; margin-bottom: 5px;">Fecha inicio</label>
+                <input type="date" id="filtro_fecha_inicio" name="fecha_inicio" class="form-control" value="<?= htmlspecialchars($filtroFechaInicioPendiente) ?>">
+            </div>
+
+            <div class="form-group" style="min-width: 180px;">
+                <label for="filtro_fecha_fin" style="font-size: 14px; margin-bottom: 5px;">Fecha fin</label>
+                <input type="date" id="filtro_fecha_fin" name="fecha_fin" class="form-control" value="<?= htmlspecialchars($filtroFechaFinPendiente) ?>">
+            </div>
+
             <div class="filters-actions" style="align-self:flex-end;">
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-funnel"></i> Filtrar
@@ -94,7 +127,7 @@ $hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPen
     <div class="card-body">
         <div class="ganar-shortcuts">
             <div class="ganar-shortcut-item">
-                <a href="<?= PUBLIC_URL ?>?url=personas/ganar&origen=celula" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'celula') ? 'active' : '' ?>">
+                <a href="<?= htmlspecialchars($buildPendientesUrl(['origen' => 'celula'])) ?>" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'celula') ? 'active' : '' ?>">
                     <span class="ganar-shortcut-title"><i class="bi bi-house-heart"></i> Ganados en célula</span>
                     <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['celula'] ?? 0) ?></span>
                 </a>
@@ -102,7 +135,7 @@ $hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPen
             </div>
 
             <div class="ganar-shortcut-item">
-                <a href="<?= PUBLIC_URL ?>?url=personas/ganar&origen=domingo" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'domingo') ? 'active' : '' ?>">
+                <a href="<?= htmlspecialchars($buildPendientesUrl(['origen' => 'domingo'])) ?>" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'domingo') ? 'active' : '' ?>">
                     <span class="ganar-shortcut-title"><i class="bi bi-building"></i> Ganados en iglesia</span>
                     <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['domingo'] ?? 0) ?></span>
                 </a>
@@ -111,7 +144,7 @@ $hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPen
 
             <?php if ($puedeVerAtajoAsignados): ?>
             <div class="ganar-shortcut-item">
-                <a href="<?= PUBLIC_URL ?>?url=personas/ganar&origen=asignados" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'asignados') ? 'active' : '' ?>">
+                <a href="<?= htmlspecialchars($buildPendientesUrl(['origen' => 'asignados'])) ?>" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'asignados') ? 'active' : '' ?>">
                     <span class="ganar-shortcut-title"><i class="bi bi-person-check"></i> Asignados</span>
                     <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['asignados'] ?? 0) ?></span>
                 </a>
@@ -121,7 +154,7 @@ $hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPen
 
             <?php if ($puedeVerAtajoReasignados): ?>
             <div class="ganar-shortcut-item">
-                <a href="<?= PUBLIC_URL ?>?url=personas/ganar&origen=reasignados" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'reasignados') ? 'active' : '' ?>">
+                <a href="<?= htmlspecialchars($buildPendientesUrl(['origen' => 'reasignados'])) ?>" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'reasignados') ? 'active' : '' ?>">
                     <span class="ganar-shortcut-title"><i class="bi bi-arrow-repeat"></i> Reasignados</span>
                     <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['reasignados'] ?? 0) ?></span>
                 </a>
@@ -130,7 +163,7 @@ $hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPen
             <?php endif; ?>
 
             <div class="ganar-shortcut-item">
-                <a href="<?= PUBLIC_URL ?>?url=personas/ganar&origen=no_disponible" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'no_disponible') ? 'active' : '' ?>">
+                <a href="<?= htmlspecialchars($buildPendientesUrl(['origen' => 'no_disponible'])) ?>" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'no_disponible') ? 'active' : '' ?>">
                     <span class="ganar-shortcut-title"><i class="bi bi-person-dash"></i> No se dispone</span>
                     <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['no_disponible'] ?? 0) ?></span>
                 </a>
@@ -172,7 +205,7 @@ $hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPen
                             <?php endif; ?>
                             <?php if (!empty($persona['Seguimiento_Reasignado'])): ?>
                             <div class="reasignado-note">
-                                Reasignado automático por falta de primer contacto (48h)
+                                Reasignado manualmente por cambio de líder
                             </div>
                             <?php endif; ?>
                         </td>

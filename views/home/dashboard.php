@@ -44,6 +44,14 @@
         <a href="<?= PUBLIC_URL ?>?url=home/lideres-celula" class="btn btn-primary btn-sm">Ver actividad</a>
     </div>
     <?php endif; ?>
+
+    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('teen', 'ver')): ?>
+    <div class="dashboard-card" style="border-left-color: #e83e8c;">
+        <h3>Material Teens</h3>
+        <div class="value" style="color: #e83e8c;">📚</div>
+        <a href="<?= PUBLIC_URL ?>?url=teen" class="btn btn-primary btn-sm">Ver materiales</a>
+    </div>
+    <?php endif; ?>
 </div>
 
 <?php if (!empty($eventosProximos) && (AuthController::esAdministrador() || AuthController::tienePermiso('eventos', 'ver'))): ?>

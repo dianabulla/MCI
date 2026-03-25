@@ -472,10 +472,43 @@ class PersonaController extends BaseController {
         $persona['Escalera_Checklist'] = json_encode($checklist, JSON_UNESCAPED_UNICODE);
         $persona['Seguimiento_No_Disponible'] = !empty($checklist['Ganar'][3]);
         $persona['Seguimiento_Observacion'] = (string)($checklist['_meta']['no_disponible_observacion'] ?? '');
-        $persona['Seguimiento_Reasignado'] = !empty($checklist['_meta']['reasignado_automatico']);
-        $persona['Seguimiento_Reasignado_At'] = (string)($checklist['_meta']['reasignado_automatico_at'] ?? '');
+        $persona['Seguimiento_Reasignado'] = !empty($checklist['_meta']['reasignado_manual']) || !empty($checklist['_meta']['reasignado_automatico']);
+        $persona['Seguimiento_Reasignado_At'] = (string)($checklist['_meta']['reasignado_manual_at'] ?? ($checklist['_meta']['reasignado_automatico_at'] ?? ''));
 
         return $persona;
+    }
+
+    private function marcarReasignacionManualSiAplica(array &$data, $personaAntes = null) {
+        if (!$this->soportaChecklistEscalera || !is_array($personaAntes) || empty($personaAntes)) {
+            return;
+        }
+
+        $idLiderAnterior = (int)($personaAntes['Id_Lider'] ?? 0);
+        $idLiderNuevo = (int)($data['Id_Lider'] ?? 0);
+
+        // Reasignado manual: solo cuando cambia de un líder existente a otro líder.
+        if ($idLiderAnterior <= 0 || $idLiderNuevo <= 0 || $idLiderAnterior === $idLiderNuevo) {
+            return;
+        }
+
+        $checklistRaw = (string)($personaAntes['Escalera_Checklist'] ?? '');
+        $checklistActual = [];
+        if ($checklistRaw !== '') {
+            $tmp = json_decode($checklistRaw, true);
+            if (is_array($tmp)) {
+                $checklistActual = $tmp;
+            }
+        }
+
+        $checklist = $this->normalizarChecklistEscalera($checklistActual);
+        $checklist['_meta']['reasignado_manual'] = true;
+        $checklist['_meta']['reasignado_manual_at'] = date('Y-m-d H:i:s');
+        $checklist['_meta']['reasignado_manual_motivo'] = 'Reasignacion manual de lider';
+
+        $checklistJson = json_encode($checklist, JSON_UNESCAPED_UNICODE);
+        if ($checklistJson !== false) {
+            $data['Escalera_Checklist'] = $checklistJson;
+        }
     }
 
     private function aplicarReglaReasignacionPrimerContacto($horasLimite = 48) {
@@ -1154,6 +1187,8 @@ class PersonaController extends BaseController {
         $filtroProceso = (string)($_GET['proceso'] ?? '');
         $filtroSinLider = (string)($_GET['sin_lider'] ?? '') === '1';
         $filtroSinCelula = (string)($_GET['sin_celula'] ?? '') === '1';
+        $filtroFechaInicio = trim((string)($_GET['fecha_inicio'] ?? ''));
+        $filtroFechaFin = trim((string)($_GET['fecha_fin'] ?? ''));
         $filtroEtapa = $this->normalizarEtapaFiltro($_GET['etapa'] ?? null);
         $filtroOrigen = $this->normalizarOrigenFiltro($_GET['origen'] ?? null);
         $puedeVerAtajoAsignados = $this->puedeVerAtajoAsignados();
@@ -1166,11 +1201,7 @@ class PersonaController extends BaseController {
             $filtroOrigen = '';
         }
 
-        // Regla de negocio: si en 48 horas no hay primer contacto, liberar líder/ministerio.
-        // Seguridad: solo aplicar cuando existe soporte de fecha de asignación.
-        if ($this->soportaFechaAsignacionLider) {
-            $this->aplicarReglaReasignacionPrimerContacto(48);
-        }
+        // Reasignación ahora es exclusivamente manual al cambiar el líder.
 
         // Pendientes por consolidar: mostrar siempre personas nuevas en etapa Ganar.
         if ($filtroEtapa === null || $filtroEtapa === '') {
@@ -1195,6 +1226,28 @@ class PersonaController extends BaseController {
 
         if ($filtroSinCelula) {
             $filtroCelula = '0';
+        }
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $filtroFechaInicio)) {
+            $filtroFechaInicio = '';
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $filtroFechaFin)) {
+            $filtroFechaFin = '';
+        }
+        if ($filtroFechaInicio !== '' && $filtroFechaFin !== '' && strcmp($filtroFechaInicio, $filtroFechaFin) > 0) {
+            [$filtroFechaInicio, $filtroFechaFin] = [$filtroFechaFin, $filtroFechaInicio];
+        }
+
+        $usarVistaHistoricaGanados = (
+            $filtroFechaInicio !== ''
+            && $filtroFechaFin !== ''
+            && in_array($filtroOrigen, ['celula', 'domingo'], true)
+        );
+
+        // Si se consulta por rango + origen de ganar, mostrar registros históricos
+        // aunque ya estén asignados o en etapas posteriores.
+        if ($usarVistaHistoricaGanados) {
+            $filtroEtapa = '';
         }
 
         $contextoFiltros = $this->getContextoFiltrosVisibles();
@@ -1228,21 +1281,22 @@ class PersonaController extends BaseController {
             || ($filtroLider !== null && $filtroLider !== '')
             || ($filtroEstado !== null && $filtroEstado !== '')
             || ($filtroCelula !== null && $filtroCelula !== '')
-            || ($filtroEtapa !== null && $filtroEtapa !== '');
+            || ($filtroEtapa !== null && $filtroEtapa !== '')
+            || ($filtroFechaInicio !== '' && $filtroFechaFin !== '');
 
         // Totales rápidos por origen sin limitar por el botón seleccionado.
         if ($hayFiltrosSinOrigen) {
-            $personasBaseConteo = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, null, $filtroEstado, $filtroCelula, $filtroEtapa, '');
+            $personasBaseConteo = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, null, $filtroEstado, $filtroCelula, $filtroEtapa, '', $filtroFechaInicio, $filtroFechaFin);
         } else {
-            $personasBaseConteo = $this->personaModel->getAllWithRole($filtroRol, null, $filtroEstado, $filtroCelula, $filtroEtapa, '');
+            $personasBaseConteo = $this->personaModel->getAllWithRole($filtroRol, null, $filtroEstado, $filtroCelula, $filtroEtapa, '', $filtroFechaInicio, $filtroFechaFin);
         }
         $personasBaseConteo = $this->enriquecerChecklistPersonas($personasBaseConteo);
         $totalesOrigenPendiente = $this->contarOrigenesPendientes($personasBaseConteo);
 
         if ($hayFiltrosSinOrigen || ($filtroOrigen !== '')) {
-            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, null, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen);
+            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, null, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         } else {
-            $personas = $this->personaModel->getAllWithRole($filtroRol, null, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen);
+            $personas = $this->personaModel->getAllWithRole($filtroRol, null, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         }
 
         $personas = $this->enriquecerChecklistPersonas($personas);
@@ -1260,7 +1314,7 @@ class PersonaController extends BaseController {
                 return empty($persona['Seguimiento_No_Disponible']);
             }));
 
-            if ($filtroOrigen !== '') {
+            if ($filtroOrigen !== '' && !$usarVistaHistoricaGanados) {
                 $personas = array_values(array_filter($personas, static function($persona) {
                     return empty($persona['Seguimiento_Reasignado']);
                 }));
@@ -1283,6 +1337,8 @@ class PersonaController extends BaseController {
             'filtroProcesoActual' => $filtroProceso,
             'filtroSinLiderActual' => $filtroSinLider,
             'filtroSinCelulaActual' => $filtroSinCelula,
+            'filtroFechaInicioActual' => $filtroFechaInicio,
+            'filtroFechaFinActual' => $filtroFechaFin,
             'filtroEtapaActual' => (string)($filtroEtapa ?? ''),
             'filtroOrigenActual' => (string)$filtroOrigen,
             'totalesOrigenPendiente' => $totalesOrigenPendiente
@@ -1312,7 +1368,10 @@ class PersonaController extends BaseController {
             'no_disponible_observacion' => '',
             'reasignado_automatico' => false,
             'reasignado_automatico_at' => '',
-            'reasignado_automatico_motivo' => ''
+            'reasignado_automatico_motivo' => '',
+            'reasignado_manual' => false,
+            'reasignado_manual_at' => '',
+            'reasignado_manual_motivo' => ''
         ];
 
         if (!is_array($checklist)) {
@@ -1335,6 +1394,9 @@ class PersonaController extends BaseController {
             $normalizado['_meta']['reasignado_automatico'] = !empty($checklist['_meta']['reasignado_automatico']);
             $normalizado['_meta']['reasignado_automatico_at'] = trim((string)($checklist['_meta']['reasignado_automatico_at'] ?? ''));
             $normalizado['_meta']['reasignado_automatico_motivo'] = trim((string)($checklist['_meta']['reasignado_automatico_motivo'] ?? ''));
+            $normalizado['_meta']['reasignado_manual'] = !empty($checklist['_meta']['reasignado_manual']);
+            $normalizado['_meta']['reasignado_manual_at'] = trim((string)($checklist['_meta']['reasignado_manual_at'] ?? ''));
+            $normalizado['_meta']['reasignado_manual_motivo'] = trim((string)($checklist['_meta']['reasignado_manual_motivo'] ?? ''));
         }
 
         return $normalizado;
@@ -1495,6 +1557,8 @@ class PersonaController extends BaseController {
         $filtroProceso = (string)($_GET['proceso'] ?? '');
         $filtroSinLider = (string)($_GET['sin_lider'] ?? '') === '1';
         $filtroSinCelula = (string)($_GET['sin_celula'] ?? '') === '1';
+        $filtroFechaInicio = trim((string)($_GET['fecha_inicio'] ?? ''));
+        $filtroFechaFin = trim((string)($_GET['fecha_fin'] ?? ''));
         $filtroEtapa = $this->normalizarEtapaFiltro($_GET['etapa'] ?? null);
         $filtroOrigen = $this->normalizarOrigenFiltro($_GET['origen'] ?? null);
         $puedeVerAtajoAsignados = $this->puedeVerAtajoAsignados();
@@ -1532,6 +1596,16 @@ class PersonaController extends BaseController {
             $filtroCelula = '0';
         }
 
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $filtroFechaInicio)) {
+            $filtroFechaInicio = '';
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $filtroFechaFin)) {
+            $filtroFechaFin = '';
+        }
+        if ($filtroFechaInicio !== '' && $filtroFechaFin !== '' && strcmp($filtroFechaInicio, $filtroFechaFin) > 0) {
+            [$filtroFechaInicio, $filtroFechaFin] = [$filtroFechaFin, $filtroFechaInicio];
+        }
+
         $contextoFiltros = $this->getContextoFiltrosVisibles();
         [$filtroMinisterio, $filtroLider] = $this->limpiarFiltrosNoPermitidos($filtroMinisterio, $filtroLider, $contextoFiltros);
 
@@ -1548,10 +1622,10 @@ class PersonaController extends BaseController {
 
         $filtroRol = DataIsolation::generarFiltroPersonas();
 
-        if (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '') || ($filtroEstado !== null && $filtroEstado !== '') || ($filtroCelula !== null && $filtroCelula !== '') || ($filtroEtapa !== null && $filtroEtapa !== '') || ($filtroOrigen !== '')) {
-            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, $soloGanar, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen);
+        if (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '') || ($filtroEstado !== null && $filtroEstado !== '') || ($filtroCelula !== null && $filtroCelula !== '') || ($filtroEtapa !== null && $filtroEtapa !== '') || ($filtroOrigen !== '') || ($filtroFechaInicio !== '' && $filtroFechaFin !== '')) {
+            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, $soloGanar, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         } else {
-            $personas = $this->personaModel->getAllWithRole($filtroRol, $soloGanar, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen);
+            $personas = $this->personaModel->getAllWithRole($filtroRol, $soloGanar, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         }
 
         if ($filtroPerfil !== '') {
@@ -1778,6 +1852,8 @@ class PersonaController extends BaseController {
             if ($this->soportaFechaAsignacionLider) {
                 $data['Fecha_Asignacion_Lider'] = $this->resolverFechaAsignacionLider($data, $personaAntes);
             }
+
+            $this->marcarReasignacionManualSiAplica($data, $personaAntes);
             
             // Agregar campos de acceso al sistema si se proporcionan (solo admin)
             if (AuthController::esAdministrador() && !$rolEsAsistente) {
