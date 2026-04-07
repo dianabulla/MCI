@@ -24,6 +24,7 @@ return [
     'personas/escalera' => 'PersonaController@escalera',
     'personas/actualizarChecklistEscalera' => 'PersonaController@actualizarChecklistEscalera',
     'personas/plantillas-whatsapp' => 'PersonaController@plantillasWhatsapp',
+    'personas/plantillas-whatsapp/programar' => 'PersonaController@programarPlantillaWhatsapp',
     'personas/crear' => 'PersonaController@crear',
     'personas/editar' => 'PersonaController@editar',
     'personas/detalle' => 'PersonaController@detalle',
@@ -69,12 +70,15 @@ return [
     'roles/exportarExcel' => 'RolController@exportarExcel',
     
     // Eventos
+    
+        // Eventos
     'eventos' => 'EventoController@index',
     'eventos/crear' => 'EventoController@crear',
     'eventos/editar' => 'EventoController@editar',
     'eventos/eliminar' => 'EventoController@eliminar',
     'eventos/exportarExcel' => 'EventoController@exportarExcel',
     'eventos/proximos' => 'EventoController@proximosPublico',
+    'eventos/compartir' => 'EventoController@compartirPublico',
     'eventos/universidad-vida' => 'EventoController@universidadVida',
     'eventos/capacitacion-destino' => 'EventoController@capacitacionDestino',
     'eventos/modulo/guardar' => 'EventoController@guardarModuloContenido',

@@ -65,10 +65,29 @@ class Evento extends BaseModel {
         return $this->query($sql);
     }
 
+    /**
+     * Obtener evento por id para compartir públicamente
+     */
+    public function getByIdPublico($id) {
+        $id = (int)$id;
+        if ($id <= 0) {
+            return null;
+        }
+
+        $sql = "SELECT * FROM {$this->table}
+                WHERE {$this->primaryKey} = ?
+                AND Fecha_Evento >= CURDATE()
+                LIMIT 1";
+
+        $rows = $this->query($sql, [$id]);
+        return $rows[0] ?? null;
+    }
+
     private function asegurarColumnasMultimedia() {
         $columnasEsperadas = [
             'Imagen_Evento' => "ALTER TABLE {$this->table} ADD COLUMN Imagen_Evento VARCHAR(255) NULL AFTER Lugar_Evento",
-            'Video_Evento' => "ALTER TABLE {$this->table} ADD COLUMN Video_Evento VARCHAR(255) NULL AFTER Imagen_Evento"
+            'Video_Evento' => "ALTER TABLE {$this->table} ADD COLUMN Video_Evento VARCHAR(255) NULL AFTER Imagen_Evento",
+            'Permitir_Compartir' => "ALTER TABLE {$this->table} ADD COLUMN Permitir_Compartir TINYINT(1) NOT NULL DEFAULT 1 AFTER Video_Evento"
         ];
 
         foreach ($columnasEsperadas as $columna => $sqlAlter) {

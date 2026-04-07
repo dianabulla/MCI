@@ -45,6 +45,60 @@ class ReporteController extends BaseController {
         return $fecha ? $fecha->format('Y-m-d') : '';
     }
 
+    private function normalizarMesYm($valor) {
+        $valor = trim((string)$valor);
+        if (!preg_match('/^\d{4}-\d{2}$/', $valor)) {
+            return '';
+        }
+
+        $fecha = DateTimeImmutable::createFromFormat('Y-m-d', $valor . '-01');
+        return $fecha ? $fecha->format('Y-m') : '';
+    }
+
+    private function formatearMesAnioEspanol($valorYm) {
+        $fecha = DateTimeImmutable::createFromFormat('Y-m-d', (string)$valorYm . '-01');
+        if (!$fecha) {
+            $fecha = new DateTimeImmutable('first day of this month');
+        }
+
+        $meses = [
+            1 => 'enero',
+            2 => 'febrero',
+            3 => 'marzo',
+            4 => 'abril',
+            5 => 'mayo',
+            6 => 'junio',
+            7 => 'julio',
+            8 => 'agosto',
+            9 => 'septiembre',
+            10 => 'octubre',
+            11 => 'noviembre',
+            12 => 'diciembre',
+        ];
+
+        $numeroMes = (int)$fecha->format('n');
+        return ucfirst($meses[$numeroMes] ?? $fecha->format('F')) . ' ' . $fecha->format('Y');
+    }
+
+    private function construirRangoMesCalendario($mesSeleccionado = '') {
+        $mesNormalizado = $this->normalizarMesYm($mesSeleccionado);
+        if ($mesNormalizado === '') {
+            $mesNormalizado = date('Y-m');
+        }
+
+        $fechaBase = DateTimeImmutable::createFromFormat('Y-m-d', $mesNormalizado . '-01');
+        if (!$fechaBase) {
+            $fechaBase = new DateTimeImmutable('first day of this month');
+        }
+
+        return [
+            'mes' => $fechaBase->format('Y-m'),
+            'inicio' => $fechaBase->modify('first day of this month')->format('Y-m-d'),
+            'fin' => $fechaBase->modify('last day of this month')->format('Y-m-d'),
+            'label' => $this->formatearMesAnioEspanol($fechaBase->format('Y-m'))
+        ];
+    }
+
     private function construirOpcionesFiltroMinisterioLider($filtroCelulas) {
         $celulasBase = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
 
@@ -629,7 +683,6 @@ class ReporteController extends BaseController {
             }));
         }
 
-        // Cuando se filtra por líder o célula, ambas tablas deben quedar en el mismo alcance.
         if ($idMinisterioFiltro === null && ($idLiderFiltro !== null || ($idCelulaFiltro !== null && (string)$idCelulaFiltro !== ''))) {
             $ministerioIdsConDatos = [];
             foreach ($personasSemestre as $persona) {
@@ -706,7 +759,7 @@ class ReporteController extends BaseController {
             if (strpos($tipoReunion, 'celula') !== false) {
                 $rowsMap[$idMinisterioPersona]['meses'][$mesKey]['celula']++;
                 $rowsMap[$idMinisterioPersona]['ganados']++;
-            } elseif (strpos($tipoReunion, 'domingo') !== false || strpos($tipoReunion, 'iglesia') !== false) {
+            } elseif (strpos($tipoReunion, 'domingo') !== false || strpos($tipoReunion, 'iglesia') !== false || strpos($tipoReunion, 'somos uno') !== false || strpos($tipoReunion, 'somosuno') !== false || strpos($tipoReunion, 'viernes') !== false || strpos($tipoReunion, 'otro') !== false) {
                 $rowsMap[$idMinisterioPersona]['meses'][$mesKey]['iglesia']++;
                 $rowsMap[$idMinisterioPersona]['ganados']++;
             }
@@ -750,7 +803,6 @@ class ReporteController extends BaseController {
     }
 
     public function index() {
-        // Verificar permiso de ver reportes
         if (!AuthController::esAdministrador() && !AuthController::tienePermiso('reportes', 'ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
@@ -782,6 +834,10 @@ class ReporteController extends BaseController {
         $filtroMinisterio = $_GET['ministerio'] ?? '';
         $filtroLider = $_GET['lider'] ?? '';
         $filtroMesMeta = $_GET['mes_meta'] ?? '';
+        $rangoEscalera = $this->construirRangoMesCalendario($_GET['mes_escalera'] ?? '');
+        $mesEscalera = (string)($rangoEscalera['mes'] ?? date('Y-m'));
+        $fechaInicioEscalera = (string)($rangoEscalera['inicio'] ?? date('Y-m-01'));
+        $fechaFinEscalera = (string)($rangoEscalera['fin'] ?? date('Y-m-t'));
         $escalaGanar = $this->resolverEscalaGanar($_GET['escala_ganar'] ?? 'semanal');
         $rangoGanar = $this->construirRangoGanar($fechaReferencia, $escalaGanar);
         $fechaInicioGanar = (string)$rangoGanar['inicio'];
@@ -796,7 +852,6 @@ class ReporteController extends BaseController {
             $fechaFinGanar = $fechaFin;
         }
 
-        // Generar filtros según el rol del usuario
         $filtroRol = DataIsolation::generarFiltroPersonas();
         $filtroCelulas = DataIsolation::generarFiltroCelulas();
         $filtroMinisterios = DataIsolation::generarFiltroMinisterios();
@@ -812,7 +867,6 @@ class ReporteController extends BaseController {
         $filtroLider = ($filtroLider !== '' && isset($opcionesFiltro['lider_ids_permitidos'][(int)$filtroLider])) ? (int)$filtroLider : '';
         $filtroCelulaGanar = $tipoReporte === 'personas' ? '' : $filtroCelula;
 
-        // Datos para gráfico de almas ganadas
         $almasGanadas = $this->personaModel->getAlmasGanadasPorMinisterioWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, $filtroMinisterio, $filtroLider);
 
         $resumenOrigenGanados = $this->personaModel->getResumenGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, $filtroMinisterio, $filtroLider);
@@ -824,10 +878,19 @@ class ReporteController extends BaseController {
 
         $almasPorEdades = $this->personaModel->getAlmasGanadasPorEdadesWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, $filtroMinisterio, $filtroLider);
 
-        // Resumen de etapas del proceso de ganar
         $procesoGanar = $this->personaModel->getResumenProcesoGanarWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, $filtroCelulaGanar, $filtroMinisterio, $filtroLider);
-        
-        // Datos para gráfico de asistencia
+
+        // Escalera del éxito: siempre consultar por mes y traer el mes actual por defecto.
+        $reporteEscaleraMesActual = $this->personaModel->getReporteEscaleraMesActual(
+            $filtroRol,
+            $fechaInicioEscalera,
+            $fechaFinEscalera,
+            $filtroMinisterio,
+            $filtroLider,
+            $filtroCelulaGanar
+        );
+        $reporteEscaleraMesActual['mes_label'] = (string)($rangoEscalera['label'] ?? ($reporteEscaleraMesActual['mes_label'] ?? ''));
+
         $asistenciaCelulas = $this->asistenciaModel->getAsistenciaPorCelulaWithRole($fechaInicio, $fechaFin, $filtroCelulas, $filtroMinisterio, $filtroLider);
         $indicadoresCelulas = $this->construirIndicadoresCelulas(
             $fechaReferencia,
@@ -880,7 +943,6 @@ class ReporteController extends BaseController {
         } elseif (in_array((string)$filtroMesMeta, $mesesMetaDisponibles, true)) {
             $filtroMesMeta = (string)$filtroMesMeta;
         } elseif (in_array($mesReferencia, $mesesMetaDisponibles, true)) {
-            // Vista por defecto compacta: mes de la fecha de referencia.
             $filtroMesMeta = $mesReferencia;
         } else {
             $filtroMesMeta = '';
@@ -910,6 +972,7 @@ class ReporteController extends BaseController {
             'filtro_ministerio' => (string)$filtroMinisterio,
             'filtro_lider' => (string)$filtroLider,
             'filtro_mes_meta' => $filtroMesMeta,
+            'mes_escalera' => $mesEscalera,
             'escala_ganar' => $escalaGanar,
             'ganar_label' => (string)($rangoGanar['label'] ?? 'Semanal'),
             'ganar_inicio' => $fechaInicioGanar,
@@ -922,6 +985,7 @@ class ReporteController extends BaseController {
             'detalle_origen_ganados' => $detalleOrigenGanados,
             'almas_por_edades' => $almasPorEdades,
             'proceso_ganar' => $procesoGanar,
+            'reporte_escalera_mes_actual' => $reporteEscaleraMesActual,
             'asistencia_celulas' => $asistenciaCelulas,
             'cumplimiento_metas' => $cumplimientoMetas,
             'indicadores_celulas' => $indicadoresCelulas,
@@ -955,6 +1019,9 @@ class ReporteController extends BaseController {
         $filtroCelula = $_GET['celula'] ?? '';
         $filtroMinisterio = $_GET['ministerio'] ?? '';
         $filtroLider = $_GET['lider'] ?? '';
+        $rangoEscalera = $this->construirRangoMesCalendario($_GET['mes_escalera'] ?? '');
+        $fechaInicioEscalera = (string)($rangoEscalera['inicio'] ?? date('Y-m-01'));
+        $fechaFinEscalera = (string)($rangoEscalera['fin'] ?? date('Y-m-t'));
         $tipoReporte = $this->resolverTipoReporte($_GET['tipo'] ?? 'personas');
         $escalaGanar = $this->resolverEscalaGanar($_GET['escala_ganar'] ?? 'semanal');
         $rangoGanar = $this->construirRangoGanar($fechaReferencia, $escalaGanar);
@@ -981,6 +1048,18 @@ class ReporteController extends BaseController {
         $procesoGanar = $this->personaModel->getResumenProcesoGanarWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, $filtroCelula, $filtroMinisterio, $filtroLider);
         $resumenOrigenGanados = $this->personaModel->getResumenGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, $filtroMinisterio, $filtroLider);
         $almasPorEdades = $this->personaModel->getAlmasGanadasPorEdadesWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, $filtroMinisterio, $filtroLider);
+
+        // Escalera del éxito para exportación con vista mensual y mes actual por defecto.
+        $reporteEscaleraMesActual = $this->personaModel->getReporteEscaleraMesActual(
+            $filtroRol,
+            $fechaInicioEscalera,
+            $fechaFinEscalera,
+            $filtroMinisterio,
+            $filtroLider,
+            $filtroCelula
+        );
+        $reporteEscaleraMesActual['mes_label'] = (string)($rangoEscalera['label'] ?? ($reporteEscaleraMesActual['mes_label'] ?? ''));
+
         $asistenciaCelulas = $this->asistenciaModel->getAsistenciaPorCelulaWithRole($fechaInicio, $fechaFin, $filtroCelulas, $filtroMinisterio, $filtroLider);
         $cumplimientoMetas = $this->construirTablaCumplimientoMetas(
             $fechaReferencia,
@@ -1054,6 +1133,26 @@ class ReporteController extends BaseController {
             $rows[] = ['Total', (string)($procesoGanar['Total'] ?? 0), '', '', '', '', ''];
 
             $rows[] = ['', '', '', '', '', '', ''];
+            $rows[] = ['Escalera del Exito - Mes Actual', '', '', '', '', '', ''];
+            $rows[] = ['Periodo', (string)($reporteEscaleraMesActual['inicio'] ?? '') . ' a ' . (string)($reporteEscaleraMesActual['fin'] ?? ''), '', '', '', '', ''];
+            $rows[] = ['Total personas del mes', (string)($reporteEscaleraMesActual['total_personas_mes'] ?? 0), '', '', '', '', ''];
+            $rows[] = ['Etapa', 'Peldaño', 'Cantidad', '', '', '', ''];
+
+            foreach (($reporteEscaleraMesActual['peldaños'] ?? []) as $etapa => $peldaños) {
+                foreach ($peldaños as $peldaño => $cantidad) {
+                    $rows[] = [
+                        (string)$etapa,
+                        (string)$peldaño,
+                        (string)$cantidad,
+                        '',
+                        '',
+                        '',
+                        ''
+                    ];
+                }
+            }
+
+            $rows[] = ['', '', '', '', '', '', ''];
             $rows[] = ['Ganados por Origen', '', '', '', '', '', ''];
             $rows[] = ['Ganados en Celula', (string)($resumenOrigenGanados['Ganados_Celula'] ?? 0), '', '', '', '', ''];
             $rows[] = ['Ganados en Domingo', (string)($resumenOrigenGanados['Ganados_Domingo'] ?? 0), '', '', '', '', ''];
@@ -1106,7 +1205,6 @@ class ReporteController extends BaseController {
         $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
         $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-t');
 
-        // Generar filtro según el rol del usuario
         $filtroRol = DataIsolation::generarFiltroPersonas();
 
         $data = $this->personaModel->getAlmasGanadasPorMinisterioWithRole($fechaInicio, $fechaFin, $filtroRol);
@@ -1119,7 +1217,6 @@ class ReporteController extends BaseController {
         $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
         $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-t');
 
-        // Generar filtro según el rol del usuario
         $filtroCelulas = DataIsolation::generarFiltroCelulas();
 
         $data = $this->asistenciaModel->getAsistenciaPorCelulaWithRole($fechaInicio, $fechaFin, $filtroCelulas);
@@ -1128,3 +1225,4 @@ class ReporteController extends BaseController {
         echo json_encode($data);
     }
 }
+

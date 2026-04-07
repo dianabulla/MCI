@@ -31,6 +31,14 @@
         </div>
 
         <div class="form-group">
+            <label class="no-realizada-toggle" for="no_se_realizo">
+                <input type="checkbox" id="no_se_realizo" name="no_se_realizo" value="1">
+                <span>No se realizó</span>
+            </label>
+            <small class="form-text text-muted">Márcala cuando la célula no pudo reunirse; las asistencias quedarán en no asistió.</small>
+        </div>
+
+        <div class="form-group">
             <label for="observaciones">Observaciones</label>
             <textarea id="observaciones" name="observaciones" class="form-control" rows="3"></textarea>
         </div>
@@ -84,6 +92,22 @@
     background-color: #667eea !important;
     color: #ffffff;
 }
+
+.no-realizada-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    color: #334155;
+    cursor: pointer;
+    margin-bottom: 4px;
+}
+
+.no-realizada-toggle input {
+    width: 16px;
+    height: 16px;
+    accent-color: #dc2626;
+}
 </style>
 
 <script>
@@ -104,7 +128,39 @@ const celulaInput = document.getElementById('celula_search');
 const celulaHidden = document.getElementById('id_celula');
 const celulaAutocomplete = document.getElementById('celula_autocomplete');
 const personaNuevaLink = document.getElementById('persona_nueva_link');
+const noSeRealizoCheck = document.getElementById('no_se_realizo');
+const observacionesInput = document.getElementById('observaciones');
 let currentFocus = -1;
+
+function syncNoSeRealizoState() {
+    const checksAsistencia = document.querySelectorAll('#lista-miembros input[type="checkbox"][name^="asistencias["]');
+    const bloqueado = !!(noSeRealizoCheck && noSeRealizoCheck.checked);
+
+    checksAsistencia.forEach((check) => {
+        if (bloqueado) {
+            check.checked = false;
+        }
+        check.disabled = bloqueado;
+
+        const fila = check.closest('tr');
+        if (fila) {
+            fila.style.opacity = bloqueado ? '0.6' : '1';
+        }
+    });
+
+    if (observacionesInput) {
+        const valor = observacionesInput.value.trim();
+        if (bloqueado && valor === '') {
+            observacionesInput.value = 'No se realizó';
+        } else if (!bloqueado && valor === 'No se realizó') {
+            observacionesInput.value = '';
+        }
+    }
+}
+
+if (noSeRealizoCheck) {
+    noSeRealizoCheck.addEventListener('change', syncNoSeRealizoState);
+}
 
 function actualizarEnlacePersonaNueva(celulaId) {
     if (!personaNuevaLink) return;
@@ -288,6 +344,7 @@ function cargarMiembrosCelula(celulaId) {
     listaMiembros.innerHTML = html;
     miembrosContainer.style.display = 'block';
     botonesAccion.style.display = 'flex';
+    syncNoSeRealizoState();
 }
 
 function escapeHtml(text) {

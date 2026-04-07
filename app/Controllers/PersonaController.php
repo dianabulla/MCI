@@ -25,6 +25,9 @@ class PersonaController extends BaseController {
     private $soportaChecklistEscalera = false;
     private $soportaConvencion = false;
     private $soportaFechaAsignacionLider = false;
+    private $soportaObservacionGanadoEn = false;
+    private $soportaCreadoPor = false;
+    private $soportaCanalCreacion = false;
 
     public function __construct() {
         $this->personaModel = new Persona();
@@ -39,10 +42,16 @@ class PersonaController extends BaseController {
         $this->personaModel->ensureConvencionColumnExists();
         $this->personaModel->ensureEscaleraChecklistColumnExists();
         $this->personaModel->ensureFechaAsignacionLiderColumnExists();
+        $this->personaModel->ensureObservacionGanadoEnColumnExists();
+        $this->personaModel->ensureCreadoPorColumnExists();
+        $this->personaModel->ensureCanalCreacionColumnExists();
         $this->soportaProceso = $this->personaModel->tieneColumna('Proceso');
         $this->soportaChecklistEscalera = $this->personaModel->tieneColumna('Escalera_Checklist');
         $this->soportaConvencion = $this->personaModel->tieneColumna('Convencion');
         $this->soportaFechaAsignacionLider = $this->personaModel->tieneColumna('Fecha_Asignacion_Lider');
+        $this->soportaObservacionGanadoEn = $this->personaModel->tieneColumna('Observacion_Ganado_En');
+        $this->soportaCreadoPor = $this->personaModel->tieneColumna('Creado_Por');
+        $this->soportaCanalCreacion = $this->personaModel->tieneColumna('Canal_Creacion');
     }
 
     /**
@@ -166,51 +175,78 @@ class PersonaController extends BaseController {
                 $payloadBienvenida['media_tipo'] ?? null
             );
         }
+    }
 
-        $idLider = (int)($personaNueva['Id_Lider'] ?? 0);
-        if ($idLider > 0 && $idLider !== $idPersona) {
-            $lider = $this->personaModel->getById($idLider);
-            if (!empty($lider) && !empty($lider['Telefono'])) {
-                $nombreLider = trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? ''));
-                $payloadLider = $this->whatsappMensajeTemplateModel->getTemplatePayload('asignacion_lider', array_merge($varsBase, [
-                    'lider_nombre' => $nombreLider,
-                    'destinatario_nombre' => $nombreLider
-                ]));
-                $this->whatsappLocalQueueModel->encolar(
-                    (string)$lider['Telefono'],
-                    (string)($payloadLider['mensaje'] ?? ''),
-                    'asignacion_lider',
-                    'persona:' . $idPersona . ':lider:' . $idLider . ':alta',
-                    $payloadLider['media_url'] ?? null,
-                    $payloadLider['media_tipo'] ?? null
-                );
+    private function encolarMensajeUniversidadALosLideres(array $personaNueva) {
+        if (!$this->whatsappLocalQueueModel) {
+            return;
+        }
+
+        $idPersona = (int)($personaNueva['Id_Persona'] ?? 0);
+        $idCelula = (int)($personaNueva['Id_Celula'] ?? 0);
+        $nombrePersona = trim((string)($personaNueva['Nombre'] ?? '') . ' ' . (string)($personaNueva['Apellido'] ?? ''));
+        $nombreCelula = '';
+        if (!empty($personaNueva['Nombre_Celula'])) {
+            $nombreCelula = (string)$personaNueva['Nombre_Celula'];
+        } elseif ($idCelula > 0) {
+            $celula = $this->celulaModel->getById($idCelula);
+            $nombreCelula = (string)($celula['Nombre_Celula'] ?? '');
+        }
+
+        require_once APP . '/Models/EventoModulo.php';
+        $eventoModuloModel = new EventoModulo();
+        $itemsUniversidad = $eventoModuloModel->getByModuloPublico('universidad_vida', date('Y-m-d'));
+
+        $urlUniversidad = $this->buildAbsolutePublicUrl('eventos/universidad-vida/publico');
+
+        $varsBase = [
+            'persona_nombre' => $nombrePersona,
+            'celula_nombre' => $nombreCelula,
+            'persona_id' => $idPersona,
+            'celula_id' => $idCelula,
+            'url_universidad_vida' => $urlUniversidad
+        ];
+
+        $infoUniversidad = '';
+        if (!empty($itemsUniversidad)) {
+            $primerItem = $itemsUniversidad[0];
+            $infoUniversidad = "📚 Universidad de la Vida: " . (string)($primerItem['Titulo'] ?? '');
+            if (!empty($primerItem['Parrafo'])) {
+                $parrafo = trim((string)$primerItem['Parrafo']);
+                if (strlen($parrafo) > 200) {
+                    $parrafo = substr($parrafo, 0, 197) . '...';
+                }
+                $infoUniversidad .= "\n\n" . $parrafo;
             }
         }
 
-        $idMinisterio = (int)($personaNueva['Id_Ministerio'] ?? 0);
-        if ($idMinisterio > 0) {
-            $destinatariosMinisterio = $this->obtenerDestinatariosMinisterio($idMinisterio, $idLider);
-            foreach ($destinatariosMinisterio as $destinatario) {
-                $idDestino = (int)($destinatario['Id_Persona'] ?? 0);
-                $telefonoDestino = (string)($destinatario['Telefono'] ?? '');
-                if ($telefonoDestino === '' || $idDestino <= 0) {
-                    continue;
-                }
+        $varsBase['universidad_vida_info'] = $infoUniversidad;
 
-                $nombreDestino = trim((string)($destinatario['Nombre'] ?? '') . ' ' . (string)($destinatario['Apellido'] ?? ''));
-                $payloadMinisterio = $this->whatsappMensajeTemplateModel->getTemplatePayload('asignacion_ministerio', array_merge($varsBase, [
-                    'destinatario_nombre' => $nombreDestino
-                ]));
+        $lideres = $this->personaModel->getLideresYPastores();
+        if (empty($lideres)) {
+            return;
+        }
 
-                $this->whatsappLocalQueueModel->encolar(
-                    $telefonoDestino,
-                    (string)($payloadMinisterio['mensaje'] ?? ''),
-                    'asignacion_ministerio',
-                    'persona:' . $idPersona . ':ministerio:' . $idMinisterio . ':alta:' . $idDestino,
-                    $payloadMinisterio['media_url'] ?? null,
-                    $payloadMinisterio['media_tipo'] ?? null
-                );
+        $payload = $this->whatsappMensajeTemplateModel->getTemplatePayload('asignacion_celula_universidad', $varsBase);
+        if (empty($payload['mensaje'])) {
+            return;
+        }
+
+        foreach ($lideres as $lider) {
+            $telefonoLider = trim((string)($lider['Telefono'] ?? ''));
+            $idLider = (int)($lider['Id_Persona'] ?? 0);
+            if ($telefonoLider === '' || $idLider <= 0) {
+                continue;
             }
+
+            $this->whatsappLocalQueueModel->encolar(
+                $telefonoLider,
+                (string)$payload['mensaje'],
+                'asignacion_celula_universidad',
+                'persona:' . $idPersona . ':lider:' . $idLider . ':universidad',
+                $payload['media_url'] ?? null,
+                $payload['media_tipo'] ?? null
+            );
         }
     }
 
@@ -293,9 +329,6 @@ class PersonaController extends BaseController {
         // Detectar cambio de célula y enviar mensaje con Universidad de la Vida
         $celulaAntes = (int)($personaAntes['Id_Celula'] ?? 0);
         $celulaDespues = (int)($personaDespues['Id_Celula'] ?? 0);
-        if ($celulaDespues > 0 && $celulaDespues !== $celulaAntes) {
-            $this->encolarMensajeAsignacionCelulaConUniversidad($personaDespues);
-        }
     }
 
     /**
@@ -375,20 +408,105 @@ class PersonaController extends BaseController {
         return in_array($proceso, $procesosPermitidos, true) ? $proceso : null;
     }
 
-    private function normalizarConvencion($convencion) {
-        $convencion = trim((string)$convencion);
-        $permitidas = [
+    private function getConvencionesPermitidas() {
+        return [
             'Convencion Enero',
             'Convencion Mujeres',
             'Convencion Jovenes',
             'Convencion Hombres'
         ];
+    }
 
-        if (in_array($convencion, $permitidas, true)) {
-            return $convencion;
+    private function normalizarConvencionesSeleccionadas($convenciones) {
+        $permitidas = $this->getConvencionesPermitidas();
+
+        if (!is_array($convenciones)) {
+            $convenciones = $convenciones !== null && trim((string)$convenciones) !== ''
+                ? [(string)$convenciones]
+                : [];
         }
 
-        return null;
+        $resultado = [];
+        foreach ($convenciones as $convencion) {
+            $convencion = trim((string)$convencion);
+            if ($convencion === '' || !in_array($convencion, $permitidas, true) || in_array($convencion, $resultado, true)) {
+                continue;
+            }
+            $resultado[] = $convencion;
+        }
+
+        return $resultado;
+    }
+
+    private function normalizarConvencion($convencion) {
+        if (is_array($convencion)) {
+            $convenciones = $this->normalizarConvencionesSeleccionadas($convencion);
+            return $convenciones[0] ?? null;
+        }
+
+        $convencion = trim((string)$convencion);
+        return in_array($convencion, $this->getConvencionesPermitidas(), true) ? $convencion : null;
+    }
+
+    private function construirChecklistEscaleraFormulario($checklistPayload, array $personaReferencia, array $convencionesSeleccionadas = []) {
+        $checklistActual = [];
+
+        if (is_array($checklistPayload)) {
+            $checklistActual = $checklistPayload;
+        } elseif (is_string($checklistPayload) && trim($checklistPayload) !== '') {
+            $decoded = json_decode($checklistPayload, true);
+            if (is_array($decoded)) {
+                $checklistActual = $decoded;
+            }
+        }
+
+        $checklistNormalizado = $this->normalizarChecklistEscalera($checklistActual);
+        $checklistNormalizado['Ganar'][0] = $this->personaTieneAsignacionCompleta($personaReferencia);
+        $checklistNormalizado['_meta']['convenciones'] = $this->normalizarConvencionesSeleccionadas($convencionesSeleccionadas);
+
+        return $checklistNormalizado;
+    }
+
+    private function normalizarTipoReunionInput($tipoReunion) {
+        $tipoReunion = trim((string)$tipoReunion);
+        if ($tipoReunion === '') {
+            return null;
+        }
+
+        $normalizado = strtolower($tipoReunion);
+        $normalizado = strtr($normalizado, [
+            'á' => 'a',
+            'é' => 'e',
+            'í' => 'i',
+            'ó' => 'o',
+            'ú' => 'u',
+            'ü' => 'u',
+            'ñ' => 'n'
+        ]);
+
+        $mapa = [
+            'domingo' => 'Domingo',
+            'somos uno' => 'Somos Uno',
+            'somos_uno' => 'Somos Uno',
+            'celula' => 'Celula',
+            'otro' => 'Otros',
+            'otros' => 'Otros',
+            'viernes' => 'Somos Uno',
+            'migrados' => 'Migrados',
+            'asignados' => 'Asignados'
+        ];
+
+        return $mapa[$normalizado] ?? $tipoReunion;
+    }
+
+    private function normalizarObservacionGanadoEn($tipoReunion, $observacion) {
+        $tipoReunion = $this->normalizarTipoReunionInput($tipoReunion);
+        if ($tipoReunion !== 'Otros') {
+            return null;
+        }
+
+        $observacion = trim((string)$observacion);
+        return $observacion !== '' ? $observacion : null;
     }
 
     private function normalizarEtapaFiltro($etapa) {
@@ -682,6 +800,29 @@ class PersonaController extends BaseController {
         }));
     }
 
+    private function filtrarPersonasPorLiderListado(array $personas, $idLider) {
+        $idLider = trim((string)$idLider);
+        if ($idLider === '') {
+            return $personas;
+        }
+
+        if ($idLider === '0') {
+            return array_values(array_filter($personas, static function($persona) {
+                return empty($persona['Id_Lider']);
+            }));
+        }
+
+        if (!ctype_digit($idLider)) {
+            return $personas;
+        }
+
+        $idLiderInt = (int)$idLider;
+
+        return array_values(array_filter($personas, static function($persona) use ($idLiderInt) {
+            return (int)($persona['Id_Lider'] ?? 0) === $idLiderInt;
+        }));
+    }
+
     private function obtenerSugerenciasNombreListado(array $personas, $limite = 200) {
         $sugerencias = [];
         $vistos = [];
@@ -759,7 +900,7 @@ class PersonaController extends BaseController {
             return 'celula';
         }
 
-        if (strpos($tipoReunion, 'domingo') !== false) {
+        if (strpos($tipoReunion, 'domingo') !== false || strpos($tipoReunion, 'iglesia') !== false || strpos($tipoReunion, 'somos uno') !== false || strpos($tipoReunion, 'somosuno') !== false || strpos($tipoReunion, 'viernes') !== false || strpos($tipoReunion, 'otro') !== false) {
             return $invitadoPor !== '' ? 'domingo' : 'asignados';
         }
 
@@ -827,7 +968,15 @@ class PersonaController extends BaseController {
             return 'Célula';
         }
 
-        if ($tipoReunion === '' || strpos($tipoReunion, 'domingo') !== false) {
+        if (strpos($tipoReunion, 'somos uno') !== false || strpos($tipoReunion, 'somosuno') !== false || strpos($tipoReunion, 'viernes') !== false) {
+            return 'Somos Uno';
+        }
+
+        if (strpos($tipoReunion, 'otro') !== false) {
+            return 'Otros';
+        }
+
+        if ($tipoReunion === '' || strpos($tipoReunion, 'domingo') !== false || strpos($tipoReunion, 'iglesia') !== false) {
             return 'Domingo';
         }
 
@@ -1029,36 +1178,39 @@ class PersonaController extends BaseController {
 
         $filtroPerfil = $this->normalizarPerfilListado($_GET['perfil'] ?? '');
         $filtroMinisterio = isset($_GET['ministerio']) ? trim((string)$_GET['ministerio']) : '';
+        $filtroLider = isset($_GET['lider']) ? trim((string)$_GET['lider']) : '';
         $filtroNombre = trim((string)($_GET['buscar'] ?? ''));
         if ($filtroMinisterio !== '' && $filtroMinisterio !== '0' && !ctype_digit($filtroMinisterio)) {
             $filtroMinisterio = '';
+        }
+        if ($filtroLider !== '' && $filtroLider !== '0' && !ctype_digit($filtroLider)) {
+            $filtroLider = '';
         }
 
         // Aplicar aislamiento por rol del usuario conectado.
         $filtroRol = DataIsolation::generarFiltroPersonas();
         $contextoFiltros = $this->getContextoFiltrosVisibles();
         $ministerios = $contextoFiltros['ministerios'] ?? [];
-        if ($contextoFiltros['restringido']) {
-            $ministerioIdsPermitidos = $contextoFiltros['ministerioIdsPermitidos'] ?? [];
-            if ($filtroMinisterio !== '' && $filtroMinisterio !== '0' && !in_array((int)$filtroMinisterio, $ministerioIdsPermitidos, true)) {
-                $filtroMinisterio = '';
-            }
-        }
+        $lideres = $contextoFiltros['lideres'] ?? [];
+        [$filtroMinisterio, $filtroLider] = $this->limpiarFiltrosNoPermitidos($filtroMinisterio, $filtroLider, $contextoFiltros);
 
-        // Base general: todas las personas visibles (incluye asignadas y pendientes).
-        $personasBase = $this->personaModel->getAllWithRole($filtroRol, null);
+        // Base general: solo personas con asignación completa, según la regla de negocio.
+        $personasBase = $this->personaModel->getAllWithRole($filtroRol, false);
         $personasBaseFiltradasPorMinisterio = $this->filtrarPersonasPorMinisterioListado($personasBase, $filtroMinisterio);
+        $personasBaseFiltradasPorLider = $this->filtrarPersonasPorLiderListado($personasBaseFiltradasPorMinisterio, $filtroLider);
         // El resumen por rol respeta la búsqueda por nombre actual.
-        $personasBaseFiltradasPorNombre = $this->filtrarPersonasPorNombreListado($personasBaseFiltradasPorMinisterio, $filtroNombre);
+        $personasBaseFiltradasPorNombre = $this->filtrarPersonasPorNombreListado($personasBaseFiltradasPorLider, $filtroNombre);
         $totalesPerfil = $this->contarPerfilesListado($personasBaseFiltradasPorNombre);
         $personas = $this->filtrarPersonasPorPerfilListado($personasBaseFiltradasPorNombre, $filtroPerfil);
-        $sugerenciasNombre = $this->obtenerSugerenciasNombreListado($personasBaseFiltradasPorMinisterio);
+        $sugerenciasNombre = $this->obtenerSugerenciasNombreListado($personasBaseFiltradasPorLider);
 
         $this->view('personas/lista', [
             'personas' => $personas,
             'ministerios' => $ministerios,
+            'lideres' => $lideres,
             'filtroPerfilActual' => $filtroPerfil,
             'filtroMinisterioActual' => $filtroMinisterio,
+            'filtroLiderActual' => $filtroLider,
             'filtroNombreActual' => $filtroNombre,
             'totalesPerfil' => $totalesPerfil,
             'sugerenciasNombre' => $sugerenciasNombre
@@ -1076,6 +1228,109 @@ class PersonaController extends BaseController {
             'variablesPlantillasWhatsapp' => $this->whatsappMensajeTemplateModel->getVariablesDisponibles(),
             'plantillasGuardadas' => (($_GET['tpl_msg'] ?? '') === 'ok')
         ]);
+    }
+
+    public function programarPlantillaWhatsapp() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('personas/plantillas-whatsapp');
+        }
+
+        if (!$this->puedeVerPlantillasWhatsapp()) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $templateKey = trim((string)($_POST['template_key'] ?? ''));
+        $scheduledAtRaw = trim((string)($_POST['programado_en'] ?? ''));
+
+        $plantillas = $this->whatsappMensajeTemplateModel->getPlantillas();
+        if (!isset($plantillas[$templateKey])) {
+            $this->redirect('personas/plantillas-whatsapp&schedule_error=template_invalid');
+        }
+
+        if ($scheduledAtRaw === '') {
+            $this->redirect('personas/plantillas-whatsapp&schedule_error=missing_datetime');
+        }
+
+        $scheduledAt = DateTime::createFromFormat('Y-m-d\TH:i', $scheduledAtRaw);
+        if ($scheduledAt === false) {
+            $scheduledAt = DateTime::createFromFormat('Y-m-d H:i', $scheduledAtRaw);
+        }
+        if ($scheduledAt === false || $scheduledAt === null) {
+            $this->redirect('personas/plantillas-whatsapp&schedule_error=invalid_datetime');
+        }
+
+        $now = new DateTime();
+        if ($scheduledAt < $now) {
+            $this->redirect('personas/plantillas-whatsapp&schedule_error=past_datetime');
+        }
+
+        $varsBase = [
+            'persona_nombre' => 'líder',
+            'celula_nombre' => '',
+            'persona_id' => '',
+            'celula_id' => '',
+            'lider_nombre' => 'líder',
+            'destinatario_nombre' => 'líder',
+            'ministerio_nombre' => '',
+            'url_peticiones' => $this->buildAbsolutePublicUrl('peticiones/crear'),
+            'url_universidad_vida' => $this->buildAbsolutePublicUrl('eventos/universidad-vida/publico')
+        ];
+
+        require_once APP . '/Models/EventoModulo.php';
+        $eventoModuloModel = new EventoModulo();
+        $itemsUniversidad = $eventoModuloModel->getByModuloPublico('universidad_vida', date('Y-m-d'));
+        $infoUniversidad = '';
+        if (!empty($itemsUniversidad)) {
+            $primerItem = $itemsUniversidad[0];
+            $infoUniversidad = "📚 Universidad de la Vida: " . (string)($primerItem['Titulo'] ?? '');
+            if (!empty($primerItem['Parrafo'])) {
+                $parrafo = trim((string)$primerItem['Parrafo']);
+                if (strlen($parrafo) > 200) {
+                    $parrafo = substr($parrafo, 0, 197) . '...';
+                }
+                $infoUniversidad .= "\n\n" . $parrafo;
+            }
+        }
+        $varsBase['universidad_vida_info'] = $infoUniversidad;
+
+        $payload = $this->whatsappMensajeTemplateModel->getTemplatePayload($templateKey, $varsBase);
+        $mensaje = trim((string)($payload['mensaje'] ?? ''));
+        if ($mensaje === '') {
+            $this->redirect('personas/plantillas-whatsapp&schedule_error=empty_message');
+        }
+
+        $lideres = $this->personaModel->getLideresYPastores();
+        if (empty($lideres)) {
+            $this->redirect('personas/plantillas-whatsapp&schedule_error=no_leaders');
+        }
+
+        $scheduledAtFormatted = $scheduledAt->format('Y-m-d H:i:s');
+        $enqueued = 0;
+        foreach ($lideres as $lider) {
+            $telefonoLider = trim((string)($lider['Telefono'] ?? ''));
+            $idLider = (int)($lider['Id_Persona'] ?? 0);
+            if ($telefonoLider === '' || $idLider <= 0) {
+                continue;
+            }
+
+            $this->whatsappLocalQueueModel->encolar(
+                $telefonoLider,
+                $mensaje,
+                'programacion_' . $templateKey,
+                'programacion:' . $templateKey . ':lider:' . $idLider,
+                $payload['media_url'] ?? null,
+                $payload['media_tipo'] ?? null,
+                $scheduledAtFormatted
+            );
+            $enqueued++;
+        }
+
+        if ($enqueued === 0) {
+            $this->redirect('personas/plantillas-whatsapp&schedule_error=no_leaders_found');
+        }
+
+        $this->redirect('personas/plantillas-whatsapp&schedule_msg=ok&schedule_count=' . $enqueued);
     }
 
     private function subirMediaPlantilla($claveTemplate, $campoArchivo, $mediaActualUrl = null) {
@@ -1152,21 +1407,15 @@ class PersonaController extends BaseController {
         }
 
         $this->whatsappMensajeTemplateModel->actualizarPlantilla('bienvenida_persona', $_POST['tpl_bienvenida_persona'] ?? '');
-        $this->whatsappMensajeTemplateModel->actualizarPlantilla('asignacion_lider', $_POST['tpl_asignacion_lider'] ?? '');
-        $this->whatsappMensajeTemplateModel->actualizarPlantilla('asignacion_ministerio', $_POST['tpl_asignacion_ministerio'] ?? '');
         $this->whatsappMensajeTemplateModel->actualizarPlantilla('felicitacion_cumpleanos', $_POST['tpl_felicitacion_cumpleanos'] ?? '');
         $this->whatsappMensajeTemplateModel->actualizarPlantilla('asignacion_celula_universidad', $_POST['tpl_asignacion_celula_universidad'] ?? '');
 
         $plantillas = $this->whatsappMensajeTemplateModel->getPlantillas();
         $bienvenidaMedia = $this->subirMediaPlantilla('bienvenida_persona', 'media_bienvenida_persona', $plantillas['bienvenida_persona']['media_url'] ?? null);
-        $liderMedia = $this->subirMediaPlantilla('asignacion_lider', 'media_asignacion_lider', $plantillas['asignacion_lider']['media_url'] ?? null);
-        $ministerioMedia = $this->subirMediaPlantilla('asignacion_ministerio', 'media_asignacion_ministerio', $plantillas['asignacion_ministerio']['media_url'] ?? null);
         $cumpleanosMedia = $this->subirMediaPlantilla('felicitacion_cumpleanos', 'media_felicitacion_cumpleanos', $plantillas['felicitacion_cumpleanos']['media_url'] ?? null);
         $celulaUniversidadMedia = $this->subirMediaPlantilla('asignacion_celula_universidad', 'media_asignacion_celula_universidad', $plantillas['asignacion_celula_universidad']['media_url'] ?? null);
 
         $this->whatsappMensajeTemplateModel->actualizarMedia('bienvenida_persona', $bienvenidaMedia['media_url'], $bienvenidaMedia['media_tipo']);
-        $this->whatsappMensajeTemplateModel->actualizarMedia('asignacion_lider', $liderMedia['media_url'], $liderMedia['media_tipo']);
-        $this->whatsappMensajeTemplateModel->actualizarMedia('asignacion_ministerio', $ministerioMedia['media_url'], $ministerioMedia['media_tipo']);
         $this->whatsappMensajeTemplateModel->actualizarMedia('felicitacion_cumpleanos', $cumpleanosMedia['media_url'], $cumpleanosMedia['media_tipo']);
         $this->whatsappMensajeTemplateModel->actualizarMedia('asignacion_celula_universidad', $celulaUniversidadMedia['media_url'], $celulaUniversidadMedia['media_tipo']);
 
@@ -1203,9 +1452,10 @@ class PersonaController extends BaseController {
 
         // Reasignación ahora es exclusivamente manual al cambiar el líder.
 
-        // Pendientes por consolidar: mostrar siempre personas nuevas en etapa Ganar.
-        if ($filtroEtapa === null || $filtroEtapa === '') {
-            $filtroEtapa = 'Ganar';
+        // Pendientes por consolidar debe incluir cualquier persona con
+        // asignación incompleta, incluso si Proceso está vacío o en otra etapa.
+        if ($filtroEtapa !== null) {
+            $filtroEtapa = (string)$filtroEtapa;
         }
 
         if (!in_array($filtroProceso, ['', 'sin_ministerio', 'sin_lider', 'sin_celula'], true)) {
@@ -1286,17 +1536,17 @@ class PersonaController extends BaseController {
 
         // Totales rápidos por origen sin limitar por el botón seleccionado.
         if ($hayFiltrosSinOrigen) {
-            $personasBaseConteo = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, null, $filtroEstado, $filtroCelula, $filtroEtapa, '', $filtroFechaInicio, $filtroFechaFin);
+            $personasBaseConteo = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, true, $filtroEstado, $filtroCelula, $filtroEtapa, '', $filtroFechaInicio, $filtroFechaFin);
         } else {
-            $personasBaseConteo = $this->personaModel->getAllWithRole($filtroRol, null, $filtroEstado, $filtroCelula, $filtroEtapa, '', $filtroFechaInicio, $filtroFechaFin);
+            $personasBaseConteo = $this->personaModel->getAllWithRole($filtroRol, true, $filtroEstado, $filtroCelula, $filtroEtapa, '', $filtroFechaInicio, $filtroFechaFin);
         }
         $personasBaseConteo = $this->enriquecerChecklistPersonas($personasBaseConteo);
         $totalesOrigenPendiente = $this->contarOrigenesPendientes($personasBaseConteo);
 
         if ($hayFiltrosSinOrigen || ($filtroOrigen !== '')) {
-            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, null, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
+            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, true, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         } else {
-            $personas = $this->personaModel->getAllWithRole($filtroRol, null, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
+            $personas = $this->personaModel->getAllWithRole($filtroRol, true, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         }
 
         $personas = $this->enriquecerChecklistPersonas($personas);
@@ -1345,10 +1595,45 @@ class PersonaController extends BaseController {
         ]);
     }
 
-    public function escalera() {
-        // Flujo unificado: el seguimiento de escalera ahora se gestiona por persona
-        // desde los listados de Personas y Pendiente por consolidar.
-        $this->redirect('personas');
+        public function escalera()
+    {
+        if (!AuthController::tienePermiso('personas', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $etapaFiltroActual = trim((string)($_GET['etapa'] ?? ''));
+        $etapasPermitidas = ['ganar', 'consolidar', 'discipular', 'enviar', 'sin_etapa'];
+
+        if (!in_array($etapaFiltroActual, $etapasPermitidas, true)) {
+            $etapaFiltroActual = '';
+        }
+
+        $mapaFiltroAEtapa = [
+            'ganar' => 'Ganar',
+            'consolidar' => 'Consolidar',
+            'discipular' => 'Discipular',
+            'enviar' => 'Enviar',
+            'sin_etapa' => 'sin_etapa'
+        ];
+
+        $etapaConsulta = $etapaFiltroActual !== '' ? ($mapaFiltroAEtapa[$etapaFiltroActual] ?? '') : '';
+
+        $filtroRol = DataIsolation::generarFiltroPersonas();
+
+        $personas = $this->personaModel->getPersonasEscalera($filtroRol, $etapaConsulta);
+        $totalesEtapa = $this->personaModel->getTotalesEscalera($filtroRol);
+        $reporteEscaleraMesActual = $this->personaModel->getReporteEscaleraMesActual($filtroRol);
+
+        $puedeEditarChecklistEscalera = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
+
+        $this->view('personas/escalera', [
+            'personas' => $personas,
+            'totalesEtapa' => $totalesEtapa,
+            'filtroEtapaActual' => $etapaFiltroActual,
+            'puedeEditarChecklistEscalera' => $puedeEditarChecklistEscalera,
+            'reporteEscaleraMesActual' => $reporteEscaleraMesActual,
+        ]);
     }
 
     private function normalizarChecklistEscalera($checklist) {
@@ -1366,6 +1651,7 @@ class PersonaController extends BaseController {
 
         $normalizado['_meta'] = [
             'no_disponible_observacion' => '',
+            'convenciones' => [],
             'reasignado_automatico' => false,
             'reasignado_automatico_at' => '',
             'reasignado_automatico_motivo' => '',
@@ -1391,6 +1677,7 @@ class PersonaController extends BaseController {
 
         if (isset($checklist['_meta']) && is_array($checklist['_meta'])) {
             $normalizado['_meta']['no_disponible_observacion'] = trim((string)($checklist['_meta']['no_disponible_observacion'] ?? ''));
+            $normalizado['_meta']['convenciones'] = $this->normalizarConvencionesSeleccionadas($checklist['_meta']['convenciones'] ?? []);
             $normalizado['_meta']['reasignado_automatico'] = !empty($checklist['_meta']['reasignado_automatico']);
             $normalizado['_meta']['reasignado_automatico_at'] = trim((string)($checklist['_meta']['reasignado_automatico_at'] ?? ''));
             $normalizado['_meta']['reasignado_automatico_motivo'] = trim((string)($checklist['_meta']['reasignado_automatico_motivo'] ?? ''));
@@ -1571,8 +1858,8 @@ class PersonaController extends BaseController {
             $filtroOrigen = '';
         }
 
-        if ($esModoGanar && ($filtroEtapa === null || $filtroEtapa === '')) {
-            $filtroEtapa = 'Ganar';
+        if ($esModoGanar && $filtroEtapa !== null) {
+            $filtroEtapa = (string)$filtroEtapa;
         }
         $filtroPerfil = $this->normalizarPerfilListado($_GET['perfil'] ?? '');
 
@@ -1673,7 +1960,29 @@ class PersonaController extends BaseController {
             $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
             $idMinisterioNormalizado = $this->normalizarIdMinisterioPost($_POST['id_ministerio'] ?? null);
             $idLiderNormalizado = $this->normalizarIdLiderPost($_POST['id_lider'] ?? null);
+            $tipoReunionNormalizado = $this->normalizarTipoReunionInput($_POST['tipo_reunion'] ?? null);
+            $observacionGanadoEn = $this->normalizarObservacionGanadoEn($tipoReunionNormalizado, $_POST['ganado_en_otro_observacion'] ?? null);
+            $convencionesSeleccionadas = $this->normalizarConvencionesSeleccionadas($_POST['convenciones'] ?? ($_POST['convencion'] ?? null));
 
+            if ($tipoReunionNormalizado === 'Otros' && $observacionGanadoEn === null) {
+                $viewData = [
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => 'Debes escribir una observación cuando seleccionas Otros en Ganado en.',
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'return_to' => $returnTo,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $viewData);
+                return;
+            }
+
+            $usuarioIdCreador = isset($_SESSION['usuario_id']) ? (int)$_SESSION['usuario_id'] : 0;
             $data = [
                 'Nombre' => $_POST['nombre'],
                 'Apellido' => $_POST['apellido'],
@@ -1688,7 +1997,7 @@ class PersonaController extends BaseController {
                 'Barrio' => $_POST['barrio'] ?: null,
                 'Peticion' => $_POST['peticion'] ?: null,
                 'Invitado_Por' => $_POST['invitado_por'] ?: null,
-                'Tipo_Reunion' => $_POST['tipo_reunion'] ?: null,
+                'Tipo_Reunion' => $tipoReunionNormalizado,
                 'Id_Lider' => $idLiderNormalizado,
                 'Id_Celula' => $_POST['id_celula'] ?: null,
                 'Id_Rol' => $_POST['id_rol'] ?: null,
@@ -1697,13 +2006,59 @@ class PersonaController extends BaseController {
                 'Fecha_Registro_Unix' => time()
             ];
 
+            if ($this->soportaCreadoPor) {
+                $data['Creado_Por'] = $usuarioIdCreador > 0 ? $usuarioIdCreador : null;
+            }
+
+            if ($this->soportaCanalCreacion) {
+                $data['Canal_Creacion'] = $usuarioIdCreador > 0 ? 'Sistema interno' : 'Registro interno';
+            }
+
+            $checklistNormalizado = $this->soportaChecklistEscalera
+                ? $this->construirChecklistEscaleraFormulario($_POST['escalera_checklist'] ?? null, $data, $convencionesSeleccionadas)
+                : null;
+
+            if ($checklistNormalizado !== null && !empty($checklistNormalizado['Ganar'][3]) && trim((string)($checklistNormalizado['_meta']['no_disponible_observacion'] ?? '')) === '') {
+                $viewData = [
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => 'Debes escribir una observación cuando marcas No se dispone en la Escalera del Éxito.',
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'soportaChecklistEscalera' => $this->soportaChecklistEscalera,
+                    'return_to' => $returnTo,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $viewData);
+                return;
+            }
+
             if ($this->soportaConvencion) {
-                $data['Convencion'] = $this->normalizarConvencion($_POST['convencion'] ?? null);
+                $data['Convencion'] = $convencionesSeleccionadas[0] ?? null;
+            }
+
+            if ($this->soportaObservacionGanadoEn) {
+                $data['Observacion_Ganado_En'] = $observacionGanadoEn;
+            }
+
+            if ($this->soportaChecklistEscalera && $checklistNormalizado !== null) {
+                $checklistJson = json_encode($checklistNormalizado, JSON_UNESCAPED_UNICODE);
+                if ($checklistJson !== false) {
+                    $data['Escalera_Checklist'] = $checklistJson;
+                }
+                if (!empty($checklistNormalizado['Ganar'][3])) {
+                    $data['Estado_Cuenta'] = 'Inactivo';
+                }
             }
 
             if ($this->soportaProceso) {
-                    // Regla ministerial: toda persona nueva inicia en la etapa Ganar.
-                    $data['Proceso'] = 'Ganar';
+                $data['Proceso'] = $checklistNormalizado !== null
+                    ? $this->calcularProcesoPorChecklist($checklistNormalizado)
+                    : 'Ganar';
             }
 
             // Regla de negocio: si se crea desde Asistencias, se ancla automáticamente
@@ -1819,6 +2174,29 @@ class PersonaController extends BaseController {
             $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
             $idMinisterioNormalizado = $this->normalizarIdMinisterioPost($_POST['id_ministerio'] ?? null);
             $idLiderNormalizado = $this->normalizarIdLiderPost($_POST['id_lider'] ?? null, $id);
+            $tipoReunionNormalizado = $this->normalizarTipoReunionInput($_POST['tipo_reunion'] ?? null);
+            $observacionGanadoEn = $this->normalizarObservacionGanadoEn($tipoReunionNormalizado, $_POST['ganado_en_otro_observacion'] ?? null);
+            $convencionesSeleccionadas = $this->normalizarConvencionesSeleccionadas($_POST['convenciones'] ?? ($_POST['convencion'] ?? null));
+
+            if ($tipoReunionNormalizado === 'Otros' && $observacionGanadoEn === null) {
+                $persona = $this->personaModel->getById($id);
+                $viewData = [
+                    'persona' => $persona,
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => 'Debes escribir una observación cuando seleccionas Otros en Ganado en.',
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'return_to' => $returnTo,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $viewData);
+                return;
+            }
 
             $data = [
                 'Nombre' => $_POST['nombre'],
@@ -1834,19 +2212,60 @@ class PersonaController extends BaseController {
                 'Barrio' => $_POST['barrio'] ?: null,
                 'Peticion' => $_POST['peticion'] ?: null,
                 'Invitado_Por' => $_POST['invitado_por'] ?: null,
-                'Tipo_Reunion' => $_POST['tipo_reunion'] ?: null,
+                'Tipo_Reunion' => $tipoReunionNormalizado,
                 'Id_Lider' => $idLiderNormalizado,
                 'Id_Celula' => $_POST['id_celula'] ?: null,
                 'Id_Rol' => $_POST['id_rol'] ?: null,
                 'Id_Ministerio' => $idMinisterioNormalizado
             ];
 
+            $checklistNormalizado = $this->soportaChecklistEscalera
+                ? $this->construirChecklistEscaleraFormulario($_POST['escalera_checklist'] ?? ($personaAntes['Escalera_Checklist'] ?? null), array_merge($personaAntes ?: [], $data), $convencionesSeleccionadas)
+                : null;
+
+            if ($checklistNormalizado !== null && !empty($checklistNormalizado['Ganar'][3]) && trim((string)($checklistNormalizado['_meta']['no_disponible_observacion'] ?? '')) === '') {
+                $persona = $this->personaModel->getById($id);
+                $viewData = [
+                    'persona' => $persona,
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => 'Debes escribir una observación cuando marcas No se dispone en la Escalera del Éxito.',
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'soportaChecklistEscalera' => $this->soportaChecklistEscalera,
+                    'return_to' => $returnTo,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $viewData);
+                return;
+            }
+
             if ($this->soportaConvencion) {
-                $data['Convencion'] = $this->normalizarConvencion($_POST['convencion'] ?? null);
+                $data['Convencion'] = $convencionesSeleccionadas[0] ?? null;
+            }
+
+            if ($this->soportaObservacionGanadoEn) {
+                $data['Observacion_Ganado_En'] = $observacionGanadoEn;
+            }
+
+            if ($this->soportaChecklistEscalera && $checklistNormalizado !== null) {
+                $checklistJson = json_encode($checklistNormalizado, JSON_UNESCAPED_UNICODE);
+                if ($checklistJson !== false) {
+                    $data['Escalera_Checklist'] = $checklistJson;
+                }
+                if (!empty($checklistNormalizado['Ganar'][3])) {
+                    $data['Estado_Cuenta'] = 'Inactivo';
+                }
             }
 
             if ($this->soportaProceso) {
-                $data['Proceso'] = $this->normalizarProceso($_POST['proceso'] ?? null);
+                $data['Proceso'] = $checklistNormalizado !== null
+                    ? $this->calcularProcesoPorChecklist($checklistNormalizado)
+                    : $this->normalizarProceso($_POST['proceso'] ?? null);
             }
 
             if ($this->soportaFechaAsignacionLider) {

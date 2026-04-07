@@ -86,6 +86,42 @@ $reporteGanadosFinSemanaAnterior = $reporte_ganados_fin_semana_anterior ?? [
     'texto' => ''
 ];
 
+$reporteEscaleraMesActual = $reporte_escalera_mes_actual ?? [
+    'inicio' => date('Y-m-01'),
+    'fin' => date('Y-m-t'),
+    'mes_label' => date('F Y'),
+    'total_personas_mes' => 0,
+    'totales_etapa' => [
+        'Ganar' => 0,
+        'Consolidar' => 0,
+        'Discipular' => 0,
+        'Enviar' => 0,
+        'sin_etapa' => 0,
+    ],
+    'peldaños' => [
+        'Ganar' => [
+            'Primer contacto' => 0,
+            'Ubicado en celula' => 0,
+            'No se dispone' => 0,
+        ],
+        'Consolidar' => [
+            'Universidad de la vida' => 0,
+            'Encuentro' => 0,
+            'Bautismo' => 0,
+        ],
+        'Discipular' => [
+            'Proyeccion' => 0,
+            'Equipo G12' => 0,
+            'Capacitacion destino nivel 1' => 0,
+        ],
+        'Enviar' => [
+            'Capacitacion destino nivel 2' => 0,
+            'Capacitacion destino nivel 3' => 0,
+            'Celula' => 0,
+        ],
+    ],
+];
+
 $tipoReporte = ($tipo_reporte ?? 'personas') === 'celulas' ? 'celulas' : 'personas';
 $esReportePersonas = $tipoReporte === 'personas';
 $tituloReporte = $esReportePersonas ? 'Reporte de Ganar' : 'Reporte de Célula';
@@ -95,6 +131,11 @@ $ganarInicio = (string)($ganar_inicio ?? $fecha_inicio ?? '');
 $ganarFin = (string)($ganar_fin ?? $fecha_fin ?? '');
 $fechaInicioFiltro = (string)($fecha_inicio_filtro ?? '');
 $fechaFinFiltro = (string)($fecha_fin_filtro ?? '');
+$mesEscaleraSeleccionado = (string)($mes_escalera ?? date('Y-m'));
+$mesEscaleraLabel = trim((string)($reporteEscaleraMesActual['mes_label'] ?? ''));
+if ($mesEscaleraLabel === '') {
+    $mesEscaleraLabel = $mesEscaleraSeleccionado;
+}
 
 $filtroMesMeta = (string)($filtro_mes_meta ?? '');
 $mesesTabla = $cumplimientoMetas['meses'] ?? [];
@@ -117,10 +158,10 @@ $tablaEsCompacta = $filtroMesMeta !== 'all';
 </div>
 
 <div class="report-switcher" style="margin-bottom: 18px;">
-    <a href="<?= PUBLIC_URL ?>index.php?url=reportes&tipo=personas&escala_ganar=<?= urlencode($escalaGanar) ?>&fecha_referencia=<?= urlencode((string)$fecha_referencia) ?>&fecha_inicio=<?= urlencode($fechaInicioFiltro) ?>&fecha_fin=<?= urlencode($fechaFinFiltro) ?>&ministerio=<?= urlencode((string)$filtro_ministerio) ?>&lider=<?= urlencode((string)$filtro_lider) ?>&mes_meta=<?= urlencode((string)$filtroMesMeta) ?>" class="report-switcher-tab <?= $esReportePersonas ? 'is-active' : '' ?>">
+    <a href="<?= PUBLIC_URL ?>index.php?url=reportes&tipo=personas&escala_ganar=<?= urlencode($escalaGanar) ?>&fecha_referencia=<?= urlencode((string)$fecha_referencia) ?>&fecha_inicio=<?= urlencode($fechaInicioFiltro) ?>&fecha_fin=<?= urlencode($fechaFinFiltro) ?>&ministerio=<?= urlencode((string)$filtro_ministerio) ?>&lider=<?= urlencode((string)$filtro_lider) ?>&mes_meta=<?= urlencode((string)$filtroMesMeta) ?>&mes_escalera=<?= urlencode($mesEscaleraSeleccionado) ?>" class="report-switcher-tab <?= $esReportePersonas ? 'is-active' : '' ?>">
         Ganar
     </a>
-    <a href="<?= PUBLIC_URL ?>index.php?url=reportes&tipo=celulas&fecha_referencia=<?= urlencode((string)$fecha_referencia) ?>&fecha_inicio=<?= urlencode($fechaInicioFiltro) ?>&fecha_fin=<?= urlencode($fechaFinFiltro) ?>&ministerio=<?= urlencode((string)$filtro_ministerio) ?>&lider=<?= urlencode((string)$filtro_lider) ?>&celula=<?= urlencode((string)$filtro_celula) ?>" class="report-switcher-tab <?= !$esReportePersonas ? 'is-active' : '' ?>">
+    <a href="<?= PUBLIC_URL ?>index.php?url=reportes&tipo=celulas&fecha_referencia=<?= urlencode((string)$fecha_referencia) ?>&fecha_inicio=<?= urlencode($fechaInicioFiltro) ?>&fecha_fin=<?= urlencode($fechaFinFiltro) ?>&ministerio=<?= urlencode((string)$filtro_ministerio) ?>&lider=<?= urlencode((string)$filtro_lider) ?>&celula=<?= urlencode((string)$filtro_celula) ?>&mes_escalera=<?= urlencode($mesEscaleraSeleccionado) ?>" class="report-switcher-tab <?= !$esReportePersonas ? 'is-active' : '' ?>">
         Célula
     </a>
 </div>
@@ -210,6 +251,12 @@ $tablaEsCompacta = $filtroMesMeta !== 'all';
                     <?php endforeach; ?>
                 </select>
             </div>
+
+            <div class="form-group" style="margin: 0;">
+                <label for="mes_escalera">Mes Escalera del Éxito</label>
+                <input type="month" id="mes_escalera" name="mes_escalera" class="form-control" value="<?= htmlspecialchars($mesEscaleraSeleccionado) ?>">
+                <small style="color:#637087;">Por defecto trae el mes actual.</small>
+            </div>
         <?php endif; ?>
 
         <div class="filters-actions">
@@ -256,6 +303,7 @@ $tablaEsCompacta = $filtroMesMeta !== 'all';
                             <th>Líder</th>
                             <th>Célula</th>
                             <th>Ministerio</th>
+                            <th>Proceso</th>
                             <th>Fecha registro</th>
                         </tr>
                     </thead>
@@ -466,6 +514,89 @@ $tablaEsCompacta = $filtroMesMeta !== 'all';
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
+</div>
+
+
+<div class="card report-card report-escalera-card" style="margin-bottom: 22px;">
+    <div class="report-escalera-head">
+        <div>
+            <h3 style="margin-bottom:4px;">Escalera del Éxito</h3>
+            <small style="color:#60708a; display:block; margin-bottom:4px;">
+                Vista mensual: <strong><?= htmlspecialchars($mesEscaleraLabel) ?></strong>
+            </small>
+            <small style="color:#60708a; display:block; margin-bottom:4px;">
+                Rango aplicado: <?= htmlspecialchars((string)($reporteEscaleraMesActual['inicio'] ?? '')) ?> a <?= htmlspecialchars((string)($reporteEscaleraMesActual['fin'] ?? '')) ?>
+            </small>
+            <small style="color:#60708a;">
+                Fuente: personas activas del rango filtrado, usando los campos <strong>`Proceso`</strong> y <strong>`Escalera_Checklist`</strong>.
+            </small>
+        </div>
+        <div class="escalera-total-pill">
+            Total personas del mes: <strong><?= (int)($reporteEscaleraMesActual['total_personas_mes'] ?? 0) ?></strong>
+        </div>
+    </div>
+
+    <div class="report-kpi-grid report-kpi-grid--escalera" style="margin-bottom: 14px;">
+        <button type="button" class="report-kpi-card report-kpi-button kpi-escalera js-escalera-detalle-etapa" data-etapa="Ganar">
+            <div class="report-kpi-label">Ganar</div>
+            <div class="report-kpi-value"><?= (int)($reporteEscaleraMesActual['totales_etapa']['Ganar'] ?? 0) ?></div>
+        </button>
+        <button type="button" class="report-kpi-card report-kpi-button kpi-celula js-escalera-detalle-etapa" data-etapa="Consolidar">
+            <div class="report-kpi-label">Consolidar</div>
+            <div class="report-kpi-value"><?= (int)($reporteEscaleraMesActual['totales_etapa']['Consolidar'] ?? 0) ?></div>
+        </button>
+        <button type="button" class="report-kpi-card report-kpi-button kpi-asistencia js-escalera-detalle-etapa" data-etapa="Discipular">
+            <div class="report-kpi-label">Discipular</div>
+            <div class="report-kpi-value"><?= (int)($reporteEscaleraMesActual['totales_etapa']['Discipular'] ?? 0) ?></div>
+        </button>
+        <button type="button" class="report-kpi-card report-kpi-button kpi-domingo js-escalera-detalle-etapa" data-etapa="Enviar">
+            <div class="report-kpi-label">Enviar</div>
+            <div class="report-kpi-value"><?= (int)($reporteEscaleraMesActual['totales_etapa']['Enviar'] ?? 0) ?></div>
+        </button>
+        <button type="button" class="report-kpi-card report-kpi-button js-escalera-detalle-etapa" data-etapa="sin_etapa" style="background:#f8fafc; border:1px solid #d8e2ee;">
+            <div class="report-kpi-label">Sin etapa</div>
+            <div class="report-kpi-value"><?= (int)($reporteEscaleraMesActual['totales_etapa']['sin_etapa'] ?? 0) ?></div>
+        </button>
+    </div>
+    <div class="report-escalera-help">Haz clic en una <strong>etapa</strong> o en un <strong>peldaño</strong> para ver las personas que lo componen.</div>
+
+    <?php
+    $etapasEscaleraUi = [
+        'Ganar' => 'ganar',
+        'Consolidar' => 'consolidar',
+        'Discipular' => 'discipular',
+        'Enviar' => 'enviar'
+    ];
+    $totalEscaleraUi = max(1, (int)($reporteEscaleraMesActual['total_personas_mes'] ?? 0));
+    ?>
+    <div class="escalera-stage-visual-grid">
+        <?php foreach ($etapasEscaleraUi as $etapa => $etapaClase): ?>
+            <?php
+            $cantidadEtapa = (int)($reporteEscaleraMesActual['totales_etapa'][$etapa] ?? 0);
+            $porcentajeEtapa = $totalEscaleraUi > 0 ? round(($cantidadEtapa / $totalEscaleraUi) * 100) : 0;
+            $peldañosEtapa = (array)($reporteEscaleraMesActual['peldaños'][$etapa] ?? []);
+            ?>
+            <div class="escalera-stage-panel escalera-stage-panel--<?= $etapaClase ?>">
+                <button type="button" class="escalera-stage-panel-head escalera-stage-panel-head--button js-escalera-detalle-etapa" data-etapa="<?= htmlspecialchars($etapa) ?>">
+                    <span class="escalera-etapa-badge etapa-<?= $etapaClase ?>"><?= htmlspecialchars($etapa) ?></span>
+                    <strong><?= $cantidadEtapa ?></strong>
+                </button>
+                <div class="escalera-stage-progress">
+                    <span style="width: <?= $cantidadEtapa > 0 ? max(4, $porcentajeEtapa) : 0 ?>%;"></span>
+                </div>
+                <small class="escalera-stage-progress-label"><?= $porcentajeEtapa ?>% del total del mes</small>
+
+                <div class="escalera-peldano-list">
+                    <?php foreach ($peldañosEtapa as $peldaño => $cantidadPeldaño): ?>
+                        <button type="button" class="escalera-peldano-item js-escalera-detalle-peldano" data-etapa="<?= htmlspecialchars($etapa) ?>" data-peldano="<?= htmlspecialchars((string)$peldaño) ?>">
+                            <span><?= htmlspecialchars((string)$peldaño) ?></span>
+                            <strong><?= (int)$cantidadPeldaño ?></strong>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
     </div>
 </div>
 
@@ -721,6 +852,8 @@ const procesoGanar = <?= json_encode($procesoGanar) ?>;
 const almasPorEdades = <?= json_encode($almasPorEdades) ?>;
 const almasGanadas = <?= json_encode($almas_ganadas ?? []) ?>;
 const detalleOrigenGanados = <?= json_encode($detalle_origen_ganados ?? []) ?>;
+const detalleEscaleraEtapa = <?= json_encode($reporteEscaleraMesActual['detalles_etapa'] ?? []) ?>;
+const detalleEscaleraPeldanos = <?= json_encode($reporteEscaleraMesActual['detalles_peldanos'] ?? []) ?>;
 const asistencia = <?= json_encode($asistencia_celulas ?? []) ?>;
 const indicadoresCelulas = <?= json_encode($indicadoresCelulas ?? []) ?>;
 const detalleLideresAperturas = <?= json_encode($tablaAperturasCelulas['detalle_lideres'] ?? []) ?>;
@@ -789,16 +922,17 @@ if (tipoReporte === 'personas') {
         reporteDetalleModalTitle.textContent = etiquetasOrigen[origen] || 'Detalle del reporte';
 
         if (!filas.length) {
-            reporteDetalleModalBody.innerHTML = '<tr><td colspan="5" class="text-center">Sin registros para este rango</td></tr>';
+            reporteDetalleModalBody.innerHTML = '<tr><td colspan="6" class="text-center">Sin registros para este rango</td></tr>';
         } else {
             reporteDetalleModalBody.innerHTML = filas.map((item) => {
                 const persona = escaparHtml(`${item.Nombre || ''} ${item.Apellido || ''}`.trim() || 'Sin nombre');
                 const lider = escaparHtml(item.Nombre_Lider || 'Sin líder');
                 const celula = escaparHtml(item.Nombre_Celula || 'Sin célula');
                 const ministerio = escaparHtml(item.Nombre_Ministerio || 'Sin ministerio');
+                const proceso = escaparHtml(item.Proceso || '');
                 const fecha = escaparHtml(item.Fecha_Registro || '');
 
-                return `<tr><td>${persona}</td><td>${lider}</td><td>${celula}</td><td>${ministerio}</td><td>${fecha}</td></tr>`;
+                return `<tr><td>${persona}</td><td>${lider}</td><td>${celula}</td><td>${ministerio}</td><td>${proceso}</td><td>${fecha}</td></tr>`;
             }).join('');
         }
 
@@ -817,6 +951,56 @@ if (tipoReporte === 'personas') {
     botonesKpiDetalle.forEach((boton) => {
         boton.addEventListener('click', () => {
             abrirDetalleKpi(String(boton.dataset.origen || ''));
+        });
+    });
+
+    const etiquetasEscalera = {
+        Ganar: 'Ganar',
+        Consolidar: 'Consolidar',
+        Discipular: 'Discipular',
+        Enviar: 'Enviar',
+        sin_etapa: 'Sin etapa'
+    };
+
+    const abrirDetalleEscalera = (titulo, filas) => {
+        if (!reporteDetalleModal || !reporteDetalleModalBody || !reporteDetalleModalTitle) {
+            return;
+        }
+
+        reporteDetalleModalTitle.textContent = titulo;
+
+        if (!Array.isArray(filas) || !filas.length) {
+            reporteDetalleModalBody.innerHTML = '<tr><td colspan="6" class="text-center">Sin personas para este filtro</td></tr>';
+        } else {
+            reporteDetalleModalBody.innerHTML = filas.map((item) => {
+                const persona = escaparHtml(`${item.Nombre || ''} ${item.Apellido || ''}`.trim() || 'Sin nombre');
+                const lider = escaparHtml(item.Nombre_Lider || 'Sin líder');
+                const celula = escaparHtml(item.Nombre_Celula || 'Sin célula');
+                const ministerio = escaparHtml(item.Nombre_Ministerio || 'Sin ministerio');
+                const proceso = escaparHtml(item.Proceso || '');
+                const fecha = escaparHtml(item.Fecha_Registro || '');
+                return `<tr><td>${persona}</td><td>${lider}</td><td>${celula}</td><td>${ministerio}</td><td>${proceso}</td><td>${fecha}</td></tr>`;
+            }).join('');
+        }
+
+        reporteDetalleModal.classList.add('is-open');
+        reporteDetalleModal.setAttribute('aria-hidden', 'false');
+    };
+
+    document.querySelectorAll('.js-escalera-detalle-etapa').forEach((boton) => {
+        boton.addEventListener('click', () => {
+            const etapa = String(boton.dataset.etapa || '');
+            const filas = Array.isArray(detalleEscaleraEtapa[etapa]) ? detalleEscaleraEtapa[etapa] : [];
+            abrirDetalleEscalera(`Escalera del Éxito - ${etiquetasEscalera[etapa] || etapa}`, filas);
+        });
+    });
+
+    document.querySelectorAll('.js-escalera-detalle-peldano').forEach((boton) => {
+        boton.addEventListener('click', () => {
+            const etapa = String(boton.dataset.etapa || '');
+            const peldano = String(boton.dataset.peldano || '');
+            const filas = Array.isArray((detalleEscaleraPeldanos[etapa] || {})[peldano]) ? (detalleEscaleraPeldanos[etapa] || {})[peldano] : [];
+            abrirDetalleEscalera(`Escalera - ${etapa} / ${peldano}`, filas);
         });
     });
 
@@ -1045,6 +1229,144 @@ if (tipoReporte === 'personas') {
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.report-kpi-grid--escalera {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.report-escalera-head {
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    align-items:flex-start;
+    flex-wrap:wrap;
+    margin-bottom:12px;
+}
+
+.escalera-total-pill {
+    background: #f4f7fb;
+    border: 1px solid #d7e0ee;
+    padding: 8px 12px;
+    border-radius: 10px;
+    color: #314766;
+}
+
+.report-escalera-help {
+    margin: -2px 0 14px;
+    font-size: 13px;
+    color: #53657f;
+}
+
+.escalera-stage-visual-grid {
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.escalera-stage-panel {
+    border: 1px solid #dbe3f4;
+    border-radius: 14px;
+    background: #fff;
+    padding: 14px;
+}
+
+.escalera-stage-panel--ganar { background: linear-gradient(180deg, #fffdf4 0%, #ffffff 100%); }
+.escalera-stage-panel--consolidar { background: linear-gradient(180deg, #f7fff8 0%, #ffffff 100%); }
+.escalera-stage-panel--discipular { background: linear-gradient(180deg, #f7fbff 0%, #ffffff 100%); }
+.escalera-stage-panel--enviar { background: linear-gradient(180deg, #fff8fb 0%, #ffffff 100%); }
+
+.escalera-stage-panel-head {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    margin-bottom:10px;
+}
+
+.escalera-stage-panel-head--button {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+}
+
+.escalera-stage-progress {
+    width:100%;
+    height:10px;
+    border-radius:999px;
+    background:#edf2f7;
+    overflow:hidden;
+    margin-bottom:6px;
+}
+
+.escalera-stage-progress span {
+    display:block;
+    height:100%;
+    border-radius:999px;
+    background: linear-gradient(90deg, #2f65b5 0%, #6ea8fe 100%);
+}
+
+.escalera-stage-progress-label {
+    display:block;
+    color:#60708a;
+    margin-bottom:10px;
+}
+
+.escalera-peldano-list {
+    display:grid;
+    gap:8px;
+}
+
+.escalera-peldano-item {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    width: 100%;
+    padding:8px 10px;
+    border:1px solid #e5ebf5;
+    border-radius:10px;
+    background:#f9fbff;
+    cursor: pointer;
+    text-align: left;
+}
+
+.escalera-peldano-item:hover,
+.escalera-stage-panel-head--button:hover {
+    filter: brightness(0.98);
+}
+
+.escalera-etapa-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 110px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-weight: 700;
+}
+
+.etapa-ganar {
+    background: #fff7dd;
+    color: #8a6500;
+}
+
+.etapa-consolidar {
+    background: #eaf9ee;
+    color: #187a35;
+}
+
+.etapa-discipular {
+    background: #eef5ff;
+    color: #1e73be;
+}
+
+.etapa-enviar {
+    background: #fff0f6;
+    color: #c2185b;
+}
+
 .report-kpi-card {
     border-radius: 12px;
     padding: 14px;
@@ -1075,6 +1397,16 @@ if (tipoReporte === 'personas') {
 .kpi-domingo { background: #fff8e8; border: 1px solid #ffe2a8; }
 .kpi-escalera { background: #eefbf1; border: 1px solid #bfe8c9; }
 .kpi-asistencia { background: #f8f2ff; border: 1px solid #ddcbff; }
+
+@media (max-width: 1100px) {
+    .report-kpi-grid--escalera {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .escalera-stage-visual-grid {
+        grid-template-columns: 1fr;
+    }
+}
 
 .report-kpi-label { font-size: .82rem; color: #475569; }
 .report-kpi-value { font-size: 1.8rem; font-weight: 800; }
@@ -1357,7 +1689,8 @@ details summary {
 }
 
 @media (max-width: 1000px) {
-    .report-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .report-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr));     .report-kpi-grid--escalera { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 }
 
 @media (max-width: 640px) {

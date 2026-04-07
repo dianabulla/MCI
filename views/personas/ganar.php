@@ -23,7 +23,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
         <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill">Personas</a>
         <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill active">Pendiente por consolidar</a>
         <?php if ($puedeExportarPersonas): ?>
-        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel&modo=ganar<?= ($filtroMinisterioActual ?? '') !== '' ? '&ministerio=' . urlencode((string)$filtroMinisterioActual) : '' ?><?= !empty($filtroSinLiderActual) ? '&sin_lider=1' : '' ?><?= !empty($filtroSinCelulaActual) ? '&sin_celula=1' : '' ?><?= ($filtroFechaInicioActual ?? '') !== '' ? '&fecha_inicio=' . urlencode((string)$filtroFechaInicioActual) : '' ?><?= ($filtroFechaFinActual ?? '') !== '' ? '&fecha_fin=' . urlencode((string)$filtroFechaFinActual) : '' ?><?= ($filtroOrigenActual ?? '') !== '' ? '&origen=' . urlencode((string)$filtroOrigenActual) : '' ?>" class="btn btn-success">
+        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel&modo=ganar<?= ($filtroMinisterioActual ?? '') !== '' ? '&ministerio=' . urlencode((string)$filtroMinisterioActual) : '' ?><?= ($filtroLiderActual ?? '') !== '' ? '&lider=' . urlencode((string)$filtroLiderActual) : '' ?><?= !empty($filtroSinLiderActual) ? '&sin_lider=1' : '' ?><?= !empty($filtroSinCelulaActual) ? '&sin_celula=1' : '' ?><?= ($filtroFechaInicioActual ?? '') !== '' ? '&fecha_inicio=' . urlencode((string)$filtroFechaInicioActual) : '' ?><?= ($filtroFechaFinActual ?? '') !== '' ? '&fecha_fin=' . urlencode((string)$filtroFechaFinActual) : '' ?><?= ($filtroOrigenActual ?? '') !== '' ? '&origen=' . urlencode((string)$filtroOrigenActual) : '' ?>" class="btn btn-success">
             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
         </a>
         <?php endif; ?>
@@ -35,16 +35,18 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 
 <?php
 $filtroMinisterioPendiente = (string)($filtroMinisterioActual ?? '');
+$filtroLiderPendiente = (string)($filtroLiderActual ?? '');
 $filtroSinLiderPendiente = !empty($filtroSinLiderActual);
 $filtroSinCelulaPendiente = !empty($filtroSinCelulaActual);
 $filtroFechaInicioPendiente = (string)($filtroFechaInicioActual ?? '');
 $filtroFechaFinPendiente = (string)($filtroFechaFinActual ?? '');
-$hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPendiente || $filtroSinCelulaPendiente;
+$hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || ($filtroLiderPendiente !== '') || $filtroSinLiderPendiente || $filtroSinCelulaPendiente;
 $hayFiltrosPendiente = $hayFiltrosPendiente || ($filtroFechaInicioPendiente !== '' && $filtroFechaFinPendiente !== '');
 
 $queryBasePendientes = [
     'url' => 'personas/ganar',
     'ministerio' => $filtroMinisterioPendiente,
+    'lider' => $filtroLiderPendiente,
     'sin_lider' => $filtroSinLiderPendiente ? '1' : '',
     'sin_celula' => $filtroSinCelulaPendiente ? '1' : '',
     'fecha_inicio' => $filtroFechaInicioPendiente,
@@ -71,6 +73,20 @@ $buildPendientesUrl = static function(array $extra = []) use ($queryBasePendient
             <input type="hidden" name="origen" value="<?= htmlspecialchars((string)$filtroOrigenActual) ?>">
             <?php endif; ?>
 
+            <?php
+            $lideresFiltradosPendiente = array_values(array_filter(($lideres ?? []), static function($lider) use ($filtroMinisterioPendiente) {
+                if ($filtroMinisterioPendiente === '') {
+                    return true;
+                }
+
+                $idMinisterioLider = isset($lider['Id_Ministerio']) ? (string)$lider['Id_Ministerio'] : '';
+                if ($filtroMinisterioPendiente === '0') {
+                    return $idMinisterioLider === '' || $idMinisterioLider === '0';
+                }
+
+                return $idMinisterioLider === $filtroMinisterioPendiente;
+            }));
+            ?>
             <div class="form-group" style="min-width: 240px;">
                 <label for="filtro_ministerio" style="font-size: 14px; margin-bottom: 5px;">Filtrar por ministerio</label>
                 <select id="filtro_ministerio" name="ministerio" class="form-control">
@@ -79,6 +95,18 @@ $buildPendientesUrl = static function(array $extra = []) use ($queryBasePendient
                     <?php foreach (($ministerios ?? []) as $ministerio): ?>
                     <option value="<?= (int)$ministerio['Id_Ministerio'] ?>" <?= $filtroMinisterioPendiente === (string)$ministerio['Id_Ministerio'] ? 'selected' : '' ?>>
                         <?= htmlspecialchars((string)$ministerio['Nombre_Ministerio']) ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="form-group" style="min-width: 240px;">
+                <label for="filtro_lider" style="font-size: 14px; margin-bottom: 5px;">Filtrar por líder</label>
+                <select id="filtro_lider" name="lider" class="form-control">
+                    <option value="">Todos</option>
+                    <?php foreach ($lideresFiltradosPendiente as $lider): ?>
+                    <option value="<?= (int)$lider['Id_Persona'] ?>" data-ministerio="<?= htmlspecialchars((string)($lider['Id_Ministerio'] ?? '')) ?>" <?= $filtroLiderPendiente === (string)$lider['Id_Persona'] ? 'selected' : '' ?>>
+                        <?= htmlspecialchars(trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? ''))) ?>
                     </option>
                     <?php endforeach; ?>
                 </select>
@@ -244,17 +272,26 @@ $buildPendientesUrl = static function(array $extra = []) use ($queryBasePendient
                             </a>
                             <button
                                 type="button"
-                                class="action-icon-btn action-icon-escalera js-escalera-btn"
-                                title="Escalera del Exito"
-                                aria-label="Escalera del Exito"
-                                data-persona-id="<?= (int)($persona['Id_Persona'] ?? 0) ?>"
-                                data-persona-asignado="<?= (!empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']) && !empty($persona['Id_Celula'])) ? '1' : '0' ?>"
-                                data-persona-nombre="<?= htmlspecialchars(trim(($persona['Nombre'] ?? '') . ' ' . ($persona['Apellido'] ?? ''))) ?>"
-                                data-persona-proceso="<?= htmlspecialchars((string)($persona['Proceso'] ?? '')) ?>"
-                                data-persona-checklist='<?= htmlspecialchars((string)($persona['Escalera_Checklist'] ?? ''), ENT_QUOTES, 'UTF-8') ?>'
+                                class="action-icon-btn action-icon-huella js-trazabilidad-btn"
+                                title="Ver huella de creación"
+                                aria-label="Ver huella de creación"
+                                data-persona-nombre="<?= htmlspecialchars(trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
+                                data-persona-fecha="<?= htmlspecialchars((string)($persona['Fecha_Registro'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                data-persona-creador="<?= htmlspecialchars(trim((string)($persona['Nombre_Creador'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
+                                data-persona-usuario-creador="<?= htmlspecialchars(trim((string)($persona['Usuario_Creador'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
+                                data-persona-creador-id="<?= (int)($persona['Creado_Por'] ?? 0) ?>"
+                                data-persona-canal="<?= htmlspecialchars((string)($persona['Canal_Creacion'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                            >
+                                <i class="bi bi-fingerprint"></i>
+                            </button>
+                            <a
+                                href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= (int)($persona['Id_Persona'] ?? 0) ?>&panel=escalera#eventos-procesos"
+                                class="action-icon-btn action-icon-escalera"
+                                title="Ir a Escalera del Exito"
+                                aria-label="Ir a Escalera del Exito"
                             >
                                 <i class="bi bi-bar-chart-steps"></i>
-                            </button>
+                            </a>
                             <?php endif; ?>
                             <?php if (AuthController::tienePermiso('personas', 'editar')): ?>
                             <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $persona['Id_Persona'] ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
@@ -318,7 +355,7 @@ $buildPendientesUrl = static function(array $extra = []) use ($queryBasePendient
 .ganar-table th.action-col,
 .ganar-table td.action-col {
     white-space: nowrap;
-    min-width: 126px;
+    min-width: 196px;
 }
 
 .ganar-table .action-buttons.action-buttons-compact {
@@ -359,6 +396,33 @@ $buildPendientesUrl = static function(array $extra = []) use ($queryBasePendient
     color: #4a3cc9;
     border-color: #cfc8ff;
     cursor: pointer;
+}
+
+.action-icon-huella {
+    background: #e8fff4;
+    color: #14804a;
+    border-color: #bfe9d1;
+    cursor: pointer;
+}
+
+.trazabilidad-grid {
+    display: grid;
+    gap: 12px;
+}
+
+.trazabilidad-item {
+    border: 1px solid #dbe3f4;
+    border-radius: 10px;
+    background: #f8fbff;
+    padding: 12px;
+}
+
+.trazabilidad-label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #5b6b84;
 }
 
 .ganar-shortcuts {
@@ -683,6 +747,16 @@ $buildPendientesUrl = static function(array $extra = []) use ($queryBasePendient
             <button type="button" class="escalera-modal-close" id="escaleraModalClose" aria-label="Cerrar">&times;</button>
         </div>
         <div class="escalera-modal-body" id="escaleraModalBody"></div>
+    </div>
+</div>
+
+<div class="escalera-modal-backdrop" id="trazabilidadModalBackdrop" aria-hidden="true">
+    <div class="escalera-modal" role="dialog" aria-modal="true" aria-labelledby="trazabilidadModalTitle" style="width:min(520px, 96vw);">
+        <div class="escalera-modal-header">
+            <h3 class="escalera-modal-title" id="trazabilidadModalTitle">Huella de registro</h3>
+            <button type="button" class="escalera-modal-close" id="trazabilidadModalClose" aria-label="Cerrar">&times;</button>
+        </div>
+        <div class="escalera-modal-body" id="trazabilidadModalBody"></div>
     </div>
 </div>
 
@@ -1098,6 +1172,158 @@ $buildPendientesUrl = static function(array $extra = []) use ($queryBasePendient
             cerrarModal();
         }
     });
+})();
+</script>
+
+<script>
+(function() {
+    const backdrop = document.getElementById('trazabilidadModalBackdrop');
+    const closeBtn = document.getElementById('trazabilidadModalClose');
+    const body = document.getElementById('trazabilidadModalBody');
+    const title = document.getElementById('trazabilidadModalTitle');
+
+    if (!backdrop || !closeBtn || !body || !title) {
+        return;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+    }
+
+    function formatearFecha(fechaRaw) {
+        const valor = String(fechaRaw || '').trim();
+        if (!valor) {
+            return 'No disponible';
+        }
+
+        const fecha = new Date(valor.replace(' ', 'T'));
+        if (Number.isNaN(fecha.getTime())) {
+            return valor;
+        }
+
+        return fecha.toLocaleString('es-CO', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    function cerrarModal() {
+        backdrop.classList.remove('show');
+        backdrop.setAttribute('aria-hidden', 'true');
+    }
+
+    function abrirModal(btn) {
+        const nombre = btn.getAttribute('data-persona-nombre') || 'Persona';
+        const fecha = btn.getAttribute('data-persona-fecha') || '';
+        const creador = String(btn.getAttribute('data-persona-creador') || '').trim();
+        const usuarioCreador = String(btn.getAttribute('data-persona-usuario-creador') || '').trim();
+        const creadorId = String(btn.getAttribute('data-persona-creador-id') || '').trim();
+        const canal = String(btn.getAttribute('data-persona-canal') || '').trim();
+        let creadorVisible = 'Registro anterior (sin trazabilidad)';
+        if (usuarioCreador !== '' && creador !== '') {
+            creadorVisible = usuarioCreador + ' · ' + creador;
+        } else if (usuarioCreador !== '') {
+            creadorVisible = usuarioCreador;
+        } else if (creador !== '') {
+            creadorVisible = creador;
+        } else if (creadorId !== '' && creadorId !== '0') {
+            creadorVisible = 'Usuario ID #' + creadorId;
+        } else if (canal !== '') {
+            creadorVisible = canal;
+        }
+        const canalVisible = canal !== '' ? canal : 'Registro anterior';
+
+        title.textContent = 'Huella de registro - ' + nombre;
+        body.innerHTML = ''
+            + '<div class="trazabilidad-grid">'
+            + '  <div class="trazabilidad-item"><span class="trazabilidad-label">Fecha de creación</span><strong>' + escapeHtml(formatearFecha(fecha)) + '</strong></div>'
+            + '  <div class="trazabilidad-item"><span class="trazabilidad-label">Creada por</span><strong>' + escapeHtml(creadorVisible) + '</strong></div>'
+            + '  <div class="trazabilidad-item"><span class="trazabilidad-label">Canal de registro</span><strong>' + escapeHtml(canalVisible) + '</strong></div>'
+            + '</div>';
+
+        backdrop.classList.add('show');
+        backdrop.setAttribute('aria-hidden', 'false');
+    }
+
+    document.querySelectorAll('.js-trazabilidad-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            abrirModal(this);
+        });
+    });
+
+    closeBtn.addEventListener('click', cerrarModal);
+    backdrop.addEventListener('click', function(e) {
+        if (e.target === backdrop) {
+            cerrarModal();
+        }
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && backdrop.classList.contains('show')) {
+            cerrarModal();
+        }
+    });
+})();
+</script>
+
+<script>
+(function() {
+    const ministerioSelect = document.getElementById('filtro_ministerio');
+    const liderSelect = document.getElementById('filtro_lider');
+    if (!ministerioSelect || !liderSelect) {
+        return;
+    }
+
+    const lideresDisponibles = [
+        <?php foreach (($lideres ?? []) as $index => $lider): ?>
+        {
+            id: '<?= htmlspecialchars((string)($lider['Id_Persona'] ?? ''), ENT_QUOTES) ?>',
+            nombre: '<?= htmlspecialchars(trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? '')), ENT_QUOTES) ?>',
+            ministerio: '<?= htmlspecialchars((string)($lider['Id_Ministerio'] ?? ''), ENT_QUOTES) ?>'
+        }<?= $index < count(($lideres ?? [])) - 1 ? ',' : '' ?>
+        <?php endforeach; ?>
+    ];
+
+    function refrescarFiltroLider() {
+        const ministerioSeleccionado = String(ministerioSelect.value || '');
+        const liderSeleccionado = String(liderSelect.value || '');
+        const lideresFiltrados = lideresDisponibles.filter(function(lider) {
+            if (ministerioSeleccionado === '') {
+                return true;
+            }
+            if (ministerioSeleccionado === '0') {
+                return !lider.ministerio || lider.ministerio === '0';
+            }
+            return String(lider.ministerio || '') === ministerioSeleccionado;
+        });
+
+        liderSelect.innerHTML = '';
+        const optionTodos = document.createElement('option');
+        optionTodos.value = '';
+        optionTodos.textContent = 'Todos';
+        liderSelect.appendChild(optionTodos);
+
+        lideresFiltrados.forEach(function(lider) {
+            const option = document.createElement('option');
+            option.value = lider.id;
+            option.textContent = lider.nombre;
+            option.setAttribute('data-ministerio', lider.ministerio || '');
+            liderSelect.appendChild(option);
+        });
+
+        const existeSeleccion = Array.from(liderSelect.options).some(function(option) {
+            return option.value === liderSeleccionado;
+        });
+        liderSelect.value = existeSeleccion ? liderSeleccionado : '';
+    }
+
+    ministerioSelect.addEventListener('change', refrescarFiltroLider);
+    refrescarFiltroLider();
 })();
 </script>
 

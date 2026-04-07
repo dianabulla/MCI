@@ -44,6 +44,21 @@
         </div>
 
         <div class="form-group">
+            <label style="display:flex; align-items:center; gap:8px; margin-bottom:0;">
+                <input
+                    type="checkbox"
+                    name="permitir_compartir"
+                    value="1"
+                    <?= !isset($evento['Permitir_Compartir']) || (int)$evento['Permitir_Compartir'] === 1 ? 'checked' : '' ?>
+                >
+                Permitir compartir este evento públicamente
+            </label>
+            <small style="display:block; margin-top:6px; color:#666;">
+                Si desmarcas esta opción, el evento seguirá saliendo en la página pública, pero no mostrará botón de compartir.
+            </small>
+        </div>
+
+        <div class="form-group">
             <label for="imagen_evento">Imagen del Evento (opcional)</label>
             <input type="file" id="imagen_evento" name="imagen_evento" class="form-control" accept="image/*">
             <small style="display:block; margin-top:6px; color:#666;">Máximo recomendado: 50MB.</small>

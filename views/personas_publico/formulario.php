@@ -119,7 +119,8 @@
         }
 
         input,
-        select {
+        select,
+        textarea {
             border: 1px solid #dbe7f7;
             border-radius: 10px;
             padding: 11px 12px;
@@ -130,8 +131,14 @@
             transition: border-color 0.15s ease, box-shadow 0.15s ease;
         }
 
+        textarea {
+            min-height: 92px;
+            resize: vertical;
+        }
+
         input:focus,
-        select:focus {
+        select:focus,
+        textarea:focus {
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(53, 98, 173, 0.15);
         }
@@ -276,10 +283,15 @@
                         <select id="ganado_en" name="ganado_en" required>
                             <option value="">Seleccione...</option>
                             <option value="domingo" <?= (string)($old['ganado_en'] ?? '') === 'domingo' ? 'selected' : '' ?>>Domingo</option>
+                            <option value="somos_uno" <?= (string)($old['ganado_en'] ?? '') === 'somos_uno' ? 'selected' : '' ?>>Somos Uno</option>
                             <option value="celula" <?= (string)($old['ganado_en'] ?? '') === 'celula' ? 'selected' : '' ?>>Célula</option>
-                            <option value="viernes" <?= (string)($old['ganado_en'] ?? '') === 'viernes' ? 'selected' : '' ?>>Viernes</option>
-                            <option value="otro" <?= (string)($old['ganado_en'] ?? '') === 'otro' ? 'selected' : '' ?>>Otro</option>
+                            <option value="otro" <?= (string)($old['ganado_en'] ?? '') === 'otro' ? 'selected' : '' ?>>Otros</option>
                         </select>
+                    </div>
+
+                    <div class="field full" id="ganado_en_otro_wrap" style="display:none;">
+                        <label for="ganado_en_otro_observacion">Observaciones</label>
+                        <textarea id="ganado_en_otro_observacion" name="ganado_en_otro_observacion" rows="3" placeholder="Describe dónde fue ganado o la observación necesaria..."><?= htmlspecialchars((string)($old['ganado_en_otro_observacion'] ?? '')) ?></textarea>
                     </div>
 
                     <div class="field full">
@@ -288,7 +300,7 @@
                     </div>
                 </div>
 
-                <p class="hint">Obligatorio: nombre, apellidos y ganado en. Los demás datos son opcionales.</p>
+                <p class="hint">Obligatorio: nombre, apellidos y ganado en. Si eliges Otros, escribe también la observación.</p>
 
                 <div class="actions">
                     <button type="submit" class="btn">Guardar registro</button>
@@ -297,5 +309,27 @@
         <?php endif; ?>
     </div>
 </div>
+<script>
+(function() {
+    const ganadoEn = document.getElementById('ganado_en');
+    const observacionWrap = document.getElementById('ganado_en_otro_wrap');
+    const observacion = document.getElementById('ganado_en_otro_observacion');
+
+    function actualizarObservacionOtros() {
+        if (!ganadoEn || !observacionWrap || !observacion) {
+            return;
+        }
+
+        const esOtros = String(ganadoEn.value || '') === 'otro';
+        observacionWrap.style.display = esOtros ? '' : 'none';
+        observacion.required = esOtros;
+    }
+
+    if (ganadoEn) {
+        ganadoEn.addEventListener('change', actualizarObservacionOtros);
+        actualizarObservacionOtros();
+    }
+})();
+</script>
 </body>
 </html>

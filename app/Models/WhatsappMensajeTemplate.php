@@ -11,8 +11,6 @@ class WhatsappMensajeTemplate extends BaseModel {
 
     private $defaults = [
         'bienvenida_persona' => 'Hola {persona_nombre}, bienvenido(a) a MCI Madrid Colombia. Estamos felices de recibirte. Muy pronto te compartiremos información de crecimiento y eventos. 📍 Peticiones: {url_peticiones}',
-        'asignacion_lider' => 'Hola {lider_nombre}, tienes una persona nueva asignada: {persona_nombre}.',
-        'asignacion_ministerio' => 'Hola {destinatario_nombre}, se asignó una persona nueva al ministerio: {persona_nombre}.',
         'felicitacion_cumpleanos' => 'Hoy celebramos tu vida y damos gracias a Dios por tu corazón tan dispuesto para servir.\n\nTu esfuerzo, tu amor por las personas y tu entrega han dejado huellas profundas en nuestra iglesia. Gracias por guiar, apoyar y nunca rendirte.\n\nOramos para que este nuevo año llegue lleno de bendición, fuerzas renovadas y mucha alegría.\n\n¡Feliz cumpleaños te desea MCI Madrid! 🎉 Te honramos y te agradecemos de corazón.',
         'asignacion_celula_universidad' => 'Hola {persona_nombre}, ¡bienvenido a tu célula {celula_nombre}! 
 

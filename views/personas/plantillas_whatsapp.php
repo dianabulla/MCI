@@ -73,6 +73,16 @@ $renderMediaActual = static function ($mediaUrl, $mediaTipo, $previewId) use ($d
     Plantillas actualizadas correctamente.
 </div>
 <?php endif; ?>
+<?php if (!empty($_GET['schedule_msg']) && $_GET['schedule_msg'] === 'ok'): ?>
+<div class="alert alert-success" style="margin-bottom: 12px;">
+    Campaña programada correctamente.
+    <?php if (!empty($_GET['schedule_count'])): ?>Se encolaron <?= (int)$_GET['schedule_count'] ?> destinatarios.<?php endif; ?>
+</div>
+<?php elseif (!empty($_GET['schedule_error'])): ?>
+<div class="alert alert-danger" style="margin-bottom: 12px;">
+    No se pudo programar la campaña. Código: <?= htmlspecialchars((string)$_GET['schedule_error']) ?>
+</div>
+<?php endif; ?>
 
 <div class="card" style="margin-bottom: 16px;">
     <div class="card-body">
@@ -90,31 +100,6 @@ $renderMediaActual = static function ($mediaUrl, $mediaTipo, $previewId) use ($d
                 </div>
             </div>
 
-            <div class="form-group" style="margin-bottom: 14px;">
-                <label for="tpl_asignacion_lider" style="font-weight: 600;">Asignación a líder</label>
-                <textarea id="tpl_asignacion_lider" name="tpl_asignacion_lider" class="form-control" rows="3" required><?= htmlspecialchars((string)($plantillasWhatsapp['asignacion_lider']['plantilla'] ?? '')) ?></textarea>
-                <div style="margin-top:8px;">
-                    <input type="file" name="media_asignacion_lider" class="form-control js-wa-media-input" accept="image/*,video/*" data-preview-target="preview_asignacion_lider">
-                    <?php $renderMediaActual($plantillasWhatsapp['asignacion_lider']['media_url'] ?? null, $plantillasWhatsapp['asignacion_lider']['media_tipo'] ?? null, 'preview_asignacion_lider'); ?>
-                    <?php if (!empty($plantillasWhatsapp['asignacion_lider']['media_url'])): ?>
-                        <a href="<?= htmlspecialchars((string)$plantillasWhatsapp['asignacion_lider']['media_url']) ?>" target="_blank" class="btn btn-sm btn-info" style="margin-top:6px;">Ver media actual</a>
-                        <label style="display:block; margin-top:6px;"><input type="checkbox" name="quitar_media_asignacion_lider" value="1"> Quitar media</label>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-            <div class="form-group" style="margin-bottom: 14px;">
-                <label for="tpl_asignacion_ministerio" style="font-weight: 600;">Asignación a ministerio</label>
-                <textarea id="tpl_asignacion_ministerio" name="tpl_asignacion_ministerio" class="form-control" rows="3" required><?= htmlspecialchars((string)($plantillasWhatsapp['asignacion_ministerio']['plantilla'] ?? '')) ?></textarea>
-                <div style="margin-top:8px;">
-                    <input type="file" name="media_asignacion_ministerio" class="form-control js-wa-media-input" accept="image/*,video/*" data-preview-target="preview_asignacion_ministerio">
-                    <?php $renderMediaActual($plantillasWhatsapp['asignacion_ministerio']['media_url'] ?? null, $plantillasWhatsapp['asignacion_ministerio']['media_tipo'] ?? null, 'preview_asignacion_ministerio'); ?>
-                    <?php if (!empty($plantillasWhatsapp['asignacion_ministerio']['media_url'])): ?>
-                        <a href="<?= htmlspecialchars((string)$plantillasWhatsapp['asignacion_ministerio']['media_url']) ?>" target="_blank" class="btn btn-sm btn-info" style="margin-top:6px;">Ver media actual</a>
-                        <label style="display:block; margin-top:6px;"><input type="checkbox" name="quitar_media_asignacion_ministerio" value="1"> Quitar media</label>
-                    <?php endif; ?>
-                </div>
-            </div>
 
             <div class="form-group" style="margin-bottom: 14px;">
                 <label for="tpl_felicitacion_cumpleanos" style="font-weight: 600;">Felicitación de cumpleaños</label>
@@ -131,9 +116,9 @@ $renderMediaActual = static function ($mediaUrl, $mediaTipo, $previewId) use ($d
             </div>
 
             <div class="form-group" style="margin-bottom: 14px;">
-                <label for="tpl_asignacion_celula_universidad" style="font-weight: 600;">Asignación a célula - Universidad de la vida</label>
+                <label for="tpl_asignacion_celula_universidad" style="font-weight: 600;">Universidad de la vida</label>
                 <textarea id="tpl_asignacion_celula_universidad" name="tpl_asignacion_celula_universidad" class="form-control" rows="3" required><?= htmlspecialchars((string)($plantillasWhatsapp['asignacion_celula_universidad']['plantilla'] ?? '')) ?></textarea>
-                <small style="display:block; margin-top:6px; color:#666;">Nota: Se incluye automáticamente el próximo contenido de Universidad de la Vida</small>
+                <small style="display:block; margin-top:6px; color:#666;">Esta plantilla se usa para mensajes programados/manuales. Desde este mismo módulo puedes programar el envío a líderes.</small>
                 <div style="margin-top:8px;">
                     <input type="file" name="media_asignacion_celula_universidad" class="form-control js-wa-media-input" accept="image/*,video/*" data-preview-target="preview_asignacion_celula_universidad">
                     <?php $renderMediaActual($plantillasWhatsapp['asignacion_celula_universidad']['media_url'] ?? null, $plantillasWhatsapp['asignacion_celula_universidad']['media_tipo'] ?? null, 'preview_asignacion_celula_universidad'); ?>
@@ -145,6 +130,32 @@ $renderMediaActual = static function ($mediaUrl, $mediaTipo, $previewId) use ($d
             </div>
 
             <button type="submit" class="btn btn-primary">Guardar plantillas</button>
+        </form>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 16px;">
+    <div class="card-body">
+        <h5>Programar campaña a líderes</h5>
+        <p style="margin: 0 0 12px; color: #5b6b84; font-size: 13px;">
+            Selecciona una de las plantillas ya guardadas y programa el envío; el sistema enviará el mensaje a todos los líderes desde este mismo módulo.
+        </p>
+        <form method="POST" action="<?= PUBLIC_URL ?>?url=personas/plantillas-whatsapp/programar">
+            <div class="form-group" style="margin-bottom: 14px;">
+                <label for="template_key" style="font-weight: 600;">Plantilla</label>
+                <select id="template_key" name="template_key" class="form-control" required>
+                    <option value="">Selecciona una plantilla</option>
+                    <?php foreach ($plantillasWhatsapp as $clave => $plantilla): ?>
+                        <option value="<?= htmlspecialchars($clave) ?>"><?= htmlspecialchars(ucwords(str_replace(['_', 'asignacion'], [' ', 'Asignación'], $clave))) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 14px;">
+                <label for="programado_en" style="font-weight: 600;">Fecha y hora de envío</label>
+                <input type="datetime-local" id="programado_en" name="programado_en" class="form-control" required>
+                <small style="display:block; margin-top:6px; color:#666;">La campaña quedará encolada y se enviará desde el worker local cuando llegue la hora programada.</small>
+            </div>
+            <button type="submit" class="btn btn-success">Programar campaña</button>
         </form>
     </div>
 </div>

@@ -386,7 +386,22 @@ class AsistenciaController extends BaseController {
             $asistencias = $_POST['asistencias'] ?? [];
             $tema = $_POST['tema'] ?? null;
             $tipoCelula = $_POST['tipo_celula'] ?? null;
-            $observaciones = $_POST['observaciones'] ?? null;
+            $noSeRealizo = !empty($_POST['no_se_realizo']);
+            $observaciones = trim((string)($_POST['observaciones'] ?? ''));
+
+            if ($noSeRealizo) {
+                foreach ($asistencias as $idPersona => $asistio) {
+                    $asistencias[$idPersona] = 0;
+                }
+
+                if ($observaciones === '') {
+                    $observaciones = 'No se realizó';
+                } elseif (stripos($observaciones, 'no se realiz') === false) {
+                    $observaciones = 'No se realizó. ' . $observaciones;
+                }
+            }
+
+            $observaciones = $observaciones !== '' ? $observaciones : null;
             
             foreach ($asistencias as $idPersona => $asistio) {
                 // Convertir a entero: "1" o 1 = asistió, "0" o vacío = no asistió

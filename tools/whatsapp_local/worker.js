@@ -58,6 +58,7 @@ async function asegurarTabla() {
       referencia VARCHAR(150) NULL,
       estado ENUM('pendiente','procesando','enviado','fallido') NOT NULL DEFAULT 'pendiente',
       intentos INT NOT NULL DEFAULT 0,
+      programado_en DATETIME NULL,
       ultimo_error TEXT NULL,
       creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       procesado_en DATETIME NULL,
@@ -76,6 +77,11 @@ async function asegurarTabla() {
   const [colMediaTipo] = await pool.query("SHOW COLUMNS FROM whatsapp_local_queue LIKE 'media_tipo'");
   if (!Array.isArray(colMediaTipo) || colMediaTipo.length === 0) {
     await pool.query("ALTER TABLE whatsapp_local_queue ADD COLUMN media_tipo VARCHAR(20) NULL AFTER media_url");
+  }
+
+  const [colProgramadoEn] = await pool.query("SHOW COLUMNS FROM whatsapp_local_queue LIKE 'programado_en'");
+  if (!Array.isArray(colProgramadoEn) || colProgramadoEn.length === 0) {
+    await pool.query("ALTER TABLE whatsapp_local_queue ADD COLUMN programado_en DATETIME NULL AFTER intentos");
   }
 }
 
@@ -227,6 +233,7 @@ async function obtenerPendientes(limit) {
     `SELECT id, telefono, mensaje, media_url, media_tipo, intentos
      FROM whatsapp_local_queue
      WHERE estado = 'pendiente' AND intentos < ?
+       AND (programado_en IS NULL OR programado_en <= NOW())
      ORDER BY id ASC
      LIMIT ?`,
     [MAX_ATTEMPTS, limit]

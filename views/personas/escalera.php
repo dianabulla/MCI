@@ -34,6 +34,26 @@ if (isset($mapaFiltroAEtapa[$etapaFiltroActual])) {
 
 $puedeEditarChecklist = !empty($puedeEditarChecklistEscalera);
 $totalColumnasChecklist = count($etapasVisibles) * 3;
+
+$reporteMes = $reporteEscaleraMesActual ?? [
+    'inicio' => date('Y-m-01'),
+    'fin' => date('Y-m-t'),
+    'mes_label' => date('F Y'),
+    'total_personas_mes' => 0,
+    'totales_etapa' => [
+        'Ganar' => 0,
+        'Consolidar' => 0,
+        'Discipular' => 0,
+        'Enviar' => 0,
+        'sin_etapa' => 0,
+    ],
+    'peldaños' => [
+        'Ganar' => ['Primer contacto' => 0, 'Ubicado en celula' => 0, 'No se dispone' => 0],
+        'Consolidar' => ['Universidad de la vida' => 0, 'Encuentro' => 0, 'Bautismo' => 0],
+        'Discipular' => ['Proyeccion' => 0, 'Equipo G12' => 0, 'Capacitacion destino nivel 1' => 0],
+        'Enviar' => ['Capacitacion destino nivel 2' => 0, 'Capacitacion destino nivel 3' => 0, 'Celula' => 0],
+    ],
+];
 ?>
 
 <div class="page-header">
@@ -72,6 +92,74 @@ $totalColumnasChecklist = count($etapasVisibles) * 3;
                 <span class="escalera-resumen-label">Todas</span>
                 <strong class="escalera-resumen-value"><?= (int)(($totalesEtapa['Ganar'] ?? 0) + ($totalesEtapa['Consolidar'] ?? 0) + ($totalesEtapa['Discipular'] ?? 0) + ($totalesEtapa['Enviar'] ?? 0) + ($totalesEtapa['sin_etapa'] ?? 0)) ?></strong>
             </a>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 16px;">
+    <div class="card-body" style="padding: 14px 16px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+            <div>
+                <h3 style="margin:0 0 4px 0;">Reporte mensual de la Escalera del Éxito</h3>
+                <small style="color:#60708a;">
+                    Rango aplicado: <?= htmlspecialchars((string)$reporteMes['inicio']) ?> a <?= htmlspecialchars((string)$reporteMes['fin']) ?>
+                </small>
+            </div>
+            <div class="mes-total-pill">
+                Total personas del mes: <strong><?= (int)($reporteMes['total_personas_mes'] ?? 0) ?></strong>
+            </div>
+        </div>
+
+        <div class="escalera-resumen-grid" style="margin-bottom:14px;">
+            <div class="escalera-resumen-item resumen-ganar">
+                <span class="escalera-resumen-label">Ganar</span>
+                <strong class="escalera-resumen-value"><?= (int)($reporteMes['totales_etapa']['Ganar'] ?? 0) ?></strong>
+            </div>
+            <div class="escalera-resumen-item resumen-consolidar">
+                <span class="escalera-resumen-label">Consolidar</span>
+                <strong class="escalera-resumen-value"><?= (int)($reporteMes['totales_etapa']['Consolidar'] ?? 0) ?></strong>
+            </div>
+            <div class="escalera-resumen-item resumen-discipular">
+                <span class="escalera-resumen-label">Discipular</span>
+                <strong class="escalera-resumen-value"><?= (int)($reporteMes['totales_etapa']['Discipular'] ?? 0) ?></strong>
+            </div>
+            <div class="escalera-resumen-item resumen-enviar">
+                <span class="escalera-resumen-label">Enviar</span>
+                <strong class="escalera-resumen-value"><?= (int)($reporteMes['totales_etapa']['Enviar'] ?? 0) ?></strong>
+            </div>
+            <div class="escalera-resumen-item resumen-sin-etapa">
+                <span class="escalera-resumen-label">Sin etapa</span>
+                <strong class="escalera-resumen-value"><?= (int)($reporteMes['totales_etapa']['sin_etapa'] ?? 0) ?></strong>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="data-table escalera-reporte-mensual-table">
+                <thead>
+                    <tr>
+                        <th>Etapa</th>
+                        <th>Peldaño</th>
+                        <th style="width:120px;">Cantidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach (($reporteMes['peldaños'] ?? []) as $etapa => $peldaños): ?>
+                        <?php $primeraFila = true; ?>
+                        <?php foreach ($peldaños as $nombrePeldaño => $cantidadPeldaño): ?>
+                            <tr>
+                                <?php if ($primeraFila): ?>
+                                    <td rowspan="<?= count($peldaños) ?>" class="stage-group-cell stage-group-<?= strtolower($etapa) ?>">
+                                        <strong><?= htmlspecialchars($etapa) ?></strong>
+                                    </td>
+                                    <?php $primeraFila = false; ?>
+                                <?php endif; ?>
+                                <td><?= htmlspecialchars($nombrePeldaño) ?></td>
+                                <td><strong><?= (int)$cantidadPeldaño ?></strong></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -115,7 +203,7 @@ $totalColumnasChecklist = count($etapasVisibles) * 3;
                     ?>
                     <tr data-persona-id="<?= (int)($persona['Id_Persona'] ?? 0) ?>" data-proceso-actual="<?= htmlspecialchars($etapaOperativa) ?>">
                         <td><?= htmlspecialchars(trim(($persona['Nombre'] ?? '') . ' ' . ($persona['Apellido'] ?? ''))) ?></td>
-                        <td><?= htmlspecialchars($persona['Nombre_Lider'] ?? 'Sin líder') ?></td>
+                        <td><?= htmlspecialchars(trim((string)($persona['Nombre_Lider'] ?? '')) ?: 'Sin líder') ?></td>
                         <?php foreach ($etapasVisibles as $etapaNombre): ?>
                             <?php $subprocesos = $subprocesosPorEtapa[$etapaNombre] ?? []; ?>
                             <?php
@@ -195,71 +283,49 @@ $totalColumnasChecklist = count($etapasVisibles) * 3;
 
 .stage-head-consolidar {
     background: #eaf9ee;
-    color: #176636;
+    color: #187a35;
 }
 
 .stage-head-discipular {
-    background: #ecf5ff;
-    color: #1e65b6;
+    background: #eef5ff;
+    color: #1e73be;
 }
 
 .stage-head-enviar {
-    background: #ffeaf2;
-    color: #a30f43;
-}
-
-.escalera-matrix-table thead tr:first-child th:first-child,
-.escalera-matrix-table thead tr:first-child th:nth-child(2) {
-    text-align: left;
+    background: #fff0f6;
+    color: #c2185b;
 }
 
 .subproceso-head-row th {
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 1.2;
     text-align: center;
-    padding: 4px 4px;
+    font-size: 11px;
+    line-height: 1.2;
+    padding: 6px 4px;
+}
+
+.subcol-ganar {
+    background: #fffbeb;
+    color: #7c5d00;
+}
+
+.subcol-consolidar {
+    background: #f2fbf4;
+    color: #1c7f3b;
+}
+
+.subcol-discipular {
+    background: #f5f9ff;
+    color: #225fa5;
+}
+
+.subcol-enviar {
+    background: #fff4f8;
+    color: #b11c57;
 }
 
 .subproceso-label {
     display: block;
-    font-size: 11px;
-    font-weight: 700;
-    line-height: 1.2;
-}
-
-.subcol-ganar .subproceso-label {
-    color: #8a6500;
-}
-
-.subcol-consolidar .subproceso-label {
-    color: #176636;
-}
-
-.subcol-discipular .subproceso-label {
-    color: #1e65b6;
-}
-
-.subcol-enviar .subproceso-label {
-    color: #a30f43;
-}
-
-.escalera-matrix-table th:nth-child(1),
-.escalera-matrix-table td:nth-child(1) {
-    width: 180px;
-}
-
-.escalera-matrix-table th:nth-child(2),
-.escalera-matrix-table td:nth-child(2) {
-    width: 190px;
-}
-
-.escalera-matrix-table td:nth-child(1),
-.escalera-matrix-table td:nth-child(2) {
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.3;
-    word-break: break-word;
+    white-space: normal;
 }
 
 .check-cell {
@@ -348,6 +414,44 @@ $totalColumnasChecklist = count($etapasVisibles) * 3;
     color: #4e607b;
 }
 
+.escalera-reporte-mensual-table td,
+.escalera-reporte-mensual-table th {
+    vertical-align: middle;
+}
+
+.stage-group-cell {
+    font-weight: 700;
+    text-align: center;
+}
+
+.stage-group-ganar {
+    background: #fff9e7;
+    color: #8a6500;
+}
+
+.stage-group-consolidar {
+    background: #eefaf1;
+    color: #1c7f3b;
+}
+
+.stage-group-discipular {
+    background: #f1f7ff;
+    color: #225fa5;
+}
+
+.stage-group-enviar {
+    background: #fff1f7;
+    color: #b11c57;
+}
+
+.mes-total-pill {
+    background: #f4f7fb;
+    border: 1px solid #d7e0ee;
+    padding: 8px 12px;
+    border-radius: 10px;
+    color: #314766;
+}
+
 @media (max-width: 900px) {
     .escalera-matrix-table th:nth-child(1),
     .escalera-matrix-table td:nth-child(1),
@@ -416,3 +520,4 @@ document.addEventListener('DOMContentLoaded', function () {
 <?php endif; ?>
 
 <?php include VIEWS . '/layout/footer.php'; ?>
+

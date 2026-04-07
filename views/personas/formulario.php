@@ -3,13 +3,15 @@
 <?php
 $returnToAsistencia = ($return_to ?? '') === 'asistencia';
 $returnToCelulas = ($return_to ?? '') === 'celulas';
+$panelEventosProcesos = strtolower(trim((string)($_GET['panel'] ?? ($_POST['panel_eventos_procesos'] ?? ''))));
+$modoSoloEventosProcesos = in_array($panelEventosProcesos, ['escalera', 'convenciones'], true);
 $urlVolver = $returnToAsistencia
     ? (PUBLIC_URL . '?url=asistencias/registrar' . (!empty($celula_retorno) ? '&celula=' . (int)$celula_retorno : ''))
     : ($returnToCelulas ? (PUBLIC_URL . '?url=celulas') : (PUBLIC_URL . '?url=personas'));
 ?>
 
 <div class="page-header">
-    <h2><?= isset($persona) ? 'Editar' : 'Nueva' ?> Persona</h2>
+    <h2><?= $modoSoloEventosProcesos ? 'Eventos y procesos' : ((isset($persona) ? 'Editar' : 'Nueva') . ' Persona') ?></h2>
     <a href="<?= $urlVolver ?>" class="btn btn-secondary">Volver</a>
 </div>
 
@@ -19,8 +21,14 @@ $urlVolver = $returnToAsistencia
 </div>
 <?php endif; ?>
 
-<div class="form-container">
-    <form method="POST">
+<?php if ($modoSoloEventosProcesos): ?>
+<div class="alert alert-info" style="margin-bottom: 20px;">
+    <i class="bi bi-bullseye"></i> Estás en la vista enfocada de <strong>Eventos y procesos</strong>. Aquí solo verás esta sección para actualizar la escalera o las convenciones.
+</div>
+<?php endif; ?>
+
+<div class="form-container <?= $modoSoloEventosProcesos ? 'modo-solo-eventos' : '' ?>">
+    <form method="POST" id="persona_form">
         <?php if (isset($persona['Id_Persona'])): ?>
         <input type="hidden" name="id" value="<?= (int)$persona['Id_Persona'] ?>">
         <?php endif; ?>
@@ -130,24 +138,30 @@ $urlVolver = $returnToAsistencia
         </div>
 
         <!-- Sección: Información Ministerial -->
-        <div class="form-section">
-            <h3 class="section-title">⛪ Información Ministerial</h3>
+        <div class="form-section form-section-ministerial">
+            <h3 class="section-title"><?= $modoSoloEventosProcesos ? '🎯 Eventos y procesos' : '⛪ Información Ministerial' ?></h3>
             
-            <div id="alerta_pastor" class="alert alert-info" style="display:none; margin-bottom: 15px;">
-                <i class="bi bi-shield-check"></i> <strong>⭐ Esta persona es un Líder (Pastor)</strong> - Será tratada como líder en el sistema y reportará actividades de liderazgo.
-            </div>
-            
-            <div class="form-row">
+            <div class="bloque-ministerial-general">
+                <div id="alerta_pastor" class="alert alert-info" style="display:none; margin-bottom: 15px;">
+                    <i class="bi bi-shield-check"></i> <strong>⭐ Esta persona es un Líder (Pastor)</strong> - Será tratada como líder en el sistema y reportará actividades de liderazgo.
+                </div>
+                
+                <div class="form-row">
                 <div class="form-group autocomplete-wrapper">
                     <label for="celula_search">Célula</label>
+                    <?php
+                    $celulaNombreSeleccionada = $post_data['celula_search'] ?? (isset($persona) && !empty($persona['Id_Celula']) ? ($persona['Nombre_Celula'] ?? '') : '');
+                    $celulaIdSeleccionada = $post_data['id_celula'] ?? (isset($persona) && !empty($persona['Id_Celula']) ? $persona['Id_Celula'] : '');
+                    ?>
                     <input type="text" id="celula_search" class="form-control"
                            placeholder="Buscar célula..."
-                           value="<?= isset($persona) && $persona['Id_Celula'] ? htmlspecialchars($persona['Nombre_Celula'] ?? '') : '' ?>"
+                           value="<?= htmlspecialchars((string)$celulaNombreSeleccionada) ?>"
                            autocomplete="off">
                     <input type="hidden" id="id_celula" name="id_celula"
-                           value="<?= isset($persona) && $persona['Id_Celula'] ? $persona['Id_Celula'] : '' ?>">
+                           value="<?= htmlspecialchars((string)$celulaIdSeleccionada) ?>">
                     <div id="celula_autocomplete" class="autocomplete-items"></div>
-                    <small class="form-text text-muted">Escriba el nombre de la célula para buscarla</small>
+                    <small class="form-text text-muted">Escriba el nombre de la célula para buscarla y selecciónela de la lista</small>
+                    <small id="celula_error" class="form-text text-danger" style="display:none;">Debes seleccionar una célula válida de la lista.</small>
                 </div>
 
                 <div class="form-group">
@@ -186,65 +200,64 @@ $urlVolver = $returnToAsistencia
             <div class="form-row">
                 <div class="form-group autocomplete-wrapper">
                     <label for="lider_search">Líder Asignado</label>
+                    <?php
+                    $liderNombreSeleccionado = $post_data['lider_search'] ?? (isset($persona) && !empty($persona['Id_Lider']) ? ($persona['Nombre_Lider'] ?? '') : '');
+                    $liderIdSeleccionado = $post_data['id_lider'] ?? (isset($persona) && !empty($persona['Id_Lider']) ? $persona['Id_Lider'] : '');
+                    ?>
                     <input type="text" id="lider_search" class="form-control" 
                            placeholder="Buscar líder..."
-                           value="<?= isset($persona) && $persona['Id_Lider'] ? htmlspecialchars($persona['Nombre_Lider'] ?? '') : '' ?>"
+                           value="<?= htmlspecialchars((string)$liderNombreSeleccionado) ?>"
                            autocomplete="off">
                     <input type="hidden" id="id_lider" name="id_lider" 
-                           value="<?= isset($persona) && $persona['Id_Lider'] ? $persona['Id_Lider'] : '' ?>">
+                           value="<?= htmlspecialchars((string)$liderIdSeleccionado) ?>">
                     <div id="lider_autocomplete" class="autocomplete-items"></div>
-                    <small class="form-text text-muted">Escriba el nombre del líder para buscarlo</small>
+                    <small class="form-text text-muted">Escriba el nombre del líder y selecciónelo de la lista</small>
+                    <small id="lider_error" class="form-text text-danger" style="display:none;">Debes seleccionar un líder válido de la lista.</small>
                 </div>
 
                 <div class="form-group">
                     <label for="invitado_por">Invitado Por</label>
                     <input type="text" id="invitado_por" name="invitado_por" class="form-control" 
-                           value="<?= htmlspecialchars($persona['Invitado_Por'] ?? '') ?>"
+                           value="<?= htmlspecialchars($post_data['invitado_por'] ?? ($persona['Invitado_Por'] ?? '')) ?>"
                            placeholder="Nombre de quien lo invitó">
                 </div>
 
                 <div class="form-group">
                     <label for="tipo_reunion">Ganado en</label>
-                    <?php $tipoReunionSeleccionado = $post_data['tipo_reunion'] ?? ($persona['Tipo_Reunion'] ?? ''); ?>
+                    <?php
+                    $tipoReunionRaw = $post_data['tipo_reunion'] ?? ($persona['Tipo_Reunion'] ?? '');
+                    $tipoReunionNormalizado = strtolower(trim((string)$tipoReunionRaw));
+                    $tipoReunionNormalizado = strtr($tipoReunionNormalizado, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n']);
+                    if (in_array($tipoReunionNormalizado, ['celula'], true)) {
+                        $tipoReunionSeleccionado = 'Celula';
+                    } elseif (in_array($tipoReunionNormalizado, ['domingo'], true)) {
+                        $tipoReunionSeleccionado = 'Domingo';
+                    } elseif (in_array($tipoReunionNormalizado, ['somos uno', 'somos_uno', 'viernes'], true)) {
+                        $tipoReunionSeleccionado = 'Somos Uno';
+                    } elseif (in_array($tipoReunionNormalizado, ['otro', 'otros', 'migrados', 'asignados'], true)) {
+                        $tipoReunionSeleccionado = 'Otros';
+                    } else {
+                        $tipoReunionSeleccionado = '';
+                    }
+                    $ganadoEnOtroObservacion = $post_data['ganado_en_otro_observacion'] ?? ($persona['Observacion_Ganado_En'] ?? '');
+                    if ($ganadoEnOtroObservacion === '' && in_array((string)$tipoReunionRaw, ['Migrados', 'Asignados'], true)) {
+                        $ganadoEnOtroObservacion = (string)$tipoReunionRaw;
+                    }
+                    ?>
                     <select id="tipo_reunion" name="tipo_reunion" class="form-control">
                         <option value="">Seleccionar...</option>
-                        <option value="Celula" <?= $tipoReunionSeleccionado === 'Celula' ? 'selected' : '' ?>>Célula</option>
                         <option value="Domingo" <?= $tipoReunionSeleccionado === 'Domingo' ? 'selected' : '' ?>>Domingo</option>
-                        <option value="Viernes" <?= $tipoReunionSeleccionado === 'Viernes' ? 'selected' : '' ?>>Viernes</option>
-                        <option value="Otro" <?= $tipoReunionSeleccionado === 'Otro' ? 'selected' : '' ?>>Otro</option>
-                        <option value="Migrados" <?= $tipoReunionSeleccionado === 'Migrados' ? 'selected' : '' ?>>Migrados</option>
-                        <option value="Asignados" <?= $tipoReunionSeleccionado === 'Asignados' ? 'selected' : '' ?>>Asignados</option>
+                        <option value="Somos Uno" <?= $tipoReunionSeleccionado === 'Somos Uno' ? 'selected' : '' ?>>Somos Uno</option>
+                        <option value="Celula" <?= $tipoReunionSeleccionado === 'Celula' ? 'selected' : '' ?>>Célula</option>
+                        <option value="Otros" <?= $tipoReunionSeleccionado === 'Otros' ? 'selected' : '' ?>>Otros</option>
                     </select>
                 </div>
 
-                <?php if (!empty($soportaConvencion)): ?>
-                <div class="form-group">
-                    <label for="convencion">Convenciones</label>
-                    <?php $convencionSeleccionada = $post_data['convencion'] ?? ($persona['Convencion'] ?? ''); ?>
-                    <select id="convencion" name="convencion" class="form-control">
-                        <option value="">Seleccionar...</option>
-                        <option value="Convencion Enero" <?= $convencionSeleccionada === 'Convencion Enero' ? 'selected' : '' ?>>Convención Enero</option>
-                        <option value="Convencion Mujeres" <?= $convencionSeleccionada === 'Convencion Mujeres' ? 'selected' : '' ?>>Convención Mujeres</option>
-                        <option value="Convencion Jovenes" <?= $convencionSeleccionada === 'Convencion Jovenes' ? 'selected' : '' ?>>Convención Jóvenes</option>
-                        <option value="Convencion Hombres" <?= $convencionSeleccionada === 'Convencion Hombres' ? 'selected' : '' ?>>Convención Hombres</option>
-                    </select>
+                <div class="form-group" id="ganado_en_otro_wrap" style="display:none;">
+                    <label for="ganado_en_otro_observacion">Observaciones</label>
+                    <textarea id="ganado_en_otro_observacion" name="ganado_en_otro_observacion" class="form-control" rows="3" placeholder="Describe dónde fue ganado o la observación necesaria..."><?= htmlspecialchars((string)$ganadoEnOtroObservacion) ?></textarea>
+                    <small class="form-text text-muted">Este campo es obligatorio cuando seleccionas Otros.</small>
                 </div>
-                <?php endif; ?>
-
-                <?php if (!empty($soportaProceso)): ?>
-                <div class="form-group">
-                    <label for="proceso">Escalera del Éxito</label>
-                    <?php $procesoSeleccionado = $post_data['proceso'] ?? ($persona['Proceso'] ?? 'Ganar'); ?>
-                    <select id="proceso" name="proceso" class="form-control">
-                        <option value="">Seleccionar...</option>
-                        <option value="Ganar" <?= $procesoSeleccionado === 'Ganar' ? 'selected' : '' ?>>Ganar</option>
-                        <option value="Consolidar" <?= $procesoSeleccionado === 'Consolidar' ? 'selected' : '' ?>>Consolidar</option>
-                        <option value="Discipular" <?= $procesoSeleccionado === 'Discipular' ? 'selected' : '' ?>>Discipular</option>
-                        <option value="Enviar" <?= $procesoSeleccionado === 'Enviar' ? 'selected' : '' ?>>Enviar</option>
-                    </select>
-                    <small class="form-text text-muted">Etapa actual de la Escalera del Éxito: Ganar, Consolidar, Discipular o Enviar.</small>
-                </div>
-                <?php endif; ?>
 
                 <?php if (AuthController::esAdministrador()): ?>
                 <div class="form-group">
@@ -261,6 +274,165 @@ $urlVolver = $returnToAsistencia
                 </div>
                 <?php endif; ?>
             </div>
+            </div>
+
+            <?php if (!empty($soportaConvencion) || !empty($soportaProceso)): ?>
+            <?php
+            $convencionesDisponibles = [
+                'Convencion Enero' => 'Convención Enero',
+                'Convencion Mujeres' => 'Convención Mujeres',
+                'Convencion Jovenes' => 'Convención Jóvenes',
+                'Convencion Hombres' => 'Convención Hombres'
+            ];
+            $subprocesosEscaleraFormulario = [
+                'Ganar' => ['Asignado a líder', 'Primer contacto', 'Ubicado en célula', 'No se dispone'],
+                'Consolidar' => ['Universidad de la Vida', 'Encuentro', 'Bautismo'],
+                'Discipular' => ['Proyección', 'Equipo G12', 'Capacitación Destino Nivel 1'],
+                'Enviar' => ['Capacitación Destino Nivel 2', 'Capacitación Destino Nivel 3', 'Célula']
+            ];
+            $procesoSeleccionado = $post_data['proceso'] ?? ($persona['Proceso'] ?? 'Ganar');
+            $checklistFormulario = [
+                'Ganar' => [false, false, false, false],
+                'Consolidar' => [false, false, false],
+                'Discipular' => [false, false, false],
+                'Enviar' => [false, false, false],
+                '_meta' => [
+                    'no_disponible_observacion' => '',
+                    'convenciones' => []
+                ]
+            ];
+            $ordenEtapasFormulario = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
+            $indiceProcesoFormulario = array_search((string)$procesoSeleccionado, $ordenEtapasFormulario, true);
+            if ($indiceProcesoFormulario === false) {
+                $indiceProcesoFormulario = 0;
+                $procesoSeleccionado = 'Ganar';
+            }
+            foreach ($ordenEtapasFormulario as $idxEtapa => $etapaNombreTmp) {
+                if ($idxEtapa < $indiceProcesoFormulario) {
+                    $limite = min(3, count($checklistFormulario[$etapaNombreTmp]));
+                    for ($iTmp = 0; $iTmp < $limite; $iTmp++) {
+                        $checklistFormulario[$etapaNombreTmp][$iTmp] = true;
+                    }
+                } elseif ($idxEtapa === $indiceProcesoFormulario && isset($checklistFormulario[$etapaNombreTmp][0])) {
+                    $checklistFormulario[$etapaNombreTmp][0] = true;
+                }
+            }
+
+            $checklistFormularioRaw = $post_data['escalera_checklist'] ?? ($persona['Escalera_Checklist'] ?? '');
+            if (is_string($checklistFormularioRaw) && trim($checklistFormularioRaw) !== '') {
+                $checklistDecodificado = json_decode($checklistFormularioRaw, true);
+                if (is_array($checklistDecodificado)) {
+                    foreach (['Ganar', 'Consolidar', 'Discipular', 'Enviar'] as $etapaTmp) {
+                        if (!empty($checklistDecodificado[$etapaTmp]) && is_array($checklistDecodificado[$etapaTmp])) {
+                            foreach ($checklistFormulario[$etapaTmp] as $indiceTmp => $valorTmp) {
+                                if (array_key_exists($indiceTmp, $checklistDecodificado[$etapaTmp])) {
+                                    $checklistFormulario[$etapaTmp][$indiceTmp] = !empty($checklistDecodificado[$etapaTmp][$indiceTmp]);
+                                }
+                            }
+                        }
+                    }
+                    if (!empty($checklistDecodificado['_meta']) && is_array($checklistDecodificado['_meta'])) {
+                        $checklistFormulario['_meta']['no_disponible_observacion'] = (string)($checklistDecodificado['_meta']['no_disponible_observacion'] ?? '');
+                        $checklistFormulario['_meta']['convenciones'] = array_values(array_unique(array_filter((array)($checklistDecodificado['_meta']['convenciones'] ?? []))));
+                    }
+                }
+            }
+
+            $convencionesSeleccionadasFormulario = [];
+            if (!empty($post_data['convenciones']) && is_array($post_data['convenciones'])) {
+                $convencionesSeleccionadasFormulario = array_values(array_unique(array_filter(array_map('strval', $post_data['convenciones']))));
+            } elseif (!empty($checklistFormulario['_meta']['convenciones']) && is_array($checklistFormulario['_meta']['convenciones'])) {
+                $convencionesSeleccionadasFormulario = array_values(array_unique(array_filter(array_map('strval', $checklistFormulario['_meta']['convenciones']))));
+            } elseif (!empty($post_data['convencion'])) {
+                $convencionesSeleccionadasFormulario = [(string)$post_data['convencion']];
+            } elseif (!empty($persona['Convencion'])) {
+                $convencionesSeleccionadasFormulario = [(string)$persona['Convencion']];
+            }
+            $checklistFormulario['_meta']['convenciones'] = $convencionesSeleccionadasFormulario;
+
+            $tieneAsignacionCompletaFormulario = !empty($celulaIdSeleccionada) && !empty($liderIdSeleccionado) && !empty($ministerioSeleccionado) && (string)$ministerioSeleccionado !== 'otro';
+            $checklistFormulario['Ganar'][0] = $tieneAsignacionCompletaFormulario;
+            $checklistFormularioJson = json_encode($checklistFormulario, JSON_UNESCAPED_UNICODE);
+            $mostrarConvencionesPrimero = !empty($soportaConvencion);
+            if ($panelEventosProcesos === 'escalera' && !empty($soportaProceso)) {
+                $mostrarConvencionesPrimero = false;
+            } elseif ($panelEventosProcesos === 'convenciones' && !empty($soportaConvencion)) {
+                $mostrarConvencionesPrimero = true;
+            }
+            ?>
+            <div class="form-row">
+                <div class="form-group form-group-wide eventos-procesos-group" id="eventos-procesos">
+                    <input type="hidden" id="panel_eventos_procesos" name="panel_eventos_procesos" value="<?= $mostrarConvencionesPrimero ? 'convenciones' : 'escalera' ?>">
+                    <label>Eventos y procesos</label>
+                    <input type="hidden" id="escalera_checklist_payload" name="escalera_checklist" value="<?= htmlspecialchars((string)$checklistFormularioJson, ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" id="proceso" name="proceso" value="<?= htmlspecialchars((string)$procesoSeleccionado) ?>">
+
+                    <div class="eventos-procesos-card">
+                        <div class="eventos-procesos-tabs">
+                            <?php if (!empty($soportaConvencion)): ?>
+                                <button type="button" class="eventos-procesos-tab <?= $mostrarConvencionesPrimero ? 'active' : '' ?>" data-target="panel_convenciones">Convenciones</button>
+                            <?php endif; ?>
+                            <?php if (!empty($soportaProceso)): ?>
+                                <button type="button" class="eventos-procesos-tab <?= !$mostrarConvencionesPrimero ? 'active' : '' ?>" data-target="panel_escalera">Escalera del Éxito</button>
+                            <?php endif; ?>
+                            <div class="eventos-proceso-badge">Proceso actual: <strong id="proceso_actual_badge"><?= htmlspecialchars((string)$procesoSeleccionado ?: 'Ganar') ?></strong></div>
+                        </div>
+
+                        <?php if (!empty($soportaConvencion)): ?>
+                        <div class="eventos-tab-panel <?= $mostrarConvencionesPrimero ? 'active' : '' ?>" id="panel_convenciones">
+                            <div class="eventos-check-grid">
+                                <?php foreach ($convencionesDisponibles as $valorConvencion => $labelConvencion): ?>
+                                    <?php $convencionMarcada = in_array($valorConvencion, $convencionesSeleccionadasFormulario, true); ?>
+                                    <label class="eventos-check-item <?= $convencionMarcada ? 'checked' : '' ?>">
+                                        <input type="checkbox" class="js-convencion-check" name="convenciones[]" value="<?= htmlspecialchars($valorConvencion) ?>" <?= $convencionMarcada ? 'checked' : '' ?>>
+                                        <span><?= htmlspecialchars($labelConvencion) ?></span>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                            <small class="form-text text-muted">Marca una o varias convenciones del año asociadas a esta persona.</small>
+                        </div>
+                        <?php endif; ?>
+
+                        <?php if (!empty($soportaProceso)): ?>
+                        <div class="eventos-tab-panel <?= !$mostrarConvencionesPrimero ? 'active' : '' ?>" id="panel_escalera">
+                            <div class="eventos-stage-grid">
+                                <?php foreach ($subprocesosEscaleraFormulario as $etapaNombre => $itemsEtapa): ?>
+                                    <div class="eventos-stage-card eventos-stage-<?= strtolower($etapaNombre) ?>">
+                                        <div class="eventos-stage-header"><?= htmlspecialchars($etapaNombre) ?></div>
+                                        <div class="eventos-stage-body">
+                                            <?php foreach ($itemsEtapa as $indiceItem => $nombreItem): ?>
+                                                <?php
+                                                $estaMarcado = !empty($checklistFormulario[$etapaNombre][$indiceItem]);
+                                                $esAsignacionAuto = $etapaNombre === 'Ganar' && $indiceItem === 0;
+                                                ?>
+                                                <label class="eventos-check-item <?= $estaMarcado ? 'checked' : '' ?> <?= $esAsignacionAuto ? 'disabled is-auto' : '' ?>">
+                                                    <input type="checkbox"
+                                                           class="js-escalera-form-check"
+                                                           data-etapa="<?= htmlspecialchars($etapaNombre) ?>"
+                                                           data-indice="<?= (int)$indiceItem ?>"
+                                                           <?= $estaMarcado ? 'checked' : '' ?>
+                                                           <?= $esAsignacionAuto ? 'disabled' : '' ?>>
+                                                    <span><?= htmlspecialchars($nombreItem) ?></span>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+
+                            <div class="eventos-no-disponible-wrap" id="evento_no_disponible_wrap" style="<?= !empty($checklistFormulario['Ganar'][3]) ? '' : 'display:none;' ?>">
+                                <label for="evento_no_disponible_observacion">Observación de "No se dispone"</label>
+                                <textarea id="evento_no_disponible_observacion" class="form-control" rows="3" placeholder="Escribe por qué no se logró concretar esta persona..."><?= htmlspecialchars((string)($checklistFormulario['_meta']['no_disponible_observacion'] ?? '')) ?></textarea>
+                                <small class="form-text text-muted">Este campo es obligatorio cuando marcas "No se dispone".</small>
+                            </div>
+
+                            <small class="form-text text-muted">Los checks de la escalera definen automáticamente el proceso actual de la persona.</small>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
         </div>
 
         <!-- Sección: Petición de Oración -->
@@ -330,6 +502,24 @@ $urlVolver = $returnToAsistencia
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
+.modo-solo-eventos .form-section:not(.form-section-ministerial),
+.modo-solo-eventos .bloque-ministerial-general,
+.modo-solo-eventos #alerta_pastor,
+.modo-solo-eventos .section-title:not(.section-title) {
+    display: none;
+}
+
+.modo-solo-eventos .form-section-ministerial {
+    border-color: #dbe7fb;
+    box-shadow: 0 4px 14px rgba(47,95,179,0.08);
+}
+
+.modo-solo-eventos .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
 .section-title {
     font-size: 1.3rem;
     font-weight: 600;
@@ -345,6 +535,158 @@ $urlVolver = $returnToAsistencia
 
 .form-section .form-group {
     margin-bottom: 20px;
+}
+
+.form-group-wide,
+.eventos-procesos-group {
+    flex: 0 0 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    grid-column: 1 / -1 !important;
+    display: block;
+    scroll-margin-top: 90px;
+}
+
+.eventos-procesos-card {
+    width: 100%;
+    border: 1px solid #dfe6f3;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #f9fbff 0%, #ffffff 100%);
+    overflow: hidden;
+}
+
+.eventos-procesos-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 14px;
+    background: #f3f6fd;
+    border-bottom: 1px solid #e2e8f5;
+}
+
+.eventos-procesos-tab {
+    border: 1px solid #cfd8ee;
+    background: #fff;
+    color: #355fa3;
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.eventos-procesos-tab.active {
+    background: #2f5fb3;
+    color: #fff;
+    border-color: #2f5fb3;
+}
+
+.eventos-proceso-badge {
+    margin-left: auto;
+    font-size: 0.92rem;
+    color: #4d5f7a;
+    background: #fff;
+    border: 1px solid #d8e1f1;
+    border-radius: 999px;
+    padding: 7px 12px;
+    white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+    .eventos-proceso-badge {
+        width: 100%;
+        margin-left: 0;
+        text-align: center;
+    }
+}
+
+.eventos-tab-panel {
+    display: none;
+    padding: 16px;
+}
+
+.eventos-tab-panel.active {
+    display: block;
+}
+
+.eventos-check-grid,
+.eventos-stage-body {
+    display: grid;
+    gap: 10px;
+}
+
+.eventos-check-grid {
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.eventos-stage-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
+    gap: 14px;
+}
+
+@media (max-width: 900px) {
+    .eventos-stage-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.eventos-stage-card {
+    border: 1px solid #dfe6f3;
+    border-radius: 12px;
+    background: #fff;
+    overflow: hidden;
+}
+
+.eventos-stage-header {
+    padding: 10px 12px;
+    font-weight: 700;
+    color: #244f93;
+    background: #eef4ff;
+    border-bottom: 1px solid #dfe6f3;
+}
+
+.eventos-stage-body {
+    padding: 12px;
+}
+
+.eventos-check-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid #dce4f2;
+    border-radius: 10px;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.eventos-check-item:hover {
+    border-color: #9bb5e3;
+    background: #f8fbff;
+}
+
+.eventos-check-item.checked {
+    border-color: #2f5fb3;
+    background: #eef4ff;
+}
+
+.eventos-check-item.disabled {
+    opacity: 0.75;
+    cursor: not-allowed;
+}
+
+.eventos-check-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.eventos-no-disponible-wrap {
+    margin-top: 14px;
 }
 
 /* Autocompletar */
@@ -382,6 +724,17 @@ $urlVolver = $returnToAsistencia
     background-color: #667eea !important;
     color: #ffffff;
 }
+
+
+.input-invalid {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.15) !important;
+}
+
+.text-danger {
+    color: #dc3545 !important;
+}
+
 </style>
 
 <script>
@@ -418,6 +771,179 @@ const fechaNacimientoInput = document.getElementById('fecha_nacimiento');
 const edadInput = document.getElementById('edad');
 const liderSearchInput = document.getElementById('lider_search');
 const liderHiddenInput = document.getElementById('id_lider');
+const personaForm = document.getElementById('persona_form');
+const celulaError = document.getElementById('celula_error');
+const liderError = document.getElementById('lider_error');
+const tipoReunionSelect = document.getElementById('tipo_reunion');
+const ganadoEnOtroWrap = document.getElementById('ganado_en_otro_wrap');
+const ganadoEnOtroInput = document.getElementById('ganado_en_otro_observacion');
+const ministerioSelect = document.getElementById('id_ministerio');
+const procesoHiddenInput = document.getElementById('proceso');
+const checklistPayloadInput = document.getElementById('escalera_checklist_payload');
+const procesoActualBadge = document.getElementById('proceso_actual_badge');
+const panelEventosProcesosInput = document.getElementById('panel_eventos_procesos');
+const tabsEventosProcesos = Array.from(document.querySelectorAll('.eventos-procesos-tab'));
+const panelsEventosProcesos = Array.from(document.querySelectorAll('.eventos-tab-panel'));
+const noDisponibleWrap = document.getElementById('evento_no_disponible_wrap');
+const noDisponibleObservacionInput = document.getElementById('evento_no_disponible_observacion');
+const etapasEventosProcesos = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
+
+function normalizarChecklistFormularioState(payload) {
+    const base = {
+        Ganar: [false, false, false, false],
+        Consolidar: [false, false, false],
+        Discipular: [false, false, false],
+        Enviar: [false, false, false],
+        _meta: {
+            no_disponible_observacion: '',
+            convenciones: []
+        }
+    };
+
+    if (!payload || typeof payload !== 'object') {
+        return base;
+    }
+
+    etapasEventosProcesos.forEach(etapa => {
+        if (!Array.isArray(payload[etapa])) {
+            return;
+        }
+        for (let i = 0; i < base[etapa].length; i++) {
+            if (typeof payload[etapa][i] !== 'undefined') {
+                base[etapa][i] = !!payload[etapa][i];
+            }
+        }
+    });
+
+    if (payload._meta && typeof payload._meta === 'object') {
+        base._meta.no_disponible_observacion = String(payload._meta.no_disponible_observacion || '').trim();
+        base._meta.convenciones = Array.isArray(payload._meta.convenciones) ? payload._meta.convenciones.map(String) : [];
+    }
+
+    return base;
+}
+
+let checklistFormularioState = normalizarChecklistFormularioState(null);
+if (checklistPayloadInput && checklistPayloadInput.value) {
+    try {
+        checklistFormularioState = normalizarChecklistFormularioState(JSON.parse(checklistPayloadInput.value));
+    } catch (e) {
+        checklistFormularioState = normalizarChecklistFormularioState(null);
+    }
+}
+
+function calcularProcesoDesdeChecklistFormulario(checklist) {
+    if (checklist && checklist.Ganar && checklist.Ganar[3]) {
+        return 'Ganar';
+    }
+
+    let consecutivas = 0;
+    for (const etapa of etapasEventosProcesos) {
+        const valores = Array.isArray(checklist[etapa]) ? checklist[etapa] : [];
+        const completa = !!valores[0] && !!valores[1] && !!valores[2];
+        if (!completa) {
+            break;
+        }
+        consecutivas++;
+    }
+
+    if (consecutivas === 0) {
+        return 'Ganar';
+    }
+
+    if (consecutivas >= etapasEventosProcesos.length) {
+        return 'Enviar';
+    }
+
+    return etapasEventosProcesos[consecutivas];
+}
+
+function actualizarTabsEventosProcesos(tabActivo) {
+    tabsEventosProcesos.forEach(tab => {
+        const esActivo = tab === tabActivo;
+        tab.classList.toggle('active', esActivo);
+    });
+
+    const panelObjetivo = tabActivo ? tabActivo.getAttribute('data-target') : '';
+    panelsEventosProcesos.forEach(panel => {
+        panel.classList.toggle('active', panel.id === panelObjetivo);
+    });
+
+    if (panelEventosProcesosInput) {
+        panelEventosProcesosInput.value = panelObjetivo === 'panel_escalera' ? 'escalera' : 'convenciones';
+    }
+}
+
+function actualizarAsignadoALiderChecklist() {
+    if (!checklistFormularioState || !Array.isArray(checklistFormularioState.Ganar)) {
+        return;
+    }
+
+    const celulaHiddenField = document.getElementById('id_celula');
+    const tieneLider = !!(liderHiddenInput && String(liderHiddenInput.value || '').trim() !== '' && !liderSearchInput.disabled);
+    const tieneCelula = !!(celulaHiddenField && String(celulaHiddenField.value || '').trim() !== '');
+    const tieneMinisterio = !!(ministerioSelect && String(ministerioSelect.value || '').trim() !== '' && String(ministerioSelect.value || '').trim() !== 'otro');
+
+    checklistFormularioState.Ganar[0] = tieneLider && tieneCelula && tieneMinisterio;
+    sincronizarEventosProcesos();
+}
+
+function sincronizarEventosProcesos() {
+    if (!checklistFormularioState || typeof checklistFormularioState !== 'object') {
+        return;
+    }
+
+    if (!checklistFormularioState._meta || typeof checklistFormularioState._meta !== 'object') {
+        checklistFormularioState._meta = { no_disponible_observacion: '', convenciones: [] };
+    }
+
+    checklistFormularioState._meta.convenciones = Array.from(document.querySelectorAll('.js-convencion-check:checked')).map(cb => cb.value);
+    checklistFormularioState._meta.no_disponible_observacion = noDisponibleObservacionInput ? String(noDisponibleObservacionInput.value || '').trim() : '';
+
+    const noDisponibleMarcado = !!(checklistFormularioState.Ganar && checklistFormularioState.Ganar[3]);
+    if (noDisponibleWrap) {
+        noDisponibleWrap.style.display = noDisponibleMarcado ? '' : 'none';
+    }
+    if (!noDisponibleMarcado && noDisponibleObservacionInput) {
+        noDisponibleObservacionInput.value = '';
+        checklistFormularioState._meta.no_disponible_observacion = '';
+    }
+
+    document.querySelectorAll('.js-escalera-form-check').forEach(function(checkbox) {
+        const etapa = checkbox.getAttribute('data-etapa');
+        const indice = Number(checkbox.getAttribute('data-indice') || -1);
+        const checked = !!(checklistFormularioState[etapa] && checklistFormularioState[etapa][indice]);
+        const esAsignacionAuto = etapa === 'Ganar' && indice === 0;
+        const disabledByNoDisponible = noDisponibleMarcado && !(etapa === 'Ganar' && indice === 3) && !esAsignacionAuto;
+
+        checkbox.checked = checked;
+        checkbox.disabled = esAsignacionAuto || disabledByNoDisponible;
+
+        const item = checkbox.closest('.eventos-check-item');
+        if (item) {
+            item.classList.toggle('checked', checked);
+            item.classList.toggle('disabled', checkbox.disabled);
+        }
+    });
+
+    document.querySelectorAll('.js-convencion-check').forEach(function(checkbox) {
+        const item = checkbox.closest('.eventos-check-item');
+        if (item) {
+            item.classList.toggle('checked', checkbox.checked);
+        }
+    });
+
+    const procesoCalculado = calcularProcesoDesdeChecklistFormulario(checklistFormularioState);
+    if (procesoHiddenInput) {
+        procesoHiddenInput.value = procesoCalculado;
+    }
+    if (procesoActualBadge) {
+        procesoActualBadge.textContent = procesoCalculado;
+    }
+    if (checklistPayloadInput) {
+        checklistPayloadInput.value = JSON.stringify(checklistFormularioState);
+    }
+}
 
 function calcularEdadDesdeFecha(fechaTexto) {
     if (!fechaTexto) {
@@ -481,6 +1007,70 @@ function rolSeleccionadoEsPastor() {
     const textoRol = normalizarTexto(option ? option.text : '');
     return textoRol.includes('pastor');
 }
+function obtenerCoincidenciaExacta(items, valor) {
+    const texto = normalizarTexto(valor);
+    if (!texto) {
+        return null;
+    }
+
+    return items.find(item => normalizarTexto(item.nombre) === texto) || null;
+}
+
+function marcarCampoInvalido(input, errorEl, mensaje) {
+    if (input) {
+        input.classList.add('input-invalid');
+    }
+    if (errorEl) {
+        if (mensaje) {
+            errorEl.textContent = mensaje;
+        }
+        errorEl.style.display = 'block';
+    }
+}
+
+function limpiarCampoInvalido(input, errorEl) {
+    if (input) {
+        input.classList.remove('input-invalid');
+    }
+    if (errorEl) {
+        errorEl.style.display = 'none';
+    }
+}
+
+function sincronizarSeleccionAutocomplete(input, hidden, items, errorEl, etiqueta) {
+    if (!input || !hidden) {
+        return true;
+    }
+
+    const valor = (input.value || '').trim();
+    if (valor === '') {
+        hidden.value = '';
+        limpiarCampoInvalido(input, errorEl);
+        if (typeof actualizarAsignadoALiderChecklist === 'function') {
+            actualizarAsignadoALiderChecklist();
+        }
+        return true;
+    }
+
+    const coincidencia = obtenerCoincidenciaExacta(items, valor);
+    if (coincidencia) {
+        input.value = coincidencia.nombre;
+        hidden.value = coincidencia.id;
+        limpiarCampoInvalido(input, errorEl);
+        if (typeof actualizarAsignadoALiderChecklist === 'function') {
+            actualizarAsignadoALiderChecklist();
+        }
+        return true;
+    }
+
+    hidden.value = '';
+    marcarCampoInvalido(input, errorEl, 'Debes seleccionar ' + etiqueta + ' válida de la lista.');
+    if (typeof actualizarAsignadoALiderChecklist === 'function') {
+        actualizarAsignadoALiderChecklist();
+    }
+    return false;
+}
+
 
 function actualizarAccesoSistemaPorRol() {
     if (!accesoSistemaSection) {
@@ -543,7 +1133,14 @@ function actualizarFormularioPorRolPastor() {
     
     if (esPastor && liderHiddenInput) {
         liderHiddenInput.value = '';
+        limpiarCampoInvalido(liderSearchInput, liderError);
     }
+
+    if (!esPastor) {
+        limpiarCampoInvalido(liderSearchInput, liderError);
+    }
+
+    actualizarAsignadoALiderChecklist();
 }
 
 if (rolSelect) {
@@ -553,10 +1150,65 @@ if (rolSelect) {
     actualizarFormularioPorRolPastor();
 }
 
+if (ministerioSelect) {
+    ministerioSelect.addEventListener('change', function() {
+        actualizarAsignadoALiderChecklist();
+    });
+}
+
+if (tabsEventosProcesos.length) {
+    tabsEventosProcesos.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            actualizarTabsEventosProcesos(tab);
+        });
+    });
+}
+
+document.querySelectorAll('.js-convencion-check').forEach(function(checkbox) {
+    checkbox.addEventListener('change', function() {
+        sincronizarEventosProcesos();
+    });
+});
+
+document.querySelectorAll('.js-escalera-form-check').forEach(function(checkbox) {
+    checkbox.addEventListener('change', function() {
+        const etapa = checkbox.getAttribute('data-etapa');
+        const indice = Number(checkbox.getAttribute('data-indice') || -1);
+        if (!etapa || indice < 0 || !Array.isArray(checklistFormularioState[etapa])) {
+            return;
+        }
+        checklistFormularioState[etapa][indice] = !!checkbox.checked;
+        sincronizarEventosProcesos();
+    });
+});
+
+if (noDisponibleObservacionInput) {
+    noDisponibleObservacionInput.addEventListener('input', function() {
+        sincronizarEventosProcesos();
+    });
+}
+
+sincronizarEventosProcesos();
+
 if (fechaNacimientoInput && edadInput) {
     fechaNacimientoInput.addEventListener('change', actualizarEdadAutomatica);
     fechaNacimientoInput.addEventListener('input', actualizarEdadAutomatica);
     actualizarEdadAutomatica();
+}
+
+function actualizarCampoGanadoEnOtro() {
+    if (!tipoReunionSelect || !ganadoEnOtroWrap || !ganadoEnOtroInput) {
+        return;
+    }
+
+    const esOtros = String(tipoReunionSelect.value || '') === 'Otros';
+    ganadoEnOtroWrap.style.display = esOtros ? '' : 'none';
+    ganadoEnOtroInput.required = esOtros;
+}
+
+if (tipoReunionSelect) {
+    tipoReunionSelect.addEventListener('change', actualizarCampoGanadoEnOtro);
+    actualizarCampoGanadoEnOtro();
 }
 
 // Autocompletar para célula
@@ -569,9 +1221,16 @@ celulaInput.addEventListener('input', function() {
     const value = this.value;
     closeAllLists();
     
+    limpiarCampoInvalido(celulaInput, celulaError);
+
     if (!value) {
         celulaHidden.value = '';
         return false;
+    }
+
+    const coincidenciaExacta = obtenerCoincidenciaExacta(celulasDisponibles, value);
+    if (!coincidenciaExacta || String(coincidenciaExacta.id) !== String(celulaHidden.value || '')) {
+        celulaHidden.value = '';
     }
     
     currentFocusCelula = -1;
@@ -605,6 +1264,7 @@ celulaInput.addEventListener('input', function() {
         div.addEventListener('click', function() {
             celulaInput.value = nombre;
             celulaHidden.value = celula.id;
+            limpiarCampoInvalido(celulaInput, celulaError);
             closeAllLists();
         });
         
@@ -631,11 +1291,7 @@ celulaInput.addEventListener('keydown', function(e) {
 
 celulaInput.addEventListener('blur', function() {
     setTimeout(() => {
-        const selectedCelula = celulasDisponibles.find(c => c.nombre === this.value);
-        if (!selectedCelula && this.value) {
-            this.value = '';
-            celulaHidden.value = '';
-        }
+        sincronizarSeleccionAutocomplete(celulaInput, celulaHidden, celulasDisponibles, celulaError, 'una célula');
     }, 200);
 });
 
@@ -649,9 +1305,16 @@ liderInput.addEventListener('input', function() {
     const value = this.value;
     closeAllLists();
     
+    limpiarCampoInvalido(liderInput, liderError);
+
     if (!value) {
         liderHidden.value = '';
         return false;
+    }
+
+    const coincidenciaExacta = obtenerCoincidenciaExacta(lideresDisponibles, value);
+    if (!coincidenciaExacta || String(coincidenciaExacta.id) !== String(liderHidden.value || '')) {
+        liderHidden.value = '';
     }
     
     currentFocus = -1;
@@ -685,6 +1348,7 @@ liderInput.addEventListener('input', function() {
         div.addEventListener('click', function() {
             liderInput.value = nombre;
             liderHidden.value = lider.id;
+            limpiarCampoInvalido(liderInput, liderError);
             closeAllLists();
         });
         
@@ -739,17 +1403,41 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Limpiar campo hidden si se borra el input
 liderInput.addEventListener('blur', function() {
     setTimeout(() => {
-        const selectedLider = lideresDisponibles.find(l => l.nombre === this.value);
-        if (!selectedLider && this.value) {
-            // Si escribió algo pero no seleccionó, limpiar
-            this.value = '';
+        if (liderInput.disabled) {
             liderHidden.value = '';
+            limpiarCampoInvalido(liderInput, liderError);
+            return;
         }
+        sincronizarSeleccionAutocomplete(liderInput, liderHidden, lideresDisponibles, liderError, 'un líder');
     }, 200);
 });
+
+if (personaForm) {
+    personaForm.addEventListener('submit', function(e) {
+        sincronizarEventosProcesos();
+        let valido = true;
+
+        if (celulaInput && !sincronizarSeleccionAutocomplete(celulaInput, celulaHidden, celulasDisponibles, celulaError, 'una célula')) {
+            valido = false;
+        }
+
+        if (liderInput && !liderInput.disabled && !sincronizarSeleccionAutocomplete(liderInput, liderHidden, lideresDisponibles, liderError, 'un líder')) {
+            valido = false;
+        }
+
+        if (!valido) {
+            e.preventDefault();
+            const primerInvalido = document.querySelector('.input-invalid');
+            if (primerInvalido) {
+                primerInvalido.focus();
+            }
+        }
+    });
+}
 </script>
 
 <?php include VIEWS . '/layout/footer.php'; ?>
+
+

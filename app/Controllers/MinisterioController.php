@@ -77,6 +77,32 @@ class MinisterioController extends BaseController {
         return '';
     }
 
+    private function extraerConvencionesPersona(array $persona) {
+        $convenciones = [];
+        $checklistRaw = (string)($persona['Escalera_Checklist'] ?? '');
+
+        if ($checklistRaw !== '') {
+            $checklist = json_decode($checklistRaw, true);
+            if (is_array($checklist) && isset($checklist['_meta']['convenciones']) && is_array($checklist['_meta']['convenciones'])) {
+                foreach ($checklist['_meta']['convenciones'] as $convencion) {
+                    $normalizada = $this->normalizarConvencion($convencion);
+                    if ($normalizada !== '' && !in_array($normalizada, $convenciones, true)) {
+                        $convenciones[] = $normalizada;
+                    }
+                }
+            }
+        }
+
+        if (empty($convenciones)) {
+            $convencionUnica = $this->normalizarConvencion($persona['Convencion'] ?? '');
+            if ($convencionUnica !== '') {
+                $convenciones[] = $convencionUnica;
+            }
+        }
+
+        return $convenciones;
+    }
+
     private function construirChecklistEfectivo(array $persona) {
         $ordenEtapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
         $indiceEtapa = array_flip($ordenEtapas);
@@ -159,7 +185,7 @@ class MinisterioController extends BaseController {
                 $avance[$idMinisterio]['celula']++;
             }
 
-            if (strpos($tipoReunion, 'domingo') !== false || strpos($tipoReunion, 'iglesia') !== false) {
+            if (strpos($tipoReunion, 'domingo') !== false || strpos($tipoReunion, 'iglesia') !== false || strpos($tipoReunion, 'somos uno') !== false || strpos($tipoReunion, 'somosuno') !== false || strpos($tipoReunion, 'viernes') !== false || strpos($tipoReunion, 'otro') !== false) {
                 $avance[$idMinisterio]['iglesia']++;
             }
         }
@@ -213,9 +239,11 @@ class MinisterioController extends BaseController {
                 $metricas[$idMinisterio]['asistentes_celula']++;
             }
 
-            $convencion = $this->normalizarConvencion($persona['Convencion'] ?? '');
-            if ($convencion !== '') {
-                $metricas[$idMinisterio]['convenciones'][$convencion]++;
+            $convencionesPersona = $this->extraerConvencionesPersona($persona);
+            foreach ($convencionesPersona as $convencion) {
+                if (isset($metricas[$idMinisterio]['convenciones'][$convencion])) {
+                    $metricas[$idMinisterio]['convenciones'][$convencion]++;
+                }
             }
 
             $fechaRegistro = substr((string)($persona['Fecha_Registro'] ?? ''), 0, 10);
@@ -225,7 +253,7 @@ class MinisterioController extends BaseController {
                 if (strpos($tipoReunion, 'celula') !== false) {
                     $metricas[$idMinisterio]['ganados_semana_celula']++;
                 }
-                if (strpos($tipoReunion, 'domingo') !== false) {
+                if (strpos($tipoReunion, 'domingo') !== false || strpos($tipoReunion, 'iglesia') !== false || strpos($tipoReunion, 'somos uno') !== false || strpos($tipoReunion, 'somosuno') !== false || strpos($tipoReunion, 'viernes') !== false || strpos($tipoReunion, 'otro') !== false) {
                     $metricas[$idMinisterio]['ganados_semana_domingo']++;
                 }
             }
@@ -310,7 +338,7 @@ class MinisterioController extends BaseController {
 
                 $tipoReunionNorm = $this->normalizarTipoReunion($miembro['Tipo_Reunion'] ?? '');
                 $rolNombreNorm = $this->normalizarTipoReunion($miembro['Nombre_Rol'] ?? '');
-                $convencionNorm = $this->normalizarConvencion($miembro['Convencion'] ?? '');
+                $convencionesNorm = $this->extraerConvencionesPersona($miembro);
                 $checklist = $this->construirChecklistEfectivo($miembro);
 
                 $esLiderCelula = ((int)($miembro['Id_Rol'] ?? 0) === 3) || (strpos($rolNombreNorm, 'lider de celula') !== false);
@@ -333,17 +361,24 @@ class MinisterioController extends BaseController {
                     'match_asistentes_celula' => $esAsistenteCelula,
                     'match_ganados_semana_total' => $esGanadoSemanaTotal,
                     'match_ganados_semana_celula' => $esGanadoSemanaTotal && strpos($tipoReunionNorm, 'celula') !== false,
-                    'match_ganados_semana_domingo' => $esGanadoSemanaTotal && strpos($tipoReunionNorm, 'domingo') !== false,
+                    'match_ganados_semana_domingo' => $esGanadoSemanaTotal && (
+                        strpos($tipoReunionNorm, 'domingo') !== false
+                        || strpos($tipoReunionNorm, 'iglesia') !== false
+                        || strpos($tipoReunionNorm, 'somos uno') !== false
+                        || strpos($tipoReunionNorm, 'somosuno') !== false
+                        || strpos($tipoReunionNorm, 'viernes') !== false
+                        || strpos($tipoReunionNorm, 'otro') !== false
+                    ),
                     'match_escalera_uv' => !empty($checklist['Consolidar'][0]),
                     'match_escalera_encuentro' => !empty($checklist['Consolidar'][1]),
                     'match_escalera_destino_n1' => !empty($checklist['Discipular'][2]),
                     'match_escalera_destino_n2' => !empty($checklist['Enviar'][0]),
                     'match_escalera_destino_n3' => !empty($checklist['Enviar'][1]),
-                    'match_convencion_enero' => $convencionNorm === 'enero',
-                    'match_convencion_mujeres' => $convencionNorm === 'mujeres',
-                    'match_convencion_jovenes' => $convencionNorm === 'jovenes',
-                    'match_convencion_hombres' => $convencionNorm === 'hombres',
-                    'match_convencion_total' => $convencionNorm !== ''
+                    'match_convencion_enero' => in_array('enero', $convencionesNorm, true),
+                    'match_convencion_mujeres' => in_array('mujeres', $convencionesNorm, true),
+                    'match_convencion_jovenes' => in_array('jovenes', $convencionesNorm, true),
+                    'match_convencion_hombres' => in_array('hombres', $convencionesNorm, true),
+                    'match_convencion_total' => !empty($convencionesNorm)
                 ];
             }
 

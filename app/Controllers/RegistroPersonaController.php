@@ -18,6 +18,9 @@ class RegistroPersonaController extends BaseController {
     private $whatsappMensajeTemplateModel;
     private $soportaProceso = false;
     private $soportaOrigenGanar = false;
+    private $soportaObservacionGanadoEn = false;
+    private $soportaCreadoPor = false;
+    private $soportaCanalCreacion = false;
 
     public function __construct() {
         $this->personaModel = new Persona();
@@ -28,9 +31,15 @@ class RegistroPersonaController extends BaseController {
 
         $this->personaModel->ensureProcesoColumnExists();
         $this->personaModel->ensureOrigenGanarColumnExists();
+        $this->personaModel->ensureObservacionGanadoEnColumnExists();
+        $this->personaModel->ensureCreadoPorColumnExists();
+        $this->personaModel->ensureCanalCreacionColumnExists();
 
         $this->soportaProceso = $this->personaModel->tieneColumna('Proceso');
         $this->soportaOrigenGanar = $this->personaModel->tieneColumna('Origen_Ganar');
+        $this->soportaObservacionGanadoEn = $this->personaModel->tieneColumna('Observacion_Ganado_En');
+        $this->soportaCreadoPor = $this->personaModel->tieneColumna('Creado_Por');
+        $this->soportaCanalCreacion = $this->personaModel->tieneColumna('Canal_Creacion');
     }
 
     private function buildAbsolutePublicUrl($route) {
@@ -121,6 +130,7 @@ class RegistroPersonaController extends BaseController {
                 'id_ministerio' => (string)($_GET['id_ministerio'] ?? ''),
                 'invitado_por' => (string)($_GET['invitado_por'] ?? ''),
                 'ganado_en' => (string)($_GET['ganado_en'] ?? ''),
+                'ganado_en_otro_observacion' => (string)($_GET['ganado_en_otro_observacion'] ?? ''),
                 'fecha_nacimiento' => (string)($_GET['fecha_nacimiento'] ?? ''),
                 'barrio' => (string)($_GET['barrio'] ?? ''),
                 'peticion' => (string)($_GET['peticion'] ?? ''),
@@ -144,6 +154,7 @@ class RegistroPersonaController extends BaseController {
         $idMinisterio = ctype_digit($idMinisterioRaw) ? (int)$idMinisterioRaw : 0;
         $invitadoPor = trim((string)($_POST['invitado_por'] ?? ''));
         $ganadoEnRaw = strtolower(trim((string)($_POST['ganado_en'] ?? '')));
+        $ganadoEnOtroObservacion = trim((string)($_POST['ganado_en_otro_observacion'] ?? ''));
         $fechaNacimiento = trim((string)($_POST['fecha_nacimiento'] ?? ''));
         $barrio = trim((string)($_POST['barrio'] ?? ''));
         $peticion = trim((string)($_POST['peticion'] ?? ''));
@@ -163,8 +174,12 @@ class RegistroPersonaController extends BaseController {
             $errores[] = 'Si registra teléfono, debe tener al menos 7 dígitos';
         }
 
-        if (!in_array($ganadoEnRaw, ['domingo', 'celula', 'viernes', 'otro'], true)) {
-            $errores[] = 'Debe seleccionar en qué reunión fue ganado (domingo, célula, viernes u otro)';
+        if (!in_array($ganadoEnRaw, ['domingo', 'somos_uno', 'celula', 'otro'], true)) {
+            $errores[] = 'Debe seleccionar en qué reunión fue ganado (domingo, Somos Uno, célula u otros)';
+        }
+
+        if ($ganadoEnRaw === 'otro' && $ganadoEnOtroObservacion === '') {
+            $errores[] = 'Debes escribir una observación cuando seleccionas Otros';
         }
 
         if (!empty($errores)) {
@@ -175,6 +190,7 @@ class RegistroPersonaController extends BaseController {
                 'id_ministerio' => $idMinisterioRaw,
                 'invitado_por' => $invitadoPor,
                 'ganado_en' => $ganadoEnRaw,
+                'ganado_en_otro_observacion' => $ganadoEnOtroObservacion,
                 'fecha_nacimiento' => $fechaNacimiento,
                 'barrio' => $barrio,
                 'peticion' => $peticion,
@@ -184,9 +200,9 @@ class RegistroPersonaController extends BaseController {
 
         $mapTipoReunion = [
             'domingo' => 'Domingo',
+            'somos_uno' => 'Somos Uno',
             'celula' => 'Celula',
-            'viernes' => 'Viernes',
-            'otro' => 'Otro'
+            'otro' => 'Otros'
         ];
         $tipoReunion = $mapTipoReunion[$ganadoEnRaw] ?? 'Domingo';
 
@@ -208,13 +224,31 @@ class RegistroPersonaController extends BaseController {
             'Estado_Cuenta' => 'Activo'
         ];
 
+        if ($this->soportaCreadoPor) {
+            $data['Creado_Por'] = null;
+        }
+
+        if ($this->soportaCanalCreacion) {
+            $data['Canal_Creacion'] = 'Formulario público';
+        }
+
         if ($this->soportaProceso) {
             // Toda persona nueva debe entrar en Pendiente por consolidar.
             $data['Proceso'] = 'Ganar';
         }
 
+        if ($this->soportaObservacionGanadoEn) {
+            $data['Observacion_Ganado_En'] = $tipoReunion === 'Otros' ? $ganadoEnOtroObservacion : null;
+        }
+
         if ($this->soportaOrigenGanar) {
-            $data['Origen_Ganar'] = $tipoReunion;
+            if ($tipoReunion === 'Celula') {
+                $data['Origen_Ganar'] = 'Celula';
+            } elseif ($tipoReunion === 'Domingo' || $tipoReunion === 'Somos Uno') {
+                $data['Origen_Ganar'] = 'Domingo';
+            } else {
+                $data['Origen_Ganar'] = null;
+            }
         }
 
         try {

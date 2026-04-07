@@ -25,6 +25,7 @@ class WhatsappLocalQueue extends BaseModel {
                     referencia VARCHAR(150) NULL,
                     estado ENUM('pendiente','procesando','enviado','fallido') NOT NULL DEFAULT 'pendiente',
                     intentos INT NOT NULL DEFAULT 0,
+                    programado_en DATETIME NULL,
                     ultimo_error TEXT NULL,
                     creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     procesado_en DATETIME NULL,
@@ -37,6 +38,7 @@ class WhatsappLocalQueue extends BaseModel {
         $this->execute($sql);
         $this->asegurarColumna('media_url', "ALTER TABLE {$this->table} ADD COLUMN media_url VARCHAR(500) NULL AFTER mensaje");
         $this->asegurarColumna('media_tipo', "ALTER TABLE {$this->table} ADD COLUMN media_tipo VARCHAR(20) NULL AFTER media_url");
+        $this->asegurarColumna('programado_en', "ALTER TABLE {$this->table} ADD COLUMN programado_en DATETIME NULL AFTER intentos");
     }
 
     private function asegurarColumna($columna, $sqlAlter) {
@@ -73,13 +75,18 @@ class WhatsappLocalQueue extends BaseModel {
         return null;
     }
 
-    public function encolar($telefono, $mensaje, $tipoEvento, $referencia = null, $mediaUrl = null, $mediaTipo = null) {
+    public function encolar($telefono, $mensaje, $tipoEvento, $referencia = null, $mediaUrl = null, $mediaTipo = null, $programadoEn = null) {
         $telefono = $this->normalizarTelefono($telefono);
         $mensaje = trim((string)$mensaje);
         $tipoEvento = trim((string)$tipoEvento);
         $referencia = $referencia !== null ? trim((string)$referencia) : null;
         $mediaUrl = $mediaUrl !== null ? trim((string)$mediaUrl) : null;
         $mediaTipo = $mediaTipo !== null ? trim((string)$mediaTipo) : null;
+        if ($programadoEn instanceof DateTime) {
+            $programadoEn = $programadoEn->format('Y-m-d H:i:s');
+        } else {
+            $programadoEn = $programadoEn !== null ? trim((string)$programadoEn) : null;
+        }
 
         if ($mediaTipo !== null && !in_array($mediaTipo, ['image', 'video'], true)) {
             $mediaTipo = null;
@@ -93,15 +100,16 @@ class WhatsappLocalQueue extends BaseModel {
             return false;
         }
 
-        $sql = "INSERT INTO {$this->table} (telefono, mensaje, media_url, media_tipo, tipo_evento, referencia, estado, intentos)
-                VALUES (?, ?, ?, ?, ?, ?, 'pendiente', 0)
+        $sql = "INSERT INTO {$this->table} (telefono, mensaje, media_url, media_tipo, tipo_evento, referencia, estado, intentos, programado_en)
+                VALUES (?, ?, ?, ?, ?, ?, 'pendiente', 0, ?)
                 ON DUPLICATE KEY UPDATE
                     mensaje = VALUES(mensaje),
                     media_url = VALUES(media_url),
                     media_tipo = VALUES(media_tipo),
+                    programado_en = VALUES(programado_en),
                     estado = 'pendiente',
                     ultimo_error = NULL";
 
-        return $this->execute($sql, [$telefono, $mensaje, $mediaUrl, $mediaTipo, $tipoEvento, $referencia]);
+        return $this->execute($sql, [$telefono, $mensaje, $mediaUrl, $mediaTipo, $tipoEvento, $referencia, $programadoEn]);
     }
 }

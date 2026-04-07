@@ -29,7 +29,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
         </a>
         <?php endif; ?>
         <?php if ($puedeExportarPersonas): ?>
-        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel<?= !empty($_GET['perfil']) ? '&perfil=' . urlencode((string)$_GET['perfil']) : '' ?><?= !empty($_GET['ministerio']) ? '&ministerio=' . urlencode((string)$_GET['ministerio']) : '' ?><?= !empty($_GET['buscar']) ? '&buscar=' . urlencode((string)$_GET['buscar']) : '' ?>" class="btn btn-success">
+        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel<?= !empty($_GET['perfil']) ? '&perfil=' . urlencode((string)$_GET['perfil']) : '' ?><?= !empty($_GET['ministerio']) ? '&ministerio=' . urlencode((string)$_GET['ministerio']) : '' ?><?= !empty($_GET['lider']) ? '&lider=' . urlencode((string)$_GET['lider']) : '' ?><?= !empty($_GET['buscar']) ? '&buscar=' . urlencode((string)$_GET['buscar']) : '' ?>" class="btn btn-success">
             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
         </a>
         <?php endif; ?>
@@ -46,19 +46,47 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 
 <div class="card" style="margin-bottom: 16px;">
     <div class="card-body">
+        <?php
+        $filtroPerfilListado = (string)($filtroPerfilActual ?? ($_GET['perfil'] ?? ''));
+        $filtroMinisterioListado = (string)($filtroMinisterioActual ?? ($_GET['ministerio'] ?? ''));
+        $filtroLiderListado = (string)($filtroLiderActual ?? ($_GET['lider'] ?? ''));
+        $lideresFiltradosFormulario = array_values(array_filter(($lideres ?? []), static function($lider) use ($filtroMinisterioListado) {
+            if ($filtroMinisterioListado === '') {
+                return true;
+            }
+
+            $idMinisterioLider = isset($lider['Id_Ministerio']) ? (string)$lider['Id_Ministerio'] : '';
+            if ($filtroMinisterioListado === '0') {
+                return $idMinisterioLider === '' || $idMinisterioLider === '0';
+            }
+
+            return $idMinisterioLider === $filtroMinisterioListado;
+        }));
+        ?>
         <form method="GET" action="<?= PUBLIC_URL ?>" class="filters-inline" id="filtro_perfil_form">
             <input type="hidden" name="url" value="personas">
-            <?php $filtroPerfilListado = (string)($filtroPerfilActual ?? ($_GET['perfil'] ?? '')); ?>
             <input type="hidden" name="perfil" value="<?= htmlspecialchars($filtroPerfilListado) ?>">
             <div class="form-group">
                 <label for="filtro_ministerio" style="font-size: 14px; margin-bottom: 5px;">Filtro por ministerio</label>
                 <select id="filtro_ministerio" name="ministerio" class="form-control">
-                    <option value="" <?= (($filtroMinisterioActual ?? ($_GET['ministerio'] ?? '')) === '') ? 'selected' : '' ?>>Todos</option>
-                    <option value="0" <?= ((string)($filtroMinisterioActual ?? ($_GET['ministerio'] ?? '')) === '0') ? 'selected' : '' ?>>Sin ministerio</option>
+                    <option value="" <?= $filtroMinisterioListado === '' ? 'selected' : '' ?>>Todos</option>
+                    <option value="0" <?= $filtroMinisterioListado === '0' ? 'selected' : '' ?>>Sin ministerio</option>
                     <?php foreach (($ministerios ?? []) as $ministerio): ?>
                         <?php $idMinisterio = (string)($ministerio['Id_Ministerio'] ?? ''); ?>
-                        <option value="<?= htmlspecialchars($idMinisterio) ?>" <?= ((string)($filtroMinisterioActual ?? ($_GET['ministerio'] ?? '')) === $idMinisterio) ? 'selected' : '' ?>>
+                        <option value="<?= htmlspecialchars($idMinisterio) ?>" <?= $filtroMinisterioListado === $idMinisterio ? 'selected' : '' ?>>
                             <?= htmlspecialchars((string)($ministerio['Nombre_Ministerio'] ?? '')) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="filtro_lider" style="font-size: 14px; margin-bottom: 5px;">Filtro por líder</label>
+                <select id="filtro_lider" name="lider" class="form-control">
+                    <option value="">Todos</option>
+                    <?php foreach ($lideresFiltradosFormulario as $lider): ?>
+                        <?php $idLider = (string)($lider['Id_Persona'] ?? ''); ?>
+                        <option value="<?= htmlspecialchars($idLider) ?>" data-ministerio="<?= htmlspecialchars((string)($lider['Id_Ministerio'] ?? '')) ?>" <?= $filtroLiderListado === $idLider ? 'selected' : '' ?>>
+                            <?= htmlspecialchars(trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? ''))) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -85,7 +113,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-search"></i> Buscar
                 </button>
-                <?php if (!empty($_GET['perfil']) || !empty($_GET['buscar']) || !empty($_GET['ministerio'])): ?>
+                <?php if (!empty($_GET['perfil']) || !empty($_GET['buscar']) || !empty($_GET['ministerio']) || !empty($_GET['lider'])): ?>
                 <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-secondary">
                     <i class="bi bi-x-circle"></i> Limpiar
                 </a>
@@ -99,25 +127,26 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
     <div class="card-body" style="padding: 12px 16px;">
         <?php $perfilActivo = (string)($filtroPerfilActual ?? ($_GET['perfil'] ?? '')); ?>
         <?php $qsMinisterio = ((string)($filtroMinisterioActual ?? '') !== '') ? '&ministerio=' . urlencode((string)$filtroMinisterioActual) : ''; ?>
+        <?php $qsLider = ((string)($filtroLiderActual ?? '') !== '') ? '&lider=' . urlencode((string)$filtroLiderActual) : ''; ?>
         <?php $qsBuscar = !empty($filtroNombreActual) ? '&buscar=' . urlencode((string)$filtroNombreActual) : ''; ?>
         <?php $totalResumenRoles = (int)($totalesPerfil['lideres_12'] ?? 0) + (int)($totalesPerfil['lideres_celula'] ?? 0) + (int)($totalesPerfil['asistentes'] ?? 0) + (int)($totalesPerfil['otros'] ?? 0); ?>
         <div class="resumen-roles-total">
             Total en listado actual: <strong><?= $totalResumenRoles ?></strong>
         </div>
         <div class="personas-resumen-roles">
-            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=lideres_12<?= $qsMinisterio ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'lideres_12' ? 'active' : '' ?>">
+            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=lideres_12<?= $qsMinisterio ?><?= $qsLider ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'lideres_12' ? 'active' : '' ?>">
                 <span class="resumen-role-label">Líder de 12</span>
                 <strong class="resumen-role-value"><?= (int)($totalesPerfil['lideres_12'] ?? 0) ?></strong>
             </a>
-            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=lideres_celula<?= $qsMinisterio ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'lideres_celula' ? 'active' : '' ?>">
+            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=lideres_celula<?= $qsMinisterio ?><?= $qsLider ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'lideres_celula' ? 'active' : '' ?>">
                 <span class="resumen-role-label">Líder de célula</span>
                 <strong class="resumen-role-value"><?= (int)($totalesPerfil['lideres_celula'] ?? 0) ?></strong>
             </a>
-            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=asistentes<?= $qsMinisterio ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'asistentes' ? 'active' : '' ?>">
+            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=asistentes<?= $qsMinisterio ?><?= $qsLider ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'asistentes' ? 'active' : '' ?>">
                 <span class="resumen-role-label">Asistentes</span>
                 <strong class="resumen-role-value"><?= (int)($totalesPerfil['asistentes'] ?? 0) ?></strong>
             </a>
-            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=otros<?= $qsMinisterio ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'otros' ? 'active' : '' ?>">
+            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=otros<?= $qsMinisterio ?><?= $qsLider ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'otros' ? 'active' : '' ?>">
                 <span class="resumen-role-label">Otros roles</span>
                 <strong class="resumen-role-value"><?= (int)($totalesPerfil['otros'] ?? 0) ?></strong>
             </a>
@@ -155,17 +184,26 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                                 </a>
                                 <button
                                     type="button"
-                                    class="action-icon-btn action-icon-escalera js-escalera-btn"
-                                    title="Escalera del Éxito"
-                                    aria-label="Escalera del Éxito"
-                                    data-persona-id="<?= (int)($persona['Id_Persona'] ?? 0) ?>"
-                                    data-persona-asignado="<?= (!empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']) && !empty($persona['Id_Celula'])) ? '1' : '0' ?>"
-                                    data-persona-nombre="<?= htmlspecialchars(trim(($persona['Nombre'] ?? '') . ' ' . ($persona['Apellido'] ?? ''))) ?>"
-                                    data-persona-proceso="<?= htmlspecialchars((string)($persona['Proceso'] ?? '')) ?>"
-                                    data-persona-checklist='<?= htmlspecialchars((string)($persona['Escalera_Checklist'] ?? ''), ENT_QUOTES, 'UTF-8') ?>'
+                                    class="action-icon-btn action-icon-huella js-trazabilidad-btn"
+                                    title="Ver huella de creación"
+                                    aria-label="Ver huella de creación"
+                                    data-persona-nombre="<?= htmlspecialchars(trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
+                                    data-persona-fecha="<?= htmlspecialchars((string)($persona['Fecha_Registro'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                    data-persona-creador="<?= htmlspecialchars(trim((string)($persona['Nombre_Creador'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
+                                    data-persona-usuario-creador="<?= htmlspecialchars(trim((string)($persona['Usuario_Creador'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
+                                    data-persona-creador-id="<?= (int)($persona['Creado_Por'] ?? 0) ?>"
+                                    data-persona-canal="<?= htmlspecialchars((string)($persona['Canal_Creacion'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                >
+                                    <i class="bi bi-fingerprint"></i>
+                                </button>
+                                <a
+                                    href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= (int)($persona['Id_Persona'] ?? 0) ?>&panel=escalera#eventos-procesos"
+                                    class="action-icon-btn action-icon-escalera"
+                                    title="Ir a Escalera del Éxito"
+                                    aria-label="Ir a Escalera del Éxito"
                                 >
                                     <i class="bi bi-bar-chart-steps"></i>
-                                </button>
+                                </a>
                                 <?php endif; ?>
                                 <?php if ($puedeEditarPersona): ?>
                                 <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $persona['Id_Persona'] ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
@@ -250,7 +288,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 .ganar-table th.action-col,
 .ganar-table td.action-col {
     white-space: nowrap;
-    min-width: 156px;
+    min-width: 196px;
 }
 
 .ganar-table .action-buttons.action-buttons-compact {
@@ -297,6 +335,33 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
     color: #4a3cc9;
     border-color: #cfc8ff;
     cursor: pointer;
+}
+
+.action-icon-huella {
+    background: #e8fff4;
+    color: #14804a;
+    border-color: #bfe9d1;
+    cursor: pointer;
+}
+
+.trazabilidad-grid {
+    display: grid;
+    gap: 12px;
+}
+
+.trazabilidad-item {
+    border: 1px solid #dbe3f4;
+    border-radius: 10px;
+    background: #f8fbff;
+    padding: 12px;
+}
+
+.trazabilidad-label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #5b6b84;
 }
 
 .escalera-modal-backdrop {
@@ -549,6 +614,16 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
             <button type="button" class="escalera-modal-close" id="escaleraModalClose" aria-label="Cerrar">&times;</button>
         </div>
         <div class="escalera-modal-body" id="escaleraModalBody"></div>
+    </div>
+</div>
+
+<div class="escalera-modal-backdrop" id="trazabilidadModalBackdrop" aria-hidden="true">
+    <div class="escalera-modal" role="dialog" aria-modal="true" aria-labelledby="trazabilidadModalTitle" style="width:min(520px, 96vw);">
+        <div class="escalera-modal-header">
+            <h3 class="escalera-modal-title" id="trazabilidadModalTitle">Huella de registro</h3>
+            <button type="button" class="escalera-modal-close" id="trazabilidadModalClose" aria-label="Cerrar">&times;</button>
+        </div>
+        <div class="escalera-modal-body" id="trazabilidadModalBody"></div>
     </div>
 </div>
 
@@ -987,6 +1062,158 @@ if (filtroNombre && filtroPerfilForm) {
             cerrarModal();
         }
     });
+})();
+</script>
+
+<script>
+(function() {
+    const backdrop = document.getElementById('trazabilidadModalBackdrop');
+    const closeBtn = document.getElementById('trazabilidadModalClose');
+    const body = document.getElementById('trazabilidadModalBody');
+    const title = document.getElementById('trazabilidadModalTitle');
+
+    if (!backdrop || !closeBtn || !body || !title) {
+        return;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+    }
+
+    function formatearFecha(fechaRaw) {
+        const valor = String(fechaRaw || '').trim();
+        if (!valor) {
+            return 'No disponible';
+        }
+
+        const fecha = new Date(valor.replace(' ', 'T'));
+        if (Number.isNaN(fecha.getTime())) {
+            return valor;
+        }
+
+        return fecha.toLocaleString('es-CO', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    function cerrarModal() {
+        backdrop.classList.remove('show');
+        backdrop.setAttribute('aria-hidden', 'true');
+    }
+
+    function abrirModal(btn) {
+        const nombre = btn.getAttribute('data-persona-nombre') || 'Persona';
+        const fecha = btn.getAttribute('data-persona-fecha') || '';
+        const creador = String(btn.getAttribute('data-persona-creador') || '').trim();
+        const usuarioCreador = String(btn.getAttribute('data-persona-usuario-creador') || '').trim();
+        const creadorId = String(btn.getAttribute('data-persona-creador-id') || '').trim();
+        const canal = String(btn.getAttribute('data-persona-canal') || '').trim();
+        let creadorVisible = 'Registro anterior (sin trazabilidad)';
+        if (usuarioCreador !== '' && creador !== '') {
+            creadorVisible = usuarioCreador + ' · ' + creador;
+        } else if (usuarioCreador !== '') {
+            creadorVisible = usuarioCreador;
+        } else if (creador !== '') {
+            creadorVisible = creador;
+        } else if (creadorId !== '' && creadorId !== '0') {
+            creadorVisible = 'Usuario ID #' + creadorId;
+        } else if (canal !== '') {
+            creadorVisible = canal;
+        }
+        const canalVisible = canal !== '' ? canal : 'Registro anterior';
+
+        title.textContent = 'Huella de registro - ' + nombre;
+        body.innerHTML = ''
+            + '<div class="trazabilidad-grid">'
+            + '  <div class="trazabilidad-item"><span class="trazabilidad-label">Fecha de creación</span><strong>' + escapeHtml(formatearFecha(fecha)) + '</strong></div>'
+            + '  <div class="trazabilidad-item"><span class="trazabilidad-label">Creada por</span><strong>' + escapeHtml(creadorVisible) + '</strong></div>'
+            + '  <div class="trazabilidad-item"><span class="trazabilidad-label">Canal de registro</span><strong>' + escapeHtml(canalVisible) + '</strong></div>'
+            + '</div>';
+
+        backdrop.classList.add('show');
+        backdrop.setAttribute('aria-hidden', 'false');
+    }
+
+    document.querySelectorAll('.js-trazabilidad-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            abrirModal(this);
+        });
+    });
+
+    closeBtn.addEventListener('click', cerrarModal);
+    backdrop.addEventListener('click', function(e) {
+        if (e.target === backdrop) {
+            cerrarModal();
+        }
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && backdrop.classList.contains('show')) {
+            cerrarModal();
+        }
+    });
+})();
+</script>
+
+<script>
+(function() {
+    const ministerioSelect = document.getElementById('filtro_ministerio');
+    const liderSelect = document.getElementById('filtro_lider');
+    if (!ministerioSelect || !liderSelect) {
+        return;
+    }
+
+    const lideresDisponibles = [
+        <?php foreach (($lideres ?? []) as $index => $lider): ?>
+        {
+            id: '<?= htmlspecialchars((string)($lider['Id_Persona'] ?? ''), ENT_QUOTES) ?>',
+            nombre: '<?= htmlspecialchars(trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? '')), ENT_QUOTES) ?>',
+            ministerio: '<?= htmlspecialchars((string)($lider['Id_Ministerio'] ?? ''), ENT_QUOTES) ?>'
+        }<?= $index < count(($lideres ?? [])) - 1 ? ',' : '' ?>
+        <?php endforeach; ?>
+    ];
+
+    function refrescarFiltroLider() {
+        const ministerioSeleccionado = String(ministerioSelect.value || '');
+        const liderSeleccionado = String(liderSelect.value || '');
+        const lideresFiltrados = lideresDisponibles.filter(function(lider) {
+            if (ministerioSeleccionado === '') {
+                return true;
+            }
+            if (ministerioSeleccionado === '0') {
+                return !lider.ministerio || lider.ministerio === '0';
+            }
+            return String(lider.ministerio || '') === ministerioSeleccionado;
+        });
+
+        liderSelect.innerHTML = '';
+        const optionTodos = document.createElement('option');
+        optionTodos.value = '';
+        optionTodos.textContent = 'Todos';
+        liderSelect.appendChild(optionTodos);
+
+        lideresFiltrados.forEach(function(lider) {
+            const option = document.createElement('option');
+            option.value = lider.id;
+            option.textContent = lider.nombre;
+            option.setAttribute('data-ministerio', lider.ministerio || '');
+            liderSelect.appendChild(option);
+        });
+
+        const existeSeleccion = Array.from(liderSelect.options).some(function(option) {
+            return option.value === liderSeleccionado;
+        });
+        liderSelect.value = existeSeleccion ? liderSeleccionado : '';
+    }
+
+    ministerioSelect.addEventListener('change', refrescarFiltroLider);
+    refrescarFiltroLider();
 })();
 </script>
 

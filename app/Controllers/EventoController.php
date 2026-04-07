@@ -91,10 +91,7 @@ class EventoController extends BaseController {
     }
 
     public function index() {
-        // Generar filtro según el rol del usuario
         $filtroEventos = DataIsolation::generarFiltroEventos();
-        
-        // Obtener eventos con aislamiento de rol
         $eventos = $this->eventoModel->getAllWithRole($filtroEventos);
         $urlEventosPublicos = $this->buildAbsolutePublicUrl('eventos/proximos');
         $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=' . urlencode($urlEventosPublicos);
@@ -134,7 +131,6 @@ class EventoController extends BaseController {
     }
 
     public function crear() {
-        // Verificar permiso de crear
         if (!AuthController::tienePermiso('eventos', 'crear')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
@@ -152,7 +148,8 @@ class EventoController extends BaseController {
                     'Hora_Evento' => $_POST['hora_evento'] ?? '',
                     'Lugar_Evento' => trim($_POST['lugar_evento'] ?? ''),
                     'Imagen_Evento' => $rutaImagen,
-                    'Video_Evento' => $rutaVideo
+                    'Video_Evento' => $rutaVideo,
+                    'Permitir_Compartir' => !empty($_POST['permitir_compartir']) ? 1 : 0
                 ];
 
                 $this->eventoModel->create($data);
@@ -169,7 +166,6 @@ class EventoController extends BaseController {
     }
 
     public function editar() {
-        // Verificar permiso de editar
         if (!AuthController::tienePermiso('eventos', 'editar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
@@ -190,7 +186,8 @@ class EventoController extends BaseController {
                     'Descripcion_Evento' => trim($_POST['descripcion_evento'] ?? ''),
                     'Fecha_Evento' => $_POST['fecha_evento'] ?? '',
                     'Hora_Evento' => $_POST['hora_evento'] ?? '',
-                    'Lugar_Evento' => trim($_POST['lugar_evento'] ?? '')
+                    'Lugar_Evento' => trim($_POST['lugar_evento'] ?? ''),
+                    'Permitir_Compartir' => !empty($_POST['permitir_compartir']) ? 1 : 0
                 ];
 
                 $eliminarImagen = !empty($_POST['eliminar_imagen']);
@@ -241,7 +238,6 @@ class EventoController extends BaseController {
     }
 
     public function eliminar() {
-        // Verificar permiso de eliminar
         if (!AuthController::tienePermiso('eventos', 'eliminar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
@@ -261,7 +257,52 @@ class EventoController extends BaseController {
 
     public function proximosPublico() {
         $eventos = $this->eventoModel->getUpcoming();
+
+        foreach ($eventos as &$evento) {
+            $evento['Url_Compartir_Evento'] = $this->buildAbsolutePublicUrl(
+                'eventos/compartir&id=' . (int)($evento['Id_Evento'] ?? 0)
+            );
+        }
+        unset($evento);
+
         $this->view('eventos/proximos_publico', ['eventos' => $eventos]);
+    }
+
+    public function compartirPublico() {
+        $id = (int)($_GET['id'] ?? 0);
+        $evento = $this->eventoModel->getByIdPublico($id);
+
+        if (empty($evento)) {
+            http_response_code(404);
+            echo 'Evento no encontrado';
+            return;
+        }
+
+        if ((int)($evento['Permitir_Compartir'] ?? 1) !== 1) {
+            http_response_code(403);
+            echo 'Este evento no está disponible para compartir';
+            return;
+        }
+
+        $urlCompartir = $this->buildAbsolutePublicUrl('eventos/compartir&id=' . $id);
+        $tituloCompartir = trim((string)($evento['Nombre_Evento'] ?? 'Evento'));
+        $descripcionCompartir = trim((string)($evento['Descripcion_Evento'] ?? ''));
+        $descripcionCompartir = $this->limitarTexto($descripcionCompartir, 180);
+
+        $imagenCompartir = '';
+        if (!empty($evento['Imagen_Evento'])) {
+            $imagenCompartir = $this->buildAbsoluteAssetUrl(
+                'uploads/eventos/' . rawurlencode((string)$evento['Imagen_Evento'])
+            );
+        }
+
+        $this->view('eventos/evento_compartir_publico', [
+            'evento' => $evento,
+            'urlCompartir' => $urlCompartir,
+            'tituloCompartir' => $tituloCompartir,
+            'descripcionCompartir' => $descripcionCompartir,
+            'imagenCompartir' => $imagenCompartir
+        ]);
     }
 
     public function universidadVida() {
@@ -568,6 +609,39 @@ class EventoController extends BaseController {
 
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $base = rtrim(PUBLIC_URL, '/');
-        return $scheme . '://' . $host . $base . '/index.php?url=' . urlencode($route);
+        return $scheme . '://' . $host . $base . '/index.php?url=' . $route;
+    }
+
+    private function buildAbsoluteAssetUrl($relativePath) {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $scheme = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
+        }
+
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $base = rtrim(PUBLIC_URL, '/');
+
+        return $scheme . '://' . $host . $base . '/' . ltrim($relativePath, '/');
+    }
+
+    private function limitarTexto($texto, $max = 180) {
+        $texto = trim(preg_replace('/\s+/', ' ', (string)$texto));
+        if ($texto === '') {
+            return '';
+        }
+
+        if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+            if (mb_strlen($texto, 'UTF-8') <= $max) {
+                return $texto;
+            }
+
+            return rtrim(mb_substr($texto, 0, $max - 3, 'UTF-8')) . '...';
+        }
+
+        if (strlen($texto) <= $max) {
+            return $texto;
+        }
+
+        return rtrim(substr($texto, 0, $max - 3)) . '...';
     }
 }
