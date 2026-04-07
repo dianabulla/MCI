@@ -63,6 +63,7 @@ $buildPendientesUrl = static function(array $extra = []) use ($queryBasePendient
     });
     return PUBLIC_URL . '?' . http_build_query($params);
 };
+$returnUrlGanar = $buildPendientesUrl();
 ?>
 
 <div class="card" style="margin-bottom: 16px;">
@@ -267,7 +268,7 @@ $buildPendientesUrl = static function(array $extra = []) use ($queryBasePendient
                         <td class="action-col">
                             <div class="action-buttons action-buttons-compact">
                             <?php if (AuthController::tienePermiso('personas', 'ver')): ?>
-                            <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= $persona['Id_Persona'] ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
+                            <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlGanar) ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
                                 <i class="bi bi-eye"></i>
                             </a>
                             <button
@@ -285,7 +286,7 @@ $buildPendientesUrl = static function(array $extra = []) use ($queryBasePendient
                                 <i class="bi bi-fingerprint"></i>
                             </button>
                             <a
-                                href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= (int)($persona['Id_Persona'] ?? 0) ?>&panel=escalera#eventos-procesos"
+                                href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= (int)($persona['Id_Persona'] ?? 0) ?>&panel=escalera&return_url=<?= urlencode($returnUrlGanar) ?>#eventos-procesos"
                                 class="action-icon-btn action-icon-escalera"
                                 title="Ir a Escalera del Exito"
                                 aria-label="Ir a Escalera del Exito"
@@ -294,12 +295,12 @@ $buildPendientesUrl = static function(array $extra = []) use ($queryBasePendient
                             </a>
                             <?php endif; ?>
                             <?php if (AuthController::tienePermiso('personas', 'editar')): ?>
-                            <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $persona['Id_Persona'] ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
+                            <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlGanar) ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
                                 <i class="bi bi-pencil"></i>
                             </a>
                             <?php endif; ?>
                             <?php if ($puedeEliminarPersona): ?>
-                            <a href="<?= PUBLIC_URL ?>?url=personas/eliminar&id=<?= $persona['Id_Persona'] ?>" class="action-icon-btn action-icon-danger" title="Eliminar" aria-label="Eliminar" onclick="return confirm('¿Eliminar esta persona?')">
+                            <a href="<?= PUBLIC_URL ?>?url=personas/eliminar&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlGanar) ?>" class="action-icon-btn action-icon-danger" title="Eliminar" aria-label="Eliminar" onclick="return confirm('¿Eliminar esta persona?')">
                                 <i class="bi bi-trash"></i>
                             </a>
                             <?php endif; ?>

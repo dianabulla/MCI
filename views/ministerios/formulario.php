@@ -1,6 +1,8 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
 <?php
+$returnUrl = $return_url ?? null;
+$volverUrl = $returnUrl ?: (PUBLIC_URL . 'index.php?url=ministerios');
 $metas = $metas ?? [];
 $metaGanadosS1 = (int)($metas['meta_ganados_s1'] ?? 0);
 $metaGanadosS2 = (int)($metas['meta_ganados_s2'] ?? 0);
@@ -54,11 +56,14 @@ $metaN3S2 = (int)($metas['meta_n3_s2'] ?? 0);
 
 <div class="page-header">
     <h2><?= isset($ministerio) ? 'Editar' : 'Nuevo' ?> Ministerio</h2>
-    <a href="<?= PUBLIC_URL ?>index.php?url=ministerios" class="btn btn-secondary">Volver</a>
+    <a href="<?= htmlspecialchars($volverUrl) ?>" class="btn btn-secondary">Volver</a>
 </div>
 
 <div class="form-container">
     <form method="POST">
+        <?php if (!empty($returnUrl)): ?>
+        <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrl) ?>">
+        <?php endif; ?>
         <div class="form-group">
             <label for="nombre_ministerio">Nombre del Ministerio</label>
             <input type="text" id="nombre_ministerio" name="nombre_ministerio" class="form-control" 

@@ -147,6 +147,31 @@ if ($filtroMesMeta !== '' && $filtroMesMeta !== 'all') {
 
 $tablaEsCompacta = $filtroMesMeta !== 'all';
 
+$parametrosReporteActual = [
+    'url' => 'reportes',
+    'tipo' => $tipoReporte,
+    'escala_ganar' => $escalaGanar,
+    'fecha_referencia' => (string)$fecha_referencia,
+    'fecha_inicio' => $fechaInicioFiltro,
+    'fecha_fin' => $fechaFinFiltro,
+    'ministerio' => (string)$filtro_ministerio,
+    'lider' => (string)$filtro_lider,
+    'celula' => (string)$filtro_celula,
+    'mes_meta' => (string)$filtroMesMeta,
+    'mes_escalera' => (string)$mesEscaleraSeleccionado
+];
+
+$buildReporteUrl = static function(array $overrides = [], array $exclude = []) use ($parametrosReporteActual) {
+    $params = array_merge($parametrosReporteActual, $overrides);
+    foreach ($exclude as $key) {
+        unset($params[$key]);
+    }
+
+    return PUBLIC_URL . 'index.php?' . http_build_query($params);
+};
+
+$retornoReporteUrl = $buildReporteUrl();
+
 ?>
 
 <div class="page-header">
@@ -158,10 +183,10 @@ $tablaEsCompacta = $filtroMesMeta !== 'all';
 </div>
 
 <div class="report-switcher" style="margin-bottom: 18px;">
-    <a href="<?= PUBLIC_URL ?>index.php?url=reportes&tipo=personas&escala_ganar=<?= urlencode($escalaGanar) ?>&fecha_referencia=<?= urlencode((string)$fecha_referencia) ?>&fecha_inicio=<?= urlencode($fechaInicioFiltro) ?>&fecha_fin=<?= urlencode($fechaFinFiltro) ?>&ministerio=<?= urlencode((string)$filtro_ministerio) ?>&lider=<?= urlencode((string)$filtro_lider) ?>&mes_meta=<?= urlencode((string)$filtroMesMeta) ?>&mes_escalera=<?= urlencode($mesEscaleraSeleccionado) ?>" class="report-switcher-tab <?= $esReportePersonas ? 'is-active' : '' ?>">
+    <a href="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'personas'])) ?>" class="report-switcher-tab <?= $esReportePersonas ? 'is-active' : '' ?>">
         Ganar
     </a>
-    <a href="<?= PUBLIC_URL ?>index.php?url=reportes&tipo=celulas&fecha_referencia=<?= urlencode((string)$fecha_referencia) ?>&fecha_inicio=<?= urlencode($fechaInicioFiltro) ?>&fecha_fin=<?= urlencode($fechaFinFiltro) ?>&ministerio=<?= urlencode((string)$filtro_ministerio) ?>&lider=<?= urlencode((string)$filtro_lider) ?>&celula=<?= urlencode((string)$filtro_celula) ?>&mes_escalera=<?= urlencode($mesEscaleraSeleccionado) ?>" class="report-switcher-tab <?= !$esReportePersonas ? 'is-active' : '' ?>">
+    <a href="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'celulas'])) ?>" class="report-switcher-tab <?= !$esReportePersonas ? 'is-active' : '' ?>">
         Célula
     </a>
 </div>
@@ -447,7 +472,7 @@ $tablaEsCompacta = $filtroMesMeta !== 'all';
             <h3 style="margin-bottom:4px;"><?= htmlspecialchars((string)($cumplimientoMetas['titulo'] ?? 'GANAR')) ?></h3>
             <small style="color:#60708a;">Periodo semestral: <?= htmlspecialchars((string)($cumplimientoMetas['inicio'] ?? '')) ?> a <?= htmlspecialchars((string)($cumplimientoMetas['fin'] ?? '')) ?></small>
         </div>
-        <a href="<?= PUBLIC_URL ?>?url=ministerios" class="btn btn-secondary btn-sm">Editar metas por ministerio</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=ministerios&return_url=<?= urlencode($retornoReporteUrl) ?>" class="btn btn-secondary btn-sm">Editar metas por ministerio</a>
     </div>
 
     <div class="table-container reporte-metas-wrap">

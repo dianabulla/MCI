@@ -1,13 +1,17 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
 <?php
-$returnToAsistencia = ($return_to ?? '') === 'asistencia';
-$returnToCelulas = ($return_to ?? '') === 'celulas';
+$returnTo = $return_to ?? ($_GET['return_to'] ?? ($_POST['return_to'] ?? ''));
+$returnUrl = trim((string)($return_url ?? ($_GET['return_url'] ?? ($_POST['return_url'] ?? ''))));
+$returnToAsistencia = $returnTo === 'asistencia';
+$returnToCelulas = $returnTo === 'celulas';
 $panelEventosProcesos = strtolower(trim((string)($_GET['panel'] ?? ($_POST['panel_eventos_procesos'] ?? ''))));
 $modoSoloEventosProcesos = in_array($panelEventosProcesos, ['escalera', 'convenciones'], true);
-$urlVolver = $returnToAsistencia
-    ? (PUBLIC_URL . '?url=asistencias/registrar' . (!empty($celula_retorno) ? '&celula=' . (int)$celula_retorno : ''))
-    : ($returnToCelulas ? (PUBLIC_URL . '?url=celulas') : (PUBLIC_URL . '?url=personas'));
+$urlVolver = $returnUrl !== ''
+    ? $returnUrl
+    : ($returnToAsistencia
+        ? (PUBLIC_URL . '?url=asistencias/registrar' . (!empty($celula_retorno) ? '&celula=' . (int)$celula_retorno : ''))
+        : ($returnToCelulas ? (PUBLIC_URL . '?url=celulas') : (PUBLIC_URL . '?url=personas')));
 ?>
 
 <div class="page-header">
@@ -38,6 +42,9 @@ $urlVolver = $returnToAsistencia
         <input type="hidden" name="celula_retorno" value="<?= (int)($celula_retorno ?? 0) ?>">
         <?php elseif ($returnToCelulas): ?>
         <input type="hidden" name="return_to" value="celulas">
+        <?php endif; ?>
+        <?php if ($returnUrl !== ''): ?>
+        <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrl, ENT_QUOTES, 'UTF-8') ?>">
         <?php endif; ?>
 
         <!-- Sección: Información Personal -->
@@ -234,7 +241,9 @@ $urlVolver = $returnToAsistencia
                         $tipoReunionSeleccionado = 'Domingo';
                     } elseif (in_array($tipoReunionNormalizado, ['somos uno', 'somos_uno', 'viernes'], true)) {
                         $tipoReunionSeleccionado = 'Somos Uno';
-                    } elseif (in_array($tipoReunionNormalizado, ['otro', 'otros', 'migrados', 'asignados'], true)) {
+                    } elseif (in_array($tipoReunionNormalizado, ['migrados'], true)) {
+                        $tipoReunionSeleccionado = 'Migrados';
+                    } elseif (in_array($tipoReunionNormalizado, ['otro', 'otros', 'asignados'], true)) {
                         $tipoReunionSeleccionado = 'Otros';
                     } else {
                         $tipoReunionSeleccionado = '';
@@ -249,6 +258,7 @@ $urlVolver = $returnToAsistencia
                         <option value="Domingo" <?= $tipoReunionSeleccionado === 'Domingo' ? 'selected' : '' ?>>Domingo</option>
                         <option value="Somos Uno" <?= $tipoReunionSeleccionado === 'Somos Uno' ? 'selected' : '' ?>>Somos Uno</option>
                         <option value="Celula" <?= $tipoReunionSeleccionado === 'Celula' ? 'selected' : '' ?>>Célula</option>
+                        <option value="Migrados" <?= $tipoReunionSeleccionado === 'Migrados' ? 'selected' : '' ?>>Migrados</option>
                         <option value="Otros" <?= $tipoReunionSeleccionado === 'Otros' ? 'selected' : '' ?>>Otros</option>
                     </select>
                 </div>
@@ -744,7 +754,7 @@ const celulasDisponibles = [
         <?php foreach ($celulas as $index => $celula): ?>
             {
                 id: <?= $celula['Id_Celula'] ?>,
-                nombre: "<?= htmlspecialchars($celula['Nombre_Celula'], ENT_QUOTES) ?>"
+                nombre: "<?= htmlspecialchars(preg_replace('/\s+/', ' ', trim((string)($celula['Nombre_Celula'] ?? ''))), ENT_QUOTES) ?>"
             }<?= $index < count($celulas) - 1 ? ',' : '' ?>
         <?php endforeach; ?>
     <?php endif; ?>
@@ -756,7 +766,7 @@ const lideresDisponibles = [
         <?php foreach ($personas_lideres as $index => $lider): ?>
             {
                 id: <?= $lider['Id_Persona'] ?>,
-                nombre: "<?= htmlspecialchars($lider['Nombre'] . ' ' . $lider['Apellido'], ENT_QUOTES) ?>"
+                nombre: "<?= htmlspecialchars(preg_replace('/\s+/', ' ', trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? ''))), ENT_QUOTES) ?>"
             }<?= $index < count($personas_lideres) - 1 ? ',' : '' ?>
         <?php endforeach; ?>
     <?php endif; ?>
@@ -985,7 +995,9 @@ function normalizarTexto(texto) {
         .toString()
         .toLowerCase()
         .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '');
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 function rolSeleccionadoEsAsistente() {
@@ -1211,6 +1223,29 @@ if (tipoReunionSelect) {
     actualizarCampoGanadoEnOtro();
 }
 
+function inicializarMayusculasAutomaticas() {
+    const campos = document.querySelectorAll('input[type="text"], textarea');
+    campos.forEach(function(campo) {
+        if (!campo || campo.id === 'usuario') {
+            return;
+        }
+
+        campo.style.textTransform = 'uppercase';
+
+        const transformar = function() {
+            if (typeof campo.value === 'string') {
+                campo.value = campo.value.toUpperCase();
+            }
+        };
+
+        campo.addEventListener('input', transformar);
+        campo.addEventListener('change', transformar);
+        transformar();
+    });
+}
+
+inicializarMayusculasAutomaticas();
+
 // Autocompletar para célula
 const celulaInput = document.getElementById('celula_search');
 const celulaHidden = document.getElementById('id_celula');
@@ -1235,8 +1270,9 @@ celulaInput.addEventListener('input', function() {
     
     currentFocusCelula = -1;
     
+    const textoBusqueda = normalizarTexto(value);
     const filtrados = celulasDisponibles.filter(celula => 
-        celula.nombre.toLowerCase().includes(value.toLowerCase())
+        normalizarTexto(celula.nombre).includes(textoBusqueda)
     );
     
     if (filtrados.length === 0) {
@@ -1319,8 +1355,9 @@ liderInput.addEventListener('input', function() {
     
     currentFocus = -1;
     
+    const textoBusqueda = normalizarTexto(value);
     const filtrados = lideresDisponibles.filter(lider => 
-        lider.nombre.toLowerCase().includes(value.toLowerCase())
+        normalizarTexto(lider.nombre).includes(textoBusqueda)
     );
     
     if (filtrados.length === 0) {

@@ -20,6 +20,39 @@ class MinisterioController extends BaseController {
         $this->celulaModel = new Celula();
     }
 
+    private function normalizarUrlRetorno($returnUrl) {
+        $returnUrl = trim((string)$returnUrl);
+        if ($returnUrl === '') {
+            return null;
+        }
+
+        $basePublic = rtrim((string)PUBLIC_URL, '/');
+
+        if ($basePublic !== '' && strpos($returnUrl, $basePublic) === 0) {
+            return $returnUrl;
+        }
+
+        if (strpos($returnUrl, '?url=') === 0) {
+            return $basePublic . $returnUrl;
+        }
+
+        if (strpos($returnUrl, 'index.php?url=') === 0) {
+            return $basePublic . '/' . ltrim($returnUrl, '/');
+        }
+
+        return null;
+    }
+
+    private function redirigirConRetorno($returnUrl, $rutaFallback) {
+        $urlNormalizada = $this->normalizarUrlRetorno($returnUrl);
+        if ($urlNormalizada !== null) {
+            header('Location: ' . $urlNormalizada);
+            exit;
+        }
+
+        $this->redirect($rutaFallback);
+    }
+
     private function calcularRangoSemanaDomingoADomingo($fechaReferencia) {
         $timestamp = strtotime((string)$fechaReferencia);
         if ($timestamp === false) {
@@ -284,6 +317,7 @@ class MinisterioController extends BaseController {
             exit;
         }
 
+        $returnUrl = $this->normalizarUrlRetorno($_GET['return_url'] ?? null);
         $fechaReferencia = $_GET['fecha_referencia'] ?? date('Y-m-d');
         [$fechaInicio, $fechaFin] = $this->calcularRangoSemanaDomingoADomingo($fechaReferencia);
 
@@ -398,7 +432,8 @@ class MinisterioController extends BaseController {
             'fecha_referencia' => $fechaReferencia,
             'fecha_inicio' => $fechaInicio,
             'fecha_fin' => $fechaFin,
-            'meta_guardada' => ($_GET['meta_guardada'] ?? '') === '1'
+            'meta_guardada' => ($_GET['meta_guardada'] ?? '') === '1',
+            'return_url' => $returnUrl
         ]);
     }
 
@@ -480,6 +515,8 @@ class MinisterioController extends BaseController {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
+
+        $returnUrl = $_POST['return_url'] ?? ($_GET['return_url'] ?? null);
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $data = [
@@ -488,9 +525,11 @@ class MinisterioController extends BaseController {
             ];
             
             $this->ministerioModel->create($data);
-            $this->redirect('ministerios');
+            $this->redirigirConRetorno($returnUrl, 'ministerios');
         } else {
-            $this->view('ministerios/formulario');
+            $this->view('ministerios/formulario', [
+                'return_url' => $this->normalizarUrlRetorno($returnUrl)
+            ]);
         }
     }
 
@@ -525,7 +564,8 @@ class MinisterioController extends BaseController {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
-        
+
+        $returnUrl = $_POST['return_url'] ?? ($_GET['return_url'] ?? null);
         $id = $_GET['id'] ?? null;
         
         if (!$id) {
@@ -558,11 +598,12 @@ class MinisterioController extends BaseController {
                 'meta_n3_s1' => $_POST['meta_n3_s1'] ?? 0,
                 'meta_n3_s2' => $_POST['meta_n3_s2'] ?? 0
             ]);
-            $this->redirect('ministerios');
+            $this->redirigirConRetorno($returnUrl, 'ministerios');
         } else {
             $data = [
                 'ministerio' => $this->ministerioModel->getById($id),
-                'metas' => $this->ministerioModel->getMetaDetalleByMinisterioId($id)
+                'metas' => $this->ministerioModel->getMetaDetalleByMinisterioId($id),
+                'return_url' => $this->normalizarUrlRetorno($returnUrl)
             ];
             $this->view('ministerios/formulario', $data);
         }
@@ -574,13 +615,14 @@ class MinisterioController extends BaseController {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
-        
+
+        $returnUrl = $_GET['return_url'] ?? null;
         $id = $_GET['id'] ?? null;
         
         if ($id) {
             $this->ministerioModel->delete($id);
         }
-        
-        $this->redirect('ministerios');
+
+        $this->redirigirConRetorno($returnUrl, 'ministerios');
     }
 }

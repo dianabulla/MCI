@@ -49,6 +49,9 @@ return [
 
     // Teen
     'teen' => 'TeenController@index',
+    'teen/registro-menores' => 'TeenController@registroMenores',
+    'teen/guardar-menor' => 'TeenController@guardarMenor',
+    'teen/buscarAcudientes' => 'TeenController@buscarAcudientes',
     'teen/verPdf' => 'TeenController@verPdf',
     'teen/editar' => 'TeenController@editar',
     'teen/eliminar' => 'TeenController@eliminar',

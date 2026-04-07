@@ -312,6 +312,11 @@
     }
 </style>
 
+<?php
+$returnUrl = $return_url ?? null;
+$returnUrlParam = $returnUrl ? '&return_url=' . urlencode((string)$returnUrl) : '';
+?>
+
 <div class="page-header">
     <h2>Ministerios</h2>
     <?php $puedeCrearMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'crear'); ?>
@@ -319,8 +324,11 @@
     <?php $puedeEliminarMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'eliminar'); ?>
     <?php $puedeGestionarMinisterio = $puedeEditarMinisterio || $puedeEliminarMinisterio; ?>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <?php if (!empty($returnUrl)): ?>
+        <a href="<?= htmlspecialchars($returnUrl) ?>" class="btn btn-secondary">← Volver a reportes</a>
+        <?php endif; ?>
         <?php if ($puedeCrearMinisterio): ?>
-        <a href="<?= PUBLIC_URL ?>index.php?url=ministerios/crear" class="btn btn-primary">+ Nuevo Ministerio</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=ministerios/crear<?= $returnUrlParam ?>" class="btn btn-primary">+ Nuevo Ministerio</a>
         <?php endif; ?>
     </div>
 </div>
@@ -328,6 +336,9 @@
 <div class="card" style="margin-bottom: 16px;">
     <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="filters-inline" style="padding: 14px;">
         <input type="hidden" name="url" value="ministerios">
+        <?php if (!empty($returnUrl)): ?>
+        <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrl) ?>">
+        <?php endif; ?>
         <div class="form-group" style="margin: 0;">
             <label for="fecha_referencia">Semana (domingo a domingo)</label>
             <input type="date" id="fecha_referencia" name="fecha_referencia" class="form-control" value="<?= htmlspecialchars((string)($fecha_referencia ?? date('Y-m-d'))) ?>" required>
@@ -335,7 +346,7 @@
         </div>
         <div class="filters-actions">
             <button type="submit" class="btn btn-primary">Aplicar semana</button>
-            <a href="<?= PUBLIC_URL ?>index.php?url=ministerios" class="btn btn-secondary">Semana actual</a>
+            <a href="<?= PUBLIC_URL ?>index.php?url=ministerios<?= $returnUrlParam ?>" class="btn btn-secondary">Semana actual</a>
         </div>
     </form>
 </div>
@@ -362,10 +373,10 @@
                 <?php if ($puedeGestionarMinisterio): ?>
                 <div class="ministerio-actions-row">
                     <?php if ($puedeEditarMinisterio): ?>
-                        <a href="<?= PUBLIC_URL ?>?url=ministerios/editar&id=<?= (int)$section['id_ministerio'] ?>" class="btn btn-sm btn-warning">Editar</a>
+                        <a href="<?= PUBLIC_URL ?>?url=ministerios/editar&id=<?= (int)$section['id_ministerio'] ?><?= $returnUrlParam ?>" class="btn btn-sm btn-warning">Editar</a>
                     <?php endif; ?>
                     <?php if ($puedeEliminarMinisterio): ?>
-                        <a href="<?= PUBLIC_URL ?>?url=ministerios/eliminar&id=<?= (int)$section['id_ministerio'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar este ministerio?')">Eliminar</a>
+                        <a href="<?= PUBLIC_URL ?>?url=ministerios/eliminar&id=<?= (int)$section['id_ministerio'] ?><?= $returnUrlParam ?>" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar este ministerio?')">Eliminar</a>
                     <?php endif; ?>
                 </div>
                 <?php endif; ?>

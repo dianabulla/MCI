@@ -57,6 +57,60 @@ class Persona extends BaseModel {
         }
     }
 
+    private function normalizarDocumentoParaComparacion($documento) {
+        $documento = strtoupper(trim((string)$documento));
+        if ($documento === '') {
+            return '';
+        }
+
+        return preg_replace('/[^A-Z0-9]/', '', $documento);
+    }
+
+    private function normalizarTelefonoParaComparacion($telefono) {
+        $telefono = trim((string)$telefono);
+        if ($telefono === '') {
+            return '';
+        }
+
+        return preg_replace('/\D+/', '', $telefono);
+    }
+
+    public function findDuplicateByCedulaOrTelefono($numeroDocumento, $telefono, $excludeId = null) {
+        $documentoNormalizado = $this->normalizarDocumentoParaComparacion($numeroDocumento);
+        $telefonoNormalizado = $this->normalizarTelefonoParaComparacion($telefono);
+        $excludeId = $excludeId !== null ? (int)$excludeId : 0;
+
+        $condiciones = [];
+        $params = [];
+
+        if ($documentoNormalizado !== '') {
+            $condiciones[] = "REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(Numero_Documento, ''))), ' ', ''), '.', ''), '-', '') = ?";
+            $params[] = $documentoNormalizado;
+        }
+
+        if ($telefonoNormalizado !== '') {
+            $condiciones[] = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(Telefono, '')), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '') = ?";
+            $params[] = $telefonoNormalizado;
+        }
+
+        if (empty($condiciones)) {
+            return null;
+        }
+
+        $sql = "SELECT Id_Persona, Nombre, Apellido, Numero_Documento, Telefono
+                FROM {$this->table}
+                WHERE (" . implode(' OR ', $condiciones) . ")";
+
+        if ($excludeId > 0) {
+            $sql .= " AND {$this->primaryKey} <> ?";
+            $params[] = $excludeId;
+        }
+
+        $sql .= " ORDER BY {$this->primaryKey} DESC LIMIT 1";
+        $rows = $this->query($sql, $params);
+        return $rows[0] ?? null;
+    }
+
     public function ensureProcesoColumnExists() {
         if ($this->tieneColumna('Proceso')) {
             return true;

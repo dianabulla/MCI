@@ -5,13 +5,40 @@
  */
 
 require_once APP . '/Models/Teen.php';
+require_once APP . '/Models/Persona.php';
+require_once APP . '/Models/Ministerio.php';
 require_once APP . '/Controllers/AuthController.php';
 
 class TeenController extends BaseController {
     private $teenModel;
+    private $personaModel;
+    private $ministerioModel;
 
     public function __construct() {
         $this->teenModel = new Teen();
+        $this->personaModel = new Persona();
+        $this->ministerioModel = new Ministerio();
+    }
+
+    private function normalizarTextoMayusculas($valor) {
+        $valor = trim((string)$valor);
+        if ($valor === '') {
+            return '';
+        }
+
+        $valor = preg_replace('/\s+/', ' ', $valor);
+        return function_exists('mb_strtoupper') ? mb_strtoupper($valor, 'UTF-8') : strtoupper($valor);
+    }
+
+    private function redirigirRegistroMenor($mensaje, $tipo = 'error', array $old = []) {
+        $params = array_merge([
+            'url' => 'teen/registro-menores',
+            'mensaje' => $mensaje,
+            'tipo' => $tipo
+        ], $old);
+
+        header('Location: ' . PUBLIC_URL . 'index.php?' . http_build_query($params));
+        exit;
     }
 
     /**
@@ -179,6 +206,189 @@ class TeenController extends BaseController {
             'mensaje' => $_GET['mensaje'] ?? '',
             'tipo' => $_GET['tipo'] ?? ''
         ]);
+    }
+
+    public function registroMenores() {
+        if (!AuthController::tienePermiso('teen', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $this->view('teen/formulario', [
+            'ministerios' => $this->ministerioModel->getAll(),
+            'registros' => $this->teenModel->getMenoresRegistrados(),
+            'mensaje' => $_GET['mensaje'] ?? '',
+            'tipo' => $_GET['tipo'] ?? '',
+            'old' => [
+                'nombre_menor' => (string)($_GET['nombre_menor'] ?? ''),
+                'acudiente_busqueda' => (string)($_GET['acudiente_busqueda'] ?? ''),
+                'id_acudiente' => (string)($_GET['id_acudiente'] ?? ''),
+                'telefono_contacto' => (string)($_GET['telefono_contacto'] ?? ''),
+                'fecha_nacimiento' => (string)($_GET['fecha_nacimiento'] ?? ''),
+                'edad' => (string)($_GET['edad'] ?? ''),
+                'id_ministerio' => (string)($_GET['id_ministerio'] ?? ''),
+                'asiste_celula' => (string)($_GET['asiste_celula'] ?? ''),
+                'barrio' => (string)($_GET['barrio'] ?? '')
+            ]
+        ]);
+    }
+
+    public function guardarMenor() {
+        if (!AuthController::tienePermiso('teen', 'crear')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('teen/registro-menores');
+            return;
+        }
+
+        $nombreMenor = $this->normalizarTextoMayusculas($_POST['nombre_menor'] ?? '');
+        $acudienteBusqueda = $this->normalizarTextoMayusculas($_POST['acudiente_busqueda'] ?? '');
+        $idAcudiente = (int)($_POST['id_acudiente'] ?? 0);
+        $telefonoContacto = trim((string)($_POST['telefono_contacto'] ?? ''));
+        $telefonoContacto = preg_replace('/[^0-9+\s\-\(\)]/', '', $telefonoContacto);
+        $fechaNacimiento = trim((string)($_POST['fecha_nacimiento'] ?? ''));
+        $edadRaw = trim((string)($_POST['edad'] ?? ''));
+        $edad = ctype_digit($edadRaw) ? (int)$edadRaw : -1;
+        if ($fechaNacimiento !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaNacimiento)) {
+            try {
+                $fechaNac = new DateTime($fechaNacimiento);
+                $hoy = new DateTime('today');
+                $edadCalculada = $fechaNac->diff($hoy)->y;
+                if ($edadCalculada >= 0) {
+                    $edad = (int)$edadCalculada;
+                    $edadRaw = (string)$edad;
+                }
+            } catch (Throwable $e) {
+                // Se valida más abajo.
+            }
+        }
+        $idMinisterioRaw = trim((string)($_POST['id_ministerio'] ?? ''));
+        $idMinisterio = ctype_digit($idMinisterioRaw) ? (int)$idMinisterioRaw : 0;
+        $asisteCelulaRaw = strtoupper(trim((string)($_POST['asiste_celula'] ?? '')));
+        $barrio = $this->normalizarTextoMayusculas($_POST['barrio'] ?? '');
+
+        $old = [
+            'nombre_menor' => $nombreMenor,
+            'acudiente_busqueda' => $acudienteBusqueda,
+            'id_acudiente' => (string)$idAcudiente,
+            'telefono_contacto' => $telefonoContacto,
+            'fecha_nacimiento' => $fechaNacimiento,
+            'edad' => $edadRaw,
+            'id_ministerio' => $idMinisterioRaw,
+            'asiste_celula' => $asisteCelulaRaw,
+            'barrio' => $barrio
+        ];
+
+        $errores = [];
+
+        if ($nombreMenor === '') {
+            $errores[] = 'El nombre y apellido del menor es obligatorio.';
+        }
+
+        if ($idAcudiente <= 0) {
+            $errores[] = 'Debes seleccionar un acudiente válido de la lista.';
+        }
+
+        $acudiente = $idAcudiente > 0 ? $this->personaModel->getById($idAcudiente) : null;
+        if ($idAcudiente > 0 && empty($acudiente)) {
+            $errores[] = 'El acudiente seleccionado no existe en la base de personas.';
+        }
+
+        $nombreAcudiente = '';
+        if (!empty($acudiente)) {
+            $nombreAcudiente = $this->normalizarTextoMayusculas(trim((string)($acudiente['Nombre'] ?? '') . ' ' . (string)($acudiente['Apellido'] ?? '')));
+            $acudienteBusqueda = $nombreAcudiente !== '' ? $nombreAcudiente : $acudienteBusqueda;
+            $old['acudiente_busqueda'] = $acudienteBusqueda;
+
+            $telefonoBase = trim((string)($acudiente['Telefono'] ?? ''));
+            if ($telefonoBase !== '') {
+                $telefonoContacto = $telefonoBase;
+                $old['telefono_contacto'] = $telefonoContacto;
+            }
+        }
+
+        if ($telefonoContacto === '') {
+            $errores[] = 'El número de contacto es obligatorio.';
+        }
+
+        if ($fechaNacimiento === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaNacimiento)) {
+            $errores[] = 'La fecha de nacimiento es obligatoria.';
+        }
+
+        if ($edad < 0 || $edad > 17) {
+            $errores[] = 'La edad debe estar entre 0 y 17 años.';
+        }
+
+        if ($idMinisterio <= 0) {
+            $errores[] = 'Debes seleccionar un ministerio.';
+        }
+
+        if (!in_array($asisteCelulaRaw, ['SI', 'SÍ', 'NO'], true)) {
+            $errores[] = 'Debes indicar si asiste a célula.';
+        }
+
+        if (!empty($errores)) {
+            $this->redirigirRegistroMenor(implode(' ', $errores), 'error', $old);
+        }
+
+        $data = [
+            'nombre_menor' => $nombreMenor,
+            'id_acudiente' => $idAcudiente,
+            'nombre_acudiente' => $nombreAcudiente !== '' ? $nombreAcudiente : $acudienteBusqueda,
+            'telefono_contacto' => $telefonoContacto,
+            'fecha_nacimiento' => $fechaNacimiento !== '' ? $fechaNacimiento : null,
+            'edad' => $edad,
+            'id_ministerio' => $idMinisterio,
+            'asiste_celula' => in_array($asisteCelulaRaw, ['SI', 'SÍ'], true) ? 1 : 0,
+            'barrio' => $barrio !== '' ? $barrio : null
+        ];
+
+        try {
+            $idMenor = (int)$this->teenModel->createMenor($data);
+            if ($idMenor <= 0) {
+                throw new Exception('No se pudo guardar el registro del menor.');
+            }
+
+            $this->redirigirRegistroMenor('Menor registrado correctamente.', 'success');
+        } catch (Throwable $e) {
+            $this->redirigirRegistroMenor('Error al guardar el menor: ' . $e->getMessage(), 'error', $old);
+        }
+    }
+
+    public function buscarAcudientes() {
+        if (!AuthController::tienePermiso('teen', 'ver')) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Acceso denegado']);
+            exit;
+        }
+
+        header('Content-Type: application/json');
+
+        $term = trim((string)($_GET['term'] ?? ''));
+        if (mb_strlen($term, 'UTF-8') < 2) {
+            echo json_encode(['success' => false, 'message' => 'Mínimo 2 caracteres']);
+            exit;
+        }
+
+        try {
+            $buscar = '%' . $term . '%';
+            $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono, m.Nombre_Ministerio
+                    FROM persona p
+                    LEFT JOIN ministerio m ON m.Id_Ministerio = p.Id_Ministerio
+                    WHERE (p.Nombre LIKE ? OR p.Apellido LIKE ? OR CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, '')) LIKE ?)
+                      AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                    ORDER BY p.Nombre, p.Apellido
+                    LIMIT 20";
+            $rows = $this->personaModel->query($sql, [$buscar, $buscar, $buscar]);
+
+            echo json_encode(['success' => true, 'data' => $rows], JSON_UNESCAPED_UNICODE);
+        } catch (Throwable $e) {
+            echo json_encode(['success' => false, 'message' => 'No se pudo buscar acudientes']);
+        }
+        exit;
     }
 
     /**

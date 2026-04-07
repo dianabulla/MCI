@@ -21,6 +21,14 @@
     </div>
     <?php endif; ?>
 
+    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('materiales_celulas', 'ver')): ?>
+    <div class="dashboard-card" style="border-left-color: #fd7e14;">
+        <h3>Material de Células</h3>
+        <div class="value" style="color: #fd7e14;">📘</div>
+        <a href="<?= PUBLIC_URL ?>?url=celulas/materiales" class="btn btn-primary btn-sm">Abrir materiales</a>
+    </div>
+    <?php endif; ?>
+
     <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'ver')): ?>
     <div class="dashboard-card" style="border-left-color: #17a2b8;">
         <h3>Ministerios</h3>

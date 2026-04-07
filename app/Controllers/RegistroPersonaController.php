@@ -52,6 +52,46 @@ class RegistroPersonaController extends BaseController {
         return $scheme . '://' . $host . $base . '/index.php?url=' . urlencode($route);
     }
 
+    private function normalizarTextoMayusculas($valor) {
+        $valor = trim((string)$valor);
+        if ($valor === '') {
+            return '';
+        }
+
+        $valor = preg_replace('/\s+/', ' ', $valor);
+        return function_exists('mb_strtoupper') ? mb_strtoupper($valor, 'UTF-8') : strtoupper($valor);
+    }
+
+    private function normalizarDocumentoInput($valor) {
+        $valor = trim((string)$valor);
+        if ($valor === '') {
+            return '';
+        }
+
+        $valor = preg_replace('/\s+/', '', $valor);
+        return function_exists('mb_strtoupper') ? mb_strtoupper($valor, 'UTF-8') : strtoupper($valor);
+    }
+
+    private function construirMensajeDuplicadoPersona(array $duplicado, $cedula, $telefono) {
+        $cedula = preg_replace('/[^A-Z0-9]/', '', strtoupper(trim((string)$cedula)));
+        $telefono = preg_replace('/\D+/', '', (string)$telefono);
+        $duplicadoCedula = preg_replace('/[^A-Z0-9]/', '', strtoupper(trim((string)($duplicado['Numero_Documento'] ?? ''))));
+        $duplicadoTelefono = preg_replace('/\D+/', '', (string)($duplicado['Telefono'] ?? ''));
+
+        $campos = [];
+        if ($cedula !== '' && $duplicadoCedula !== '' && $cedula === $duplicadoCedula) {
+            $campos[] = 'la cédula';
+        }
+        if ($telefono !== '' && $duplicadoTelefono !== '' && $telefono === $duplicadoTelefono) {
+            $campos[] = 'el teléfono';
+        }
+
+        $nombre = trim((string)($duplicado['Nombre'] ?? '') . ' ' . (string)($duplicado['Apellido'] ?? ''));
+        $detalle = !empty($campos) ? implode(' y ', $campos) : 'los datos registrados';
+
+        return 'Ya existe una persona registrada con ' . $detalle . ($nombre !== '' ? ': ' . $nombre . '.' : '.');
+    }
+
     private function encolarMensajeBienvenida(array $personaNueva) {
         if (!$this->whatsappLocalQueueModel || !$this->whatsappMensajeTemplateModel) {
             return;
@@ -147,18 +187,18 @@ class RegistroPersonaController extends BaseController {
             exit;
         }
 
-        $nombre = trim((string)($_POST['nombre'] ?? ''));
-        $apellido = trim((string)($_POST['apellido'] ?? ''));
+        $nombre = $this->normalizarTextoMayusculas($_POST['nombre'] ?? '');
+        $apellido = $this->normalizarTextoMayusculas($_POST['apellido'] ?? '');
         $telefono = $this->normalizarTelefono((string)($_POST['telefono'] ?? ''));
         $idMinisterioRaw = trim((string)($_POST['id_ministerio'] ?? ''));
         $idMinisterio = ctype_digit($idMinisterioRaw) ? (int)$idMinisterioRaw : 0;
-        $invitadoPor = trim((string)($_POST['invitado_por'] ?? ''));
+        $invitadoPor = $this->normalizarTextoMayusculas($_POST['invitado_por'] ?? '');
         $ganadoEnRaw = strtolower(trim((string)($_POST['ganado_en'] ?? '')));
-        $ganadoEnOtroObservacion = trim((string)($_POST['ganado_en_otro_observacion'] ?? ''));
+        $ganadoEnOtroObservacion = $this->normalizarTextoMayusculas($_POST['ganado_en_otro_observacion'] ?? '');
         $fechaNacimiento = trim((string)($_POST['fecha_nacimiento'] ?? ''));
-        $barrio = trim((string)($_POST['barrio'] ?? ''));
-        $peticion = trim((string)($_POST['peticion'] ?? ''));
-        $cedula = trim((string)($_POST['cedula'] ?? ''));
+        $barrio = $this->normalizarTextoMayusculas($_POST['barrio'] ?? '');
+        $peticion = $this->normalizarTextoMayusculas($_POST['peticion'] ?? '');
+        $cedula = $this->normalizarDocumentoInput($_POST['cedula'] ?? '');
 
         $errores = [];
 
@@ -174,12 +214,17 @@ class RegistroPersonaController extends BaseController {
             $errores[] = 'Si registra teléfono, debe tener al menos 7 dígitos';
         }
 
-        if (!in_array($ganadoEnRaw, ['domingo', 'somos_uno', 'celula', 'otro'], true)) {
-            $errores[] = 'Debe seleccionar en qué reunión fue ganado (domingo, Somos Uno, célula u otros)';
+        if (!in_array($ganadoEnRaw, ['domingo', 'somos_uno', 'celula', 'migrados', 'otro'], true)) {
+            $errores[] = 'Debe seleccionar en qué reunión fue ganado (domingo, Somos Uno, célula, migrados u otros)';
         }
 
         if ($ganadoEnRaw === 'otro' && $ganadoEnOtroObservacion === '') {
             $errores[] = 'Debes escribir una observación cuando seleccionas Otros';
+        }
+
+        $duplicado = $this->personaModel->findDuplicateByCedulaOrTelefono($cedula, $telefono);
+        if (!empty($duplicado)) {
+            $errores[] = $this->construirMensajeDuplicadoPersona($duplicado, $cedula, $telefono);
         }
 
         if (!empty($errores)) {
@@ -202,6 +247,7 @@ class RegistroPersonaController extends BaseController {
             'domingo' => 'Domingo',
             'somos_uno' => 'Somos Uno',
             'celula' => 'Celula',
+            'migrados' => 'Migrados',
             'otro' => 'Otros'
         ];
         $tipoReunion = $mapTipoReunion[$ganadoEnRaw] ?? 'Domingo';

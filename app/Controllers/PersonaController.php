@@ -499,6 +499,46 @@ class PersonaController extends BaseController {
         return $mapa[$normalizado] ?? $tipoReunion;
     }
 
+    private function normalizarTextoMayusculas($valor) {
+        $valor = trim((string)$valor);
+        if ($valor === '') {
+            return null;
+        }
+
+        $valor = preg_replace('/\s+/', ' ', $valor);
+        return function_exists('mb_strtoupper') ? mb_strtoupper($valor, 'UTF-8') : strtoupper($valor);
+    }
+
+    private function normalizarDocumentoInput($valor) {
+        $valor = trim((string)$valor);
+        if ($valor === '') {
+            return null;
+        }
+
+        $valor = preg_replace('/\s+/', '', $valor);
+        return function_exists('mb_strtoupper') ? mb_strtoupper($valor, 'UTF-8') : strtoupper($valor);
+    }
+
+    private function construirMensajeDuplicadoPersona(array $duplicado, $numeroDocumento, $telefono) {
+        $numeroDocumento = preg_replace('/[^A-Z0-9]/', '', strtoupper(trim((string)$numeroDocumento)));
+        $telefono = preg_replace('/\D+/', '', (string)$telefono);
+        $duplicadoDocumento = preg_replace('/[^A-Z0-9]/', '', strtoupper(trim((string)($duplicado['Numero_Documento'] ?? ''))));
+        $duplicadoTelefono = preg_replace('/\D+/', '', (string)($duplicado['Telefono'] ?? ''));
+
+        $camposDuplicados = [];
+        if ($numeroDocumento !== '' && $duplicadoDocumento !== '' && $numeroDocumento === $duplicadoDocumento) {
+            $camposDuplicados[] = 'la cédula';
+        }
+        if ($telefono !== '' && $duplicadoTelefono !== '' && $telefono === $duplicadoTelefono) {
+            $camposDuplicados[] = 'el teléfono';
+        }
+
+        $nombreDuplicado = trim((string)($duplicado['Nombre'] ?? '') . ' ' . (string)($duplicado['Apellido'] ?? ''));
+        $detalleCampos = !empty($camposDuplicados) ? implode(' y ', $camposDuplicados) : 'los datos registrados';
+
+        return 'Ya existe una persona registrada con ' . $detalleCampos . ($nombreDuplicado !== '' ? ': ' . $nombreDuplicado . '.' : '.');
+    }
+
     private function normalizarObservacionGanadoEn($tipoReunion, $observacion) {
         $tipoReunion = $this->normalizarTipoReunionInput($tipoReunion);
         if ($tipoReunion !== 'Otros') {
@@ -516,6 +556,39 @@ class PersonaController extends BaseController {
     private function normalizarOrigenFiltro($origen) {
         $origen = strtolower(trim((string)$origen));
         return in_array($origen, ['domingo', 'celula', 'asignados', 'reasignados', 'no_disponible'], true) ? $origen : '';
+    }
+
+    private function normalizarUrlRetorno($returnUrl) {
+        $returnUrl = trim((string)$returnUrl);
+        if ($returnUrl === '') {
+            return null;
+        }
+
+        $basePublic = rtrim((string)PUBLIC_URL, '/');
+
+        if ($basePublic !== '' && strpos($returnUrl, $basePublic) === 0) {
+            return $returnUrl;
+        }
+
+        if (strpos($returnUrl, '?url=') === 0) {
+            return $basePublic . $returnUrl;
+        }
+
+        if (strpos($returnUrl, 'index.php?url=') === 0) {
+            return $basePublic . '/' . ltrim($returnUrl, '/');
+        }
+
+        return null;
+    }
+
+    private function redirigirConRetorno($returnUrl, $rutaFallback) {
+        $urlNormalizada = $this->normalizarUrlRetorno($returnUrl);
+        if ($urlNormalizada !== null) {
+            header('Location: ' . $urlNormalizada);
+            exit;
+        }
+
+        $this->redirect($rutaFallback);
     }
 
     private function personaTieneAsignacionCompleta(array $persona) {
@@ -1952,10 +2025,23 @@ class PersonaController extends BaseController {
         }
 
         $returnTo = $_POST['return_to'] ?? ($_GET['return_to'] ?? null);
+        $returnUrl = $_POST['return_url'] ?? ($_GET['return_url'] ?? null);
         $celulaRetorno = $_POST['celula_retorno'] ?? ($_GET['celula'] ?? null);
         $celulaRetorno = ($celulaRetorno !== null && $celulaRetorno !== '') ? (int) $celulaRetorno : null;
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $_POST['nombre'] = (string)($this->normalizarTextoMayusculas($_POST['nombre'] ?? null) ?? '');
+            $_POST['apellido'] = (string)($this->normalizarTextoMayusculas($_POST['apellido'] ?? null) ?? '');
+            $_POST['numero_documento'] = (string)($this->normalizarDocumentoInput($_POST['numero_documento'] ?? null) ?? '');
+            $_POST['direccion'] = (string)($this->normalizarTextoMayusculas($_POST['direccion'] ?? null) ?? '');
+            $_POST['barrio'] = (string)($this->normalizarTextoMayusculas($_POST['barrio'] ?? null) ?? '');
+            $_POST['peticion'] = (string)($this->normalizarTextoMayusculas($_POST['peticion'] ?? null) ?? '');
+            $_POST['invitado_por'] = (string)($this->normalizarTextoMayusculas($_POST['invitado_por'] ?? null) ?? '');
+            $_POST['ganado_en_otro_observacion'] = (string)($this->normalizarTextoMayusculas($_POST['ganado_en_otro_observacion'] ?? null) ?? '');
+            $_POST['telefono'] = trim((string)($_POST['telefono'] ?? ''));
+            $_POST['email'] = trim((string)($_POST['email'] ?? ''));
+            $_POST['usuario'] = trim((string)($_POST['usuario'] ?? ''));
+
             $idRolSeleccionado = $_POST['id_rol'] ?: null;
             $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
             $idMinisterioNormalizado = $this->normalizarIdMinisterioPost($_POST['id_ministerio'] ?? null);
@@ -1972,6 +2058,25 @@ class PersonaController extends BaseController {
                     'personas_invitadores' => $this->personaModel->getAll(),
                     'personas_lideres' => $this->personaModel->getLideresYPastores(),
                     'error' => 'Debes escribir una observación cuando seleccionas Otros en Ganado en.',
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'return_to' => $returnTo,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $viewData);
+                return;
+            }
+
+            $duplicadoPersona = $this->personaModel->findDuplicateByCedulaOrTelefono($_POST['numero_documento'] ?? '', $_POST['telefono'] ?? '');
+            if (!empty($duplicadoPersona)) {
+                $viewData = [
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => $this->construirMensajeDuplicadoPersona($duplicadoPersona, $_POST['numero_documento'] ?? '', $_POST['telefono'] ?? ''),
                     'post_data' => $_POST,
                     'soportaConvencion' => $this->soportaConvencion,
                     'soportaProceso' => $this->soportaProceso,
@@ -2111,11 +2216,11 @@ class PersonaController extends BaseController {
                     $this->redirect($urlRetorno);
                 }
 
-                $this->redirect('personas/ganar');
+                $this->redirigirConRetorno($returnUrl, 'personas/ganar');
             } catch (PDOException $e) {
                 // Detectar error de duplicado
                 if ($e->getCode() == 23000 || strpos($e->getMessage(), '1062') !== false) {
-                    $error = 'La cédula ' . htmlspecialchars($data['Numero_Documento']) . ' ya está registrada en el sistema.';
+                    $error = 'Ya existe una persona registrada con esa cédula o teléfono.';
                 } else {
                     $error = 'Error al guardar la persona: ' . $e->getMessage();
                 }
@@ -2159,16 +2264,29 @@ class PersonaController extends BaseController {
         }
 
         $returnTo = $_POST['return_to'] ?? ($_GET['return_to'] ?? null);
+        $returnUrl = $_POST['return_url'] ?? ($_GET['return_url'] ?? null);
         $celulaRetorno = $_POST['celula_retorno'] ?? ($_GET['celula'] ?? null);
         $celulaRetorno = ($celulaRetorno !== null && $celulaRetorno !== '') ? (int) $celulaRetorno : null;
         
         $id = $_GET['id'] ?? ($_POST['id'] ?? null);
         
         if (!$id) {
-            $this->redirect('personas');
+            $this->redirigirConRetorno($returnUrl, 'personas');
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $_POST['nombre'] = (string)($this->normalizarTextoMayusculas($_POST['nombre'] ?? null) ?? '');
+            $_POST['apellido'] = (string)($this->normalizarTextoMayusculas($_POST['apellido'] ?? null) ?? '');
+            $_POST['numero_documento'] = (string)($this->normalizarDocumentoInput($_POST['numero_documento'] ?? null) ?? '');
+            $_POST['direccion'] = (string)($this->normalizarTextoMayusculas($_POST['direccion'] ?? null) ?? '');
+            $_POST['barrio'] = (string)($this->normalizarTextoMayusculas($_POST['barrio'] ?? null) ?? '');
+            $_POST['peticion'] = (string)($this->normalizarTextoMayusculas($_POST['peticion'] ?? null) ?? '');
+            $_POST['invitado_por'] = (string)($this->normalizarTextoMayusculas($_POST['invitado_por'] ?? null) ?? '');
+            $_POST['ganado_en_otro_observacion'] = (string)($this->normalizarTextoMayusculas($_POST['ganado_en_otro_observacion'] ?? null) ?? '');
+            $_POST['telefono'] = trim((string)($_POST['telefono'] ?? ''));
+            $_POST['email'] = trim((string)($_POST['email'] ?? ''));
+            $_POST['usuario'] = trim((string)($_POST['usuario'] ?? ''));
+
             $personaAntes = $this->personaModel->getById($id);
             $idRolSeleccionado = $_POST['id_rol'] ?: null;
             $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
@@ -2188,6 +2306,27 @@ class PersonaController extends BaseController {
                     'personas_invitadores' => $this->personaModel->getAll(),
                     'personas_lideres' => $this->personaModel->getLideresYPastores(),
                     'error' => 'Debes escribir una observación cuando seleccionas Otros en Ganado en.',
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'return_to' => $returnTo,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $viewData);
+                return;
+            }
+
+            $duplicadoPersona = $this->personaModel->findDuplicateByCedulaOrTelefono($_POST['numero_documento'] ?? '', $_POST['telefono'] ?? '', $id);
+            if (!empty($duplicadoPersona)) {
+                $persona = $this->personaModel->getById($id);
+                $viewData = [
+                    'persona' => $persona,
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => $this->construirMensajeDuplicadoPersona($duplicadoPersona, $_POST['numero_documento'] ?? '', $_POST['telefono'] ?? ''),
                     'post_data' => $_POST,
                     'soportaConvencion' => $this->soportaConvencion,
                     'soportaProceso' => $this->soportaProceso,
@@ -2321,11 +2460,11 @@ class PersonaController extends BaseController {
                     $this->redirect('celulas');
                 }
 
-                $this->redirect('personas');
+                $this->redirigirConRetorno($returnUrl, 'personas');
             } catch (PDOException $e) {
                 // Detectar error de duplicado
                 if ($e->getCode() == 23000 || strpos($e->getMessage(), '1062') !== false) {
-                    $error = 'La cédula ' . htmlspecialchars($data['Numero_Documento']) . ' ya está registrada en el sistema.';
+                    $error = 'Ya existe una persona registrada con esa cédula o teléfono.';
                 } else {
                     $error = 'Error al actualizar la persona: ' . $e->getMessage();
                 }
@@ -2368,15 +2507,17 @@ class PersonaController extends BaseController {
     public function detalle() {
         $id = $_GET['id'] ?? null;
         $returnTo = $_GET['return_to'] ?? null;
+        $returnUrl = $_GET['return_url'] ?? null;
         
         if (!$id) {
-            $this->redirect('personas');
+            $this->redirigirConRetorno($returnUrl, 'personas');
         }
 
         $persona = $this->personaModel->getById($id);
         $this->view('personas/detalle', [
             'persona' => $persona,
-            'return_to' => $returnTo
+            'return_to' => $returnTo,
+            'return_url' => $returnUrl
         ]);
     }
 
@@ -2388,11 +2529,12 @@ class PersonaController extends BaseController {
         }
         
         $id = $_GET['id'] ?? null;
+        $returnUrl = $_GET['return_url'] ?? null;
         
         if ($id) {
             $this->personaModel->delete($id);
         }
         
-        $this->redirect('personas');
+        $this->redirigirConRetorno($returnUrl, 'personas');
     }
 }

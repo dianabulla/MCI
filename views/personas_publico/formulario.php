@@ -285,6 +285,7 @@
                             <option value="domingo" <?= (string)($old['ganado_en'] ?? '') === 'domingo' ? 'selected' : '' ?>>Domingo</option>
                             <option value="somos_uno" <?= (string)($old['ganado_en'] ?? '') === 'somos_uno' ? 'selected' : '' ?>>Somos Uno</option>
                             <option value="celula" <?= (string)($old['ganado_en'] ?? '') === 'celula' ? 'selected' : '' ?>>Célula</option>
+                            <option value="migrados" <?= (string)($old['ganado_en'] ?? '') === 'migrados' ? 'selected' : '' ?>>Migrados</option>
                             <option value="otro" <?= (string)($old['ganado_en'] ?? '') === 'otro' ? 'selected' : '' ?>>Otros</option>
                         </select>
                     </div>
@@ -324,6 +325,29 @@
         observacionWrap.style.display = esOtros ? '' : 'none';
         observacion.required = esOtros;
     }
+
+    function aplicarMayusculasAutomaticas() {
+        const campos = document.querySelectorAll('input[type="text"], textarea');
+        campos.forEach(function(campo) {
+            if (!campo) {
+                return;
+            }
+
+            campo.style.textTransform = 'uppercase';
+
+            const transformar = function() {
+                if (typeof campo.value === 'string') {
+                    campo.value = campo.value.toUpperCase();
+                }
+            };
+
+            campo.addEventListener('input', transformar);
+            campo.addEventListener('change', transformar);
+            transformar();
+        });
+    }
+
+    aplicarMayusculasAutomaticas();
 
     if (ganadoEn) {
         ganadoEn.addEventListener('change', actualizarObservacionOtros);

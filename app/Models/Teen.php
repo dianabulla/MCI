@@ -5,17 +5,20 @@ require_once APP . '/Models/BaseModel.php';
 class Teen extends BaseModel {
     protected $table = 'teens';
     protected $primaryKey = 'id';
+    private $tablaMenores = 'teen_menores';
 
     public function __construct() {
         parent::__construct();
         $this->ensureTableStructure();
+        $this->ensureMenoresTableStructure();
     }
 
     /**
      * Verifica si una columna existe
      */
-    private function columnExists($columnName) {
-        $sql = "SHOW COLUMNS FROM {$this->table} LIKE ?";
+    private function columnExists($columnName, $tableName = null) {
+        $tableName = $tableName ?: $this->table;
+        $sql = "SHOW COLUMNS FROM {$tableName} LIKE ?";
         $rows = $this->query($sql, [$columnName]);
         return !empty($rows);
     }
@@ -49,6 +52,69 @@ class Teen extends BaseModel {
 
         } catch (Throwable $e) {
             error_log('Error asegurando estructura de teens: ' . $e->getMessage());
+        }
+    }
+
+    private function ensureMenoresTableStructure() {
+        try {
+            $this->execute("
+                CREATE TABLE IF NOT EXISTS {$this->tablaMenores} (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    nombre_menor VARCHAR(180) NOT NULL,
+                    id_acudiente INT NOT NULL,
+                    nombre_acudiente VARCHAR(180) NOT NULL,
+                    telefono_contacto VARCHAR(30) NULL,
+                    fecha_nacimiento DATE NULL,
+                    edad TINYINT UNSIGNED NOT NULL,
+                    id_ministerio INT NULL,
+                    asiste_celula TINYINT(1) NOT NULL DEFAULT 0,
+                    barrio VARCHAR(150) NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    KEY idx_acudiente (id_acudiente),
+                    KEY idx_ministerio (id_ministerio)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ");
+
+            if (!$this->columnExists('fecha_nacimiento', $this->tablaMenores)) {
+                $this->execute("ALTER TABLE {$this->tablaMenores} ADD COLUMN fecha_nacimiento DATE NULL AFTER telefono_contacto");
+            }
+
+            if (!$this->columnExists('updated_at', $this->tablaMenores)) {
+                $this->execute("ALTER TABLE {$this->tablaMenores} ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+            }
+        } catch (Throwable $e) {
+            error_log('Error asegurando estructura de teen_menores: ' . $e->getMessage());
+        }
+    }
+
+    public function getMenoresRegistrados() {
+        $this->ensureMenoresTableStructure();
+
+        $sql = "SELECT tm.*, 
+                       COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
+                       TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, ''))) AS Nombre_Acudiente_Base,
+                       COALESCE(NULLIF(TRIM(COALESCE(p.Telefono, '')), ''), tm.telefono_contacto) AS Telefono_Acudiente_Actual
+                FROM {$this->tablaMenores} tm
+                LEFT JOIN ministerio m ON m.Id_Ministerio = tm.id_ministerio
+                LEFT JOIN persona p ON p.Id_Persona = tm.id_acudiente
+                ORDER BY tm.created_at DESC, tm.id DESC";
+
+        return $this->query($sql);
+    }
+
+    public function createMenor(array $data) {
+        $tablaOriginal = $this->table;
+        $llaveOriginal = $this->primaryKey;
+
+        $this->table = $this->tablaMenores;
+        $this->primaryKey = 'id';
+
+        try {
+            return parent::create($data);
+        } finally {
+            $this->table = $tablaOriginal;
+            $this->primaryKey = $llaveOriginal;
         }
     }
 

@@ -35,7 +35,7 @@
                     <th>Archivo</th>
                     <th style="width:140px;">Tamaño (KB)</th>
                     <th style="width:170px;">Personas que lo vieron</th>
-                    <th style="width:190px;">Fecha</th>
+                    <th style="width:190px;">Fecha de creación</th>
                     <th style="width:280px;">Acciones</th>
                 </tr>
             </thead>
@@ -47,7 +47,7 @@
                         <td><?= (int)($material['personas_vieron'] ?? 0) ?></td>
                         <td>
                             <?php
-                            $ts = (int)($material['fecha_modificacion'] ?? 0);
+                            $ts = (int)($material['fecha_creacion'] ?? 0);
                             echo $ts > 0 ? date('Y-m-d H:i', $ts) : '—';
                             ?>
                         </td>

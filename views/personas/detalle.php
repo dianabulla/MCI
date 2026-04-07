@@ -1,13 +1,20 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
 <?php
-$returnTo = $return_to ?? null;
+$returnTo = $return_to ?? ($_GET['return_to'] ?? null);
+$returnUrl = trim((string)($return_url ?? ($_GET['return_url'] ?? '')));
 $editUrl = PUBLIC_URL . '?url=personas/editar&id=' . (int)$persona['Id_Persona'];
-$volverUrl = PUBLIC_URL . '?url=personas';
+$volverUrl = $returnUrl !== '' ? $returnUrl : (PUBLIC_URL . '?url=personas');
+
+if ($returnUrl !== '') {
+    $editUrl .= '&return_url=' . urlencode($returnUrl);
+}
 
 if ($returnTo === 'celulas') {
     $editUrl .= '&return_to=celulas';
-    $volverUrl = PUBLIC_URL . '?url=celulas';
+    if ($returnUrl === '') {
+        $volverUrl = PUBLIC_URL . '?url=celulas';
+    }
 } elseif ($returnTo === 'asistencia') {
     $editUrl .= '&return_to=asistencia';
 }

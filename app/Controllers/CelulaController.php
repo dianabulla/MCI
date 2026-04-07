@@ -487,10 +487,12 @@ class CelulaController extends BaseController {
             $archivos = glob($directorioMateriales . '/*.pdf') ?: [];
             foreach ($archivos as $ruta) {
                 $nombre = basename((string)$ruta);
+                $fechaCreacion = @filectime($ruta) ?: (@filemtime($ruta) ?: 0);
                 $materiales[] = [
                     'nombre_archivo' => $nombre,
                     'url' => PUBLIC_URL . '?url=celulas/materiales/ver&archivo=' . rawurlencode($nombre),
                     'peso_kb' => round(((int)@filesize($ruta)) / 1024, 2),
+                    'fecha_creacion' => $fechaCreacion,
                     'fecha_modificacion' => @filemtime($ruta) ?: 0,
                     'personas_vieron' => (int)($vistasPorArchivo[$nombre] ?? 0)
                 ];
@@ -498,7 +500,7 @@ class CelulaController extends BaseController {
         }
 
         usort($materiales, static function ($a, $b) {
-            return ($b['fecha_modificacion'] ?? 0) <=> ($a['fecha_modificacion'] ?? 0);
+            return ($b['fecha_creacion'] ?? 0) <=> ($a['fecha_creacion'] ?? 0);
         });
 
         $this->view('celulas/materiales', [

@@ -62,6 +62,21 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 
             return $idMinisterioLider === $filtroMinisterioListado;
         }));
+        $queryBasePersonas = [
+            'url' => 'personas',
+            'perfil' => $filtroPerfilListado,
+            'ministerio' => $filtroMinisterioListado,
+            'lider' => $filtroLiderListado,
+            'buscar' => (string)($filtroNombreActual ?? ($_GET['buscar'] ?? ''))
+        ];
+        $buildPersonasUrl = static function(array $extra = []) use ($queryBasePersonas) {
+            $params = array_merge($queryBasePersonas, $extra);
+            $params = array_filter($params, static function($value) {
+                return $value !== null && $value !== '';
+            });
+            return PUBLIC_URL . '?' . http_build_query($params);
+        };
+        $returnUrlPersonas = $buildPersonasUrl();
         ?>
         <form method="GET" action="<?= PUBLIC_URL ?>" class="filters-inline" id="filtro_perfil_form">
             <input type="hidden" name="url" value="personas">
@@ -179,7 +194,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                         <td class="action-col">
                             <div class="action-buttons action-buttons-compact">
                                 <?php if ($puedeVerPersona): ?>
-                                <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= $persona['Id_Persona'] ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
+                                <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlPersonas) ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
                                     <i class="bi bi-eye"></i>
                                 </a>
                                 <button
@@ -197,7 +212,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                                     <i class="bi bi-fingerprint"></i>
                                 </button>
                                 <a
-                                    href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= (int)($persona['Id_Persona'] ?? 0) ?>&panel=escalera#eventos-procesos"
+                                    href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= (int)($persona['Id_Persona'] ?? 0) ?>&panel=escalera&return_url=<?= urlencode($returnUrlPersonas) ?>#eventos-procesos"
                                     class="action-icon-btn action-icon-escalera"
                                     title="Ir a Escalera del Éxito"
                                     aria-label="Ir a Escalera del Éxito"
@@ -206,12 +221,12 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                                 </a>
                                 <?php endif; ?>
                                 <?php if ($puedeEditarPersona): ?>
-                                <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $persona['Id_Persona'] ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
+                                <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlPersonas) ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
                                     <i class="bi bi-pencil"></i>
                                 </a>
                                 <?php endif; ?>
                                 <?php if ($puedeEliminarPersona): ?>
-                                <a href="<?= PUBLIC_URL ?>?url=personas/eliminar&id=<?= $persona['Id_Persona'] ?>" class="action-icon-btn action-icon-danger" title="Eliminar" aria-label="Eliminar" onclick="return confirm('¿Eliminar esta persona?')">
+                                <a href="<?= PUBLIC_URL ?>?url=personas/eliminar&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlPersonas) ?>" class="action-icon-btn action-icon-danger" title="Eliminar" aria-label="Eliminar" onclick="return confirm('¿Eliminar esta persona?')">
                                     <i class="bi bi-trash"></i>
                                 </a>
                                 <?php endif; ?>
