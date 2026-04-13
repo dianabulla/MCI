@@ -802,6 +802,494 @@ class ReporteController extends BaseController {
         ];
     }
 
+    private function obtenerMesesAbreviados() {
+        return [
+            1 => 'ENE', 2 => 'FEB', 3 => 'MAR', 4 => 'ABR',
+            5 => 'MAY', 6 => 'JUN', 7 => 'JUL', 8 => 'AGO',
+            9 => 'SEP', 10 => 'OCT', 11 => 'NOV', 12 => 'DIC'
+        ];
+    }
+
+    private function normalizarProcesoValor($valor) {
+        $proceso = trim((string)$valor);
+        return in_array($proceso, ['Ganar', 'Consolidar', 'Discipular', 'Enviar'], true) ? $proceso : '';
+    }
+
+    /**
+     * Clasifica el origen de la persona: 'iglesia' | 'celula' | 'otros'
+     * - 'iglesia'  → Tipo_Reunion contiene Domingo / Somos Uno / Migrados o no tiene valor
+     * - 'celula'   → Tipo_Reunion = Célula
+     * - 'otros'    → cualquier otro valor (Otros, desconocido, etc.)
+     */
+    private function clasificarOrigenGanar(array $persona): string {
+        $tipo = strtolower(trim((string)($persona['Tipo_Reunion'] ?? '')));
+        if (strpos($tipo, 'celula') !== false || strpos($tipo, 'célula') !== false) {
+            return 'celula';
+        }
+        if ($tipo === '' || strpos($tipo, 'domingo') !== false || strpos($tipo, 'somos uno') !== false
+            || strpos($tipo, 'somosuno') !== false || strpos($tipo, 'migrados') !== false
+            || strpos($tipo, 'viernes') !== false) {
+            return 'iglesia';
+        }
+        return 'otros';
+    }
+
+    /**
+     * Devuelve el checklist decodificado de una persona, o array vacío.
+     */
+    private function obtenerChecklist(array $persona): array {
+        $raw = trim((string)($persona['Escalera_Checklist'] ?? ''));
+        if ($raw === '') {
+            return [];
+        }
+        $decoded = json_decode($raw, true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Indica si el peldaño $indice de la etapa $etapa está marcado,
+     * considerando que etapas anteriores a la actual se dan por completadas.
+     */
+    private function peldanoMarcado(array $checklist, string $etapa, int $indice, string $procesoActual): bool {
+        $ordenEtapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
+        $idxActual  = array_search($procesoActual, $ordenEtapas, true);
+        $idxEtapa   = array_search($etapa, $ordenEtapas, true);
+
+        // Etapas anteriores → se consideran completas
+        if ($idxActual !== false && $idxEtapa !== false && $idxEtapa < $idxActual) {
+            return true;
+        }
+
+        $checksEtapa = $checklist[$etapa] ?? [];
+        if (array_key_exists($indice, $checksEtapa)) {
+            return !empty($checksEtapa[$indice]);
+        }
+
+        // Primer peldaño de la etapa activa = marcado por defecto
+        if ($etapa === $procesoActual && $indice === 0) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function construirDetallePersonaReporteMinisterial(array $persona): array {
+        $nombre = trim(trim((string)($persona['Nombre'] ?? '')) . ' ' . trim((string)($persona['Apellido'] ?? '')));
+        if ($nombre === '') {
+            $nombre = 'Sin nombre';
+        }
+        $fechaRegistro = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
+        return [
+            'id_persona'      => (int)($persona['Id_Persona'] ?? 0),
+            'nombre'          => $nombre,
+            'ministerio'      => trim((string)($persona['Nombre_Ministerio'] ?? '')) ?: 'Sin ministerio',
+            'lider'           => trim((string)($persona['Nombre_Lider'] ?? '')) ?: 'Sin líder',
+            'celula'          => trim((string)($persona['Nombre_Celula'] ?? '')) ?: 'Sin célula',
+            'proceso'         => $this->normalizarProcesoValor($persona['Proceso'] ?? '') ?: 'Sin etapa',
+            'fecha_registro'  => $fechaRegistro,
+        ];
+    }
+
+    /**
+     * Construye la tabla GANAR con subcategorías: GI (iglesia), GC (célula), V (otros), total.
+     * Filas = meses, columnas = subcategorías.
+     * Estructura devuelta:
+     *   [titulo, anio, meses, columnas, rows[mes => [gi,gc,v,total]], totales, detalles[col][mes][]]
+     */
+    private function construirTablaGanarMensual(array $personas, int $anio): array {
+        $meses = $this->obtenerMesesAbreviados();
+        $cols  = ['gi' => 'GI', 'gc' => 'GC', 'v' => 'V'];
+
+        $rows    = [];
+        $totales = ['gi' => 0, 'gc' => 0, 'v' => 0, 'total' => 0];
+        $detalles = [];   // detalles[col][mes][]
+
+        for ($m = 1; $m <= 12; $m++) {
+            $rows[$m] = ['mes' => $meses[$m], 'gi' => 0, 'gc' => 0, 'v' => 0, 'total' => 0];
+        }
+
+        foreach ($personas as $persona) {
+            $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
+            if ($proceso !== 'Ganar') {
+                continue;
+            }
+
+            $fechaYmd = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
+            $ts = strtotime($fechaYmd);
+            if ($ts === false || (int)date('Y', $ts) !== $anio) {
+                continue;
+            }
+            $mes = (int)date('n', $ts);
+
+            $origen = $this->clasificarOrigenGanar($persona);
+            $col    = ($origen === 'iglesia') ? 'gi' : (($origen === 'celula') ? 'gc' : 'v');
+
+            $rows[$mes][$col]++;
+            $rows[$mes]['total']++;
+            $totales[$col]++;
+            $totales['total']++;
+
+            $detalle = $this->construirDetallePersonaReporteMinisterial($persona);
+            $detalles[$col][$mes][] = $detalle;
+            $detalles['total'][$mes][] = $detalle;
+        }
+
+        return [
+            'titulo'   => 'GANAR',
+            'anio'     => $anio,
+            'meses'    => $meses,
+            'columnas' => $cols,
+            'rows'     => $rows,
+            'totales'  => $totales,
+            'detalles' => $detalles,
+        ];
+    }
+
+    /**
+     * Construye una tabla mensual por peldaños para Consolidar, Discipular o Enviar.
+     * $peldanos: array asociativo [clave => etiqueta]
+     * Estructura devuelta igual que construirTablaGanarMensual.
+     */
+    private function construirTablaPeldanosMensual(array $personas, int $anio, string $titulo, string $etapa, array $peldanos): array {
+        $meses    = $this->obtenerMesesAbreviados();
+        $rows     = [];
+        $totales  = array_fill_keys(array_keys($peldanos), 0);
+        $totales['total'] = 0;
+        $detalles = [];
+
+        for ($m = 1; $m <= 12; $m++) {
+            $rows[$m] = array_merge(['mes' => $meses[$m]], array_fill_keys(array_keys($peldanos), 0), ['total' => 0]);
+        }
+
+        foreach ($personas as $persona) {
+            $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
+            if ($proceso !== $etapa) {
+                continue;
+            }
+
+            $fechaYmd = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
+            $ts = strtotime($fechaYmd);
+            if ($ts === false || (int)date('Y', $ts) !== $anio) {
+                continue;
+            }
+            $mes = (int)date('n', $ts);
+
+            $checklist = $this->obtenerChecklist($persona);
+            $contado = false;
+            $detalle = $this->construirDetallePersonaReporteMinisterial($persona);
+
+            foreach ($peldanos as $col => $idx) {
+                if ($this->peldanoMarcado($checklist, $etapa, $idx, $proceso)) {
+                    $rows[$mes][$col]++;
+                    $totales[$col]++;
+                    $detalles[$col][$mes][] = $detalle;
+                    $contado = true;
+                }
+            }
+
+            if ($contado) {
+                $rows[$mes]['total']++;
+                $totales['total']++;
+                $detalles['total'][$mes][] = $detalle;
+            }
+        }
+
+        return [
+            'titulo'   => $titulo,
+            'anio'     => $anio,
+            'meses'    => $meses,
+            'columnas' => $peldanos,
+            'rows'     => $rows,
+            'totales'  => $totales,
+            'detalles' => $detalles,
+        ];
+    }
+
+    /**
+     * Construye tabla ENVIAR: personas en proceso Enviar que ya están haciendo célula
+     * (peldaño índice 2 de Enviar = 'Celula').
+     * Columna única: # Células abiertas.
+     */
+    private function construirTablaEnviarMensual(array $personas, int $anio): array {
+        $meses   = $this->obtenerMesesAbreviados();
+        $rows    = [];
+        $totales = ['celulas' => 0, 'total' => 0];
+        $detalles = [];
+
+        for ($m = 1; $m <= 12; $m++) {
+            $rows[$m] = ['mes' => $meses[$m], 'celulas' => 0, 'total' => 0];
+        }
+
+        foreach ($personas as $persona) {
+            $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
+            if ($proceso !== 'Enviar') {
+                continue;
+            }
+
+            $fechaYmd = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
+            $ts = strtotime($fechaYmd);
+            if ($ts === false || (int)date('Y', $ts) !== $anio) {
+                continue;
+            }
+            $mes = (int)date('n', $ts);
+
+            $checklist = $this->obtenerChecklist($persona);
+            $detalle   = $this->construirDetallePersonaReporteMinisterial($persona);
+
+            // Peldaño índice 2 de Enviar = 'Celula' (ya abrió célula)
+            if ($this->peldanoMarcado($checklist, 'Enviar', 2, $proceso)) {
+                $rows[$mes]['celulas']++;
+                $totales['celulas']++;
+                $detalles['celulas'][$mes][] = $detalle;
+            }
+
+            $rows[$mes]['total']++;
+            $totales['total']++;
+            $detalles['total'][$mes][] = $detalle;
+        }
+
+        return [
+            'titulo'   => 'ENVIAR',
+            'anio'     => $anio,
+            'meses'    => $meses,
+            'columnas' => ['celulas' => '# CELULAS'],
+            'rows'     => $rows,
+            'totales'  => $totales,
+            'detalles' => $detalles,
+        ];
+    }
+
+    /**
+     * Tabla GANAR 2026: filas = ministerios, columnas = meses × (Celula | Iglesia).
+     * Incluye TODAS las personas registradas (sin filtro de proceso).
+     */
+    private function construirTablaGananciaMinisterioPorMes(array $personas, int $anio): array {
+        $meses   = $this->obtenerMesesAbreviados();
+        $rowsMap = [];
+        $totales = [
+            'meses' => array_fill(1, 12, ['celula' => 0, 'iglesia' => 0]),
+            'anual' => ['celula' => 0, 'iglesia' => 0, 'total' => 0],
+        ];
+        $detalles = []; // [ministerio][col][mes][]
+
+        foreach ($personas as $persona) {
+            $fechaYmd = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
+            $ts = strtotime($fechaYmd);
+            if ($ts === false || (int)date('Y', $ts) !== $anio) {
+                continue;
+            }
+            $mes = (int)date('n', $ts);
+
+            $ministerio = trim((string)($persona['Nombre_Ministerio'] ?? '')) ?: 'Sin ministerio';
+            $origen     = $this->clasificarOrigenGanar($persona);
+            $col        = ($origen === 'celula') ? 'celula' : 'iglesia';
+
+            if (!isset($rowsMap[$ministerio])) {
+                $rowsMap[$ministerio] = [
+                    'ministerio' => $ministerio,
+                    'meses' => array_fill(1, 12, ['celula' => 0, 'iglesia' => 0]),
+                    'anual' => ['celula' => 0, 'iglesia' => 0, 'total' => 0],
+                ];
+            }
+
+            $rowsMap[$ministerio]['meses'][$mes][$col]++;
+            $rowsMap[$ministerio]['anual'][$col]++;
+            $rowsMap[$ministerio]['anual']['total']++;
+
+            $totales['meses'][$mes][$col]++;
+            $totales['anual'][$col]++;
+            $totales['anual']['total']++;
+
+            $detalle = $this->construirDetallePersonaReporteMinisterial($persona);
+            $detalles[$ministerio][$col][$mes][] = $detalle;
+            $detalles[$ministerio]['total'][$mes][] = $detalle;
+        }
+
+        ksort($rowsMap);
+
+        return [
+            'titulo'   => 'Ganancia de almas por ministerio',
+            'anio'     => $anio,
+            'meses'    => $meses,
+            'rows'     => array_values($rowsMap),
+            'totales'  => $totales,
+            'detalles' => $detalles,
+        ];
+    }
+
+    /**
+     * Tabla CONSOLIDAR por ministerio (anual): U.V, Encuentro, Bautismo.
+     * Cada celda es interactiva para mostrar personas.
+     */
+    private function construirTablaConsolidarPorMinisterio(array $personas, int $anio): array {
+        $rowsMap = [];
+        $totales = ['uv' => 0, 'e' => 0, 'b' => 0, 'total' => 0];
+        $detalles = []; // [ministerio][uv|e|b|total][]
+
+        foreach ($personas as $persona) {
+            $fechaYmd = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
+            $ts = strtotime($fechaYmd);
+            if ($ts === false || (int)date('Y', $ts) !== $anio) {
+                continue;
+            }
+
+            // Este reporte es del estado actual en CONSOLIDAR; no debe mezclar etapas posteriores.
+            $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
+            if ($proceso !== 'Consolidar') {
+                continue;
+            }
+
+            $ministerio = trim((string)($persona['Nombre_Ministerio'] ?? '')) ?: 'Sin ministerio';
+            if (!isset($rowsMap[$ministerio])) {
+                $rowsMap[$ministerio] = [
+                    'ministerio' => $ministerio,
+                    'uv' => 0,
+                    'e' => 0,
+                    'b' => 0,
+                    'total' => 0,
+                ];
+            }
+
+            $checklist = $this->obtenerChecklist($persona);
+            $detalle = $this->construirDetallePersonaReporteMinisterial($persona);
+
+            if ($this->peldanoMarcado($checklist, 'Consolidar', 0, $proceso)) {
+                $rowsMap[$ministerio]['uv']++;
+                $totales['uv']++;
+                $detalles[$ministerio]['uv'][] = $detalle;
+            }
+            if ($this->peldanoMarcado($checklist, 'Consolidar', 1, $proceso)) {
+                $rowsMap[$ministerio]['e']++;
+                $totales['e']++;
+                $detalles[$ministerio]['e'][] = $detalle;
+            }
+            if ($this->peldanoMarcado($checklist, 'Consolidar', 2, $proceso)) {
+                $rowsMap[$ministerio]['b']++;
+                $totales['b']++;
+                $detalles[$ministerio]['b'][] = $detalle;
+            }
+        }
+
+        foreach ($rowsMap as $ministerio => $row) {
+            $rowsMap[$ministerio]['total'] = (int)$row['uv'] + (int)$row['e'] + (int)$row['b'];
+            $totales['total'] += $rowsMap[$ministerio]['total'];
+            $detalles[$ministerio]['total'] = array_merge(
+                $detalles[$ministerio]['uv'] ?? [],
+                $detalles[$ministerio]['e'] ?? [],
+                $detalles[$ministerio]['b'] ?? []
+            );
+        }
+
+        ksort($rowsMap);
+
+        return [
+            'titulo' => 'CONSOLIDAR POR MINISTERIO',
+            'anio' => $anio,
+            'rows' => array_values($rowsMap),
+            'totales' => $totales,
+            'detalles' => $detalles,
+        ];
+    }
+
+    public function ministerial() {
+        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('reportes', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $anio = (int)($_GET['anio'] ?? date('Y'));
+        if ($anio < 2020 || $anio > ((int)date('Y') + 1)) {
+            $anio = (int)date('Y');
+        }
+
+        $filtroMinisterio = $_GET['ministerio'] ?? '';
+        $filtroLider      = $_GET['lider'] ?? '';
+        $filtroCelula     = $_GET['celula'] ?? '';
+
+        $filtroRol    = DataIsolation::generarFiltroPersonas();
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+
+        $opcionesFiltro    = $this->construirOpcionesFiltroMinisterioLider($filtroCelulas);
+        $celulasDisponibles = $opcionesFiltro['celulas_disponibles'];
+        $celulaIdsPermitidas = array_map(static function($c) {
+            return (int)($c['Id_Celula'] ?? 0);
+        }, $celulasDisponibles);
+
+        $filtroCelula     = ($filtroCelula !== '' && in_array((int)$filtroCelula, $celulaIdsPermitidas, true)) ? (int)$filtroCelula : (($filtroCelula === '0') ? '0' : '');
+        $filtroMinisterio = ($filtroMinisterio !== '' && isset($opcionesFiltro['ministerio_ids_permitidos'][(int)$filtroMinisterio])) ? (int)$filtroMinisterio : '';
+        $filtroLider      = ($filtroLider !== '' && isset($opcionesFiltro['lider_ids_permitidos'][(int)$filtroLider])) ? (int)$filtroLider : '';
+
+        $fechaInicioAnio = sprintf('%04d-01-01', $anio);
+        $fechaFinAnio    = sprintf('%04d-12-31', $anio);
+
+        $idMinisterioFiltro = ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null;
+        $idLiderFiltro      = ($filtroLider !== '' && (int)$filtroLider > 0) ? (int)$filtroLider : null;
+        $idCelulaFiltro     = ($filtroCelula !== '') ? (string)$filtroCelula : null;
+
+        $personasAnio = $this->personaModel->getWithFiltersAndRole(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            null,
+            'Activo',
+            $idCelulaFiltro,
+            null,
+            null,
+            $fechaInicioAnio,
+            $fechaFinAnio
+        );
+
+        // GANAR: GI = iglesia, GC = célula, V = otros
+        $tablaGanar = $this->construirTablaGanarMensual($personasAnio, $anio);
+
+        // CONSOLIDAR: UV (índice 0), E (índice 1), B (índice 2)
+        $tablaConsolidar = $this->construirTablaPeldanosMensual(
+            $personasAnio, $anio, 'CONSOLIDAR', 'Consolidar',
+            ['uv' => 0, 'e' => 1, 'b' => 2]
+        );
+
+        // DISCIPULAR: CD-M1-2 (proy, idx 0), CD-M3-4 (equipo G12, idx 1), CD-M5-6 (cap dest niv1, idx 2)
+        $tablaDiscipular = $this->construirTablaPeldanosMensual(
+            $personasAnio, $anio, 'DISCIPULAR', 'Discipular',
+            ['cdm12' => 0, 'cdm34' => 1, 'cdm56' => 2]
+        );
+
+        // ENVIAR: # células
+        $tablaEnviar = $this->construirTablaEnviarMensual($personasAnio, $anio);
+
+        // GANANCIA por ministerio: todas las personas, filas=ministerio, columnas=mes×(Celula|Iglesia)
+        $tablaGanancia = $this->construirTablaGananciaMinisterioPorMes($personasAnio, $anio);
+        $tablaConsolidarMinisterio = $this->construirTablaConsolidarPorMinisterio($personasAnio, $anio);
+
+        $tablas = [
+            'ganar'      => $tablaGanar,
+            'consolidar' => $tablaConsolidar,
+            'discipular' => $tablaDiscipular,
+            'enviar'     => $tablaEnviar,
+        ];
+
+        $detallesTablas = [];
+        foreach ($tablas as $key => $tabla) {
+            $detallesTablas[$key] = $tabla['detalles'] ?? [];
+        }
+
+        $this->view('reportes/ministerial', [
+            'anio'                    => $anio,
+            'filtro_ministerio'       => (string)$filtroMinisterio,
+            'filtro_lider'            => (string)$filtroLider,
+            'filtro_celula'           => (string)$filtroCelula,
+            'ministerios_disponibles' => $opcionesFiltro['ministerios_disponibles'],
+            'lideres_disponibles'     => $opcionesFiltro['lideres_disponibles'],
+            'celulas_disponibles'     => $celulasDisponibles,
+            'tablas_reportes'         => $tablas,
+            'detalles_tablas'         => $detallesTablas,
+            'tabla_ganancia'          => $tablaGanancia,
+            'detalles_ganancia'       => $tablaGanancia['detalles'] ?? [],
+            'tabla_consolidar_ministerio' => $tablaConsolidarMinisterio,
+            'detalles_consolidar_ministerio' => $tablaConsolidarMinisterio['detalles'] ?? [],
+        ]);
+    }
+
     public function index() {
         if (!AuthController::esAdministrador() && !AuthController::tienePermiso('reportes', 'ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
@@ -925,6 +1413,59 @@ class ReporteController extends BaseController {
             $filtroLider
         );
 
+        // Tablas ministeriales interactivas para incrustar dentro del reporte de GANAR.
+        $anioMinisterial = (int)substr((string)$fechaReferencia, 0, 4);
+        if ($anioMinisterial < 2020 || $anioMinisterial > ((int)date('Y') + 1)) {
+            $anioMinisterial = (int)date('Y');
+        }
+        $fechaInicioAnioMinisterial = sprintf('%04d-01-01', $anioMinisterial);
+        $fechaFinAnioMinisterial = sprintf('%04d-12-31', $anioMinisterial);
+        $idMinisterioFiltroMinisterial = ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null;
+        $idLiderFiltroMinisterial = ($filtroLider !== '' && (int)$filtroLider > 0) ? (int)$filtroLider : null;
+        $idCelulaFiltroMinisterial = ($filtroCelulaGanar !== '') ? (string)$filtroCelulaGanar : null;
+
+        $personasAnioMinisterial = $this->personaModel->getWithFiltersAndRole(
+            $filtroRol,
+            $idMinisterioFiltroMinisterial,
+            $idLiderFiltroMinisterial,
+            null,
+            'Activo',
+            $idCelulaFiltroMinisterial,
+            null,
+            null,
+            $fechaInicioAnioMinisterial,
+            $fechaFinAnioMinisterial
+        );
+
+        $tablaGanarMensualMinisterial = $this->construirTablaGanarMensual($personasAnioMinisterial, $anioMinisterial);
+        $tablaConsolidarMensualMinisterial = $this->construirTablaPeldanosMensual(
+            $personasAnioMinisterial,
+            $anioMinisterial,
+            'CONSOLIDAR',
+            'Consolidar',
+            ['uv' => 0, 'e' => 1, 'b' => 2]
+        );
+        $tablaDiscipularMensualMinisterial = $this->construirTablaPeldanosMensual(
+            $personasAnioMinisterial,
+            $anioMinisterial,
+            'DISCIPULAR',
+            'Discipular',
+            ['cdm12' => 0, 'cdm34' => 1, 'cdm56' => 2]
+        );
+        $tablaEnviarMensualMinisterial = $this->construirTablaEnviarMensual($personasAnioMinisterial, $anioMinisterial);
+        $tablaGananciaMinisterial = $this->construirTablaGananciaMinisterioPorMes($personasAnioMinisterial, $anioMinisterial);
+
+        $tablasMinisterial = [
+            'ganar' => $tablaGanarMensualMinisterial,
+            'consolidar' => $tablaConsolidarMensualMinisterial,
+            'discipular' => $tablaDiscipularMensualMinisterial,
+            'enviar' => $tablaEnviarMensualMinisterial,
+        ];
+        $detallesMinisterial = [];
+        foreach ($tablasMinisterial as $keyTablaMinisterial => $tablaMinisterial) {
+            $detallesMinisterial[$keyTablaMinisterial] = $tablaMinisterial['detalles'] ?? [];
+        }
+
         $cumplimientoMetas = $this->construirTablaCumplimientoMetas(
             $fechaReferencia,
             $filtroRol,
@@ -991,7 +1532,12 @@ class ReporteController extends BaseController {
             'indicadores_celulas' => $indicadoresCelulas,
             'tabla_aperturas_celulas' => $tablaAperturasCelulas,
             'tabla_ganar_ministerio' => $tablaGanarMinisterio,
-            'reporte_ganados_fin_semana_anterior' => $reporteGanadosFinSemanaAnterior
+            'reporte_ganados_fin_semana_anterior' => $reporteGanadosFinSemanaAnterior,
+            'anio_ministerial_tablas' => $anioMinisterial,
+            'tablas_ministerial' => $tablasMinisterial,
+            'detalles_tablas_ministerial' => $detallesMinisterial,
+            'tabla_ganancia_ministerial' => $tablaGananciaMinisterial,
+            'detalles_ganancia_ministerial' => $tablaGananciaMinisterial['detalles'] ?? [],
         ];
 
         $this->view('reportes/index', $data);

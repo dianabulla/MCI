@@ -110,6 +110,7 @@ return [
     
     // Reportes
     'reportes' => 'ReporteController@index',
+    'reportes/ministerial' => 'ReporteController@ministerial',
     'reportes/almasGanadas' => 'ReporteController@almasGanadas',
     'reportes/asistenciaCelulas' => 'ReporteController@asistenciaCelulas',
     'reportes/exportarExcel' => 'ReporteController@exportarExcel',

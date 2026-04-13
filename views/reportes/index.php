@@ -172,6 +172,132 @@ $buildReporteUrl = static function(array $overrides = [], array $exclude = []) u
 
 $retornoReporteUrl = $buildReporteUrl();
 
+$anioMinisterialTablas = (int)($anio_ministerial_tablas ?? date('Y'));
+$tablasMinisterial = $tablas_ministerial ?? [];
+$detallesTablasMinisterial = $detalles_tablas_ministerial ?? [];
+$tablaGananciaMinisterial = $tabla_ganancia_ministerial ?? [];
+$detallesGananciaMinisterial = $detalles_ganancia_ministerial ?? [];
+
+$renderTablaGananciaMinisterial = static function(array $tabla, int $anio) {
+    $rows = $tabla['rows'] ?? [];
+    $meses = $tabla['meses'] ?? [];
+    $totales = $tabla['totales'] ?? [];
+    if (empty($rows)) {
+        echo '<div class="card report-card" style="margin-bottom:22px;"><div class="report-empty-state">Sin datos para la tabla de ganancia por ministerio.</div></div>';
+        return;
+    }
+    ?>
+    <div class="card report-card report-metas-card" style="margin-bottom: 22px;">
+        <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
+            <div>
+                <h3 style="margin-bottom:4px;">Ganancia de almas por ministerio (<?= $anio ?>)</h3>
+                <small style="color:#60708a;">Meses por columna: G.C = Ganados Célula, G.I = Ganados Iglesia</small>
+            </div>
+        </div>
+        <div class="table-container reporte-metas-wrap">
+            <table class="data-table rpt-ganancia-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2" class="col-num-sm">N°</th>
+                        <th rowspan="2" class="col-ministerio">MINISTERIO</th>
+                        <?php foreach ($meses as $m => $label): ?>
+                            <th colspan="2" class="col-mes-group"><?= htmlspecialchars($label) ?></th>
+                        <?php endforeach; ?>
+                        <th rowspan="2" class="col-sub col-anual-head">TOTAL</th>
+                    </tr>
+                    <tr>
+                        <?php foreach ($meses as $m => $label): ?>
+                            <th class="col-sub">G.C</th>
+                            <th class="col-sub">G.I</th>
+                        <?php endforeach; ?>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php $n = 1; foreach ($rows as $row):
+                        $ministerio = (string)($row['ministerio'] ?? '');
+                    ?>
+                    <tr>
+                        <td class="col-num-sm"><?= $n++ ?></td>
+                        <td class="col-ministerio-label"><?= htmlspecialchars($ministerio) ?></td>
+                        <?php foreach ($meses as $m => $label):
+                            $vc = (int)($row['meses'][$m]['celula'] ?? 0);
+                            $vi = (int)($row['meses'][$m]['iglesia'] ?? 0);
+                        ?>
+                            <td><?php if ($vc > 0): ?><button type="button" class="report-link-button js-open-ganancia-main" data-ministerio="<?= htmlspecialchars($ministerio, ENT_QUOTES) ?>" data-col="celula" data-mes="<?= $m ?>"><?= $vc ?></button><?php else: ?><span class="rpt-cero">0</span><?php endif; ?></td>
+                            <td><?php if ($vi > 0): ?><button type="button" class="report-link-button js-open-ganancia-main" data-ministerio="<?= htmlspecialchars($ministerio, ENT_QUOTES) ?>" data-col="iglesia" data-mes="<?= $m ?>"><?= $vi ?></button><?php else: ?><span class="rpt-cero">0</span><?php endif; ?></td>
+                        <?php endforeach; ?>
+                        <?php $at = (int)($row['anual']['total'] ?? 0); ?>
+                        <td><?php if ($at > 0): ?><button type="button" class="report-link-button js-open-ganancia-main" data-ministerio="<?= htmlspecialchars($ministerio, ENT_QUOTES) ?>" data-col="total" data-mes="0"><?= $at ?></button><?php else: ?><span class="rpt-cero">0</span><?php endif; ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+                <tfoot>
+                    <tr class="reporte-metas-total-row">
+                        <td colspan="2"><strong>TOTAL</strong></td>
+                        <?php foreach ($meses as $m => $label):
+                            $tc = (int)($totales['meses'][$m]['celula'] ?? 0);
+                            $ti = (int)($totales['meses'][$m]['iglesia'] ?? 0);
+                        ?>
+                            <td><?php if ($tc > 0): ?><button type="button" class="report-link-button js-open-ganancia-main" data-ministerio="__todos__" data-col="celula" data-mes="<?= $m ?>"><?= $tc ?></button><?php else: ?>0<?php endif; ?></td>
+                            <td><?php if ($ti > 0): ?><button type="button" class="report-link-button js-open-ganancia-main" data-ministerio="__todos__" data-col="iglesia" data-mes="<?= $m ?>"><?= $ti ?></button><?php else: ?>0<?php endif; ?></td>
+                        <?php endforeach; ?>
+                        <?php $tat = (int)($totales['anual']['total'] ?? 0); ?>
+                        <td><?php if ($tat > 0): ?><button type="button" class="report-link-button js-open-ganancia-main" data-ministerio="__todos__" data-col="total" data-mes="0"><?= $tat ?></button><?php else: ?>0<?php endif; ?></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    <?php
+};
+
+$renderTablaMinisterial = static function(string $tablaKey, array $tabla, array $headers) {
+    $rows = $tabla['rows'] ?? [];
+    $totales = $tabla['totales'] ?? [];
+    $titulo = $tabla['titulo'] ?? strtoupper($tablaKey);
+    $cols = array_keys($headers);
+    ?>
+    <div class="card report-card report-metas-card" style="margin-bottom: 0;">
+        <div style="margin-bottom:8px;"><h3 style="margin:0;"><?= htmlspecialchars($titulo) ?></h3></div>
+        <div class="table-container reporte-metas-wrap">
+            <table class="data-table rpt-min-table">
+                <thead>
+                    <tr>
+                        <th class="col-mes">MES</th>
+                        <?php foreach ($headers as $col => $label): ?>
+                            <th class="col-num"><?= htmlspecialchars($label) ?></th>
+                        <?php endforeach; ?>
+                        <th class="col-num">TOTAL</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php for ($m = 1; $m <= 12; $m++): $row = $rows[$m] ?? []; ?>
+                        <tr>
+                            <td class="col-mes-label"><?= htmlspecialchars((string)($row['mes'] ?? '')) ?></td>
+                            <?php foreach ($cols as $col): $val = (int)($row[$col] ?? 0); ?>
+                                <td><?php if ($val > 0): ?><button type="button" class="report-link-button js-open-ministerial" data-tabla="<?= htmlspecialchars($tablaKey, ENT_QUOTES) ?>" data-col="<?= htmlspecialchars($col, ENT_QUOTES) ?>" data-mes="<?= $m ?>"><?= $val ?></button><?php else: ?><span class="rpt-cero">&#8212;</span><?php endif; ?></td>
+                            <?php endforeach; ?>
+                            <?php $total = (int)($row['total'] ?? 0); ?>
+                            <td><?php if ($total > 0): ?><button type="button" class="report-link-button js-open-ministerial" data-tabla="<?= htmlspecialchars($tablaKey, ENT_QUOTES) ?>" data-col="total" data-mes="<?= $m ?>"><?= $total ?></button><?php else: ?><span class="rpt-cero">&#8212;</span><?php endif; ?></td>
+                        </tr>
+                    <?php endfor; ?>
+                </tbody>
+                <tfoot>
+                    <tr class="reporte-metas-total-row">
+                        <td><strong>TOTAL</strong></td>
+                        <?php foreach ($cols as $col): $val = (int)($totales[$col] ?? 0); ?>
+                            <td><?php if ($val > 0): ?><button type="button" class="report-link-button js-open-ministerial" data-tabla="<?= htmlspecialchars($tablaKey, ENT_QUOTES) ?>" data-col="<?= htmlspecialchars($col, ENT_QUOTES) ?>" data-mes="0"><?= $val ?></button><?php else: ?>&#8212;<?php endif; ?></td>
+                        <?php endforeach; ?>
+                        <?php $totTotal = (int)($totales['total'] ?? 0); ?>
+                        <td><?php if ($totTotal > 0): ?><button type="button" class="report-link-button js-open-ministerial" data-tabla="<?= htmlspecialchars($tablaKey, ENT_QUOTES) ?>" data-col="total" data-mes="0"><?= $totTotal ?></button><?php else: ?>&#8212;<?php endif; ?></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    <?php
+};
+
 ?>
 
 <div class="page-header">
@@ -179,6 +305,8 @@ $retornoReporteUrl = $buildReporteUrl();
         <h2>Reportes Semanales</h2>
         <small style="color:#637087;"><?= htmlspecialchars($tituloReporte) ?></small>
     </div>
+
+    <a href="<?= PUBLIC_URL ?>index.php?url=reportes/ministerial" class="btn btn-secondary">Vista interactiva por ministerio</a>
 
 </div>
 
@@ -384,245 +512,20 @@ $retornoReporteUrl = $buildReporteUrl();
     <?php endif; ?>
 </div>
 
-<div class="card report-card report-metas-card" style="margin-bottom: 22px;">
-    <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
-        <div>
-            <h3 style="margin-bottom:4px;">Ganados por ministerio (<?= (int)($tablaGanarMinisterio['anio'] ?? date('Y')) ?>)</h3>
-            <small style="color:#60708a;">Rango aplicado: <?= htmlspecialchars((string)($tablaGanarMinisterio['inicio'] ?? $ganarInicio)) ?> a <?= htmlspecialchars((string)($tablaGanarMinisterio['fin'] ?? $ganarFin)) ?></small>
-        </div>
-    </div>
+<?php $renderTablaGananciaMinisterial($tablaGananciaMinisterial, $anioMinisterialTablas); ?>
 
-    <?php if (!empty($tablaGanarMinisterio['rows'])): ?>
-        <div class="table-container reporte-metas-wrap">
-            <table class="data-table reporte-metas-table reporte-celulas-abiertas-table">
-                <thead>
-                    <tr>
-                        <th rowspan="2" style="width:48px;">N°</th>
-                        <th rowspan="2" style="width:240px;">MINISTERIO</th>
-                        <th colspan="12">MESES</th>
-                        <th rowspan="2" style="width:70px;">S1</th>
-                        <th rowspan="2" style="width:70px;">S2</th>
-                        <th rowspan="2" style="width:76px;">AÑO</th>
-                    </tr>
-                    <tr>
-                        <?php for ($m = 1; $m <= 12; $m++): ?>
-                            <th><?= htmlspecialchars((string)($tablaGanarMinisterio['meses'][$m] ?? '')) ?></th>
-                        <?php endfor; ?>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php $nroGan = 1; ?>
-                    <?php foreach (($tablaGanarMinisterio['rows'] ?? []) as $row): ?>
-                        <tr>
-                            <td><?= $nroGan++ ?></td>
-                            <td>
-                                <button type="button" class="report-link-button js-ministerio-ganar" data-ministerio="<?= htmlspecialchars((string)($row['ministerio'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                    <?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio')) ?>
-                                </button>
-                            </td>
-                            <?php for ($m = 1; $m <= 12; $m++): ?>
-                                <td><?= (int)($row['meses'][$m] ?? 0) ?></td>
-                            <?php endfor; ?>
-                            <td><strong><?= (int)($row['s1'] ?? 0) ?></strong></td>
-                            <td><strong><?= (int)($row['s2'] ?? 0) ?></strong></td>
-                            <td><strong><?= (int)($row['anual'] ?? 0) ?></strong></td>
-                        </tr>
-                    <?php endforeach; ?>
-
-                    <tr class="reporte-metas-total-row">
-                        <td colspan="2"><strong>TOTAL</strong></td>
-                        <?php for ($m = 1; $m <= 12; $m++): ?>
-                            <td><strong><?= (int)($tablaGanarMinisterio['totales']['meses'][$m] ?? 0) ?></strong></td>
-                        <?php endfor; ?>
-                        <td><strong><?= (int)($tablaGanarMinisterio['totales']['s1'] ?? 0) ?></strong></td>
-                        <td><strong><?= (int)($tablaGanarMinisterio['totales']['s2'] ?? 0) ?></strong></td>
-                        <td><strong><?= (int)($tablaGanarMinisterio['totales']['anual'] ?? 0) ?></strong></td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    <?php else: ?>
-        <div class="report-empty-state">
-            Sin ganados registrados para este año.
-        </div>
-    <?php endif; ?>
-
-    <div id="detalleMinisterioGanar" class="report-subpanel" style="display:none; margin-top:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-            <h4 id="detalleMinisterioGanarTitulo" style="margin:0;">Líderes con ganados</h4>
-            <button type="button" id="detalleMinisterioGanarCerrar" class="btn btn-secondary btn-sm">Cerrar</button>
-        </div>
-        <div class="table-container">
-            <table class="data-table data-table--compacta-celula">
-                <thead>
-                    <tr>
-                        <th>Líder</th>
-                        <th style="width:120px;">Ganados</th>
-                    </tr>
-                </thead>
-                <tbody id="detalleMinisterioGanarBody"></tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<div class="card report-card report-metas-card" style="margin-bottom: 22px;">
-    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap; margin-bottom:10px;">
-        <div>
-            <h3 style="margin-bottom:4px;"><?= htmlspecialchars((string)($cumplimientoMetas['titulo'] ?? 'GANAR')) ?></h3>
-            <small style="color:#60708a;">Periodo semestral: <?= htmlspecialchars((string)($cumplimientoMetas['inicio'] ?? '')) ?> a <?= htmlspecialchars((string)($cumplimientoMetas['fin'] ?? '')) ?></small>
-        </div>
-        <a href="<?= PUBLIC_URL ?>index.php?url=ministerios&return_url=<?= urlencode($retornoReporteUrl) ?>" class="btn btn-secondary btn-sm">Editar metas por ministerio</a>
-    </div>
-
-    <div class="table-container reporte-metas-wrap">
-        <table class="data-table reporte-metas-table <?= $tablaEsCompacta ? 'reporte-metas-table--compacta' : '' ?>">
-            <thead>
-                <tr>
-                    <th rowspan="2" style="width:48px;">N°</th>
-                    <th rowspan="2" style="width:230px;">MINISTERIO</th>
-                    <?php foreach ($mesesTabla as $mes): ?>
-                        <th colspan="2"><?= htmlspecialchars((string)($mes['label'] ?? 'MES')) ?></th>
-                    <?php endforeach; ?>
-                    <th rowspan="2" style="width:78px;">META</th>
-                    <th rowspan="2" style="width:94px;">PENDIENTE</th>
-                    <th rowspan="2" style="width:84px;">GANADOS</th>
-                </tr>
-                <tr>
-                    <?php foreach ($mesesTabla as $mes): ?>
-                        <th>Celula</th>
-                        <th>Iglesia</th>
-                    <?php endforeach; ?>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (!empty($cumplimientoMetas['rows'])): ?>
-                    <?php $nroMeta = 1; ?>
-                    <?php foreach ($cumplimientoMetas['rows'] as $row): ?>
-                        <?php
-                        $metaRow = (int)($row['meta'] ?? 0);
-                        $ganadosRow = (int)($row['ganados'] ?? 0);
-                        $pendienteRow = (int)($row['pendiente'] ?? 0);
-                        $cumplimiento = $metaRow > 0 ? (($ganadosRow / $metaRow) * 100) : 0;
-                        $claseGanados = $cumplimiento >= 100 ? 'ganado-ok' : ($cumplimiento >= 50 ? 'ganado-medio' : 'ganado-bajo');
-                        $clasePendiente = $pendienteRow <= 0 ? 'pendiente-ok' : ($cumplimiento >= 50 ? 'pendiente-medio' : 'pendiente-alto');
-                        ?>
-                        <tr>
-                            <td><?= $nroMeta++ ?></td>
-                            <td><?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio')) ?></td>
-                            <?php foreach ($mesesTabla as $mes): ?>
-                                <?php $mesKey = (string)($mes['key'] ?? ''); ?>
-                                <td><?= (int)($row['meses'][$mesKey]['celula'] ?? 0) ?></td>
-                                <td><?= (int)($row['meses'][$mesKey]['iglesia'] ?? 0) ?></td>
-                            <?php endforeach; ?>
-                            <td><?= $metaRow ?></td>
-                            <td><span class="meta-pill-cell <?= $clasePendiente ?>"><?= $pendienteRow ?></span></td>
-                            <td><span class="meta-pill-cell <?= $claseGanados ?>"><strong><?= $ganadosRow ?></strong></span></td>
-                        </tr>
-                    <?php endforeach; ?>
-
-                    <tr class="reporte-metas-total-row">
-                        <td colspan="2"><strong>TOTAL</strong></td>
-                        <?php foreach ($mesesTabla as $mes): ?>
-                            <?php $mesKey = (string)($mes['key'] ?? ''); ?>
-                            <td><strong><?= (int)($cumplimientoMetas['totales']['meses'][$mesKey]['celula'] ?? 0) ?></strong></td>
-                            <td><strong><?= (int)($cumplimientoMetas['totales']['meses'][$mesKey]['iglesia'] ?? 0) ?></strong></td>
-                        <?php endforeach; ?>
-                        <td><strong><?= (int)($cumplimientoMetas['totales']['meta'] ?? 0) ?></strong></td>
-                        <td><strong><?= (int)($cumplimientoMetas['totales']['pendiente'] ?? 0) ?></strong></td>
-                        <td><strong><?= (int)($cumplimientoMetas['totales']['ganados'] ?? 0) ?></strong></td>
-                    </tr>
-                <?php else: ?>
-                    <tr>
-                        <td colspan="99" class="text-center">Sin datos para construir el cumplimiento de metas en este periodo</td>
-                    </tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-
-<div class="card report-card report-escalera-card" style="margin-bottom: 22px;">
-    <div class="report-escalera-head">
-        <div>
-            <h3 style="margin-bottom:4px;">Escalera del Éxito</h3>
-            <small style="color:#60708a; display:block; margin-bottom:4px;">
-                Vista mensual: <strong><?= htmlspecialchars($mesEscaleraLabel) ?></strong>
-            </small>
-            <small style="color:#60708a; display:block; margin-bottom:4px;">
-                Rango aplicado: <?= htmlspecialchars((string)($reporteEscaleraMesActual['inicio'] ?? '')) ?> a <?= htmlspecialchars((string)($reporteEscaleraMesActual['fin'] ?? '')) ?>
-            </small>
-            <small style="color:#60708a;">
-                Fuente: personas activas del rango filtrado, usando los campos <strong>`Proceso`</strong> y <strong>`Escalera_Checklist`</strong>.
-            </small>
-        </div>
-        <div class="escalera-total-pill">
-            Total personas del mes: <strong><?= (int)($reporteEscaleraMesActual['total_personas_mes'] ?? 0) ?></strong>
-        </div>
-    </div>
-
-    <div class="report-kpi-grid report-kpi-grid--escalera" style="margin-bottom: 14px;">
-        <button type="button" class="report-kpi-card report-kpi-button kpi-escalera js-escalera-detalle-etapa" data-etapa="Ganar">
-            <div class="report-kpi-label">Ganar</div>
-            <div class="report-kpi-value"><?= (int)($reporteEscaleraMesActual['totales_etapa']['Ganar'] ?? 0) ?></div>
-        </button>
-        <button type="button" class="report-kpi-card report-kpi-button kpi-celula js-escalera-detalle-etapa" data-etapa="Consolidar">
-            <div class="report-kpi-label">Consolidar</div>
-            <div class="report-kpi-value"><?= (int)($reporteEscaleraMesActual['totales_etapa']['Consolidar'] ?? 0) ?></div>
-        </button>
-        <button type="button" class="report-kpi-card report-kpi-button kpi-asistencia js-escalera-detalle-etapa" data-etapa="Discipular">
-            <div class="report-kpi-label">Discipular</div>
-            <div class="report-kpi-value"><?= (int)($reporteEscaleraMesActual['totales_etapa']['Discipular'] ?? 0) ?></div>
-        </button>
-        <button type="button" class="report-kpi-card report-kpi-button kpi-domingo js-escalera-detalle-etapa" data-etapa="Enviar">
-            <div class="report-kpi-label">Enviar</div>
-            <div class="report-kpi-value"><?= (int)($reporteEscaleraMesActual['totales_etapa']['Enviar'] ?? 0) ?></div>
-        </button>
-        <button type="button" class="report-kpi-card report-kpi-button js-escalera-detalle-etapa" data-etapa="sin_etapa" style="background:#f8fafc; border:1px solid #d8e2ee;">
-            <div class="report-kpi-label">Sin etapa</div>
-            <div class="report-kpi-value"><?= (int)($reporteEscaleraMesActual['totales_etapa']['sin_etapa'] ?? 0) ?></div>
-        </button>
-    </div>
-    <div class="report-escalera-help">Haz clic en una <strong>etapa</strong> o en un <strong>peldaño</strong> para ver las personas que lo componen.</div>
-
+<div class="rpt-mini-grid" style="margin-bottom: 22px;">
     <?php
-    $etapasEscaleraUi = [
-        'Ganar' => 'ganar',
-        'Consolidar' => 'consolidar',
-        'Discipular' => 'discipular',
-        'Enviar' => 'enviar'
+    $headersTablasMinisterial = [
+        'ganar' => ['gi' => 'G.I', 'gc' => 'G.C', 'v' => 'V'],
+        'consolidar' => ['uv' => 'U.V', 'e' => 'E', 'b' => 'B'],
+        'discipular' => ['cdm12' => 'CD-M1-2', 'cdm34' => 'CD-M3-4', 'cdm56' => 'CD-M5-6'],
+        'enviar' => ['celulas' => '# CELULAS'],
     ];
-    $totalEscaleraUi = max(1, (int)($reporteEscaleraMesActual['total_personas_mes'] ?? 0));
+    foreach ($headersTablasMinisterial as $keyTabla => $headersTabla) {
+        $renderTablaMinisterial($keyTabla, $tablasMinisterial[$keyTabla] ?? [], $headersTabla);
+    }
     ?>
-    <div class="escalera-stage-visual-grid">
-        <?php foreach ($etapasEscaleraUi as $etapa => $etapaClase): ?>
-            <?php
-            $cantidadEtapa = (int)($reporteEscaleraMesActual['totales_etapa'][$etapa] ?? 0);
-            $porcentajeEtapa = $totalEscaleraUi > 0 ? round(($cantidadEtapa / $totalEscaleraUi) * 100) : 0;
-            $peldañosEtapa = (array)($reporteEscaleraMesActual['peldaños'][$etapa] ?? []);
-            ?>
-            <div class="escalera-stage-panel escalera-stage-panel--<?= $etapaClase ?>">
-                <button type="button" class="escalera-stage-panel-head escalera-stage-panel-head--button js-escalera-detalle-etapa" data-etapa="<?= htmlspecialchars($etapa) ?>">
-                    <span class="escalera-etapa-badge etapa-<?= $etapaClase ?>"><?= htmlspecialchars($etapa) ?></span>
-                    <strong><?= $cantidadEtapa ?></strong>
-                </button>
-                <div class="escalera-stage-progress">
-                    <span style="width: <?= $cantidadEtapa > 0 ? max(4, $porcentajeEtapa) : 0 ?>%;"></span>
-                </div>
-                <small class="escalera-stage-progress-label"><?= $porcentajeEtapa ?>% del total del mes</small>
-
-                <div class="escalera-peldano-list">
-                    <?php foreach ($peldañosEtapa as $peldaño => $cantidadPeldaño): ?>
-                        <button type="button" class="escalera-peldano-item js-escalera-detalle-peldano" data-etapa="<?= htmlspecialchars($etapa) ?>" data-peldano="<?= htmlspecialchars((string)$peldaño) ?>">
-                            <span><?= htmlspecialchars((string)$peldaño) ?></span>
-                            <strong><?= (int)$cantidadPeldaño ?></strong>
-                        </button>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-        <?php endforeach; ?>
-    </div>
 </div>
 
 <div class="card report-card" style="margin-bottom: 22px;">
@@ -883,6 +786,8 @@ const asistencia = <?= json_encode($asistencia_celulas ?? []) ?>;
 const indicadoresCelulas = <?= json_encode($indicadoresCelulas ?? []) ?>;
 const detalleLideresAperturas = <?= json_encode($tablaAperturasCelulas['detalle_lideres'] ?? []) ?>;
 const detalleLideresGanar = <?= json_encode($tablaGanarMinisterio['detalle_lideres'] ?? []) ?>;
+const detallesTablasMinisterial = <?= json_encode($detallesTablasMinisterial ?? [], JSON_UNESCAPED_UNICODE) ?>;
+const detallesGananciaMinisterial = <?= json_encode($detallesGananciaMinisterial ?? [], JSON_UNESCAPED_UNICODE) ?>;
 const tipoReporte = <?= json_encode($tipoReporte) ?>;
 const nombresCelulas = asistencia.map(x => (x.Nombre_Celula || 'Sin célula'));
 const etiquetasCelulas = nombresCelulas.map(nombre => {
@@ -938,6 +843,28 @@ if (tipoReporte === 'personas') {
         asignados: 'Asignados'
     };
 
+    const nombresMesMinisterial = {
+        0: 'Anual', 1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
+        7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+    };
+
+    const etiquetasColMinisterial = {
+        ganar: { gi: 'Ganados Iglesia', gc: 'Ganados Célula', v: 'Otros', total: 'Total' },
+        consolidar: { uv: 'Universidad de la Vida', e: 'Encuentro', b: 'Bautismo', total: 'Total' },
+        discipular: { cdm12: 'CD-M1-2', cdm34: 'CD-M3-4', cdm56: 'CD-M5-6', total: 'Total' },
+        enviar: { celulas: '# Células', total: 'Total' }
+    };
+
+    const construirFilaPersona = (item) => {
+        const nombre = String(item.nombre || `${item.Nombre || ''} ${item.Apellido || ''}`.trim() || 'Sin nombre');
+        const lider = String(item.lider || item.Nombre_Lider || 'Sin líder');
+        const celula = String(item.celula || item.Nombre_Celula || 'Sin célula');
+        const ministerio = String(item.ministerio || item.Nombre_Ministerio || 'Sin ministerio');
+        const proceso = String(item.proceso || item.Proceso || '');
+        const fecha = String(item.fecha_registro || item.Fecha_Registro || '');
+        return `<tr><td>${escaparHtml(nombre)}</td><td>${escaparHtml(lider)}</td><td>${escaparHtml(celula)}</td><td>${escaparHtml(ministerio)}</td><td>${escaparHtml(proceso)}</td><td>${escaparHtml(fecha)}</td></tr>`;
+    };
+
     const abrirDetalleKpi = (origen) => {
         if (!reporteDetalleModal || !reporteDetalleModalBody || !reporteDetalleModalTitle) {
             return;
@@ -976,6 +903,52 @@ if (tipoReporte === 'personas') {
     botonesKpiDetalle.forEach((boton) => {
         boton.addEventListener('click', () => {
             abrirDetalleKpi(String(boton.dataset.origen || ''));
+        });
+    });
+
+    document.querySelectorAll('.js-open-ministerial').forEach((boton) => {
+        boton.addEventListener('click', () => {
+            const tabla = String(boton.dataset.tabla || '');
+            const col = String(boton.dataset.col || '');
+            const mes = parseInt(boton.dataset.mes || '0', 10);
+            const datos = ((detallesTablasMinisterial[tabla] || {})[col] || {});
+            const filas = mes === 0 ? Object.values(datos).flat() : (datos[mes] || []);
+            const etiquetaCol = ((etiquetasColMinisterial[tabla] || {})[col]) || col;
+            reporteDetalleModalTitle.textContent = `${String(tabla || '').toUpperCase()} - ${etiquetaCol} - ${nombresMesMinisterial[mes] || ''}`;
+            if (!filas.length) {
+                reporteDetalleModalBody.innerHTML = '<tr><td colspan="6" class="text-center">Sin personas para este filtro</td></tr>';
+            } else {
+                reporteDetalleModalBody.innerHTML = filas.map(construirFilaPersona).join('');
+            }
+            reporteDetalleModal.classList.add('is-open');
+            reporteDetalleModal.setAttribute('aria-hidden', 'false');
+        });
+    });
+
+    document.querySelectorAll('.js-open-ganancia-main').forEach((boton) => {
+        boton.addEventListener('click', () => {
+            const ministerio = String(boton.dataset.ministerio || '');
+            const col = String(boton.dataset.col || '');
+            const mes = parseInt(boton.dataset.mes || '0', 10);
+            let filas;
+            if (ministerio === '__todos__') {
+                const allMins = Object.values(detallesGananciaMinisterial);
+                const allCols = allMins.map((m) => (m[col] || {}));
+                filas = mes === 0 ? allCols.flatMap((c) => Object.values(c)).flat() : allCols.flatMap((c) => (c[mes] || []));
+            } else {
+                const datos = ((detallesGananciaMinisterial[ministerio] || {})[col] || {});
+                filas = mes === 0 ? Object.values(datos).flat() : (datos[mes] || []);
+            }
+            const etiquetaCol = col === 'celula' ? 'Ganados Célula' : (col === 'iglesia' ? 'Ganados Iglesia' : 'Total');
+            const etiquetaMinisterio = ministerio === '__todos__' ? 'Todos los ministerios' : ministerio;
+            reporteDetalleModalTitle.textContent = `GANANCIA - ${etiquetaMinisterio} - ${etiquetaCol} - ${nombresMesMinisterial[mes] || ''}`;
+            if (!filas.length) {
+                reporteDetalleModalBody.innerHTML = '<tr><td colspan="6" class="text-center">Sin personas para este filtro</td></tr>';
+            } else {
+                reporteDetalleModalBody.innerHTML = filas.map(construirFilaPersona).join('');
+            }
+            reporteDetalleModal.classList.add('is-open');
+            reporteDetalleModal.setAttribute('aria-hidden', 'false');
         });
     });
 
@@ -1238,6 +1211,117 @@ if (tipoReporte === 'personas') {
 
 .report-metas-card {
     padding: 14px;
+}
+
+.rpt-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.rpt-min-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 320px;
+}
+
+.rpt-min-table th {
+    background: #1e4a89;
+    color: #fff;
+    font-size: 12px;
+    padding: 7px 8px;
+    border: 1px solid #16397a;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.rpt-min-table td {
+    border: 1px solid #dde4f0;
+    text-align: center;
+    padding: 6px 8px;
+    font-size: 13px;
+}
+
+.rpt-min-table .col-mes {
+    min-width: 56px;
+}
+
+.rpt-min-table .col-mes-label {
+    text-align: left;
+    font-weight: 700;
+    font-size: 12px;
+}
+
+.rpt-ganancia-table {
+    border-collapse: collapse;
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto !important;
+}
+
+.rpt-ganancia-table th,
+.rpt-ganancia-table td {
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+}
+
+.rpt-ganancia-table th {
+    background: #1e4a89;
+    color: #fff;
+    font-weight: 700;
+    text-align: center;
+    padding: 4px 5px;
+    border: 1px solid #16397a;
+    font-size: 12px;
+}
+
+.rpt-ganancia-table td {
+    text-align: center;
+    padding: 4px 5px;
+    border: 1px solid #dde4f0;
+    font-size: 12px;
+}
+
+.rpt-ganancia-table .col-num-sm {
+    width: 26px;
+}
+
+.rpt-ganancia-table .col-ministerio {
+    width: 130px;
+    min-width: 130px;
+    max-width: 130px;
+    text-align: left !important;
+}
+
+.rpt-ganancia-table .col-ministerio-label {
+    text-align: left !important;
+    font-weight: 600;
+    font-size: 12px;
+    padding-left: 8px !important;
+    white-space: normal !important;
+    word-break: keep-all !important;
+    overflow-wrap: break-word !important;
+}
+
+.rpt-ganancia-table .col-mes-group {
+    width: 36px;
+}
+
+.rpt-ganancia-table .col-sub {
+    width: 18px;
+    font-size: 11px;
+    padding: 4px 3px !important;
+}
+
+.rpt-ganancia-table .col-anual-head {
+    background: #0c2a54 !important;
+    color: #e0eaff !important;
+    border-color: #091e3d !important;
+}
+
+.rpt-cero {
+    color: #97a6bd;
 }
 
 .report-kpi-grid {
