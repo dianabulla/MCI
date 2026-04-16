@@ -172,18 +172,13 @@ $urlVolver = $returnUrl !== ''
                 </div>
 
                 <div class="form-group">
-                    <label for="id_rol">Rol</label>
-                    <select id="id_rol" name="id_rol" class="form-control">
-                        <option value="">Sin rol</option>
-                        <?php if (!empty($roles)): ?>
-                            <?php foreach ($roles as $rol): ?>
-                                <option value="<?= $rol['Id_Rol'] ?>" 
-                                        <?= isset($persona) && $persona['Id_Rol'] == $rol['Id_Rol'] ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($rol['Nombre_Rol']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </select>
+                    <?php if (AuthController::esAdministrador()): ?>
+                        <label>Rol</label>
+                        <div class="form-control" style="background:#f8f9fb; color:#5f6d84;">Se asigna desde el botón "Asignar usuario"</div>
+                    <?php else: ?>
+                        <label>Acceso de usuario</label>
+                        <div class="form-control" style="background:#f8f9fb; color:#5f6d84;">Solo el administrador puede asignar usuario y rol.</div>
+                    <?php endif; ?>
                 </div>
 
                 <div class="form-group">
@@ -269,20 +264,47 @@ $urlVolver = $returnUrl !== ''
                     <small class="form-text text-muted">Este campo es obligatorio cuando seleccionas Otros.</small>
                 </div>
 
-                <?php if (AuthController::esAdministrador()): ?>
-                <div class="form-group">
-                    <label for="estado_cuenta">Estado de Cuenta</label>
-                    <select id="estado_cuenta" name="estado_cuenta" class="form-control">
-                        <?php $estadoCuentaSeleccionado = $post_data['estado_cuenta'] ?? ($persona['Estado_Cuenta'] ?? 'Activo'); ?>
-                        <option value="Activo" <?= $estadoCuentaSeleccionado == 'Activo' ? 'selected' : '' ?>>Activo</option>
-                        <option value="Inactivo" <?= $estadoCuentaSeleccionado == 'Inactivo' ? 'selected' : '' ?>>Inactivo</option>
-                        <option value="Bloqueado" <?= $estadoCuentaSeleccionado == 'Bloqueado' ? 'selected' : '' ?>>Bloqueado</option>
-                    </select>
-                    <small class="form-text text-muted">
-                        Solo las cuentas activas pueden iniciar sesión
-                    </small>
+                <?php
+                $tipoPersonaSeleccionado = strtolower(trim((string)($post_data['tipo_persona'] ?? '')));
+                if (!in_array($tipoPersonaSeleccionado, ['nueva', 'antigua'], true)) {
+                    if (isset($persona['Es_Antiguo'])) {
+                        $tipoPersonaSeleccionado = ((int)$persona['Es_Antiguo'] === 1) ? 'antigua' : 'nueva';
+                    } else {
+                        $tipoPersonaSeleccionado = isset($persona) ? 'antigua' : 'nueva';
+                    }
+                }
+                ?>
+                <div class="form-row">
+                    <?php if (AuthController::esAdministrador()): ?>
+                    <div class="form-group">
+                        <label for="estado_cuenta">Estado de Cuenta</label>
+                        <select id="estado_cuenta" name="estado_cuenta" class="form-control">
+                            <?php $estadoCuentaSeleccionado = $post_data['estado_cuenta'] ?? ($persona['Estado_Cuenta'] ?? 'Activo'); ?>
+                            <option value="Activo" <?= $estadoCuentaSeleccionado == 'Activo' ? 'selected' : '' ?>>Activo</option>
+                            <option value="Inactivo" <?= $estadoCuentaSeleccionado == 'Inactivo' ? 'selected' : '' ?>>Inactivo</option>
+                            <option value="Bloqueado" <?= $estadoCuentaSeleccionado == 'Bloqueado' ? 'selected' : '' ?>>Bloqueado</option>
+                        </select>
+                        <small class="form-text text-muted">
+                            Solo las cuentas activas pueden iniciar sesión
+                        </small>
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="form-group">
+                        <label>Tipo de persona</label>
+                        <div class="tipo-persona-options">
+                            <label class="tipo-persona-item">
+                                <input type="radio" name="tipo_persona" value="antigua" <?= $tipoPersonaSeleccionado === 'antigua' ? 'checked' : '' ?>>
+                                Antigua
+                            </label>
+                            <label class="tipo-persona-item">
+                                <input type="radio" name="tipo_persona" value="nueva" <?= $tipoPersonaSeleccionado === 'nueva' ? 'checked' : '' ?>>
+                                Nueva
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">Marca si la persona es antigua o nueva.</small>
+                    </div>
                 </div>
-                <?php endif; ?>
             </div>
             </div>
 
@@ -456,8 +478,36 @@ $urlVolver = $returnUrl !== ''
 
         <!-- Acceso al Sistema - Solo Administradores -->
         <?php if (AuthController::esAdministrador()): ?>
+        <?php
+        $rolSeleccionadoAdmin = (string)($post_data['id_rol'] ?? ($persona['Id_Rol'] ?? ''));
+        $asignarUsuarioAbierto = !empty($post_data['asignar_usuario_activo']) || !empty($persona['Usuario']);
+        ?>
         <div class="form-section" id="acceso_sistema_section">
             <h3 class="section-title">🔐 Acceso al Sistema</h3>
+            <button type="button" id="btn_asignar_usuario_toggle" class="btn btn-secondary" style="margin-bottom: 15px;">
+                Asignar usuario
+            </button>
+
+            <input type="hidden" name="asignar_usuario_activo" id="asignar_usuario_activo" value="<?= $asignarUsuarioAbierto ? '1' : '0' ?>">
+
+            <div id="asignar_usuario_panel" style="display:<?= $asignarUsuarioAbierto ? 'block' : 'none' ?>;">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="id_rol">Rol</label>
+                    <select id="id_rol" name="id_rol" class="form-control">
+                        <option value="">Sin rol</option>
+                        <?php if (!empty($roles)): ?>
+                            <?php foreach ($roles as $rol): ?>
+                                <option value="<?= $rol['Id_Rol'] ?>" <?= (string)$rolSeleccionadoAdmin === (string)$rol['Id_Rol'] ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($rol['Nombre_Rol']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </select>
+                    <small class="form-text text-muted">Solo el administrador puede asignar o cambiar el rol.</small>
+                </div>
+            </div>
+
             <div id="acceso_sistema_alerta" class="alert alert-warning" style="display:none; margin-bottom: 15px;">
                 El acceso al sistema no está disponible para personas con rol Asistente.
             </div>
@@ -492,6 +542,7 @@ $urlVolver = $returnUrl !== ''
                 <?= date('d/m/Y H:i:s', strtotime($persona['Ultimo_Acceso'])) ?>
             </div>
             <?php endif; ?>
+            </div>
         </div>
         <?php endif; ?>
 
@@ -745,6 +796,21 @@ $urlVolver = $returnUrl !== ''
     color: #dc3545 !important;
 }
 
+.tipo-persona-options {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.tipo-persona-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+}
+
 </style>
 
 <script>
@@ -776,6 +842,9 @@ const lideresDisponibles = [
 const rolSelect = document.getElementById('id_rol');
 const accesoSistemaSection = document.getElementById('acceso_sistema_section');
 const accesoSistemaAlerta = document.getElementById('acceso_sistema_alerta');
+const asignarUsuarioBtn = document.getElementById('btn_asignar_usuario_toggle');
+const asignarUsuarioPanel = document.getElementById('asignar_usuario_panel');
+const asignarUsuarioActivoInput = document.getElementById('asignar_usuario_activo');
 const alertaPastor = document.getElementById('alerta_pastor');
 const fechaNacimientoInput = document.getElementById('fecha_nacimiento');
 const edadInput = document.getElementById('edad');
@@ -1085,10 +1154,11 @@ function sincronizarSeleccionAutocomplete(input, hidden, items, errorEl, etiquet
 
 
 function actualizarAccesoSistemaPorRol() {
-    if (!accesoSistemaSection) {
+    if (!accesoSistemaSection || !asignarUsuarioPanel) {
         return;
     }
 
+    const panelAbierto = asignarUsuarioPanel.style.display !== 'none';
     const esAsistente = rolSeleccionadoEsAsistente();
     const rolAsignado = rolSelect && rolSelect.value !== '';
     const camposAcceso = [
@@ -1096,8 +1166,28 @@ function actualizarAccesoSistemaPorRol() {
         document.getElementById('contrasena')
     ].filter(Boolean);
 
+    if (rolSelect) {
+        rolSelect.disabled = !panelAbierto;
+    }
+
+    if (!panelAbierto) {
+        if (asignarUsuarioActivoInput) {
+            asignarUsuarioActivoInput.value = '0';
+        }
+        if (accesoSistemaAlerta) {
+            accesoSistemaAlerta.style.display = 'none';
+        }
+        camposAcceso.forEach(campo => {
+            campo.disabled = true;
+        });
+        return;
+    }
+
+    if (asignarUsuarioActivoInput) {
+        asignarUsuarioActivoInput.value = '1';
+    }
+
     if (!rolAsignado || esAsistente) {
-        accesoSistemaSection.style.display = 'none';
         if (accesoSistemaAlerta) {
             accesoSistemaAlerta.textContent = !rolAsignado
                 ? 'Asigne un rol para habilitar el acceso al sistema.'
@@ -1114,7 +1204,6 @@ function actualizarAccesoSistemaPorRol() {
         return;
     }
 
-    accesoSistemaSection.style.display = 'block';
     if (accesoSistemaAlerta) {
         accesoSistemaAlerta.style.display = 'none';
     }
@@ -1158,9 +1247,18 @@ function actualizarFormularioPorRolPastor() {
 if (rolSelect) {
     rolSelect.addEventListener('change', actualizarAccesoSistemaPorRol);
     rolSelect.addEventListener('change', actualizarFormularioPorRolPastor);
-    actualizarAccesoSistemaPorRol();
-    actualizarFormularioPorRolPastor();
 }
+
+if (asignarUsuarioBtn && asignarUsuarioPanel) {
+    asignarUsuarioBtn.addEventListener('click', function() {
+        const panelAbierto = asignarUsuarioPanel.style.display !== 'none';
+        asignarUsuarioPanel.style.display = panelAbierto ? 'none' : 'block';
+        actualizarAccesoSistemaPorRol();
+    });
+}
+
+actualizarAccesoSistemaPorRol();
+actualizarFormularioPorRolPastor();
 
 if (ministerioSelect) {
     ministerioSelect.addEventListener('change', function() {

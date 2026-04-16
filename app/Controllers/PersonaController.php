@@ -28,6 +28,7 @@ class PersonaController extends BaseController {
     private $soportaObservacionGanadoEn = false;
     private $soportaCreadoPor = false;
     private $soportaCanalCreacion = false;
+    private $idRolAsistenteCache = null;
 
     public function __construct() {
         $this->personaModel = new Persona();
@@ -45,6 +46,7 @@ class PersonaController extends BaseController {
         $this->personaModel->ensureObservacionGanadoEnColumnExists();
         $this->personaModel->ensureCreadoPorColumnExists();
         $this->personaModel->ensureCanalCreacionColumnExists();
+        $this->personaModel->ensureEsAntiguoColumnExists();
         $this->soportaProceso = $this->personaModel->tieneColumna('Proceso');
         $this->soportaChecklistEscalera = $this->personaModel->tieneColumna('Escalera_Checklist');
         $this->soportaConvencion = $this->personaModel->tieneColumna('Convencion');
@@ -759,6 +761,53 @@ class PersonaController extends BaseController {
         }, $personas);
     }
 
+    private function esPersonaAntigua(array $persona) {
+        return (int)($persona['Es_Antiguo'] ?? 1) === 1;
+    }
+
+    private function esPersonaNueva(array $persona) {
+        return !$this->esPersonaAntigua($persona);
+    }
+
+    private function filtrarSoloPersonasNuevas(array $personas) {
+        return array_values(array_filter($personas, function($persona) {
+            return $this->esPersonaNueva($persona);
+        }));
+    }
+
+    private function filtrarSoloPersonasAntiguas(array $personas) {
+        return array_values(array_filter($personas, function($persona) {
+            return $this->esPersonaAntigua($persona);
+        }));
+    }
+
+    private function unirPersonasSinDuplicados(array $base, array $adicionales) {
+        $resultado = $base;
+        $ids = [];
+
+        foreach ($base as $personaBase) {
+            $id = (int)($personaBase['Id_Persona'] ?? 0);
+            if ($id > 0) {
+                $ids[$id] = true;
+            }
+        }
+
+        foreach ($adicionales as $personaAdicional) {
+            $id = (int)($personaAdicional['Id_Persona'] ?? 0);
+            if ($id > 0 && isset($ids[$id])) {
+                continue;
+            }
+
+            if ($id > 0) {
+                $ids[$id] = true;
+            }
+
+            $resultado[] = $personaAdicional;
+        }
+
+        return $resultado;
+    }
+
     private function normalizarPerfilListado($perfil) {
         $perfil = strtolower(trim((string)$perfil));
         return in_array($perfil, ['', 'lideres_12', 'lideres_celula', 'asistentes', 'otros', 'pastores', 'sin_rol'], true) ? $perfil : '';
@@ -973,11 +1022,9 @@ class PersonaController extends BaseController {
             return 'celula';
         }
 
-        if (strpos($tipoReunion, 'domingo') !== false || strpos($tipoReunion, 'iglesia') !== false || strpos($tipoReunion, 'somos uno') !== false || strpos($tipoReunion, 'somosuno') !== false || strpos($tipoReunion, 'viernes') !== false || strpos($tipoReunion, 'otro') !== false) {
-            return $invitadoPor !== '' ? 'domingo' : 'asignados';
-        }
-
-        return 'otros';
+        // Regla de negocio: todo lo que NO sea origen célula entra en iglesia
+        // (domingo/asignados), incluyendo viernes/somos uno/otros/sin dato.
+        return $invitadoPor !== '' ? 'domingo' : 'asignados';
     }
 
     private function contarOrigenesPendientes(array $personas) {
@@ -1173,6 +1220,39 @@ class PersonaController extends BaseController {
         return strpos($nombreRol, 'asistente') !== false;
     }
 
+    private function obtenerIdRolAsistenteDefault() {
+        if ($this->idRolAsistenteCache !== null) {
+            return $this->idRolAsistenteCache;
+        }
+
+        $this->idRolAsistenteCache = 0;
+
+        try {
+            $roles = $this->rolModel->getAll();
+            foreach ((array)$roles as $rol) {
+                $nombreRol = strtolower(trim((string)($rol['Nombre_Rol'] ?? '')));
+                $nombreRol = strtr($nombreRol, [
+                    'á' => 'a',
+                    'é' => 'e',
+                    'í' => 'i',
+                    'ó' => 'o',
+                    'ú' => 'u',
+                    'ü' => 'u',
+                    'ñ' => 'n'
+                ]);
+
+                if (strpos($nombreRol, 'asistente') !== false) {
+                    $this->idRolAsistenteCache = (int)($rol['Id_Rol'] ?? 0);
+                    break;
+                }
+            }
+        } catch (Exception $e) {
+            $this->idRolAsistenteCache = 0;
+        }
+
+        return $this->idRolAsistenteCache;
+    }
+
     /**
      * Resolver anclaje automático cuando la creación viene desde asistencias.
      */
@@ -1271,10 +1351,21 @@ class PersonaController extends BaseController {
         $personasBase = $this->personaModel->getAllWithRole($filtroRol, false);
         $personasBaseFiltradasPorMinisterio = $this->filtrarPersonasPorMinisterioListado($personasBase, $filtroMinisterio);
         $personasBaseFiltradasPorLider = $this->filtrarPersonasPorLiderListado($personasBaseFiltradasPorMinisterio, $filtroLider);
+
+        // Apartado "Otros": incluir antiguas sin asignación completa.
+        $personasAntiguasIncompletas = $this->personaModel->getAllWithRole($filtroRol, true);
+        $personasAntiguasIncompletas = $this->filtrarSoloPersonasAntiguas($personasAntiguasIncompletas);
+        $personasAntiguasIncompletas = $this->filtrarPersonasPorMinisterioListado($personasAntiguasIncompletas, $filtroMinisterio);
+        $personasAntiguasIncompletas = $this->filtrarPersonasPorLiderListado($personasAntiguasIncompletas, $filtroLider);
         // El resumen por rol respeta la búsqueda por nombre actual.
         $personasBaseFiltradasPorNombre = $this->filtrarPersonasPorNombreListado($personasBaseFiltradasPorLider, $filtroNombre);
+        $personasAntiguasIncompletas = $this->filtrarPersonasPorNombreListado($personasAntiguasIncompletas, $filtroNombre);
         $totalesPerfil = $this->contarPerfilesListado($personasBaseFiltradasPorNombre);
+        $totalesPerfil['otros'] = (int)($totalesPerfil['otros'] ?? 0) + count($personasAntiguasIncompletas);
         $personas = $this->filtrarPersonasPorPerfilListado($personasBaseFiltradasPorNombre, $filtroPerfil);
+        if ($filtroPerfil === 'otros') {
+            $personas = $this->unirPersonasSinDuplicados($personas, $personasAntiguasIncompletas);
+        }
         $sugerenciasNombre = $this->obtenerSugerenciasNombreListado($personasBaseFiltradasPorLider);
 
         $this->view('personas/lista', [
@@ -1613,6 +1704,7 @@ class PersonaController extends BaseController {
         } else {
             $personasBaseConteo = $this->personaModel->getAllWithRole($filtroRol, true, $filtroEstado, $filtroCelula, $filtroEtapa, '', $filtroFechaInicio, $filtroFechaFin);
         }
+        $personasBaseConteo = $this->filtrarSoloPersonasNuevas($personasBaseConteo);
         $personasBaseConteo = $this->enriquecerChecklistPersonas($personasBaseConteo);
         $totalesOrigenPendiente = $this->contarOrigenesPendientes($personasBaseConteo);
 
@@ -1622,6 +1714,7 @@ class PersonaController extends BaseController {
             $personas = $this->personaModel->getAllWithRole($filtroRol, true, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         }
 
+        $personas = $this->filtrarSoloPersonasNuevas($personas);
         $personas = $this->enriquecerChecklistPersonas($personas);
 
         if ($filtroOrigen === 'no_disponible') {
@@ -1988,8 +2081,18 @@ class PersonaController extends BaseController {
             $personas = $this->personaModel->getAllWithRole($filtroRol, $soloGanar, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         }
 
+        if ($esModoGanar) {
+            $personas = $this->filtrarSoloPersonasNuevas($personas);
+        }
+
         if ($filtroPerfil !== '') {
             $personas = $this->filtrarPersonasPorPerfilListado($personas, $filtroPerfil);
+
+            if (!$esModoGanar && $filtroPerfil === 'otros') {
+                $personasAntiguasIncompletas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, true, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
+                $personasAntiguasIncompletas = $this->filtrarSoloPersonasAntiguas($personasAntiguasIncompletas);
+                $personas = $this->unirPersonasSinDuplicados($personas, $personasAntiguasIncompletas);
+            }
         }
 
         $rows = [];
@@ -2028,6 +2131,7 @@ class PersonaController extends BaseController {
         $returnUrl = $_POST['return_url'] ?? ($_GET['return_url'] ?? null);
         $celulaRetorno = $_POST['celula_retorno'] ?? ($_GET['celula'] ?? null);
         $celulaRetorno = ($celulaRetorno !== null && $celulaRetorno !== '') ? (int) $celulaRetorno : null;
+
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_POST['nombre'] = (string)($this->normalizarTextoMayusculas($_POST['nombre'] ?? null) ?? '');
@@ -2042,7 +2146,13 @@ class PersonaController extends BaseController {
             $_POST['email'] = trim((string)($_POST['email'] ?? ''));
             $_POST['usuario'] = trim((string)($_POST['usuario'] ?? ''));
 
-            $idRolSeleccionado = $_POST['id_rol'] ?: null;
+            $idRolAsistente = $this->obtenerIdRolAsistenteDefault();
+            $idRolSeleccionado = AuthController::esAdministrador()
+                ? ($_POST['id_rol'] ?: null)
+                : ($idRolAsistente > 0 ? $idRolAsistente : null);
+            if ((int)$idRolSeleccionado <= 0 && $idRolAsistente > 0) {
+                $idRolSeleccionado = $idRolAsistente;
+            }
             $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
             $idMinisterioNormalizado = $this->normalizarIdMinisterioPost($_POST['id_ministerio'] ?? null);
             $idLiderNormalizado = $this->normalizarIdLiderPost($_POST['id_lider'] ?? null);
@@ -2105,11 +2215,14 @@ class PersonaController extends BaseController {
                 'Tipo_Reunion' => $tipoReunionNormalizado,
                 'Id_Lider' => $idLiderNormalizado,
                 'Id_Celula' => $_POST['id_celula'] ?: null,
-                'Id_Rol' => $_POST['id_rol'] ?: null,
+                'Id_Rol' => $idRolSeleccionado,
                 'Id_Ministerio' => $idMinisterioNormalizado,
                 'Fecha_Registro' => date('Y-m-d H:i:s'),
                 'Fecha_Registro_Unix' => time()
             ];
+
+            $tipoPersonaInput = strtolower(trim((string)($_POST['tipo_persona'] ?? 'nueva')));
+            $data['Es_Antiguo'] = in_array($tipoPersonaInput, ['antigua', 'antiguo', '1'], true) ? 1 : 0;
 
             if ($this->soportaCreadoPor) {
                 $data['Creado_Por'] = $usuarioIdCreador > 0 ? $usuarioIdCreador : null;
@@ -2288,7 +2401,9 @@ class PersonaController extends BaseController {
             $_POST['usuario'] = trim((string)($_POST['usuario'] ?? ''));
 
             $personaAntes = $this->personaModel->getById($id);
-            $idRolSeleccionado = $_POST['id_rol'] ?: null;
+            $idRolSeleccionado = AuthController::esAdministrador()
+                ? (isset($_POST['id_rol']) && $_POST['id_rol'] !== '' ? $_POST['id_rol'] : ($personaAntes['Id_Rol'] ?? null))
+                : ($personaAntes['Id_Rol'] ?? null);
             $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
             $idMinisterioNormalizado = $this->normalizarIdMinisterioPost($_POST['id_ministerio'] ?? null);
             $idLiderNormalizado = $this->normalizarIdLiderPost($_POST['id_lider'] ?? null, $id);
@@ -2354,9 +2469,16 @@ class PersonaController extends BaseController {
                 'Tipo_Reunion' => $tipoReunionNormalizado,
                 'Id_Lider' => $idLiderNormalizado,
                 'Id_Celula' => $_POST['id_celula'] ?: null,
-                'Id_Rol' => $_POST['id_rol'] ?: null,
+                'Id_Rol' => $idRolSeleccionado,
                 'Id_Ministerio' => $idMinisterioNormalizado
             ];
+
+            $tipoPersonaInput = strtolower(trim((string)($_POST['tipo_persona'] ?? '')));
+            if ($tipoPersonaInput !== '') {
+                $data['Es_Antiguo'] = in_array($tipoPersonaInput, ['antigua', 'antiguo', '1'], true) ? 1 : 0;
+            } elseif (array_key_exists('Es_Antiguo', (array)$personaAntes)) {
+                $data['Es_Antiguo'] = (int)$personaAntes['Es_Antiguo'] === 1 ? 1 : 0;
+            }
 
             $checklistNormalizado = $this->soportaChecklistEscalera
                 ? $this->construirChecklistEscaleraFormulario($_POST['escalera_checklist'] ?? ($personaAntes['Escalera_Checklist'] ?? null), array_merge($personaAntes ?: [], $data), $convencionesSeleccionadas)

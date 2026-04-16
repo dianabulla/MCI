@@ -149,6 +149,21 @@
             color: #8B92A1;
         }
 
+        .tipo-persona-options {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-top: 6px;
+        }
+
+        .tipo-persona-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+            color: #2e2a24;
+        }
+
         .actions {
             margin-top: 18px;
             display: flex;
@@ -288,6 +303,26 @@
                             <option value="migrados" <?= (string)($old['ganado_en'] ?? '') === 'migrados' ? 'selected' : '' ?>>Migrados</option>
                             <option value="otro" <?= (string)($old['ganado_en'] ?? '') === 'otro' ? 'selected' : '' ?>>Otros</option>
                         </select>
+                    </div>
+
+                    <?php
+                    $tipoPersonaPublico = strtolower(trim((string)($old['tipo_persona'] ?? 'nueva')));
+                    if (!in_array($tipoPersonaPublico, ['nueva', 'antigua'], true)) {
+                        $tipoPersonaPublico = 'nueva';
+                    }
+                    ?>
+                    <div class="field full">
+                        <label>Tipo de persona <span class="req">*</span></label>
+                        <div class="tipo-persona-options">
+                            <label class="tipo-persona-item">
+                                <input type="radio" name="tipo_persona" value="antigua" <?= $tipoPersonaPublico === 'antigua' ? 'checked' : '' ?> required>
+                                Antigua
+                            </label>
+                            <label class="tipo-persona-item">
+                                <input type="radio" name="tipo_persona" value="nueva" <?= $tipoPersonaPublico === 'nueva' ? 'checked' : '' ?>>
+                                Nueva
+                            </label>
+                        </div>
                     </div>
 
                     <div class="field full" id="ganado_en_otro_wrap" style="display:none;">

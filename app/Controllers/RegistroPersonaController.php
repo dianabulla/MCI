@@ -21,6 +21,8 @@ class RegistroPersonaController extends BaseController {
     private $soportaObservacionGanadoEn = false;
     private $soportaCreadoPor = false;
     private $soportaCanalCreacion = false;
+    private $soportaEsAntiguo = false;
+    private $idRolAsistenteCache = null;
 
     public function __construct() {
         $this->personaModel = new Persona();
@@ -32,14 +34,18 @@ class RegistroPersonaController extends BaseController {
         $this->personaModel->ensureProcesoColumnExists();
         $this->personaModel->ensureOrigenGanarColumnExists();
         $this->personaModel->ensureObservacionGanadoEnColumnExists();
+        $this->personaModel->ensureTipoReunionOtrosValueExists();
+        $this->personaModel->repararTipoReunionOtrosSinDato();
         $this->personaModel->ensureCreadoPorColumnExists();
         $this->personaModel->ensureCanalCreacionColumnExists();
+        $this->personaModel->ensureEsAntiguoColumnExists();
 
         $this->soportaProceso = $this->personaModel->tieneColumna('Proceso');
         $this->soportaOrigenGanar = $this->personaModel->tieneColumna('Origen_Ganar');
         $this->soportaObservacionGanadoEn = $this->personaModel->tieneColumna('Observacion_Ganado_En');
         $this->soportaCreadoPor = $this->personaModel->tieneColumna('Creado_Por');
         $this->soportaCanalCreacion = $this->personaModel->tieneColumna('Canal_Creacion');
+        $this->soportaEsAntiguo = $this->personaModel->tieneColumna('Es_Antiguo');
     }
 
     private function buildAbsolutePublicUrl($route) {
@@ -60,6 +66,39 @@ class RegistroPersonaController extends BaseController {
 
         $valor = preg_replace('/\s+/', ' ', $valor);
         return function_exists('mb_strtoupper') ? mb_strtoupper($valor, 'UTF-8') : strtoupper($valor);
+    }
+
+    private function obtenerIdRolAsistenteDefault() {
+        if ($this->idRolAsistenteCache !== null) {
+            return $this->idRolAsistenteCache;
+        }
+
+        $this->idRolAsistenteCache = 0;
+
+        try {
+            $rows = $this->personaModel->query("SELECT Id_Rol, Nombre_Rol FROM rol ORDER BY Id_Rol ASC");
+            foreach ((array)$rows as $row) {
+                $nombreRol = strtolower(trim((string)($row['Nombre_Rol'] ?? '')));
+                $nombreRol = strtr($nombreRol, [
+                    'á' => 'a',
+                    'é' => 'e',
+                    'í' => 'i',
+                    'ó' => 'o',
+                    'ú' => 'u',
+                    'ü' => 'u',
+                    'ñ' => 'n'
+                ]);
+
+                if (strpos($nombreRol, 'asistente') !== false) {
+                    $this->idRolAsistenteCache = (int)($row['Id_Rol'] ?? 0);
+                    break;
+                }
+            }
+        } catch (Exception $e) {
+            $this->idRolAsistenteCache = 0;
+        }
+
+        return $this->idRolAsistenteCache;
     }
 
     private function normalizarDocumentoInput($valor) {
@@ -174,7 +213,8 @@ class RegistroPersonaController extends BaseController {
                 'fecha_nacimiento' => (string)($_GET['fecha_nacimiento'] ?? ''),
                 'barrio' => (string)($_GET['barrio'] ?? ''),
                 'peticion' => (string)($_GET['peticion'] ?? ''),
-                'cedula' => (string)($_GET['cedula'] ?? '')
+                'cedula' => (string)($_GET['cedula'] ?? ''),
+                'tipo_persona' => (string)($_GET['tipo_persona'] ?? 'nueva')
             ]
         ];
 
@@ -199,6 +239,7 @@ class RegistroPersonaController extends BaseController {
         $barrio = $this->normalizarTextoMayusculas($_POST['barrio'] ?? '');
         $peticion = $this->normalizarTextoMayusculas($_POST['peticion'] ?? '');
         $cedula = $this->normalizarDocumentoInput($_POST['cedula'] ?? '');
+        $tipoPersonaInput = strtolower(trim((string)($_POST['tipo_persona'] ?? 'nueva')));
 
         $errores = [];
 
@@ -239,7 +280,8 @@ class RegistroPersonaController extends BaseController {
                 'fecha_nacimiento' => $fechaNacimiento,
                 'barrio' => $barrio,
                 'peticion' => $peticion,
-                'cedula' => $cedula
+                'cedula' => $cedula,
+                'tipo_persona' => $tipoPersonaInput
             ]);
         }
 
@@ -270,12 +312,21 @@ class RegistroPersonaController extends BaseController {
             'Estado_Cuenta' => 'Activo'
         ];
 
+        $idRolAsistente = $this->obtenerIdRolAsistenteDefault();
+        if ($idRolAsistente > 0) {
+            $data['Id_Rol'] = $idRolAsistente;
+        }
+
         if ($this->soportaCreadoPor) {
             $data['Creado_Por'] = null;
         }
 
         if ($this->soportaCanalCreacion) {
             $data['Canal_Creacion'] = 'Formulario público';
+        }
+
+        if ($this->soportaEsAntiguo) {
+            $data['Es_Antiguo'] = in_array($tipoPersonaInput, ['antigua', 'antiguo', '1'], true) ? 1 : 0;
         }
 
         if ($this->soportaProceso) {

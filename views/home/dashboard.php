@@ -60,6 +60,14 @@
         <a href="<?= PUBLIC_URL ?>?url=teen" class="btn btn-primary btn-sm">Ver materiales</a>
     </div>
     <?php endif; ?>
+
+    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver')): ?>
+    <div class="dashboard-card" style="border-left-color: #1e4a89;">
+        <h3>Escuelas de Formación</h3>
+        <div class="value" style="color: #1e4a89;"><?= (int)(($reporteUniversidadVida['total'] ?? 0)) ?></div>
+        <a href="<?= PUBLIC_URL ?>?url=home/escuelas-formacion" class="btn btn-primary btn-sm">Ver reporte U.V</a>
+    </div>
+    <?php endif; ?>
 </div>
 
 <?php if (!empty($eventosProximos) && (AuthController::esAdministrador() || AuthController::tienePermiso('eventos', 'ver'))): ?>

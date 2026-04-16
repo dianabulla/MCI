@@ -17,6 +17,10 @@ return [
     // Home
     'home' => 'HomeController@index',
     'home/lideres-celula' => 'HomeController@lideresCelula',
+    'home/escuelas-formacion' => 'HomeController@escuelasFormacion',
+    'home/escuelas-formacion/exportar' => 'HomeController@exportarEscuelasFormacion',
+    'home/escuelas-formacion/actualizar-estado' => 'HomeController@actualizarEstadoEscuelaFormacion',
+    'home/escuelas-formacion/actualizar-asistencia-clase' => 'HomeController@actualizarAsistenciaClaseEscuelaFormacion',
     
     // Personas
     'personas' => 'PersonaController@index',
@@ -133,6 +137,12 @@ return [
     // Registro de Personas (Público - No requiere autenticación)
     'registro_personas' => 'RegistroPersonaController@index',
     'registro_personas/guardar' => 'RegistroPersonaController@guardar',
+
+    // Escuelas de Formación (Público - No requiere autenticación)
+    'escuelas_formacion/registro-publico' => 'EscuelaFormacionRegistroController@index',
+    'escuelas_formacion/registro-publico/buscar-persona' => 'EscuelaFormacionRegistroController@buscarPersona',
+    'escuelas_formacion/registro-publico/buscar-lideres' => 'EscuelaFormacionRegistroController@buscarLideres',
+    'escuelas_formacion/registro-publico/guardar' => 'EscuelaFormacionRegistroController@guardar',
     
     // Stream ESP32-CAM (Público - No requiere autenticación)
     'stream/live' => 'StreamController@live',

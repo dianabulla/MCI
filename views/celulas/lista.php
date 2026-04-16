@@ -3,6 +3,7 @@
 <div class="page-header">
     <h2>Células</h2>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="<?= PUBLIC_URL ?>?url=personas/crear&return_to=celulas&return_url=<?= urlencode(PUBLIC_URL . '?url=celulas') ?>" class="btn btn-primary">+ Nueva Persona</a>
         <a href="<?= PUBLIC_URL ?>?url=celulas/exportarExcel<?= !empty($_GET['ministerio']) ? '&ministerio=' . urlencode((string)$_GET['ministerio']) : '' ?><?= !empty($_GET['lider']) ? '&lider=' . urlencode((string)$_GET['lider']) : '' ?>" class="btn btn-success">
             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
         </a>
@@ -79,6 +80,7 @@
                 </div>
 
                 <div class="mb-3">
+                    <a href="<?= PUBLIC_URL ?>?url=personas/crear&return_to=celulas&return_url=<?= urlencode(PUBLIC_URL . '?url=celulas') ?>&celula=<?= (int)$section['id_celula'] ?>" class="btn btn-sm btn-primary">+ Nueva persona</a>
                     <?php if (AuthController::tienePermiso('asistencias', 'crear')): ?>
                         <a href="<?= PUBLIC_URL ?>?url=asistencias/registrar&celula=<?= (int)$section['id_celula'] ?>" class="btn btn-sm btn-success">Asistencias</a>
                     <?php endif; ?>

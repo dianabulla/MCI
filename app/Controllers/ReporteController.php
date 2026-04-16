@@ -564,6 +564,10 @@ class ReporteController extends BaseController {
         $detalleLideres = [];
 
         foreach ($personas as $persona) {
+            if (!$this->esPersonaNueva($persona)) {
+                continue;
+            }
+
             $fechaRegistroRaw = trim((string)($persona['Fecha_Registro'] ?? ''));
             if ($fechaRegistroRaw === '') {
                 continue;
@@ -740,6 +744,10 @@ class ReporteController extends BaseController {
         }
 
         foreach ($personasSemestre as $persona) {
+            if (!$this->esPersonaNueva($persona)) {
+                continue;
+            }
+
             $idMinisterioPersona = (int)($persona['Id_Ministerio'] ?? 0);
             if ($idMinisterioPersona <= 0 || !isset($rowsMap[$idMinisterioPersona])) {
                 continue;
@@ -815,6 +823,10 @@ class ReporteController extends BaseController {
         return in_array($proceso, ['Ganar', 'Consolidar', 'Discipular', 'Enviar'], true) ? $proceso : '';
     }
 
+    private function esPersonaNueva(array $persona): bool {
+        return (int)($persona['Es_Antiguo'] ?? 1) === 0;
+    }
+
     /**
      * Clasifica el origen de la persona: 'iglesia' | 'celula' | 'otros'
      * - 'iglesia'  → Tipo_Reunion contiene Domingo / Somos Uno / Migrados o no tiene valor
@@ -832,6 +844,29 @@ class ReporteController extends BaseController {
             return 'iglesia';
         }
         return 'otros';
+    }
+
+    /**
+     * Identifica si la persona debe considerarse nueva para U.V según "Ganado en".
+     * Incluye: Célula, Domingo, Somos Uno, Otro.
+     * Excluye explícitamente Migrados.
+     */
+    private function esOrigenValidoUniversidadVida(array $persona): bool {
+        if (!$this->esPersonaNueva($persona)) {
+            return false;
+        }
+
+        $tipo = strtolower(trim((string)($persona['Tipo_Reunion'] ?? '')));
+        if ($tipo === '' || strpos($tipo, 'migrados') !== false) {
+            return false;
+        }
+
+        return strpos($tipo, 'celula') !== false
+            || strpos($tipo, 'célula') !== false
+            || strpos($tipo, 'domingo') !== false
+            || strpos($tipo, 'somos uno') !== false
+            || strpos($tipo, 'somosuno') !== false
+            || strpos($tipo, 'otro') !== false;
     }
 
     /**
@@ -909,6 +944,10 @@ class ReporteController extends BaseController {
         }
 
         foreach ($personas as $persona) {
+            if (!$this->esPersonaNueva($persona)) {
+                continue;
+            }
+
             $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
             if ($proceso !== 'Ganar') {
                 continue;
@@ -963,7 +1002,7 @@ class ReporteController extends BaseController {
 
         foreach ($personas as $persona) {
             $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
-            if ($proceso !== $etapa) {
+            if ($etapa !== 'Consolidar' && $proceso !== $etapa) {
                 continue;
             }
 
@@ -979,7 +1018,14 @@ class ReporteController extends BaseController {
             $detalle = $this->construirDetallePersonaReporteMinisterial($persona);
 
             foreach ($peldanos as $col => $idx) {
-                if ($this->peldanoMarcado($checklist, $etapa, $idx, $proceso)) {
+                $marcado = false;
+                if ($etapa === 'Consolidar' && $col === 'uv') {
+                    $marcado = $this->esOrigenValidoUniversidadVida($persona);
+                } else {
+                    $marcado = $this->peldanoMarcado($checklist, $etapa, $idx, $proceso);
+                }
+
+                if ($marcado) {
                     $rows[$mes][$col]++;
                     $totales[$col]++;
                     $detalles[$col][$mes][] = $detalle;
@@ -1073,6 +1119,10 @@ class ReporteController extends BaseController {
         $detalles = []; // [ministerio][col][mes][]
 
         foreach ($personas as $persona) {
+            if (!$this->esPersonaNueva($persona)) {
+                continue;
+            }
+
             $fechaYmd = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
             $ts = strtotime($fechaYmd);
             if ($ts === false || (int)date('Y', $ts) !== $anio) {
@@ -1133,11 +1183,7 @@ class ReporteController extends BaseController {
                 continue;
             }
 
-            // Este reporte es del estado actual en CONSOLIDAR; no debe mezclar etapas posteriores.
             $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
-            if ($proceso !== 'Consolidar') {
-                continue;
-            }
 
             $ministerio = trim((string)($persona['Nombre_Ministerio'] ?? '')) ?: 'Sin ministerio';
             if (!isset($rowsMap[$ministerio])) {
@@ -1153,7 +1199,7 @@ class ReporteController extends BaseController {
             $checklist = $this->obtenerChecklist($persona);
             $detalle = $this->construirDetallePersonaReporteMinisterial($persona);
 
-            if ($this->peldanoMarcado($checklist, 'Consolidar', 0, $proceso)) {
+            if ($this->esOrigenValidoUniversidadVida($persona)) {
                 $rowsMap[$ministerio]['uv']++;
                 $totales['uv']++;
                 $detalles[$ministerio]['uv'][] = $detalle;

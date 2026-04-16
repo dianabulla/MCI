@@ -138,6 +138,11 @@ if ($returnTo === 'celulas') {
             </div>
 
             <div class="detail-item">
+                <span class="detail-label">Tipo de persona:</span>
+                <span class="detail-value"><?= ((int)($persona['Es_Antiguo'] ?? 1) === 1) ? 'Antigua' : 'Nueva' ?></span>
+            </div>
+
+            <div class="detail-item">
                 <span class="detail-label">Usuario de acceso:</span>
                 <span class="detail-value"><?= htmlspecialchars($persona['Usuario'] ?? 'No asignado') ?></span>
             </div>

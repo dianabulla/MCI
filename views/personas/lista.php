@@ -162,7 +162,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                 <strong class="resumen-role-value"><?= (int)($totalesPerfil['asistentes'] ?? 0) ?></strong>
             </a>
             <a href="<?= PUBLIC_URL ?>?url=personas&perfil=otros<?= $qsMinisterio ?><?= $qsLider ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'otros' ? 'active' : '' ?>">
-                <span class="resumen-role-label">Otros roles</span>
+                <span class="resumen-role-label">Otros (incluye antiguas sin consolidar)</span>
                 <strong class="resumen-role-value"><?= (int)($totalesPerfil['otros'] ?? 0) ?></strong>
             </a>
         </div>

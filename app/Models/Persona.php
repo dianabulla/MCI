@@ -111,6 +111,63 @@ class Persona extends BaseModel {
         return $rows[0] ?? null;
     }
 
+    public function buscarParaInscripcionEscuela($numeroDocumento, $telefono, $nombreCompleto = '') {
+        $documentoNormalizado = $this->normalizarDocumentoParaComparacion($numeroDocumento);
+        $telefonoNormalizado = $this->normalizarTelefonoParaComparacion($telefono);
+
+        $sqlBase = "SELECT
+                        p.Id_Persona,
+                        p.Nombre,
+                        p.Apellido,
+                        p.Genero,
+                        p.Telefono,
+                        p.Numero_Documento,
+                        p.Id_Ministerio,
+                        m.Nombre_Ministerio,
+                        p.Id_Lider,
+                        CONCAT(COALESCE(lid.Nombre, ''), ' ', COALESCE(lid.Apellido, '')) AS Nombre_Lider
+                    FROM {$this->table} p
+                    LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
+                    LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona";
+
+        $params = [];
+        $condiciones = [];
+
+        if ($documentoNormalizado !== '') {
+            $condiciones[] = "REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(p.Numero_Documento, ''))), ' ', ''), '.', ''), '-', '') = ?";
+            $params[] = $documentoNormalizado;
+        }
+
+        if ($telefonoNormalizado !== '') {
+            $condiciones[] = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(p.Telefono, '')), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '') = ?";
+            $params[] = $telefonoNormalizado;
+        }
+
+        if (!empty($condiciones)) {
+            $sql = $sqlBase . " WHERE (" . implode(' OR ', $condiciones) . ") ORDER BY p.Id_Persona DESC LIMIT 1";
+            $rows = $this->query($sql, $params);
+            if (!empty($rows)) {
+                return $rows[0];
+            }
+        }
+
+        $nombreCompleto = trim((string)$nombreCompleto);
+        if ($nombreCompleto === '') {
+            return null;
+        }
+
+        $nombreCompleto = preg_replace('/\s+/', ' ', $nombreCompleto);
+        $nombreNormalizado = function_exists('mb_strtoupper') ? mb_strtoupper($nombreCompleto, 'UTF-8') : strtoupper($nombreCompleto);
+
+        $sql = $sqlBase . "
+                WHERE UPPER(TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, '')))) = ?
+                ORDER BY p.Id_Persona DESC
+                LIMIT 1";
+
+        $rows = $this->query($sql, [$nombreNormalizado]);
+        return $rows[0] ?? null;
+    }
+
     public function ensureProcesoColumnExists() {
         if ($this->tieneColumna('Proceso')) {
             return true;
@@ -158,6 +215,79 @@ class Persona extends BaseModel {
         } catch (Exception $e) {
             error_log('No se pudo crear columna Observacion_Ganado_En en persona: ' . $e->getMessage());
             $this->columnasCache['Observacion_Ganado_En'] = false;
+            return false;
+        }
+    }
+
+    public function ensureTipoReunionOtrosValueExists() {
+        try {
+            $stmt = $this->db->prepare("SHOW COLUMNS FROM {$this->table} LIKE ?");
+            $stmt->execute(['Tipo_Reunion']);
+            $col = $stmt->fetch();
+            if (empty($col)) {
+                return false;
+            }
+
+            $type = (string)($col['Type'] ?? '');
+            if (stripos($type, 'enum(') !== 0) {
+                return true;
+            }
+
+            $matches = [];
+            preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'/", $type, $matches);
+            $enumValues = array_map(static function($value) {
+                return stripcslashes((string)$value);
+            }, $matches[1] ?? []);
+
+            if (empty($enumValues)) {
+                return true;
+            }
+
+            $yaTieneOtros = false;
+            foreach ($enumValues as $value) {
+                if (strcasecmp(trim((string)$value), 'Otros') === 0) {
+                    $yaTieneOtros = true;
+                    break;
+                }
+            }
+
+            if ($yaTieneOtros) {
+                return true;
+            }
+
+            $enumValues[] = 'Otros';
+            $enumSqlValues = array_map([$this->db, 'quote'], $enumValues);
+            $nullable = strtoupper((string)($col['Null'] ?? 'YES')) === 'NO' ? 'NOT NULL' : 'NULL';
+            $defaultSql = '';
+
+            if (array_key_exists('Default', $col) && $col['Default'] !== null) {
+                $defaultSql = ' DEFAULT ' . $this->db->quote((string)$col['Default']);
+            }
+
+            $sql = "ALTER TABLE {$this->table} MODIFY COLUMN Tipo_Reunion ENUM(" . implode(',', $enumSqlValues) . ") {$nullable}{$defaultSql}";
+            $this->db->exec($sql);
+            return true;
+        } catch (Exception $e) {
+            error_log('No se pudo asegurar el valor Otros en Tipo_Reunion: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    public function repararTipoReunionOtrosSinDato() {
+        if (!$this->tieneColumna('Observacion_Ganado_En')) {
+            return false;
+        }
+
+        try {
+            $sql = "UPDATE {$this->table}
+                    SET Tipo_Reunion = 'Otros'
+                    WHERE (Tipo_Reunion IS NULL OR TRIM(Tipo_Reunion) = '')
+                      AND Observacion_Ganado_En IS NOT NULL
+                      AND TRIM(Observacion_Ganado_En) <> ''";
+
+            return $this->execute($sql);
+        } catch (Exception $e) {
+            error_log('No se pudo reparar Tipo_Reunion sin dato para Otros: ' . $e->getMessage());
             return false;
         }
     }
@@ -243,6 +373,23 @@ class Persona extends BaseModel {
         } catch (Exception $e) {
             error_log('No se pudo crear columna Canal_Creacion en persona: ' . $e->getMessage());
             $this->columnasCache['Canal_Creacion'] = false;
+            return false;
+        }
+    }
+
+    public function ensureEsAntiguoColumnExists() {
+        if ($this->tieneColumna('Es_Antiguo')) {
+            return true;
+        }
+
+        try {
+            $sql = "ALTER TABLE {$this->table} ADD COLUMN Es_Antiguo TINYINT(1) NOT NULL DEFAULT 1 AFTER Estado_Cuenta";
+            $this->db->exec($sql);
+            $this->columnasCache['Es_Antiguo'] = true;
+            return true;
+        } catch (Exception $e) {
+            error_log('No se pudo crear columna Es_Antiguo en persona: ' . $e->getMessage());
+            $this->columnasCache['Es_Antiguo'] = false;
             return false;
         }
     }
@@ -980,10 +1127,11 @@ class Persona extends BaseModel {
         if ($origen !== null && $origen !== '') {
             $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
             $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
-            $esIglesiaExpr = "({$tipoReunionExpr} LIKE '%domingo%' OR {$tipoReunionExpr} LIKE '%iglesia%' OR {$tipoReunionExpr} LIKE '%somos uno%' OR {$tipoReunionExpr} LIKE '%somosuno%' OR {$tipoReunionExpr} LIKE '%viernes%' OR {$tipoReunionExpr} LIKE '%otro%')";
+            $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%célula%')";
+            $esIglesiaExpr = "(NOT {$esCelulaExpr})";
 
             if ($origen === 'celula') {
-                $sql .= " AND {$tipoReunionExpr} LIKE '%celula%'";
+                $sql .= " AND {$esCelulaExpr}";
             } elseif ($origen === 'domingo') {
                 $sql .= " AND {$esIglesiaExpr} AND {$invitadoExpr} <> ''";
             } elseif ($origen === 'asignados') {
@@ -1073,10 +1221,11 @@ class Persona extends BaseModel {
         if ($origen !== null && $origen !== '') {
             $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
             $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
-            $esIglesiaExpr = "({$tipoReunionExpr} LIKE '%domingo%' OR {$tipoReunionExpr} LIKE '%iglesia%' OR {$tipoReunionExpr} LIKE '%somos uno%' OR {$tipoReunionExpr} LIKE '%somosuno%' OR {$tipoReunionExpr} LIKE '%viernes%' OR {$tipoReunionExpr} LIKE '%otro%')";
+            $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%célula%')";
+            $esIglesiaExpr = "(NOT {$esCelulaExpr})";
 
             if ($origen === 'celula') {
-                $sql .= " AND {$tipoReunionExpr} LIKE '%celula%'";
+                $sql .= " AND {$esCelulaExpr}";
             } elseif ($origen === 'domingo') {
                 $sql .= " AND {$esIglesiaExpr} AND {$invitadoExpr} <> ''";
             } elseif ($origen === 'asignados') {
