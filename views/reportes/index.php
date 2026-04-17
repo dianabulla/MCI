@@ -140,7 +140,14 @@ $resumenEscuelasInscripciones = $resumen_escuelas_inscripciones ?? [
     'capacitacion_destino' => 0,
     'otros' => 0,
 ];
+$escuelasTotalRegistroPublico = (int)($resumenEscuelasInscripciones['total'] ?? 0);
+$escuelasTotalOtraTabla = (int)($reporteEscuelasUv['total'] ?? 0);
+$escuelasTotalGeneral = $escuelasTotalRegistroPublico + $escuelasTotalOtraTabla;
 $inscripcionesEscuelas = $inscripciones_escuelas ?? [];
+$inscripcionesEscuelasJson = json_encode($inscripcionesEscuelas, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+if ($inscripcionesEscuelasJson === false) {
+    $inscripcionesEscuelasJson = '[]';
+}
 $filtroEscuelaPrograma = (string)($filtro_escuela_programa ?? '');
 $filtroEscuelaBuscar = (string)($filtro_escuela_buscar ?? '');
 
@@ -210,6 +217,31 @@ $tablasMinisterial = $tablas_ministerial ?? [];
 $detallesTablasMinisterial = $detalles_tablas_ministerial ?? [];
 $tablaGananciaMinisterial = $tabla_ganancia_ministerial ?? [];
 $detallesGananciaMinisterial = $detalles_ganancia_ministerial ?? [];
+
+$diasSemanaEs = [
+    0 => 'dom',
+    1 => 'lun',
+    2 => 'mar',
+    3 => 'mié',
+    4 => 'jue',
+    5 => 'vie',
+    6 => 'sáb'
+];
+$mesesEs = [
+    1 => 'ene',
+    2 => 'feb',
+    3 => 'mar',
+    4 => 'abr',
+    5 => 'may',
+    6 => 'jun',
+    7 => 'jul',
+    8 => 'ago',
+    9 => 'sep',
+    10 => 'oct',
+    11 => 'nov',
+    12 => 'dic'
+];
+$fechaBadgeReporte = ($diasSemanaEs[(int)date('w')] ?? '') . ', ' . date('j') . ' ' . ($mesesEs[(int)date('n')] ?? '');
 
 $renderTablaGananciaMinisterial = static function(array $tabla, int $anio) {
     $rows = $tabla['rows'] ?? [];
@@ -356,7 +388,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </div>
 
     <div class="report-shell-actions">
-        <span class="report-shell-date"><?= date('D, M j') ?></span>
+        <span class="report-shell-date"><?= htmlspecialchars($fechaBadgeReporte) ?></span>
     </div>
 
 </div>
@@ -580,31 +612,31 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 </div>
 
 <div class="report-kpi-grid report-chart-context" style="margin-bottom: 18px;">
-    <div class="report-kpi-card kpi-celula">
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-celula" data-kpi="uv">
         <div class="report-kpi-icon">🎓</div>
         <div class="report-kpi-label">Universidad de la Vida</div>
-        <div class="report-kpi-value\"><?= (int)($resumenEscuelasInscripciones['universidad_vida'] ?? 0) ?></div>
-    </div>
-    <div class="report-kpi-card kpi-domingo">
+        <div class="report-kpi-value"><?= (int)($resumenEscuelasInscripciones['universidad_vida'] ?? 0) ?></div>
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-domingo" data-kpi="encuentro">
         <div class="report-kpi-icon">🤝</div>
         <div class="report-kpi-label">Encuentro</div>
-        <div class="report-kpi-value\"><?= (int)($resumenEscuelasInscripciones['encuentro'] ?? 0) ?></div>
-    </div>
-    <div class="report-kpi-card kpi-escalera">
+        <div class="report-kpi-value"><?= (int)($resumenEscuelasInscripciones['encuentro'] ?? 0) ?></div>
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-escalera" data-kpi="bautismo">
         <div class="report-kpi-icon">💧</div>
         <div class="report-kpi-label">Bautismo</div>
-        <div class="report-kpi-value\"><?= (int)($resumenEscuelasInscripciones['bautismo'] ?? 0) ?></div>
-    </div>
-    <div class="report-kpi-card kpi-asistencia">
+        <div class="report-kpi-value"><?= (int)($resumenEscuelasInscripciones['bautismo'] ?? 0) ?></div>
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-asistencia" data-kpi="capacitacion_destino">
         <div class="report-kpi-icon">📚</div>
         <div class="report-kpi-label">Capacitación Destino</div>
         <div class="report-kpi-value"><?= (int)($resumenEscuelasInscripciones['capacitacion_destino'] ?? 0) ?></div>
-    </div>
-    <div class="report-kpi-card kpi-celula">
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-celula" data-kpi="total_inscripciones">
         <div class="report-kpi-icon">📝</div>
         <div class="report-kpi-label">Total inscripciones</div>
-        <div class="report-kpi-value\"><?= (int)($resumenEscuelasInscripciones['total'] ?? 0) ?></div>
-    </div>
+        <div class="report-kpi-value"><?= (int)$escuelasTotalGeneral ?></div>
+    </button>
 </div>
 
 <div class="card report-card report-chart-only" style="margin-bottom: 22px;">
@@ -646,7 +678,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </form>
 </div>
 
-<div class="card report-card report-table-only" style="margin-bottom: 18px;">
+<div id="reporteEscuelasResumenProgramas" class="card report-card report-table-only" style="margin-bottom: 18px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <h3 style="margin:0;">Resumen por tipo de programa</h3>
         <small style="color:#637087;">Conteo actual de inscripciones</small>
@@ -685,7 +717,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </div>
 </div>
 
-<div class="card report-card report-table-only" style="margin-bottom: 18px;">
+<div id="reporteEscuelasDetalleUv" class="card report-card report-table-only" style="margin-bottom: 18px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <h3 style="margin:0;">Detalle Universidad de la Vida</h3>
         <small style="color:#637087;">Total: <?= (int)($reporteEscuelasUv['total'] ?? 0) ?></small>
@@ -722,7 +754,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </div>
 </div>
 
-<div class="card report-card report-table-only" style="margin-bottom: 22px;">
+<div id="reporteEscuelasRegistrosPublicos" class="card report-card report-table-only" style="margin-bottom: 22px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <h3 style="margin:0;">Registros del formulario público</h3>
         <small style="color:#637087;">Mostrando <?= (int)count($inscripcionesEscuelas) ?> registros recientes</small>
@@ -775,36 +807,36 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 </div>
 <?php else: ?>
 <div class="report-kpi-grid report-kpi-grid--celulas report-chart-context" style="margin-bottom: 18px;">
-    <div class="report-kpi-card kpi-escalera">
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-escalera" data-kpi="total_celulas">
         <div class="report-kpi-icon">🏠</div>
         <div class="report-kpi-label">Total de células</div>
         <div class="report-kpi-value"><?= (int)($indicadoresCelulas['totales']['total_celulas'] ?? 0) ?></div>
-    </div>
-    <div class="report-kpi-card kpi-domingo">
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-domingo" data-kpi="nuevas_semestre">
         <div class="report-kpi-icon">🆕</div>
         <div class="report-kpi-label">Nuevas en semestre</div>
         <div class="report-kpi-value"><?= (int)($indicadoresCelulas['totales']['nuevas_semestre'] ?? 0) ?></div>
-    </div>
-    <div class="report-kpi-card kpi-celula">
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-celula" data-kpi="cerradas_semestre">
         <div class="report-kpi-icon">⛔</div>
         <div class="report-kpi-label">Cerradas en semestre</div>
         <div class="report-kpi-value"><?= (int)($indicadoresCelulas['totales']['cerradas_semestre'] ?? 0) ?></div>
-    </div>
-    <div class="report-kpi-card kpi-asistencia">
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-asistencia" data-kpi="reportadas_semana">
         <div class="report-kpi-icon">📋</div>
         <div class="report-kpi-label">Reportadas semana</div>
         <div class="report-kpi-value"><?= (int)($indicadoresCelulas['totales']['reportadas_semana'] ?? 0) ?></div>
-    </div>
-    <div class="report-kpi-card kpi-domingo">
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-domingo" data-kpi="no_reportadas_semana">
         <div class="report-kpi-icon">⚠️</div>
         <div class="report-kpi-label">No reportadas semana</div>
         <div class="report-kpi-value"><?= (int)($indicadoresCelulas['totales']['no_reportadas_semana'] ?? 0) ?></div>
-    </div>
-    <div class="report-kpi-card kpi-asistencia">
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-asistencia" data-kpi="promedio_asistencia">
         <div class="report-kpi-icon">📈</div>
         <div class="report-kpi-label">Promedio asistencia</div>
         <div class="report-kpi-value"><?= $promedioAsistencia ?>%</div>
-    </div>
+    </button>
 </div>
 
 <div class="card report-card report-chart-only" style="margin-bottom: 22px;">
@@ -849,7 +881,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </div>
 </div>
 
-<div class="card report-card report-metas-card report-table-only" style="margin-bottom: 22px;">
+<div id="reporteCelulasAperturas" class="card report-card report-metas-card report-table-only" style="margin-bottom: 22px;">
     <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
         <div>
             <h3 style="margin-bottom:4px;">Células abiertas por ministerio (<?= (int)($tablaAperturasCelulas['anio'] ?? date('Y')) ?>)</h3>
@@ -933,7 +965,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </div>
 </div>
 
-<div class="card report-card report-chart-only" style="margin-bottom: 22px;">
+<div id="reporteCelulasAsistencia" class="card report-card report-chart-only" style="margin-bottom: 22px;">
     <h3>Asistencia a células</h3>
     <div id="chartAsistencia"></div>
     <details style="margin-top: 14px;">
@@ -983,6 +1015,26 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 
 </div>
 
+<div id="reporteTarjetaModal" class="celula-modal" aria-hidden="true">
+    <div class="celula-modal__overlay" data-reporte-tarjeta-close="1"></div>
+    <div class="celula-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="reporteTarjetaModalTitle">
+        <div class="celula-modal__header">
+            <h3 id="reporteTarjetaModalTitle" class="celula-modal__title">Detalle de tarjeta</h3>
+            <button type="button" class="celula-modal__close" data-reporte-tarjeta-close="1" aria-label="Cerrar">×</button>
+        </div>
+        <div class="celula-modal__body">
+            <div class="table-container" style="display:block;">
+                <table class="data-table data-table--compacta-celula">
+                    <thead>
+                        <tr id="reporteTarjetaModalHead"></tr>
+                    </thead>
+                    <tbody id="reporteTarjetaModalBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
 const procesoGanar = <?= json_encode($procesoGanar) ?>;
@@ -1000,6 +1052,10 @@ const detallesTablasMinisterial = <?= json_encode($detallesTablasMinisterial ?? 
 const detallesGananciaMinisterial = <?= json_encode($detallesGananciaMinisterial ?? [], JSON_UNESCAPED_UNICODE) ?>;
 const reporteEscuelasUv = <?= json_encode($reporteEscuelasUv ?? ['total' => 0, 'rows' => []], JSON_UNESCAPED_UNICODE) ?>;
 const resumenEscuelasInscripciones = <?= json_encode($resumenEscuelasInscripciones ?? [], JSON_UNESCAPED_UNICODE) ?>;
+const escuelasTotalRegistroPublico = <?= (int)$escuelasTotalRegistroPublico ?>;
+const escuelasTotalOtraTabla = <?= (int)$escuelasTotalOtraTabla ?>;
+const escuelasTotalGeneral = <?= (int)$escuelasTotalGeneral ?>;
+const inscripcionesEscuelasData = <?= $inscripcionesEscuelasJson ?>;
 const tipoReporte = <?= json_encode($tipoReporte) ?>;
 const nombresCelulas = asistencia.map(x => (x.Nombre_Celula || 'Sin célula'));
 const etiquetasCelulas = nombresCelulas.map(nombre => {
@@ -1085,6 +1141,174 @@ if (toggleGanadosSemanaAnteriorBtn && reporteGanadosSemanaAnteriorDetalle) {
         toggleGanadosSemanaAnteriorBtn.textContent = mostrar ? 'Ocultar detalle' : 'Ver detalle';
     });
 }
+
+const reporteTarjetaModal = document.getElementById('reporteTarjetaModal');
+const reporteTarjetaModalTitle = document.getElementById('reporteTarjetaModalTitle');
+const reporteTarjetaModalHead = document.getElementById('reporteTarjetaModalHead');
+const reporteTarjetaModalBody = document.getElementById('reporteTarjetaModalBody');
+
+const escapeHtml = (valor) => String(valor ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const abrirModalTarjeta = (titulo, headers, rows) => {
+    if (!reporteTarjetaModal || !reporteTarjetaModalTitle || !reporteTarjetaModalHead || !reporteTarjetaModalBody) {
+        return;
+    }
+
+    reporteTarjetaModalTitle.textContent = titulo;
+    reporteTarjetaModalHead.innerHTML = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('');
+
+    if (!rows.length) {
+        reporteTarjetaModalBody.innerHTML = `<tr><td colspan="${headers.length}" class="text-center">Sin registros para este indicador</td></tr>`;
+    } else {
+        reporteTarjetaModalBody.innerHTML = rows
+            .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`)
+            .join('');
+    }
+
+    reporteTarjetaModal.classList.add('is-open');
+    reporteTarjetaModal.setAttribute('aria-hidden', 'false');
+};
+
+const cerrarModalTarjeta = () => {
+    if (!reporteTarjetaModal) {
+        return;
+    }
+    reporteTarjetaModal.classList.remove('is-open');
+    reporteTarjetaModal.setAttribute('aria-hidden', 'true');
+};
+
+document.querySelectorAll('[data-reporte-tarjeta-close="1"]').forEach((btn) => {
+    btn.addEventListener('click', cerrarModalTarjeta);
+});
+
+const etiquetaProgramaEscuela = (programaRaw) => {
+    const mapa = {
+        universidad_vida: 'Universidad de la Vida',
+        encuentro: 'Encuentro',
+        bautismo: 'Bautismo',
+        capacitacion_destino: 'Capacitación Destino',
+        capacitacion_destino_nivel_1: 'Capacitación Destino - Nivel 1',
+        capacitacion_destino_nivel_2: 'Capacitación Destino - Nivel 2',
+        capacitacion_destino_nivel_3: 'Capacitación Destino - Nivel 3'
+    };
+    const key = String(programaRaw || '');
+    return mapa[key] || key;
+};
+
+document.querySelectorAll('.js-kpi-modal').forEach((btn) => {
+    btn.addEventListener('click', () => {
+        const kpi = String(btn.dataset.kpi || '').trim();
+        if (!kpi) {
+            return;
+        }
+
+        if (tipoReporte === 'escuelas') {
+            if (kpi === 'uv') {
+                const rowsUv = (Array.isArray(reporteEscuelasUv.rows) ? reporteEscuelasUv.rows : []).map((item) => [
+                    item.nombre || '',
+                    item.ministerio || 'Sin ministerio',
+                    item.lider || 'Sin líder',
+                    item.celula || 'Sin célula',
+                    item.va ? 'Sí' : 'No'
+                ]);
+                abrirModalTarjeta('Escuelas · Universidad de la Vida', ['Persona', 'Ministerio', 'Líder', 'Célula', 'Asiste'], rowsUv);
+                return;
+            }
+
+            let filtroPrograma = '';
+            if (kpi === 'encuentro') {
+                filtroPrograma = 'encuentro';
+            } else if (kpi === 'bautismo') {
+                filtroPrograma = 'bautismo';
+            } else if (kpi === 'capacitacion_destino') {
+                filtroPrograma = 'capacitacion_destino';
+            }
+
+            if (kpi === 'total_inscripciones') {
+                const rowsResumen = [
+                    ['Universidad de la Vida', parseInt(resumenEscuelasInscripciones.universidad_vida || 0, 10)],
+                    ['Encuentro', parseInt(resumenEscuelasInscripciones.encuentro || 0, 10)],
+                    ['Bautismo', parseInt(resumenEscuelasInscripciones.bautismo || 0, 10)],
+                    ['Capacitación Destino', parseInt(resumenEscuelasInscripciones.capacitacion_destino || 0, 10)],
+                    ['Subtotal registro público', parseInt(escuelasTotalRegistroPublico || 0, 10)],
+                    ['Subtotal otra tabla', parseInt(escuelasTotalOtraTabla || 0, 10)],
+                    ['TOTAL GENERAL', parseInt(escuelasTotalGeneral || 0, 10)]
+                ];
+                abrirModalTarjeta('Escuelas · Total de inscripciones', ['Programa', 'Cantidad'], rowsResumen);
+                return;
+            }
+
+            const rowsPrograma = (Array.isArray(inscripcionesEscuelasData) ? inscripcionesEscuelasData : [])
+                .filter((item) => {
+                    const prog = String(item.Programa || '');
+                    if (filtroPrograma === 'capacitacion_destino') {
+                        return prog.indexOf('capacitacion_destino') === 0;
+                    }
+                    return prog === filtroPrograma;
+                })
+                .map((item) => [
+                    String(item.Fecha_Registro || '').slice(0, 16),
+                    item.Nombre || '',
+                    item.Lider || 'Sin líder',
+                    item.Nombre_Ministerio || 'Sin ministerio',
+                    etiquetaProgramaEscuela(item.Programa || ''),
+                    String(item.Asistio_Clase || '') === '1' ? 'Sí' : (String(item.Asistio_Clase || '') === '0' ? 'No' : 'Pendiente')
+                ]);
+
+            const tituloPrograma = kpi === 'encuentro'
+                ? 'Escuelas · Encuentro'
+                : (kpi === 'bautismo' ? 'Escuelas · Bautismo' : 'Escuelas · Capacitación Destino');
+            abrirModalTarjeta(tituloPrograma, ['Fecha', 'Nombre', 'Líder', 'Ministerio', 'Programa', 'Asistencia'], rowsPrograma);
+            return;
+        }
+
+        if (tipoReporte === 'celulas') {
+            if (kpi === 'total_celulas') {
+                const rows = Object.entries(indicadoresCelulas.por_ministerio || {}).map(([ministerio, cantidad]) => [ministerio, cantidad]);
+                abrirModalTarjeta('Células · Total por ministerio', ['Ministerio', 'Cantidad'], rows);
+                return;
+            }
+
+            if (kpi === 'nuevas_semestre') {
+                abrirModalTarjeta('Células · Nuevas en semestre', ['Indicador', 'Valor'], [['Nuevas en semestre', parseInt((indicadoresCelulas.totales || {}).nuevas_semestre || 0, 10)]]);
+                return;
+            }
+
+            if (kpi === 'cerradas_semestre') {
+                abrirModalTarjeta('Células · Cerradas en semestre', ['Indicador', 'Valor'], [['Cerradas en semestre', parseInt((indicadoresCelulas.totales || {}).cerradas_semestre || 0, 10)]]);
+                return;
+            }
+
+            const rowsAsistencia = (Array.isArray(asistencia) ? asistencia : [])
+                .filter((item) => {
+                    const reales = parseInt(item.Asistencias_Reales || 0, 10);
+                    if (kpi === 'reportadas_semana') {
+                        return reales > 0;
+                    }
+                    if (kpi === 'no_reportadas_semana') {
+                        return reales <= 0;
+                    }
+                    return true;
+                })
+                .map((item) => {
+                    const esperadas = parseInt(item.Asistencias_Esperadas || 0, 10);
+                    const reales = parseInt(item.Asistencias_Reales || 0, 10);
+                    const porcentaje = esperadas > 0 ? Math.round((reales / esperadas) * 1000) / 10 : 0;
+                    return [item.Nombre_Celula || 'Sin célula', item.Nombre_Lider || 'Sin líder', esperadas, reales, `${porcentaje}%`];
+                });
+
+            const tituloAsistencia = kpi === 'reportadas_semana'
+                ? 'Células · Reportadas esta semana'
+                : (kpi === 'no_reportadas_semana' ? 'Células · No reportadas esta semana' : 'Células · Promedio de asistencia');
+            abrirModalTarjeta(tituloAsistencia, ['Célula', 'Líder', 'Esperadas', 'Reales', '%'], rowsAsistencia);
+        }
+    });
+});
 
 if (tipoReporte === 'personas') {
     let graficosPersonasRenderizados = false;
@@ -1555,6 +1779,10 @@ if (tipoReporte === 'personas') {
     background: #17324d;
     border-color: #17324d;
     color: #ffffff;
+}
+
+.report-kpi-button.js-kpi-modal {
+    cursor: pointer;
 }
 
 #reportesVisualContainer .table-container,

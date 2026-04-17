@@ -94,6 +94,58 @@ class EscuelaFormacionInscripcion extends BaseModel {
         );
     }
 
+    private function normalizarSoloDigitos($valor) {
+        return preg_replace('/\D+/', '', (string)$valor);
+    }
+
+    public function getByIdInscripcion($idInscripcion) {
+        $idInscripcion = (int)$idInscripcion;
+        if ($idInscripcion <= 0) {
+            return null;
+        }
+
+        $rows = $this->query(
+            "SELECT * FROM {$this->table} WHERE Id_Inscripcion = ? LIMIT 1",
+            [$idInscripcion]
+        );
+
+        return $rows[0] ?? null;
+    }
+
+    public function buscarInscripcionesPorTelefonoOCedula($telefono = '', $cedula = '', $limit = 20) {
+        $telefono = $this->normalizarSoloDigitos($telefono);
+        $cedula = $this->normalizarSoloDigitos($cedula);
+        $limit = max(1, min(50, (int)$limit));
+
+        if ($telefono === '' && $cedula === '') {
+            return [];
+        }
+
+        $telefonoExpr = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(s.Telefono, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '')";
+        $cedulaExpr = "REPLACE(REPLACE(REPLACE(COALESCE(s.Cedula, ''), ' ', ''), '-', ''), '.', '')";
+
+        $where = [];
+        $params = [];
+
+        if ($telefono !== '') {
+            $where[] = "{$telefonoExpr} = ?";
+            $params[] = $telefono;
+        }
+
+        if ($cedula !== '') {
+            $where[] = "{$cedulaExpr} = ?";
+            $params[] = $cedula;
+        }
+
+        $sql = "SELECT s.*
+                FROM {$this->table} s
+                WHERE " . implode(' OR ', $where) . "
+                ORDER BY s.Fecha_Registro DESC, s.Id_Inscripcion DESC
+                LIMIT {$limit}";
+
+        return $this->query($sql, $params);
+    }
+
     public function existeInscripcionPersonaPrograma($idPersona, $programa) {
         $idPersona = (int)$idPersona;
         $programa = trim((string)$programa);
@@ -109,6 +161,21 @@ class EscuelaFormacionInscripcion extends BaseModel {
         return !empty($rows);
     }
 
+    public function getIdInscripcionPersonaPrograma($idPersona, $programa) {
+        $idPersona = (int)$idPersona;
+        $programa = trim((string)$programa);
+        if ($idPersona <= 0 || $programa === '') {
+            return 0;
+        }
+
+        $rows = $this->query(
+            "SELECT Id_Inscripcion FROM {$this->table} WHERE Id_Persona = ? AND Programa = ? ORDER BY Id_Inscripcion ASC LIMIT 1",
+            [$idPersona, $programa]
+        );
+
+        return !empty($rows) ? (int)($rows[0]['Id_Inscripcion'] ?? 0) : 0;
+    }
+
     public function crearDesdePersonaSiNoExiste($idPersona, $programa, $fuente = 'Escuelas de formacion (asistencia)') {
         $idPersona = (int)$idPersona;
         $programa = trim((string)$programa);
@@ -117,7 +184,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
             return false;
         }
 
-        if ($this->existeInscripcionPersonaPrograma($idPersona, $programa)) {
+        if ($this->getIdInscripcionPersonaPrograma($idPersona, $programa) > 0) {
             return true;
         }
 
@@ -161,7 +228,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
         return true;
     }
 
-    public function getListado($programa = '', $buscar = '', $limit = 300) {
+    public function getListado($programa = '', $buscar = '', $limit = 300, $genero = 'todos', $idMinisterio = null, $idLider = null) {
         $limit = (int)$limit;
         if ($limit <= 0) {
             $limit = 300;
@@ -172,6 +239,9 @@ class EscuelaFormacionInscripcion extends BaseModel {
 
         $programa = trim((string)$programa);
         $buscar = trim((string)$buscar);
+        $genero = strtolower(trim((string)$genero));
+        $idMinisterio = (int)$idMinisterio;
+        $idLider = (int)$idLider;
 
         $where = [];
         $params = [];
@@ -185,6 +255,16 @@ class EscuelaFormacionInscripcion extends BaseModel {
             }
         }
 
+        if ($genero === 'mujeres') {
+            $where[] = "(LOWER(TRIM(COALESCE(s.Genero, ''))) LIKE '%mujer%' OR LOWER(TRIM(COALESCE(s.Genero, ''))) LIKE '%femen%' OR LOWER(TRIM(COALESCE(s.Genero, ''))) = 'f')";
+        } elseif ($genero === 'hombres') {
+            $where[] = "(LOWER(TRIM(COALESCE(s.Genero, ''))) LIKE '%hombre%' OR LOWER(TRIM(COALESCE(s.Genero, ''))) LIKE '%mascul%' OR LOWER(TRIM(COALESCE(s.Genero, ''))) = 'm')";
+        } elseif ($genero === 'joven_hombre') {
+            $where[] = "(LOWER(TRIM(COALESCE(s.Genero, ''))) LIKE '%joven%' AND (LOWER(TRIM(COALESCE(s.Genero, ''))) LIKE '%hombre%' OR LOWER(TRIM(COALESCE(s.Genero, ''))) LIKE '%mascul%'))";
+        } elseif ($genero === 'joven_mujer') {
+            $where[] = "(LOWER(TRIM(COALESCE(s.Genero, ''))) LIKE '%joven%' AND (LOWER(TRIM(COALESCE(s.Genero, ''))) LIKE '%mujer%' OR LOWER(TRIM(COALESCE(s.Genero, ''))) LIKE '%femen%'))";
+        }
+
         if ($buscar !== '') {
             $where[] = '(s.Nombre LIKE ? OR s.Genero LIKE ? OR s.Telefono LIKE ? OR s.Cedula LIKE ? OR s.Lider LIKE ? OR s.Nombre_Ministerio LIKE ?)';
             $like = '%' . $buscar . '%';
@@ -194,6 +274,17 @@ class EscuelaFormacionInscripcion extends BaseModel {
             $params[] = $like;
             $params[] = $like;
             $params[] = $like;
+        }
+
+        if ($idMinisterio > 0) {
+            $where[] = '(s.Id_Ministerio = ? OR p.Id_Ministerio = ?)';
+            $params[] = $idMinisterio;
+            $params[] = $idMinisterio;
+        }
+
+        if ($idLider > 0) {
+            $where[] = 'p.Id_Lider = ?';
+            $params[] = $idLider;
         }
 
         $sql = "SELECT

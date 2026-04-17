@@ -372,7 +372,6 @@
                             <option value="capacitacion_destino_nivel_1" <?= (string)($old['programa'] ?? '') === 'capacitacion_destino_nivel_1' ? 'selected' : '' ?>>Capacitación Destino - Nivel 1 (Módulos 1 y 2)</option>
                             <option value="capacitacion_destino_nivel_2" <?= (string)($old['programa'] ?? '') === 'capacitacion_destino_nivel_2' ? 'selected' : '' ?>>Capacitación Destino - Nivel 2 (Módulos 3 y 4)</option>
                             <option value="capacitacion_destino_nivel_3" <?= (string)($old['programa'] ?? '') === 'capacitacion_destino_nivel_3' ? 'selected' : '' ?>>Capacitación Destino - Nivel 3 (Módulos 5 y 6)</option>
-                            <option value="capacitacion_destino" <?= (string)($old['programa'] ?? '') === 'capacitacion_destino' ? 'selected' : '' ?>>Capacitación Destino (general)</option>
                         </select>
                     </div>
                 </div>

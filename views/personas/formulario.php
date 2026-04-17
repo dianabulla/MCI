@@ -224,44 +224,44 @@ $urlVolver = $returnUrl !== ''
                            placeholder="Nombre de quien lo invitó">
                 </div>
 
-                <div class="form-group">
-                    <label for="tipo_reunion">Ganado en</label>
-                    <?php
-                    $tipoReunionRaw = $post_data['tipo_reunion'] ?? ($persona['Tipo_Reunion'] ?? '');
-                    $tipoReunionNormalizado = strtolower(trim((string)$tipoReunionRaw));
-                    $tipoReunionNormalizado = strtr($tipoReunionNormalizado, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n']);
-                    if (in_array($tipoReunionNormalizado, ['celula'], true)) {
-                        $tipoReunionSeleccionado = 'Celula';
-                    } elseif (in_array($tipoReunionNormalizado, ['domingo'], true)) {
-                        $tipoReunionSeleccionado = 'Domingo';
-                    } elseif (in_array($tipoReunionNormalizado, ['somos uno', 'somos_uno', 'viernes'], true)) {
-                        $tipoReunionSeleccionado = 'Somos Uno';
-                    } elseif (in_array($tipoReunionNormalizado, ['migrados'], true)) {
-                        $tipoReunionSeleccionado = 'Migrados';
-                    } elseif (in_array($tipoReunionNormalizado, ['otro', 'otros', 'asignados'], true)) {
-                        $tipoReunionSeleccionado = 'Otros';
-                    } else {
-                        $tipoReunionSeleccionado = '';
-                    }
-                    $ganadoEnOtroObservacion = $post_data['ganado_en_otro_observacion'] ?? ($persona['Observacion_Ganado_En'] ?? '');
-                    if ($ganadoEnOtroObservacion === '' && in_array((string)$tipoReunionRaw, ['Migrados', 'Asignados'], true)) {
-                        $ganadoEnOtroObservacion = (string)$tipoReunionRaw;
-                    }
-                    ?>
-                    <select id="tipo_reunion" name="tipo_reunion" class="form-control">
-                        <option value="">Seleccionar...</option>
-                        <option value="Domingo" <?= $tipoReunionSeleccionado === 'Domingo' ? 'selected' : '' ?>>Domingo</option>
-                        <option value="Somos Uno" <?= $tipoReunionSeleccionado === 'Somos Uno' ? 'selected' : '' ?>>Somos Uno</option>
-                        <option value="Celula" <?= $tipoReunionSeleccionado === 'Celula' ? 'selected' : '' ?>>Célula</option>
-                        <option value="Migrados" <?= $tipoReunionSeleccionado === 'Migrados' ? 'selected' : '' ?>>Migrados</option>
-                        <option value="Otros" <?= $tipoReunionSeleccionado === 'Otros' ? 'selected' : '' ?>>Otros</option>
-                    </select>
-                </div>
+                <div id="ganado_en_section">
+                    <div class="form-group">
+                        <label for="tipo_reunion">Ganado en</label>
+                        <?php
+                        $tipoReunionRaw = $post_data['tipo_reunion'] ?? ($persona['Tipo_Reunion'] ?? '');
+                        $tipoReunionNormalizado = strtolower(trim((string)$tipoReunionRaw));
+                        $tipoReunionNormalizado = strtr($tipoReunionNormalizado, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n']);
+                        if (in_array($tipoReunionNormalizado, ['celula'], true)) {
+                            $tipoReunionSeleccionado = 'Celula';
+                        } elseif (in_array($tipoReunionNormalizado, ['domingo'], true)) {
+                            $tipoReunionSeleccionado = 'Domingo';
+                        } elseif (in_array($tipoReunionNormalizado, ['somos uno', 'somos_uno', 'viernes'], true)) {
+                            $tipoReunionSeleccionado = 'Somos Uno';
+                        } elseif (in_array($tipoReunionNormalizado, ['otro', 'otros', 'asignados'], true)) {
+                            $tipoReunionSeleccionado = 'Otros';
+                        } else {
+                            $tipoReunionSeleccionado = '';
+                        }
+                        $ganadoEnOtroObservacion = $post_data['ganado_en_otro_observacion'] ?? ($persona['Observacion_Ganado_En'] ?? '');
+                        if ($ganadoEnOtroObservacion === '' && in_array((string)$tipoReunionRaw, ['Migrados', 'Asignados'], true)) {
+                            $ganadoEnOtroObservacion = (string)$tipoReunionRaw;
+                        }
+                        ?>
+                        <select id="tipo_reunion" name="tipo_reunion" class="form-control">
+                            <option value="">Seleccionar...</option>
+                            <option value="Domingo" <?= $tipoReunionSeleccionado === 'Domingo' ? 'selected' : '' ?>>Domingo</option>
+                            <option value="Somos Uno" <?= $tipoReunionSeleccionado === 'Somos Uno' ? 'selected' : '' ?>>Somos Uno</option>
+                            <option value="Celula" <?= $tipoReunionSeleccionado === 'Celula' ? 'selected' : '' ?>>Célula</option>
+                            <option value="Otros" <?= $tipoReunionSeleccionado === 'Otros' ? 'selected' : '' ?>>Otros</option>
+                        </select>
+                        <small class="form-text text-muted">Solo aplica para personas nuevas.</small>
+                    </div>
 
-                <div class="form-group" id="ganado_en_otro_wrap" style="display:none;">
-                    <label for="ganado_en_otro_observacion">Observaciones</label>
-                    <textarea id="ganado_en_otro_observacion" name="ganado_en_otro_observacion" class="form-control" rows="3" placeholder="Describe dónde fue ganado o la observación necesaria..."><?= htmlspecialchars((string)$ganadoEnOtroObservacion) ?></textarea>
-                    <small class="form-text text-muted">Este campo es obligatorio cuando seleccionas Otros.</small>
+                    <div class="form-group" id="ganado_en_otro_wrap" style="display:none;">
+                        <label for="ganado_en_otro_observacion">Observaciones</label>
+                        <textarea id="ganado_en_otro_observacion" name="ganado_en_otro_observacion" class="form-control" rows="3" placeholder="Describe dónde fue ganado o la observación necesaria..."><?= htmlspecialchars((string)$ganadoEnOtroObservacion) ?></textarea>
+                        <small class="form-text text-muted">Este campo es obligatorio cuando seleccionas Otros.</small>
+                    </div>
                 </div>
 
                 <?php
@@ -861,8 +861,10 @@ const personaForm = document.getElementById('persona_form');
 const celulaError = document.getElementById('celula_error');
 const liderError = document.getElementById('lider_error');
 const tipoReunionSelect = document.getElementById('tipo_reunion');
+const ganadoEnSection = document.getElementById('ganado_en_section');
 const ganadoEnOtroWrap = document.getElementById('ganado_en_otro_wrap');
 const ganadoEnOtroInput = document.getElementById('ganado_en_otro_observacion');
+const tipoPersonaRadios = Array.from(document.querySelectorAll('input[name="tipo_persona"]'));
 const ministerioSelect = document.getElementById('id_ministerio');
 const procesoHiddenInput = document.getElementById('proceso');
 const checklistPayloadInput = document.getElementById('escalera_checklist_payload');
@@ -1321,14 +1323,61 @@ function actualizarCampoGanadoEnOtro() {
         return;
     }
 
+    if (tipoReunionSelect.disabled) {
+        ganadoEnOtroWrap.style.display = 'none';
+        ganadoEnOtroInput.required = false;
+        ganadoEnOtroInput.value = '';
+        return;
+    }
+
     const esOtros = String(tipoReunionSelect.value || '') === 'Otros';
     ganadoEnOtroWrap.style.display = esOtros ? '' : 'none';
     ganadoEnOtroInput.required = esOtros;
 }
 
+function esTipoPersonaAntiguaSeleccionada() {
+    if (!tipoPersonaRadios.length) {
+        return false;
+    }
+
+    const seleccion = tipoPersonaRadios.find(function(radio) {
+        return radio.checked;
+    });
+
+    return !!seleccion && String(seleccion.value || '') === 'antigua';
+}
+
+function actualizarReglaGanadoEnPorTipoPersona() {
+    if (!tipoReunionSelect) {
+        return;
+    }
+
+    const esAntigua = esTipoPersonaAntiguaSeleccionada();
+    if (ganadoEnSection) {
+        ganadoEnSection.style.display = esAntigua ? 'none' : '';
+    }
+    tipoReunionSelect.disabled = esAntigua;
+
+    if (esAntigua) {
+        tipoReunionSelect.value = '';
+        if (ganadoEnOtroInput) {
+            ganadoEnOtroInput.value = '';
+        }
+    }
+
+    actualizarCampoGanadoEnOtro();
+}
+
 if (tipoReunionSelect) {
     tipoReunionSelect.addEventListener('change', actualizarCampoGanadoEnOtro);
     actualizarCampoGanadoEnOtro();
+}
+
+if (tipoPersonaRadios.length) {
+    tipoPersonaRadios.forEach(function(radio) {
+        radio.addEventListener('change', actualizarReglaGanadoEnPorTipoPersona);
+    });
+    actualizarReglaGanadoEnPorTipoPersona();
 }
 
 function inicializarMayusculasAutomaticas() {

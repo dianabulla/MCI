@@ -81,6 +81,12 @@
             border-color: #f1c0c0;
         }
 
+        .alert-info {
+            background: #e9f4ff;
+            color: #14507a;
+            border-color: #bfdef7;
+        }
+
         .codigo-box {
             margin: 14px 0 20px;
             background: #fffbe8;
@@ -179,7 +185,7 @@
     <div class="container">
         <div class="hero">
             <h1>Registro de ninos - Teens</h1>
-            <p>Completa este formulario y al final te entregaremos un codigo de consulta.</p>
+            <p>Completa este formulario y al final te entregaremos un codigo semanal de asistencia.</p>
         </div>
 
         <div class="content">
@@ -191,13 +197,14 @@
 
             <?php if (!empty($codigo ?? '')): ?>
                 <div class="codigo-box">
-                    Codigo de registro
+                    Codigo semanal
                     <strong><?= htmlspecialchars((string)$codigo, ENT_QUOTES, 'UTF-8') ?></strong>
-                    <div>Guardalo. Lo necesitaras para consultar la informacion del nino.</div>
+                    <div>Guardalo. Si ya estabas registrado, este codigo reemplaza el de la semana anterior.</div>
                 </div>
             <?php endif; ?>
 
             <form method="POST" action="<?= PUBLIC_URL ?>index.php?url=teen/guardar-menor-publico" id="formRegistroPublicoTeen">
+                <input type="hidden" id="id_menor_existente" name="id_menor_existente" value="<?= htmlspecialchars((string)($old['id_menor_existente'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                 <div>
                     <label for="nombre_menor">Nombre y apellido del nino</label>
                     <input type="text" id="nombre_menor" name="nombre_menor" required value="<?= htmlspecialchars((string)($old['nombre_menor'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" class="js-upper">
@@ -211,6 +218,7 @@
                 <div>
                     <label for="telefono_contacto">Telefono de contacto</label>
                     <input type="text" id="telefono_contacto" name="telefono_contacto" required value="<?= htmlspecialchars((string)($old['telefono_contacto'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                    <small id="telefono_lookup_info" style="display:block; margin-top:6px; color:#5e6f83;">Escribe el numero para autocompletar si ya existe registro.</small>
                 </div>
 
                 <div>
@@ -254,10 +262,14 @@
                     <button type="submit" class="btn btn-primary">Guardar registro</button>
                     <a href="<?= PUBLIC_URL ?>index.php?url=teen/consulta-codigo" class="btn btn-secondary">Consultar codigo</a>
                 </div>
+
+                <div id="alerta_registro_existente" class="full alert alert-info" style="display:none; margin-top:0;">
+                    Ya encontramos este numero. Cargamos los datos del menor para agilizar el registro semanal.
+                </div>
             </form>
 
             <p class="hint">
-                Nota: al completar el registro se mostrara un codigo unico. Ese codigo permite consultar despues a que nino pertenece.
+                Nota: si el nino ya existe en el sistema, no se duplica el registro. Solo se actualiza su asistencia semanal con un codigo nuevo cada domingo.
             </p>
         </div>
     </div>
@@ -287,6 +299,113 @@
 
             var fechaNacimientoInput = document.getElementById('fecha_nacimiento');
             var edadInput = document.getElementById('edad');
+            var telefonoInput = document.getElementById('telefono_contacto');
+            var nombreMenorInput = document.getElementById('nombre_menor');
+            var nombreAcudienteInput = document.getElementById('nombre_acudiente');
+            var ministerioInput = document.getElementById('id_ministerio');
+            var asisteCelulaInput = document.getElementById('asiste_celula');
+            var barrioInput = document.getElementById('barrio');
+            var idMenorExistenteInput = document.getElementById('id_menor_existente');
+            var alertaRegistroExistente = document.getElementById('alerta_registro_existente');
+            var telefonoLookupInfo = document.getElementById('telefono_lookup_info');
+            var ultimoTelefonoConsultado = '';
+
+            function normalizarTelefono(valor) {
+                return String(valor || '').replace(/\D+/g, '');
+            }
+
+            function ocultarAlertaExistente() {
+                if (alertaRegistroExistente) {
+                    alertaRegistroExistente.style.display = 'none';
+                }
+                if (idMenorExistenteInput) {
+                    idMenorExistenteInput.value = '';
+                }
+                if (telefonoLookupInfo) {
+                    telefonoLookupInfo.textContent = 'Escribe el numero para autocompletar si ya existe registro.';
+                }
+            }
+
+            function mostrarAlertaExistente(texto) {
+                if (alertaRegistroExistente) {
+                    alertaRegistroExistente.style.display = 'block';
+                    alertaRegistroExistente.textContent = texto;
+                }
+                if (telefonoLookupInfo) {
+                    telefonoLookupInfo.textContent = 'Numero encontrado. Puedes ajustar cualquier dato antes de guardar.';
+                }
+            }
+
+            function llenarDatosPorTelefono(data) {
+                if (!data) {
+                    return;
+                }
+
+                if (nombreMenorInput && data.nombre_menor) {
+                    nombreMenorInput.value = String(data.nombre_menor).toUpperCase();
+                }
+                if (nombreAcudienteInput && data.nombre_acudiente) {
+                    nombreAcudienteInput.value = String(data.nombre_acudiente).toUpperCase();
+                }
+                if (telefonoInput && data.telefono_contacto) {
+                    telefonoInput.value = String(data.telefono_contacto);
+                }
+                if (fechaNacimientoInput && data.fecha_nacimiento) {
+                    fechaNacimientoInput.value = String(data.fecha_nacimiento);
+                }
+                if (edadInput && typeof data.edad !== 'undefined') {
+                    edadInput.value = String(data.edad || '');
+                }
+                if (ministerioInput && data.id_ministerio) {
+                    ministerioInput.value = String(data.id_ministerio);
+                }
+                if (asisteCelulaInput && data.asiste_celula) {
+                    asisteCelulaInput.value = String(data.asiste_celula).toUpperCase();
+                }
+                if (barrioInput && data.barrio) {
+                    barrioInput.value = String(data.barrio).toUpperCase();
+                }
+                if (idMenorExistenteInput && data.id) {
+                    idMenorExistenteInput.value = String(data.id);
+                }
+            }
+
+            function consultarTelefonoExistente() {
+                if (!telefonoInput) {
+                    return;
+                }
+
+                var telefonoNormalizado = normalizarTelefono(telefonoInput.value);
+                if (telefonoNormalizado.length < 7) {
+                    ocultarAlertaExistente();
+                    return;
+                }
+
+                if (telefonoNormalizado === ultimoTelefonoConsultado) {
+                    return;
+                }
+                ultimoTelefonoConsultado = telefonoNormalizado;
+
+                fetch('<?= PUBLIC_URL ?>index.php?url=teen/buscar-menor-publico-telefono&telefono=' + encodeURIComponent(telefonoNormalizado))
+                    .then(function (res) { return res.json(); })
+                    .then(function (res) {
+                        if (!res || !res.success || !res.found || !res.data) {
+                            ocultarAlertaExistente();
+                            return;
+                        }
+
+                        llenarDatosPorTelefono(res.data);
+
+                        var texto = 'Ya encontramos este numero. Cargamos los datos para agilizar.';
+                        if (res.data.codigo_semana) {
+                            texto += ' Codigo semanal vigente: ' + String(res.data.codigo_semana) + '.';
+                        }
+                        mostrarAlertaExistente(texto);
+                    })
+                    .catch(function () {
+                        ocultarAlertaExistente();
+                    });
+            }
 
             function actualizarEdad() {
                 if (!fechaNacimientoInput || !edadInput) {
@@ -300,6 +419,11 @@
                 fechaNacimientoInput.addEventListener('input', actualizarEdad);
             }
             actualizarEdad();
+
+            if (telefonoInput) {
+                telefonoInput.addEventListener('blur', consultarTelefonoExistente);
+                telefonoInput.addEventListener('change', consultarTelefonoExistente);
+            }
 
             var camposUpper = document.querySelectorAll('.js-upper');
             camposUpper.forEach(function (campo) {

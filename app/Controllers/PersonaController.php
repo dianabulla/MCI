@@ -497,6 +497,7 @@ class PersonaController extends BaseController {
             'otro' => 'Otros',
             'otros' => 'Otros',
             'viernes' => 'Somos Uno',
+            // Compatibilidad con registros antiguos/cargas previas.
             'migrados' => 'Migrados',
             'asignados' => 'Asignados'
         ];
@@ -2285,8 +2286,15 @@ class PersonaController extends BaseController {
             $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
             $idMinisterioNormalizado = $this->normalizarIdMinisterioPost($_POST['id_ministerio'] ?? null);
             $idLiderNormalizado = $this->normalizarIdLiderPost($_POST['id_lider'] ?? null);
+            $tipoPersonaInput = strtolower(trim((string)($_POST['tipo_persona'] ?? 'nueva')));
+            $esPersonaAntigua = in_array($tipoPersonaInput, ['antigua', 'antiguo', '1'], true);
+
             $tipoReunionNormalizado = $this->normalizarTipoReunionInput($_POST['tipo_reunion'] ?? null);
             $observacionGanadoEn = $this->normalizarObservacionGanadoEn($tipoReunionNormalizado, $_POST['ganado_en_otro_observacion'] ?? null);
+            if ($esPersonaAntigua) {
+                $tipoReunionNormalizado = null;
+                $observacionGanadoEn = null;
+            }
             $convencionesSeleccionadas = $this->normalizarConvencionesSeleccionadas($_POST['convenciones'] ?? ($_POST['convencion'] ?? null));
 
             if ($tipoReunionNormalizado === 'Otros' && $observacionGanadoEn === null) {
@@ -2350,7 +2358,6 @@ class PersonaController extends BaseController {
                 'Fecha_Registro_Unix' => time()
             ];
 
-            $tipoPersonaInput = strtolower(trim((string)($_POST['tipo_persona'] ?? 'nueva')));
             $data['Es_Antiguo'] = in_array($tipoPersonaInput, ['antigua', 'antiguo', '1'], true) ? 1 : 0;
 
             if ($this->soportaCreadoPor) {
@@ -2536,8 +2543,15 @@ class PersonaController extends BaseController {
             $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
             $idMinisterioNormalizado = $this->normalizarIdMinisterioPost($_POST['id_ministerio'] ?? null);
             $idLiderNormalizado = $this->normalizarIdLiderPost($_POST['id_lider'] ?? null, $id);
+            $tipoPersonaInput = strtolower(trim((string)($_POST['tipo_persona'] ?? '')));
+            $esPersonaAntigua = in_array($tipoPersonaInput, ['antigua', 'antiguo', '1'], true);
+
             $tipoReunionNormalizado = $this->normalizarTipoReunionInput($_POST['tipo_reunion'] ?? null);
             $observacionGanadoEn = $this->normalizarObservacionGanadoEn($tipoReunionNormalizado, $_POST['ganado_en_otro_observacion'] ?? null);
+            if ($esPersonaAntigua) {
+                $tipoReunionNormalizado = null;
+                $observacionGanadoEn = null;
+            }
             $convencionesSeleccionadas = $this->normalizarConvencionesSeleccionadas($_POST['convenciones'] ?? ($_POST['convencion'] ?? null));
 
             if ($tipoReunionNormalizado === 'Otros' && $observacionGanadoEn === null) {
@@ -2560,26 +2574,7 @@ class PersonaController extends BaseController {
                 return;
             }
 
-            $duplicadoPersona = $this->personaModel->findDuplicateByCedulaOrTelefono($_POST['numero_documento'] ?? '', $_POST['telefono'] ?? '', $id);
-            if (!empty($duplicadoPersona)) {
-                $persona = $this->personaModel->getById($id);
-                $viewData = [
-                    'persona' => $persona,
-                    'celulas' => $this->celulaModel->getAll(),
-                    'ministerios' => $this->ministerioModel->getAll(),
-                    'roles' => $this->rolModel->getAll(),
-                    'personas_invitadores' => $this->personaModel->getAll(),
-                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
-                    'error' => $this->construirMensajeDuplicadoPersona($duplicadoPersona, $_POST['numero_documento'] ?? '', $_POST['telefono'] ?? ''),
-                    'post_data' => $_POST,
-                    'soportaConvencion' => $this->soportaConvencion,
-                    'soportaProceso' => $this->soportaProceso,
-                    'return_to' => $returnTo,
-                    'celula_retorno' => $celulaRetorno
-                ];
-                $this->view('personas/formulario', $viewData);
-                return;
-            }
+            // Regla de negocio: validación de duplicado por cédula/teléfono solo aplica en creación.
 
             $data = [
                 'Nombre' => $_POST['nombre'],
@@ -2602,7 +2597,6 @@ class PersonaController extends BaseController {
                 'Id_Ministerio' => $idMinisterioNormalizado
             ];
 
-            $tipoPersonaInput = strtolower(trim((string)($_POST['tipo_persona'] ?? '')));
             if ($tipoPersonaInput !== '') {
                 $data['Es_Antiguo'] = in_array($tipoPersonaInput, ['antigua', 'antiguo', '1'], true) ? 1 : 0;
             } elseif (array_key_exists('Es_Antiguo', (array)$personaAntes)) {
@@ -2713,8 +2707,58 @@ class PersonaController extends BaseController {
 
                 $this->redirigirConRetorno($returnUrl, 'personas');
             } catch (PDOException $e) {
+                $esErrorDuplicado = ($e->getCode() == 23000 || strpos($e->getMessage(), '1062') !== false);
+
+                if ($esErrorDuplicado && !empty($personaAntes)) {
+                    $normalizarDoc = static function($valor) {
+                        return preg_replace('/[^A-Z0-9]/', '', strtoupper(trim((string)$valor)));
+                    };
+                    $normalizarTel = static function($valor) {
+                        return preg_replace('/\D+/', '', trim((string)$valor));
+                    };
+
+                    $docAntes = $normalizarDoc($personaAntes['Numero_Documento'] ?? '');
+                    $docNuevo = $normalizarDoc($_POST['numero_documento'] ?? '');
+                    $telAntes = $normalizarTel($personaAntes['Telefono'] ?? '');
+                    $telNuevo = $normalizarTel($_POST['telefono'] ?? '');
+
+                    if ($docAntes === $docNuevo && $telAntes === $telNuevo) {
+                        $dataReintento = $data;
+                        unset($dataReintento['Numero_Documento'], $dataReintento['Telefono']);
+
+                        if (!empty($dataReintento)) {
+                            $this->personaModel->update($id, $dataReintento);
+
+                            $peticionAntes = trim((string)($personaAntes['Peticion'] ?? ''));
+                            $peticionDespues = trim((string)($data['Peticion'] ?? ''));
+                            if ($peticionDespues !== '' && $peticionDespues !== $peticionAntes) {
+                                $this->registrarPeticionSiAplica($id, $peticionDespues);
+                            }
+
+                            $personaDespues = $this->personaModel->getById($id);
+                            if (!empty($personaAntes) && !empty($personaDespues)) {
+                                $this->encolarNotificacionCambiosAsignacion($personaAntes, $personaDespues);
+                            }
+
+                            if ($returnTo === 'asistencia') {
+                                $urlRetorno = 'asistencias/registrar';
+                                if ($celulaRetorno) {
+                                    $urlRetorno .= '&celula=' . $celulaRetorno;
+                                }
+                                $this->redirect($urlRetorno);
+                            }
+
+                            if ($returnTo === 'celulas') {
+                                $this->redirect('celulas');
+                            }
+
+                            $this->redirigirConRetorno($returnUrl, 'personas');
+                        }
+                    }
+                }
+
                 // Detectar error de duplicado
-                if ($e->getCode() == 23000 || strpos($e->getMessage(), '1062') !== false) {
+                if ($esErrorDuplicado) {
                     $error = 'Ya existe una persona registrada con esa cédula o teléfono.';
                 } else {
                     $error = 'Error al actualizar la persona: ' . $e->getMessage();

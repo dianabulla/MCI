@@ -213,8 +213,7 @@ class RegistroPersonaController extends BaseController {
                 'fecha_nacimiento' => (string)($_GET['fecha_nacimiento'] ?? ''),
                 'barrio' => (string)($_GET['barrio'] ?? ''),
                 'peticion' => (string)($_GET['peticion'] ?? ''),
-                'cedula' => (string)($_GET['cedula'] ?? ''),
-                'tipo_persona' => (string)($_GET['tipo_persona'] ?? 'nueva')
+                'cedula' => (string)($_GET['cedula'] ?? '')
             ]
         ];
 
@@ -239,7 +238,7 @@ class RegistroPersonaController extends BaseController {
         $barrio = $this->normalizarTextoMayusculas($_POST['barrio'] ?? '');
         $peticion = $this->normalizarTextoMayusculas($_POST['peticion'] ?? '');
         $cedula = $this->normalizarDocumentoInput($_POST['cedula'] ?? '');
-        $tipoPersonaInput = strtolower(trim((string)($_POST['tipo_persona'] ?? 'nueva')));
+        $tipoPersonaInput = 'nueva';
 
         $errores = [];
 
@@ -255,8 +254,8 @@ class RegistroPersonaController extends BaseController {
             $errores[] = 'Si registra teléfono, debe tener al menos 7 dígitos';
         }
 
-        if (!in_array($ganadoEnRaw, ['domingo', 'somos_uno', 'celula', 'migrados', 'otro'], true)) {
-            $errores[] = 'Debe seleccionar en qué reunión fue ganado (domingo, Somos Uno, célula, migrados u otros)';
+        if (!in_array($ganadoEnRaw, ['domingo', 'somos_uno', 'celula', 'otro'], true)) {
+            $errores[] = 'Debe seleccionar en qué reunión fue ganado (domingo, Somos Uno, célula u otros)';
         }
 
         if ($ganadoEnRaw === 'otro' && $ganadoEnOtroObservacion === '') {
@@ -280,8 +279,7 @@ class RegistroPersonaController extends BaseController {
                 'fecha_nacimiento' => $fechaNacimiento,
                 'barrio' => $barrio,
                 'peticion' => $peticion,
-                'cedula' => $cedula,
-                'tipo_persona' => $tipoPersonaInput
+                'cedula' => $cedula
             ]);
         }
 
@@ -289,7 +287,6 @@ class RegistroPersonaController extends BaseController {
             'domingo' => 'Domingo',
             'somos_uno' => 'Somos Uno',
             'celula' => 'Celula',
-            'migrados' => 'Migrados',
             'otro' => 'Otros'
         ];
         $tipoReunion = $mapTipoReunion[$ganadoEnRaw] ?? 'Domingo';
@@ -326,7 +323,7 @@ class RegistroPersonaController extends BaseController {
         }
 
         if ($this->soportaEsAntiguo) {
-            $data['Es_Antiguo'] = in_array($tipoPersonaInput, ['antigua', 'antiguo', '1'], true) ? 1 : 0;
+            $data['Es_Antiguo'] = 0;
         }
 
         if ($this->soportaProceso) {

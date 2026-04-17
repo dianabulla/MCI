@@ -6,11 +6,13 @@ class Teen extends BaseModel {
     protected $table = 'teens';
     protected $primaryKey = 'id';
     private $tablaMenores = 'teen_menores';
+    private $tablaAsistenciaSemanal = 'teen_menores_asistencia';
 
     public function __construct() {
         parent::__construct();
         $this->ensureTableStructure();
         $this->ensureMenoresTableStructure();
+        $this->ensureAsistenciaSemanalStructure();
     }
 
     /**
@@ -105,16 +107,71 @@ class Teen extends BaseModel {
         }
     }
 
+    private function ensureAsistenciaSemanalStructure() {
+        try {
+            $this->execute(" 
+                CREATE TABLE IF NOT EXISTS {$this->tablaAsistenciaSemanal} (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    id_menor INT NOT NULL,
+                    fecha_domingo DATE NOT NULL,
+                    codigo_semana VARCHAR(24) NOT NULL,
+                    registrado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_menor_domingo (id_menor, fecha_domingo),
+                    UNIQUE KEY uq_codigo_semana (codigo_semana),
+                    KEY idx_fecha_domingo (fecha_domingo)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ");
+
+            if (!$this->indexExists('uq_menor_domingo', $this->tablaAsistenciaSemanal)) {
+                $this->execute("CREATE UNIQUE INDEX uq_menor_domingo ON {$this->tablaAsistenciaSemanal} (id_menor, fecha_domingo)");
+            }
+
+            if (!$this->indexExists('uq_codigo_semana', $this->tablaAsistenciaSemanal)) {
+                $this->execute("CREATE UNIQUE INDEX uq_codigo_semana ON {$this->tablaAsistenciaSemanal} (codigo_semana)");
+            }
+        } catch (Throwable $e) {
+            error_log('Error asegurando estructura de teen_menores_asistencia: ' . $e->getMessage());
+        }
+    }
+
+    private function getFechaDomingoSemana(?DateTimeInterface $fechaReferencia = null) {
+        $base = $fechaReferencia ? DateTimeImmutable::createFromInterface($fechaReferencia) : new DateTimeImmutable('today');
+        if ($base === false) {
+            $base = new DateTimeImmutable('today');
+        }
+
+        $diaSemana = (int)$base->format('w'); // 0 = domingo
+        if ($diaSemana > 0) {
+            $base = $base->modify('-' . $diaSemana . ' days');
+        }
+
+        return $base->format('Y-m-d');
+    }
+
     public function getMenoresRegistrados() {
         $this->ensureMenoresTableStructure();
+        $this->ensureAsistenciaSemanalStructure();
 
         $sql = "SELECT tm.*, 
                        COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
                        TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, ''))) AS Nombre_Acudiente_Base,
-                       COALESCE(NULLIF(TRIM(COALESCE(p.Telefono, '')), ''), tm.telefono_contacto) AS Telefono_Acudiente_Actual
+                       COALESCE(NULLIF(TRIM(COALESCE(p.Telefono, '')), ''), tm.telefono_contacto) AS Telefono_Acudiente_Actual,
+                       COALESCE(agg.total_asistencias, 0) AS total_asistencias,
+                       agg.ultima_fecha_asistencia,
+                       sem.codigo_semana AS codigo_semana_actual,
+                       sem.registrado_en AS fecha_asistencia_actual
                 FROM {$this->tablaMenores} tm
                 LEFT JOIN ministerio m ON m.Id_Ministerio = tm.id_ministerio
                 LEFT JOIN persona p ON p.Id_Persona = tm.id_acudiente
+                LEFT JOIN (
+                    SELECT id_menor,
+                           COUNT(*) AS total_asistencias,
+                           MAX(fecha_domingo) AS ultima_fecha_asistencia
+                    FROM {$this->tablaAsistenciaSemanal}
+                    GROUP BY id_menor
+                ) agg ON agg.id_menor = tm.id
+                LEFT JOIN {$this->tablaAsistenciaSemanal} sem ON sem.id_menor = tm.id
+                    AND sem.fecha_domingo = DATE_SUB(CURDATE(), INTERVAL (DAYOFWEEK(CURDATE()) - 1) DAY)
                 ORDER BY tm.created_at DESC, tm.id DESC";
 
         return $this->query($sql);
@@ -149,7 +206,23 @@ class Teen extends BaseModel {
         return !empty($rows);
     }
 
+    public function existeCodigoSemanal($codigo) {
+        $codigo = trim((string)$codigo);
+        if ($codigo === '') {
+            return false;
+        }
+
+        $rows = $this->query(
+            "SELECT id FROM {$this->tablaAsistenciaSemanal} WHERE codigo_semana = ? LIMIT 1",
+            [$codigo]
+        );
+
+        return !empty($rows);
+    }
+
     public function getMenorByCodigoRegistro($codigo) {
+        $this->ensureAsistenciaSemanalStructure();
+
         $codigo = trim((string)$codigo);
         if ($codigo === '') {
             return null;
@@ -158,14 +231,232 @@ class Teen extends BaseModel {
         $sql = "SELECT tm.*,
                        COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
                        TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, ''))) AS Nombre_Acudiente_Base,
-                       COALESCE(NULLIF(TRIM(COALESCE(p.Telefono, '')), ''), tm.telefono_contacto) AS Telefono_Acudiente_Actual
+                       COALESCE(NULLIF(TRIM(COALESCE(p.Telefono, '')), ''), tm.telefono_contacto) AS Telefono_Acudiente_Actual,
+                       ult.fecha_domingo AS ultima_fecha_asistencia,
+                       ult.codigo_semana AS ultimo_codigo_semana,
+                       COALESCE(agg.total_asistencias, 0) AS total_asistencias
                 FROM {$this->tablaMenores} tm
                 LEFT JOIN ministerio m ON m.Id_Ministerio = tm.id_ministerio
                 LEFT JOIN persona p ON p.Id_Persona = tm.id_acudiente
+                LEFT JOIN (
+                    SELECT a1.id_menor, a1.fecha_domingo, a1.codigo_semana
+                    FROM {$this->tablaAsistenciaSemanal} a1
+                    INNER JOIN (
+                        SELECT id_menor, MAX(fecha_domingo) AS max_domingo
+                        FROM {$this->tablaAsistenciaSemanal}
+                        GROUP BY id_menor
+                    ) ult1 ON ult1.id_menor = a1.id_menor AND ult1.max_domingo = a1.fecha_domingo
+                ) ult ON ult.id_menor = tm.id
+                LEFT JOIN (
+                    SELECT id_menor, COUNT(*) AS total_asistencias
+                    FROM {$this->tablaAsistenciaSemanal}
+                    GROUP BY id_menor
+                ) agg ON agg.id_menor = tm.id
                 WHERE tm.codigo_registro = ?
                 LIMIT 1";
 
         $rows = $this->query($sql, [$codigo]);
+        return $rows[0] ?? null;
+    }
+
+    public function getMenorByCodigoSemanal($codigoSemanal) {
+        $this->ensureAsistenciaSemanalStructure();
+
+        $codigoSemanal = trim((string)$codigoSemanal);
+        if ($codigoSemanal === '') {
+            return null;
+        }
+
+        $sql = "SELECT tm.*,
+                       COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
+                       TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, ''))) AS Nombre_Acudiente_Base,
+                       COALESCE(NULLIF(TRIM(COALESCE(p.Telefono, '')), ''), tm.telefono_contacto) AS Telefono_Acudiente_Actual,
+                       a.fecha_domingo AS fecha_asistencia_codigo,
+                       a.codigo_semana AS codigo_semana,
+                       COALESCE(agg.total_asistencias, 0) AS total_asistencias
+                FROM {$this->tablaAsistenciaSemanal} a
+                INNER JOIN {$this->tablaMenores} tm ON tm.id = a.id_menor
+                LEFT JOIN ministerio m ON m.Id_Ministerio = tm.id_ministerio
+                LEFT JOIN persona p ON p.Id_Persona = tm.id_acudiente
+                LEFT JOIN (
+                    SELECT id_menor, COUNT(*) AS total_asistencias
+                    FROM {$this->tablaAsistenciaSemanal}
+                    GROUP BY id_menor
+                ) agg ON agg.id_menor = tm.id
+                WHERE a.codigo_semana = ?
+                LIMIT 1";
+
+        $rows = $this->query($sql, [$codigoSemanal]);
+        return $rows[0] ?? null;
+    }
+
+    public function findMenorExistentePublico($nombreMenor, $fechaNacimiento, $nombreAcudiente, $telefonoContacto) {
+        $nombreMenor = trim((string)$nombreMenor);
+        $fechaNacimiento = trim((string)$fechaNacimiento);
+        $nombreAcudiente = trim((string)$nombreAcudiente);
+        $telefonoContacto = preg_replace('/\D+/', '', (string)$telefonoContacto);
+
+        if ($nombreMenor === '') {
+            return null;
+        }
+
+        $telefonoExpr = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(telefono_contacto, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '')";
+
+        if ($fechaNacimiento !== '') {
+            $sqlConFecha = "SELECT *
+                            FROM {$this->tablaMenores}
+                            WHERE nombre_menor = ?
+                              AND fecha_nacimiento = ?
+                              AND (
+                                (nombre_acudiente = ? AND ? <> '')
+                                OR ({$telefonoExpr} = ? AND ? <> '')
+                              )
+                            ORDER BY id DESC
+                            LIMIT 1";
+
+            $rowsConFecha = $this->query($sqlConFecha, [
+                $nombreMenor,
+                $fechaNacimiento,
+                $nombreAcudiente,
+                $nombreAcudiente,
+                $telefonoContacto,
+                $telefonoContacto
+            ]);
+
+            if (!empty($rowsConFecha[0])) {
+                return $rowsConFecha[0];
+            }
+        }
+
+        if ($telefonoContacto !== '') {
+            $sqlSinFecha = "SELECT *
+                            FROM {$this->tablaMenores}
+                            WHERE nombre_menor = ?
+                              AND {$telefonoExpr} = ?
+                            ORDER BY id DESC
+                            LIMIT 1";
+
+            $rowsSinFecha = $this->query($sqlSinFecha, [$nombreMenor, $telefonoContacto]);
+            if (!empty($rowsSinFecha[0])) {
+                return $rowsSinFecha[0];
+            }
+        }
+
+        return null;
+    }
+
+    public function getMenorRegistradoById($idMenor) {
+        $idMenor = (int)$idMenor;
+        if ($idMenor <= 0) {
+            return null;
+        }
+
+        $rows = $this->query(
+            "SELECT * FROM {$this->tablaMenores} WHERE id = ? LIMIT 1",
+            [$idMenor]
+        );
+
+        return $rows[0] ?? null;
+    }
+
+    public function getMenorByTelefonoContacto($telefonoContacto) {
+        $this->ensureAsistenciaSemanalStructure();
+
+        $telefonoContacto = preg_replace('/\D+/', '', (string)$telefonoContacto);
+        if ($telefonoContacto === '' || strlen($telefonoContacto) < 7) {
+            return null;
+        }
+
+        $telefonoExpr = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(tm.telefono_contacto, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '')";
+
+        $sql = "SELECT tm.*,
+                       COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
+                       COALESCE(agg.total_asistencias, 0) AS total_asistencias,
+                       ult.fecha_domingo AS ultima_fecha_asistencia,
+                       ult.codigo_semana AS ultimo_codigo_semana,
+                       sem.codigo_semana AS codigo_semana_actual,
+                       sem.registrado_en AS fecha_asistencia_actual
+                FROM {$this->tablaMenores} tm
+                LEFT JOIN ministerio m ON m.Id_Ministerio = tm.id_ministerio
+                LEFT JOIN (
+                    SELECT id_menor, COUNT(*) AS total_asistencias
+                    FROM {$this->tablaAsistenciaSemanal}
+                    GROUP BY id_menor
+                ) agg ON agg.id_menor = tm.id
+                LEFT JOIN (
+                    SELECT a1.id_menor, a1.fecha_domingo, a1.codigo_semana
+                    FROM {$this->tablaAsistenciaSemanal} a1
+                    INNER JOIN (
+                        SELECT id_menor, MAX(fecha_domingo) AS max_domingo
+                        FROM {$this->tablaAsistenciaSemanal}
+                        GROUP BY id_menor
+                    ) ult1 ON ult1.id_menor = a1.id_menor AND ult1.max_domingo = a1.fecha_domingo
+                ) ult ON ult.id_menor = tm.id
+                LEFT JOIN {$this->tablaAsistenciaSemanal} sem ON sem.id_menor = tm.id
+                    AND sem.fecha_domingo = DATE_SUB(CURDATE(), INTERVAL (DAYOFWEEK(CURDATE()) - 1) DAY)
+                WHERE {$telefonoExpr} = ?
+                ORDER BY tm.updated_at DESC, tm.id DESC
+                LIMIT 1";
+
+        $rows = $this->query($sql, [$telefonoContacto]);
+        return $rows[0] ?? null;
+    }
+
+    public function updateMenorById($idMenor, array $data) {
+        $idMenor = (int)$idMenor;
+        if ($idMenor <= 0 || empty($data)) {
+            return false;
+        }
+
+        $sets = [];
+        $params = [];
+        foreach ($data as $campo => $valor) {
+            $sets[] = "{$campo} = ?";
+            $params[] = $valor;
+        }
+
+        $params[] = $idMenor;
+
+        $sql = "UPDATE {$this->tablaMenores}
+                SET " . implode(', ', $sets) . "
+                WHERE id = ?
+                LIMIT 1";
+
+        return $this->execute($sql, $params);
+    }
+
+    public function registrarAsistenciaSemanal($idMenor, $codigoSemanal, ?DateTimeInterface $fechaReferencia = null) {
+        $this->ensureAsistenciaSemanalStructure();
+
+        $idMenor = (int)$idMenor;
+        $codigoSemanal = trim((string)$codigoSemanal);
+        if ($idMenor <= 0 || $codigoSemanal === '') {
+            return false;
+        }
+
+        $fechaDomingo = $this->getFechaDomingoSemana($fechaReferencia);
+        $sql = "INSERT INTO {$this->tablaAsistenciaSemanal} (id_menor, fecha_domingo, codigo_semana)
+                VALUES (?, ?, ?)";
+
+        return $this->execute($sql, [$idMenor, $fechaDomingo, $codigoSemanal]);
+    }
+
+    public function getAsistenciaSemanalActualByMenor($idMenor, ?DateTimeInterface $fechaReferencia = null) {
+        $this->ensureAsistenciaSemanalStructure();
+
+        $idMenor = (int)$idMenor;
+        if ($idMenor <= 0) {
+            return null;
+        }
+
+        $fechaDomingo = $this->getFechaDomingoSemana($fechaReferencia);
+        $rows = $this->query(
+            "SELECT * FROM {$this->tablaAsistenciaSemanal}
+             WHERE id_menor = ? AND fecha_domingo = ?
+             LIMIT 1",
+            [$idMenor, $fechaDomingo]
+        );
+
         return $rows[0] ?? null;
     }
 

@@ -84,6 +84,49 @@ class TeenController extends BaseController {
         throw new Exception('No fue posible generar un código único. Intenta nuevamente.');
     }
 
+    private function generarCodigoSemanalUnico() {
+        for ($i = 0; $i < 20; $i++) {
+            $numero = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $codigo = 'TS-' . date('ymd') . '-' . $numero;
+            if (!$this->teenModel->existeCodigoSemanal($codigo)) {
+                return $codigo;
+            }
+        }
+
+        throw new Exception('No fue posible generar un código semanal único. Intenta nuevamente.');
+    }
+
+    private function obtenerOCrearAsistenciaSemanal($idMenor) {
+        $idMenor = (int)$idMenor;
+        if ($idMenor <= 0) {
+            throw new Exception('ID de menor inválido para registrar asistencia semanal.');
+        }
+
+        $existente = $this->teenModel->getAsistenciaSemanalActualByMenor($idMenor);
+        if (!empty($existente)) {
+            return [
+                'asistencia' => $existente,
+                'fue_nueva' => false
+            ];
+        }
+
+        $codigoSemanal = $this->generarCodigoSemanalUnico();
+        $ok = $this->teenModel->registrarAsistenciaSemanal($idMenor, $codigoSemanal);
+        if (!$ok) {
+            throw new Exception('No se pudo registrar la asistencia semanal.');
+        }
+
+        $asistencia = $this->teenModel->getAsistenciaSemanalActualByMenor($idMenor);
+        if (empty($asistencia)) {
+            throw new Exception('No se encontró la asistencia semanal recién creada.');
+        }
+
+        return [
+            'asistencia' => $asistencia,
+            'fue_nueva' => true
+        ];
+    }
+
     /**
      * Pantalla principal del módulo.
      * GET: lista materiales
@@ -257,11 +300,16 @@ class TeenController extends BaseController {
             exit;
         }
 
+        $urlRegistro = $this->buildAbsolutePublicUrl('teen/registro-publico');
+        $urlConsulta = $this->buildAbsolutePublicUrl('teen/consulta-codigo');
+
         $this->view('teen/formulario', [
             'ministerios' => $this->ministerioModel->getAll(),
             'registros' => $this->teenModel->getMenoresRegistrados(),
             'mensaje' => $_GET['mensaje'] ?? '',
             'tipo' => $_GET['tipo'] ?? '',
+            'url_registro' => $urlRegistro,
+            'url_consulta' => $urlConsulta,
             'old' => [
                 'nombre_menor' => (string)($_GET['nombre_menor'] ?? ''),
                 'acudiente_busqueda' => (string)($_GET['acudiente_busqueda'] ?? ''),
@@ -310,6 +358,8 @@ class TeenController extends BaseController {
         }
         $idMinisterioRaw = trim((string)($_POST['id_ministerio'] ?? ''));
         $idMinisterio = ctype_digit($idMinisterioRaw) ? (int)$idMinisterioRaw : 0;
+        $idMenorExistenteRaw = trim((string)($_POST['id_menor_existente'] ?? ''));
+        $idMenorExistente = ctype_digit($idMenorExistenteRaw) ? (int)$idMenorExistenteRaw : 0;
         $asisteCelulaRaw = strtoupper(trim((string)($_POST['asiste_celula'] ?? '')));
         $barrio = $this->normalizarTextoMayusculas($_POST['barrio'] ?? '');
 
@@ -321,6 +371,7 @@ class TeenController extends BaseController {
             'fecha_nacimiento' => $fechaNacimiento,
             'edad' => $edadRaw,
             'id_ministerio' => $idMinisterioRaw,
+            'id_menor_existente' => (string)$idMenorExistente,
             'asiste_celula' => $asisteCelulaRaw,
             'barrio' => $barrio
         ];
@@ -415,6 +466,7 @@ class TeenController extends BaseController {
                 'fecha_nacimiento' => (string)($_GET['fecha_nacimiento'] ?? ''),
                 'edad' => (string)($_GET['edad'] ?? ''),
                 'id_ministerio' => (string)($_GET['id_ministerio'] ?? ''),
+                'id_menor_existente' => (string)($_GET['id_menor_existente'] ?? ''),
                 'asiste_celula' => (string)($_GET['asiste_celula'] ?? ''),
                 'barrio' => (string)($_GET['barrio'] ?? '')
             ]
@@ -491,27 +543,85 @@ class TeenController extends BaseController {
             $this->redirigirRegistroPublico(implode(' ', $errores), 'error', $old);
         }
 
-        $codigoRegistro = $this->generarCodigoRegistroUnico();
-        $data = [
-            'codigo_registro' => $codigoRegistro,
-            'nombre_menor' => $nombreMenor,
-            'id_acudiente' => 0,
-            'nombre_acudiente' => $nombreAcudiente,
-            'telefono_contacto' => $telefonoContacto,
-            'fecha_nacimiento' => $fechaNacimiento !== '' ? $fechaNacimiento : null,
-            'edad' => $edad,
-            'id_ministerio' => $idMinisterio,
-            'asiste_celula' => in_array($asisteCelulaRaw, ['SI', 'SÍ'], true) ? 1 : 0,
-            'barrio' => $barrio !== '' ? $barrio : null
-        ];
-
         try {
-            $idMenor = (int)$this->teenModel->createMenor($data);
-            if ($idMenor <= 0) {
-                throw new Exception('No se pudo guardar el registro del menor.');
+            $registroExistente = null;
+
+            if ($idMenorExistente > 0) {
+                $registroExistente = $this->teenModel->getMenorRegistradoById($idMenorExistente);
+                if (!empty($registroExistente)) {
+                    $telefonoExistente = preg_replace('/\D+/', '', (string)($registroExistente['telefono_contacto'] ?? ''));
+                    $telefonoActual = preg_replace('/\D+/', '', (string)$telefonoContacto);
+                    if ($telefonoExistente !== '' && $telefonoActual !== '' && $telefonoExistente !== $telefonoActual) {
+                        $registroExistente = null;
+                    }
+                }
             }
 
-            $this->redirigirRegistroPublico('Registro completado correctamente. Guarda este código para consultar el registro.', 'success', [], $codigoRegistro);
+            if (empty($registroExistente)) {
+                $registroExistente = $this->teenModel->findMenorExistentePublico(
+                    $nombreMenor,
+                    $fechaNacimiento,
+                    $nombreAcudiente,
+                    $telefonoContacto
+                );
+            }
+
+            $esExistente = !empty($registroExistente);
+            $idMenor = 0;
+
+            if ($esExistente) {
+                $idMenor = (int)($registroExistente['id'] ?? 0);
+                if ($idMenor <= 0) {
+                    throw new Exception('Se encontró un registro existente inválido.');
+                }
+
+                // Actualiza datos básicos por si cambiaron entre semanas.
+                $this->teenModel->updateMenorById($idMenor, [
+                    'nombre_acudiente' => $nombreAcudiente,
+                    'telefono_contacto' => $telefonoContacto,
+                    'edad' => $edad,
+                    'id_ministerio' => $idMinisterio,
+                    'asiste_celula' => in_array($asisteCelulaRaw, ['SI', 'SÍ'], true) ? 1 : 0,
+                    'barrio' => $barrio !== '' ? $barrio : null
+                ]);
+            } else {
+                $codigoRegistro = $this->generarCodigoRegistroUnico();
+                $data = [
+                    'codigo_registro' => $codigoRegistro,
+                    'nombre_menor' => $nombreMenor,
+                    'id_acudiente' => 0,
+                    'nombre_acudiente' => $nombreAcudiente,
+                    'telefono_contacto' => $telefonoContacto,
+                    'fecha_nacimiento' => $fechaNacimiento !== '' ? $fechaNacimiento : null,
+                    'edad' => $edad,
+                    'id_ministerio' => $idMinisterio,
+                    'asiste_celula' => in_array($asisteCelulaRaw, ['SI', 'SÍ'], true) ? 1 : 0,
+                    'barrio' => $barrio !== '' ? $barrio : null
+                ];
+
+                $idMenor = (int)$this->teenModel->createMenor($data);
+                if ($idMenor <= 0) {
+                    throw new Exception('No se pudo guardar el registro del menor.');
+                }
+            }
+
+            $resultadoAsistencia = $this->obtenerOCrearAsistenciaSemanal($idMenor);
+            $asistencia = $resultadoAsistencia['asistencia'];
+            $codigoSemana = (string)($asistencia['codigo_semana'] ?? '');
+
+            if ($codigoSemana === '') {
+                throw new Exception('No se pudo obtener el código semanal.');
+            }
+
+            if ($esExistente && !empty($resultadoAsistencia['fue_nueva'])) {
+                $mensaje = 'Ya estabas registrado. Te asignamos el nuevo código semanal de asistencia.';
+            } elseif ($esExistente) {
+                $mensaje = 'Ya estabas registrado. Este es tu código vigente de esta semana.';
+            } else {
+                $mensaje = 'Registro completado correctamente. Este es tu código semanal.';
+            }
+
+            $this->redirigirRegistroPublico($mensaje, 'success', [], $codigoSemana);
         } catch (Throwable $e) {
             $this->redirigirRegistroPublico('Error al guardar el menor: ' . $e->getMessage(), 'error', $old);
         }
@@ -524,7 +634,11 @@ class TeenController extends BaseController {
         $tipo = '';
 
         if ($codigo !== '') {
-            $registro = $this->teenModel->getMenorByCodigoRegistro($codigo);
+            $registro = $this->teenModel->getMenorByCodigoSemanal($codigo);
+            if (empty($registro)) {
+                $registro = $this->teenModel->getMenorByCodigoRegistro($codigo);
+            }
+
             if (empty($registro)) {
                 $mensaje = 'No encontramos un registro con ese código.';
                 $tipo = 'error';
@@ -540,6 +654,11 @@ class TeenController extends BaseController {
     }
 
     public function qrRegistroPublico() {
+        $this->redirect('teen/codigos');
+        return;
+    }
+
+    public function codigos() {
         if (!AuthController::tienePermiso('teen', 'ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
@@ -548,7 +667,7 @@ class TeenController extends BaseController {
         $urlRegistro = $this->buildAbsolutePublicUrl('teen/registro-publico');
         $urlConsulta = $this->buildAbsolutePublicUrl('teen/consulta-codigo');
 
-        $this->view('teen/qr_registro', [
+        $this->view('teen/codigos', [
             'url_registro' => $urlRegistro,
             'url_consulta' => $urlConsulta
         ]);
@@ -584,6 +703,49 @@ class TeenController extends BaseController {
         } catch (Throwable $e) {
             echo json_encode(['success' => false, 'message' => 'No se pudo buscar acudientes']);
         }
+        exit;
+    }
+
+    public function buscarMenorPublicoPorTelefono() {
+        header('Content-Type: application/json');
+
+        $telefonoRaw = trim((string)($_GET['telefono'] ?? ''));
+        $telefonoNormalizado = preg_replace('/\D+/', '', $telefonoRaw);
+
+        if ($telefonoNormalizado === '' || strlen($telefonoNormalizado) < 7) {
+            echo json_encode(['success' => false, 'message' => 'Ingresa al menos 7 dígitos']);
+            exit;
+        }
+
+        try {
+            $registro = $this->teenModel->getMenorByTelefonoContacto($telefonoNormalizado);
+            if (empty($registro)) {
+                echo json_encode(['success' => true, 'found' => false]);
+                exit;
+            }
+
+            echo json_encode([
+                'success' => true,
+                'found' => true,
+                'data' => [
+                    'id' => (int)($registro['id'] ?? 0),
+                    'nombre_menor' => (string)($registro['nombre_menor'] ?? ''),
+                    'nombre_acudiente' => (string)($registro['nombre_acudiente'] ?? ''),
+                    'telefono_contacto' => (string)($registro['telefono_contacto'] ?? ''),
+                    'fecha_nacimiento' => (string)($registro['fecha_nacimiento'] ?? ''),
+                    'edad' => (int)($registro['edad'] ?? 0),
+                    'id_ministerio' => (int)($registro['id_ministerio'] ?? 0),
+                    'asiste_celula' => !empty($registro['asiste_celula']) ? 'SI' : 'NO',
+                    'barrio' => (string)($registro['barrio'] ?? ''),
+                    'codigo_registro' => (string)($registro['codigo_registro'] ?? ''),
+                    'codigo_semana' => (string)($registro['codigo_semana_actual'] ?? ($registro['ultimo_codigo_semana'] ?? '')),
+                    'total_asistencias' => (int)($registro['total_asistencias'] ?? 0)
+                ]
+            ], JSON_UNESCAPED_UNICODE);
+        } catch (Throwable $e) {
+            echo json_encode(['success' => false, 'message' => 'No se pudo consultar el teléfono']);
+        }
+
         exit;
     }
 

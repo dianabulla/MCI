@@ -54,11 +54,13 @@ return [
     // Teen
     'teen' => 'TeenController@index',
     'teen/registro-menores' => 'TeenController@registroMenores',
+    'teen/codigos' => 'TeenController@codigos',
     'teen/guardar-menor' => 'TeenController@guardarMenor',
     'teen/qr-registro' => 'TeenController@qrRegistroPublico',
     'teen/registro-publico' => 'TeenController@registroPublico',
     'teen/guardar-menor-publico' => 'TeenController@guardarMenorPublico',
     'teen/consulta-codigo' => 'TeenController@consultarCodigoPublico',
+    'teen/buscar-menor-publico-telefono' => 'TeenController@buscarMenorPublicoPorTelefono',
     'teen/buscarAcudientes' => 'TeenController@buscarAcudientes',
     'teen/verPdf' => 'TeenController@verPdf',
     'teen/editar' => 'TeenController@editar',
@@ -147,6 +149,9 @@ return [
     'escuelas_formacion/registro-publico/buscar-persona' => 'EscuelaFormacionRegistroController@buscarPersona',
     'escuelas_formacion/registro-publico/buscar-lideres' => 'EscuelaFormacionRegistroController@buscarLideres',
     'escuelas_formacion/registro-publico/guardar' => 'EscuelaFormacionRegistroController@guardar',
+    'escuelas_formacion/asistencia-publica' => 'EscuelaFormacionRegistroController@asistenciaPublica',
+    'escuelas_formacion/asistencia-publica/buscar' => 'EscuelaFormacionRegistroController@buscarAsistenciaPublica',
+    'escuelas_formacion/asistencia-publica/guardar' => 'EscuelaFormacionRegistroController@guardarAsistenciaPublica',
     
     // Stream ESP32-CAM (Público - No requiere autenticación)
     'stream/live' => 'StreamController@live',

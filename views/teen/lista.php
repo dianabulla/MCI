@@ -2,16 +2,10 @@
 
 <div class="page-header">
     <h2>Material Teens</h2>
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-sm btn-secondary">
-            Registrar menor
-        </a>
-        <a href="<?= PUBLIC_URL ?>index.php?url=teen/qr-registro" class="btn btn-sm btn-info">
-            QR Registro Teens
-        </a>
-        <a href="<?= PUBLIC_URL ?>index.php?url=teen/consulta-codigo" target="_blank" class="btn btn-sm btn-outline-secondary">
-            Consulta pública por código
-        </a>
+    <div class="page-actions personas-mobile-stack" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="<?= PUBLIC_URL ?>index.php?url=teen" class="btn btn-nav-pill active">Material Teens</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-nav-pill">Registro teens-kids</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=teen/codigos" class="btn btn-nav-pill">Códigos</a>
         <?php if (AuthController::tienePermiso('teen', 'crear')): ?>
             <button type="button" class="btn btn-sm btn-primary" onclick="document.getElementById('formSubidaTeen').scrollIntoView({ behavior: 'smooth' });">
                 Subir PDF

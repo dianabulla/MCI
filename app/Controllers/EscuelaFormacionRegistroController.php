@@ -271,6 +271,25 @@ class EscuelaFormacionRegistroController extends BaseController {
         return ['nombre' => $nombre, 'apellido' => $apellido];
     }
 
+    private function etiquetaProgramaEscuela($programa) {
+        $map = [
+            'universidad_vida' => 'Universidad de la Vida',
+            'encuentro' => 'Encuentro',
+            'bautismo' => 'Bautismo',
+            'capacitacion_destino' => 'Capacitacion Destino',
+            'capacitacion_destino_nivel_1' => 'Capacitacion Destino - Nivel 1',
+            'capacitacion_destino_nivel_2' => 'Capacitacion Destino - Nivel 2',
+            'capacitacion_destino_nivel_3' => 'Capacitacion Destino - Nivel 3',
+        ];
+
+        $programa = trim((string)$programa);
+        if ($programa === '') {
+            return 'Programa';
+        }
+
+        return $map[$programa] ?? $programa;
+    }
+
     private function obtenerIdRolAsistenteDefault() {
         if ($this->idRolAsistenteCache !== null) {
             return $this->idRolAsistenteCache;
@@ -398,6 +417,147 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'programa' => (string)($_GET['programa'] ?? '')
             ]
         ]);
+    }
+
+    public function asistenciaPublica() {
+        $this->view('escuelas_formacion_publico/asistencia', [
+            'mensaje' => $_GET['mensaje'] ?? null,
+            'tipo_mensaje' => $_GET['tipo'] ?? null,
+            'registro_exitoso' => isset($_GET['exito']) && $_GET['exito'] === '1',
+            'old' => [
+                'telefono' => (string)($_GET['telefono'] ?? ''),
+                'cedula' => (string)($_GET['cedula'] ?? ''),
+            ]
+        ]);
+    }
+
+    public function buscarAsistenciaPublica() {
+        $telefono = $this->normalizarTelefono($_GET['telefono'] ?? '');
+        $cedula = $this->normalizarDocumento($_GET['cedula'] ?? '');
+
+        if ($telefono === '' && $cedula === '') {
+            $this->json([
+                'encontrado' => false,
+                'mensaje' => 'Ingresa teléfono o cédula para buscar.'
+            ]);
+        }
+
+        $inscripciones = $this->inscripcionModel->buscarInscripcionesPorTelefonoOCedula($telefono, $cedula, 20);
+        if (empty($inscripciones)) {
+            $this->json([
+                'encontrado' => false,
+                'mensaje' => 'No encontramos inscripciones con esos datos.'
+            ]);
+        }
+
+        $programaLabels = [
+            'universidad_vida' => 'Universidad de la Vida',
+            'encuentro' => 'Encuentro',
+            'bautismo' => 'Bautismo',
+            'capacitacion_destino' => 'Capacitación Destino',
+            'capacitacion_destino_nivel_1' => 'Capacitación Destino - Nivel 1',
+            'capacitacion_destino_nivel_2' => 'Capacitación Destino - Nivel 2',
+            'capacitacion_destino_nivel_3' => 'Capacitación Destino - Nivel 3',
+        ];
+
+        $programas = array_map(static function($item) use ($programaLabels) {
+            $programaRaw = (string)($item['Programa'] ?? '');
+            return [
+                'id_inscripcion' => (int)($item['Id_Inscripcion'] ?? 0),
+                'programa' => $programaRaw,
+                'programa_label' => $programaLabels[$programaRaw] ?? $programaRaw,
+                'asistio_clase' => array_key_exists('Asistio_Clase', $item) ? $item['Asistio_Clase'] : null,
+                'fecha_asistencia_clase' => (string)($item['Fecha_Asistencia_Clase'] ?? ''),
+                'fecha_registro' => (string)($item['Fecha_Registro'] ?? ''),
+            ];
+        }, $inscripciones);
+
+        $primera = $inscripciones[0];
+        $this->json([
+            'encontrado' => true,
+            'persona' => [
+                'nombre' => (string)($primera['Nombre'] ?? ''),
+                'genero' => (string)($primera['Genero'] ?? ''),
+                'telefono' => (string)($primera['Telefono'] ?? ''),
+                'cedula' => (string)($primera['Cedula'] ?? ''),
+                'lider' => (string)($primera['Lider'] ?? ''),
+                'ministerio' => (string)($primera['Nombre_Ministerio'] ?? ''),
+            ],
+            'programas' => $programas,
+            'mensaje' => 'Datos cargados correctamente. Selecciona el programa y registra asistencia.'
+        ]);
+    }
+
+    public function guardarAsistenciaPublica() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . PUBLIC_URL . '?url=escuelas_formacion/asistencia-publica');
+            exit;
+        }
+
+        $idInscripcionRaw = trim((string)($_POST['id_inscripcion'] ?? ''));
+        $idInscripcion = ctype_digit($idInscripcionRaw) ? (int)$idInscripcionRaw : 0;
+        $telefono = $this->normalizarTelefono($_POST['telefono'] ?? '');
+        $cedula = $this->normalizarDocumento($_POST['cedula'] ?? '');
+
+        if ($idInscripcion <= 0) {
+            $query = http_build_query([
+                'url' => 'escuelas_formacion/asistencia-publica',
+                'mensaje' => 'Debes seleccionar una inscripción válida.',
+                'tipo' => 'error',
+                'telefono' => $telefono,
+                'cedula' => $cedula
+            ]);
+            header('Location: ' . PUBLIC_URL . '?' . $query);
+            exit;
+        }
+
+        $inscripcion = $this->inscripcionModel->getByIdInscripcion($idInscripcion);
+        if (empty($inscripcion)) {
+            $query = http_build_query([
+                'url' => 'escuelas_formacion/asistencia-publica',
+                'mensaje' => 'La inscripción seleccionada no existe.',
+                'tipo' => 'error',
+                'telefono' => $telefono,
+                'cedula' => $cedula
+            ]);
+            header('Location: ' . PUBLIC_URL . '?' . $query);
+            exit;
+        }
+
+        $programaLabel = $this->etiquetaProgramaEscuela((string)($inscripcion['Programa'] ?? ''));
+
+        if ((string)($inscripcion['Asistio_Clase'] ?? '') === '1') {
+            $query = http_build_query([
+                'url' => 'escuelas_formacion/asistencia-publica',
+                'mensaje' => 'La asistencia para ' . $programaLabel . ' ya estaba registrada.',
+                'tipo' => 'success',
+                'exito' => '1'
+            ]);
+            header('Location: ' . PUBLIC_URL . '?' . $query);
+            exit;
+        }
+
+        $ok = $this->inscripcionModel->actualizarAsistenciaClase($idInscripcion, true);
+        if (!$ok) {
+            $query = http_build_query([
+                'url' => 'escuelas_formacion/asistencia-publica',
+                'mensaje' => 'No se pudo registrar la asistencia. Intenta nuevamente.',
+                'tipo' => 'error',
+                'telefono' => $telefono,
+                'cedula' => $cedula
+            ]);
+            header('Location: ' . PUBLIC_URL . '?' . $query);
+            exit;
+        }
+
+        $query = http_build_query([
+            'url' => 'escuelas_formacion/asistencia-publica',
+            'mensaje' => 'Asistencia registrada correctamente en ' . $programaLabel . '.',
+            'tipo' => 'success',
+            'exito' => '1'
+        ]);
+        header('Location: ' . PUBLIC_URL . '?' . $query);
+        exit;
     }
 
     private function obtenerLiderPorId($idLider) {
@@ -533,7 +693,7 @@ class EscuelaFormacionRegistroController extends BaseController {
             $errores[] = 'Debe seleccionar un ministerio.';
         }
 
-        if (!in_array($programa, ['universidad_vida', 'encuentro', 'bautismo', 'capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+        if (!in_array($programa, ['universidad_vida', 'encuentro', 'bautismo', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
             $errores[] = 'Debe seleccionar un programa válido.';
         }
 
@@ -643,6 +803,22 @@ class EscuelaFormacionRegistroController extends BaseController {
             'Programa' => $programa,
             'Fuente' => 'Formulario público'
         ];
+
+        $idInscripcionExistente = 0;
+        if ($idPersona > 0) {
+            $idInscripcionExistente = (int)$this->inscripcionModel->getIdInscripcionPersonaPrograma($idPersona, $programa);
+        }
+
+        if ($idInscripcionExistente > 0) {
+            $query = http_build_query([
+                'url' => 'escuelas_formacion/registro-publico',
+                'mensaje' => 'Esta persona ya estaba inscrita en ese programa. No se creó un registro duplicado.',
+                'tipo' => 'success',
+                'exito' => '1'
+            ]);
+            header('Location: ' . PUBLIC_URL . '?' . $query);
+            exit;
+        }
 
         try {
             $this->inscripcionModel->create($data);

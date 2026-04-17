@@ -1,9 +1,12 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
 <div class="page-header">
-    <h2>Registro de Menores - Teens</h2>
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="<?= PUBLIC_URL ?>index.php?url=teen" class="btn btn-secondary">Volver a Material Teens</a>
+    <h2>Registro teens-kids</h2>
+    <div class="page-actions personas-mobile-stack" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="<?= PUBLIC_URL ?>index.php?url=teen" class="btn btn-nav-pill">Material Teens</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-nav-pill active">Registro teens-kids</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=teen/codigos" class="btn btn-nav-pill">Códigos</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-publico" target="_blank" class="btn btn-primary">Nuevo registro</a>
     </div>
 </div>
 
@@ -14,76 +17,11 @@
 <?php endif; ?>
 
 <div class="card" style="margin-bottom:20px;">
-    <div class="card-body">
-        <h3 style="margin-top:0;">Formulario de registro</h3>
-
-        <?php if (AuthController::tienePermiso('teen', 'crear')): ?>
-            <form method="POST" action="<?= PUBLIC_URL ?>index.php?url=teen/guardar-menor" id="formRegistroMenor">
-                <div class="teen-grid">
-                    <div class="form-group">
-                        <label for="nombre_menor">Nombre y apellido</label>
-                        <input type="text" id="nombre_menor" name="nombre_menor" class="form-control js-upper" required value="<?= htmlspecialchars((string)($old['nombre_menor'] ?? '')) ?>" placeholder="Nombre completo del menor">
-                    </div>
-
-                    <div class="form-group autocomplete-wrapper" style="position:relative;">
-                        <label for="acudiente_busqueda">Nombre de acudiente</label>
-                        <input type="text" id="acudiente_busqueda" name="acudiente_busqueda" class="form-control js-upper" required value="<?= htmlspecialchars((string)($old['acudiente_busqueda'] ?? '')) ?>" placeholder="Escribe y selecciona de la base de personas" autocomplete="off">
-                        <input type="hidden" id="id_acudiente" name="id_acudiente" value="<?= htmlspecialchars((string)($old['id_acudiente'] ?? '')) ?>">
-                        <div id="acudiente_autocomplete" class="autocomplete-items"></div>
-                        <small class="form-text text-muted">Al seleccionar el acudiente se cargará su número de contacto.</small>
-                        <small id="acudiente_error" class="form-text text-danger" style="display:none;">Debes seleccionar un acudiente válido de la lista.</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="telefono_contacto">N° de contacto</label>
-                        <input type="text" id="telefono_contacto" name="telefono_contacto" class="form-control" required value="<?= htmlspecialchars((string)($old['telefono_contacto'] ?? '')) ?>" placeholder="Se completa automáticamente con el acudiente">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="fecha_nacimiento">Fecha de nacimiento</label>
-                        <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" class="form-control" required value="<?= htmlspecialchars((string)($old['fecha_nacimiento'] ?? '')) ?>">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="edad">Edad</label>
-                        <input type="number" id="edad" name="edad" class="form-control" min="0" max="17" required value="<?= htmlspecialchars((string)($old['edad'] ?? '')) ?>" placeholder="Edad del menor" readonly>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="id_ministerio">Ministerio</label>
-                        <select id="id_ministerio" name="id_ministerio" class="form-control" required>
-                            <option value="">Seleccione...</option>
-                            <?php foreach (($ministerios ?? []) as $ministerio): ?>
-                                <option value="<?= (int)$ministerio['Id_Ministerio'] ?>" <?= (string)($old['id_ministerio'] ?? '') === (string)$ministerio['Id_Ministerio'] ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars((string)$ministerio['Nombre_Ministerio']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="asiste_celula">Asiste a célula</label>
-                        <select id="asiste_celula" name="asiste_celula" class="form-control" required>
-                            <option value="">Seleccione...</option>
-                            <option value="SI" <?= strtoupper((string)($old['asiste_celula'] ?? '')) === 'SI' ? 'selected' : '' ?>>Sí</option>
-                            <option value="NO" <?= strtoupper((string)($old['asiste_celula'] ?? '')) === 'NO' ? 'selected' : '' ?>>No</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group teen-grid-full">
-                        <label for="barrio">Barrio</label>
-                        <input type="text" id="barrio" name="barrio" class="form-control js-upper" value="<?= htmlspecialchars((string)($old['barrio'] ?? '')) ?>" placeholder="Barrio del menor">
-                    </div>
-                </div>
-
-                <div style="margin-top: 16px; display:flex; gap:8px; flex-wrap:wrap;">
-                    <button type="submit" class="btn btn-primary">Guardar menor</button>
-                    <a href="<?= PUBLIC_URL ?>index.php?url=teen" class="btn btn-secondary">Cancelar</a>
-                </div>
-            </form>
-        <?php else: ?>
-            <p style="margin:0; color:#666;">No tienes permiso para registrar menores, pero sí puedes consultar los registros existentes.</p>
-        <?php endif; ?>
+    <div class="card-body" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <span style="color:#4d5f7b; font-weight:600;">Filtrar grupo:</span>
+        <button type="button" class="btn btn-sm btn-secondary js-filtro-grupo active" data-grupo="todos">Todos</button>
+        <button type="button" class="btn btn-sm btn-secondary js-filtro-grupo" data-grupo="teen">Teens</button>
+        <button type="button" class="btn btn-sm btn-secondary js-filtro-grupo" data-grupo="kids">Kids</button>
     </div>
 </div>
 
@@ -93,34 +31,50 @@
 
         <?php if (!empty($registros ?? [])): ?>
             <div class="table-container">
-                <table class="data-table">
+                <table class="data-table teen-registros-table">
                     <thead>
                         <tr>
                             <th>Código</th>
+                            <th>Código semanal</th>
                             <th>Menor</th>
                             <th>Acudiente</th>
                             <th>Contacto</th>
-                            <th>Fecha nacimiento</th>
                             <th>Edad</th>
+                            <th>Nacimiento</th>
                             <th>Ministerio</th>
-                            <th>Asiste a célula</th>
+                            <th>Asiste célula</th>
+                            <th>Total asistencias</th>
+                            <th>Último domingo</th>
                             <th>Barrio</th>
-                            <th>Fecha</th>
+                            <th>Registro</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach (($registros ?? []) as $registro): ?>
-                            <tr>
+                            <?php
+                                $edadRegistro = (int)($registro['edad'] ?? 0);
+                                if ($edadRegistro >= 4 && $edadRegistro <= 9) {
+                                    $grupoRegistro = 'kids';
+                                } elseif ($edadRegistro >= 10 && $edadRegistro <= 13) {
+                                    $grupoRegistro = 'teen';
+                                } else {
+                                    $grupoRegistro = 'otros';
+                                }
+                            ?>
+                            <tr data-grupo="<?= $grupoRegistro ?>">
                                 <td><strong><?= htmlspecialchars((string)($registro['codigo_registro'] ?? '')) ?></strong></td>
-                                <td><?= htmlspecialchars((string)($registro['nombre_menor'] ?? '')) ?></td>
-                                <td><?= htmlspecialchars((string)($registro['Nombre_Acudiente_Base'] ?: ($registro['nombre_acudiente'] ?? ''))) ?></td>
-                                <td><?= htmlspecialchars((string)($registro['Telefono_Acudiente_Actual'] ?? ($registro['telefono_contacto'] ?? ''))) ?></td>
-                                <td><?= !empty($registro['fecha_nacimiento']) ? htmlspecialchars((string)$registro['fecha_nacimiento']) : '—' ?></td>
+                                <td><strong><?= htmlspecialchars((string)($registro['codigo_semana_actual'] ?? '—')) ?></strong></td>
+                                <td class="teen-nowrap teen-strong"><?= htmlspecialchars((string)($registro['nombre_menor'] ?? '')) ?></td>
+                                <td class="teen-nowrap"><?= htmlspecialchars((string)($registro['Nombre_Acudiente_Base'] ?: ($registro['nombre_acudiente'] ?? ''))) ?></td>
+                                <td class="teen-nowrap teen-strong"><?= htmlspecialchars((string)($registro['Telefono_Acudiente_Actual'] ?? ($registro['telefono_contacto'] ?? ''))) ?></td>
                                 <td><?= (int)($registro['edad'] ?? 0) ?></td>
-                                <td><?= htmlspecialchars((string)($registro['Nombre_Ministerio'] ?? 'Sin ministerio')) ?></td>
+                                <td class="teen-nowrap"><?= !empty($registro['fecha_nacimiento']) ? htmlspecialchars((string)$registro['fecha_nacimiento']) : '—' ?></td>
+                                <td class="teen-nowrap"><?= htmlspecialchars((string)($registro['Nombre_Ministerio'] ?? 'Sin ministerio')) ?></td>
                                 <td><?= !empty($registro['asiste_celula']) ? 'Sí' : 'No' ?></td>
-                                <td><?= htmlspecialchars((string)($registro['barrio'] ?? '')) ?></td>
-                                <td><?= !empty($registro['created_at']) ? htmlspecialchars((string)$registro['created_at']) : '—' ?></td>
+                                <td><strong><?= (int)($registro['total_asistencias'] ?? 0) ?></strong></td>
+                                <td class="teen-nowrap"><?= !empty($registro['ultima_fecha_asistencia']) ? htmlspecialchars((string)$registro['ultima_fecha_asistencia']) : '—' ?></td>
+                                <td class="teen-nowrap"><?= htmlspecialchars((string)($registro['barrio'] ?? '')) ?></td>
+                                <td class="teen-nowrap"><?= !empty($registro['created_at']) ? htmlspecialchars((string)$registro['created_at']) : '—' ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -137,6 +91,12 @@
     display:grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap:14px;
+}
+
+.js-filtro-grupo.active {
+    background: #2f65b5;
+    color: #fff;
+    border-color: #2f65b5;
 }
 
 .teen-grid-full {
@@ -171,10 +131,133 @@
     border-color:#dc3545 !important;
     box-shadow:0 0 0 0.2rem rgba(220,53,69,.15) !important;
 }
+
+.teen-codigo-grid {
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap:16px;
+}
+
+.teen-registros-table th,
+.teen-registros-table td {
+    vertical-align: top;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    padding: 10px 12px !important;
+    overflow: hidden;
+}
+
+.teen-registros-table {
+    min-width: 1660px;
+    width: max-content;
+    table-layout: auto !important;
+}
+
+.teen-registros-table th:first-child,
+.teen-registros-table td:first-child {
+    white-space: nowrap;
+    min-width: 120px;
+}
+
+.teen-registros-table th:nth-child(2),
+.teen-registros-table td:nth-child(2) {
+    min-width: 140px;
+}
+
+.teen-registros-table th:nth-child(3),
+.teen-registros-table td:nth-child(3) {
+    min-width: 230px;
+}
+
+.teen-registros-table th:nth-child(4),
+.teen-registros-table td:nth-child(4) {
+    min-width: 190px;
+}
+
+.teen-registros-table th:nth-child(5),
+.teen-registros-table td:nth-child(5) {
+    min-width: 145px;
+}
+
+.teen-registros-table th:nth-child(6),
+.teen-registros-table td:nth-child(6) {
+    min-width: 75px;
+}
+
+.teen-registros-table th:nth-child(7),
+.teen-registros-table td:nth-child(7) {
+    min-width: 130px;
+}
+
+.teen-registros-table th:nth-child(8),
+.teen-registros-table td:nth-child(8) {
+    min-width: 185px;
+}
+
+.teen-registros-table th:nth-child(9),
+.teen-registros-table td:nth-child(9) {
+    min-width: 120px;
+}
+
+.teen-registros-table th:nth-child(10),
+.teen-registros-table td:nth-child(10) {
+    min-width: 125px;
+}
+
+.teen-registros-table th:nth-child(11),
+.teen-registros-table td:nth-child(11) {
+    min-width: 135px;
+}
+
+.teen-registros-table th:nth-child(12),
+.teen-registros-table td:nth-child(12) {
+    min-width: 150px;
+}
+
+.teen-registros-table th:nth-child(13),
+.teen-registros-table td:nth-child(13) {
+    min-width: 175px;
+}
+
+.teen-nowrap {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.teen-strong {
+    font-weight: 700;
+    color: #1f365f;
+}
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const botonesGrupo = Array.from(document.querySelectorAll('.js-filtro-grupo'));
+    const filasRegistros = Array.from(document.querySelectorAll('.teen-registros-table tbody tr[data-grupo]'));
+
+    function aplicarFiltroGrupo(grupo) {
+        filasRegistros.forEach(function(fila) {
+            const grupoFila = String(fila.getAttribute('data-grupo') || '');
+            const visible = (grupo === 'todos') || (grupoFila === grupo);
+            fila.style.display = visible ? '' : 'none';
+        });
+
+        botonesGrupo.forEach(function(btn) {
+            btn.classList.toggle('active', btn.getAttribute('data-grupo') === grupo);
+        });
+    }
+
+    botonesGrupo.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            aplicarFiltroGrupo(String(btn.getAttribute('data-grupo') || 'todos'));
+        });
+    });
+
+    if (botonesGrupo.length > 0) {
+        aplicarFiltroGrupo('todos');
+    }
+
     const form = document.getElementById('formRegistroMenor');
     const acudienteInput = document.getElementById('acudiente_busqueda');
     const acudienteHidden = document.getElementById('id_acudiente');

@@ -43,6 +43,34 @@ class EscuelaFormacionEstado extends BaseModel {
         return $map;
     }
 
+    public function getEstadosDetallePorPrograma(array $personIds, string $programa): array {
+        $personIds = array_values(array_filter(array_map('intval', $personIds), static function($id) {
+            return $id > 0;
+        }));
+        if (empty($personIds)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($personIds), '?'));
+        $sql = "SELECT Id_Persona, Va FROM {$this->table} WHERE Programa = ? AND Id_Persona IN ({$placeholders})";
+        $rows = $this->query($sql, array_merge([$programa], $personIds));
+
+        $map = [];
+        foreach ($rows as $row) {
+            $idPersona = (int)($row['Id_Persona'] ?? 0);
+            if ($idPersona <= 0) {
+                continue;
+            }
+
+            $map[$idPersona] = [
+                'existe' => true,
+                'va' => (int)($row['Va'] ?? 0) === 1,
+            ];
+        }
+
+        return $map;
+    }
+
     public function upsertEstado(int $idPersona, string $programa, bool $va): bool {
         $sql = "INSERT INTO {$this->table} (Id_Persona, Programa, Va, Fecha_Actualizacion)
                 VALUES (?, ?, ?, NOW())

@@ -157,13 +157,13 @@
     <div class="box">
         <div class="top">
             <h1>Consulta por codigo</h1>
-            <p>Ingresa el codigo entregado al finalizar el registro para identificar al nino.</p>
+            <p>Ingresa el codigo semanal o el codigo base del registro para identificar al nino.</p>
         </div>
 
         <div class="inner">
             <form method="GET" action="<?= PUBLIC_URL ?>index.php">
                 <input type="hidden" name="url" value="teen/consulta-codigo">
-                <input type="text" name="codigo" value="<?= htmlspecialchars((string)($codigo ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej: TN-260416-123456" required>
+                <input type="text" name="codigo" value="<?= htmlspecialchars((string)($codigo ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej: TS-260416-123456" required>
                 <button type="submit">Buscar</button>
                 <a class="btn-link" href="<?= PUBLIC_URL ?>index.php?url=teen/registro-publico">Registrar nuevo</a>
             </form>
@@ -176,8 +176,14 @@
 
             <?php if (!empty($registro)): ?>
                 <div class="result">
+                    <?php if (!empty($registro['codigo_semana'] ?? '')): ?>
+                        <div class="row">
+                            <div class="label">Codigo semanal</div>
+                            <div class="value"><strong><?= htmlspecialchars((string)($registro['codigo_semana'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong></div>
+                        </div>
+                    <?php endif; ?>
                     <div class="row">
-                        <div class="label">Codigo</div>
+                        <div class="label">Codigo base</div>
                         <div class="value"><strong><?= htmlspecialchars((string)($registro['codigo_registro'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong></div>
                     </div>
                     <div class="row">
@@ -211,6 +217,14 @@
                     <div class="row">
                         <div class="label">Fecha de registro</div>
                         <div class="value"><?= htmlspecialchars((string)($registro['created_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                    </div>
+                    <div class="row">
+                        <div class="label">Asistencias totales</div>
+                        <div class="value"><?= (int)($registro['total_asistencias'] ?? 0) ?></div>
+                    </div>
+                    <div class="row">
+                        <div class="label">Ultimo domingo</div>
+                        <div class="value"><?= !empty($registro['ultima_fecha_asistencia']) ? htmlspecialchars((string)$registro['ultima_fecha_asistencia'], ENT_QUOTES, 'UTF-8') : (!empty($registro['fecha_asistencia_codigo']) ? htmlspecialchars((string)$registro['fecha_asistencia_codigo'], ENT_QUOTES, 'UTF-8') : '—') ?></div>
                     </div>
                 </div>
             <?php elseif (empty($mensaje ?? '') && empty($codigo ?? '')): ?>
