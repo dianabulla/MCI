@@ -1712,9 +1712,10 @@ class PersonaController extends BaseController {
             $filtroCelula = '0';
         }
 
+        // No aplicar filtro semanal por defecto en pendientes:
+        // debe listar todas las personas nuevas salvo que el usuario filtre explícitamente.
         if ($filtroSemanaRef === '' && $filtroFechaInicio === '' && $filtroFechaFin === '') {
-            $filtroSemanaRef = date('Y-m-d');
-            $filtroSemanaRefEsDefault = true;
+            $filtroSemanaRefEsDefault = false;
         }
 
         if ($filtroSemanaRef !== '') {
@@ -1802,7 +1803,11 @@ class PersonaController extends BaseController {
             $personas = $this->personaModel->getAllWithRole($filtroRol, true, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         }
 
-        $personas = $this->filtrarSoloPersonasNuevas($personas);
+        // En la pestaña "No se dispone" no limitar a solo nuevas para evitar
+        // que desaparezcan registros previamente marcados.
+        if ($filtroOrigen !== 'no_disponible') {
+            $personas = $this->filtrarSoloPersonasNuevas($personas);
+        }
         $personas = $this->enriquecerChecklistPersonas($personas);
         $personas = $this->filtrarPersonasPorNombreListado($personas, $filtroNombre);
 
@@ -1815,6 +1820,8 @@ class PersonaController extends BaseController {
                 return empty($persona['Seguimiento_No_Disponible']) && !empty($persona['Seguimiento_Reasignado']);
             }));
         } else {
+            // En la lista general de pendientes no deben aparecer
+            // los casos marcados como "No se dispone".
             $personas = array_values(array_filter($personas, static function($persona) {
                 return empty($persona['Seguimiento_No_Disponible']);
             }));
