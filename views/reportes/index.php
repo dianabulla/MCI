@@ -300,117 +300,49 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 
 ?>
 
-<div class="page-header">
+<div class="page-header report-page-header report-shell-head">
     <div>
-        <h2>Reportes Semanales</h2>
-        <small style="color:#637087;"><?= htmlspecialchars($tituloReporte) ?></small>
+        <h2>Reportes</h2>
+        <small class="report-shell-subtitle"><?= htmlspecialchars($tituloReporte) ?> · Vista tipo panel</small>
     </div>
 
-    <a href="<?= PUBLIC_URL ?>index.php?url=reportes/ministerial" class="btn btn-secondary">Vista interactiva por ministerio</a>
+    <div class="report-shell-actions">
+        <span class="report-shell-date"><?= date('D, M j') ?></span>
+    </div>
 
 </div>
 
-<div class="report-switcher" style="margin-bottom: 18px;">
-    <a href="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'personas'])) ?>" class="report-switcher-tab <?= $esReportePersonas ? 'is-active' : '' ?>">
-        Ganar
-    </a>
-    <a href="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'celulas'])) ?>" class="report-switcher-tab <?= !$esReportePersonas ? 'is-active' : '' ?>">
-        Célula
-    </a>
+<div class="report-top-strip" id="reportTopStrip" style="margin-bottom: 14px;">
+    <button type="button" class="report-top-strip-tab" data-mode="tablas">Ver tablas</button>
+    <button type="button" class="report-top-strip-tab" data-mode="graficos">Ver gráficos</button>
+    <button type="button" class="report-top-strip-tab is-active" data-breakdown="ministerio">Por ministerio</button>
+    <button type="button" class="report-top-strip-tab" data-breakdown="lider">Por líder</button>
 </div>
 
-<div class="card report-card" style="margin-bottom: 18px;">
-    <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="filters-inline" style="padding: 14px;">
+<div class="card report-card report-toolbar-card" style="margin-bottom: 18px; padding: 14px;">
+    <div class="form-group" style="margin:0; max-width: 340px;">
+        <label for="selector_reporte" style="margin-bottom:6px;">Reporte a visualizar</label>
+        <select id="selector_reporte" class="form-control" onchange="if(this.value){ window.location.href = this.value; }">
+            <option value="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'personas'])) ?>" <?= $esReportePersonas ? 'selected' : '' ?>>Reporte de Ganar</option>
+            <option value="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'celulas'])) ?>" <?= !$esReportePersonas ? 'selected' : '' ?>>Reporte de Célula</option>
+            <option value="<?= PUBLIC_URL ?>index.php?url=reportes/ministerial">Escalera del Éxito</option>
+        </select>
+    </div>
+    <div class="report-toolbar-actions">
+        <a href="<?= PUBLIC_URL ?>index.php?url=reportes&tipo=<?= urlencode($tipoReporte) ?>" class="report-icon-btn" title="Refrescar">☁</a>
+    </div>
+</div>
+
+<div class="card report-card" style="margin-bottom: 22px;">
+    <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="filters-inline report-compact-form" style="padding: 18px;">
         <input type="hidden" name="url" value="reportes">
         <input type="hidden" name="tipo" value="<?= htmlspecialchars($tipoReporte) ?>">
 
-        <?php if (!$esReportePersonas): ?>
-        <div class="form-group" style="margin: 0;">
-            <label for="fecha_referencia">Semana (domingo a domingo)</label>
+        <div class="form-group report-date-group" style="margin: 0;">
+            <label for="fecha_referencia">Fecha de la semana (lunes a domingo)</label>
             <input type="date" id="fecha_referencia" name="fecha_referencia" class="form-control" value="<?= htmlspecialchars((string)$fecha_referencia) ?>" required>
             <small style="color:#637087;">Rango aplicado: <?= date('d/m/Y', strtotime($fecha_inicio)) ?> - <?= date('d/m/Y', strtotime($fecha_fin)) ?></small>
         </div>
-        <?php else: ?>
-        <input type="hidden" name="fecha_referencia" value="<?= htmlspecialchars((string)$fecha_referencia) ?>">
-        <?php endif; ?>
-
-        <div class="form-group" style="margin: 0;">
-            <label for="fecha_inicio">Fecha inicio (personalizada)</label>
-            <input type="date" id="fecha_inicio" name="fecha_inicio" class="form-control" value="<?= htmlspecialchars($fechaInicioFiltro) ?>">
-        </div>
-
-        <div class="form-group" style="margin: 0;">
-            <label for="fecha_fin">Fecha fin (personalizada)</label>
-            <input type="date" id="fecha_fin" name="fecha_fin" class="form-control" value="<?= htmlspecialchars($fechaFinFiltro) ?>">
-        </div>
-
-        <div class="form-group" style="margin: 0;">
-            <label for="filtro_ministerio">Ministerio (opcional)</label>
-            <select id="filtro_ministerio" name="ministerio" class="form-control">
-                <option value="">Todos los ministerios</option>
-                <?php foreach (($ministerios_disponibles ?? []) as $ministerio): ?>
-                    <option value="<?= (int)$ministerio['Id_Ministerio'] ?>" <?= ((string)($filtro_ministerio ?? '') === (string)$ministerio['Id_Ministerio']) ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($ministerio['Nombre_Ministerio']) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-
-        <div class="form-group" style="margin: 0;">
-            <label for="filtro_lider">Líder de célula (opcional)</label>
-            <select id="filtro_lider" name="lider" class="form-control">
-                <option value="">Todos los líderes</option>
-                <?php foreach (($lideres_disponibles ?? []) as $lider): ?>
-                    <option value="<?= (int)$lider['Id_Persona'] ?>" <?= ((string)($filtro_lider ?? '') === (string)$lider['Id_Persona']) ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($lider['Nombre_Completo']) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-
-        <?php if (!$esReportePersonas): ?>
-            <div class="form-group" style="margin: 0;">
-                <label for="filtro_celula">Célula (opcional)</label>
-                <select id="filtro_celula" name="celula" class="form-control">
-                    <option value="">Todas las células</option>
-                    <?php foreach (($celulas_disponibles ?? []) as $celula): ?>
-                        <option value="<?= (int)$celula['Id_Celula'] ?>" <?= ((string)($filtro_celula ?? '') === (string)$celula['Id_Celula']) ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($celula['Nombre_Celula']) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-        <?php endif; ?>
-
-        <?php if ($esReportePersonas): ?>
-            <div class="form-group" style="margin: 0;">
-                <label for="escala_ganar">Vista ganar</label>
-                <select id="escala_ganar" name="escala_ganar" class="form-control">
-                    <option value="semanal" <?= $escalaGanar === 'semanal' ? 'selected' : '' ?>>Semanal</option>
-                    <option value="mensual" <?= $escalaGanar === 'mensual' ? 'selected' : '' ?>>Mensual</option>
-                    <option value="semestral" <?= $escalaGanar === 'semestral' ? 'selected' : '' ?>>Semestral</option>
-                    <option value="anual" <?= $escalaGanar === 'anual' ? 'selected' : '' ?>>Anual</option>
-                </select>
-            </div>
-
-            <div class="form-group" style="margin: 0;">
-                <label for="filtro_mes_meta">Mes de metas</label>
-                <select id="filtro_mes_meta" name="mes_meta" class="form-control">
-                    <option value="all" <?= ($filtroMesMeta === 'all') ? 'selected' : '' ?>>Todo el semestre</option>
-                    <?php foreach (($cumplimientoMetas['meses'] ?? []) as $mesMeta): ?>
-                        <option value="<?= htmlspecialchars((string)($mesMeta['key'] ?? '')) ?>" <?= ($filtroMesMeta === (string)($mesMeta['key'] ?? '')) ? 'selected' : '' ?>>
-                            <?= htmlspecialchars((string)($mesMeta['label'] ?? 'MES')) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="form-group" style="margin: 0;">
-                <label for="mes_escalera">Mes Escalera del Éxito</label>
-                <input type="month" id="mes_escalera" name="mes_escalera" class="form-control" value="<?= htmlspecialchars($mesEscaleraSeleccionado) ?>">
-                <small style="color:#637087;">Por defecto trae el mes actual.</small>
-            </div>
-        <?php endif; ?>
 
         <div class="filters-actions">
             <button type="submit" class="btn btn-primary">Aplicar</button>
@@ -418,6 +350,8 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
         </div>
     </form>
 </div>
+
+<div id="reportesVisualContainer">
 
 <?php if ($esReportePersonas): ?>
 <div class="card report-card" style="margin-bottom: 12px; padding: 12px 14px;">
@@ -427,14 +361,17 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 
 <div class="report-kpi-grid report-kpi-grid--ganar" style="margin-bottom: 18px;">
     <button type="button" class="report-kpi-card report-kpi-button kpi-celula js-kpi-detalle" data-origen="celula">
+        <div class="report-kpi-icon">👤</div>
         <div class="report-kpi-label">Ganados en célula</div>
         <div class="report-kpi-value"><?= (int)$resumenOrigen['Ganados_Celula'] ?></div>
     </button>
     <button type="button" class="report-kpi-card report-kpi-button kpi-domingo js-kpi-detalle" data-origen="domingo">
+        <div class="report-kpi-icon">✅</div>
         <div class="report-kpi-label">Ganados en domingo</div>
         <div class="report-kpi-value"><?= (int)$resumenOrigen['Ganados_Domingo'] ?></div>
     </button>
     <button type="button" class="report-kpi-card report-kpi-button kpi-asistencia js-kpi-detalle" data-origen="asignados">
+        <div class="report-kpi-icon">📌</div>
         <div class="report-kpi-label">Asignados</div>
         <div class="report-kpi-value"><?= (int)($resumenOrigen['Asignados'] ?? 0) ?></div>
     </button>
@@ -473,8 +410,10 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
             <h3 style="margin-bottom:4px;">Reporte de Ganados del fin de semana anterior</h3>
             <small style="color:#60708a;">Rango: <?= htmlspecialchars((string)($reporteGanadosFinSemanaAnterior['inicio'] ?? '')) ?> a <?= htmlspecialchars((string)($reporteGanadosFinSemanaAnterior['fin'] ?? '')) ?></small>
         </div>
+        <button type="button" id="toggleGanadosSemanaAnteriorBtn" class="btn btn-secondary">Ver detalle</button>
     </div>
 
+    <div id="reporteGanadosSemanaAnteriorDetalle" style="display:none;">
     <?php if (!empty($reporteGanadosFinSemanaAnterior['rows'])): ?>
         <div class="table-container" style="margin-bottom: 12px;">
             <table class="data-table">
@@ -510,8 +449,11 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
             Sin registros de domingo para el fin de semana anterior.
         </div>
     <?php endif; ?>
+    </div>
 </div>
 
+<div class="ganar-extra-section">
+<div class="report-breakdown-block report-breakdown-ministerio">
 <?php $renderTablaGananciaMinisterial($tablaGananciaMinisterial, $anioMinisterialTablas); ?>
 
 <div class="rpt-mini-grid" style="margin-bottom: 22px;">
@@ -527,13 +469,33 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     }
     ?>
 </div>
-
-<div class="card report-card" style="margin-bottom: 22px;">
-    <h3>Almas ganadas por edades</h3>
-    <div id="chartEdades"></div>
 </div>
 
-<div class="card report-card" style="margin-bottom: 22px;">
+<div class="card report-card report-breakdown-block report-breakdown-lider" style="margin-bottom: 22px;">
+    <h3>Ganados por líder (tabla)</h3>
+    <div class="table-container" style="margin-top: 10px;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Líder</th>
+                    <th style="width: 140px;">Ganados</th>
+                </tr>
+            </thead>
+            <tbody id="tablaGanadosLiderBody">
+                <tr>
+                    <td colspan="2" class="text-center">Sin datos para el rango seleccionado</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card report-card report-breakdown-block report-breakdown-lider" style="margin-bottom: 22px;">
+    <h3>Ganados por líder</h3>
+    <div id="chartLideres"></div>
+</div>
+
+<div class="card report-card report-breakdown-block report-breakdown-ministerio" style="margin-bottom: 22px;">
     <h3>Almas ganadas por ministerio</h3>
     <div id="chartAlmasMinisterio"></div>
     <details style="margin-top: 14px;">
@@ -572,29 +534,36 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
         </div>
     </details>
 </div>
+</div>
 <?php else: ?>
 <div class="report-kpi-grid report-kpi-grid--celulas" style="margin-bottom: 18px;">
     <div class="report-kpi-card kpi-escalera">
+        <div class="report-kpi-icon">🏠</div>
         <div class="report-kpi-label">Total de células</div>
         <div class="report-kpi-value"><?= (int)($indicadoresCelulas['totales']['total_celulas'] ?? 0) ?></div>
     </div>
     <div class="report-kpi-card kpi-domingo">
+        <div class="report-kpi-icon">🆕</div>
         <div class="report-kpi-label">Nuevas en semestre</div>
         <div class="report-kpi-value"><?= (int)($indicadoresCelulas['totales']['nuevas_semestre'] ?? 0) ?></div>
     </div>
     <div class="report-kpi-card kpi-celula">
+        <div class="report-kpi-icon">⛔</div>
         <div class="report-kpi-label">Cerradas en semestre</div>
         <div class="report-kpi-value"><?= (int)($indicadoresCelulas['totales']['cerradas_semestre'] ?? 0) ?></div>
     </div>
     <div class="report-kpi-card kpi-asistencia">
+        <div class="report-kpi-icon">📋</div>
         <div class="report-kpi-label">Reportadas semana</div>
         <div class="report-kpi-value"><?= (int)($indicadoresCelulas['totales']['reportadas_semana'] ?? 0) ?></div>
     </div>
     <div class="report-kpi-card kpi-domingo">
+        <div class="report-kpi-icon">⚠️</div>
         <div class="report-kpi-label">No reportadas semana</div>
         <div class="report-kpi-value"><?= (int)($indicadoresCelulas['totales']['no_reportadas_semana'] ?? 0) ?></div>
     </div>
     <div class="report-kpi-card kpi-asistencia">
+        <div class="report-kpi-icon">📈</div>
         <div class="report-kpi-label">Promedio asistencia</div>
         <div class="report-kpi-value"><?= $promedioAsistencia ?>%</div>
     </div>
@@ -774,6 +743,8 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 </div>
 <?php endif; ?>
 
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
 const procesoGanar = <?= json_encode($procesoGanar) ?>;
@@ -795,23 +766,149 @@ const etiquetasCelulas = nombresCelulas.map(nombre => {
     return limpio.length > 20 ? `${limpio.slice(0, 20)}...` : limpio;
 });
 
-if (tipoReporte === 'personas') {
-    new ApexCharts(document.querySelector('#chartEdades'), {
-        chart: { type: 'pie', height: 320 },
-        labels: ['Kids (3-8)', 'Teens (9-12)', 'Rocas (13-17)', 'Jóvenes (18-30)', 'Adultos (31-59)', 'Adultos mayores (60+)', 'Sin dato'],
-        colors: ['#FFB703', '#8ECAE6', '#3A86FF', '#06D6A0', '#8338EC', '#EF476F', '#ADB5BD'],
-        series: [
-            parseInt(almasPorEdades.Kids || 0, 10),
-            parseInt(almasPorEdades.Teens || 0, 10),
-            parseInt(almasPorEdades.Rocas || 0, 10),
-            parseInt(almasPorEdades.Jovenes || 0, 10),
-            parseInt(almasPorEdades.Adultos || 0, 10),
-            parseInt(almasPorEdades.Adultos_Mayores || 0, 10),
-            parseInt(almasPorEdades.Sin_Dato || 0, 10)
-        ],
-        legend: {
-            position: 'bottom'
+const reportTopStrip = document.getElementById('reportTopStrip');
+const reportModeButtons = reportTopStrip ? reportTopStrip.querySelectorAll('[data-mode]') : [];
+const reportBreakdownButtons = reportTopStrip ? reportTopStrip.querySelectorAll('[data-breakdown]') : [];
+const STORAGE_MODE_KEY = 'reportes_view_mode';
+const STORAGE_BREAKDOWN_KEY = 'reportes_view_breakdown';
+
+const aplicarModoReporte = (modo) => {
+    const root = document.documentElement;
+    root.classList.remove('show-report-tables', 'show-report-charts');
+
+    if (modo === 'tablas') {
+        root.classList.add('show-report-tables');
+    }
+
+    if (modo === 'graficos') {
+        root.classList.add('show-report-charts');
+    }
+
+    reportModeButtons.forEach((btn) => {
+        btn.classList.toggle('is-active', String(btn.dataset.mode || '') === modo);
+    });
+};
+
+if (reportModeButtons.length) {
+    reportModeButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const modoSeleccionado = String(btn.dataset.mode || 'tablas');
+            aplicarModoReporte(modoSeleccionado);
+            try {
+                localStorage.setItem(STORAGE_MODE_KEY, modoSeleccionado);
+            } catch (e) {
+                // Ignorar errores de almacenamiento del navegador.
+            }
+        });
+    });
+
+    let modoInicial = 'tablas';
+    try {
+        const guardado = String(localStorage.getItem(STORAGE_MODE_KEY) || '').trim();
+        if (guardado === 'tablas' || guardado === 'graficos') {
+            modoInicial = guardado;
         }
+    } catch (e) {
+        // Mantener valor por defecto.
+    }
+
+    aplicarModoReporte(modoInicial);
+}
+
+const aplicarBreakdownReporte = (tipo) => {
+    const root = document.documentElement;
+    root.classList.toggle('breakdown-lider', tipo === 'lider');
+    root.classList.toggle('breakdown-ministerio', tipo !== 'lider');
+
+    reportBreakdownButtons.forEach((btn) => {
+        btn.classList.toggle('is-active', String(btn.dataset.breakdown || '') === tipo);
+    });
+};
+
+if (reportBreakdownButtons.length) {
+    reportBreakdownButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const breakdownSeleccionado = String(btn.dataset.breakdown || 'ministerio');
+            aplicarBreakdownReporte(breakdownSeleccionado);
+            try {
+                localStorage.setItem(STORAGE_BREAKDOWN_KEY, breakdownSeleccionado);
+            } catch (e) {
+                // Ignorar errores de almacenamiento del navegador.
+            }
+        });
+    });
+
+    let breakdownInicial = 'ministerio';
+    try {
+        const guardado = String(localStorage.getItem(STORAGE_BREAKDOWN_KEY) || '').trim();
+        if (guardado === 'ministerio' || guardado === 'lider') {
+            breakdownInicial = guardado;
+        }
+    } catch (e) {
+        // Mantener valor por defecto.
+    }
+
+    aplicarBreakdownReporte(breakdownInicial);
+}
+
+const toggleGanadosSemanaAnteriorBtn = document.getElementById('toggleGanadosSemanaAnteriorBtn');
+const reporteGanadosSemanaAnteriorDetalle = document.getElementById('reporteGanadosSemanaAnteriorDetalle');
+if (toggleGanadosSemanaAnteriorBtn && reporteGanadosSemanaAnteriorDetalle) {
+    toggleGanadosSemanaAnteriorBtn.addEventListener('click', () => {
+        const mostrar = reporteGanadosSemanaAnteriorDetalle.style.display === 'none';
+        reporteGanadosSemanaAnteriorDetalle.style.display = mostrar ? 'block' : 'none';
+        toggleGanadosSemanaAnteriorBtn.textContent = mostrar ? 'Ocultar detalle' : 'Ver detalle';
+    });
+}
+
+if (tipoReporte === 'personas') {
+    const registrosGanados = ['celula', 'domingo', 'asignados']
+        .flatMap((key) => Array.isArray(detalleOrigenGanados[key]) ? detalleOrigenGanados[key] : []);
+
+    const conteoLideresMap = {};
+    registrosGanados.forEach((item) => {
+        const nombreLider = String(item.Nombre_Lider || 'Sin líder').trim() || 'Sin líder';
+        conteoLideresMap[nombreLider] = (conteoLideresMap[nombreLider] || 0) + 1;
+    });
+
+    const rankingLideres = Object.entries(conteoLideresMap)
+        .map(([lider, total]) => ({ lider, total: parseInt(total || 0, 10) }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 12);
+
+    const tablaGanadosLiderBody = document.getElementById('tablaGanadosLiderBody');
+    const escapeRowText = (valor) => String(valor || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    if (tablaGanadosLiderBody) {
+        if (!rankingLideres.length) {
+            tablaGanadosLiderBody.innerHTML = '<tr><td colspan="2" class="text-center">Sin datos para el rango seleccionado</td></tr>';
+        } else {
+            tablaGanadosLiderBody.innerHTML = rankingLideres.map((item) => (
+                `<tr><td>${escapeRowText(item.lider)}</td><td><strong>${item.total}</strong></td></tr>`
+            )).join('');
+        }
+    }
+
+    new ApexCharts(document.querySelector('#chartLideres'), {
+        chart: { type: 'bar', height: 340, toolbar: { show: false } },
+        series: [{
+            name: 'Ganados',
+            data: rankingLideres.map(x => x.total)
+        }],
+        xaxis: {
+            categories: rankingLideres.map(x => x.lider),
+            labels: {
+                rotate: -20,
+                trim: true
+            }
+        },
+        dataLabels: { enabled: true },
+        colors: ['#3b82f6']
     }).render();
 
     new ApexCharts(document.querySelector('#chartAlmasMinisterio'), {
@@ -1202,11 +1299,186 @@ if (tipoReporte === 'personas') {
     color: #ffffff;
 }
 
+#reportesVisualContainer .table-container,
+#reportesVisualContainer details {
+    display: none;
+}
+
+#reportesVisualContainer .ganar-extra-section {
+    display: none;
+}
+
+#reportesVisualContainer .report-breakdown-block {
+    display: none;
+}
+
+html.show-report-tables #reportesVisualContainer .table-container,
+html.show-report-tables #reportesVisualContainer details {
+    display: block;
+}
+
+html.show-report-tables #reportesVisualContainer .ganar-extra-section {
+    display: block;
+}
+
+html.show-report-tables.breakdown-ministerio #reportesVisualContainer .report-breakdown-ministerio,
+html.show-report-charts.breakdown-ministerio #reportesVisualContainer .report-breakdown-ministerio {
+    display: block;
+}
+
+html.show-report-tables.breakdown-lider #reportesVisualContainer .report-breakdown-lider,
+html.show-report-charts.breakdown-lider #reportesVisualContainer .report-breakdown-lider {
+    display: block;
+}
+
+html.show-report-charts #reportesVisualContainer .ganar-extra-section {
+    display: block;
+}
+
+html.show-report-charts #reportesVisualContainer .btn-chart-toggle,
+html.show-report-charts #reportesVisualContainer .rpt-chart-wrap,
+html.show-report-charts #reportesVisualContainer [id^="chart"] {
+    display: block !important;
+}
+
+.celula-modal .table-container {
+    display: block !important;
+}
+
+#reportesVisualContainer .btn-chart-toggle,
+#reportesVisualContainer .rpt-chart-wrap,
+#reportesVisualContainer [id^="chart"] {
+    display: none !important;
+}
+
 .report-card {
     background: #fff;
     padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    border-radius: 14px;
+    border: 1px solid #e1e9f3;
+    box-shadow: 0 10px 26px rgba(17, 42, 72, 0.08);
+}
+
+.report-shell-head {
+    background: linear-gradient(90deg, #1a4f87 0%, #2f6fae 100%);
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid #194a7e;
+}
+
+.report-shell-head h2 {
+    color: #ffffff;
+    margin-bottom: 2px;
+}
+
+.report-shell-subtitle {
+    color: rgba(235, 243, 255, 0.9);
+}
+
+.report-shell-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.report-shell-date {
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.report-shell-head .btn.btn-secondary {
+    background: #f3f8ff;
+    border: 1px solid #d5e4f8;
+    color: #1a4f87;
+}
+
+.report-top-strip {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    border-bottom: 2px solid #d8e3f2;
+    padding-bottom: 8px;
+}
+
+.report-top-strip-tab {
+    border: 1px solid #b8d0ea;
+    background: #eaf3ff;
+    color: #1c466f;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: default;
+}
+
+.report-top-strip-tab.is-active {
+    background: #2b6ba7;
+    border-color: #255f95;
+    color: #ffffff;
+}
+
+.report-toolbar-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.report-toolbar-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.report-icon-btn {
+    appearance: none;
+    border: 1px solid #c9d8ea;
+    background: #ffffff;
+    color: #1d446f;
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    text-decoration: none;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(17, 42, 72, 0.08);
+}
+
+.report-icon-btn:hover {
+    background: #eef5ff;
+}
+
+.report-page-header {
+    margin-bottom: 16px;
+}
+
+.report-compact-form {
+    display: flex;
+    align-items: end;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.report-date-group {
+    min-width: 280px;
+    max-width: 360px;
+}
+
+.report-compact-form .filters-actions {
+    margin-left: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .report-metas-card {
@@ -1332,10 +1604,12 @@ if (tipoReporte === 'personas') {
 
 .report-kpi-grid--ganar {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
 }
 
 .report-kpi-grid--celulas {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
 }
 
 .report-kpi-grid--escalera {
@@ -1480,6 +1754,27 @@ if (tipoReporte === 'personas') {
     border-radius: 12px;
     padding: 14px;
     color: #10233d;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 118px;
+    background: #ffffff;
+    border: 1px solid #dce7f4;
+    box-shadow: 0 8px 20px rgba(14, 39, 67, 0.08);
+}
+
+.report-kpi-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    margin-bottom: 2px;
+    background: linear-gradient(180deg, #f0f8ff, #ffffff);
+    border: 1px solid #cddff4;
+    color: #25588f;
 }
 
 .report-kpi-button {
@@ -1502,10 +1797,10 @@ if (tipoReporte === 'personas') {
     outline-offset: 2px;
 }
 
-.kpi-celula { background: #eef7ff; border: 1px solid #c7dfff; }
-.kpi-domingo { background: #fff8e8; border: 1px solid #ffe2a8; }
-.kpi-escalera { background: #eefbf1; border: 1px solid #bfe8c9; }
-.kpi-asistencia { background: #f8f2ff; border: 1px solid #ddcbff; }
+.kpi-celula { border-top: 4px solid #4a9ee8; }
+.kpi-domingo { border-top: 4px solid #e6a93e; }
+.kpi-escalera { border-top: 4px solid #4cbf6e; }
+.kpi-asistencia { border-top: 4px solid #7f88e6; }
 
 @media (max-width: 1100px) {
     .report-kpi-grid--escalera {
@@ -1517,8 +1812,22 @@ if (tipoReporte === 'personas') {
     }
 }
 
-.report-kpi-label { font-size: .82rem; color: #475569; }
-.report-kpi-value { font-size: 1.8rem; font-weight: 800; }
+.report-kpi-label { font-size: .82rem; color: #4f6279; font-weight: 600; }
+.report-kpi-value { font-size: 1.9rem; font-weight: 800; color: #12335a; }
+
+.report-kpi-grid .report-kpi-card {
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.report-kpi-grid .report-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px rgba(12, 36, 62, 0.12);
+}
+
+#toggleGanadosSemanaAnteriorBtn {
+    border-radius: 8px;
+    font-weight: 700;
+}
 
 .report-list-items {
     display: grid;
@@ -1798,7 +2107,24 @@ details summary {
 }
 
 @media (max-width: 1000px) {
-    .report-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr));     .report-kpi-grid--escalera { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .report-kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .report-kpi-grid--escalera {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .report-compact-form {
+        align-items: stretch;
+    }
+
+    .report-date-group {
+        min-width: 100%;
+        max-width: 100%;
+    }
 }
 }
 

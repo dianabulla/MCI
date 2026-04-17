@@ -28,8 +28,9 @@ class ReporteController extends BaseController {
             $timestamp = time();
         }
 
-        $diaSemana = (int)date('w', $timestamp); // 0 domingo, 6 sabado
-        $inicio = strtotime('-' . $diaSemana . ' days', $timestamp);
+        $diaSemana = (int)date('N', $timestamp); // 1 lunes, 7 domingo
+        $diasDesdeLunes = $diaSemana - 1;
+        $inicio = strtotime('-' . $diasDesdeLunes . ' days', $timestamp);
         $fin = strtotime('+6 days', $inicio);
 
         return [date('Y-m-d', $inicio), date('Y-m-d', $fin)];

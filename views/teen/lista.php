@@ -6,6 +6,12 @@
         <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-sm btn-secondary">
             Registrar menor
         </a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=teen/qr-registro" class="btn btn-sm btn-info">
+            QR Registro Teens
+        </a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=teen/consulta-codigo" target="_blank" class="btn btn-sm btn-outline-secondary">
+            Consulta pública por código
+        </a>
         <?php if (AuthController::tienePermiso('teen', 'crear')): ?>
             <button type="button" class="btn btn-sm btn-primary" onclick="document.getElementById('formSubidaTeen').scrollIntoView({ behavior: 'smooth' });">
                 Subir PDF

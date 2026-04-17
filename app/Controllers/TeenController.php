@@ -41,6 +41,49 @@ class TeenController extends BaseController {
         exit;
     }
 
+    private function redirigirRegistroPublico($mensaje, $tipo = 'error', array $old = [], $codigo = '') {
+        $params = array_merge([
+            'url' => 'teen/registro-publico',
+            'mensaje' => $mensaje,
+            'tipo' => $tipo,
+            'codigo' => $codigo
+        ], $old);
+
+        header('Location: ' . PUBLIC_URL . 'index.php?' . http_build_query($params));
+        exit;
+    }
+
+    private function buildAbsolutePublicUrl($route) {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $scheme = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
+        }
+
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $base = rtrim(PUBLIC_URL, '/');
+
+        return $scheme . '://' . $host . $base . '/index.php?url=' . urlencode($route);
+    }
+
+    private function normalizarCodigoRegistro($codigo) {
+        $codigo = trim((string)$codigo);
+        $codigo = strtoupper($codigo);
+        $codigo = preg_replace('/[^A-Z0-9\-]/', '', $codigo);
+        return $codigo;
+    }
+
+    private function generarCodigoRegistroUnico() {
+        for ($i = 0; $i < 15; $i++) {
+            $numero = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $codigo = 'TN-' . date('ymd') . '-' . $numero;
+            if (!$this->teenModel->existeCodigoRegistro($codigo)) {
+                return $codigo;
+            }
+        }
+
+        throw new Exception('No fue posible generar un código único. Intenta nuevamente.');
+    }
+
     /**
      * Pantalla principal del módulo.
      * GET: lista materiales
@@ -335,6 +378,7 @@ class TeenController extends BaseController {
         }
 
         $data = [
+            'codigo_registro' => $this->generarCodigoRegistroUnico(),
             'nombre_menor' => $nombreMenor,
             'id_acudiente' => $idAcudiente,
             'nombre_acudiente' => $nombreAcudiente !== '' ? $nombreAcudiente : $acudienteBusqueda,
@@ -352,10 +396,162 @@ class TeenController extends BaseController {
                 throw new Exception('No se pudo guardar el registro del menor.');
             }
 
-            $this->redirigirRegistroMenor('Menor registrado correctamente.', 'success');
+            $this->redirigirRegistroMenor('Menor registrado correctamente. Código asignado: ' . $data['codigo_registro'], 'success');
         } catch (Throwable $e) {
             $this->redirigirRegistroMenor('Error al guardar el menor: ' . $e->getMessage(), 'error', $old);
         }
+    }
+
+    public function registroPublico() {
+        $this->view('teen/registro_publico', [
+            'ministerios' => $this->ministerioModel->getAll(),
+            'mensaje' => (string)($_GET['mensaje'] ?? ''),
+            'tipo' => (string)($_GET['tipo'] ?? ''),
+            'codigo' => (string)($_GET['codigo'] ?? ''),
+            'old' => [
+                'nombre_menor' => (string)($_GET['nombre_menor'] ?? ''),
+                'nombre_acudiente' => (string)($_GET['nombre_acudiente'] ?? ''),
+                'telefono_contacto' => (string)($_GET['telefono_contacto'] ?? ''),
+                'fecha_nacimiento' => (string)($_GET['fecha_nacimiento'] ?? ''),
+                'edad' => (string)($_GET['edad'] ?? ''),
+                'id_ministerio' => (string)($_GET['id_ministerio'] ?? ''),
+                'asiste_celula' => (string)($_GET['asiste_celula'] ?? ''),
+                'barrio' => (string)($_GET['barrio'] ?? '')
+            ]
+        ]);
+    }
+
+    public function guardarMenorPublico() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . PUBLIC_URL . 'index.php?url=teen/registro-publico');
+            exit;
+        }
+
+        $nombreMenor = $this->normalizarTextoMayusculas($_POST['nombre_menor'] ?? '');
+        $nombreAcudiente = $this->normalizarTextoMayusculas($_POST['nombre_acudiente'] ?? '');
+        $telefonoContacto = trim((string)($_POST['telefono_contacto'] ?? ''));
+        $telefonoContacto = preg_replace('/[^0-9+\s\-\(\)]/', '', $telefonoContacto);
+        $fechaNacimiento = trim((string)($_POST['fecha_nacimiento'] ?? ''));
+        $edadRaw = trim((string)($_POST['edad'] ?? ''));
+        $edad = ctype_digit($edadRaw) ? (int)$edadRaw : -1;
+        $idMinisterioRaw = trim((string)($_POST['id_ministerio'] ?? ''));
+        $idMinisterio = ctype_digit($idMinisterioRaw) ? (int)$idMinisterioRaw : 0;
+        $asisteCelulaRaw = strtoupper(trim((string)($_POST['asiste_celula'] ?? '')));
+        $barrio = $this->normalizarTextoMayusculas($_POST['barrio'] ?? '');
+
+        if ($fechaNacimiento !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaNacimiento)) {
+            try {
+                $fechaNac = new DateTime($fechaNacimiento);
+                $hoy = new DateTime('today');
+                $edadCalculada = $fechaNac->diff($hoy)->y;
+                if ($edadCalculada >= 0) {
+                    $edad = (int)$edadCalculada;
+                    $edadRaw = (string)$edad;
+                }
+            } catch (Throwable $e) {
+                // Se valida más abajo.
+            }
+        }
+
+        $old = [
+            'nombre_menor' => $nombreMenor,
+            'nombre_acudiente' => $nombreAcudiente,
+            'telefono_contacto' => $telefonoContacto,
+            'fecha_nacimiento' => $fechaNacimiento,
+            'edad' => $edadRaw,
+            'id_ministerio' => $idMinisterioRaw,
+            'asiste_celula' => $asisteCelulaRaw,
+            'barrio' => $barrio
+        ];
+
+        $errores = [];
+        if ($nombreMenor === '') {
+            $errores[] = 'El nombre y apellido del menor es obligatorio.';
+        }
+        if ($nombreAcudiente === '') {
+            $errores[] = 'El nombre del acudiente es obligatorio.';
+        }
+        if ($telefonoContacto === '') {
+            $errores[] = 'El número de contacto es obligatorio.';
+        }
+        if ($fechaNacimiento === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaNacimiento)) {
+            $errores[] = 'La fecha de nacimiento es obligatoria.';
+        }
+        if ($edad < 0 || $edad > 17) {
+            $errores[] = 'La edad debe estar entre 0 y 17 años.';
+        }
+        if ($idMinisterio <= 0) {
+            $errores[] = 'Debes seleccionar un ministerio.';
+        }
+        if (!in_array($asisteCelulaRaw, ['SI', 'SÍ', 'NO'], true)) {
+            $errores[] = 'Debes indicar si asiste a célula.';
+        }
+
+        if (!empty($errores)) {
+            $this->redirigirRegistroPublico(implode(' ', $errores), 'error', $old);
+        }
+
+        $codigoRegistro = $this->generarCodigoRegistroUnico();
+        $data = [
+            'codigo_registro' => $codigoRegistro,
+            'nombre_menor' => $nombreMenor,
+            'id_acudiente' => 0,
+            'nombre_acudiente' => $nombreAcudiente,
+            'telefono_contacto' => $telefonoContacto,
+            'fecha_nacimiento' => $fechaNacimiento !== '' ? $fechaNacimiento : null,
+            'edad' => $edad,
+            'id_ministerio' => $idMinisterio,
+            'asiste_celula' => in_array($asisteCelulaRaw, ['SI', 'SÍ'], true) ? 1 : 0,
+            'barrio' => $barrio !== '' ? $barrio : null
+        ];
+
+        try {
+            $idMenor = (int)$this->teenModel->createMenor($data);
+            if ($idMenor <= 0) {
+                throw new Exception('No se pudo guardar el registro del menor.');
+            }
+
+            $this->redirigirRegistroPublico('Registro completado correctamente. Guarda este código para consultar el registro.', 'success', [], $codigoRegistro);
+        } catch (Throwable $e) {
+            $this->redirigirRegistroPublico('Error al guardar el menor: ' . $e->getMessage(), 'error', $old);
+        }
+    }
+
+    public function consultarCodigoPublico() {
+        $codigo = $this->normalizarCodigoRegistro($_GET['codigo'] ?? '');
+        $registro = null;
+        $mensaje = '';
+        $tipo = '';
+
+        if ($codigo !== '') {
+            $registro = $this->teenModel->getMenorByCodigoRegistro($codigo);
+            if (empty($registro)) {
+                $mensaje = 'No encontramos un registro con ese código.';
+                $tipo = 'error';
+            }
+        }
+
+        $this->view('teen/consulta_publica', [
+            'codigo' => $codigo,
+            'registro' => $registro,
+            'mensaje' => $mensaje,
+            'tipo' => $tipo
+        ]);
+    }
+
+    public function qrRegistroPublico() {
+        if (!AuthController::tienePermiso('teen', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $urlRegistro = $this->buildAbsolutePublicUrl('teen/registro-publico');
+        $urlConsulta = $this->buildAbsolutePublicUrl('teen/consulta-codigo');
+
+        $this->view('teen/qr_registro', [
+            'url_registro' => $urlRegistro,
+            'url_consulta' => $urlConsulta
+        ]);
     }
 
     public function buscarAcudientes() {

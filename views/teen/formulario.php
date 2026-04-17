@@ -96,6 +96,7 @@
                 <table class="data-table">
                     <thead>
                         <tr>
+                            <th>Código</th>
                             <th>Menor</th>
                             <th>Acudiente</th>
                             <th>Contacto</th>
@@ -110,6 +111,7 @@
                     <tbody>
                         <?php foreach (($registros ?? []) as $registro): ?>
                             <tr>
+                                <td><strong><?= htmlspecialchars((string)($registro['codigo_registro'] ?? '')) ?></strong></td>
                                 <td><?= htmlspecialchars((string)($registro['nombre_menor'] ?? '')) ?></td>
                                 <td><?= htmlspecialchars((string)($registro['Nombre_Acudiente_Base'] ?: ($registro['nombre_acudiente'] ?? ''))) ?></td>
                                 <td><?= htmlspecialchars((string)($registro['Telefono_Acudiente_Actual'] ?? ($registro['telefono_contacto'] ?? ''))) ?></td>

@@ -23,6 +23,13 @@ class Teen extends BaseModel {
         return !empty($rows);
     }
 
+    private function indexExists($indexName, $tableName = null) {
+        $tableName = $tableName ?: $this->table;
+        $sql = "SHOW INDEX FROM {$tableName} WHERE Key_name = ?";
+        $rows = $this->query($sql, [$indexName]);
+        return !empty($rows);
+    }
+
     /**
      * Crear tabla o columnas necesarias
      */
@@ -60,6 +67,7 @@ class Teen extends BaseModel {
             $this->execute("
                 CREATE TABLE IF NOT EXISTS {$this->tablaMenores} (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    codigo_registro VARCHAR(24) NULL,
                     nombre_menor VARCHAR(180) NOT NULL,
                     id_acudiente INT NOT NULL,
                     nombre_acudiente VARCHAR(180) NOT NULL,
@@ -71,10 +79,15 @@ class Teen extends BaseModel {
                     barrio VARCHAR(150) NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_codigo_registro (codigo_registro),
                     KEY idx_acudiente (id_acudiente),
                     KEY idx_ministerio (id_ministerio)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ");
+
+            if (!$this->columnExists('codigo_registro', $this->tablaMenores)) {
+                $this->execute("ALTER TABLE {$this->tablaMenores} ADD COLUMN codigo_registro VARCHAR(24) NULL FIRST");
+            }
 
             if (!$this->columnExists('fecha_nacimiento', $this->tablaMenores)) {
                 $this->execute("ALTER TABLE {$this->tablaMenores} ADD COLUMN fecha_nacimiento DATE NULL AFTER telefono_contacto");
@@ -82,6 +95,10 @@ class Teen extends BaseModel {
 
             if (!$this->columnExists('updated_at', $this->tablaMenores)) {
                 $this->execute("ALTER TABLE {$this->tablaMenores} ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+            }
+
+            if (!$this->indexExists('uq_codigo_registro', $this->tablaMenores)) {
+                $this->execute("CREATE UNIQUE INDEX uq_codigo_registro ON {$this->tablaMenores} (codigo_registro)");
             }
         } catch (Throwable $e) {
             error_log('Error asegurando estructura de teen_menores: ' . $e->getMessage());
@@ -116,6 +133,40 @@ class Teen extends BaseModel {
             $this->table = $tablaOriginal;
             $this->primaryKey = $llaveOriginal;
         }
+    }
+
+    public function existeCodigoRegistro($codigo) {
+        $codigo = trim((string)$codigo);
+        if ($codigo === '') {
+            return false;
+        }
+
+        $rows = $this->query(
+            "SELECT id FROM {$this->tablaMenores} WHERE codigo_registro = ? LIMIT 1",
+            [$codigo]
+        );
+
+        return !empty($rows);
+    }
+
+    public function getMenorByCodigoRegistro($codigo) {
+        $codigo = trim((string)$codigo);
+        if ($codigo === '') {
+            return null;
+        }
+
+        $sql = "SELECT tm.*,
+                       COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
+                       TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, ''))) AS Nombre_Acudiente_Base,
+                       COALESCE(NULLIF(TRIM(COALESCE(p.Telefono, '')), ''), tm.telefono_contacto) AS Telefono_Acudiente_Actual
+                FROM {$this->tablaMenores} tm
+                LEFT JOIN ministerio m ON m.Id_Ministerio = tm.id_ministerio
+                LEFT JOIN persona p ON p.Id_Persona = tm.id_acudiente
+                WHERE tm.codigo_registro = ?
+                LIMIT 1";
+
+        $rows = $this->query($sql, [$codigo]);
+        return $rows[0] ?? null;
     }
 
     /**
