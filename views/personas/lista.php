@@ -55,7 +55,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                 return true;
             }
 
-            $idMinisterioLider = isset($lider['Id_Ministerio']) ? (string)$lider['Id_Ministerio'] : '';
+            $idMinisterioLider = isset($lider['Id_Ministerio']) ? trim((string)$lider['Id_Ministerio']) : '';
             if ($filtroMinisterioListado === '0') {
                 return $idMinisterioLider === '' || $idMinisterioLider === '0';
             }
@@ -176,12 +176,45 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                 <th>Nombre</th>
                 <th>Ministerio</th>
                 <th>Líder</th>
+                <th class="escalera-inline-col">Escalera rápida</th>
                 <?php if ($mostrarAcciones): ?><th class="action-col">Acciones</th><?php endif; ?>
             </tr>
         </thead>
         <tbody>
             <?php if (!empty($personas)): ?>
                 <?php foreach ($personas as $persona): ?>
+                    <?php
+                    $checklistEscalera = [];
+                    $checklistRawPersona = (string)($persona['Escalera_Checklist'] ?? '');
+                    if ($checklistRawPersona !== '') {
+                        $tmpChecklist = json_decode($checklistRawPersona, true);
+                        if (is_array($tmpChecklist)) {
+                            $checklistEscalera = $tmpChecklist;
+                        }
+                    }
+                    if (!isset($checklistEscalera['Ganar']) || !is_array($checklistEscalera['Ganar'])) {
+                        $checklistEscalera['Ganar'] = [false, false, false, false, false, false];
+                    }
+                    if (!isset($checklistEscalera['Consolidar']) || !is_array($checklistEscalera['Consolidar'])) {
+                        $checklistEscalera['Consolidar'] = [false, false, false];
+                    }
+                    if (!isset($checklistEscalera['Discipular']) || !is_array($checklistEscalera['Discipular'])) {
+                        $checklistEscalera['Discipular'] = [false, false, false];
+                    }
+                    if (!isset($checklistEscalera['Enviar']) || !is_array($checklistEscalera['Enviar'])) {
+                        $checklistEscalera['Enviar'] = [false, false, false];
+                    }
+                    for ($i = 0; $i <= 5; $i++) {
+                        $checklistEscalera['Ganar'][$i] = !empty($checklistEscalera['Ganar'][$i]);
+                    }
+                    for ($i = 0; $i <= 2; $i++) {
+                        $checklistEscalera['Consolidar'][$i] = !empty($checklistEscalera['Consolidar'][$i]);
+                        $checklistEscalera['Discipular'][$i] = !empty($checklistEscalera['Discipular'][$i]);
+                        $checklistEscalera['Enviar'][$i] = !empty($checklistEscalera['Enviar'][$i]);
+                    }
+                    $checklistEscaleraJson = htmlspecialchars((string)json_encode($checklistEscalera, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                    $puedeEditarEscaleraInline = !empty($puedeEditarPersona);
+                    ?>
                     <tr>
                         <td>
                             <span class="ganar-cell-truncate persona-nombre-cell" title="<?= htmlspecialchars($persona['Nombre'] . ' ' . $persona['Apellido']) ?>">
@@ -190,6 +223,53 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                         </td>
                         <td><?= htmlspecialchars($persona['Nombre_Ministerio'] ?? 'Sin ministerio') ?></td>
                         <td><?= htmlspecialchars(trim((string)($persona['Nombre_Lider'] ?? '')) ?: 'Sin líder') ?></td>
+                        <td class="escalera-inline-col">
+                            <div
+                                class="escalera-inline-card js-inline-escalera"
+                                data-persona-id="<?= (int)($persona['Id_Persona'] ?? 0) ?>"
+                                data-checklist="<?= $checklistEscaleraJson ?>"
+                                data-proceso="<?= htmlspecialchars((string)($persona['Proceso'] ?? 'Ganar'), ENT_QUOTES, 'UTF-8') ?>"
+                                data-puede-editar="<?= $puedeEditarEscaleraInline ? '1' : '0' ?>"
+                            >
+                                <div class="escalera-inline-steps">
+                                    <button type="button" class="escalera-step-btn etapa-ganar js-inline-step-btn" data-etapa="Ganar" title="Ganar" aria-label="Ganar">
+                                        <span class="escalera-step-icon" aria-hidden="true"><span class="step-initial">G</span></span>
+                                    </button>
+                                    <button type="button" class="escalera-step-btn etapa-consolidar js-inline-step-btn" data-etapa="Consolidar" title="Consolidar" aria-label="Consolidar">
+                                        <span class="escalera-step-icon" aria-hidden="true"><span class="step-initial">C</span></span>
+                                    </button>
+                                    <button type="button" class="escalera-step-btn etapa-discipular js-inline-step-btn" data-etapa="Discipular" title="Discipular" aria-label="Discipular">
+                                        <span class="escalera-step-icon" aria-hidden="true"><span class="step-initial">D</span></span>
+                                    </button>
+                                    <button type="button" class="escalera-step-btn etapa-enviar js-inline-step-btn" data-etapa="Enviar" title="Enviar" aria-label="Enviar">
+                                        <span class="escalera-step-icon" aria-hidden="true"><span class="step-initial">E</span></span>
+                                    </button>
+                                </div>
+
+                                <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Ganar" hidden>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="0" <?= !empty($checklistEscalera['Ganar'][0]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Primer contacto</span></label>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="2" <?= !empty($checklistEscalera['Ganar'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Fonovisita</span></label>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="3" <?= !empty($checklistEscalera['Ganar'][3]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Visita</span></label>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="5" <?= !empty($checklistEscalera['Ganar'][5]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>No se dispone</span></label>
+                                </div>
+
+                                <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Consolidar" hidden>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Consolidar" data-indice="0" <?= !empty($checklistEscalera['Consolidar'][0]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Universidad de la vida</span></label>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Consolidar" data-indice="1" <?= !empty($checklistEscalera['Consolidar'][1]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Encuentro</span></label>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Consolidar" data-indice="2" <?= !empty($checklistEscalera['Consolidar'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Bautismo</span></label>
+                                </div>
+
+                                <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Discipular" hidden>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Discipular" data-indice="0" <?= !empty($checklistEscalera['Discipular'][0]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Destino nivel 1</span></label>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Discipular" data-indice="1" <?= !empty($checklistEscalera['Discipular'][1]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Destino nivel 2</span></label>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Discipular" data-indice="2" <?= !empty($checklistEscalera['Discipular'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Destino nivel 3</span></label>
+                                </div>
+
+                                <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Enviar" hidden>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Enviar" data-indice="2" <?= !empty($checklistEscalera['Enviar'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Célula</span></label>
+                                </div>
+                            </div>
+                        </td>
                         <?php if ($mostrarAcciones): ?>
                         <td class="action-col">
                             <div class="action-buttons action-buttons-compact">
@@ -211,14 +291,6 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                                 >
                                     <i class="bi bi-fingerprint"></i>
                                 </button>
-                                <a
-                                    href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= (int)($persona['Id_Persona'] ?? 0) ?>&panel=escalera&return_url=<?= urlencode($returnUrlPersonas) ?>#eventos-procesos"
-                                    class="action-icon-btn action-icon-escalera"
-                                    title="Ir a Escalera del Éxito"
-                                    aria-label="Ir a Escalera del Éxito"
-                                >
-                                    <i class="bi bi-bar-chart-steps"></i>
-                                </a>
                                 <?php endif; ?>
                                 <?php if ($puedeEditarPersona): ?>
                                 <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlPersonas) ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
@@ -237,7 +309,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="<?= $mostrarAcciones ? '4' : '3' ?>" class="text-center">No hay personas registradas</td>
+                    <td colspan="<?= $mostrarAcciones ? '5' : '4' ?>" class="text-center">No hay personas registradas</td>
                 </tr>
             <?php endif; ?>
         </tbody>
@@ -303,12 +375,20 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 .ganar-table th.action-col,
 .ganar-table td.action-col {
     white-space: nowrap;
-    min-width: 196px;
+    min-width: 120px;
+    vertical-align: top;
+}
+
+.ganar-table th.escalera-inline-col,
+.ganar-table td.escalera-inline-col {
+    min-width: 150px;
+    vertical-align: top;
+    text-align: center;
 }
 
 .ganar-table .action-buttons.action-buttons-compact {
     flex-wrap: nowrap !important;
-    justify-content: flex-start;
+    justify-content: center;
 }
 
 .ganar-table .action-buttons.action-buttons-compact .action-icon-btn {
@@ -316,15 +396,15 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 }
 
 .action-icon-btn {
-    width: 30px;
-    height: 30px;
+    width: 27px;
+    height: 27px;
     border-radius: 8px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     text-decoration: none;
     border: 1px solid transparent;
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .action-icon-info {
@@ -345,18 +425,138 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
     border-color: #ffc1c7;
 }
 
-.action-icon-escalera {
-    background: #ebe9ff;
-    color: #4a3cc9;
-    border-color: #cfc8ff;
+.action-icon-huella {
+    background: #f3f4f6;
+    color: #1f2937;
+    border-color: #d1d5db;
     cursor: pointer;
 }
 
-.action-icon-huella {
-    background: #e8fff4;
-    color: #14804a;
-    border-color: #bfe9d1;
+.action-icon-huella i {
+    font-size: 15px;
+}
+
+.escalera-inline-card {
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.escalera-inline-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: auto;
+}
+
+.escalera-step-btn {
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #2d4c79;
+    width: 24px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.12s ease;
+}
+
+.escalera-step-btn.active {
+    background: rgba(15, 23, 42, 0.06);
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.escalera-step-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    flex: 0 0 auto;
+    border: 2px solid transparent;
+    background: #fff;
+}
+
+.step-initial {
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0.2px;
+}
+
+.escalera-step-name {
+    display: none;
+}
+
+.escalera-step-btn.etapa-ganar .escalera-step-icon {
+    border-color: #f2c300;
+    color: #d3a700;
+}
+
+.escalera-step-btn.etapa-consolidar .escalera-step-icon {
+    border-color: #36c24f;
+    color: #22a83e;
+}
+
+.escalera-step-btn.etapa-discipular .escalera-step-icon {
+    border-color: #2b8eea;
+    color: #1f77ca;
+}
+
+.escalera-step-btn.etapa-enviar .escalera-step-icon {
+    border-color: #d90d46;
+    color: #bf0a3d;
+}
+
+.escalera-step-btn.active .escalera-step-icon {
+    background: #f9fbff;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+}
+
+.escalera-inline-panel {
+    margin-top: 8px;
+    border: 1px solid #dbe3f4;
+    border-radius: 8px;
+    background: #f8fbff;
+    padding: 8px;
+    display: grid;
+    gap: 6px;
+}
+
+.escalera-inline-panel[hidden] {
+    display: none !important;
+}
+
+.escalera-inline-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #2f4a74;
+}
+
+.escalera-inline-item input {
+    width: 14px;
+    height: 14px;
+}
+
+.escalera-inline-card.is-saving {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.escalera-inline-card.is-bloqueado .escalera-inline-item {
+    opacity: 0.7;
 }
 
 .trazabilidad-grid {
@@ -706,10 +906,16 @@ if (filtroNombre && filtroPerfilForm) {
 (function() {
     const etapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
     const subprocesos = {
-        Ganar: ['Asignado a lider', 'Primer contacto', 'Ubicado en celula', 'No se dispone'],
+        Ganar: ['Primer contacto', 'Asignacion a lideres y ministerio', 'Fonovisita', 'Visita', 'Asignacion a una celula', 'No se dispone'],
         Consolidar: ['Universidad de la vida', 'Encuentro', 'Bautismo'],
-        Discipular: ['Proyeccion', 'Equipo G12', 'Capacitacion destino nivel 1'],
-        Enviar: ['Capacitacion destino nivel 2', 'Capacitacion destino nivel 3', 'Celula']
+        Discipular: ['Capacitacion destino nivel 1 (modulos 1 y 2)', 'Capacitacion destino nivel 2 (modulos 3 y 4)', 'Capacitacion destino nivel 3 (modulos 5 y 6)'],
+        Enviar: ['Celula']
+    };
+    const indicesChecklist = {
+        Ganar: [0, 1, 2, 3, 4, 5],
+        Consolidar: [0, 1, 2],
+        Discipular: [0, 1, 2],
+        Enviar: [2]
     };
 
     const backdrop = document.getElementById('escaleraModalBackdrop');
@@ -748,7 +954,7 @@ if (filtroNombre && filtroPerfilForm) {
             }
         });
         if (indiceActual < 0) {
-            resultado.Ganar = [false, false, false, false];
+            resultado.Ganar = [false, false, false, false, false, false];
         }
         return resultado;
     }
@@ -764,8 +970,9 @@ if (filtroNombre && filtroPerfilForm) {
                 return;
             }
             for (let i = 0; i < (subprocesos[etapa] || []).length; i++) {
-                if (typeof persistido[etapa][i] !== 'undefined') {
-                    combinado[etapa][i] = !!persistido[etapa][i];
+                const indiceReal = (indicesChecklist[etapa] && typeof indicesChecklist[etapa][i] !== 'undefined') ? indicesChecklist[etapa][i] : i;
+                if (typeof persistido[etapa][indiceReal] !== 'undefined') {
+                    combinado[etapa][indiceReal] = !!persistido[etapa][indiceReal];
                 }
             }
         });
@@ -803,7 +1010,7 @@ if (filtroNombre && filtroPerfilForm) {
         modalState.meta = extraerMetaChecklist(checklistPersistido);
         modalState.asignadoALider = !!asignadoALider;
         if (modalState.checklist.Ganar && modalState.checklist.Ganar.length > 0) {
-            modalState.checklist.Ganar[0] = modalState.asignadoALider;
+            modalState.checklist.Ganar[1] = modalState.asignadoALider;
         }
         modalState.botonOrigen = botonOrigen || null;
         modalState.guardando = false;
@@ -816,7 +1023,7 @@ if (filtroNombre && filtroPerfilForm) {
     function renderModal(mensaje, esError) {
         const procesoActual = etapas.includes(modalState.proceso) ? modalState.proceso : 'Ganar';
         const indiceProceso = etapas.indexOf(procesoActual);
-        const noDisponibleMarcado = !!(modalState.checklist.Ganar && modalState.checklist.Ganar[3]);
+        const noDisponibleMarcado = !!(modalState.checklist.Ganar && modalState.checklist.Ganar[5]);
 
         title.textContent = 'Escalera del Exito - ' + modalState.personaNombre;
         let html = '<div class="escalera-level-pill">Nivel actual: <strong>' + escapeHtml(procesoActual) + '</strong></div>';
@@ -839,18 +1046,22 @@ if (filtroNombre && filtroPerfilForm) {
                     return;
                 }
 
-                const done = !!(modalState.checklist[etapa] && modalState.checklist[etapa][i]);
+                const indiceReal = (indicesChecklist[etapa] && typeof indicesChecklist[etapa][i] !== 'undefined') ? indicesChecklist[etapa][i] : i;
+                const done = !!(modalState.checklist[etapa] && modalState.checklist[etapa][indiceReal]);
                 let editable = etapaIndex === indiceProceso;
-                if (etapa === 'Ganar' && i === 0) {
+                if (etapa === 'Ganar' && indiceReal === 1) {
                     editable = false;
                 }
-                if (noDisponibleMarcado && !(etapa === 'Ganar' && i === 3)) {
+                if (etapa === 'Ganar' && indiceReal === 4) {
+                    editable = false;
+                }
+                if (noDisponibleMarcado && !(etapa === 'Ganar' && indiceReal === 5)) {
                     editable = false;
                 }
                 html += '<td class="escalera-check-item ' + (done ? 'done' : '') + '">';
                 html += '<span class="escalera-modal-sub-label">' + escapeHtml(nombreSub) + '</span>';
                 html += '<label class="escalera-check-label ' + (editable ? '' : 'disabled') + '">';
-                html += '<input type="checkbox" class="js-escalera-check" data-etapa="' + escapeHtml(etapa) + '" data-indice="' + i + '" ' + (done ? 'checked' : '') + ' ' + (editable && !modalState.guardando ? '' : 'disabled') + '>';
+                html += '<input type="checkbox" class="js-escalera-check" data-etapa="' + escapeHtml(etapa) + '" data-indice="' + indiceReal + '" ' + (done ? 'checked' : '') + ' ' + (editable && !modalState.guardando ? '' : 'disabled') + '>';
                 html += '<span>' + (done ? '<span class="escalera-check-icon">&#10003;</span>Completado' : 'Pendiente') + '</span>';
                 html += '</label>';
                 html += '</td>';
@@ -896,7 +1107,7 @@ if (filtroNombre && filtroPerfilForm) {
         }
 
         modalState.meta.no_disponible_observacion = observacion;
-        guardarChecklist('Ganar', 3, true, observacion, {
+        guardarChecklist('Ganar', 5, true, observacion, {
             cerrarModalExito: true,
             recargarDespues: true,
             mensajeExito: 'Se guardo la informacion con exito'
@@ -941,7 +1152,7 @@ if (filtroNombre && filtroPerfilForm) {
                     etapa: etapa,
                     indice: indice,
                     marcado: marcado ? 1 : 0,
-                    observacion_no_disponible: (etapa === 'Ganar' && indice === 3) ? (observacionNoDisponible || '') : ''
+                    observacion_no_disponible: (etapa === 'Ganar' && indice === 5) ? (observacionNoDisponible || '') : ''
                 })
             });
 
@@ -965,7 +1176,7 @@ if (filtroNombre && filtroPerfilForm) {
             }
 
             if (modalState.checklist.Ganar && modalState.checklist.Ganar.length > 0) {
-                modalState.checklist.Ganar[0] = modalState.asignadoALider;
+                modalState.checklist.Ganar[1] = modalState.asignadoALider;
             }
 
             if (modalState.botonOrigen) {
@@ -1032,13 +1243,13 @@ if (filtroNombre && filtroPerfilForm) {
                 return;
             }
 
-            if (etapa === 'Ganar' && indice === 3 && target.checked) {
-                modalState.checklist.Ganar[3] = true;
+            if (etapa === 'Ganar' && indice === 5 && target.checked) {
+                modalState.checklist.Ganar[5] = true;
                 renderModal('Escribe la observacion y guardala para marcar No se dispone');
                 return;
             }
 
-            if (etapa === 'Ganar' && indice === 3 && !target.checked) {
+            if (etapa === 'Ganar' && indice === 5 && !target.checked) {
                 modalState.meta.no_disponible_observacion = '';
                 guardarChecklist(etapa, indice, false, '');
                 return;
@@ -1189,22 +1400,23 @@ if (filtroNombre && filtroPerfilForm) {
         {
             id: '<?= htmlspecialchars((string)($lider['Id_Persona'] ?? ''), ENT_QUOTES) ?>',
             nombre: '<?= htmlspecialchars(trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? '')), ENT_QUOTES) ?>',
-            ministerio: '<?= htmlspecialchars((string)($lider['Id_Ministerio'] ?? ''), ENT_QUOTES) ?>'
+            ministerio: '<?= htmlspecialchars(trim((string)($lider['Id_Ministerio'] ?? '')), ENT_QUOTES) ?>'
         }<?= $index < count(($lideres ?? [])) - 1 ? ',' : '' ?>
         <?php endforeach; ?>
     ];
 
     function refrescarFiltroLider() {
-        const ministerioSeleccionado = String(ministerioSelect.value || '');
+        const ministerioSeleccionado = String(ministerioSelect.value || '').trim();
         const liderSeleccionado = String(liderSelect.value || '');
         const lideresFiltrados = lideresDisponibles.filter(function(lider) {
+            const ministerioLider = String(lider.ministerio || '').trim();
             if (ministerioSeleccionado === '') {
                 return true;
             }
             if (ministerioSeleccionado === '0') {
-                return !lider.ministerio || lider.ministerio === '0';
+                return ministerioLider === '' || ministerioLider === '0';
             }
-            return String(lider.ministerio || '') === ministerioSeleccionado;
+            return ministerioLider === ministerioSeleccionado;
         });
 
         liderSelect.innerHTML = '';
@@ -1229,6 +1441,203 @@ if (filtroNombre && filtroPerfilForm) {
 
     ministerioSelect.addEventListener('change', refrescarFiltroLider);
     refrescarFiltroLider();
+})();
+</script>
+
+<script>
+(function() {
+    const endpointChecklist = '<?= PUBLIC_URL ?>?url=personas/actualizarChecklistEscalera';
+    const etapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
+
+    function parseChecklist(raw) {
+        if (!raw) {
+            return {
+                Ganar: [false, false, false, false, false, false],
+                Consolidar: [false, false, false],
+                Discipular: [false, false, false],
+                Enviar: [false, false, false],
+                _meta: {}
+            };
+        }
+
+        try {
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') {
+                throw new Error('Checklist inválido');
+            }
+
+            if (!Array.isArray(parsed.Ganar)) parsed.Ganar = [false, false, false, false, false, false];
+            if (!Array.isArray(parsed.Consolidar)) parsed.Consolidar = [false, false, false];
+            if (!Array.isArray(parsed.Discipular)) parsed.Discipular = [false, false, false];
+            if (!Array.isArray(parsed.Enviar)) parsed.Enviar = [false, false, false];
+
+            for (let i = 0; i <= 5; i++) parsed.Ganar[i] = !!parsed.Ganar[i];
+            for (let i = 0; i <= 2; i++) {
+                parsed.Consolidar[i] = !!parsed.Consolidar[i];
+                parsed.Discipular[i] = !!parsed.Discipular[i];
+                parsed.Enviar[i] = !!parsed.Enviar[i];
+            }
+
+            if (!parsed._meta || typeof parsed._meta !== 'object') {
+                parsed._meta = {};
+            }
+
+            return parsed;
+        } catch (e) {
+            return {
+                Ganar: [false, false, false, false, false, false],
+                Consolidar: [false, false, false],
+                Discipular: [false, false, false],
+                Enviar: [false, false, false],
+                _meta: {}
+            };
+        }
+    }
+
+    function aplicarChecksEnVista(container, checklist) {
+        container.querySelectorAll('.js-inline-escalera-check').forEach(function(check) {
+            const etapa = check.getAttribute('data-etapa') || '';
+            const indice = parseInt(check.getAttribute('data-indice') || '-1', 10);
+            if (!etapa || indice < 0 || !Array.isArray(checklist[etapa])) {
+                return;
+            }
+            check.checked = !!checklist[etapa][indice];
+        });
+    }
+
+    function aplicarBloqueoNoDisponible(container, checklist, puedeEditar) {
+        const noDisponible = !!(checklist.Ganar && checklist.Ganar[5]);
+        container.querySelectorAll('.js-inline-escalera-check').forEach(function(check) {
+            const etapa = check.getAttribute('data-etapa') || 'Ganar';
+            const indice = parseInt(check.getAttribute('data-indice') || '-1', 10);
+            let disabled = !puedeEditar;
+            if (!disabled && noDisponible && !(etapa === 'Ganar' && indice === 5)) {
+                disabled = true;
+            }
+            check.disabled = disabled;
+        });
+        container.classList.toggle('is-bloqueado', noDisponible);
+    }
+
+    async function guardarChecklistInline(container, etapa, indice, marcado) {
+        const idPersona = parseInt(container.getAttribute('data-persona-id') || '0', 10);
+        if (!idPersona) {
+            return false;
+        }
+
+        const checklist = parseChecklist(container.getAttribute('data-checklist') || '');
+        let observacionNoDisponible = '';
+
+        if (etapa === 'Ganar' && indice === 5 && marcado) {
+            const observacionActual = String((checklist._meta && checklist._meta.no_disponible_observacion) || '');
+            const ingresada = window.prompt('Escribe una observación para marcar "No se dispone":', observacionActual);
+            if (ingresada === null) {
+                return false;
+            }
+            const limpia = String(ingresada || '').trim();
+            if (limpia === '') {
+                alert('La observación es obligatoria para "No se dispone".');
+                return false;
+            }
+            observacionNoDisponible = limpia;
+        }
+
+        if (etapa === 'Ganar' && indice === 5 && !marcado && checklist._meta) {
+            checklist._meta.no_disponible_observacion = '';
+        }
+
+        container.classList.add('is-saving');
+        try {
+            const response = await fetch(endpointChecklist, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    id_persona: idPersona,
+                    etapa: etapa,
+                    indice: indice,
+                    marcado: marcado ? 1 : 0,
+                    observacion_no_disponible: (etapa === 'Ganar' && indice === 5) ? observacionNoDisponible : ''
+                })
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data || !data.success) {
+                throw new Error((data && data.message) ? data.message : 'No se pudo guardar.');
+            }
+
+            const checklistServidor = parseChecklist(JSON.stringify(data.checklist || {}));
+            container.setAttribute('data-checklist', JSON.stringify(checklistServidor));
+            aplicarChecksEnVista(container, checklistServidor);
+            return true;
+        } catch (error) {
+            alert(error.message || 'Error al guardar checklist.');
+            return false;
+        } finally {
+            container.classList.remove('is-saving');
+        }
+    }
+
+    document.querySelectorAll('.js-inline-escalera').forEach(function(container) {
+        const checklist = parseChecklist(container.getAttribute('data-checklist') || '');
+        const puedeEditar = container.getAttribute('data-puede-editar') === '1';
+        container.setAttribute('data-checklist', JSON.stringify(checklist));
+
+        aplicarChecksEnVista(container, checklist);
+        aplicarBloqueoNoDisponible(container, checklist, puedeEditar);
+
+        let etapaAbierta = null;
+        function mostrarPanel(etapaObjetivo) {
+            container.querySelectorAll('.js-inline-stage-panel').forEach(function(panel) {
+                if (etapaObjetivo && panel.getAttribute('data-etapa') === etapaObjetivo) {
+                    panel.removeAttribute('hidden');
+                } else {
+                    panel.setAttribute('hidden', 'hidden');
+                }
+            });
+
+            container.querySelectorAll('.js-inline-step-btn').forEach(function(btn) {
+                btn.classList.toggle('active', !!etapaObjetivo && btn.getAttribute('data-etapa') === etapaObjetivo);
+            });
+
+            etapaAbierta = etapaObjetivo || null;
+        }
+
+        mostrarPanel(null);
+
+        container.querySelectorAll('.js-inline-step-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const etapa = btn.getAttribute('data-etapa') || 'Ganar';
+                if (etapaAbierta === etapa) {
+                    mostrarPanel(null);
+                    return;
+                }
+                mostrarPanel(etapa);
+            });
+        });
+
+        container.querySelectorAll('.js-inline-escalera-check').forEach(function(check) {
+            check.addEventListener('change', async function() {
+                const etapa = String(check.getAttribute('data-etapa') || 'Ganar');
+                const indice = parseInt(check.getAttribute('data-indice') || '-1', 10);
+                if (!etapas.includes(etapa) || indice < 0) {
+                    return;
+                }
+
+                const nuevoValor = !!check.checked;
+                const guardado = await guardarChecklistInline(container, etapa, indice, nuevoValor);
+                if (!guardado) {
+                    check.checked = !nuevoValor;
+                    return;
+                }
+
+                const checklistActualizado = parseChecklist(container.getAttribute('data-checklist') || '');
+                aplicarBloqueoNoDisponible(container, checklistActualizado, puedeEditar);
+            });
+        });
+    });
 })();
 </script>
 

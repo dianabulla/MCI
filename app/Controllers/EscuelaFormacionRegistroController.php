@@ -16,6 +16,7 @@ class EscuelaFormacionRegistroController extends BaseController {
     private $soportaObservacionGanadoEn = false;
     private $soportaCreadoPor = false;
     private $soportaCanalCreacion = false;
+    private $soportaChecklistEscalera = false;
     private $idRolAsistenteCache = null;
 
     public function __construct() {
@@ -28,12 +29,187 @@ class EscuelaFormacionRegistroController extends BaseController {
         $this->personaModel->ensureObservacionGanadoEnColumnExists();
         $this->personaModel->ensureCreadoPorColumnExists();
         $this->personaModel->ensureCanalCreacionColumnExists();
+        $this->personaModel->ensureEscaleraChecklistColumnExists();
 
         $this->soportaProceso = $this->personaModel->tieneColumna('Proceso');
         $this->soportaOrigenGanar = $this->personaModel->tieneColumna('Origen_Ganar');
         $this->soportaObservacionGanadoEn = $this->personaModel->tieneColumna('Observacion_Ganado_En');
         $this->soportaCreadoPor = $this->personaModel->tieneColumna('Creado_Por');
         $this->soportaCanalCreacion = $this->personaModel->tieneColumna('Canal_Creacion');
+        $this->soportaChecklistEscalera = $this->personaModel->tieneColumna('Escalera_Checklist');
+    }
+
+    private function normalizarChecklistEscalera($checklist) {
+        $estructuraEtapas = [
+            'Ganar' => 6,
+            'Consolidar' => 3,
+            'Discipular' => 3,
+            'Enviar' => 3
+        ];
+
+        $normalizado = [];
+        foreach ($estructuraEtapas as $etapa => $totalSubprocesos) {
+            $normalizado[$etapa] = array_fill(0, $totalSubprocesos, false);
+        }
+
+        $normalizado['_meta'] = [
+            'no_disponible_observacion' => '',
+            'convenciones' => [],
+            'reasignado_automatico' => false,
+            'reasignado_automatico_at' => '',
+            'reasignado_automatico_motivo' => '',
+            'reasignado_manual' => false,
+            'reasignado_manual_at' => '',
+            'reasignado_manual_motivo' => ''
+        ];
+
+        if (!is_array($checklist)) {
+            return $normalizado;
+        }
+
+        foreach ($estructuraEtapas as $etapa => $totalSubprocesos) {
+            $valoresEtapa = $checklist[$etapa] ?? [];
+            if (!is_array($valoresEtapa)) {
+                continue;
+            }
+
+            for ($i = 0; $i < $totalSubprocesos; $i++) {
+                $normalizado[$etapa][$i] = !empty($valoresEtapa[$i]);
+            }
+        }
+
+        if (isset($checklist['_meta']) && is_array($checklist['_meta'])) {
+            $normalizado['_meta']['no_disponible_observacion'] = trim((string)($checklist['_meta']['no_disponible_observacion'] ?? ''));
+            $normalizado['_meta']['convenciones'] = array_values(array_filter((array)($checklist['_meta']['convenciones'] ?? []), static function($item) {
+                return trim((string)$item) !== '';
+            }));
+            $normalizado['_meta']['reasignado_automatico'] = !empty($checklist['_meta']['reasignado_automatico']);
+            $normalizado['_meta']['reasignado_automatico_at'] = trim((string)($checklist['_meta']['reasignado_automatico_at'] ?? ''));
+            $normalizado['_meta']['reasignado_automatico_motivo'] = trim((string)($checklist['_meta']['reasignado_automatico_motivo'] ?? ''));
+            $normalizado['_meta']['reasignado_manual'] = !empty($checklist['_meta']['reasignado_manual']);
+            $normalizado['_meta']['reasignado_manual_at'] = trim((string)($checklist['_meta']['reasignado_manual_at'] ?? ''));
+            $normalizado['_meta']['reasignado_manual_motivo'] = trim((string)($checklist['_meta']['reasignado_manual_motivo'] ?? ''));
+        }
+
+        return $normalizado;
+    }
+
+    private function calcularProcesoPorChecklist(array $checklistNormalizado) {
+        if (!empty($checklistNormalizado['Ganar'][5])) {
+            return 'Ganar';
+        }
+
+        $etapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
+        $completadasSeguidas = 0;
+
+        foreach ($etapas as $etapa) {
+            $valores = $checklistNormalizado[$etapa] ?? [false, false, false];
+            if ($etapa === 'Ganar') {
+                $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]) && !empty($valores[3]) && !empty($valores[4]);
+            } else {
+                $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]);
+            }
+
+            if (!$completa) {
+                break;
+            }
+
+            $completadasSeguidas++;
+        }
+
+        if ($completadasSeguidas === 0) {
+            return 'Ganar';
+        }
+
+        if ($completadasSeguidas >= count($etapas)) {
+            return 'Enviar';
+        }
+
+        return $etapas[$completadasSeguidas];
+    }
+
+    private function marcarProgramaConsolidarEnEscalera($idPersona, $programa) {
+        $idPersona = (int)$idPersona;
+        $programa = trim((string)$programa);
+
+        $mapaProgramaAIndice = [
+            'universidad_vida' => 0,
+            'encuentro' => 1,
+            'bautismo' => 2,
+        ];
+
+        if ($idPersona <= 0 || !$this->soportaChecklistEscalera || !isset($mapaProgramaAIndice[$programa])) {
+            return;
+        }
+
+        $persona = $this->personaModel->getById($idPersona);
+        if (empty($persona)) {
+            return;
+        }
+
+        $checklistActual = [];
+        $checklistRaw = (string)($persona['Escalera_Checklist'] ?? '');
+        if ($checklistRaw !== '') {
+            $decoded = json_decode($checklistRaw, true);
+            if (is_array($decoded)) {
+                $checklistActual = $decoded;
+            }
+        }
+
+        $checklistNormalizado = $this->normalizarChecklistEscalera($checklistActual);
+        $checklistNormalizado['Ganar'][1] = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
+        $checklistNormalizado['Ganar'][4] = !empty($persona['Id_Celula']);
+        $checklistNormalizado['Consolidar'][(int)$mapaProgramaAIndice[$programa]] = true;
+
+        $checklistJson = json_encode($checklistNormalizado, JSON_UNESCAPED_UNICODE);
+        if ($checklistJson === false) {
+            return;
+        }
+
+        $proceso = $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklistNormalizado) : null;
+        $this->personaModel->updateEscaleraChecklistYProceso($idPersona, $checklistJson, $proceso);
+    }
+
+    private function marcarNivelDiscipularEnEscalera($idPersona, $programa) {
+        $idPersona = (int)$idPersona;
+        $programa = trim((string)$programa);
+
+        $mapaProgramaAIndice = [
+            'capacitacion_destino_nivel_1' => 0,
+            'capacitacion_destino_nivel_2' => 1,
+            'capacitacion_destino_nivel_3' => 2,
+        ];
+
+        if ($idPersona <= 0 || !$this->soportaChecklistEscalera || !isset($mapaProgramaAIndice[$programa])) {
+            return;
+        }
+
+        $persona = $this->personaModel->getById($idPersona);
+        if (empty($persona)) {
+            return;
+        }
+
+        $checklistActual = [];
+        $checklistRaw = (string)($persona['Escalera_Checklist'] ?? '');
+        if ($checklistRaw !== '') {
+            $decoded = json_decode($checklistRaw, true);
+            if (is_array($decoded)) {
+                $checklistActual = $decoded;
+            }
+        }
+
+        $checklistNormalizado = $this->normalizarChecklistEscalera($checklistActual);
+        $checklistNormalizado['Ganar'][1] = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
+        $checklistNormalizado['Ganar'][4] = !empty($persona['Id_Celula']);
+        $checklistNormalizado['Discipular'][(int)$mapaProgramaAIndice[$programa]] = true;
+
+        $checklistJson = json_encode($checklistNormalizado, JSON_UNESCAPED_UNICODE);
+        if ($checklistJson === false) {
+            return;
+        }
+
+        $proceso = $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklistNormalizado) : null;
+        $this->personaModel->updateEscaleraChecklistYProceso($idPersona, $checklistJson, $proceso);
     }
 
     private function normalizarTextoMayusculas($valor) {
@@ -357,7 +533,7 @@ class EscuelaFormacionRegistroController extends BaseController {
             $errores[] = 'Debe seleccionar un ministerio.';
         }
 
-        if (!in_array($programa, ['universidad_vida', 'capacitacion_destino'], true)) {
+        if (!in_array($programa, ['universidad_vida', 'encuentro', 'bautismo', 'capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
             $errores[] = 'Debe seleccionar un programa válido.';
         }
 
@@ -470,6 +646,16 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         try {
             $this->inscripcionModel->create($data);
+            if (in_array($programa, ['universidad_vida', 'encuentro', 'bautismo'], true)) {
+                $this->marcarProgramaConsolidarEnEscalera($idPersona, $programa);
+            }
+            // Compatibilidad con opción antigua: se toma como Nivel 1.
+            if ($programa === 'capacitacion_destino') {
+                $this->marcarNivelDiscipularEnEscalera($idPersona, 'capacitacion_destino_nivel_1');
+            }
+            if (in_array($programa, ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+                $this->marcarNivelDiscipularEnEscalera($idPersona, $programa);
+            }
             $query = http_build_query([
                 'url' => 'escuelas_formacion/registro-publico',
                 'mensaje' => 'Inscripción registrada correctamente. La persona quedó en Personas nuevas si no existía.',

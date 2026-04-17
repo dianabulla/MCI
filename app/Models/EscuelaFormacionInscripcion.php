@@ -176,9 +176,13 @@ class EscuelaFormacionInscripcion extends BaseModel {
         $where = [];
         $params = [];
 
-        if (in_array($programa, ['universidad_vida', 'capacitacion_destino'], true)) {
-            $where[] = 's.Programa = ?';
-            $params[] = $programa;
+        if (in_array($programa, ['universidad_vida', 'encuentro', 'bautismo', 'capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+            if ($programa === 'capacitacion_destino') {
+                $where[] = "s.Programa IN ('capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3')";
+            } else {
+                $where[] = 's.Programa = ?';
+                $params[] = $programa;
+            }
         }
 
         if ($buscar !== '') {
@@ -216,7 +220,12 @@ class EscuelaFormacionInscripcion extends BaseModel {
         $resumen = [
             'total' => 0,
             'universidad_vida' => 0,
+            'encuentro' => 0,
+            'bautismo' => 0,
             'capacitacion_destino' => 0,
+            'capacitacion_destino_nivel_1' => 0,
+            'capacitacion_destino_nivel_2' => 0,
+            'capacitacion_destino_nivel_3' => 0,
             'otros' => 0,
         ];
 
@@ -225,12 +234,20 @@ class EscuelaFormacionInscripcion extends BaseModel {
             $total = (int)($row['Total'] ?? 0);
             $resumen['total'] += $total;
 
-            if ($programa === 'universidad_vida' || $programa === 'capacitacion_destino') {
+            if (in_array($programa, ['universidad_vida', 'encuentro', 'bautismo', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
                 $resumen[$programa] = $total;
+            } elseif ($programa === 'capacitacion_destino') {
+                // Compatibilidad con registros anteriores sin nivel explícito.
+                $resumen['capacitacion_destino_nivel_1'] += $total;
             } else {
                 $resumen['otros'] += $total;
             }
         }
+
+        $resumen['capacitacion_destino'] =
+            (int)$resumen['capacitacion_destino_nivel_1'] +
+            (int)$resumen['capacitacion_destino_nivel_2'] +
+            (int)$resumen['capacitacion_destino_nivel_3'];
 
         return $resumen;
     }

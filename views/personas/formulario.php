@@ -317,14 +317,20 @@ $urlVolver = $returnUrl !== ''
                 'Convencion Hombres' => 'Convención Hombres'
             ];
             $subprocesosEscaleraFormulario = [
-                'Ganar' => ['Asignado a líder', 'Primer contacto', 'Ubicado en célula', 'No se dispone'],
+                'Ganar' => ['Primer contacto', 'Asignación a líderes y ministerio', 'Fonovisita', 'Visita', 'Asignación a una célula', 'No se dispone'],
                 'Consolidar' => ['Universidad de la Vida', 'Encuentro', 'Bautismo'],
-                'Discipular' => ['Proyección', 'Equipo G12', 'Capacitación Destino Nivel 1'],
-                'Enviar' => ['Capacitación Destino Nivel 2', 'Capacitación Destino Nivel 3', 'Célula']
+                'Discipular' => ['Capacitación Destino Nivel 1 (Módulos 1 y 2)', 'Capacitación Destino Nivel 2 (Módulos 3 y 4)', 'Capacitación Destino Nivel 3 (Módulos 5 y 6)'],
+                'Enviar' => ['Célula']
+            ];
+            $indicesChecklistEscaleraFormulario = [
+                'Ganar' => [0, 1, 2, 3, 4, 5],
+                'Consolidar' => [0, 1, 2],
+                'Discipular' => [0, 1, 2],
+                'Enviar' => [2]
             ];
             $procesoSeleccionado = $post_data['proceso'] ?? ($persona['Proceso'] ?? 'Ganar');
             $checklistFormulario = [
-                'Ganar' => [false, false, false, false],
+                'Ganar' => [false, false, false, false, false, false],
                 'Consolidar' => [false, false, false],
                 'Discipular' => [false, false, false],
                 'Enviar' => [false, false, false],
@@ -382,8 +388,8 @@ $urlVolver = $returnUrl !== ''
             }
             $checklistFormulario['_meta']['convenciones'] = $convencionesSeleccionadasFormulario;
 
-            $tieneAsignacionCompletaFormulario = !empty($celulaIdSeleccionada) && !empty($liderIdSeleccionado) && !empty($ministerioSeleccionado) && (string)$ministerioSeleccionado !== 'otro';
-            $checklistFormulario['Ganar'][0] = $tieneAsignacionCompletaFormulario;
+            $tieneAsignacionLiderMinisterioFormulario = !empty($liderIdSeleccionado) && !empty($ministerioSeleccionado) && (string)$ministerioSeleccionado !== 'otro';
+            $checklistFormulario['Ganar'][1] = $tieneAsignacionLiderMinisterioFormulario;
             $checklistFormularioJson = json_encode($checklistFormulario, JSON_UNESCAPED_UNICODE);
             $mostrarConvencionesPrimero = !empty($soportaConvencion);
             if ($panelEventosProcesos === 'escalera' && !empty($soportaProceso)) {
@@ -434,14 +440,15 @@ $urlVolver = $returnUrl !== ''
                                         <div class="eventos-stage-body">
                                             <?php foreach ($itemsEtapa as $indiceItem => $nombreItem): ?>
                                                 <?php
-                                                $estaMarcado = !empty($checklistFormulario[$etapaNombre][$indiceItem]);
-                                                $esAsignacionAuto = $etapaNombre === 'Ganar' && $indiceItem === 0;
+                                                $indiceChecklistReal = (int)($indicesChecklistEscaleraFormulario[$etapaNombre][$indiceItem] ?? $indiceItem);
+                                                $estaMarcado = !empty($checklistFormulario[$etapaNombre][$indiceChecklistReal]);
+                                                $esAsignacionAuto = $etapaNombre === 'Ganar' && in_array($indiceChecklistReal, [1, 4], true);
                                                 ?>
                                                 <label class="eventos-check-item <?= $estaMarcado ? 'checked' : '' ?> <?= $esAsignacionAuto ? 'disabled is-auto' : '' ?>">
                                                     <input type="checkbox"
                                                            class="js-escalera-form-check"
                                                            data-etapa="<?= htmlspecialchars($etapaNombre) ?>"
-                                                           data-indice="<?= (int)$indiceItem ?>"
+                                                           data-indice="<?= (int)$indiceChecklistReal ?>"
                                                            <?= $estaMarcado ? 'checked' : '' ?>
                                                            <?= $esAsignacionAuto ? 'disabled' : '' ?>>
                                                     <span><?= htmlspecialchars($nombreItem) ?></span>
@@ -452,7 +459,7 @@ $urlVolver = $returnUrl !== ''
                                 <?php endforeach; ?>
                             </div>
 
-                            <div class="eventos-no-disponible-wrap" id="evento_no_disponible_wrap" style="<?= !empty($checklistFormulario['Ganar'][3]) ? '' : 'display:none;' ?>">
+                            <div class="eventos-no-disponible-wrap" id="evento_no_disponible_wrap" style="<?= !empty($checklistFormulario['Ganar'][5]) ? '' : 'display:none;' ?>">
                                 <label for="evento_no_disponible_observacion">Observación de "No se dispone"</label>
                                 <textarea id="evento_no_disponible_observacion" class="form-control" rows="3" placeholder="Escribe por qué no se logró concretar esta persona..."><?= htmlspecialchars((string)($checklistFormulario['_meta']['no_disponible_observacion'] ?? '')) ?></textarea>
                                 <small class="form-text text-muted">Este campo es obligatorio cuando marcas "No se dispone".</small>
@@ -869,7 +876,7 @@ const etapasEventosProcesos = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
 
 function normalizarChecklistFormularioState(payload) {
     const base = {
-        Ganar: [false, false, false, false],
+        Ganar: [false, false, false, false, false, false],
         Consolidar: [false, false, false],
         Discipular: [false, false, false],
         Enviar: [false, false, false],
@@ -912,14 +919,16 @@ if (checklistPayloadInput && checklistPayloadInput.value) {
 }
 
 function calcularProcesoDesdeChecklistFormulario(checklist) {
-    if (checklist && checklist.Ganar && checklist.Ganar[3]) {
+    if (checklist && checklist.Ganar && checklist.Ganar[5]) {
         return 'Ganar';
     }
 
     let consecutivas = 0;
     for (const etapa of etapasEventosProcesos) {
         const valores = Array.isArray(checklist[etapa]) ? checklist[etapa] : [];
-        const completa = !!valores[0] && !!valores[1] && !!valores[2];
+        const completa = etapa === 'Ganar'
+            ? (!!valores[0] && !!valores[1] && !!valores[2] && !!valores[3] && !!valores[4])
+            : (!!valores[0] && !!valores[1] && !!valores[2]);
         if (!completa) {
             break;
         }
@@ -963,7 +972,8 @@ function actualizarAsignadoALiderChecklist() {
     const tieneCelula = !!(celulaHiddenField && String(celulaHiddenField.value || '').trim() !== '');
     const tieneMinisterio = !!(ministerioSelect && String(ministerioSelect.value || '').trim() !== '' && String(ministerioSelect.value || '').trim() !== 'otro');
 
-    checklistFormularioState.Ganar[0] = tieneLider && tieneCelula && tieneMinisterio;
+    checklistFormularioState.Ganar[1] = tieneLider && tieneMinisterio;
+    checklistFormularioState.Ganar[4] = tieneCelula;
     sincronizarEventosProcesos();
 }
 
@@ -979,7 +989,7 @@ function sincronizarEventosProcesos() {
     checklistFormularioState._meta.convenciones = Array.from(document.querySelectorAll('.js-convencion-check:checked')).map(cb => cb.value);
     checklistFormularioState._meta.no_disponible_observacion = noDisponibleObservacionInput ? String(noDisponibleObservacionInput.value || '').trim() : '';
 
-    const noDisponibleMarcado = !!(checklistFormularioState.Ganar && checklistFormularioState.Ganar[3]);
+    const noDisponibleMarcado = !!(checklistFormularioState.Ganar && checklistFormularioState.Ganar[5]);
     if (noDisponibleWrap) {
         noDisponibleWrap.style.display = noDisponibleMarcado ? '' : 'none';
     }
@@ -992,8 +1002,8 @@ function sincronizarEventosProcesos() {
         const etapa = checkbox.getAttribute('data-etapa');
         const indice = Number(checkbox.getAttribute('data-indice') || -1);
         const checked = !!(checklistFormularioState[etapa] && checklistFormularioState[etapa][indice]);
-        const esAsignacionAuto = etapa === 'Ganar' && indice === 0;
-        const disabledByNoDisponible = noDisponibleMarcado && !(etapa === 'Ganar' && indice === 3) && !esAsignacionAuto;
+        const esAsignacionAuto = etapa === 'Ganar' && (indice === 1 || indice === 4);
+        const disabledByNoDisponible = noDisponibleMarcado && !(etapa === 'Ganar' && indice === 5) && !esAsignacionAuto;
 
         checkbox.checked = checked;
         checkbox.disabled = esAsignacionAuto || disabledByNoDisponible;

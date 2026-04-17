@@ -3,17 +3,17 @@
 $puedeVerPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver');
 
 $subprocesosPorEtapa = [
-    'Ganar' => ['Primer contacto', 'Ubicado en celula', 'No se dispone'],
+    'Ganar' => ['Primer contacto', 'Asignacion a lideres y ministerio', 'Fonovisita', 'Visita', 'Asignacion a una celula', 'No se dispone'],
     'Consolidar' => ['Universidad de la vida', 'Encuentro', 'Bautismo'],
-    'Discipular' => ['Proyeccion', 'Equipo G12', 'Capacitacion destino nivel 1'],
-    'Enviar' => ['Capacitacion destino nivel 2', 'Capacitacion destino nivel 3', 'Celula']
+    'Discipular' => ['Capacitacion destino nivel 1 (modulos 1 y 2)', 'Capacitacion destino nivel 2 (modulos 3 y 4)', 'Capacitacion destino nivel 3 (modulos 5 y 6)'],
+    'Enviar' => ['Celula']
 ];
 
 $subprocesosCodigoPorEtapa = [
-    'Ganar' => ['PC', 'UC', 'ND'],
+    'Ganar' => ['PC', 'ALM', 'FO', 'VI', 'AC', 'ND'],
     'Consolidar' => ['UV', 'EN', 'BA'],
-    'Discipular' => ['PR', 'G12', 'N1'],
-    'Enviar' => ['N2', 'N3', 'CE']
+    'Discipular' => ['N1', 'N2', 'N3'],
+    'Enviar' => ['CE']
 ];
 
 $ordenEtapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
@@ -33,7 +33,18 @@ if (isset($mapaFiltroAEtapa[$etapaFiltroActual])) {
 }
 
 $puedeEditarChecklist = !empty($puedeEditarChecklistEscalera);
-$totalColumnasChecklist = count($etapasVisibles) * 3;
+$puedeMarcarPrimerContacto = !empty($puedeMarcarPrimerContactoGanar);
+$totalColumnasChecklist = 0;
+foreach ($etapasVisibles as $etapaVisibleTmp) {
+    $totalColumnasChecklist += count($subprocesosPorEtapa[$etapaVisibleTmp] ?? []);
+}
+
+$indicesChecklistPorEtapa = [
+    'Ganar' => [0, 1, 2, 3, 4, 5],
+    'Consolidar' => [0, 1, 2],
+    'Discipular' => [0, 1, 2],
+    'Enviar' => [2],
+];
 
 $reporteMes = $reporteEscaleraMesActual ?? [
     'inicio' => date('Y-m-01'),
@@ -48,10 +59,10 @@ $reporteMes = $reporteEscaleraMesActual ?? [
         'sin_etapa' => 0,
     ],
     'peldaños' => [
-        'Ganar' => ['Primer contacto' => 0, 'Ubicado en celula' => 0, 'No se dispone' => 0],
+        'Ganar' => ['Primer contacto' => 0, 'Asignacion a lideres y ministerio' => 0, 'Fonovisita' => 0, 'Visita' => 0, 'Asignacion a una celula' => 0, 'No se dispone' => 0],
         'Consolidar' => ['Universidad de la vida' => 0, 'Encuentro' => 0, 'Bautismo' => 0],
-        'Discipular' => ['Proyeccion' => 0, 'Equipo G12' => 0, 'Capacitacion destino nivel 1' => 0],
-        'Enviar' => ['Capacitacion destino nivel 2' => 0, 'Capacitacion destino nivel 3' => 0, 'Celula' => 0],
+        'Discipular' => ['Capacitacion destino nivel 1 (modulos 1 y 2)' => 0, 'Capacitacion destino nivel 2 (modulos 3 y 4)' => 0, 'Capacitacion destino nivel 3 (modulos 5 y 6)' => 0],
+        'Enviar' => ['Celula' => 0],
     ],
 ];
 ?>
@@ -214,9 +225,16 @@ $reporteMes = $reporteEscaleraMesActual ?? [
                             ?>
                             <?php foreach ($subprocesos as $indiceSub => $subproceso): ?>
                                 <?php
-                                $checkPersistido = array_key_exists($indiceSub, $checklistEtapa) ? !empty($checklistEtapa[$indiceSub]) : null;
+                                $indiceRealChecklist = (int)($indicesChecklistPorEtapa[$etapaNombre][$indiceSub] ?? $indiceSub);
+                                $checkPersistido = array_key_exists($indiceRealChecklist, $checklistEtapa) ? !empty($checklistEtapa[$indiceRealChecklist]) : null;
                                 $checked = $checkPersistido !== null ? $checkPersistido : ($bloqueCompletado || ($bloqueActivo && $indiceSub === 0));
                                 $puedeEditarCelda = $puedeEditarChecklist && ($etapaNombre === $etapaOperativa);
+                                if ($etapaNombre === 'Ganar' && $indiceRealChecklist === 0 && !$puedeMarcarPrimerContacto) {
+                                    $puedeEditarCelda = false;
+                                }
+                                if ($etapaNombre === 'Ganar' && $indiceRealChecklist === 4) {
+                                    $puedeEditarCelda = false;
+                                }
                                 ?>
                                 <td class="check-cell <?= $bloqueCompletado ? 'cell-completado' : '' ?> <?= $bloqueActivo ? 'cell-activo' : '' ?>">
                                     <input
@@ -224,7 +242,7 @@ $reporteMes = $reporteEscaleraMesActual ?? [
                                         class="escalera-check-toggle"
                                         data-id-persona="<?= (int)($persona['Id_Persona'] ?? 0) ?>"
                                         data-etapa="<?= htmlspecialchars($etapaNombre) ?>"
-                                        data-indice="<?= (int)$indiceSub ?>"
+                                        data-indice="<?= (int)$indiceRealChecklist ?>"
                                         <?= $checked ? 'checked' : '' ?>
                                         <?= $puedeEditarCelda ? '' : 'disabled' ?>
                                     >
@@ -245,10 +263,10 @@ $reporteMes = $reporteEscaleraMesActual ?? [
 <div class="card" style="margin-top: 10px; margin-bottom: 16px;">
     <div class="card-body" style="padding: 10px 14px;">
         <div class="subproceso-legend-grid">
-            <div><strong>Ganar:</strong> PC Primer contacto | UC Ubicado en celula | ND No se dispone</div>
+            <div><strong>Ganar:</strong> PC Primer contacto | ALM Asignacion a lideres y ministerio | FO Fonovisita | VI Visita | AC Asignacion a una celula | ND No se dispone</div>
             <div><strong>Consolidar:</strong> UV Universidad de la vida | EN Encuentro | BA Bautismo</div>
-            <div><strong>Discipular:</strong> PR Proyeccion | G12 Equipo G12 | N1 Capacitacion destino nivel 1</div>
-            <div><strong>Enviar:</strong> N2 Capacitacion destino nivel 2 | N3 Capacitacion destino nivel 3 | CE Celula</div>
+            <div><strong>Discipular:</strong> N1 Capacitacion destino nivel 1 (modulos 1 y 2) | N2 Capacitacion destino nivel 2 (modulos 3 y 4) | N3 Capacitacion destino nivel 3 (modulos 5 y 6)</div>
+            <div><strong>Enviar:</strong> CE Celula</div>
         </div>
     </div>
 </div>

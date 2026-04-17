@@ -12,8 +12,16 @@ $procesoGanar = $proceso_ganar ?? [
 
 $resumenOrigen = $resumen_origen_ganados ?? [
     'Ganados_Celula' => 0,
+    'Ganados_Iglesia' => 0,
     'Ganados_Domingo' => 0,
     'Total' => 0
+];
+
+$tarjetasUniversidadVida = $tarjetas_universidad_vida ?? [
+    'total' => 0,
+    'celula' => 0,
+    'iglesia' => 0,
+    'otros' => 0,
 ];
 
 $almasPorEdades = $almas_por_edades ?? [
@@ -101,7 +109,10 @@ $reporteEscaleraMesActual = $reporte_escalera_mes_actual ?? [
     'peldaños' => [
         'Ganar' => [
             'Primer contacto' => 0,
-            'Ubicado en celula' => 0,
+            'Asignacion a lideres y ministerio' => 0,
+            'Fonovisita' => 0,
+            'Visita' => 0,
+            'Asignacion a una celula' => 0,
             'No se dispone' => 0,
         ],
         'Consolidar' => [
@@ -110,21 +121,43 @@ $reporteEscaleraMesActual = $reporte_escalera_mes_actual ?? [
             'Bautismo' => 0,
         ],
         'Discipular' => [
-            'Proyeccion' => 0,
-            'Equipo G12' => 0,
             'Capacitacion destino nivel 1' => 0,
-        ],
-        'Enviar' => [
             'Capacitacion destino nivel 2' => 0,
             'Capacitacion destino nivel 3' => 0,
+        ],
+        'Enviar' => [
             'Celula' => 0,
         ],
     ],
 ];
 
-$tipoReporte = ($tipo_reporte ?? 'personas') === 'celulas' ? 'celulas' : 'personas';
+$reporteEscuelasUv = $reporte_escuelas_uv ?? ['total' => 0, 'rows' => []];
+$resumenEscuelasInscripciones = $resumen_escuelas_inscripciones ?? [
+    'total' => 0,
+    'universidad_vida' => 0,
+    'encuentro' => 0,
+    'bautismo' => 0,
+    'capacitacion_destino' => 0,
+    'otros' => 0,
+];
+$inscripcionesEscuelas = $inscripciones_escuelas ?? [];
+$filtroEscuelaPrograma = (string)($filtro_escuela_programa ?? '');
+$filtroEscuelaBuscar = (string)($filtro_escuela_buscar ?? '');
+
+$tipoReporte = (string)($tipo_reporte ?? 'personas');
+if (!in_array($tipoReporte, ['personas', 'celulas', 'escuelas'], true)) {
+    $tipoReporte = 'personas';
+}
 $esReportePersonas = $tipoReporte === 'personas';
-$tituloReporte = $esReportePersonas ? 'Reporte de Ganar' : 'Reporte de Célula';
+$esReporteCelulas = $tipoReporte === 'celulas';
+$esReporteEscuelas = $tipoReporte === 'escuelas';
+
+$tituloReporte = 'Reporte de Ganar';
+if ($esReporteCelulas) {
+    $tituloReporte = 'Reporte de Célula';
+} elseif ($esReporteEscuelas) {
+    $tituloReporte = 'Reporte de Escuelas de Formación';
+}
 $escalaGanar = (string)($escala_ganar ?? 'semanal');
 $ganarLabel = (string)($ganar_label ?? 'Semanal');
 $ganarInicio = (string)($ganar_inicio ?? $fecha_inicio ?? '');
@@ -186,6 +219,12 @@ $renderTablaGananciaMinisterial = static function(array $tabla, int $anio) {
         echo '<div class="card report-card" style="margin-bottom:22px;"><div class="report-empty-state">Sin datos para la tabla de ganancia por ministerio.</div></div>';
         return;
     }
+    $tooltipsSiglas = [
+        'G.C' => 'Ganados en célula',
+        'G.I' => 'Ganados en iglesia',
+        'F.V' => 'Fonovisitas',
+        'V' => 'Visitas',
+    ];
     ?>
     <div class="card report-card report-metas-card" style="margin-bottom: 22px;">
         <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
@@ -207,8 +246,8 @@ $renderTablaGananciaMinisterial = static function(array $tabla, int $anio) {
                     </tr>
                     <tr>
                         <?php foreach ($meses as $m => $label): ?>
-                            <th class="col-sub">G.C</th>
-                            <th class="col-sub">G.I</th>
+                            <th class="col-sub" title="<?= htmlspecialchars($tooltipsSiglas['G.C'], ENT_QUOTES, 'UTF-8') ?>">G.C</th>
+                            <th class="col-sub" title="<?= htmlspecialchars($tooltipsSiglas['G.I'], ENT_QUOTES, 'UTF-8') ?>">G.I</th>
                         <?php endforeach; ?>
                     </tr>
                 </thead>
@@ -256,6 +295,13 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     $totales = $tabla['totales'] ?? [];
     $titulo = $tabla['titulo'] ?? strtoupper($tablaKey);
     $cols = array_keys($headers);
+    $tooltipsSiglas = [
+        'G.I' => 'Ganados en iglesia',
+        'G.C' => 'Ganados en célula',
+        'F.V' => 'Fonovisitas',
+        'V' => 'Visitas',
+        'U.V' => 'Universidad de la Vida',
+    ];
     ?>
     <div class="card report-card report-metas-card" style="margin-bottom: 0;">
         <div style="margin-bottom:8px;"><h3 style="margin:0;"><?= htmlspecialchars($titulo) ?></h3></div>
@@ -264,8 +310,11 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
                 <thead>
                     <tr>
                         <th class="col-mes">MES</th>
-                        <?php foreach ($headers as $col => $label): ?>
-                            <th class="col-num"><?= htmlspecialchars($label) ?></th>
+                        <?php foreach ($headers as $col => $label):
+                            $labelTexto = (string)$label;
+                            $tooltip = $tooltipsSiglas[$labelTexto] ?? '';
+                        ?>
+                            <th class="col-num"<?= $tooltip !== '' ? ' title="' . htmlspecialchars($tooltip, ENT_QUOTES, 'UTF-8') . '"' : '' ?>><?= htmlspecialchars($labelTexto) ?></th>
                         <?php endforeach; ?>
                         <th class="col-num">TOTAL</th>
                     </tr>
@@ -315,8 +364,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 <div class="report-top-strip" id="reportTopStrip" style="margin-bottom: 14px;">
     <button type="button" class="report-top-strip-tab" data-mode="tablas">Ver tablas</button>
     <button type="button" class="report-top-strip-tab" data-mode="graficos">Ver gráficos</button>
-    <button type="button" class="report-top-strip-tab is-active" data-breakdown="ministerio">Por ministerio</button>
-    <button type="button" class="report-top-strip-tab" data-breakdown="lider">Por líder</button>
+    <button type="button" id="btnVolverReportes" class="report-top-strip-tab report-back-reportes">Volver a reportes</button>
 </div>
 
 <div class="card report-card report-toolbar-card" style="margin-bottom: 18px; padding: 14px;">
@@ -324,8 +372,8 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
         <label for="selector_reporte" style="margin-bottom:6px;">Reporte a visualizar</label>
         <select id="selector_reporte" class="form-control" onchange="if(this.value){ window.location.href = this.value; }">
             <option value="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'personas'])) ?>" <?= $esReportePersonas ? 'selected' : '' ?>>Reporte de Ganar</option>
-            <option value="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'celulas'])) ?>" <?= !$esReportePersonas ? 'selected' : '' ?>>Reporte de Célula</option>
-            <option value="<?= PUBLIC_URL ?>index.php?url=reportes/ministerial">Escalera del Éxito</option>
+            <option value="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'celulas'])) ?>" <?= $esReporteCelulas ? 'selected' : '' ?>>Reporte de Célula</option>
+            <option value="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'escuelas'])) ?>" <?= $esReporteEscuelas ? 'selected' : '' ?>>Escuelas de Formación</option>
         </select>
     </div>
     <div class="report-toolbar-actions">
@@ -333,7 +381,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </div>
 </div>
 
-<div class="card report-card" style="margin-bottom: 22px;">
+<div class="card report-card report-filters-card" style="margin-bottom: 22px;">
     <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="filters-inline report-compact-form" style="padding: 18px;">
         <input type="hidden" name="url" value="reportes">
         <input type="hidden" name="tipo" value="<?= htmlspecialchars($tipoReporte) ?>">
@@ -354,27 +402,37 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 <div id="reportesVisualContainer">
 
 <?php if ($esReportePersonas): ?>
-<div class="card report-card" style="margin-bottom: 12px; padding: 12px 14px;">
+<div class="card report-card report-chart-context" style="margin-bottom: 12px; padding: 12px 14px;">
     <strong><?= htmlspecialchars($ganarLabel) ?></strong>
     <span style="color:#64748b;">(<?= htmlspecialchars($ganarInicio) ?> a <?= htmlspecialchars($ganarFin) ?>)</span>
 </div>
 
-<div class="report-kpi-grid report-kpi-grid--ganar" style="margin-bottom: 18px;">
+<div class="report-kpi-grid report-kpi-grid--ganar report-chart-context" style="margin-bottom: 18px;">
     <button type="button" class="report-kpi-card report-kpi-button kpi-celula js-kpi-detalle" data-origen="celula">
         <div class="report-kpi-icon">👤</div>
         <div class="report-kpi-label">Ganados en célula</div>
         <div class="report-kpi-value"><?= (int)$resumenOrigen['Ganados_Celula'] ?></div>
     </button>
-    <button type="button" class="report-kpi-card report-kpi-button kpi-domingo js-kpi-detalle" data-origen="domingo">
+    <button type="button" class="report-kpi-card report-kpi-button kpi-domingo js-kpi-detalle" data-origen="iglesia">
         <div class="report-kpi-icon">✅</div>
-        <div class="report-kpi-label">Ganados en domingo</div>
-        <div class="report-kpi-value"><?= (int)$resumenOrigen['Ganados_Domingo'] ?></div>
+        <div class="report-kpi-label">Ganados en iglesia</div>
+        <div class="report-kpi-value"><?= (int)($resumenOrigen['Ganados_Iglesia'] ?? ($resumenOrigen['Ganados_Domingo'] ?? 0)) ?></div>
     </button>
     <button type="button" class="report-kpi-card report-kpi-button kpi-asistencia js-kpi-detalle" data-origen="asignados">
         <div class="report-kpi-icon">📌</div>
         <div class="report-kpi-label">Asignados</div>
         <div class="report-kpi-value"><?= (int)($resumenOrigen['Asignados'] ?? 0) ?></div>
     </button>
+    <button type="button" class="report-kpi-card report-kpi-button kpi-escalera js-kpi-detalle" data-origen="todos">
+        <div class="report-kpi-icon">📊</div>
+        <div class="report-kpi-label">Total ganados esta semana</div>
+        <div class="report-kpi-value"><?= (int)($resumenOrigen['Ganados_Celula'] ?? 0) + (int)($resumenOrigen['Ganados_Iglesia'] ?? ($resumenOrigen['Ganados_Domingo'] ?? 0)) + (int)($resumenOrigen['Asignados'] ?? 0) ?></div>
+    </button>
+</div>
+
+<div class="card report-card report-chart-only" style="margin-bottom: 22px;">
+    <h3>Resumen de Ganar</h3>
+    <div id="chartResumenGanar"></div>
 </div>
 
 <div id="reporteDetalleModal" class="celula-modal" aria-hidden="true">
@@ -446,20 +504,24 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 
     <?php else: ?>
         <div class="report-empty-state">
-            Sin registros de domingo para el fin de semana anterior.
+            Sin registros de iglesia para el fin de semana anterior.
         </div>
     <?php endif; ?>
     </div>
 </div>
 
-<div class="ganar-extra-section">
-<div class="report-breakdown-block report-breakdown-ministerio">
+<div class="ganar-extra-section report-table-only">
+<div class="card report-card report-excel-intro" style="margin-bottom: 12px; padding: 12px 14px;">
+    <h3 style="margin:0 0 4px 0;">Escalera del Éxito · Ver tablas</h3>
+    <small style="color:#61728a;">Formato tipo Excel con acumulados mensuales y totales para GANAR, CONSOLIDAR, DISCIPULAR y ENVIAR.</small>
+</div>
+
 <?php $renderTablaGananciaMinisterial($tablaGananciaMinisterial, $anioMinisterialTablas); ?>
 
 <div class="rpt-mini-grid" style="margin-bottom: 22px;">
     <?php
     $headersTablasMinisterial = [
-        'ganar' => ['gi' => 'G.I', 'gc' => 'G.C', 'v' => 'V'],
+        'ganar' => ['gi' => 'G.I', 'gc' => 'G.C', 'fv' => 'F.V', 'v' => 'V'],
         'consolidar' => ['uv' => 'U.V', 'e' => 'E', 'b' => 'B'],
         'discipular' => ['cdm12' => 'CD-M1-2', 'cdm34' => 'CD-M3-4', 'cdm56' => 'CD-M5-6'],
         'enviar' => ['celulas' => '# CELULAS'],
@@ -471,31 +533,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 </div>
 </div>
 
-<div class="card report-card report-breakdown-block report-breakdown-lider" style="margin-bottom: 22px;">
-    <h3>Ganados por líder (tabla)</h3>
-    <div class="table-container" style="margin-top: 10px;">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Líder</th>
-                    <th style="width: 140px;">Ganados</th>
-                </tr>
-            </thead>
-            <tbody id="tablaGanadosLiderBody">
-                <tr>
-                    <td colspan="2" class="text-center">Sin datos para el rango seleccionado</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<div class="card report-card report-breakdown-block report-breakdown-lider" style="margin-bottom: 22px;">
-    <h3>Ganados por líder</h3>
-    <div id="chartLideres"></div>
-</div>
-
-<div class="card report-card report-breakdown-block report-breakdown-ministerio" style="margin-bottom: 22px;">
+<div class="card report-card report-chart-only" style="margin-bottom: 22px;">
     <h3>Almas ganadas por ministerio</h3>
     <div id="chartAlmasMinisterio"></div>
     <details style="margin-top: 14px;">
@@ -535,8 +573,208 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </details>
 </div>
 </div>
+<?php elseif ($esReporteEscuelas): ?>
+<div class="card report-card report-chart-context" style="margin-bottom: 12px; padding: 12px 14px;">
+    <strong>Escuelas de Formación</strong>
+    <span style="color:#64748b;">(vista integrada de reporte)</span>
+</div>
+
+<div class="report-kpi-grid report-chart-context" style="margin-bottom: 18px;">
+    <div class="report-kpi-card kpi-celula">
+        <div class="report-kpi-icon">🎓</div>
+        <div class="report-kpi-label">Universidad de la Vida</div>
+        <div class="report-kpi-value\"><?= (int)($resumenEscuelasInscripciones['universidad_vida'] ?? 0) ?></div>
+    </div>
+    <div class="report-kpi-card kpi-domingo">
+        <div class="report-kpi-icon">🤝</div>
+        <div class="report-kpi-label">Encuentro</div>
+        <div class="report-kpi-value\"><?= (int)($resumenEscuelasInscripciones['encuentro'] ?? 0) ?></div>
+    </div>
+    <div class="report-kpi-card kpi-escalera">
+        <div class="report-kpi-icon">💧</div>
+        <div class="report-kpi-label">Bautismo</div>
+        <div class="report-kpi-value\"><?= (int)($resumenEscuelasInscripciones['bautismo'] ?? 0) ?></div>
+    </div>
+    <div class="report-kpi-card kpi-asistencia">
+        <div class="report-kpi-icon">📚</div>
+        <div class="report-kpi-label">Capacitación Destino</div>
+        <div class="report-kpi-value"><?= (int)($resumenEscuelasInscripciones['capacitacion_destino'] ?? 0) ?></div>
+    </div>
+    <div class="report-kpi-card kpi-celula">
+        <div class="report-kpi-icon">📝</div>
+        <div class="report-kpi-label">Total inscripciones</div>
+        <div class="report-kpi-value\"><?= (int)($resumenEscuelasInscripciones['total'] ?? 0) ?></div>
+    </div>
+</div>
+
+<div class="card report-card report-chart-only" style="margin-bottom: 22px;">
+    <h3>Programas de Escuelas de Formación</h3>
+    <div id="chartEscuelasProgramas"></div>
+</div>
+
+<div class="card report-card report-table-only" style="margin-bottom: 18px; padding: 14px;">
+    <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="filters-inline" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+        <input type="hidden" name="url" value="reportes">
+        <input type="hidden" name="tipo" value="escuelas">
+        <input type="hidden" name="fecha_referencia" value="<?= htmlspecialchars((string)$fecha_referencia) ?>">
+        <input type="hidden" name="fecha_inicio" value="<?= htmlspecialchars((string)$fechaInicioFiltro) ?>">
+        <input type="hidden" name="fecha_fin" value="<?= htmlspecialchars((string)$fechaFinFiltro) ?>">
+        <input type="hidden" name="ministerio" value="<?= htmlspecialchars((string)$filtro_ministerio) ?>">
+        <input type="hidden" name="lider" value="<?= htmlspecialchars((string)$filtro_lider) ?>">
+        <input type="hidden" name="celula" value="<?= htmlspecialchars((string)$filtro_celula) ?>">
+
+        <div class="form-group" style="margin:0; min-width:220px;">
+            <label for="escuela_programa">Programa</label>
+            <select id="escuela_programa" name="escuela_programa" class="form-control">
+                <option value="" <?= $filtroEscuelaPrograma === '' ? 'selected' : '' ?>>Todos</option>
+                <option value="universidad_vida" <?= $filtroEscuelaPrograma === 'universidad_vida' ? 'selected' : '' ?>>Universidad de la Vida</option>
+                <option value="encuentro" <?= $filtroEscuelaPrograma === 'encuentro' ? 'selected' : '' ?>>Encuentro</option>
+                <option value="bautismo" <?= $filtroEscuelaPrograma === 'bautismo' ? 'selected' : '' ?>>Bautismo</option>
+                <option value="capacitacion_destino" <?= $filtroEscuelaPrograma === 'capacitacion_destino' ? 'selected' : '' ?>>Capacitación Destino</option>
+            </select>
+        </div>
+
+        <div class="form-group" style="margin:0; min-width:280px;">
+            <label for="escuela_buscar">Buscar</label>
+            <input type="text" id="escuela_buscar" name="escuela_buscar" class="form-control" placeholder="Nombre, cédula, teléfono o líder" value="<?= htmlspecialchars($filtroEscuelaBuscar) ?>">
+        </div>
+
+        <div class="filters-actions" style="display:flex;gap:8px;">
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'escuelas', 'escuela_programa' => '', 'escuela_buscar' => ''])) ?>" class="btn btn-secondary">Limpiar</a>
+        </div>
+    </form>
+</div>
+
+<div class="card report-card report-table-only" style="margin-bottom: 18px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <h3 style="margin:0;">Resumen por tipo de programa</h3>
+        <small style="color:#637087;">Conteo actual de inscripciones</small>
+    </div>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Programa</th>
+                    <th style="width:160px;">Cantidad</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Universidad de la Vida</td>
+                    <td><strong><?= (int)($resumenEscuelasInscripciones['universidad_vida'] ?? 0) ?></strong></td>
+                </tr>
+                <tr>
+                    <td>Encuentro</td>
+                    <td><strong><?= (int)($resumenEscuelasInscripciones['encuentro'] ?? 0) ?></strong></td>
+                </tr>
+                <tr>
+                    <td>Bautismo</td>
+                    <td><strong><?= (int)($resumenEscuelasInscripciones['bautismo'] ?? 0) ?></strong></td>
+                </tr>
+                <tr>
+                    <td>Capacitación Destino</td>
+                    <td><strong><?= (int)($resumenEscuelasInscripciones['capacitacion_destino'] ?? 0) ?></strong></td>
+                </tr>
+                <tr class="reporte-metas-total-row">
+                    <td><strong>TOTAL</strong></td>
+                    <td><strong><?= (int)($resumenEscuelasInscripciones['total'] ?? 0) ?></strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card report-card report-table-only" style="margin-bottom: 18px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <h3 style="margin:0;">Detalle Universidad de la Vida</h3>
+        <small style="color:#637087;">Total: <?= (int)($reporteEscuelasUv['total'] ?? 0) ?></small>
+    </div>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Persona</th>
+                    <th>Ministerio</th>
+                    <th>Líder</th>
+                    <th>Célula</th>
+                    <th style="width:120px;">Asiste</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($reporteEscuelasUv['rows'])): ?>
+                    <?php foreach (($reporteEscuelasUv['rows'] ?? []) as $rowUv): ?>
+                        <tr>
+                            <td><?= htmlspecialchars((string)($rowUv['nombre'] ?? '')) ?></td>
+                            <td><?= htmlspecialchars((string)($rowUv['ministerio'] ?? '')) ?></td>
+                            <td><?= htmlspecialchars((string)($rowUv['lider'] ?? '')) ?></td>
+                            <td><?= htmlspecialchars((string)($rowUv['celula'] ?? '')) ?></td>
+                            <td><?= !empty($rowUv['va']) ? 'Sí' : 'No' ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="5" class="text-center">No hay personas para Universidad de la Vida con estos filtros.</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card report-card report-table-only" style="margin-bottom: 22px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <h3 style="margin:0;">Registros del formulario público</h3>
+        <small style="color:#637087;">Mostrando <?= (int)count($inscripcionesEscuelas) ?> registros recientes</small>
+    </div>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Nombre</th>
+                    <th>Líder</th>
+                    <th>Ministerio</th>
+                    <th>Programa</th>
+                    <th>Asistencia clase</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($inscripcionesEscuelas)): ?>
+                    <?php foreach ($inscripcionesEscuelas as $ins): ?>
+                        <?php
+                        $programaRaw = (string)($ins['Programa'] ?? '');
+                        $programaLabels = [
+                            'universidad_vida' => 'Universidad de la Vida',
+                            'encuentro' => 'Encuentro',
+                            'bautismo' => 'Bautismo',
+                            'capacitacion_destino' => 'Capacitación Destino',
+                            'capacitacion_destino_nivel_1' => 'Capacitación Destino - Nivel 1',
+                            'capacitacion_destino_nivel_2' => 'Capacitación Destino - Nivel 2',
+                            'capacitacion_destino_nivel_3' => 'Capacitación Destino - Nivel 3',
+                        ];
+                        $programaLabel = $programaLabels[$programaRaw] ?? $programaRaw;
+                        ?>
+                        <tr>
+                            <td><?= htmlspecialchars((string)substr((string)($ins['Fecha_Registro'] ?? ''), 0, 16)) ?></td>
+                            <td><?= htmlspecialchars((string)($ins['Nombre'] ?? '')) ?></td>
+                            <td><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
+                            <td><?= htmlspecialchars((string)($ins['Nombre_Ministerio'] ?? '')) ?></td>
+                            <td><?= htmlspecialchars($programaLabel) ?></td>
+                            <td><?= ((int)($ins['Asistio_Clase'] ?? -1) === 1) ? 'Sí' : ((((int)($ins['Asistio_Clase'] ?? -1) === 0) ? 'No' : 'Pendiente')) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="6" class="text-center">No hay inscripciones públicas con esos filtros.</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
 <?php else: ?>
-<div class="report-kpi-grid report-kpi-grid--celulas" style="margin-bottom: 18px;">
+<div class="report-kpi-grid report-kpi-grid--celulas report-chart-context" style="margin-bottom: 18px;">
     <div class="report-kpi-card kpi-escalera">
         <div class="report-kpi-icon">🏠</div>
         <div class="report-kpi-label">Total de células</div>
@@ -569,7 +807,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </div>
 </div>
 
-<div class="card report-card" style="margin-bottom: 22px;">
+<div class="card report-card report-chart-only" style="margin-bottom: 22px;">
     <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px;">
         <h3 style="margin:0;">Indicadores de células</h3>
         <small style="color:#64748b;">Semestre: <?= htmlspecialchars((string)($indicadoresCelulas['semestre']['inicio'] ?? '')) ?> a <?= htmlspecialchars((string)($indicadoresCelulas['semestre']['fin'] ?? '')) ?></small>
@@ -577,7 +815,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     <div id="chartIndicadoresCelulas"></div>
 </div>
 
-<div class="report-kpi-grid report-kpi-grid--celulas" style="margin-bottom: 22px;">
+<div class="report-kpi-grid report-kpi-grid--celulas report-table-only" style="margin-bottom: 22px;">
     <div class="card report-card" style="padding: 14px;">
         <h3 style="margin-bottom: 10px;">Células por ministerio</h3>
         <?php if (!empty($indicadoresCelulas['por_ministerio'])): ?>
@@ -611,7 +849,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </div>
 </div>
 
-<div class="card report-card report-metas-card" style="margin-bottom: 22px;">
+<div class="card report-card report-metas-card report-table-only" style="margin-bottom: 22px;">
     <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
         <div>
             <h3 style="margin-bottom:4px;">Células abiertas por ministerio (<?= (int)($tablaAperturasCelulas['anio'] ?? date('Y')) ?>)</h3>
@@ -695,7 +933,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </div>
 </div>
 
-<div class="card report-card" style="margin-bottom: 22px;">
+<div class="card report-card report-chart-only" style="margin-bottom: 22px;">
     <h3>Asistencia a células</h3>
     <div id="chartAsistencia"></div>
     <details style="margin-top: 14px;">
@@ -748,6 +986,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <script>
 const procesoGanar = <?= json_encode($procesoGanar) ?>;
+const resumenOrigen = <?= json_encode($resumenOrigen ?? []) ?>;
 const almasPorEdades = <?= json_encode($almasPorEdades) ?>;
 const almasGanadas = <?= json_encode($almas_ganadas ?? []) ?>;
 const detalleOrigenGanados = <?= json_encode($detalle_origen_ganados ?? []) ?>;
@@ -759,6 +998,8 @@ const detalleLideresAperturas = <?= json_encode($tablaAperturasCelulas['detalle_
 const detalleLideresGanar = <?= json_encode($tablaGanarMinisterio['detalle_lideres'] ?? []) ?>;
 const detallesTablasMinisterial = <?= json_encode($detallesTablasMinisterial ?? [], JSON_UNESCAPED_UNICODE) ?>;
 const detallesGananciaMinisterial = <?= json_encode($detallesGananciaMinisterial ?? [], JSON_UNESCAPED_UNICODE) ?>;
+const reporteEscuelasUv = <?= json_encode($reporteEscuelasUv ?? ['total' => 0, 'rows' => []], JSON_UNESCAPED_UNICODE) ?>;
+const resumenEscuelasInscripciones = <?= json_encode($resumenEscuelasInscripciones ?? [], JSON_UNESCAPED_UNICODE) ?>;
 const tipoReporte = <?= json_encode($tipoReporte) ?>;
 const nombresCelulas = asistencia.map(x => (x.Nombre_Celula || 'Sin célula'));
 const etiquetasCelulas = nombresCelulas.map(nombre => {
@@ -767,10 +1008,9 @@ const etiquetasCelulas = nombresCelulas.map(nombre => {
 });
 
 const reportTopStrip = document.getElementById('reportTopStrip');
+const btnVolverReportes = document.getElementById('btnVolverReportes');
 const reportModeButtons = reportTopStrip ? reportTopStrip.querySelectorAll('[data-mode]') : [];
-const reportBreakdownButtons = reportTopStrip ? reportTopStrip.querySelectorAll('[data-breakdown]') : [];
 const STORAGE_MODE_KEY = 'reportes_view_mode';
-const STORAGE_BREAKDOWN_KEY = 'reportes_view_breakdown';
 
 const aplicarModoReporte = (modo) => {
     const root = document.documentElement;
@@ -782,6 +1022,15 @@ const aplicarModoReporte = (modo) => {
 
     if (modo === 'graficos') {
         root.classList.add('show-report-charts');
+
+        if (typeof window.__renderReportCharts === 'function') {
+            window.__renderReportCharts();
+        }
+
+        // Fuerza recálculo de ApexCharts cuando el contenedor pasa de oculto a visible.
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 80);
     }
 
     reportModeButtons.forEach((btn) => {
@@ -802,10 +1051,10 @@ if (reportModeButtons.length) {
         });
     });
 
-    let modoInicial = 'tablas';
+    let modoInicial = 'dashboard';
     try {
         const guardado = String(localStorage.getItem(STORAGE_MODE_KEY) || '').trim();
-        if (guardado === 'tablas' || guardado === 'graficos') {
+        if (guardado === 'tablas' || guardado === 'graficos' || guardado === 'dashboard') {
             modoInicial = guardado;
         }
     } catch (e) {
@@ -815,40 +1064,16 @@ if (reportModeButtons.length) {
     aplicarModoReporte(modoInicial);
 }
 
-const aplicarBreakdownReporte = (tipo) => {
-    const root = document.documentElement;
-    root.classList.toggle('breakdown-lider', tipo === 'lider');
-    root.classList.toggle('breakdown-ministerio', tipo !== 'lider');
-
-    reportBreakdownButtons.forEach((btn) => {
-        btn.classList.toggle('is-active', String(btn.dataset.breakdown || '') === tipo);
-    });
-};
-
-if (reportBreakdownButtons.length) {
-    reportBreakdownButtons.forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const breakdownSeleccionado = String(btn.dataset.breakdown || 'ministerio');
-            aplicarBreakdownReporte(breakdownSeleccionado);
-            try {
-                localStorage.setItem(STORAGE_BREAKDOWN_KEY, breakdownSeleccionado);
-            } catch (e) {
-                // Ignorar errores de almacenamiento del navegador.
-            }
-        });
-    });
-
-    let breakdownInicial = 'ministerio';
-    try {
-        const guardado = String(localStorage.getItem(STORAGE_BREAKDOWN_KEY) || '').trim();
-        if (guardado === 'ministerio' || guardado === 'lider') {
-            breakdownInicial = guardado;
+if (btnVolverReportes) {
+    btnVolverReportes.addEventListener('click', () => {
+        aplicarModoReporte('dashboard');
+        try {
+            localStorage.setItem(STORAGE_MODE_KEY, 'dashboard');
+        } catch (e) {
+            // Ignorar errores de almacenamiento del navegador.
         }
-    } catch (e) {
-        // Mantener valor por defecto.
-    }
-
-    aplicarBreakdownReporte(breakdownInicial);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
 }
 
 const toggleGanadosSemanaAnteriorBtn = document.getElementById('toggleGanadosSemanaAnteriorBtn');
@@ -862,64 +1087,55 @@ if (toggleGanadosSemanaAnteriorBtn && reporteGanadosSemanaAnteriorDetalle) {
 }
 
 if (tipoReporte === 'personas') {
-    const registrosGanados = ['celula', 'domingo', 'asignados']
-        .flatMap((key) => Array.isArray(detalleOrigenGanados[key]) ? detalleOrigenGanados[key] : []);
-
-    const conteoLideresMap = {};
-    registrosGanados.forEach((item) => {
-        const nombreLider = String(item.Nombre_Lider || 'Sin líder').trim() || 'Sin líder';
-        conteoLideresMap[nombreLider] = (conteoLideresMap[nombreLider] || 0) + 1;
-    });
-
-    const rankingLideres = Object.entries(conteoLideresMap)
-        .map(([lider, total]) => ({ lider, total: parseInt(total || 0, 10) }))
-        .sort((a, b) => b.total - a.total)
-        .slice(0, 12);
-
-    const tablaGanadosLiderBody = document.getElementById('tablaGanadosLiderBody');
-    const escapeRowText = (valor) => String(valor || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-
-    if (tablaGanadosLiderBody) {
-        if (!rankingLideres.length) {
-            tablaGanadosLiderBody.innerHTML = '<tr><td colspan="2" class="text-center">Sin datos para el rango seleccionado</td></tr>';
-        } else {
-            tablaGanadosLiderBody.innerHTML = rankingLideres.map((item) => (
-                `<tr><td>${escapeRowText(item.lider)}</td><td><strong>${item.total}</strong></td></tr>`
-            )).join('');
+    let graficosPersonasRenderizados = false;
+    const renderGraficosPersonas = () => {
+        if (graficosPersonasRenderizados || typeof ApexCharts === 'undefined') {
+            return;
         }
+
+        const chartAlmasMinisterioEl = document.querySelector('#chartAlmasMinisterio');
+        if (chartAlmasMinisterioEl) {
+            new ApexCharts(chartAlmasMinisterioEl, {
+                chart: { type: 'bar', height: 330 },
+                series: [{
+                    name: 'Total',
+                    data: almasGanadas.map(x => parseInt(x.Total || 0, 10))
+                }],
+                xaxis: { categories: almasGanadas.map(x => x.Nombre_Ministerio || 'Sin ministerio') },
+                colors: ['#02a66f']
+            }).render();
+        }
+
+        const chartResumenGanarEl = document.querySelector('#chartResumenGanar');
+        if (chartResumenGanarEl) {
+            new ApexCharts(chartResumenGanarEl, {
+                chart: { type: 'bar', height: 320, toolbar: { show: false } },
+                series: [{
+                    name: 'Personas',
+                    data: [
+                        parseInt(resumenOrigen.Ganados_Celula || 0, 10),
+                        parseInt((resumenOrigen.Ganados_Iglesia ?? resumenOrigen.Ganados_Domingo) || 0, 10),
+                        parseInt(resumenOrigen.Asignados || 0, 10)
+                    ]
+                }],
+                xaxis: { categories: ['Ganados en célula', 'Ganados en iglesia', 'Asignados'] },
+                dataLabels: { enabled: true },
+                colors: ['#3b82f6'],
+                yaxis: {
+                    min: 0,
+                    forceNiceScale: true,
+                    labels: { formatter: (v) => Math.round(v) }
+                }
+            }).render();
+        }
+
+        graficosPersonasRenderizados = true;
+    };
+
+    window.__renderReportCharts = renderGraficosPersonas;
+    if (document.documentElement.classList.contains('show-report-charts')) {
+        renderGraficosPersonas();
     }
-
-    new ApexCharts(document.querySelector('#chartLideres'), {
-        chart: { type: 'bar', height: 340, toolbar: { show: false } },
-        series: [{
-            name: 'Ganados',
-            data: rankingLideres.map(x => x.total)
-        }],
-        xaxis: {
-            categories: rankingLideres.map(x => x.lider),
-            labels: {
-                rotate: -20,
-                trim: true
-            }
-        },
-        dataLabels: { enabled: true },
-        colors: ['#3b82f6']
-    }).render();
-
-    new ApexCharts(document.querySelector('#chartAlmasMinisterio'), {
-        chart: { type: 'bar', height: 330 },
-        series: [{
-            name: 'Total',
-            data: almasGanadas.map(x => parseInt(x.Total || 0, 10))
-        }],
-        xaxis: { categories: almasGanadas.map(x => x.Nombre_Ministerio || 'Sin ministerio') },
-        colors: ['#02a66f']
-    }).render();
 
     const botonesKpiDetalle = document.querySelectorAll('.js-kpi-detalle');
     const reporteDetalleModal = document.querySelector('#reporteDetalleModal');
@@ -936,8 +1152,10 @@ if (tipoReporte === 'personas') {
 
     const etiquetasOrigen = {
         celula: 'Ganados en célula',
-        domingo: 'Ganados en domingo',
-        asignados: 'Asignados'
+        iglesia: 'Ganados en iglesia',
+        domingo: 'Ganados en iglesia',
+        asignados: 'Asignados',
+        todos: 'Todos los orígenes'
     };
 
     const nombresMesMinisterial = {
@@ -946,7 +1164,7 @@ if (tipoReporte === 'personas') {
     };
 
     const etiquetasColMinisterial = {
-        ganar: { gi: 'Ganados Iglesia', gc: 'Ganados Célula', v: 'Otros', total: 'Total' },
+        ganar: { gi: 'Ganados Iglesia', gc: 'Ganados Célula', fv: 'Fonovisitas', v: 'Visitas', total: 'Total' },
         consolidar: { uv: 'Universidad de la Vida', e: 'Encuentro', b: 'Bautismo', total: 'Total' },
         discipular: { cdm12: 'CD-M1-2', cdm34: 'CD-M3-4', cdm56: 'CD-M5-6', total: 'Total' },
         enviar: { celulas: '# Células', total: 'Total' }
@@ -967,7 +1185,28 @@ if (tipoReporte === 'personas') {
             return;
         }
 
-        const filas = Array.isArray(detalleOrigenGanados[origen]) ? detalleOrigenGanados[origen] : [];
+        let filas = [];
+        if (origen === 'todos') {
+            const combinadas = [
+                ...(Array.isArray(detalleOrigenGanados.celula) ? detalleOrigenGanados.celula : []),
+                ...(Array.isArray(detalleOrigenGanados.iglesia) ? detalleOrigenGanados.iglesia : []),
+                ...(Array.isArray(detalleOrigenGanados.asignados) ? detalleOrigenGanados.asignados : [])
+            ];
+
+            const unicos = new Map();
+            combinadas.forEach((item) => {
+                const idPersona = String(item.Id_Persona || item.id_persona || '').trim();
+                const llave = idPersona !== ''
+                    ? `id:${idPersona}`
+                    : `row:${String(item.Nombre || '')}:${String(item.Apellido || '')}:${String(item.Fecha_Registro || '')}`;
+                if (!unicos.has(llave)) {
+                    unicos.set(llave, item);
+                }
+            });
+            filas = Array.from(unicos.values());
+        } else {
+            filas = Array.isArray(detalleOrigenGanados[origen]) ? detalleOrigenGanados[origen] : [];
+        }
         reporteDetalleModalTitle.textContent = etiquetasOrigen[origen] || 'Detalle del reporte';
 
         if (!filas.length) {
@@ -1153,6 +1392,25 @@ if (tipoReporte === 'personas') {
             panelDetalleGanar.style.display = 'none';
         });
     }
+} else if (tipoReporte === 'escuelas') {
+    const chartEscuelas = document.querySelector('#chartEscuelasProgramas');
+    if (chartEscuelas && typeof ApexCharts !== 'undefined') {
+        new ApexCharts(chartEscuelas, {
+            chart: { type: 'bar', height: 300, toolbar: { show: false } },
+            series: [{
+                name: 'Inscripciones',
+                data: [
+                    parseInt(resumenEscuelasInscripciones.universidad_vida || 0, 10),
+                    parseInt(resumenEscuelasInscripciones.encuentro || 0, 10),
+                    parseInt(resumenEscuelasInscripciones.bautismo || 0, 10),
+                    parseInt(resumenEscuelasInscripciones.capacitacion_destino || 0, 10)
+                ]
+            }],
+            xaxis: { categories: ['Universidad de la Vida', 'Encuentro', 'Bautismo', 'Capacitación Destino'] },
+            dataLabels: { enabled: true },
+            colors: ['#1d4ed8']
+        }).render();
+    }
 } else {
     const tot = indicadoresCelulas.totales || {};
 
@@ -1308,8 +1566,22 @@ if (tipoReporte === 'personas') {
     display: none;
 }
 
-#reportesVisualContainer .report-breakdown-block {
+#reportesVisualContainer .report-table-only,
+#reportesVisualContainer .report-chart-only {
     display: none;
+}
+
+html.show-report-tables .report-toolbar-card,
+html.show-report-tables .report-filters-card {
+    display: none !important;
+}
+
+html.show-report-tables #reportesVisualContainer > * {
+    display: none !important;
+}
+
+html.show-report-tables #reportesVisualContainer .report-table-only {
+    display: block !important;
 }
 
 html.show-report-tables #reportesVisualContainer .table-container,
@@ -1318,21 +1590,33 @@ html.show-report-tables #reportesVisualContainer details {
 }
 
 html.show-report-tables #reportesVisualContainer .ganar-extra-section {
-    display: block;
-}
-
-html.show-report-tables.breakdown-ministerio #reportesVisualContainer .report-breakdown-ministerio,
-html.show-report-charts.breakdown-ministerio #reportesVisualContainer .report-breakdown-ministerio {
-    display: block;
-}
-
-html.show-report-tables.breakdown-lider #reportesVisualContainer .report-breakdown-lider,
-html.show-report-charts.breakdown-lider #reportesVisualContainer .report-breakdown-lider {
-    display: block;
+    display: block !important;
 }
 
 html.show-report-charts #reportesVisualContainer .ganar-extra-section {
     display: block;
+}
+
+html.show-report-charts .report-toolbar-card,
+html.show-report-charts .report-filters-card {
+    display: none !important;
+}
+
+html.show-report-charts #reportesVisualContainer > * {
+    display: none !important;
+}
+
+html.show-report-charts #reportesVisualContainer .report-chart-only {
+    display: block !important;
+}
+
+html.show-report-charts #reportesVisualContainer .report-chart-only details,
+html.show-report-charts #reportesVisualContainer .report-chart-only .table-container {
+    display: none !important;
+}
+
+html.show-report-charts #reportesVisualContainer .ganar-extra-section {
+    display: none !important;
 }
 
 html.show-report-charts #reportesVisualContainer .btn-chart-toggle,
@@ -1423,6 +1707,11 @@ html.show-report-charts #reportesVisualContainer [id^="chart"] {
     color: #ffffff;
 }
 
+.report-back-reportes {
+    margin-left: auto;
+    display: inline-flex;
+}
+
 .report-toolbar-card {
     display: flex;
     justify-content: space-between;
@@ -1491,43 +1780,71 @@ html.show-report-charts #reportesVisualContainer [id^="chart"] {
     gap: 14px;
 }
 
+@media (max-width: 1280px) {
+    .rpt-mini-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .rpt-mini-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .rpt-min-table {
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     border-collapse: collapse;
-    min-width: 320px;
+    table-layout: auto;
 }
 
 .rpt-min-table th {
     background: #1e4a89;
-    color: #fff;
+    color: #ffffff;
     font-size: 12px;
-    padding: 7px 8px;
+    padding: 8px 10px;
     border: 1px solid #16397a;
     text-align: center;
     white-space: nowrap;
+    line-height: 1.35;
+    vertical-align: middle;
 }
 
 .rpt-min-table td {
     border: 1px solid #dde4f0;
     text-align: center;
-    padding: 6px 8px;
+    padding: 7px 10px;
     font-size: 13px;
+    line-height: 1.35;
+    vertical-align: middle;
 }
 
 .rpt-min-table .col-mes {
-    min-width: 56px;
+    min-width: 84px;
 }
 
 .rpt-min-table .col-mes-label {
     text-align: left;
     font-weight: 700;
     font-size: 12px;
+    background: #f5f8fe;
+    white-space: nowrap;
+    word-break: normal;
+    overflow-wrap: normal;
+    writing-mode: horizontal-tb;
+    text-orientation: mixed;
+}
+
+.rpt-min-table tfoot td {
+    background: #eef3fb;
+    font-weight: 700;
 }
 
 .rpt-ganancia-table {
     border-collapse: collapse;
     width: max-content;
-    min-width: 100%;
+    min-width: 980px;
     table-layout: auto !important;
 }
 
@@ -1540,19 +1857,23 @@ html.show-report-charts #reportesVisualContainer [id^="chart"] {
 
 .rpt-ganancia-table th {
     background: #1e4a89;
-    color: #fff;
+    color: #ffffff;
     font-weight: 700;
     text-align: center;
-    padding: 4px 5px;
+    padding: 6px 8px;
     border: 1px solid #16397a;
     font-size: 12px;
+    line-height: 1.3;
+    vertical-align: middle;
 }
 
 .rpt-ganancia-table td {
     text-align: center;
-    padding: 4px 5px;
+    padding: 6px 8px;
     border: 1px solid #dde4f0;
     font-size: 12px;
+    line-height: 1.3;
+    vertical-align: middle;
 }
 
 .rpt-ganancia-table .col-num-sm {
@@ -1577,13 +1898,13 @@ html.show-report-charts #reportesVisualContainer [id^="chart"] {
 }
 
 .rpt-ganancia-table .col-mes-group {
-    width: 36px;
+    min-width: 72px;
 }
 
 .rpt-ganancia-table .col-sub {
-    width: 18px;
+    min-width: 44px;
     font-size: 11px;
-    padding: 4px 3px !important;
+    padding: 6px 6px !important;
 }
 
 .rpt-ganancia-table .col-anual-head {
@@ -1592,8 +1913,38 @@ html.show-report-charts #reportesVisualContainer [id^="chart"] {
     border-color: #091e3d !important;
 }
 
+.rpt-ganancia-table tfoot td {
+    background: #eef3fb;
+    font-weight: 700;
+}
+
 .rpt-cero {
     color: #97a6bd;
+}
+
+.reporte-metas-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.report-link-button,
+.report-link-btn {
+    white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+    .rpt-min-table { min-width: 640px; }
+
+    .rpt-ganancia-table {
+        min-width: 1080px;
+    }
+
+    .rpt-min-table th,
+    .rpt-min-table td,
+    .rpt-ganancia-table th,
+    .rpt-ganancia-table td {
+        font-size: 11px;
+    }
 }
 
 .report-kpi-grid {

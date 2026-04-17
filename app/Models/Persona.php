@@ -243,19 +243,24 @@ class Persona extends BaseModel {
                 return true;
             }
 
-            $yaTieneOtros = false;
+            $requeridos = ['Domingo', 'Somos Uno', 'Celula', 'Migrados', 'Otros', 'Asignados'];
+            $normalizadosActuales = [];
             foreach ($enumValues as $value) {
-                if (strcasecmp(trim((string)$value), 'Otros') === 0) {
-                    $yaTieneOtros = true;
-                    break;
+                $normalizadosActuales[] = strtolower(trim((string)$value));
+            }
+
+            $requiereCambios = false;
+            foreach ($requeridos as $requerido) {
+                if (!in_array(strtolower($requerido), $normalizadosActuales, true)) {
+                    $enumValues[] = $requerido;
+                    $requiereCambios = true;
                 }
             }
 
-            if ($yaTieneOtros) {
+            if (!$requiereCambios) {
                 return true;
             }
 
-            $enumValues[] = 'Otros';
             $enumSqlValues = array_map([$this->db, 'quote'], $enumValues);
             $nullable = strtoupper((string)($col['Null'] ?? 'YES')) === 'NO' ? 'NOT NULL' : 'NULL';
             $defaultSql = '';
@@ -571,7 +576,10 @@ class Persona extends BaseModel {
             'peldaños' => [
                 'Ganar' => [
                     'Primer contacto' => 0,
-                    'Ubicado en celula' => 0,
+                    'Asignacion a lideres y ministerio' => 0,
+                    'Fonovisita' => 0,
+                    'Visita' => 0,
+                    'Asignacion a una celula' => 0,
                     'No se dispone' => 0,
                 ],
                 'Consolidar' => [
@@ -580,13 +588,11 @@ class Persona extends BaseModel {
                     'Bautismo' => 0,
                 ],
                 'Discipular' => [
-                    'Proyeccion' => 0,
-                    'Equipo G12' => 0,
                     'Capacitacion destino nivel 1' => 0,
-                ],
-                'Enviar' => [
                     'Capacitacion destino nivel 2' => 0,
                     'Capacitacion destino nivel 3' => 0,
+                ],
+                'Enviar' => [
                     'Celula' => 0,
                 ],
             ],
@@ -600,7 +606,10 @@ class Persona extends BaseModel {
             'detalles_peldanos' => [
                 'Ganar' => [
                     'Primer contacto' => [],
-                    'Ubicado en celula' => [],
+                    'Asignacion a lideres y ministerio' => [],
+                    'Fonovisita' => [],
+                    'Visita' => [],
+                    'Asignacion a una celula' => [],
                     'No se dispone' => [],
                 ],
                 'Consolidar' => [
@@ -609,13 +618,11 @@ class Persona extends BaseModel {
                     'Bautismo' => [],
                 ],
                 'Discipular' => [
-                    'Proyeccion' => [],
-                    'Equipo G12' => [],
                     'Capacitacion destino nivel 1' => [],
-                ],
-                'Enviar' => [
                     'Capacitacion destino nivel 2' => [],
                     'Capacitacion destino nivel 3' => [],
+                ],
+                'Enviar' => [
                     'Celula' => [],
                 ],
             ],
@@ -624,10 +631,10 @@ class Persona extends BaseModel {
         $ordenEtapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
 
         $mapaPeldaños = [
-            'Ganar' => ['Primer contacto', 'Ubicado en celula', 'No se dispone'],
+            'Ganar' => ['Primer contacto', 'Asignacion a lideres y ministerio', 'Fonovisita', 'Visita', 'Asignacion a una celula', 'No se dispone'],
             'Consolidar' => ['Universidad de la vida', 'Encuentro', 'Bautismo'],
-            'Discipular' => ['Proyeccion', 'Equipo G12', 'Capacitacion destino nivel 1'],
-            'Enviar' => ['Capacitacion destino nivel 2', 'Capacitacion destino nivel 3', 'Celula'],
+            'Discipular' => ['Capacitacion destino nivel 1', 'Capacitacion destino nivel 2', 'Capacitacion destino nivel 3'],
+            'Enviar' => [2 => 'Celula'],
         ];
 
         foreach ($rows as $persona) {
@@ -1129,13 +1136,15 @@ class Persona extends BaseModel {
             $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
             $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%célula%')";
             $esIglesiaExpr = "(NOT {$esCelulaExpr})";
+            $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
+            $esAsignadoExpr = "({$esIglesiaExpr} AND {$invitadoExpr} = '' AND {$tieneAsignacionExpr})";
 
             if ($origen === 'celula') {
                 $sql .= " AND {$esCelulaExpr}";
             } elseif ($origen === 'domingo') {
-                $sql .= " AND {$esIglesiaExpr} AND {$invitadoExpr} <> ''";
+                $sql .= " AND {$esIglesiaExpr} AND NOT {$esAsignadoExpr}";
             } elseif ($origen === 'asignados') {
-                $sql .= " AND {$esIglesiaExpr} AND {$invitadoExpr} = ''";
+                $sql .= " AND {$esAsignadoExpr}";
             }
         }
 
@@ -1223,13 +1232,15 @@ class Persona extends BaseModel {
             $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
             $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%célula%')";
             $esIglesiaExpr = "(NOT {$esCelulaExpr})";
+            $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
+            $esAsignadoExpr = "({$esIglesiaExpr} AND {$invitadoExpr} = '' AND {$tieneAsignacionExpr})";
 
             if ($origen === 'celula') {
                 $sql .= " AND {$esCelulaExpr}";
             } elseif ($origen === 'domingo') {
-                $sql .= " AND {$esIglesiaExpr} AND {$invitadoExpr} <> ''";
+                $sql .= " AND {$esIglesiaExpr} AND NOT {$esAsignadoExpr}";
             } elseif ($origen === 'asignados') {
-                $sql .= " AND {$esIglesiaExpr} AND {$invitadoExpr} = ''";
+                $sql .= " AND {$esAsignadoExpr}";
             }
         }
 
@@ -1248,6 +1259,7 @@ class Persona extends BaseModel {
      * Obtener almas ganadas por ministerio con aislamiento de rol
      */
     public function getAlmasGanadasPorMinisterioWithRole($fechaInicio, $fechaFin, $filtroRol, $idMinisterio = '', $idLider = '') {
+        $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
         $sql = "SELECT 
                     COALESCE(m.Nombre_Ministerio, 'Sin Ministerio') as Nombre_Ministerio,
                     m.Id_Ministerio,
@@ -1259,8 +1271,7 @@ class Persona extends BaseModel {
                 FROM persona p
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
                 WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
-                AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
-                AND $filtroRol";
+                AND $filtroRol" . $filtroNuevas;
 
         $params = [$fechaInicio, $fechaFin];
 
@@ -1296,6 +1307,7 @@ class Persona extends BaseModel {
             ];
         }
 
+        $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
         $sql = "SELECT
                     SUM(CASE WHEN p.Proceso = 'Ganar' THEN 1 ELSE 0 END) AS Ganar,
                     SUM(CASE WHEN p.Proceso = 'Consolidar' THEN 1 ELSE 0 END) AS Consolidar,
@@ -1305,8 +1317,7 @@ class Persona extends BaseModel {
                     COUNT(*) AS Total
                 FROM persona p
                 WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
-                AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
-                AND $filtroRol";
+                AND $filtroRol" . $filtroNuevas;
 
         $params = [$fechaInicio, $fechaFin];
 
@@ -1345,18 +1356,20 @@ class Persona extends BaseModel {
     public function getResumenGanadosOrigenWithRole($fechaInicio, $fechaFin, $filtroRol, $idMinisterio = '', $idLider = '') {
         $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
         $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
+        $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
 
-        $esIglesiaExpr = "({$tipoReunionExpr} LIKE '%domingo%' OR {$tipoReunionExpr} LIKE '%iglesia%' OR {$tipoReunionExpr} LIKE '%somos uno%' OR {$tipoReunionExpr} LIKE '%somosuno%' OR {$tipoReunionExpr} LIKE '%viernes%' OR {$tipoReunionExpr} LIKE '%otro%')";
+        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%célula%')";
+        $esIglesiaExpr = "(NOT {$esCelulaExpr})";
+        $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
 
         $sql = "SELECT
                     SUM(CASE WHEN {$tipoReunionExpr} LIKE '%celula%' THEN 1 ELSE 0 END) AS Ganados_Celula,
-                    SUM(CASE WHEN {$esIglesiaExpr} THEN 1 ELSE 0 END) AS Ganados_Domingo,
-                    SUM(CASE WHEN {$esIglesiaExpr} AND {$invitadoExpr} = '' THEN 1 ELSE 0 END) AS Asignados,
+                    SUM(CASE WHEN {$esIglesiaExpr} THEN 1 ELSE 0 END) AS Ganados_Iglesia,
+                    SUM(CASE WHEN {$esIglesiaExpr} AND {$invitadoExpr} = '' AND {$tieneAsignacionExpr} THEN 1 ELSE 0 END) AS Asignados,
                     COUNT(*) AS Total
                 FROM persona p
                 WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
-                AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
-                AND $filtroRol";
+                AND $filtroRol" . $filtroNuevas;
 
         $params = [$fechaInicio, $fechaFin];
 
@@ -1375,7 +1388,8 @@ class Persona extends BaseModel {
 
         return [
             'Ganados_Celula' => (int)($row['Ganados_Celula'] ?? 0),
-            'Ganados_Domingo' => (int)($row['Ganados_Domingo'] ?? 0),
+            'Ganados_Iglesia' => (int)($row['Ganados_Iglesia'] ?? 0),
+            'Ganados_Domingo' => (int)($row['Ganados_Iglesia'] ?? 0),
             'Asignados' => (int)($row['Asignados'] ?? 0),
             'Total' => (int)($row['Total'] ?? 0)
         ];
@@ -1384,6 +1398,7 @@ class Persona extends BaseModel {
     public function getDetalleGanadosOrigenWithRole($fechaInicio, $fechaFin, $filtroRol, $origen, $idMinisterio = '', $idLider = '') {
         $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
         $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
+        $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
 
         $sql = "SELECT
                     p.Id_Persona,
@@ -1399,8 +1414,7 @@ class Persona extends BaseModel {
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
                 LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
                 WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
-                AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
-                AND $filtroRol";
+                AND $filtroRol" . $filtroNuevas;
 
         $params = [$fechaInicio, $fechaFin];
 
@@ -1414,14 +1428,16 @@ class Persona extends BaseModel {
             $params[] = (int)$idLider;
         }
 
-        $esIglesiaExpr = "({$tipoReunionExpr} LIKE '%domingo%' OR {$tipoReunionExpr} LIKE '%iglesia%' OR {$tipoReunionExpr} LIKE '%somos uno%' OR {$tipoReunionExpr} LIKE '%somosuno%' OR {$tipoReunionExpr} LIKE '%viernes%' OR {$tipoReunionExpr} LIKE '%otro%')";
+        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%célula%')";
+        $esIglesiaExpr = "(NOT {$esCelulaExpr})";
+        $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
 
         if ($origen === 'celula') {
-            $sql .= " AND {$tipoReunionExpr} LIKE '%celula%'";
-        } elseif ($origen === 'domingo') {
+            $sql .= " AND {$esCelulaExpr}";
+        } elseif ($origen === 'iglesia' || $origen === 'domingo') {
             $sql .= " AND {$esIglesiaExpr}";
         } elseif ($origen === 'asignados') {
-            $sql .= " AND {$esIglesiaExpr} AND {$invitadoExpr} = ''";
+            $sql .= " AND {$esIglesiaExpr} AND {$invitadoExpr} = '' AND {$tieneAsignacionExpr}";
         } else {
             return [];
         }
@@ -1440,21 +1456,22 @@ class Persona extends BaseModel {
     public function getResumenGanadosFinSemanaAnteriorPorMinisterioWithRole($fechaInicio, $fechaFin, $filtroRol, $idMinisterio = '', $idLider = '') {
         $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
         $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
+        $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
 
-        $esIglesiaExpr = "({$tipoReunionExpr} LIKE '%domingo%' OR {$tipoReunionExpr} LIKE '%iglesia%' OR {$tipoReunionExpr} LIKE '%somos uno%' OR {$tipoReunionExpr} LIKE '%somosuno%' OR {$tipoReunionExpr} LIKE '%viernes%' OR {$tipoReunionExpr} LIKE '%otro%')";
+        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%célula%')";
+        $esIglesiaExpr = "(NOT {$esCelulaExpr})";
+        $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
 
         $sql = "SELECT
                     COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
                     SUM(CASE WHEN {$esIglesiaExpr} AND {$invitadoExpr} <> '' THEN 1 ELSE 0 END) AS Ganados,
-                    SUM(CASE WHEN {$esIglesiaExpr} AND {$invitadoExpr} = '' THEN 1 ELSE 0 END) AS Asignados,
+                    SUM(CASE WHEN {$esIglesiaExpr} AND {$invitadoExpr} = '' AND {$tieneAsignacionExpr} THEN 1 ELSE 0 END) AS Asignados,
                     SUM(CASE WHEN {$esIglesiaExpr} AND (p.Id_Lider IS NULL OR p.Id_Lider = 0) THEN 1 ELSE 0 END) AS Por_Verificar,
-                    SUM(CASE WHEN {$esIglesiaExpr} THEN 1 ELSE 0 END) AS Total_Domingo
+                    SUM(CASE WHEN {$esIglesiaExpr} THEN 1 ELSE 0 END) AS Total_Iglesia
                 FROM persona p
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
                 WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
-                AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
-                AND (p.Proceso = 'Ganar' OR p.Proceso IS NULL OR p.Proceso = '')
-                AND $filtroRol";
+                AND $filtroRol" . $filtroNuevas;
 
         $params = [$fechaInicio, $fechaFin];
 
@@ -1470,7 +1487,7 @@ class Persona extends BaseModel {
 
         $sql .= "
                 GROUP BY m.Id_Ministerio, m.Nombre_Ministerio
-                HAVING Total_Domingo > 0
+            HAVING Total_Iglesia > 0
                 ORDER BY m.Nombre_Ministerio";
 
         $rows = $this->query($sql, $params);
@@ -1480,6 +1497,7 @@ class Persona extends BaseModel {
             'ganados' => 0,
             'asignados' => 0,
             'por_verificar' => 0,
+            'total_iglesia' => 0,
             'total_domingo' => 0
         ];
 
@@ -1489,13 +1507,15 @@ class Persona extends BaseModel {
                 'ganados' => (int)($row['Ganados'] ?? 0),
                 'asignados' => (int)($row['Asignados'] ?? 0),
                 'por_verificar' => (int)($row['Por_Verificar'] ?? 0),
-                'total_domingo' => (int)($row['Total_Domingo'] ?? 0)
+                'total_iglesia' => (int)($row['Total_Iglesia'] ?? 0),
+                'total_domingo' => (int)($row['Total_Iglesia'] ?? 0)
             ];
 
             $resultadoRows[] = $item;
             $totales['ganados'] += $item['ganados'];
             $totales['asignados'] += $item['asignados'];
             $totales['por_verificar'] += $item['por_verificar'];
+            $totales['total_iglesia'] += $item['total_iglesia'];
             $totales['total_domingo'] += $item['total_domingo'];
         }
 
@@ -1506,6 +1526,7 @@ class Persona extends BaseModel {
     }
 
     public function getAlmasGanadasPorEdadesWithRole($fechaInicio, $fechaFin, $filtroRol, $idMinisterio = '', $idLider = '') {
+        $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
         $sql = "SELECT
                     SUM(CASE WHEN COALESCE(p.Edad, TIMESTAMPDIFF(YEAR, p.Fecha_Nacimiento, CURDATE())) BETWEEN 3 AND 8 THEN 1 ELSE 0 END) AS Kids,
                     SUM(CASE WHEN COALESCE(p.Edad, TIMESTAMPDIFF(YEAR, p.Fecha_Nacimiento, CURDATE())) BETWEEN 9 AND 12 THEN 1 ELSE 0 END) AS Teens,
@@ -1517,8 +1538,7 @@ class Persona extends BaseModel {
                     SUM(CASE WHEN COALESCE(p.Edad, TIMESTAMPDIFF(YEAR, p.Fecha_Nacimiento, CURDATE())) IS NULL OR COALESCE(p.Edad, TIMESTAMPDIFF(YEAR, p.Fecha_Nacimiento, CURDATE())) < 3 THEN 1 ELSE 0 END) AS Sin_Dato
                 FROM persona p
                 WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
-                AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
-                AND $filtroRol";
+                AND $filtroRol" . $filtroNuevas;
 
         $params = [$fechaInicio, $fechaFin];
 

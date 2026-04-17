@@ -44,6 +44,8 @@ class PersonaController extends BaseController {
         $this->personaModel->ensureEscaleraChecklistColumnExists();
         $this->personaModel->ensureFechaAsignacionLiderColumnExists();
         $this->personaModel->ensureObservacionGanadoEnColumnExists();
+        $this->personaModel->ensureTipoReunionOtrosValueExists();
+        $this->personaModel->repararTipoReunionOtrosSinDato();
         $this->personaModel->ensureCreadoPorColumnExists();
         $this->personaModel->ensureCanalCreacionColumnExists();
         $this->personaModel->ensureEsAntiguoColumnExists();
@@ -463,7 +465,8 @@ class PersonaController extends BaseController {
         }
 
         $checklistNormalizado = $this->normalizarChecklistEscalera($checklistActual);
-        $checklistNormalizado['Ganar'][0] = $this->personaTieneAsignacionCompleta($personaReferencia);
+        $checklistNormalizado['Ganar'][1] = $this->personaTieneAsignacionLiderYMinisterio($personaReferencia);
+        $checklistNormalizado['Ganar'][4] = $this->personaTieneCelulaAsignada($personaReferencia);
         $checklistNormalizado['_meta']['convenciones'] = $this->normalizarConvencionesSeleccionadas($convencionesSeleccionadas);
 
         return $checklistNormalizado;
@@ -560,6 +563,24 @@ class PersonaController extends BaseController {
         return in_array($origen, ['domingo', 'celula', 'asignados', 'reasignados', 'no_disponible'], true) ? $origen : '';
     }
 
+    private function resolverRangoSemanaLunesDomingo($fechaReferencia) {
+        $valor = trim((string)$fechaReferencia);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $valor)) {
+            return ['', '', ''];
+        }
+
+        $timestamp = strtotime($valor);
+        if ($timestamp === false) {
+            return ['', '', ''];
+        }
+
+        $diaSemana = (int)date('N', $timestamp); // 1 lunes, 7 domingo
+        $inicio = strtotime('-' . ($diaSemana - 1) . ' days', $timestamp);
+        $fin = strtotime('+6 days', $inicio);
+
+        return [date('Y-m-d', $inicio), date('Y-m-d', $fin), date('Y-m-d', $timestamp)];
+    }
+
     private function normalizarUrlRetorno($returnUrl) {
         $returnUrl = trim((string)$returnUrl);
         if ($returnUrl === '') {
@@ -593,9 +614,18 @@ class PersonaController extends BaseController {
         $this->redirect($rutaFallback);
     }
 
-    private function personaTieneAsignacionCompleta(array $persona) {
-        return !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']) && !empty($persona['Id_Celula']);
+    private function personaTieneAsignacionLiderYMinisterio(array $persona) {
+        return !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
     }
+
+    private function personaTieneCelulaAsignada(array $persona) {
+        return !empty($persona['Id_Celula']);
+    }
+
+    private function puedeGestionarPrimerContactoGanar() {
+        return AuthController::esAdministrador() || DataIsolation::esGanar();
+    }
+
     private function normalizarIdLiderPost($idLiderRaw, $idPersonaActual = null) {
         $idLider = (int)($idLiderRaw ?: 0);
         $idPersonaActual = $idPersonaActual !== null ? (int)$idPersonaActual : 0;
@@ -659,11 +689,13 @@ class PersonaController extends BaseController {
         }
 
         $checklist = $this->normalizarChecklistEscalera($decoded);
-        // Regla de negocio: "Asignado a líder" se calcula automáticamente.
-        $checklist['Ganar'][0] = $this->personaTieneAsignacionCompleta($persona);
+        // Regla de negocio: "Asignación a líderes y ministerio" se calcula automáticamente.
+        $checklist['Ganar'][1] = $this->personaTieneAsignacionLiderYMinisterio($persona);
+        // Regla de negocio: "Asignación a una célula" se calcula automáticamente.
+        $checklist['Ganar'][4] = $this->personaTieneCelulaAsignada($persona);
 
         $persona['Escalera_Checklist'] = json_encode($checklist, JSON_UNESCAPED_UNICODE);
-        $persona['Seguimiento_No_Disponible'] = !empty($checklist['Ganar'][3]);
+        $persona['Seguimiento_No_Disponible'] = !empty($checklist['Ganar'][5]);
         $persona['Seguimiento_Observacion'] = (string)($checklist['_meta']['no_disponible_observacion'] ?? '');
         $persona['Seguimiento_Reasignado'] = !empty($checklist['_meta']['reasignado_manual']) || !empty($checklist['_meta']['reasignado_automatico']);
         $persona['Seguimiento_Reasignado_At'] = (string)($checklist['_meta']['reasignado_manual_at'] ?? ($checklist['_meta']['reasignado_automatico_at'] ?? ''));
@@ -732,16 +764,16 @@ class PersonaController extends BaseController {
             $checklist = $this->normalizarChecklistEscalera($checklistActual);
 
             // Si ya hubo primer contacto, no se reasigna.
-            if (!empty($checklist['Ganar'][1])) {
+            if (!empty($checklist['Ganar'][0])) {
                 continue;
             }
 
             // No mover casos cerrados como "No se dispone".
-            if (!empty($checklist['Ganar'][3])) {
+            if (!empty($checklist['Ganar'][5])) {
                 continue;
             }
 
-            $checklist['Ganar'][0] = false;
+            $checklist['Ganar'][1] = false;
             $checklist['_meta']['reasignado_automatico'] = true;
             $checklist['_meta']['reasignado_automatico_at'] = date('Y-m-d H:i:s');
             $checklist['_meta']['reasignado_automatico_motivo'] = 'Sin primer contacto en 48 horas';
@@ -814,7 +846,8 @@ class PersonaController extends BaseController {
     }
 
     private function textoSinAcentos($texto) {
-        $texto = strtolower(trim((string)$texto));
+        $texto = preg_replace('/\s+/u', ' ', trim((string)$texto));
+        $texto = strtolower((string)$texto);
         return strtr($texto, [
             'á' => 'a',
             'é' => 'e',
@@ -877,14 +910,17 @@ class PersonaController extends BaseController {
     }
 
     private function filtrarPersonasPorNombreListado(array $personas, $termino) {
-        $termino = trim((string)$termino);
+        $termino = preg_replace('/\s+/u', ' ', trim((string)$termino));
         if ($termino === '') {
             return $personas;
         }
 
         $terminoNormalizado = $this->textoSinAcentos($termino);
+        $tokens = array_values(array_filter(explode(' ', $terminoNormalizado), static function($token) {
+            return $token !== '';
+        }));
 
-        return array_values(array_filter($personas, function($persona) use ($terminoNormalizado) {
+        return array_values(array_filter($personas, function($persona) use ($terminoNormalizado, $tokens) {
             $nombre = trim((string)($persona['Nombre'] ?? ''));
             $apellido = trim((string)($persona['Apellido'] ?? ''));
             $nombreCompleto = trim($nombre . ' ' . $apellido);
@@ -893,14 +929,30 @@ class PersonaController extends BaseController {
             $apellidoNormalizado = $this->textoSinAcentos($apellido);
             $nombreCompletoNormalizado = $this->textoSinAcentos($nombreCompleto);
 
-            return $nombreNormalizado === $terminoNormalizado
-                || $apellidoNormalizado === $terminoNormalizado
-                || $nombreCompletoNormalizado === $terminoNormalizado;
+            if (
+                strpos($nombreNormalizado, $terminoNormalizado) !== false
+                || strpos($apellidoNormalizado, $terminoNormalizado) !== false
+                || strpos($nombreCompletoNormalizado, $terminoNormalizado) !== false
+            ) {
+                return true;
+            }
+
+            if (empty($tokens)) {
+                return false;
+            }
+
+            foreach ($tokens as $token) {
+                if (strpos($nombreCompletoNormalizado, $token) === false) {
+                    return false;
+                }
+            }
+
+            return true;
         }));
     }
 
     private function filtrarPersonasPorMinisterioListado(array $personas, $idMinisterio) {
-        $idMinisterio = trim((string)$idMinisterio);
+        $idMinisterio = preg_replace('/\s+/u', '', trim((string)$idMinisterio));
         if ($idMinisterio === '') {
             return $personas;
         }
@@ -923,7 +975,7 @@ class PersonaController extends BaseController {
     }
 
     private function filtrarPersonasPorLiderListado(array $personas, $idLider) {
-        $idLider = trim((string)$idLider);
+        $idLider = preg_replace('/\s+/u', '', trim((string)$idLider));
         if ($idLider === '') {
             return $personas;
         }
@@ -1017,14 +1069,22 @@ class PersonaController extends BaseController {
 
         $tipoReunion = $this->textoSinAcentos((string)($persona['Tipo_Reunion'] ?? ''));
         $invitadoPor = trim((string)($persona['Invitado_Por'] ?? ''));
+        $idLider = (int)($persona['Id_Lider'] ?? 0);
+        $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
+        $tieneAsignacion = ($idLider > 0 || $idMinisterio > 0);
 
         if (strpos($tipoReunion, 'celula') !== false) {
             return 'celula';
         }
 
-        // Regla de negocio: todo lo que NO sea origen célula entra en iglesia
-        // (domingo/asignados), incluyendo viernes/somos uno/otros/sin dato.
-        return $invitadoPor !== '' ? 'domingo' : 'asignados';
+        // Regla de negocio en pendientes:
+        // - Asignados: ganado en iglesia, sin invitador y con líder/ministerio asignado.
+        // - Domingo/Iglesia: resto de no-célula (incluye quien llegó solo y aún no se asigna).
+        if ($invitadoPor === '' && $tieneAsignacion) {
+            return 'asignados';
+        }
+
+        return 'domingo';
     }
 
     private function contarOrigenesPendientes(array $personas) {
@@ -1330,9 +1390,9 @@ class PersonaController extends BaseController {
         }
 
         $filtroPerfil = $this->normalizarPerfilListado($_GET['perfil'] ?? '');
-        $filtroMinisterio = isset($_GET['ministerio']) ? trim((string)$_GET['ministerio']) : '';
-        $filtroLider = isset($_GET['lider']) ? trim((string)$_GET['lider']) : '';
-        $filtroNombre = trim((string)($_GET['buscar'] ?? ''));
+        $filtroMinisterio = isset($_GET['ministerio']) ? preg_replace('/\s+/u', '', trim((string)$_GET['ministerio'])) : '';
+        $filtroLider = isset($_GET['lider']) ? preg_replace('/\s+/u', '', trim((string)$_GET['lider'])) : '';
+        $filtroNombre = preg_replace('/\s+/u', ' ', trim((string)($_GET['buscar'] ?? '')));
         if ($filtroMinisterio !== '' && $filtroMinisterio !== '0' && !ctype_digit($filtroMinisterio)) {
             $filtroMinisterio = '';
         }
@@ -1362,9 +1422,15 @@ class PersonaController extends BaseController {
         $personasAntiguasIncompletas = $this->filtrarPersonasPorNombreListado($personasAntiguasIncompletas, $filtroNombre);
         $totalesPerfil = $this->contarPerfilesListado($personasBaseFiltradasPorNombre);
         $totalesPerfil['otros'] = (int)($totalesPerfil['otros'] ?? 0) + count($personasAntiguasIncompletas);
-        $personas = $this->filtrarPersonasPorPerfilListado($personasBaseFiltradasPorNombre, $filtroPerfil);
-        if ($filtroPerfil === 'otros') {
-            $personas = $this->unirPersonasSinDuplicados($personas, $personasAntiguasIncompletas);
+        $ignorarPerfilPorBusqueda = ($filtroNombre !== '');
+        if ($ignorarPerfilPorBusqueda) {
+            // Si hay búsqueda por nombre, mostrar coincidencias globales sin limitar por el rol activo.
+            $personas = $this->unirPersonasSinDuplicados($personasBaseFiltradasPorNombre, $personasAntiguasIncompletas);
+        } else {
+            $personas = $this->filtrarPersonasPorPerfilListado($personasBaseFiltradasPorNombre, $filtroPerfil);
+            if ($filtroPerfil === 'otros') {
+                $personas = $this->unirPersonasSinDuplicados($personas, $personasAntiguasIncompletas);
+            }
         }
         $sugerenciasNombre = $this->obtenerSugerenciasNombreListado($personasBaseFiltradasPorLider);
 
@@ -1372,7 +1438,7 @@ class PersonaController extends BaseController {
             'personas' => $personas,
             'ministerios' => $ministerios,
             'lideres' => $lideres,
-            'filtroPerfilActual' => $filtroPerfil,
+            'filtroPerfilActual' => $ignorarPerfilPorBusqueda ? '' : $filtroPerfil,
             'filtroMinisterioActual' => $filtroMinisterio,
             'filtroLiderActual' => $filtroLider,
             'filtroNombreActual' => $filtroNombre,
@@ -1600,8 +1666,11 @@ class PersonaController extends BaseController {
         $filtroProceso = (string)($_GET['proceso'] ?? '');
         $filtroSinLider = (string)($_GET['sin_lider'] ?? '') === '1';
         $filtroSinCelula = (string)($_GET['sin_celula'] ?? '') === '1';
+        $filtroNombre = preg_replace('/\s+/u', ' ', trim((string)($_GET['buscar'] ?? '')));
+        $filtroSemanaRef = trim((string)($_GET['semana_ref'] ?? ''));
         $filtroFechaInicio = trim((string)($_GET['fecha_inicio'] ?? ''));
         $filtroFechaFin = trim((string)($_GET['fecha_fin'] ?? ''));
+        $filtroSemanaRefEsDefault = false;
         $filtroEtapa = $this->normalizarEtapaFiltro($_GET['etapa'] ?? null);
         $filtroOrigen = $this->normalizarOrigenFiltro($_GET['origen'] ?? null);
         $puedeVerAtajoAsignados = $this->puedeVerAtajoAsignados();
@@ -1640,6 +1709,22 @@ class PersonaController extends BaseController {
 
         if ($filtroSinCelula) {
             $filtroCelula = '0';
+        }
+
+        if ($filtroSemanaRef === '' && $filtroFechaInicio === '' && $filtroFechaFin === '') {
+            $filtroSemanaRef = date('Y-m-d');
+            $filtroSemanaRefEsDefault = true;
+        }
+
+        if ($filtroSemanaRef !== '') {
+            [$inicioSemana, $finSemana, $fechaSemanaRefNormalizada] = $this->resolverRangoSemanaLunesDomingo($filtroSemanaRef);
+            if ($inicioSemana !== '' && $finSemana !== '') {
+                $filtroFechaInicio = $inicioSemana;
+                $filtroFechaFin = $finSemana;
+                $filtroSemanaRef = $fechaSemanaRefNormalizada;
+            } else {
+                $filtroSemanaRef = '';
+            }
         }
 
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $filtroFechaInicio)) {
@@ -1696,6 +1781,7 @@ class PersonaController extends BaseController {
             || ($filtroEstado !== null && $filtroEstado !== '')
             || ($filtroCelula !== null && $filtroCelula !== '')
             || ($filtroEtapa !== null && $filtroEtapa !== '')
+            || ($filtroNombre !== '')
             || ($filtroFechaInicio !== '' && $filtroFechaFin !== '');
 
         // Totales rápidos por origen sin limitar por el botón seleccionado.
@@ -1706,6 +1792,7 @@ class PersonaController extends BaseController {
         }
         $personasBaseConteo = $this->filtrarSoloPersonasNuevas($personasBaseConteo);
         $personasBaseConteo = $this->enriquecerChecklistPersonas($personasBaseConteo);
+        $personasBaseConteo = $this->filtrarPersonasPorNombreListado($personasBaseConteo, $filtroNombre);
         $totalesOrigenPendiente = $this->contarOrigenesPendientes($personasBaseConteo);
 
         if ($hayFiltrosSinOrigen || ($filtroOrigen !== '')) {
@@ -1716,6 +1803,7 @@ class PersonaController extends BaseController {
 
         $personas = $this->filtrarSoloPersonasNuevas($personas);
         $personas = $this->enriquecerChecklistPersonas($personas);
+        $personas = $this->filtrarPersonasPorNombreListado($personas, $filtroNombre);
 
         if ($filtroOrigen === 'no_disponible') {
             $personas = array_values(array_filter($personas, static function($persona) {
@@ -1753,11 +1841,15 @@ class PersonaController extends BaseController {
             'filtroProcesoActual' => $filtroProceso,
             'filtroSinLiderActual' => $filtroSinLider,
             'filtroSinCelulaActual' => $filtroSinCelula,
+            'filtroNombreActual' => $filtroNombre,
+            'filtroSemanaRefActual' => $filtroSemanaRef,
+            'filtroSemanaRefEsDefault' => $filtroSemanaRefEsDefault,
             'filtroFechaInicioActual' => $filtroFechaInicio,
             'filtroFechaFinActual' => $filtroFechaFin,
             'filtroEtapaActual' => (string)($filtroEtapa ?? ''),
             'filtroOrigenActual' => (string)$filtroOrigen,
-            'totalesOrigenPendiente' => $totalesOrigenPendiente
+            'totalesOrigenPendiente' => $totalesOrigenPendiente,
+            'puedeMarcarPrimerContactoGanar' => $this->puedeGestionarPrimerContactoGanar()
         ]);
     }
 
@@ -1792,19 +1884,21 @@ class PersonaController extends BaseController {
         $reporteEscaleraMesActual = $this->personaModel->getReporteEscaleraMesActual($filtroRol);
 
         $puedeEditarChecklistEscalera = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
+        $puedeMarcarPrimerContactoGanar = $this->puedeGestionarPrimerContactoGanar();
 
         $this->view('personas/escalera', [
             'personas' => $personas,
             'totalesEtapa' => $totalesEtapa,
             'filtroEtapaActual' => $etapaFiltroActual,
             'puedeEditarChecklistEscalera' => $puedeEditarChecklistEscalera,
+            'puedeMarcarPrimerContactoGanar' => $puedeMarcarPrimerContactoGanar,
             'reporteEscaleraMesActual' => $reporteEscaleraMesActual,
         ]);
     }
 
     private function normalizarChecklistEscalera($checklist) {
         $estructuraEtapas = [
-            'Ganar' => 4,
+            'Ganar' => 6,
             'Consolidar' => 3,
             'Discipular' => 3,
             'Enviar' => 3
@@ -1856,7 +1950,7 @@ class PersonaController extends BaseController {
     }
 
     private function calcularProcesoPorChecklist(array $checklistNormalizado) {
-        if (!empty($checklistNormalizado['Ganar'][3])) {
+        if (!empty($checklistNormalizado['Ganar'][5])) {
             return 'Ganar';
         }
 
@@ -1866,7 +1960,7 @@ class PersonaController extends BaseController {
         foreach ($etapas as $etapa) {
             $valores = $checklistNormalizado[$etapa] ?? [false, false, false];
             if ($etapa === 'Ganar') {
-                $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]);
+                $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]) && !empty($valores[3]) && !empty($valores[4]);
             } else {
                 $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]);
             }
@@ -1918,7 +2012,7 @@ class PersonaController extends BaseController {
         $observacionNoDisponible = trim((string)($payload['observacion_no_disponible'] ?? ''));
 
         $estructuraEtapas = [
-            'Ganar' => 4,
+            'Ganar' => 6,
             'Consolidar' => 3,
             'Discipular' => 3,
             'Enviar' => 3
@@ -1949,21 +2043,41 @@ class PersonaController extends BaseController {
 
         $checklistNormalizado = $this->normalizarChecklistEscalera($checklistActual);
 
-        // Regla de negocio: "Asignado a líder" se controla automáticamente.
-        $checklistNormalizado['Ganar'][0] = $this->personaTieneAsignacionCompleta($persona);
+        // Regla de negocio: "Asignación a líderes y ministerio" se controla automáticamente.
+        $checklistNormalizado['Ganar'][1] = $this->personaTieneAsignacionLiderYMinisterio($persona);
+        // Regla de negocio: "Asignación a una célula" se controla automáticamente.
+        $checklistNormalizado['Ganar'][4] = $this->personaTieneCelulaAsignada($persona);
 
-        if ($etapa === 'Ganar' && $indice === 0) {
+        if ($etapa === 'Ganar' && $indice === 1) {
             $this->json([
                 'success' => true,
-                'message' => 'Asignado a líder se actualiza automáticamente',
+                'message' => 'Asignación a líderes y ministerio se actualiza automáticamente',
                 'proceso' => $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklistNormalizado) : null,
                 'checklist' => $checklistNormalizado
             ]);
         }
 
+        if ($etapa === 'Ganar' && $indice === 4) {
+            $this->json([
+                'success' => true,
+                'message' => 'Asignación a una célula se actualiza automáticamente',
+                'proceso' => $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklistNormalizado) : null,
+                'checklist' => $checklistNormalizado
+            ]);
+        }
+
+        // Primer contacto solo puede marcarlo el encargado del usuario Ganar (o admin).
+        if ($etapa === 'Ganar' && $indice === 0 && !$this->puedeGestionarPrimerContactoGanar()) {
+            $this->json(['success' => false, 'message' => 'Solo el usuario encargado de Ganar puede marcar Primer contacto'], 403);
+        }
+
+        if ($etapa === 'Ganar' && in_array($indice, [2, 3], true) && empty($checklistNormalizado['Ganar'][1])) {
+            $this->json(['success' => false, 'message' => 'Primero debes asignar líder y ministerio'], 422);
+        }
+
         $checklistNormalizado[$etapa][$indice] = $marcado;
 
-        if ($etapa === 'Ganar' && $indice === 3) {
+        if ($etapa === 'Ganar' && $indice === 5) {
             if ($marcado && $observacionNoDisponible === '') {
                 $this->json(['success' => false, 'message' => 'Debes registrar una observación para No se dispone'], 422);
             }
@@ -2010,6 +2124,8 @@ class PersonaController extends BaseController {
         $filtroProceso = (string)($_GET['proceso'] ?? '');
         $filtroSinLider = (string)($_GET['sin_lider'] ?? '') === '1';
         $filtroSinCelula = (string)($_GET['sin_celula'] ?? '') === '1';
+        $filtroNombre = preg_replace('/\s+/u', ' ', trim((string)($_GET['buscar'] ?? '')));
+        $filtroSemanaRef = trim((string)($_GET['semana_ref'] ?? ''));
         $filtroFechaInicio = trim((string)($_GET['fecha_inicio'] ?? ''));
         $filtroFechaFin = trim((string)($_GET['fecha_fin'] ?? ''));
         $filtroEtapa = $this->normalizarEtapaFiltro($_GET['etapa'] ?? null);
@@ -2049,6 +2165,17 @@ class PersonaController extends BaseController {
             $filtroCelula = '0';
         }
 
+        if ($filtroSemanaRef !== '') {
+            [$inicioSemana, $finSemana, $fechaSemanaRefNormalizada] = $this->resolverRangoSemanaLunesDomingo($filtroSemanaRef);
+            if ($inicioSemana !== '' && $finSemana !== '') {
+                $filtroFechaInicio = $inicioSemana;
+                $filtroFechaFin = $finSemana;
+                $filtroSemanaRef = $fechaSemanaRefNormalizada;
+            } else {
+                $filtroSemanaRef = '';
+            }
+        }
+
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $filtroFechaInicio)) {
             $filtroFechaInicio = '';
         }
@@ -2080,6 +2207,8 @@ class PersonaController extends BaseController {
         } else {
             $personas = $this->personaModel->getAllWithRole($filtroRol, $soloGanar, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         }
+
+        $personas = $this->filtrarPersonasPorNombreListado($personas, $filtroNombre);
 
         if ($esModoGanar) {
             $personas = $this->filtrarSoloPersonasNuevas($personas);
@@ -2236,7 +2365,7 @@ class PersonaController extends BaseController {
                 ? $this->construirChecklistEscaleraFormulario($_POST['escalera_checklist'] ?? null, $data, $convencionesSeleccionadas)
                 : null;
 
-            if ($checklistNormalizado !== null && !empty($checklistNormalizado['Ganar'][3]) && trim((string)($checklistNormalizado['_meta']['no_disponible_observacion'] ?? '')) === '') {
+            if ($checklistNormalizado !== null && !empty($checklistNormalizado['Ganar'][5]) && trim((string)($checklistNormalizado['_meta']['no_disponible_observacion'] ?? '')) === '') {
                 $viewData = [
                     'celulas' => $this->celulaModel->getAll(),
                     'ministerios' => $this->ministerioModel->getAll(),
@@ -2268,7 +2397,7 @@ class PersonaController extends BaseController {
                 if ($checklistJson !== false) {
                     $data['Escalera_Checklist'] = $checklistJson;
                 }
-                if (!empty($checklistNormalizado['Ganar'][3])) {
+                if (!empty($checklistNormalizado['Ganar'][5])) {
                     $data['Estado_Cuenta'] = 'Inactivo';
                 }
             }
@@ -2484,7 +2613,7 @@ class PersonaController extends BaseController {
                 ? $this->construirChecklistEscaleraFormulario($_POST['escalera_checklist'] ?? ($personaAntes['Escalera_Checklist'] ?? null), array_merge($personaAntes ?: [], $data), $convencionesSeleccionadas)
                 : null;
 
-            if ($checklistNormalizado !== null && !empty($checklistNormalizado['Ganar'][3]) && trim((string)($checklistNormalizado['_meta']['no_disponible_observacion'] ?? '')) === '') {
+            if ($checklistNormalizado !== null && !empty($checklistNormalizado['Ganar'][5]) && trim((string)($checklistNormalizado['_meta']['no_disponible_observacion'] ?? '')) === '') {
                 $persona = $this->personaModel->getById($id);
                 $viewData = [
                     'persona' => $persona,
@@ -2518,7 +2647,7 @@ class PersonaController extends BaseController {
                 if ($checklistJson !== false) {
                     $data['Escalera_Checklist'] = $checklistJson;
                 }
-                if (!empty($checklistNormalizado['Ganar'][3])) {
+                if (!empty($checklistNormalizado['Ganar'][5])) {
                     $data['Estado_Cuenta'] = 'Inactivo';
                 }
             }

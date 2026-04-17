@@ -6,7 +6,7 @@ $filtroMinisterio = (string)($filtro_ministerio ?? '');
 $filtroLider = (string)($filtro_lider ?? '');
 $filtroCelula = (string)($filtro_celula ?? '');
 $inscripcionesPublicas = $inscripciones_publicas ?? [];
-$resumenInscripciones = $resumen_inscripciones ?? ['total' => 0, 'universidad_vida' => 0, 'capacitacion_destino' => 0, 'otros' => 0];
+$resumenInscripciones = $resumen_inscripciones ?? ['total' => 0, 'universidad_vida' => 0, 'encuentro' => 0, 'bautismo' => 0, 'capacitacion_destino' => 0, 'otros' => 0];
 $filtroInscPrograma = (string)($filtro_insc_programa ?? '');
 $filtroInscBuscar = (string)($filtro_insc_buscar ?? '');
 
@@ -158,7 +158,7 @@ $exportUrl = PUBLIC_URL . '?url=home/escuelas-formacion/exportar&' . http_build_
     </div>
 </div>
 
-<div class="dashboard-grid" style="grid-template-columns: repeat(3, minmax(0, 320px)); margin:18px 0;">
+<div class="dashboard-grid" style="grid-template-columns: repeat(5, minmax(0, 320px)); margin:18px 0;">
     <div class="dashboard-card" style="border-left-color:#0f6a66;">
         <h3>Inscripciones públicas</h3>
         <div class="value" style="color:#0f6a66;"><?= (int)($resumenInscripciones['total'] ?? 0) ?></div>
@@ -167,6 +167,16 @@ $exportUrl = PUBLIC_URL . '?url=home/escuelas-formacion/exportar&' . http_build_
     <div class="dashboard-card" style="border-left-color:#1e4a89;">
         <h3>Universidad de la Vida</h3>
         <div class="value" style="color:#1e4a89;"><?= (int)($resumenInscripciones['universidad_vida'] ?? 0) ?></div>
+        <small style="color:#637087;">Registros en este programa.</small>
+    </div>
+    <div class="dashboard-card" style="border-left-color:#0b7285;">
+        <h3>Encuentro</h3>
+        <div class="value" style="color:#0b7285;"><?= (int)($resumenInscripciones['encuentro'] ?? 0) ?></div>
+        <small style="color:#637087;">Registros en este programa.</small>
+    </div>
+    <div class="dashboard-card" style="border-left-color:#5f3dc4;">
+        <h3>Bautismo</h3>
+        <div class="value" style="color:#5f3dc4;"><?= (int)($resumenInscripciones['bautismo'] ?? 0) ?></div>
         <small style="color:#637087;">Registros en este programa.</small>
     </div>
     <div class="dashboard-card" style="border-left-color:#7a4e08;">
@@ -188,7 +198,12 @@ $exportUrl = PUBLIC_URL . '?url=home/escuelas-formacion/exportar&' . http_build_
             <select id="insc_programa" name="insc_programa" class="form-control">
                 <option value="" <?= $filtroInscPrograma === '' ? 'selected' : '' ?>>Todos</option>
                 <option value="universidad_vida" <?= $filtroInscPrograma === 'universidad_vida' ? 'selected' : '' ?>>Universidad de la Vida</option>
+                <option value="encuentro" <?= $filtroInscPrograma === 'encuentro' ? 'selected' : '' ?>>Encuentro</option>
+                <option value="bautismo" <?= $filtroInscPrograma === 'bautismo' ? 'selected' : '' ?>>Bautismo</option>
                 <option value="capacitacion_destino" <?= $filtroInscPrograma === 'capacitacion_destino' ? 'selected' : '' ?>>Capacitación Destino</option>
+                <option value="capacitacion_destino_nivel_1" <?= $filtroInscPrograma === 'capacitacion_destino_nivel_1' ? 'selected' : '' ?>>Capacitación Destino - Nivel 1</option>
+                <option value="capacitacion_destino_nivel_2" <?= $filtroInscPrograma === 'capacitacion_destino_nivel_2' ? 'selected' : '' ?>>Capacitación Destino - Nivel 2</option>
+                <option value="capacitacion_destino_nivel_3" <?= $filtroInscPrograma === 'capacitacion_destino_nivel_3' ? 'selected' : '' ?>>Capacitación Destino - Nivel 3</option>
             </select>
         </div>
 
@@ -231,9 +246,16 @@ $exportUrl = PUBLIC_URL . '?url=home/escuelas-formacion/exportar&' . http_build_
                     <?php foreach ($inscripcionesPublicas as $ins): ?>
                         <?php
                         $programaRaw = (string)($ins['Programa'] ?? '');
-                        $programaLabel = $programaRaw === 'universidad_vida'
-                            ? 'Universidad de la Vida'
-                            : ($programaRaw === 'capacitacion_destino' ? 'Capacitación Destino' : $programaRaw);
+                        $programaLabels = [
+                            'universidad_vida' => 'Universidad de la Vida',
+                            'encuentro' => 'Encuentro',
+                            'bautismo' => 'Bautismo',
+                            'capacitacion_destino' => 'Capacitación Destino',
+                            'capacitacion_destino_nivel_1' => 'Capacitación Destino - Nivel 1',
+                            'capacitacion_destino_nivel_2' => 'Capacitación Destino - Nivel 2',
+                            'capacitacion_destino_nivel_3' => 'Capacitación Destino - Nivel 3',
+                        ];
+                        $programaLabel = $programaLabels[$programaRaw] ?? $programaRaw;
                         ?>
                         <tr>
                             <td><?= htmlspecialchars((string)($ins['Fecha_Registro'] ?? '')) ?></td>

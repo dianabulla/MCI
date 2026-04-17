@@ -492,17 +492,19 @@ $returnUrlParam = $returnUrl ? '&return_url=' . urlencode((string)$returnUrl) : 
                             $uv = (int)($metricas['escalera']['Consolidar']['Universidad de la vida'] ?? 0);
                             $encuentro = (int)($metricas['escalera']['Consolidar']['Encuentro'] ?? 0);
                             $destinoN1 = (int)($metricas['escalera']['Discipular']['Capacitacion destino nivel 1'] ?? 0);
-                            $destinoN2 = (int)($metricas['escalera']['Enviar']['Capacitacion destino nivel 2'] ?? 0);
-                            $destinoN3 = (int)($metricas['escalera']['Enviar']['Capacitacion destino nivel 3'] ?? 0);
+                            $destinoN2 = (int)($metricas['escalera']['Discipular']['Capacitacion destino nivel 2'] ?? 0);
+                            $destinoN3 = (int)($metricas['escalera']['Discipular']['Capacitacion destino nivel 3'] ?? 0);
+                            $enviarCelula = (int)($metricas['escalera']['Enviar']['Celula'] ?? 0);
                             ?>
                             <strong style="display:block; margin-bottom:8px;">Reporte Escalera del Éxito (Ministerio)</strong>
 
                             <div class="escalera-resumen-ministerio">
                                 <span class="meta-pill ministerio-chip--clickable" data-kpi-filter="escalera_uv">Universidad de la vida <strong><?= $uv ?></strong></span>
                                 <span class="meta-pill ministerio-chip--clickable" data-kpi-filter="escalera_encuentro">Encuentro <strong><?= $encuentro ?></strong></span>
-                                <span class="meta-pill ministerio-chip--clickable" data-kpi-filter="escalera_destino_n1">Capacitación destino N1 <strong><?= $destinoN1 ?></strong></span>
-                                <span class="meta-pill ministerio-chip--clickable" data-kpi-filter="escalera_destino_n2">Capacitación destino N2 <strong><?= $destinoN2 ?></strong></span>
-                                <span class="meta-pill ministerio-chip--clickable" data-kpi-filter="escalera_destino_n3">Capacitación destino N3 <strong><?= $destinoN3 ?></strong></span>
+                                <span class="meta-pill ministerio-chip--clickable" data-kpi-filter="escalera_destino_n1">Capacitación destino N1 (Módulos 1 y 2) <strong><?= $destinoN1 ?></strong></span>
+                                <span class="meta-pill ministerio-chip--clickable" data-kpi-filter="escalera_destino_n2">Capacitación destino N2 (Módulos 3 y 4) <strong><?= $destinoN2 ?></strong></span>
+                                <span class="meta-pill ministerio-chip--clickable" data-kpi-filter="escalera_destino_n3">Capacitación destino N3 (Módulos 5 y 6) <strong><?= $destinoN3 ?></strong></span>
+                                <span class="meta-pill ministerio-chip--clickable" data-kpi-filter="escalera_enviar_celula">Enviar - Célula <strong><?= $enviarCelula ?></strong></span>
                             </div>
                         </div>
                     </div>
@@ -632,9 +634,10 @@ $returnUrlParam = $returnUrl ? '&return_url=' . urlencode((string)$returnUrl) : 
             'ganados_semana_domingo': 'Ganados en domingo',
             'escalera_uv': 'Universidad de la vida',
             'escalera_encuentro': 'Encuentro',
-            'escalera_destino_n1': 'Capacitación destino N1',
-            'escalera_destino_n2': 'Capacitación destino N2',
-            'escalera_destino_n3': 'Capacitación destino N3',
+            'escalera_destino_n1': 'Capacitación destino N1 (Módulos 1 y 2)',
+            'escalera_destino_n2': 'Capacitación destino N2 (Módulos 3 y 4)',
+            'escalera_destino_n3': 'Capacitación destino N3 (Módulos 5 y 6)',
+            'escalera_enviar_celula': 'Enviar - Célula',
             'convencion_enero': 'Convención Enero',
             'convencion_mujeres': 'Convención Mujeres',
             'convencion_jovenes': 'Convención Jóvenes',

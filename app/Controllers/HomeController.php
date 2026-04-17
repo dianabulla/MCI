@@ -241,7 +241,7 @@ class HomeController extends BaseController {
         $filtroProgramaInscripcion = trim((string)($_GET['insc_programa'] ?? ''));
         $filtroBusquedaInscripcion = trim((string)($_GET['insc_buscar'] ?? ''));
 
-        if (!in_array($filtroProgramaInscripcion, ['', 'universidad_vida', 'capacitacion_destino'], true)) {
+        if (!in_array($filtroProgramaInscripcion, ['', 'universidad_vida', 'encuentro', 'bautismo', 'capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
             $filtroProgramaInscripcion = '';
         }
 

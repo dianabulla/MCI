@@ -23,7 +23,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
         <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill">Personas</a>
         <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill active">Pendiente por consolidar</a>
         <?php if ($puedeExportarPersonas): ?>
-        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel&modo=ganar<?= ($filtroMinisterioActual ?? '') !== '' ? '&ministerio=' . urlencode((string)$filtroMinisterioActual) : '' ?><?= ($filtroLiderActual ?? '') !== '' ? '&lider=' . urlencode((string)$filtroLiderActual) : '' ?><?= !empty($filtroSinLiderActual) ? '&sin_lider=1' : '' ?><?= !empty($filtroSinCelulaActual) ? '&sin_celula=1' : '' ?><?= ($filtroFechaInicioActual ?? '') !== '' ? '&fecha_inicio=' . urlencode((string)$filtroFechaInicioActual) : '' ?><?= ($filtroFechaFinActual ?? '') !== '' ? '&fecha_fin=' . urlencode((string)$filtroFechaFinActual) : '' ?><?= ($filtroOrigenActual ?? '') !== '' ? '&origen=' . urlencode((string)$filtroOrigenActual) : '' ?>" class="btn btn-success">
+        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel&modo=ganar<?= ($filtroMinisterioActual ?? '') !== '' ? '&ministerio=' . urlencode((string)$filtroMinisterioActual) : '' ?><?= ($filtroLiderActual ?? '') !== '' ? '&lider=' . urlencode((string)$filtroLiderActual) : '' ?><?= !empty($filtroSinLiderActual) ? '&sin_lider=1' : '' ?><?= !empty($filtroSinCelulaActual) ? '&sin_celula=1' : '' ?><?= ($filtroNombreActual ?? '') !== '' ? '&buscar=' . urlencode((string)$filtroNombreActual) : '' ?><?= ($filtroSemanaRefActual ?? '') !== '' ? '&semana_ref=' . urlencode((string)$filtroSemanaRefActual) : '' ?><?= ($filtroFechaInicioActual ?? '') !== '' ? '&fecha_inicio=' . urlencode((string)$filtroFechaInicioActual) : '' ?><?= ($filtroFechaFinActual ?? '') !== '' ? '&fecha_fin=' . urlencode((string)$filtroFechaFinActual) : '' ?><?= ($filtroOrigenActual ?? '') !== '' ? '&origen=' . urlencode((string)$filtroOrigenActual) : '' ?>" class="btn btn-success">
             <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
         </a>
         <?php endif; ?>
@@ -38,10 +38,13 @@ $filtroMinisterioPendiente = (string)($filtroMinisterioActual ?? '');
 $filtroLiderPendiente = (string)($filtroLiderActual ?? '');
 $filtroSinLiderPendiente = !empty($filtroSinLiderActual);
 $filtroSinCelulaPendiente = !empty($filtroSinCelulaActual);
+$filtroNombrePendiente = (string)($filtroNombreActual ?? '');
+$filtroSemanaRefPendiente = (string)($filtroSemanaRefActual ?? '');
+$filtroSemanaRefEsDefaultPendiente = !empty($filtroSemanaRefEsDefault);
 $filtroFechaInicioPendiente = (string)($filtroFechaInicioActual ?? '');
 $filtroFechaFinPendiente = (string)($filtroFechaFinActual ?? '');
-$hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || ($filtroLiderPendiente !== '') || $filtroSinLiderPendiente || $filtroSinCelulaPendiente;
-$hayFiltrosPendiente = $hayFiltrosPendiente || ($filtroFechaInicioPendiente !== '' && $filtroFechaFinPendiente !== '');
+$hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || ($filtroLiderPendiente !== '') || $filtroSinLiderPendiente || $filtroSinCelulaPendiente || ($filtroNombrePendiente !== '') || (!$filtroSemanaRefEsDefaultPendiente && $filtroSemanaRefPendiente !== '');
+$hayFiltrosPendiente = $hayFiltrosPendiente || (!$filtroSemanaRefEsDefaultPendiente && $filtroFechaInicioPendiente !== '' && $filtroFechaFinPendiente !== '');
 
 $queryBasePendientes = [
     'url' => 'personas/ganar',
@@ -49,6 +52,8 @@ $queryBasePendientes = [
     'lider' => $filtroLiderPendiente,
     'sin_lider' => $filtroSinLiderPendiente ? '1' : '',
     'sin_celula' => $filtroSinCelulaPendiente ? '1' : '',
+    'buscar' => $filtroNombrePendiente,
+    'semana_ref' => $filtroSemanaRefPendiente,
     'fecha_inicio' => $filtroFechaInicioPendiente,
     'fecha_fin' => $filtroFechaFinPendiente,
 ];
@@ -68,7 +73,7 @@ $returnUrlGanar = $buildPendientesUrl();
 
 <div class="card" style="margin-bottom: 16px;">
     <div class="card-body">
-        <form method="GET" action="<?= PUBLIC_URL ?>" class="filters-inline">
+        <form method="GET" action="<?= PUBLIC_URL ?>" class="filters-inline" id="filtrosPendientesForm">
             <input type="hidden" name="url" value="personas/ganar">
             <?php if (($filtroOrigenActual ?? '') !== ''): ?>
             <input type="hidden" name="origen" value="<?= htmlspecialchars((string)$filtroOrigenActual) ?>">
@@ -80,7 +85,7 @@ $returnUrlGanar = $buildPendientesUrl();
                     return true;
                 }
 
-                $idMinisterioLider = isset($lider['Id_Ministerio']) ? (string)$lider['Id_Ministerio'] : '';
+                $idMinisterioLider = isset($lider['Id_Ministerio']) ? trim((string)$lider['Id_Ministerio']) : '';
                 if ($filtroMinisterioPendiente === '0') {
                     return $idMinisterioLider === '' || $idMinisterioLider === '0';
                 }
@@ -113,6 +118,11 @@ $returnUrlGanar = $buildPendientesUrl();
                 </select>
             </div>
 
+            <div class="form-group" style="min-width: 260px;">
+                <label for="filtro_buscar" style="font-size: 14px; margin-bottom: 5px;">Buscar por nombre</label>
+                <input type="text" id="filtro_buscar" name="buscar" class="form-control" placeholder="Ej: Juan Perez" value="<?= htmlspecialchars($filtroNombrePendiente) ?>">
+            </div>
+
             <div class="form-group" style="align-self:flex-end; margin-bottom: 8px; min-width: 250px;">
                 <label style="display:block; font-size: 14px; margin-bottom: 5px;">Filtros rápidos</label>
                 <label style="display:block; margin: 0 0 4px 0; font-weight: 500;">
@@ -123,14 +133,12 @@ $returnUrlGanar = $buildPendientesUrl();
                 </label>
             </div>
 
-            <div class="form-group" style="min-width: 180px;">
-                <label for="filtro_fecha_inicio" style="font-size: 14px; margin-bottom: 5px;">Fecha inicio</label>
-                <input type="date" id="filtro_fecha_inicio" name="fecha_inicio" class="form-control" value="<?= htmlspecialchars($filtroFechaInicioPendiente) ?>">
-            </div>
-
-            <div class="form-group" style="min-width: 180px;">
-                <label for="filtro_fecha_fin" style="font-size: 14px; margin-bottom: 5px;">Fecha fin</label>
-                <input type="date" id="filtro_fecha_fin" name="fecha_fin" class="form-control" value="<?= htmlspecialchars($filtroFechaFinPendiente) ?>">
+            <div class="form-group" style="min-width: 220px;">
+                <label for="filtro_semana_ref" style="font-size: 14px; margin-bottom: 5px;">Semana (lunes a domingo)</label>
+                <input type="date" id="filtro_semana_ref" name="semana_ref" class="form-control" value="<?= htmlspecialchars($filtroSemanaRefPendiente) ?>">
+                <?php if ($filtroFechaInicioPendiente !== '' && $filtroFechaFinPendiente !== ''): ?>
+                <small style="display:block; margin-top:4px; color:#637087;">Rango aplicado: <?= htmlspecialchars($filtroFechaInicioPendiente) ?> a <?= htmlspecialchars($filtroFechaFinPendiente) ?></small>
+                <?php endif; ?>
             </div>
 
             <div class="filters-actions" style="align-self:flex-end;">
@@ -138,7 +146,7 @@ $returnUrlGanar = $buildPendientesUrl();
                     <i class="bi bi-funnel"></i> Filtrar
                 </button>
                 <?php if ($hayFiltrosPendiente): ?>
-                <a href="<?= PUBLIC_URL ?>?url=personas/ganar<?= ($filtroOrigenActual ?? '') !== '' ? '&origen=' . urlencode((string)$filtroOrigenActual) : '' ?>" class="btn btn-secondary">
+                <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-secondary">
                     <i class="bi bi-x-circle"></i> Limpiar
                 </a>
                 <?php endif; ?>
@@ -168,7 +176,7 @@ $returnUrlGanar = $buildPendientesUrl();
                     <span class="ganar-shortcut-title"><i class="bi bi-building"></i> Ganados en iglesia</span>
                     <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['domingo'] ?? 0) ?></span>
                 </a>
-                <small class="ganar-shortcut-help">Domingo + Invitado por con dato</small>
+                <small class="ganar-shortcut-help">No célula y aún no clasificados como asignados</small>
             </div>
 
             <?php if ($puedeVerAtajoAsignados): ?>
@@ -177,7 +185,7 @@ $returnUrlGanar = $buildPendientesUrl();
                     <span class="ganar-shortcut-title"><i class="bi bi-person-check"></i> Asignados</span>
                     <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['asignados'] ?? 0) ?></span>
                 </a>
-                <small class="ganar-shortcut-help">Domingo + Invitado por vacío</small>
+                <small class="ganar-shortcut-help">Sin invitador y con líder o ministerio asignado</small>
             </div>
             <?php endif; ?>
 
@@ -216,12 +224,35 @@ $returnUrlGanar = $buildPendientesUrl();
                 <th>Líder</th>
                 <th>Ministerio</th>
                 <th>Ganado en</th>
+                <th class="escalera-inline-col">Escalera rápida</th>
                 <?php if ($mostrarAcciones): ?><th class="action-col">Acciones</th><?php endif; ?>
             </tr>
         </thead>
         <tbody>
             <?php if (!empty($personas)): ?>
                 <?php foreach ($personas as $persona): ?>
+                    <?php
+                    $checklistEscalera = [];
+                    $checklistRawPersona = (string)($persona['Escalera_Checklist'] ?? '');
+                    if ($checklistRawPersona !== '') {
+                        $tmpChecklist = json_decode($checklistRawPersona, true);
+                        if (is_array($tmpChecklist)) {
+                            $checklistEscalera = $tmpChecklist;
+                        }
+                    }
+                    $ganarChecklist = isset($checklistEscalera['Ganar']) && is_array($checklistEscalera['Ganar']) ? $checklistEscalera['Ganar'] : [];
+                    for ($i = 0; $i <= 5; $i++) {
+                        $ganarChecklist[$i] = !empty($ganarChecklist[$i]);
+                    }
+                    $ganarChecklist[1] = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
+                    $ganarChecklist[4] = !empty($persona['Id_Celula']);
+                    $checklistEscalera['Ganar'] = $ganarChecklist;
+                    $checklistEscaleraJson = htmlspecialchars((string)json_encode($checklistEscalera, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                    $observacionNoDisponible = (string)($checklistEscalera['_meta']['no_disponible_observacion'] ?? '');
+                    $asignadoALiderMinisterio = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
+                    $tieneCelulaAsignada = !empty($persona['Id_Celula']);
+                    $puedeEditarEscaleraInline = !empty($puedeMarcarPrimerContactoGanar);
+                    ?>
                     <tr>
                         <td>
                             <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Nombre'] . ' ' . $persona['Apellido']) ?>">
@@ -264,6 +295,101 @@ $returnUrlGanar = $buildPendientesUrl();
                                 <?= htmlspecialchars($ganadoEn) ?>
                             </span>
                         </td>
+                        <td class="escalera-inline-col">
+                            <div
+                                class="escalera-inline-card js-inline-escalera"
+                                data-persona-id="<?= (int)($persona['Id_Persona'] ?? 0) ?>"
+                                data-checklist="<?= $checklistEscaleraJson ?>"
+                                data-observacion-no-disponible="<?= htmlspecialchars($observacionNoDisponible, ENT_QUOTES, 'UTF-8') ?>"
+                                data-asignado="<?= $asignadoALiderMinisterio ? '1' : '0' ?>"
+                                data-celula="<?= $tieneCelulaAsignada ? '1' : '0' ?>"
+                                data-puede-editar="<?= $puedeEditarEscaleraInline ? '1' : '0' ?>"
+                                data-proceso="<?= htmlspecialchars((string)($persona['Proceso'] ?? 'Ganar'), ENT_QUOTES, 'UTF-8') ?>"
+                            >
+                                <div class="escalera-inline-steps">
+                                    <button type="button" class="escalera-step-btn etapa-ganar js-inline-step-btn" data-etapa="Ganar" title="Ganar" aria-label="Ganar">
+                                        <span class="escalera-step-icon" aria-hidden="true">
+                                            <span class="step-initial">G</span>
+                                        </span>
+                                        <span class="escalera-step-name">GANAR</span>
+                                    </button>
+                                    <button type="button" class="escalera-step-btn etapa-consolidar js-inline-step-btn" data-etapa="Consolidar" title="Consolidar" aria-label="Consolidar">
+                                        <span class="escalera-step-icon" aria-hidden="true">
+                                            <span class="step-initial">C</span>
+                                        </span>
+                                        <span class="escalera-step-name">CONSOLIDAR</span>
+                                    </button>
+                                    <button type="button" class="escalera-step-btn etapa-discipular js-inline-step-btn" data-etapa="Discipular" title="Discipular" aria-label="Discipular">
+                                        <span class="escalera-step-icon" aria-hidden="true">
+                                            <span class="step-initial">D</span>
+                                        </span>
+                                        <span class="escalera-step-name">DISCIPULAR</span>
+                                    </button>
+                                    <button type="button" class="escalera-step-btn etapa-enviar js-inline-step-btn" data-etapa="Enviar" title="Enviar" aria-label="Enviar">
+                                        <span class="escalera-step-icon" aria-hidden="true">
+                                            <span class="step-initial">E</span>
+                                        </span>
+                                        <span class="escalera-step-name">ENVIAR</span>
+                                    </button>
+                                </div>
+
+                                <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Ganar" hidden>
+                                    <label class="escalera-inline-item" title="Primer contacto">
+                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="0" <?= !empty($ganarChecklist[0]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                        <span>Primer contacto</span>
+                                    </label>
+                                    <label class="escalera-inline-item" title="Fonovisita">
+                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="2" <?= !empty($ganarChecklist[2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                        <span>Fonovisita</span>
+                                    </label>
+                                    <label class="escalera-inline-item" title="Visita">
+                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="3" <?= !empty($ganarChecklist[3]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                        <span>Visita</span>
+                                    </label>
+                                    <label class="escalera-inline-item" title="No se dispone">
+                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="5" <?= !empty($ganarChecklist[5]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                        <span>No se dispone</span>
+                                    </label>
+                                </div>
+
+                                <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Consolidar" hidden>
+                                    <label class="escalera-inline-item" title="Universidad de la vida">
+                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Consolidar" data-indice="0" <?= !empty($checklistEscalera['Consolidar'][0]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                        <span>Universidad de la vida</span>
+                                    </label>
+                                    <label class="escalera-inline-item" title="Encuentro">
+                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Consolidar" data-indice="1" <?= !empty($checklistEscalera['Consolidar'][1]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                        <span>Encuentro</span>
+                                    </label>
+                                    <label class="escalera-inline-item" title="Bautismo">
+                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Consolidar" data-indice="2" <?= !empty($checklistEscalera['Consolidar'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                        <span>Bautismo</span>
+                                    </label>
+                                </div>
+
+                                <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Discipular" hidden>
+                                    <label class="escalera-inline-item" title="Capacitación destino nivel 1">
+                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Discipular" data-indice="0" <?= !empty($checklistEscalera['Discipular'][0]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                        <span>Destino nivel 1</span>
+                                    </label>
+                                    <label class="escalera-inline-item" title="Capacitación destino nivel 2">
+                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Discipular" data-indice="1" <?= !empty($checklistEscalera['Discipular'][1]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                        <span>Destino nivel 2</span>
+                                    </label>
+                                    <label class="escalera-inline-item" title="Capacitación destino nivel 3">
+                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Discipular" data-indice="2" <?= !empty($checklistEscalera['Discipular'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                        <span>Destino nivel 3</span>
+                                    </label>
+                                </div>
+
+                                <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Enviar" hidden>
+                                    <label class="escalera-inline-item" title="Célula">
+                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Enviar" data-indice="2" <?= !empty($checklistEscalera['Enviar'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                        <span>Célula</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </td>
                         <?php if ($mostrarAcciones): ?>
                         <td class="action-col">
                             <div class="action-buttons action-buttons-compact">
@@ -285,14 +411,6 @@ $returnUrlGanar = $buildPendientesUrl();
                             >
                                 <i class="bi bi-fingerprint"></i>
                             </button>
-                            <a
-                                href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= (int)($persona['Id_Persona'] ?? 0) ?>&panel=escalera&return_url=<?= urlencode($returnUrlGanar) ?>#eventos-procesos"
-                                class="action-icon-btn action-icon-escalera"
-                                title="Ir a Escalera del Exito"
-                                aria-label="Ir a Escalera del Exito"
-                            >
-                                <i class="bi bi-bar-chart-steps"></i>
-                            </a>
                             <?php endif; ?>
                             <?php if (AuthController::tienePermiso('personas', 'editar')): ?>
                             <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlGanar) ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
@@ -311,7 +429,7 @@ $returnUrlGanar = $buildPendientesUrl();
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="<?= $mostrarAcciones ? '6' : '5' ?>" class="text-center">No hay personas pendientes por consolidar</td>
+                    <td colspan="<?= $mostrarAcciones ? '7' : '6' ?>" class="text-center">No hay personas pendientes por consolidar</td>
                 </tr>
             <?php endif; ?>
         </tbody>
@@ -356,12 +474,20 @@ $returnUrlGanar = $buildPendientesUrl();
 .ganar-table th.action-col,
 .ganar-table td.action-col {
     white-space: nowrap;
-    min-width: 196px;
+    min-width: 120px;
+    vertical-align: top;
+}
+
+.ganar-table th.escalera-inline-col,
+.ganar-table td.escalera-inline-col {
+    min-width: 150px;
+    overflow: visible;
+    text-align: center;
 }
 
 .ganar-table .action-buttons.action-buttons-compact {
     flex-wrap: nowrap !important;
-    justify-content: flex-start;
+    justify-content: center;
 }
 
 .ganar-table .action-buttons.action-buttons-compact .action-icon-btn {
@@ -369,15 +495,15 @@ $returnUrlGanar = $buildPendientesUrl();
 }
 
 .action-icon-btn {
-    width: 30px;
-    height: 30px;
+    width: 27px;
+    height: 27px;
     border-radius: 8px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     text-decoration: none;
     border: 1px solid transparent;
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .action-icon-info {
@@ -392,18 +518,157 @@ $returnUrlGanar = $buildPendientesUrl();
     border-color: #ffd98a;
 }
 
-.action-icon-escalera {
-    background: #ebe9ff;
-    color: #4a3cc9;
-    border-color: #cfc8ff;
+.escalera-inline-card {
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.escalera-inline-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: auto;
+}
+
+.escalera-step-btn {
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #2d4c79;
+    width: 24px;
+    height: 24px;
+    min-height: 24px;
+    padding: 0;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.12s ease;
+}
+
+.escalera-step-btn.active {
+    background: rgba(15, 23, 42, 0.06);
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.escalera-step-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    flex: 0 0 auto;
+    border: 2px solid transparent;
+    background: #fff;
+}
+
+.escalera-step-btn:hover {
+    transform: translateY(-1px);
+}
+
+.escalera-step-name {
+    display: none;
+}
+
+.step-initial {
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0.2px;
+}
+
+.escalera-step-btn.etapa-ganar .escalera-step-icon {
+    border-color: #f2c300;
+    color: #d3a700;
+}
+
+.escalera-step-btn.etapa-consolidar .escalera-step-icon {
+    border-color: #36c24f;
+    color: #22a83e;
+}
+
+.escalera-step-btn.etapa-discipular .escalera-step-icon {
+    border-color: #2b8eea;
+    color: #1f77ca;
+}
+
+.escalera-step-btn.etapa-enviar .escalera-step-icon {
+    border-color: #d90d46;
+    color: #bf0a3d;
+}
+
+.escalera-step-btn.active .escalera-step-icon {
+    background: #f9fbff;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+}
+
+.escalera-inline-panel {
+    margin-top: 8px;
+    border: 1px solid #dbe3f4;
+    border-radius: 8px;
+    background: #f8fbff;
+    padding: 8px;
+    display: grid;
+    gap: 6px;
+}
+
+.escalera-inline-panel[hidden] {
+    display: none !important;
+}
+
+.escalera-inline-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 5px;
+    padding: 5px 6px;
+    border: 1px solid #dbe3f4;
+    border-radius: 8px;
+    background: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+    color: #2f4a74;
+    cursor: pointer;
+    min-width: 0;
+}
+
+.escalera-inline-item input {
+    width: 13px;
+    height: 13px;
+}
+
+.escalera-inline-item span {
+    display: block;
+    min-width: 0;
+    white-space: normal;
+    line-height: 1.15;
+}
+
+.escalera-inline-card.is-saving {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.escalera-inline-card.is-bloqueado .escalera-inline-item {
+    opacity: 0.7;
 }
 
 .action-icon-huella {
-    background: #e8fff4;
-    color: #14804a;
-    border-color: #bfe9d1;
+    background: #f3f4f6;
+    color: #1f2937;
+    border-color: #d1d5db;
     cursor: pointer;
+}
+
+.action-icon-huella i {
+    font-size: 15px;
 }
 
 .trazabilidad-grid {
@@ -802,10 +1067,16 @@ $returnUrlGanar = $buildPendientesUrl();
 (function() {
     const etapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
     const subprocesos = {
-        Ganar: ['Asignado a lider', 'Primer contacto', 'Ubicado en celula', 'No se dispone'],
+        Ganar: ['Primer contacto', 'Asignacion a lideres y ministerio', 'Fonovisita', 'Visita', 'Asignacion a una celula', 'No se dispone'],
         Consolidar: ['Universidad de la vida', 'Encuentro', 'Bautismo'],
-        Discipular: ['Proyeccion', 'Equipo G12', 'Capacitacion destino nivel 1'],
-        Enviar: ['Capacitacion destino nivel 2', 'Capacitacion destino nivel 3', 'Celula']
+        Discipular: ['Capacitacion destino nivel 1 (modulos 1 y 2)', 'Capacitacion destino nivel 2 (modulos 3 y 4)', 'Capacitacion destino nivel 3 (modulos 5 y 6)'],
+        Enviar: ['Celula']
+    };
+    const indicesChecklist = {
+        Ganar: [0, 1, 2, 3, 4, 5],
+        Consolidar: [0, 1, 2],
+        Discipular: [0, 1, 2],
+        Enviar: [2]
     };
 
     const backdrop = document.getElementById('escaleraModalBackdrop');
@@ -844,7 +1115,7 @@ $returnUrlGanar = $buildPendientesUrl();
             }
         });
         if (indiceActual < 0) {
-            resultado.Ganar = [false, false, false, false];
+            resultado.Ganar = [false, false, false, false, false, false];
         }
         return resultado;
     }
@@ -860,8 +1131,9 @@ $returnUrlGanar = $buildPendientesUrl();
                 return;
             }
             for (let i = 0; i < (subprocesos[etapa] || []).length; i++) {
-                if (typeof persistido[etapa][i] !== 'undefined') {
-                    combinado[etapa][i] = !!persistido[etapa][i];
+                const indiceReal = (indicesChecklist[etapa] && typeof indicesChecklist[etapa][i] !== 'undefined') ? indicesChecklist[etapa][i] : i;
+                if (typeof persistido[etapa][indiceReal] !== 'undefined') {
+                    combinado[etapa][indiceReal] = !!persistido[etapa][indiceReal];
                 }
             }
         });
@@ -899,7 +1171,7 @@ $returnUrlGanar = $buildPendientesUrl();
         modalState.meta = extraerMetaChecklist(checklistPersistido);
         modalState.asignadoALider = !!asignadoALider;
         if (modalState.checklist.Ganar && modalState.checklist.Ganar.length > 0) {
-            modalState.checklist.Ganar[0] = modalState.asignadoALider;
+            modalState.checklist.Ganar[1] = modalState.asignadoALider;
         }
         modalState.botonOrigen = botonOrigen || null;
         modalState.guardando = false;
@@ -912,7 +1184,7 @@ $returnUrlGanar = $buildPendientesUrl();
     function renderModal(mensaje, esError) {
         const procesoActual = etapas.includes(modalState.proceso) ? modalState.proceso : 'Ganar';
         const indiceProceso = etapas.indexOf(procesoActual);
-        const noDisponibleMarcado = !!(modalState.checklist.Ganar && modalState.checklist.Ganar[3]);
+        const noDisponibleMarcado = !!(modalState.checklist.Ganar && modalState.checklist.Ganar[5]);
 
         title.textContent = 'Escalera del Exito - ' + modalState.personaNombre;
         let html = '<div class="escalera-level-pill">Nivel actual: <strong>' + escapeHtml(procesoActual) + '</strong></div>';
@@ -935,18 +1207,22 @@ $returnUrlGanar = $buildPendientesUrl();
                     return;
                 }
 
-                const done = !!(modalState.checklist[etapa] && modalState.checklist[etapa][i]);
+                const indiceReal = (indicesChecklist[etapa] && typeof indicesChecklist[etapa][i] !== 'undefined') ? indicesChecklist[etapa][i] : i;
+                const done = !!(modalState.checklist[etapa] && modalState.checklist[etapa][indiceReal]);
                 let editable = etapaIndex === indiceProceso;
-                if (etapa === 'Ganar' && i === 0) {
+                if (etapa === 'Ganar' && indiceReal === 1) {
                     editable = false;
                 }
-                if (noDisponibleMarcado && !(etapa === 'Ganar' && i === 3)) {
+                if (etapa === 'Ganar' && indiceReal === 4) {
+                    editable = false;
+                }
+                if (noDisponibleMarcado && !(etapa === 'Ganar' && indiceReal === 5)) {
                     editable = false;
                 }
                 html += '<td class="escalera-check-item ' + (done ? 'done' : '') + '">';
                 html += '<span class="escalera-modal-sub-label">' + escapeHtml(nombreSub) + '</span>';
                 html += '<label class="escalera-check-label ' + (editable ? '' : 'disabled') + '">';
-                html += '<input type="checkbox" class="js-escalera-check" data-etapa="' + escapeHtml(etapa) + '" data-indice="' + i + '" ' + (done ? 'checked' : '') + ' ' + (editable && !modalState.guardando ? '' : 'disabled') + '>';
+                html += '<input type="checkbox" class="js-escalera-check" data-etapa="' + escapeHtml(etapa) + '" data-indice="' + indiceReal + '" ' + (done ? 'checked' : '') + ' ' + (editable && !modalState.guardando ? '' : 'disabled') + '>';
                 html += '<span>' + (done ? '<span class="escalera-check-icon">&#10003;</span>Completado' : 'Pendiente') + '</span>';
                 html += '</label>';
                 html += '</td>';
@@ -992,7 +1268,7 @@ $returnUrlGanar = $buildPendientesUrl();
         }
 
         modalState.meta.no_disponible_observacion = observacion;
-        guardarChecklist('Ganar', 3, true, observacion, {
+        guardarChecklist('Ganar', 5, true, observacion, {
             cerrarModalExito: true,
             recargarDespues: true,
             mensajeExito: 'Se guardo la informacion con exito'
@@ -1037,7 +1313,7 @@ $returnUrlGanar = $buildPendientesUrl();
                     etapa: etapa,
                     indice: indice,
                     marcado: marcado ? 1 : 0,
-                    observacion_no_disponible: (etapa === 'Ganar' && indice === 3) ? (observacionNoDisponible || '') : ''
+                    observacion_no_disponible: (etapa === 'Ganar' && indice === 5) ? (observacionNoDisponible || '') : ''
                 })
             });
 
@@ -1061,7 +1337,7 @@ $returnUrlGanar = $buildPendientesUrl();
             }
 
             if (modalState.checklist.Ganar && modalState.checklist.Ganar.length > 0) {
-                modalState.checklist.Ganar[0] = modalState.asignadoALider;
+                modalState.checklist.Ganar[1] = modalState.asignadoALider;
             }
 
             if (modalState.botonOrigen) {
@@ -1128,13 +1404,13 @@ $returnUrlGanar = $buildPendientesUrl();
                 return;
             }
 
-            if (etapa === 'Ganar' && indice === 3 && target.checked) {
-                modalState.checklist.Ganar[3] = true;
+            if (etapa === 'Ganar' && indice === 5 && target.checked) {
+                modalState.checklist.Ganar[5] = true;
                 renderModal('Escribe la observacion y guardala para marcar No se dispone');
                 return;
             }
 
-            if (etapa === 'Ganar' && indice === 3 && !target.checked) {
+            if (etapa === 'Ganar' && indice === 5 && !target.checked) {
                 modalState.meta.no_disponible_observacion = '';
                 guardarChecklist(etapa, indice, false, '');
                 return;
@@ -1276,6 +1552,8 @@ $returnUrlGanar = $buildPendientesUrl();
 (function() {
     const ministerioSelect = document.getElementById('filtro_ministerio');
     const liderSelect = document.getElementById('filtro_lider');
+    const semanaRefInput = document.getElementById('filtro_semana_ref');
+    const filtrosForm = document.getElementById('filtrosPendientesForm');
     if (!ministerioSelect || !liderSelect) {
         return;
     }
@@ -1285,22 +1563,23 @@ $returnUrlGanar = $buildPendientesUrl();
         {
             id: '<?= htmlspecialchars((string)($lider['Id_Persona'] ?? ''), ENT_QUOTES) ?>',
             nombre: '<?= htmlspecialchars(trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? '')), ENT_QUOTES) ?>',
-            ministerio: '<?= htmlspecialchars((string)($lider['Id_Ministerio'] ?? ''), ENT_QUOTES) ?>'
+            ministerio: '<?= htmlspecialchars(trim((string)($lider['Id_Ministerio'] ?? '')), ENT_QUOTES) ?>'
         }<?= $index < count(($lideres ?? [])) - 1 ? ',' : '' ?>
         <?php endforeach; ?>
     ];
 
     function refrescarFiltroLider() {
-        const ministerioSeleccionado = String(ministerioSelect.value || '');
-        const liderSeleccionado = String(liderSelect.value || '');
+        const ministerioSeleccionado = String(ministerioSelect.value || '').trim();
+        const liderSeleccionado = String(liderSelect.value || '').trim();
         const lideresFiltrados = lideresDisponibles.filter(function(lider) {
+            const ministerioLider = String(lider.ministerio || '').trim();
             if (ministerioSeleccionado === '') {
                 return true;
             }
             if (ministerioSeleccionado === '0') {
-                return !lider.ministerio || lider.ministerio === '0';
+                return !ministerioLider || ministerioLider === '0';
             }
-            return String(lider.ministerio || '') === ministerioSeleccionado;
+            return ministerioLider === ministerioSeleccionado;
         });
 
         liderSelect.innerHTML = '';
@@ -1313,7 +1592,7 @@ $returnUrlGanar = $buildPendientesUrl();
             const option = document.createElement('option');
             option.value = lider.id;
             option.textContent = lider.nombre;
-            option.setAttribute('data-ministerio', lider.ministerio || '');
+            option.setAttribute('data-ministerio', String(lider.ministerio || '').trim());
             liderSelect.appendChild(option);
         });
 
@@ -1324,7 +1603,240 @@ $returnUrlGanar = $buildPendientesUrl();
     }
 
     ministerioSelect.addEventListener('change', refrescarFiltroLider);
+
+    if (semanaRefInput && filtrosForm) {
+        semanaRefInput.addEventListener('change', function() {
+            filtrosForm.submit();
+        });
+    }
+
     refrescarFiltroLider();
+})();
+</script>
+
+<script>
+(function() {
+    const endpointChecklist = '<?= PUBLIC_URL ?>?url=personas/actualizarChecklistEscalera';
+    const etapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
+
+    function parseChecklist(raw) {
+        if (!raw) {
+            return {
+                Ganar: [false, false, false, false, false, false],
+                Consolidar: [false, false, false],
+                Discipular: [false, false, false],
+                Enviar: [false, false, false],
+                _meta: {}
+            };
+        }
+        try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                if (!Array.isArray(parsed.Ganar)) {
+                    parsed.Ganar = [false, false, false, false, false, false];
+                }
+                if (!Array.isArray(parsed.Consolidar)) {
+                    parsed.Consolidar = [false, false, false];
+                }
+                if (!Array.isArray(parsed.Discipular)) {
+                    parsed.Discipular = [false, false, false];
+                }
+                if (!Array.isArray(parsed.Enviar)) {
+                    parsed.Enviar = [false, false, false];
+                }
+                for (let i = 0; i <= 5; i++) {
+                    parsed.Ganar[i] = !!parsed.Ganar[i];
+                }
+                for (let i = 0; i <= 2; i++) {
+                    parsed.Consolidar[i] = !!parsed.Consolidar[i];
+                    parsed.Discipular[i] = !!parsed.Discipular[i];
+                    parsed.Enviar[i] = !!parsed.Enviar[i];
+                }
+                if (!parsed._meta || typeof parsed._meta !== 'object') {
+                    parsed._meta = {};
+                }
+                return parsed;
+            }
+        } catch (e) {
+        }
+        return {
+            Ganar: [false, false, false, false, false, false],
+            Consolidar: [false, false, false],
+            Discipular: [false, false, false],
+            Enviar: [false, false, false],
+            _meta: {}
+        };
+    }
+
+    function aplicarBloqueoNoDisponible(container, checklist, puedeEditar) {
+        const noDisponible = !!(checklist.Ganar && checklist.Ganar[5]);
+        const checks = container.querySelectorAll('.js-inline-escalera-check');
+        checks.forEach(function(check) {
+            const etapa = check.getAttribute('data-etapa') || 'Ganar';
+            const indice = parseInt(check.getAttribute('data-indice') || '-1', 10);
+            const esAuto = etapa === 'Ganar' && (indice === 1 || indice === 4);
+            let disabled = esAuto || !puedeEditar;
+
+            if (!disabled && noDisponible && !(etapa === 'Ganar' && indice === 5)) {
+                disabled = true;
+            }
+
+            check.disabled = disabled;
+        });
+
+        container.classList.toggle('is-bloqueado', noDisponible);
+    }
+
+    function aplicarChecksEnVista(container, checklist) {
+        container.querySelectorAll('.js-inline-escalera-check').forEach(function(check) {
+            const etapa = check.getAttribute('data-etapa') || '';
+            const indice = parseInt(check.getAttribute('data-indice') || '-1', 10);
+            if (!etapa || indice < 0 || !Array.isArray(checklist[etapa])) {
+                return;
+            }
+            check.checked = !!checklist[etapa][indice];
+        });
+    }
+
+    async function guardarChecklistInline(container, etapa, indice, marcado) {
+        const idPersona = parseInt(container.getAttribute('data-persona-id') || '0', 10);
+        if (!idPersona) {
+            return false;
+        }
+
+        const checklist = parseChecklist(container.getAttribute('data-checklist') || '');
+        let observacionNoDisponible = '';
+        if (etapa === 'Ganar' && indice === 5 && marcado) {
+            const observacionActual = (checklist._meta && checklist._meta.no_disponible_observacion)
+                ? String(checklist._meta.no_disponible_observacion)
+                : '';
+            const ingresada = window.prompt('Escribe una observación para marcar "No se dispone":', observacionActual);
+            if (ingresada === null) {
+                return false;
+            }
+            const limpia = String(ingresada || '').trim();
+            if (limpia === '') {
+                alert('La observación es obligatoria para "No se dispone".');
+                return false;
+            }
+            observacionNoDisponible = limpia;
+        }
+
+        if (etapa === 'Ganar' && indice === 5 && !marcado && checklist._meta) {
+            checklist._meta.no_disponible_observacion = '';
+        }
+
+        container.classList.add('is-saving');
+
+        try {
+            const response = await fetch(endpointChecklist, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    id_persona: idPersona,
+                    etapa: etapa,
+                    indice: indice,
+                    marcado: marcado ? 1 : 0,
+                    observacion_no_disponible: (etapa === 'Ganar' && indice === 5) ? observacionNoDisponible : ''
+                })
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data || !data.success) {
+                throw new Error((data && data.message) ? data.message : 'No se pudo guardar.');
+            }
+
+            const checklistServidor = parseChecklist(JSON.stringify(data.checklist || {}));
+            checklistServidor.Ganar[1] = container.getAttribute('data-asignado') === '1';
+            checklistServidor.Ganar[4] = container.getAttribute('data-celula') === '1';
+            checklistServidor.Enviar[2] = container.getAttribute('data-celula') === '1';
+
+            container.setAttribute('data-checklist', JSON.stringify(checklistServidor));
+            if (checklistServidor._meta && checklistServidor._meta.no_disponible_observacion) {
+                container.setAttribute('data-observacion-no-disponible', String(checklistServidor._meta.no_disponible_observacion));
+            } else {
+                container.setAttribute('data-observacion-no-disponible', '');
+            }
+
+            aplicarChecksEnVista(container, checklistServidor);
+
+            return true;
+        } catch (error) {
+            alert(error.message || 'Error al guardar checklist.');
+            return false;
+        } finally {
+            container.classList.remove('is-saving');
+        }
+    }
+
+    document.querySelectorAll('.js-inline-escalera').forEach(function(container) {
+        const checklist = parseChecklist(container.getAttribute('data-checklist') || '');
+        const puedeEditar = container.getAttribute('data-puede-editar') === '1';
+        checklist.Ganar[1] = container.getAttribute('data-asignado') === '1';
+        checklist.Ganar[4] = container.getAttribute('data-celula') === '1';
+        checklist.Enviar[2] = container.getAttribute('data-celula') === '1';
+        container.setAttribute('data-checklist', JSON.stringify(checklist));
+
+        aplicarChecksEnVista(container, checklist);
+        aplicarBloqueoNoDisponible(container, checklist, puedeEditar);
+
+        let etapaAbierta = null;
+
+        function mostrarPanel(etapaObjetivo) {
+            container.querySelectorAll('.js-inline-stage-panel').forEach(function(panel) {
+                if (etapaObjetivo && panel.getAttribute('data-etapa') === etapaObjetivo) {
+                    panel.removeAttribute('hidden');
+                } else {
+                    panel.setAttribute('hidden', 'hidden');
+                }
+            });
+
+            container.querySelectorAll('.js-inline-step-btn').forEach(function(btn) {
+                btn.classList.toggle('active', !!etapaObjetivo && btn.getAttribute('data-etapa') === etapaObjetivo);
+            });
+
+            etapaAbierta = etapaObjetivo || null;
+        }
+
+        // Inicia completamente oculto; solo se despliega al pulsar un peldaño.
+        mostrarPanel(null);
+
+        container.querySelectorAll('.js-inline-step-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const etapa = btn.getAttribute('data-etapa') || 'Ganar';
+                if (etapaAbierta === etapa) {
+                    mostrarPanel(null);
+                    return;
+                }
+                mostrarPanel(etapa);
+            });
+        });
+
+        container.querySelectorAll('.js-inline-escalera-check').forEach(function(check) {
+            check.addEventListener('change', async function() {
+                const etapa = String(check.getAttribute('data-etapa') || 'Ganar');
+                const indice = parseInt(check.getAttribute('data-indice') || '-1', 10);
+                if (indice < 0 || !etapas.includes(etapa)) {
+                    return;
+                }
+
+                const nuevoValor = !!check.checked;
+                const guardado = await guardarChecklistInline(container, etapa, indice, nuevoValor);
+                if (!guardado) {
+                    check.checked = !nuevoValor;
+                    return;
+                }
+
+                const checklistActualizado = parseChecklist(container.getAttribute('data-checklist') || '');
+                check.checked = !!(checklistActualizado[etapa] && checklistActualizado[etapa][indice]);
+                aplicarBloqueoNoDisponible(container, checklistActualizado, puedeEditar);
+            });
+        });
+    });
+
 })();
 </script>
 

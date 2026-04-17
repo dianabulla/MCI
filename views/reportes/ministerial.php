@@ -20,6 +20,12 @@ $renderTablaGanancia = static function(array $tabla) {
         echo '<div class="card report-card mb-4"><div class="report-card__head"><h3>GANANCIA DE ALMAS POR MINISTERIO</h3></div><div class="report-empty-state">Sin datos para este filtro.</div></div>';
         return;
     }
+    $tooltipsSiglas = [
+        'G.C' => 'Ganados en célula',
+        'G.I' => 'Ganados en iglesia',
+        'F.V' => 'Fonovisitas',
+        'V' => 'Visitas',
+    ];
     ?>
     <div class="card report-card mb-4">
         <div class="report-card__head">
@@ -39,8 +45,8 @@ $renderTablaGanancia = static function(array $tabla) {
                     </tr>
                     <tr>
                         <?php foreach ($meses as $m => $label): ?>
-                            <th class="col-sub">G.C</th>
-                            <th class="col-sub">G.I</th>
+                            <th class="col-sub" title="<?= htmlspecialchars($tooltipsSiglas['G.C'], ENT_QUOTES, 'UTF-8') ?>">G.C</th>
+                            <th class="col-sub" title="<?= htmlspecialchars($tooltipsSiglas['G.I'], ENT_QUOTES, 'UTF-8') ?>">G.I</th>
                         <?php endforeach; ?>
                     </tr>
                 </thead>
@@ -91,6 +97,13 @@ $renderTabla = static function(string $tablaKey, array $tabla, array $headers) {
     $totales = $tabla['totales'] ?? [];
     $titulo  = $tabla['titulo']  ?? $tablaKey;
     $cols    = array_keys($headers);
+    $tooltipsSiglas = [
+        'GI' => 'Ganados en iglesia',
+        'GC' => 'Ganados en célula',
+        'FV' => 'Fonovisitas',
+        'V' => 'Visitas',
+        'U.V' => 'Universidad de la Vida',
+    ];
     ?>
     <div class="card report-card mb-4">
         <div class="report-card__head">
@@ -102,8 +115,11 @@ $renderTabla = static function(string $tablaKey, array $tabla, array $headers) {
                 <thead>
                     <tr>
                         <th class="col-mes">MES</th>
-                        <?php foreach ($headers as $col => $label): ?>
-                            <th class="col-num"><?= htmlspecialchars($label) ?></th>
+                        <?php foreach ($headers as $col => $label):
+                            $labelTexto = (string)$label;
+                            $tooltip = $tooltipsSiglas[$labelTexto] ?? '';
+                        ?>
+                            <th class="col-num"<?= $tooltip !== '' ? ' title="' . htmlspecialchars($tooltip, ENT_QUOTES, 'UTF-8') . '"' : '' ?>><?= htmlspecialchars($labelTexto) ?></th>
                         <?php endforeach; ?>
                         <th class="col-num col-total">TOTAL</th>
                     </tr>
@@ -319,10 +335,11 @@ $renderTablaConsolidarMinisterio = static function(array $tabla) {
 <!-- TABLAS EN GRID 2x2 -->
 <div class="rpt-grid">
 
-    <!-- GANAR: GI | GC | V -->
+    <!-- GANAR: GI | GC | FV | V -->
     <?php $renderTabla('ganar', $tablasReportes['ganar'] ?? [], [
         'gi' => 'GI',
         'gc' => 'GC',
+        'fv' => 'FV',
         'v'  => 'V',
     ]); ?>
 
@@ -387,7 +404,7 @@ $renderTablaConsolidarMinisterio = static function(array $tabla) {
     const tablaConsolidarMinisterioData = <?= json_encode($tablaConsolidarMinisterio, JSON_UNESCAPED_UNICODE) ?>;
 
     const etiquetasCol = {
-        ganar:      { gi: 'Ganados en Iglesia', gc: 'Ganados en C\u00e9lula', v: 'Otros', total: 'Total' },
+        ganar:      { gi: 'Ganados en Iglesia', gc: 'Ganados en C\u00e9lula', fv: 'Fonovisitas', v: 'Visitas', total: 'Total' },
         consolidar: { uv: 'Universidad de la Vida', e: 'Encuentro', b: 'Bautismo', total: 'Total' },
         discipular: { cdm12: 'CD Nivel 1-2', cdm34: 'CD Nivel 3-4', cdm56: 'CD Nivel 5-6', total: 'Total' },
         enviar:     { celulas: '# C\u00e9lulas', total: 'Total' },
@@ -553,6 +570,7 @@ $renderTablaConsolidarMinisterio = static function(array $tabla) {
                 series: [
                     { name: 'G.I', data: getMonthlySeries(tabla, 'gi') },
                     { name: 'G.C', data: getMonthlySeries(tabla, 'gc') },
+                    { name: 'F.V', data: getMonthlySeries(tabla, 'fv') },
                     { name: 'V', data: getMonthlySeries(tabla, 'v') }
                 ]
             };
@@ -607,7 +625,7 @@ $renderTablaConsolidarMinisterio = static function(array $tabla) {
             dataLabels: { enabled: true },
             legend: { position: 'top' },
             plotOptions: { bar: { borderRadius: 3, columnWidth: '55%' } },
-            colors: ['#1e4a89', '#2c6db8', '#6f9ed8']
+            colors: ['#1e4a89', '#2c6db8', '#4e8bcb', '#6f9ed8']
         };
         chartInstances[key] = new ApexCharts(mount, options);
         chartInstances[key].render();
@@ -637,7 +655,7 @@ $renderTablaConsolidarMinisterio = static function(array $tabla) {
 <style>
 .rpt-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
     gap: 18px;
 }
 @media (max-width: 1100px) { .rpt-grid { grid-template-columns: 1fr; } }
@@ -668,15 +686,27 @@ $renderTablaConsolidarMinisterio = static function(array $tabla) {
 
 .rpt-chart { width:100%; min-height:280px; }
 
-.rpt-min-table { border-collapse:collapse; width:100%; min-width:280px; }
+.rpt-min-table { border-collapse:collapse; width:max-content; min-width:100%; table-layout:auto; }
 .rpt-min-table th {
     background:#f5c800; color:#111; font-weight:800; font-size:12px;
-    text-align:center; padding:7px 10px; border:1px solid #e0c000; white-space:nowrap;
+    text-align:center; padding:8px 10px; border:1px solid #e0c000; white-space:nowrap;
+    line-height:1.35; vertical-align:middle;
 }
-.rpt-min-table td { text-align:center; padding:6px 10px; font-size:14px; border:1px solid #e9ecef; }
-.col-mes { text-align:left !important; min-width:55px; }
-.col-mes-label { text-align:left; font-weight:700; font-size:12px; color:#333; background:#fafafa; }
-.col-num { min-width:58px; }
+.rpt-min-table td { text-align:center; padding:7px 10px; font-size:13px; border:1px solid #e9ecef; line-height:1.35; vertical-align:middle; }
+.col-mes { text-align:left !important; min-width:84px; }
+.col-mes-label {
+    text-align:left;
+    font-weight:700;
+    font-size:12px;
+    color:#333;
+    background:#fafafa;
+    white-space:nowrap;
+    word-break:normal;
+    overflow-wrap:normal;
+    writing-mode:horizontal-tb;
+    text-orientation:mixed;
+}
+.col-num { min-width:64px; }
 .col-total { background:#111 !important; color:#f5c800 !important; border-color:#333 !important; }
 
 .rpt-total-row { background:#111; }
@@ -685,7 +715,7 @@ $renderTablaConsolidarMinisterio = static function(array $tabla) {
 
 .rpt-ganancia-wrap { overflow-x:auto; margin-bottom:24px; }
 .rpt-ganancia-table {
-    border-collapse:collapse; width:max-content; min-width:100%; font-size:12px;
+    border-collapse:collapse; width:max-content; min-width:980px; font-size:12px;
     table-layout:auto !important;
 }
 .rpt-ganancia-table th,
@@ -696,19 +726,31 @@ $renderTablaConsolidarMinisterio = static function(array $tabla) {
 }
 .rpt-ganancia-table th {
     background:#1e4a89; color:#fff; font-weight:700; text-align:center;
-    padding:4px 5px; border:1px solid #16397a;
+    padding:6px 8px; border:1px solid #16397a;
+    line-height:1.3; vertical-align:middle;
 }
-.rpt-ganancia-table td { text-align:center; padding:4px 5px; border:1px solid #dde4f0; font-size:12px; }
+.rpt-ganancia-table td { text-align:center; padding:6px 8px; border:1px solid #dde4f0; font-size:12px; line-height:1.3; vertical-align:middle; }
 .col-ministerio { width:130px; min-width:130px; max-width:130px; text-align:left !important; }
 .col-ministerio-label {
     text-align:left !important; font-weight:600; font-size:12px; padding-left:8px !important;
     white-space:normal !important; word-break:keep-all !important; overflow-wrap:break-word !important;
 }
-.col-mes-group { width:36px; }
+.col-mes-group { min-width:72px; }
 .col-anual-head { background:#0c2a54 !important; color:#e0eaff !important; border-color:#091e3d !important; }
-.col-sub { width:18px; font-size:11px; padding:4px 3px !important; }
+.col-sub { min-width:44px; font-size:11px; padding:6px 6px !important; }
 .col-num-sm { width:26px; }
 .rpt-ganancia-table .rpt-total-row td { color:#fff; font-weight:800; background:#1a3a6b; border-color:#16397a; }
+
+.reporte-metas-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+@media (max-width: 900px) {
+    .rpt-min-table { min-width:640px; }
+    .rpt-ganancia-table { min-width:1080px; }
+    .rpt-min-table th,
+    .rpt-min-table td,
+    .rpt-ganancia-table th,
+    .rpt-ganancia-table td { font-size:11px; }
+}
 
 .rpt-consolidar-min-table { border-collapse:collapse; width:100%; min-width:540px; }
 .rpt-consolidar-min-table th {

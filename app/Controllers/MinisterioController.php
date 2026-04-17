@@ -249,10 +249,17 @@ class MinisterioController extends BaseController {
                     'hombres' => 0
                 ],
                 'escalera' => [
-                    'Ganar' => ['Primer contacto' => 0, 'Ubicado en celula' => 0, 'No se dispone' => 0],
+                    'Ganar' => [
+                        'Primer contacto' => 0,
+                        'Asignacion a lideres y ministerio' => 0,
+                        'Fonovisita' => 0,
+                        'Visita' => 0,
+                        'Asignacion a una celula' => 0,
+                        'No se dispone' => 0
+                    ],
                     'Consolidar' => ['Universidad de la vida' => 0, 'Encuentro' => 0, 'Bautismo' => 0],
-                    'Discipular' => ['Proyeccion' => 0, 'Equipo G12' => 0, 'Capacitacion destino nivel 1' => 0],
-                    'Enviar' => ['Capacitacion destino nivel 2' => 0, 'Capacitacion destino nivel 3' => 0, 'Celula' => 0]
+                    'Discipular' => ['Capacitacion destino nivel 1' => 0, 'Capacitacion destino nivel 2' => 0, 'Capacitacion destino nivel 3' => 0],
+                    'Enviar' => ['Celula' => 0]
                 ]
             ];
         }
@@ -293,10 +300,17 @@ class MinisterioController extends BaseController {
 
             $checklist = $this->construirChecklistEfectivo($persona);
             $mapa = [
-                'Ganar' => ['Primer contacto', 'Ubicado en celula', 'No se dispone'],
+                'Ganar' => [
+                    0 => 'Primer contacto',
+                    1 => 'Asignacion a lideres y ministerio',
+                    2 => 'Fonovisita',
+                    3 => 'Visita',
+                    4 => 'Asignacion a una celula',
+                    5 => 'No se dispone'
+                ],
                 'Consolidar' => ['Universidad de la vida', 'Encuentro', 'Bautismo'],
-                'Discipular' => ['Proyeccion', 'Equipo G12', 'Capacitacion destino nivel 1'],
-                'Enviar' => ['Capacitacion destino nivel 2', 'Capacitacion destino nivel 3', 'Celula']
+                'Discipular' => ['Capacitacion destino nivel 1', 'Capacitacion destino nivel 2', 'Capacitacion destino nivel 3'],
+                'Enviar' => [2 => 'Celula']
             ];
 
             foreach ($mapa as $etapa => $subprocesos) {
@@ -405,9 +419,9 @@ class MinisterioController extends BaseController {
                     ),
                     'match_escalera_uv' => !empty($checklist['Consolidar'][0]),
                     'match_escalera_encuentro' => !empty($checklist['Consolidar'][1]),
-                    'match_escalera_destino_n1' => !empty($checklist['Discipular'][2]),
-                    'match_escalera_destino_n2' => !empty($checklist['Enviar'][0]),
-                    'match_escalera_destino_n3' => !empty($checklist['Enviar'][1]),
+                    'match_escalera_destino_n1' => !empty($checklist['Discipular'][0]),
+                    'match_escalera_destino_n2' => !empty($checklist['Discipular'][1]),
+                    'match_escalera_destino_n3' => !empty($checklist['Discipular'][2]),
                     'match_convencion_enero' => in_array('enero', $convencionesNorm, true),
                     'match_convencion_mujeres' => in_array('mujeres', $convencionesNorm, true),
                     'match_convencion_jovenes' => in_array('jovenes', $convencionesNorm, true),

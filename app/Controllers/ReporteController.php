@@ -7,6 +7,8 @@ require_once APP . '/Models/Persona.php';
 require_once APP . '/Models/Asistencia.php';
 require_once APP . '/Models/Celula.php';
 require_once APP . '/Models/Ministerio.php';
+require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+require_once APP . '/Models/EscuelaFormacionEstado.php';
 require_once APP . '/Helpers/DataIsolation.php';
 
 class ReporteController extends BaseController {
@@ -14,12 +16,16 @@ class ReporteController extends BaseController {
     private $asistenciaModel;
     private $celulaModel;
     private $ministerioModel;
+    private $escuelaInscripcionModel;
+    private $escuelaEstadoModel;
 
     public function __construct() {
         $this->personaModel = new Persona();
         $this->asistenciaModel = new Asistencia();
         $this->celulaModel = new Celula();
         $this->ministerioModel = new Ministerio();
+        $this->escuelaInscripcionModel = new EscuelaFormacionInscripcion();
+        $this->escuelaEstadoModel = new EscuelaFormacionEstado();
     }
 
     private function calcularRangoSemanaDomingoADomingo($fechaReferencia) {
@@ -168,7 +174,65 @@ class ReporteController extends BaseController {
 
     private function resolverTipoReporte($tipoSolicitado) {
         $tipo = strtolower(trim((string)$tipoSolicitado));
-        return in_array($tipo, ['personas', 'celulas'], true) ? $tipo : 'personas';
+        return in_array($tipo, ['personas', 'celulas', 'escuelas'], true) ? $tipo : 'personas';
+    }
+
+    private function esOrigenValidoEscuela($tipoReunion): bool {
+        $tipo = strtolower(trim((string)$tipoReunion));
+        if ($tipo === '') {
+            return false;
+        }
+
+        if (strpos($tipo, 'migrados') !== false) {
+            return false;
+        }
+
+        return strpos($tipo, 'celula') !== false
+            || strpos($tipo, 'célula') !== false
+            || strpos($tipo, 'domingo') !== false
+            || strpos($tipo, 'somos uno') !== false
+            || strpos($tipo, 'somosuno') !== false
+            || strpos($tipo, 'otro') !== false;
+    }
+
+    private function construirReporteUniversidadVidaEscuelas(array $personas): array {
+        $rows = [];
+        $vistos = [];
+
+        foreach ($personas as $persona) {
+            if (!$this->esPersonaNueva($persona)) {
+                continue;
+            }
+
+            if (!$this->esOrigenValidoEscuela($persona['Tipo_Reunion'] ?? '')) {
+                continue;
+            }
+
+            $idPersona = (int)($persona['Id_Persona'] ?? 0);
+            if ($idPersona <= 0 || isset($vistos[$idPersona])) {
+                continue;
+            }
+            $vistos[$idPersona] = true;
+
+            $nombre = trim(trim((string)($persona['Nombre'] ?? '')) . ' ' . trim((string)($persona['Apellido'] ?? '')));
+            $rows[] = [
+                'id_persona' => $idPersona,
+                'nombre' => $nombre !== '' ? $nombre : 'Sin nombre',
+                'ministerio' => trim((string)($persona['Nombre_Ministerio'] ?? '')) ?: 'Sin ministerio',
+                'lider' => trim((string)($persona['Nombre_Lider'] ?? '')) ?: 'Sin líder',
+                'celula' => trim((string)($persona['Nombre_Celula'] ?? '')) ?: 'Sin célula',
+                'fecha_registro' => substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10),
+            ];
+        }
+
+        usort($rows, static function($a, $b) {
+            return strcmp((string)$a['nombre'], (string)$b['nombre']);
+        });
+
+        return [
+            'total' => count($rows),
+            'rows' => $rows,
+        ];
     }
 
     private function resolverEscalaGanar($escalaSolicitada) {
@@ -232,6 +296,7 @@ class ReporteController extends BaseController {
             'ganados' => 0,
             'asignados' => 0,
             'por_verificar' => 0,
+            'total_iglesia' => 0,
             'total_domingo' => 0
         ];
 
@@ -550,7 +615,7 @@ class ReporteController extends BaseController {
             $idMinisterioFiltro,
             $idLiderFiltro,
             null,
-            'Activo',
+            null,
             $idCelulaFiltro,
             null,
             null
@@ -675,7 +740,7 @@ class ReporteController extends BaseController {
             $idMinisterioFiltro,
             $idLiderFiltro,
             null,
-            'Activo',
+            null,
             $idCelulaFiltro,
             null,
             null
@@ -830,21 +895,17 @@ class ReporteController extends BaseController {
 
     /**
      * Clasifica el origen de la persona: 'iglesia' | 'celula' | 'otros'
-     * - 'iglesia'  → Tipo_Reunion contiene Domingo / Somos Uno / Migrados o no tiene valor
+     * - 'iglesia'  → Cualquier origen distinto de Célula
      * - 'celula'   → Tipo_Reunion = Célula
-     * - 'otros'    → cualquier otro valor (Otros, desconocido, etc.)
+     * - 'otros'    → reservado para compatibilidad (actualmente no se usa)
      */
     private function clasificarOrigenGanar(array $persona): string {
         $tipo = strtolower(trim((string)($persona['Tipo_Reunion'] ?? '')));
         if (strpos($tipo, 'celula') !== false || strpos($tipo, 'célula') !== false) {
             return 'celula';
         }
-        if ($tipo === '' || strpos($tipo, 'domingo') !== false || strpos($tipo, 'somos uno') !== false
-            || strpos($tipo, 'somosuno') !== false || strpos($tipo, 'migrados') !== false
-            || strpos($tipo, 'viernes') !== false) {
-            return 'iglesia';
-        }
-        return 'otros';
+
+        return 'iglesia';
     }
 
     /**
@@ -927,30 +988,30 @@ class ReporteController extends BaseController {
     }
 
     /**
-     * Construye la tabla GANAR con subcategorías: GI (iglesia), GC (célula), V (otros), total.
+     * Construye la tabla GANAR con subcategorías:
+     * - GI: Ganados en iglesia
+     * - GC: Ganados en célula
+     * - FV: Fonovisitas (checklist Ganar índice 2)
+     * - V: Visitas (checklist Ganar índice 3)
+     *
      * Filas = meses, columnas = subcategorías.
      * Estructura devuelta:
-     *   [titulo, anio, meses, columnas, rows[mes => [gi,gc,v,total]], totales, detalles[col][mes][]]
+     *   [titulo, anio, meses, columnas, rows[mes => [gi,gc,fv,v,total]], totales, detalles[col][mes][]]
      */
     private function construirTablaGanarMensual(array $personas, int $anio): array {
         $meses = $this->obtenerMesesAbreviados();
-        $cols  = ['gi' => 'GI', 'gc' => 'GC', 'v' => 'V'];
+        $cols  = ['gi' => 'GI', 'gc' => 'GC', 'fv' => 'FV', 'v' => 'V'];
 
         $rows    = [];
-        $totales = ['gi' => 0, 'gc' => 0, 'v' => 0, 'total' => 0];
+        $totales = ['gi' => 0, 'gc' => 0, 'fv' => 0, 'v' => 0, 'total' => 0];
         $detalles = [];   // detalles[col][mes][]
 
         for ($m = 1; $m <= 12; $m++) {
-            $rows[$m] = ['mes' => $meses[$m], 'gi' => 0, 'gc' => 0, 'v' => 0, 'total' => 0];
+            $rows[$m] = ['mes' => $meses[$m], 'gi' => 0, 'gc' => 0, 'fv' => 0, 'v' => 0, 'total' => 0];
         }
 
         foreach ($personas as $persona) {
             if (!$this->esPersonaNueva($persona)) {
-                continue;
-            }
-
-            $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
-            if ($proceso !== 'Ganar') {
                 continue;
             }
 
@@ -962,15 +1023,46 @@ class ReporteController extends BaseController {
             $mes = (int)date('n', $ts);
 
             $origen = $this->clasificarOrigenGanar($persona);
-            $col    = ($origen === 'iglesia') ? 'gi' : (($origen === 'celula') ? 'gc' : 'v');
+            $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
+            $checklist = $this->obtenerChecklist($persona);
 
-            $rows[$mes][$col]++;
+            if ($origen === 'iglesia') {
+                $rows[$mes]['gi']++;
+                $totales['gi']++;
+            } elseif ($origen === 'celula') {
+                $rows[$mes]['gc']++;
+                $totales['gc']++;
+            }
+
+            if ($this->peldanoMarcado($checklist, 'Ganar', 2, $proceso)) {
+                $rows[$mes]['fv']++;
+                $totales['fv']++;
+            }
+
+            if ($this->peldanoMarcado($checklist, 'Ganar', 3, $proceso)) {
+                $rows[$mes]['v']++;
+                $totales['v']++;
+            }
+
             $rows[$mes]['total']++;
-            $totales[$col]++;
             $totales['total']++;
 
             $detalle = $this->construirDetallePersonaReporteMinisterial($persona);
-            $detalles[$col][$mes][] = $detalle;
+
+            if ($origen === 'iglesia') {
+                $detalles['gi'][$mes][] = $detalle;
+            } elseif ($origen === 'celula') {
+                $detalles['gc'][$mes][] = $detalle;
+            }
+
+            if ($this->peldanoMarcado($checklist, 'Ganar', 2, $proceso)) {
+                $detalles['fv'][$mes][] = $detalle;
+            }
+
+            if ($this->peldanoMarcado($checklist, 'Ganar', 3, $proceso)) {
+                $detalles['v'][$mes][] = $detalle;
+            }
+
             $detalles['total'][$mes][] = $detalle;
         }
 
@@ -983,6 +1075,33 @@ class ReporteController extends BaseController {
             'totales'  => $totales,
             'detalles' => $detalles,
         ];
+    }
+
+    private function construirTarjetasUniversidadVida(array $personas): array {
+        $resumen = [
+            'total' => 0,
+            'celula' => 0,
+            'iglesia' => 0,
+            'otros' => 0,
+        ];
+
+        foreach ($personas as $persona) {
+            if (!$this->esOrigenValidoUniversidadVida($persona)) {
+                continue;
+            }
+
+            $resumen['total']++;
+            $origen = $this->clasificarOrigenGanar($persona);
+            if ($origen === 'celula') {
+                $resumen['celula']++;
+            } elseif ($origen === 'iglesia') {
+                $resumen['iglesia']++;
+            } else {
+                $resumen['otros']++;
+            }
+        }
+
+        return $resumen;
     }
 
     /**
@@ -1278,7 +1397,7 @@ class ReporteController extends BaseController {
             $idMinisterioFiltro,
             $idLiderFiltro,
             null,
-            'Activo',
+            null,
             $idCelulaFiltro,
             null,
             null,
@@ -1295,7 +1414,7 @@ class ReporteController extends BaseController {
             ['uv' => 0, 'e' => 1, 'b' => 2]
         );
 
-        // DISCIPULAR: CD-M1-2 (proy, idx 0), CD-M3-4 (equipo G12, idx 1), CD-M5-6 (cap dest niv1, idx 2)
+        // DISCIPULAR: CD-M1-2 (idx 0), CD-M3-4 (idx 1), CD-M5-6 (idx 2)
         $tablaDiscipular = $this->construirTablaPeldanosMensual(
             $personasAnio, $anio, 'DISCIPULAR', 'Discipular',
             ['cdm12' => 0, 'cdm34' => 1, 'cdm56' => 2]
@@ -1407,9 +1526,11 @@ class ReporteController extends BaseController {
         $resumenOrigenGanados = $this->personaModel->getResumenGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, $filtroMinisterio, $filtroLider);
         $detalleOrigenGanados = [
             'celula' => $this->personaModel->getDetalleGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, 'celula', $filtroMinisterio, $filtroLider),
-            'domingo' => $this->personaModel->getDetalleGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, 'domingo', $filtroMinisterio, $filtroLider),
+            'iglesia' => $this->personaModel->getDetalleGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, 'iglesia', $filtroMinisterio, $filtroLider),
             'asignados' => $this->personaModel->getDetalleGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, 'asignados', $filtroMinisterio, $filtroLider),
         ];
+        // Alias temporal para evitar ruptura en vistas que aun consulten la clave anterior.
+        $detalleOrigenGanados['domingo'] = $detalleOrigenGanados['iglesia'];
 
         $almasPorEdades = $this->personaModel->getAlmasGanadasPorEdadesWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, $filtroMinisterio, $filtroLider);
 
@@ -1452,6 +1573,20 @@ class ReporteController extends BaseController {
             $filtroLider,
             $filtroCelulaGanar
         );
+
+        $personasRangoGanar = $this->personaModel->getWithFiltersAndRole(
+            $filtroRol,
+            ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null,
+            ($filtroLider !== '' && (int)$filtroLider > 0) ? (int)$filtroLider : null,
+            null,
+            null,
+            ($filtroCelulaGanar !== '') ? (string)$filtroCelulaGanar : null,
+            null,
+            null,
+            $fechaInicioGanar,
+            $fechaFinGanar
+        );
+        $tarjetasUniversidadVida = $this->construirTarjetasUniversidadVida($personasRangoGanar);
         $reporteGanadosFinSemanaAnterior = $this->construirReporteGanadosFinSemanaAnterior(
             $fechaInicio,
             $fechaFin,
@@ -1476,7 +1611,7 @@ class ReporteController extends BaseController {
             $idMinisterioFiltroMinisterial,
             $idLiderFiltroMinisterial,
             null,
-            'Activo',
+            null,
             $idCelulaFiltroMinisterial,
             null,
             null,
@@ -1547,6 +1682,35 @@ class ReporteController extends BaseController {
             }
         }
 
+        $filtroProgramaEscuelas = trim((string)($_GET['escuela_programa'] ?? ''));
+        $filtroBusquedaEscuelas = trim((string)($_GET['escuela_buscar'] ?? ''));
+        if (!in_array($filtroProgramaEscuelas, ['', 'universidad_vida', 'encuentro', 'bautismo', 'capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+            $filtroProgramaEscuelas = '';
+        }
+
+        $personasActivasEscuelas = $this->personaModel->getWithFiltersAndRole(
+            $filtroRol,
+            ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null,
+            ($filtroLider !== '' && (int)$filtroLider > 0) ? (int)$filtroLider : null,
+            null,
+            'Activo',
+            ($filtroCelula !== '') ? (string)$filtroCelula : null,
+            null,
+            null,
+            null,
+            null
+        );
+
+        $reporteEscuelasUv = $this->construirReporteUniversidadVidaEscuelas($personasActivasEscuelas);
+        $estadosEscuelasUv = $this->escuelaEstadoModel->getEstadosPorPrograma(array_column($reporteEscuelasUv['rows'], 'id_persona'), 'universidad_vida');
+        foreach ($reporteEscuelasUv['rows'] as &$rowUvEscuela) {
+            $rowUvEscuela['va'] = !empty($estadosEscuelasUv[(int)($rowUvEscuela['id_persona'] ?? 0)]);
+        }
+        unset($rowUvEscuela);
+
+        $resumenEscuelasInscripciones = $this->escuelaInscripcionModel->getResumenProgramas();
+        $inscripcionesEscuelas = $this->escuelaInscripcionModel->getListado($filtroProgramaEscuelas, $filtroBusquedaEscuelas, 200);
+
         $data = [
             'tipo_reporte' => $tipoReporte,
             'fecha_referencia' => $fechaReferencia,
@@ -1579,12 +1743,18 @@ class ReporteController extends BaseController {
             'indicadores_celulas' => $indicadoresCelulas,
             'tabla_aperturas_celulas' => $tablaAperturasCelulas,
             'tabla_ganar_ministerio' => $tablaGanarMinisterio,
+            'tarjetas_universidad_vida' => $tarjetasUniversidadVida,
             'reporte_ganados_fin_semana_anterior' => $reporteGanadosFinSemanaAnterior,
             'anio_ministerial_tablas' => $anioMinisterial,
             'tablas_ministerial' => $tablasMinisterial,
             'detalles_tablas_ministerial' => $detallesMinisterial,
             'tabla_ganancia_ministerial' => $tablaGananciaMinisterial,
             'detalles_ganancia_ministerial' => $tablaGananciaMinisterial['detalles'] ?? [],
+            'reporte_escuelas_uv' => $reporteEscuelasUv,
+            'resumen_escuelas_inscripciones' => $resumenEscuelasInscripciones,
+            'inscripciones_escuelas' => $inscripcionesEscuelas,
+            'filtro_escuela_programa' => $filtroProgramaEscuelas,
+            'filtro_escuela_buscar' => $filtroBusquedaEscuelas,
         ];
 
         $this->view('reportes/index', $data);
@@ -1748,7 +1918,7 @@ class ReporteController extends BaseController {
             $rows[] = ['', '', '', '', '', '', ''];
             $rows[] = ['Ganados por Origen', '', '', '', '', '', ''];
             $rows[] = ['Ganados en Celula', (string)($resumenOrigenGanados['Ganados_Celula'] ?? 0), '', '', '', '', ''];
-            $rows[] = ['Ganados en Domingo', (string)($resumenOrigenGanados['Ganados_Domingo'] ?? 0), '', '', '', '', ''];
+            $rows[] = ['Ganados en Iglesia', (string)($resumenOrigenGanados['Ganados_Iglesia'] ?? ($resumenOrigenGanados['Ganados_Domingo'] ?? 0)), '', '', '', '', ''];
             $rows[] = ['Total', (string)($resumenOrigenGanados['Total'] ?? 0), '', '', '', '', ''];
 
             $rows[] = ['', '', '', '', '', '', ''];
