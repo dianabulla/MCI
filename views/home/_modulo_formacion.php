@@ -4,6 +4,7 @@
 $configModulo = $config_modulo ?? [];
 $tituloModulo = (string)($configModulo['titulo'] ?? 'Modulo');
 $rutaBase = (string)($configModulo['ruta_base'] ?? 'home');
+$rutaAsistencias = (string)($configModulo['ruta_asistencias'] ?? $rutaBase);
 $rutaExportar = (string)($configModulo['ruta_exportar'] ?? 'home');
 
 $reportePendientes = $reporte_pendientes ?? ['total' => 0, 'rows' => []];
@@ -68,9 +69,11 @@ $exportUrl = PUBLIC_URL . '?url=' . $rutaExportar . '&' . http_build_query([
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
     <div>
         <h2 style="margin:0;"><?= htmlspecialchars($tituloModulo) ?></h2>
-        <small style="color:#637087;">Programa actual: <strong><?= htmlspecialchars($programaReporteLabel) ?></strong>.</small>
+        <small style="color:#637087;">Vista Registro. Programa actual: <strong><?= htmlspecialchars($programaReporteLabel) ?></strong>.</small>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($rutaBase) ?>" class="btn btn-primary">Registro</a>
+        <a href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($rutaAsistencias) ?>" class="btn btn-secondary">Asistencias</a>
         <a href="<?= htmlspecialchars($exportUrl) ?>" class="btn btn-secondary">Exportar CSV</a>
         <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico" class="btn btn-secondary" target="_blank" rel="noopener">Formulario publico</a>
         <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/asistencia-publica" class="btn btn-secondary" target="_blank" rel="noopener">Asistencia publica</a>
@@ -156,18 +159,6 @@ $exportUrl = PUBLIC_URL . '?url=' . $rutaExportar . '&' . http_build_query([
     </form>
 </div>
 
-<?php if (!empty($tarjetasResumen)): ?>
-<div class="dashboard-grid" style="grid-template-columns: repeat(4, minmax(0, 320px)); margin:18px 0;">
-    <?php foreach ($tarjetasResumen as $tarjeta): ?>
-    <div class="dashboard-card" style="border-left-color:#1e4a89;">
-        <h3><?= htmlspecialchars((string)($tarjeta['label'] ?? 'Programa')) ?></h3>
-        <div class="value" style="color:#1e4a89;"><?= (int)($tarjeta['total'] ?? 0) ?></div>
-        <small style="color:#637087;">Registros en este programa.</small>
-    </div>
-    <?php endforeach; ?>
-</div>
-<?php endif; ?>
-
 <div class="card report-card" style="padding:14px; margin-bottom:14px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <h3 style="margin:0;">Detalle Pendientes: <?= htmlspecialchars($programaReporteLabel) ?></h3>
@@ -228,7 +219,6 @@ $exportUrl = PUBLIC_URL . '?url=' . $rutaExportar . '&' . http_build_query([
                     <th>Cedula</th>
                     <th>Telefono</th>
                     <th>Lider</th>
-                    <th>Asistencias</th>
                 </tr>
             </thead>
             <tbody>
@@ -240,13 +230,11 @@ $exportUrl = PUBLIC_URL . '?url=' . $rutaExportar . '&' . http_build_query([
                             <td><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
                             <td><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
                             <td class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
-                            <?php $numeroAsistencias = ((string)($ins['Asistio_Clase'] ?? '') === '1') ? 1 : 0; ?>
-                            <td><strong><?= $numeroAsistencias ?></strong></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="6" class="text-center">No hay registros de inscripciones para los filtros seleccionados.</td>
+                        <td colspan="5" class="text-center">No hay registros de inscripciones para los filtros seleccionados.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>

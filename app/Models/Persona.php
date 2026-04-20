@@ -119,6 +119,7 @@ class Persona extends BaseModel {
                         p.Id_Persona,
                         p.Nombre,
                         p.Apellido,
+                        p.Id_Rol,
                         p.Genero,
                         p.Telefono,
                         p.Numero_Documento,

@@ -18,7 +18,7 @@ $rutaDetalleVistas = PUBLIC_URL . '?url=home/material/detalle-vistas&modulo=' . 
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
     <div>
         <h2 style="margin:0;"><?= htmlspecialchars($titulo) ?></h2>
-        <small style="color:#637087;">Gestiona PDFs de este módulo en una vista dedicada.</small>
+        <small style="color:#637087;">Gestiona módulos de material con varios PDFs por creación.</small>
     </div>
     <a href="<?= PUBLIC_URL ?>?url=home/material" class="btn btn-secondary">Volver a Material</a>
 </div>
@@ -43,10 +43,18 @@ $rutaDetalleVistas = PUBLIC_URL . '?url=home/material/detalle-vistas&modulo=' . 
 
 <?php if ($puedeGestionar): ?>
 <div class="form-container" style="margin-bottom: 16px;">
-    <h3 style="margin-top:0;">Subir PDF(s)</h3>
+    <h3 style="margin-top:0;">Crear módulo de material</h3>
     <form method="POST" enctype="multipart/form-data" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>">
         <input type="hidden" name="accion" value="subir">
         <input type="hidden" name="modulo" value="<?= htmlspecialchars($clave) ?>">
+        <div class="form-group" style="margin-bottom: 12px;">
+            <label for="titulo">Título</label>
+            <input type="text" id="titulo" name="titulo" class="form-control" maxlength="255" required placeholder="Ej: Guía Semana 1">
+        </div>
+        <div class="form-group" style="margin-bottom: 12px;">
+            <label for="descripcion">Descripción</label>
+            <textarea id="descripcion" name="descripcion" class="form-control" rows="3" placeholder="Descripción opcional del material"></textarea>
+        </div>
         <div class="form-group" style="margin-bottom: 12px;">
             <label for="material_pdf">Archivo(s) PDF</label>
             <input type="file" id="material_pdf" name="material_pdf[]" class="form-control" accept="application/pdf,.pdf" multiple required>
@@ -58,16 +66,17 @@ $rutaDetalleVistas = PUBLIC_URL . '?url=home/material/detalle-vistas&modulo=' . 
 <?php endif; ?>
 
 <div class="card" style="padding:14px;">
-    <h3 style="margin-top:0;">Temas de material</h3>
+    <h3 style="margin-top:0;">Módulos de material</h3>
 
     <?php if (!empty($temas)): ?>
         <div class="table-container">
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Tema</th>
-                        <th style="width:140px;">Archivos</th>
-                        <th style="width:180px;">Personas que lo vieron</th>
+                        <th>Título</th>
+                        <th>Descripción</th>
+                        <th style="width:120px;">Archivos</th>
+                        <th style="width:150px;">Vistas</th>
                         <th style="width:190px;">Creado</th>
                         <th style="width:340px;">Acciones</th>
                     </tr>
@@ -82,6 +91,7 @@ $rutaDetalleVistas = PUBLIC_URL . '?url=home/material/detalle-vistas&modulo=' . 
                             <td>
                                 <strong><?= htmlspecialchars((string)($tema['titulo'] ?? 'Tema de material')) ?></strong>
                             </td>
+                            <td><?= htmlspecialchars((string)($tema['descripcion'] ?? 'Sin descripción')) ?></td>
                             <td><?= (int)($tema['total_archivos'] ?? 0) ?></td>
                             <td><?= (int)($tema['personas_vieron'] ?? 0) ?></td>
                             <td>
@@ -91,7 +101,7 @@ $rutaDetalleVistas = PUBLIC_URL . '?url=home/material/detalle-vistas&modulo=' . 
                                 ?>
                             </td>
                             <td style="display:flex; gap:8px; flex-wrap:wrap;">
-                                <button type="button" class="btn btn-sm btn-secondary js-toggle-tema" data-target="<?= htmlspecialchars($temaId, ENT_QUOTES, 'UTF-8') ?>">Ver archivos</button>
+                                <button type="button" class="btn btn-sm btn-secondary js-toggle-tema" data-target="<?= htmlspecialchars($temaId, ENT_QUOTES, 'UTF-8') ?>">Ver PDFs</button>
                                 <button type="button" class="btn btn-sm btn-info js-ver-vistas" data-lote="<?= htmlspecialchars((string)($tema['lote_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">Ver quién vio</button>
                             </td>
                         </tr>

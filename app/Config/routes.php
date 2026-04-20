@@ -25,13 +25,17 @@ return [
     'home/material/detalle-vistas' => 'HomeController@materialDetalleVistas',
     'home/lideres-celula' => 'HomeController@lideresCelula',
     'home/consolidar' => 'HomeController@consolidar',
+    'home/consolidar/asistencias' => 'HomeController@consolidarAsistencias',
     'home/consolidar/exportar' => 'HomeController@exportarConsolidar',
     'home/discipular' => 'HomeController@discipular',
+    'home/discipular/asistencias' => 'HomeController@discipularAsistencias',
     'home/discipular/exportar' => 'HomeController@exportarDiscipular',
     'home/escuelas-formacion' => 'HomeController@escuelasFormacion',
     'home/escuelas-formacion/exportar' => 'HomeController@exportarEscuelasFormacion',
     'home/escuelas-formacion/actualizar-estado' => 'HomeController@actualizarEstadoEscuelaFormacion',
     'home/escuelas-formacion/actualizar-asistencia-clase' => 'HomeController@actualizarAsistenciaClaseEscuelaFormacion',
+    'home/escuelas-formacion/actualizar-matriz-asistencia' => 'HomeController@actualizarAsistenciaMatrizEscuelaFormacion',
+    'home/escuelas-formacion/actualizar-fecha-clase' => 'HomeController@actualizarFechaClaseEscuelaFormacion',
     
     // Personas
     'personas' => 'PersonaController@index',

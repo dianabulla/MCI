@@ -335,6 +335,15 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         try {
             $rows = $this->personaModel->query("SELECT Id_Rol, Nombre_Rol FROM rol ORDER BY Id_Rol ASC");
+            $prioridades = [
+                'asistente' => 1,
+                'miembro' => 2,
+                'visitante' => 3,
+                'colaborador' => 4,
+            ];
+            $mejorIdRol = 0;
+            $mejorPrioridad = PHP_INT_MAX;
+
             foreach ((array)$rows as $row) {
                 $nombreRol = strtolower(trim((string)($row['Nombre_Rol'] ?? '')));
                 $nombreRol = strtr($nombreRol, [
@@ -347,16 +356,77 @@ class EscuelaFormacionRegistroController extends BaseController {
                     'ñ' => 'n'
                 ]);
 
-                if (strpos($nombreRol, 'asistente') !== false) {
-                    $this->idRolAsistenteCache = (int)($row['Id_Rol'] ?? 0);
-                    break;
+                $idRol = (int)($row['Id_Rol'] ?? 0);
+                if ($idRol <= 0 || $nombreRol === '') {
+                    continue;
                 }
+
+                foreach ($prioridades as $palabra => $prioridad) {
+                    if (strpos($nombreRol, $palabra) !== false && $prioridad < $mejorPrioridad) {
+                        $mejorPrioridad = $prioridad;
+                        $mejorIdRol = $idRol;
+                    }
+                }
+            }
+
+            if ($mejorIdRol > 0) {
+                $this->idRolAsistenteCache = $mejorIdRol;
             }
         } catch (Exception $e) {
             $this->idRolAsistenteCache = 0;
         }
 
         return $this->idRolAsistenteCache;
+    }
+
+    private function normalizarProgramaInscripcion($programa) {
+        $programa = trim((string)$programa);
+        if ($programa === 'capacitacion_destino') {
+            return 'capacitacion_destino_nivel_1';
+        }
+
+        return $programa;
+    }
+
+    private function resolverModuloFormacionPorPrograma($programa) {
+        $programa = $this->normalizarProgramaInscripcion($programa);
+
+        if (in_array($programa, ['universidad_vida', 'encuentro'], true)) {
+            return 'consolidar';
+        }
+
+        if (in_array($programa, ['bautismo', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+            return 'discipular';
+        }
+
+        return '';
+    }
+
+    private function marcarAsistenciaAutomaticaDesdeRegistroPublico($idInscripcion, $idPersona, $programa, $fechaAsistencia = null) {
+        $idInscripcion = (int)$idInscripcion;
+        $idPersona = (int)$idPersona;
+        $programaNormalizado = $this->normalizarProgramaInscripcion($programa);
+        $fechaAsistencia = trim((string)($fechaAsistencia ?? date('Y-m-d')));
+
+        if ($idInscripcion > 0) {
+            // Mantener actualizado el indicador histórico de asistencia en inscripción.
+            $this->inscripcionModel->actualizarAsistenciaClase($idInscripcion, true);
+        }
+
+        $modulo = $this->resolverModuloFormacionPorPrograma($programaNormalizado);
+        if ($idPersona <= 0 || $modulo === '' || $programaNormalizado === '') {
+            return;
+        }
+
+        require_once APP . '/Models/EscuelaFormacionAsistenciaClase.php';
+        $asistenciaModel = new EscuelaFormacionAsistenciaClase();
+        $numeroClase = $asistenciaModel->getNumeroClasePorFecha($modulo, $programaNormalizado, $fechaAsistencia);
+        if ($numeroClase <= 0) {
+            return;
+        }
+
+        // Marca la clase que tenga configurada la misma fecha del registro de asistencia.
+        $asistenciaModel->upsertAsistencia($idPersona, $modulo, $programaNormalizado, $numeroClase, true);
     }
 
     private function resolverIdLiderPorNombre($nombreLider) {
@@ -564,9 +634,16 @@ class EscuelaFormacionRegistroController extends BaseController {
         $programaLabel = $this->etiquetaProgramaEscuela((string)($inscripcion['Programa'] ?? ''));
 
         if ((string)($inscripcion['Asistio_Clase'] ?? '') === '1') {
+            $this->marcarAsistenciaAutomaticaDesdeRegistroPublico(
+                $idInscripcion,
+                (int)($inscripcion['Id_Persona'] ?? 0),
+                (string)($inscripcion['Programa'] ?? ''),
+                date('Y-m-d')
+            );
+
             $query = http_build_query([
                 'url' => 'escuelas_formacion/asistencia-publica',
-                'mensaje' => 'La asistencia para ' . $programaLabel . ' ya estaba registrada.',
+                'mensaje' => 'La asistencia para ' . $programaLabel . ' ya estaba registrada. Se intentó marcar la clase con fecha de hoy en la matriz.',
                 'tipo' => 'success',
                 'exito' => '1'
             ]);
@@ -587,9 +664,16 @@ class EscuelaFormacionRegistroController extends BaseController {
             exit;
         }
 
+        $this->marcarAsistenciaAutomaticaDesdeRegistroPublico(
+            $idInscripcion,
+            (int)($inscripcion['Id_Persona'] ?? 0),
+            (string)($inscripcion['Programa'] ?? ''),
+            date('Y-m-d')
+        );
+
         $query = http_build_query([
             'url' => 'escuelas_formacion/asistencia-publica',
-            'mensaje' => 'Asistencia registrada correctamente en ' . $programaLabel . '.',
+            'mensaje' => 'Asistencia registrada correctamente en ' . $programaLabel . '. Se marcó la clase con fecha de hoy en la matriz (si existe).',
             'tipo' => 'success',
             'exito' => '1'
         ]);
@@ -781,6 +865,7 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         $persona = $this->personaModel->buscarParaInscripcionEscuela($cedula, $telefono, $nombre);
         $idPersona = (int)($persona['Id_Persona'] ?? 0);
+        $idRolAsistente = $this->obtenerIdRolAsistenteDefault();
 
         if ($idPersona > 0) {
             $nombreCompletoPersona = trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? ''));
@@ -820,6 +905,9 @@ class EscuelaFormacionRegistroController extends BaseController {
             if (trim((string)($persona['Numero_Documento'] ?? '')) === '' && $cedula !== '') {
                 $actualizarPersona['Tipo_Documento'] = 'Cedula de Ciudadania';
                 $actualizarPersona['Numero_Documento'] = $cedula;
+            }
+            if ((int)($persona['Id_Rol'] ?? 0) <= 0 && $idRolAsistente > 0) {
+                $actualizarPersona['Id_Rol'] = $idRolAsistente;
             }
 
             if (!empty($actualizarPersona)) {
@@ -882,9 +970,11 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         if ($idInscripcionExistente > 0) {
+            $this->marcarAsistenciaAutomaticaDesdeRegistroPublico($idInscripcionExistente, $idPersona, $programa);
+
             $query = http_build_query([
                 'url' => 'escuelas_formacion/registro-publico',
-                'mensaje' => 'Esta persona ya estaba inscrita en ese programa. No se creó un registro duplicado.',
+                'mensaje' => 'Esta persona ya estaba inscrita en ese programa. Se marcó la asistencia automáticamente.',
                 'tipo' => 'success',
                 'exito' => '1'
             ]);
@@ -893,7 +983,9 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         try {
-            $this->inscripcionModel->create($data);
+            $idInscripcionCreada = (int)$this->inscripcionModel->create($data);
+            $this->marcarAsistenciaAutomaticaDesdeRegistroPublico($idInscripcionCreada, $idPersona, $programa);
+
             if (in_array($programa, ['universidad_vida', 'encuentro', 'bautismo'], true)) {
                 $this->marcarProgramaConsolidarEnEscalera($idPersona, $programa);
             }
@@ -906,7 +998,7 @@ class EscuelaFormacionRegistroController extends BaseController {
             }
             $query = http_build_query([
                 'url' => 'escuelas_formacion/registro-publico',
-                'mensaje' => 'Inscripción registrada correctamente. La persona quedó en Personas nuevas si no existía.',
+                'mensaje' => 'Inscripción registrada correctamente y asistencia marcada automáticamente.',
                 'tipo' => 'success',
                 'exito' => '1'
             ]);

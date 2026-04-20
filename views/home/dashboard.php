@@ -55,9 +55,9 @@
 
     <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('teen', 'ver')): ?>
     <div class="dashboard-card" style="border-left-color: #e83e8c;">
-        <h3>Teens</h3>
+        <h3>Registro Teens y Kids</h3>
         <div class="value" style="color: #e83e8c;">📚</div>
-        <a href="<?= PUBLIC_URL ?>?url=teen/registro-menores" class="btn btn-primary btn-sm">Abrir Teens</a>
+        <a href="<?= PUBLIC_URL ?>?url=teen/registro-menores" class="btn btn-primary btn-sm">Abrir registro</a>
     </div>
     <?php endif; ?>
 </div>
