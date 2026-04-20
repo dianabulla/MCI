@@ -251,6 +251,42 @@ class EscuelaFormacionRegistroController extends BaseController {
         return $telefono;
     }
 
+    private function normalizarSoloDigitos($valor) {
+        return preg_replace('/\D+/', '', (string)$valor);
+    }
+
+    private function esTextoBasuraDocumentoTelefono($valor) {
+        $valor = trim((string)$valor);
+        if ($valor === '') {
+            return false;
+        }
+
+        $normalizado = function_exists('mb_strtoupper') ? mb_strtoupper($valor, 'UTF-8') : strtoupper($valor);
+        $normalizado = preg_replace('/\s+/', '', $normalizado);
+        $normalizado = str_replace(['.', '-', '_', '/'], '', $normalizado);
+
+        $bloqueados = ['NO', 'NA', 'N/A', 'NINGUNO', 'NINGUNA', 'SINDATO', 'SN', 'XX', 'XXX'];
+        return in_array($normalizado, $bloqueados, true);
+    }
+
+    private function esNumeroRepetidoInvalido($valor, $minLen = 3) {
+        $digits = $this->normalizarSoloDigitos($valor);
+        if ($digits === '' || strlen($digits) < $minLen) {
+            return false;
+        }
+
+        return preg_match('/^(\d)\1+$/', $digits) === 1;
+    }
+
+    private function normalizarEdad($valor) {
+        $valor = trim((string)$valor);
+        if ($valor === '' || !ctype_digit($valor)) {
+            return 0;
+        }
+
+        return (int)$valor;
+    }
+
     private function separarNombreApellido($nombreCompleto) {
         $nombreCompleto = preg_replace('/\s+/', ' ', trim((string)$nombreCompleto));
         if ($nombreCompleto === '') {
@@ -409,6 +445,7 @@ class EscuelaFormacionRegistroController extends BaseController {
             'old' => [
                 'nombre' => (string)($_GET['nombre'] ?? ''),
                 'genero' => (string)($_GET['genero'] ?? ''),
+                'edad' => (string)($_GET['edad'] ?? ''),
                 'telefono' => (string)($_GET['telefono'] ?? ''),
                 'cedula' => (string)($_GET['cedula'] ?? ''),
                 'lider' => (string)($_GET['lider'] ?? ''),
@@ -671,6 +708,9 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         $nombre = $this->normalizarTextoMayusculas($_POST['nombre'] ?? '');
         $genero = trim((string)($_POST['genero'] ?? ''));
+        $edad = $this->normalizarEdad($_POST['edad'] ?? '');
+        $telefonoRaw = trim((string)($_POST['telefono'] ?? ''));
+        $cedulaRaw = trim((string)($_POST['cedula'] ?? ''));
         $telefono = $this->normalizarTelefono($_POST['telefono'] ?? '');
         $cedula = $this->normalizarDocumento($_POST['cedula'] ?? '');
         $lider = $this->normalizarTextoMayusculas($_POST['lider'] ?? '');
@@ -685,8 +725,38 @@ class EscuelaFormacionRegistroController extends BaseController {
             $errores[] = 'El nombre es requerido.';
         }
 
-        if ($cedula === '' && $telefono === '') {
-            $errores[] = 'Debe registrar cédula o teléfono para validar duplicados con precisión.';
+        if ($edad <= 0) {
+            $errores[] = 'La edad es requerida.';
+        } elseif ($edad < 7 || $edad > 120) {
+            $errores[] = 'La edad debe estar entre 7 y 120 anos.';
+        }
+
+        if ($this->esTextoBasuraDocumentoTelefono($telefonoRaw)) {
+            $errores[] = 'El telefono no puede contener valores como NO, N/A o similares.';
+        }
+
+        if ($this->esTextoBasuraDocumentoTelefono($cedulaRaw)) {
+            $errores[] = 'La cedula no puede contener valores como NO, N/A o similares.';
+        }
+
+        if ($telefono !== '' && $this->esNumeroRepetidoInvalido($telefono, 3)) {
+            $errores[] = 'El telefono no puede ser una secuencia repetida como 0000 o 1111.';
+        }
+
+        if ($cedula !== '' && $this->esNumeroRepetidoInvalido($cedula, 3)) {
+            $errores[] = 'La cedula no puede ser una secuencia repetida como 0000 o 1111.';
+        }
+
+        if ($telefono === '') {
+            $errores[] = 'El telefono es obligatorio.';
+        }
+
+        if ($cedula === '') {
+            $errores[] = 'La cedula es obligatoria.';
+        }
+
+        if ($cedula === '' || $telefono === '') {
+            $errores[] = 'Debe registrar telefono y cedula para validar duplicados con precision.';
         }
 
         if ($idMinisterio <= 0) {
@@ -780,6 +850,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'tipo' => 'error',
                 'nombre' => $nombre,
                 'genero' => $genero,
+                'edad' => (string)$edad,
                 'telefono' => $telefono,
                 'cedula' => $cedula,
                 'lider' => $lider,
@@ -795,6 +866,7 @@ class EscuelaFormacionRegistroController extends BaseController {
             'Id_Persona' => $idPersona > 0 ? $idPersona : null,
             'Nombre' => $nombre,
             'Genero' => $genero !== '' ? $genero : null,
+            'Edad' => $edad > 0 ? $edad : null,
             'Telefono' => $telefono !== '' ? $telefono : null,
             'Cedula' => $cedula !== '' ? $cedula : null,
             'Lider' => $lider,
@@ -847,6 +919,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'tipo' => 'error',
                 'nombre' => $nombre,
                 'genero' => $genero,
+                'edad' => (string)$edad,
                 'telefono' => $telefono,
                 'cedula' => $cedula,
                 'lider' => $lider,

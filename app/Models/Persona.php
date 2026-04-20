@@ -1082,6 +1082,23 @@ class Persona extends BaseModel {
     }
 
     /**
+     * Contar personas con acciones pendientes en Ganar respetando aislamiento por rol.
+     */
+    public function contarPendientesGanarWithRole($filtroRol) {
+        $sql = "SELECT COUNT(*) AS total
+                FROM persona p
+                WHERE $filtroRol
+                  AND (p.Id_Ministerio IS NULL OR p.Id_Lider IS NULL OR p.Id_Celula IS NULL)";
+
+        $resultado = $this->query($sql);
+        if (empty($resultado)) {
+            return 0;
+        }
+
+        return (int)($resultado[0]['total'] ?? 0);
+    }
+
+    /**
      * Obtener todas las personas con aislamiento de rol
      */
     public function getAllWithRole($filtroRol, $soloGanar = false, $estadoCuenta = null, $idCelula = null, $proceso = null, $origen = null, $fechaInicioRegistro = null, $fechaFinRegistro = null) {

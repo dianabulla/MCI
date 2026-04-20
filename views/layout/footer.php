@@ -6,6 +6,6 @@
     </div>
 </div>
 
-    <script src="<?= ASSETS_URL ?>/js/main.js"></script>
+    <script src="<?= ASSETS_URL ?>/js/main.js?v=20260420-ganar-alert-1"></script>
 </body>
 </html>

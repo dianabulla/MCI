@@ -132,6 +132,7 @@ class CelulaController extends BaseController {
             $sections[] = [
                 'id_celula' => $idCelula,
                 'label' => (string)($celula['Nombre_Celula'] ?? 'Célula sin nombre'),
+                'ministerio' => (string)($celula['Nombre_Ministerio_Lider'] ?? 'Sin ministerio'),
                 'lider' => (string)($celula['Nombre_Lider'] ?? 'Sin líder'),
                 'anfitrion' => (string)($celula['Nombre_Anfitrion'] ?? 'Sin anfitrión'),
                 'direccion' => (string)($celula['Direccion_Celula'] ?? ''),
@@ -373,16 +374,67 @@ class CelulaController extends BaseController {
         $stmt->execute([$archivo, $idPersona]);
     }
 
+    private function obtenerDirectorioMaterialesCelulas(): string {
+        return ROOT . '/public/assets/celulas_materiales';
+    }
+
+    private function migrarMaterialesCelulasLegacy(): void {
+        $directorioDestino = $this->obtenerDirectorioMaterialesCelulas();
+        $directorioLegacy = ROOT . '/public/uploads/material_hub/celulas';
+
+        if (!is_dir($directorioLegacy)) {
+            return;
+        }
+
+        if (!is_dir($directorioDestino) && !@mkdir($directorioDestino, 0775, true) && !is_dir($directorioDestino)) {
+            return;
+        }
+
+        $archivos = @scandir($directorioLegacy) ?: [];
+        foreach ($archivos as $archivo) {
+            if ($archivo === '.' || $archivo === '..') {
+                continue;
+            }
+
+            if (strtolower((string)pathinfo($archivo, PATHINFO_EXTENSION)) !== 'pdf') {
+                continue;
+            }
+
+            $origen = $directorioLegacy . '/' . $archivo;
+            if (!is_file($origen)) {
+                continue;
+            }
+
+            $destino = $directorioDestino . '/' . $archivo;
+            if (!is_file($destino)) {
+                @rename($origen, $destino);
+                continue;
+            }
+
+            $base = (string)pathinfo($archivo, PATHINFO_FILENAME);
+            $ext = (string)pathinfo($archivo, PATHINFO_EXTENSION);
+            $i = 1;
+            do {
+                $destinoAlterno = $directorioDestino . '/' . $base . '_legacy_' . $i . '.' . $ext;
+                $i++;
+            } while (is_file($destinoAlterno));
+
+            @rename($origen, $destinoAlterno);
+        }
+    }
+
     public function materiales() {
         if (!AuthController::tienePermiso('materiales_celulas', 'ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
 
-        $directorioMateriales = ROOT . '/public/assets/celulas_materiales';
+        $directorioMateriales = $this->obtenerDirectorioMaterialesCelulas();
         if (!is_dir($directorioMateriales)) {
             @mkdir($directorioMateriales, 0775, true);
         }
+
+        $this->migrarMaterialesCelulasLegacy();
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
@@ -484,8 +536,21 @@ class CelulaController extends BaseController {
         }
 
         if (is_dir($directorioMateriales)) {
-            $archivos = glob($directorioMateriales . '/*.pdf') ?: [];
-            foreach ($archivos as $ruta) {
+            $archivos = @scandir($directorioMateriales) ?: [];
+            foreach ($archivos as $archivo) {
+                if ($archivo === '.' || $archivo === '..') {
+                    continue;
+                }
+
+                $ruta = $directorioMateriales . '/' . $archivo;
+                if (!is_file($ruta)) {
+                    continue;
+                }
+
+                if (strtolower((string)pathinfo($archivo, PATHINFO_EXTENSION)) !== 'pdf') {
+                    continue;
+                }
+
                 $nombre = basename((string)$ruta);
                 $fechaCreacion = @filectime($ruta) ?: (@filemtime($ruta) ?: 0);
                 $materiales[] = [
@@ -525,7 +590,8 @@ class CelulaController extends BaseController {
             return;
         }
 
-        $directorioMateriales = ROOT . '/public/assets/celulas_materiales';
+        $directorioMateriales = $this->obtenerDirectorioMaterialesCelulas();
+        $this->migrarMaterialesCelulasLegacy();
         $ruta = $directorioMateriales . '/' . $archivo;
         if (!is_file($ruta)) {
             $this->redirect('celulas/materiales&mensaje=' . urlencode('El archivo no existe') . '&tipo=error');

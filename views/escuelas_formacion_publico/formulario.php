@@ -311,7 +311,7 @@
                 </div>
             </div>
         <?php else: ?>
-            <p class="help">Al escribir cédula o teléfono se buscará la persona en la plataforma para autocompletar datos y evitar errores.</p>
+            <p class="help">Debes registrar cédula y teléfono. Con esos datos se buscará la persona en la plataforma para autocompletar y evitar errores.</p>
 
             <form method="POST" action="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/guardar" id="form-escuelas">
                 <div class="grid">
@@ -332,13 +332,18 @@
                     </div>
 
                     <div class="field">
-                        <label for="telefono">Teléfono</label>
-                        <input type="tel" id="telefono" name="telefono" value="<?= htmlspecialchars((string)($old['telefono'] ?? '')) ?>" placeholder="Ej: 3001234567">
+                        <label for="edad">Edad <span class="req">*</span></label>
+                        <input type="number" id="edad" name="edad" min="7" max="120" step="1" required value="<?= htmlspecialchars((string)($old['edad'] ?? '')) ?>" placeholder="Ej: 28">
                     </div>
 
                     <div class="field">
-                        <label for="cedula">Cédula</label>
-                        <input type="text" id="cedula" name="cedula" value="<?= htmlspecialchars((string)($old['cedula'] ?? '')) ?>" placeholder="Ej: 12345678">
+                        <label for="telefono">Teléfono <span class="req">*</span></label>
+                        <input type="tel" id="telefono" name="telefono" required value="<?= htmlspecialchars((string)($old['telefono'] ?? '')) ?>" placeholder="Ej: 3001234567">
+                    </div>
+
+                    <div class="field">
+                        <label for="cedula">Cédula <span class="req">*</span></label>
+                        <input type="text" id="cedula" name="cedula" required value="<?= htmlspecialchars((string)($old['cedula'] ?? '')) ?>" placeholder="Ej: 12345678">
                     </div>
 
                     <div class="field full">
@@ -392,8 +397,10 @@
 (function() {
     const endpointBuscar = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/registro-publico/buscar-persona') ?>;
     const endpointLideres = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/registro-publico/buscar-lideres') ?>;
+    const form = document.getElementById('form-escuelas');
     const nombre = document.getElementById('nombre');
     const genero = document.getElementById('genero');
+    const edad = document.getElementById('edad');
     const telefono = document.getElementById('telefono');
     const cedula = document.getElementById('cedula');
     const lider = document.getElementById('lider');
@@ -403,7 +410,7 @@
     const loader = document.getElementById('loader-busqueda');
     const estadoBusqueda = document.getElementById('estado-busqueda');
 
-    if (!nombre || !genero || !telefono || !cedula || !lider || !idLider || !listaLideres || !ministerio) {
+    if (!form || !nombre || !genero || !edad || !telefono || !cedula || !lider || !idLider || !listaLideres || !ministerio) {
         return;
     }
 
@@ -582,6 +589,29 @@
         timer = setTimeout(buscarPersona, 450);
     }
 
+    function esTextoBasuraDocumentoTelefono(valor) {
+        const texto = String(valor || '').trim();
+        if (!texto) {
+            return false;
+        }
+
+        const normalizado = texto
+            .toUpperCase()
+            .replace(/\s+/g, '')
+            .replace(/[\.\-_\/]/g, '');
+
+        const bloqueados = ['NO', 'NA', 'N/A', 'NINGUNO', 'NINGUNA', 'SINDATO', 'SN', 'XX', 'XXX'];
+        return bloqueados.includes(normalizado);
+    }
+
+    function esNumeroRepetidoInvalido(valor) {
+        const digits = String(valor || '').replace(/\D+/g, '');
+        if (!digits || digits.length < 3) {
+            return false;
+        }
+        return /^(\d)\1+$/.test(digits);
+    }
+
     [nombre, telefono, cedula].forEach(function(input) {
         input.addEventListener('input', function() {
             if (input === nombre || input === lider) {
@@ -611,6 +641,51 @@
 
     toUpperCaseInput(nombre);
     toUpperCaseInput(lider);
+
+    form.addEventListener('submit', function(event) {
+        const edadValor = parseInt(String(edad.value || '').trim(), 10);
+        const telefonoValor = String(telefono.value || '').trim();
+        const cedulaValor = String(cedula.value || '').trim();
+
+        if (!Number.isFinite(edadValor) || edadValor < 7 || edadValor > 120) {
+            event.preventDefault();
+            alert('La edad es obligatoria y debe estar entre 7 y 120 anos.');
+            edad.focus();
+            return;
+        }
+
+        if (esTextoBasuraDocumentoTelefono(telefonoValor) || esTextoBasuraDocumentoTelefono(cedulaValor)) {
+            event.preventDefault();
+            alert('Telefono y cedula no pueden contener valores como NO, N/A o similares.');
+            if (esTextoBasuraDocumentoTelefono(telefonoValor)) {
+                telefono.focus();
+            } else {
+                cedula.focus();
+            }
+            return;
+        }
+
+        if (esNumeroRepetidoInvalido(telefonoValor) || esNumeroRepetidoInvalido(cedulaValor)) {
+            event.preventDefault();
+            alert('Telefono y cedula no pueden ser secuencias repetidas como 0000 o 1111.');
+            if (esNumeroRepetidoInvalido(telefonoValor)) {
+                telefono.focus();
+            } else {
+                cedula.focus();
+            }
+            return;
+        }
+
+        if (!telefonoValor || !cedulaValor) {
+            event.preventDefault();
+            alert('Debes registrar telefono y cedula.');
+            if (!telefonoValor) {
+                telefono.focus();
+            } else {
+                cedula.focus();
+            }
+        }
+    });
 })();
 </script>
 </body>

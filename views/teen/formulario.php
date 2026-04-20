@@ -3,7 +3,6 @@
 <div class="page-header">
     <h2>Registro teens-kids</h2>
     <div class="page-actions personas-mobile-stack" style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="<?= PUBLIC_URL ?>index.php?url=teen" class="btn btn-nav-pill">Material Teens</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-nav-pill active">Registro teens-kids</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=teen/codigos" class="btn btn-nav-pill">Códigos</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-publico" target="_blank" class="btn btn-primary">Nuevo registro</a>

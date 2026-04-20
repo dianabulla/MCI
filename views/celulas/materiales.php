@@ -3,7 +3,7 @@
 
 <div class="page-header">
     <h2>Material para Células (PDF)</h2>
-    <a href="<?= PUBLIC_URL ?>?url=celulas" class="btn btn-secondary">Volver a Células</a>
+    <a href="<?= PUBLIC_URL ?>?url=home/material" class="btn btn-secondary">Volver a Material</a>
 </div>
 
 <?php if (!empty($mensaje ?? '')): ?>

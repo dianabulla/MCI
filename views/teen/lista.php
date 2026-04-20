@@ -3,6 +3,7 @@
 <div class="page-header">
     <h2>Material Teens</h2>
     <div class="page-actions personas-mobile-stack" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="<?= PUBLIC_URL ?>index.php?url=home/material" class="btn btn-secondary">Volver a Material</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=teen" class="btn btn-nav-pill active">Material Teens</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-nav-pill">Registro teens-kids</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=teen/codigos" class="btn btn-nav-pill">Códigos</a>

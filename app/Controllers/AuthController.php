@@ -217,6 +217,7 @@ class AuthController extends BaseController {
         $_SESSION['usuario_ministerio'] = $user['Id_Ministerio'] ?? null;
         $_SESSION['permisos'] = $permisos;
         $_SESSION['active_account_id'] = $idUsuario;
+        $_SESSION['mostrar_alerta_ganar_pendiente'] = true;
 
         $_SESSION['account_pool'][$idUsuario] = [
             'id' => $idUsuario,

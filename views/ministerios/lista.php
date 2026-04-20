@@ -323,9 +323,13 @@ $returnUrlParam = $returnUrl ? '&return_url=' . urlencode((string)$returnUrl) : 
     <?php $puedeEditarMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'editar'); ?>
     <?php $puedeEliminarMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'eliminar'); ?>
     <?php $puedeGestionarMinisterio = $puedeEditarMinisterio || $puedeEliminarMinisterio; ?>
+    <?php $puedeVerLideresCelula = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver'); ?>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <?php if (!empty($returnUrl)): ?>
         <a href="<?= htmlspecialchars($returnUrl) ?>" class="btn btn-secondary">← Volver a reportes</a>
+        <?php endif; ?>
+        <?php if ($puedeVerLideresCelula): ?>
+        <a href="<?= PUBLIC_URL ?>?url=home/lideres-celula" class="btn btn-secondary">Líderes de célula</a>
         <?php endif; ?>
         <?php if ($puedeCrearMinisterio): ?>
         <a href="<?= PUBLIC_URL ?>index.php?url=ministerios/crear<?= $returnUrlParam ?>" class="btn btn-primary">+ Nuevo Ministerio</a>
@@ -363,6 +367,9 @@ $returnUrlParam = $returnUrl ? '&return_url=' . urlencode((string)$returnUrl) : 
                 <div class="section-meta mb-0">
                     <a class="view-group-btn" href="<?= PUBLIC_URL ?>?url=personas&ministerio=<?= (int)$section['id_ministerio'] ?>" onclick="event.stopPropagation();">Ver personas</a>
                     <a class="view-group-btn" href="<?= PUBLIC_URL ?>?url=celulas&ministerio=<?= (int)$section['id_ministerio'] ?>" onclick="event.stopPropagation();">Ver células</a>
+                    <?php if ($puedeVerLideresCelula): ?>
+                    <a class="view-group-btn" href="<?= PUBLIC_URL ?>?url=home/lideres-celula&ministerio=<?= (int)$section['id_ministerio'] ?>" onclick="event.stopPropagation();">Ver líderes</a>
+                    <?php endif; ?>
                     <span class="meta-pill">Líderes célula: <?= (int)($metricas['lideres_celula'] ?? 0) ?></span>
                     <span class="meta-pill">Asistentes célula: <?= (int)($metricas['asistentes_celula'] ?? 0) ?></span>
                     <span class="collapse-arrow">⤢</span>

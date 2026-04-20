@@ -16,7 +16,18 @@ return [
     
     // Home
     'home' => 'HomeController@index',
+    'home/material' => 'HomeController@material',
+    'home/material/celulas' => 'HomeController@materialCelulas',
+    'home/material/teens' => 'HomeController@materialTeens',
+    'home/material/universidad-vida' => 'HomeController@materialUniversidadVida',
+    'home/material/capacitacion-destino' => 'HomeController@materialCapacitacionDestino',
+    'home/material/ver' => 'HomeController@materialVerPdf',
+    'home/material/detalle-vistas' => 'HomeController@materialDetalleVistas',
     'home/lideres-celula' => 'HomeController@lideresCelula',
+    'home/consolidar' => 'HomeController@consolidar',
+    'home/consolidar/exportar' => 'HomeController@exportarConsolidar',
+    'home/discipular' => 'HomeController@discipular',
+    'home/discipular/exportar' => 'HomeController@exportarDiscipular',
     'home/escuelas-formacion' => 'HomeController@escuelasFormacion',
     'home/escuelas-formacion/exportar' => 'HomeController@exportarEscuelasFormacion',
     'home/escuelas-formacion/actualizar-estado' => 'HomeController@actualizarEstadoEscuelaFormacion',

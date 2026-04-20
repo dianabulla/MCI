@@ -251,6 +251,23 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+
+    const ganarAlertToast = document.getElementById('ganarAlertToast');
+    const ganarAlertToastClose = document.getElementById('ganarAlertToastClose');
+    if (ganarAlertToast) {
+        const pendientes = parseInt(ganarAlertToast.dataset.pendientes || '0', 10);
+        const showOnLogin = (ganarAlertToast.dataset.showOnLogin || '0') === '1';
+
+        if (showOnLogin && pendientes > 0) {
+            ganarAlertToast.classList.add('visible');
+        }
+
+        if (ganarAlertToastClose) {
+            ganarAlertToastClose.addEventListener('click', function() {
+                ganarAlertToast.classList.remove('visible');
+            });
+        }
+    }
 });
 
 // Función para búsqueda en tablas

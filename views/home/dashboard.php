@@ -7,25 +7,41 @@
 <div class="dashboard-grid">
     <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver')): ?>
     <div class="dashboard-card">
-        <h3>Personas</h3>
+        <h3>Ganar</h3>
         <div class="value"><?= $totalPersonas ?? 0 ?></div>
         <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-primary btn-sm">Ver todas</a>
     </div>
     <?php endif; ?>
 
+    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver')): ?>
+    <div class="dashboard-card" style="border-left-color: #1e4a89;">
+        <h3>Consolidar</h3>
+        <div class="value" style="color: #1e4a89;"><?= (int)($totalConsolidar ?? 0) ?></div>
+        <a href="<?= PUBLIC_URL ?>?url=home/consolidar" class="btn btn-primary btn-sm">Ver modulo</a>
+    </div>
+    <?php endif; ?>
+
+    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver')): ?>
+    <div class="dashboard-card" style="border-left-color: #7a4e08;">
+        <h3>Discipular</h3>
+        <div class="value" style="color: #7a4e08;"><?= (int)($totalDiscipular ?? 0) ?></div>
+        <a href="<?= PUBLIC_URL ?>?url=home/discipular" class="btn btn-primary btn-sm">Ver modulo</a>
+    </div>
+    <?php endif; ?>
+
     <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('celulas', 'ver')): ?>
     <div class="dashboard-card" style="border-left-color: #28a745;">
-        <h3>Células</h3>
+        <h3>Enviar</h3>
         <div class="value" style="color: #28a745;"><?= $totalCelulas ?? 0 ?></div>
         <a href="<?= PUBLIC_URL ?>?url=celulas" class="btn btn-primary btn-sm">Ver todas</a>
     </div>
     <?php endif; ?>
 
-    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('materiales_celulas', 'ver')): ?>
+    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('materiales_celulas', 'ver') || AuthController::tienePermiso('teen', 'ver') || AuthController::tienePermiso('eventos', 'ver')): ?>
     <div class="dashboard-card" style="border-left-color: #fd7e14;">
-        <h3>Material de Células</h3>
+        <h3>Material</h3>
         <div class="value" style="color: #fd7e14;">📘</div>
-        <a href="<?= PUBLIC_URL ?>?url=celulas/materiales" class="btn btn-primary btn-sm">Abrir materiales</a>
+        <a href="<?= PUBLIC_URL ?>?url=home/material" class="btn btn-primary btn-sm">Abrir materiales</a>
     </div>
     <?php endif; ?>
 
@@ -37,35 +53,11 @@
     </div>
     <?php endif; ?>
 
-    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('eventos', 'ver')): ?>
-    <div class="dashboard-card" style="border-left-color: #ffc107;">
-        <h3>Próximos Eventos</h3>
-        <div class="value" style="color: #ffc107;"><?= count($eventosProximos ?? []) ?></div>
-        <a href="<?= PUBLIC_URL ?>?url=eventos" class="btn btn-primary btn-sm">Ver todos</a>
-    </div>
-    <?php endif; ?>
-
-    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver')): ?>
-    <div class="dashboard-card" style="border-left-color: #6f42c1;">
-        <h3>Líderes de Célula</h3>
-        <div class="value" style="color: #6f42c1;"><?= (int)($totalLideresCelula ?? 0) ?></div>
-        <a href="<?= PUBLIC_URL ?>?url=home/lideres-celula" class="btn btn-primary btn-sm">Ver actividad</a>
-    </div>
-    <?php endif; ?>
-
     <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('teen', 'ver')): ?>
     <div class="dashboard-card" style="border-left-color: #e83e8c;">
-        <h3>Material Teens</h3>
+        <h3>Teens</h3>
         <div class="value" style="color: #e83e8c;">📚</div>
-        <a href="<?= PUBLIC_URL ?>?url=teen" class="btn btn-primary btn-sm">Ver materiales</a>
-    </div>
-    <?php endif; ?>
-
-    <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver')): ?>
-    <div class="dashboard-card" style="border-left-color: #1e4a89;">
-        <h3>Escuelas de Formación</h3>
-        <div class="value" style="color: #1e4a89;"><?= (int)(($reporteUniversidadVida['total'] ?? 0)) ?></div>
-        <a href="<?= PUBLIC_URL ?>?url=home/escuelas-formacion" class="btn btn-primary btn-sm">Ver reporte U.V</a>
+        <a href="<?= PUBLIC_URL ?>?url=teen/registro-menores" class="btn btn-primary btn-sm">Abrir Teens</a>
     </div>
     <?php endif; ?>
 </div>

@@ -464,13 +464,44 @@ class ReporteController extends BaseController {
         arsort($porRed);
 
         $reportadasSemana = 0;
+        $reportadasMap = [];
         foreach ($asistencia as $fila) {
-            if ((int)($fila['Reuniones_Realizadas'] ?? 0) > 0) {
+            $idCelula = (int)($fila['Id_Celula'] ?? 0);
+            $reporto = (int)($fila['Reuniones_Realizadas'] ?? 0) > 0;
+            if ($idCelula > 0) {
+                $reportadasMap[$idCelula] = $reporto;
+            }
+            if ($reporto) {
                 $reportadasSemana++;
             }
         }
 
         $noReportadasSemana = max(0, $totalCelulas - $reportadasSemana);
+
+        $celulaIds = array_map(static function($celula) {
+            return (int)($celula['Id_Celula'] ?? 0);
+        }, $celulas);
+        $estadoEntregoSobre = $this->asistenciaModel->getEstadoEntregoSobrePorCelulaSemana($celulaIds, $fechaInicioSemana);
+
+        $entregaronSobreSinReportar = 0;
+        $reportaronSinEntregarSobre = 0;
+        foreach ($celulas as $celula) {
+            $idCelula = (int)($celula['Id_Celula'] ?? 0);
+            if ($idCelula <= 0) {
+                continue;
+            }
+
+            $reporto = !empty($reportadasMap[$idCelula]);
+            $entregoSobre = !empty($estadoEntregoSobre[$idCelula]);
+
+            if ($entregoSobre && !$reporto) {
+                $entregaronSobreSinReportar++;
+            }
+
+            if ($reporto && !$entregoSobre) {
+                $reportaronSinEntregarSobre++;
+            }
+        }
 
         return [
             'semestre' => $semestre,
@@ -479,7 +510,9 @@ class ReporteController extends BaseController {
                 'nuevas_semestre' => $nuevasSemestre,
                 'cerradas_semestre' => $cerradasSemestre,
                 'reportadas_semana' => $reportadasSemana,
-                'no_reportadas_semana' => $noReportadasSemana
+                'no_reportadas_semana' => $noReportadasSemana,
+                'entregaron_sobre_sin_reportar' => $entregaronSobreSinReportar,
+                'reportaron_sin_entregar_sobre' => $reportaronSinEntregarSobre
             ],
             'por_ministerio' => $porMinisterio,
             'por_red' => $porRed
@@ -1681,6 +1714,19 @@ class ReporteController extends BaseController {
                 }));
             }
         }
+
+        $estadoEntregoSobreReporte = $this->asistenciaModel->getEstadoEntregoSobrePorCelulaSemana(
+            array_map(static function($item) {
+                return (int)($item['Id_Celula'] ?? 0);
+            }, $asistenciaCelulas),
+            $fechaInicio
+        );
+
+        foreach ($asistenciaCelulas as &$filaAsistenciaReporte) {
+            $idCelulaFila = (int)($filaAsistenciaReporte['Id_Celula'] ?? 0);
+            $filaAsistenciaReporte['Entrego_Sobre'] = !empty($estadoEntregoSobreReporte[$idCelulaFila]) ? 1 : 0;
+        }
+        unset($filaAsistenciaReporte);
 
         $filtroProgramaEscuelas = trim((string)($_GET['escuela_programa'] ?? ''));
         $filtroBusquedaEscuelas = trim((string)($_GET['escuela_buscar'] ?? ''));

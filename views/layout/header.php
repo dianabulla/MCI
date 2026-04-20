@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $pageTitle ?? 'MCI Madrid Colombia' ?></title>
-    <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/styles.css?v=20260227-39">
+    <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/styles.css?v=20260420-ganar-alert-1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
 </head>
 <body>
@@ -22,6 +22,28 @@ $isActive = function(array $prefixes) use ($currentUrl) {
 $puedeVer = function(string $modulo) {
     return AuthController::esAdministrador() || AuthController::tienePermiso($modulo, 'ver');
 };
+
+$puedeVerPendientesGanar = $puedeVer('personas');
+$totalPendientesGanar = 0;
+$mostrarAlertaIngresoGanar = !empty($_SESSION['mostrar_alerta_ganar_pendiente']);
+
+if ($mostrarAlertaIngresoGanar) {
+    unset($_SESSION['mostrar_alerta_ganar_pendiente']);
+}
+
+if ($puedeVerPendientesGanar) {
+    require_once APP . '/Helpers/DataIsolation.php';
+    require_once APP . '/Models/Persona.php';
+
+    try {
+        $personaCampanaModel = new Persona();
+        $filtroRolPendientes = DataIsolation::generarFiltroPersonasPendienteConsolidar();
+        $totalPendientesGanar = $personaCampanaModel->contarPendientesGanarWithRole($filtroRolPendientes);
+    } catch (Exception $e) {
+        error_log('No se pudo cargar contador de pendientes en Ganar: ' . $e->getMessage());
+        $totalPendientesGanar = 0;
+    }
+}
 ?>
 
 <div class="app-shell">
@@ -168,4 +190,41 @@ $puedeVer = function(string $modulo) {
         <button type="button" id="sidebarArrowToggle" class="sidebar-arrow-toggle" aria-label="Ocultar menú lateral">
             <i class="bi bi-chevron-left"></i>
         </button>
+
+        <?php if ($puedeVerPendientesGanar): ?>
+        <a
+            href="<?= PUBLIC_URL ?>?url=personas/ganar"
+            class="ganar-alert-bell"
+            id="ganarAlertBell"
+            title="Tienes <?= (int)$totalPendientesGanar ?> acciones pendientes en Ganar"
+            aria-label="Ir a pendientes de Ganar"
+            data-pendientes="<?= (int)$totalPendientesGanar ?>"
+        >
+            <i class="bi bi-bell-fill"></i>
+            <?php if ((int)$totalPendientesGanar > 0): ?>
+            <span class="ganar-alert-badge"><?= (int)$totalPendientesGanar ?></span>
+            <?php endif; ?>
+        </a>
+
+        <div
+            class="ganar-alert-toast"
+            id="ganarAlertToast"
+            data-pendientes="<?= (int)$totalPendientesGanar ?>"
+            data-show-on-login="<?= $mostrarAlertaIngresoGanar ? '1' : '0' ?>"
+            role="status"
+            aria-live="polite"
+        >
+            <div class="ganar-alert-toast-content">
+                <i class="bi bi-bell-fill"></i>
+                <div>
+                    <strong>Tienes acciones pendientes en el Ganar</strong>
+                    <p>Haz clic en la campana para revisar y gestionar.</p>
+                </div>
+            </div>
+            <button type="button" class="ganar-alert-toast-close" id="ganarAlertToastClose" aria-label="Cerrar aviso">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <?php endif; ?>
+
         <main class="main-content">

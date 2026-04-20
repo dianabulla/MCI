@@ -16,7 +16,7 @@ $fechaPublicacionHasta = htmlspecialchars((string)($itemEditar['Fecha_Publicacio
 <div class="page-header">
     <h2><?= htmlspecialchars((string)($modulo['titulo'] ?? 'Mini módulo')) ?></h2>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="<?= PUBLIC_URL ?>index.php?url=eventos" class="btn btn-secondary">Volver a eventos</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=home/material" class="btn btn-secondary">Volver a Material</a>
     </div>
 </div>
 

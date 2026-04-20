@@ -49,95 +49,82 @@
     </form>
 </div>
 
-<?php if (!empty($sections ?? [])): ?>
-<div class="sections-grid">
-    <?php foreach ($sections as $section): ?>
-        <details class="section-collapse celula-card" data-celula-card="1">
-            <summary>
-                <div class="collapse-title">
-                    <i class="bi bi-people-fill"></i> <?= htmlspecialchars($section['label']) ?>
-                </div>
-                <div class="section-meta mb-0">
-                    <a class="view-group-btn" href="<?= PUBLIC_URL ?>?url=celulas/detalle&id=<?= (int)$section['id_celula'] ?>" onclick="event.stopPropagation();">Ver personas</a>
-                    <span class="meta-pill">Líder: <?= htmlspecialchars($section['lider']) ?></span>
-                    <span class="meta-pill">Anfitrión: <?= htmlspecialchars($section['anfitrion']) ?></span>
-                    <span class="meta-pill">Personas: <?= number_format((int)$section['total_personas']) ?></span>
-                    <span class="collapse-arrow">⤢</span>
-                </div>
-            </summary>
+<?php
+$sections = $sections ?? [];
+$ministerioGrupos = [];
+foreach ($sections as $section) {
+    $ministerio = trim((string)($section['ministerio'] ?? ''));
+    if ($ministerio === '') {
+        $ministerio = 'Sin ministerio';
+    }
 
-            <div class="collapse-content">
-                <div class="section-meta">
-                    <?php if (!empty($section['direccion'])): ?>
-                        <span class="meta-pill">Dirección: <?= htmlspecialchars($section['direccion']) ?></span>
-                    <?php endif; ?>
-                    <?php if (!empty($section['dia'])): ?>
-                        <span class="meta-pill">Día: <?= htmlspecialchars($section['dia']) ?></span>
-                    <?php endif; ?>
-                    <?php if (!empty($section['hora'])): ?>
-                        <span class="meta-pill">Hora: <?= htmlspecialchars($section['hora']) ?></span>
-                    <?php endif; ?>
-                </div>
+    if (!isset($ministerioGrupos[$ministerio])) {
+        $ministerioGrupos[$ministerio] = [];
+    }
+    $ministerioGrupos[$ministerio][] = $section;
+}
+krsort($ministerioGrupos);
+?>
 
-                <div class="mb-3">
-                    <a href="<?= PUBLIC_URL ?>?url=personas/crear&return_to=celulas&return_url=<?= urlencode(PUBLIC_URL . '?url=celulas') ?>&celula=<?= (int)$section['id_celula'] ?>" class="btn btn-sm btn-primary">+ Nueva persona</a>
-                    <?php if (AuthController::tienePermiso('asistencias', 'crear')): ?>
-                        <a href="<?= PUBLIC_URL ?>?url=asistencias/registrar&celula=<?= (int)$section['id_celula'] ?>" class="btn btn-sm btn-success">Asistencias</a>
-                    <?php endif; ?>
-                    <a href="<?= PUBLIC_URL ?>?url=celulas/editar&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm btn-warning">Editar</a>
-                    <a href="<?= PUBLIC_URL ?>?url=celulas/eliminar&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar esta célula?')">Eliminar</a>
+<?php if (!empty($ministerioGrupos)): ?>
+<div class="ministerio-cards-grid">
+    <?php foreach ($ministerioGrupos as $ministerioNombre => $celulasMinisterio): ?>
+        <?php
+        $totalPersonasMinisterio = 0;
+        foreach ($celulasMinisterio as $celulaMinisterio) {
+            $totalPersonasMinisterio += (int)($celulaMinisterio['total_personas'] ?? 0);
+        }
+        ?>
+        <div class="dashboard-card ministerio-card" data-ministerio-card="1">
+            <button type="button" class="ministerio-card-header" data-ministerio-toggle="1">
+                <div>
+                    <h3 style="margin:0;"><?= htmlspecialchars($ministerioNombre) ?></h3>
+                    <div class="value" style="font-size: 18px; color:#17a2b8;"><?= count($celulasMinisterio) ?> célula(s)</div>
                 </div>
-
-                <div class="table-responsive ministerio-table-wrap">
-                    <table class="table table-hover ministerio-detail-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 60px;">Nro</th>
-                                <th>Persona</th>
-                                <th style="width: 140px;">Teléfono</th>
-                                <th style="width: 160px;">Documento</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (!empty($section['rows'])): ?>
-                                <?php foreach ($section['rows'] as $row): ?>
-                                    <tr>
-                                        <td><?= (int)$row['nro'] ?></td>
-                                        <td>
-                                            <a class="group-link" href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= (int)$row['id_persona'] ?>&return_to=celulas">
-                                                <?= htmlspecialchars($row['nombre']) ?>
-                                            </a>
-                                        </td>
-                                        <td><?= htmlspecialchars($row['telefono'] !== '' ? $row['telefono'] : '—') ?></td>
-                                        <td><?= htmlspecialchars($row['documento'] !== '' ? $row['documento'] : '—') ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <tr>
-                                    <td colspan="4" class="text-center">No hay personas registradas en esta célula</td>
-                                </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
+                <div style="text-align:right;">
+                    <span class="meta-pill">Personas: <?= number_format($totalPersonasMinisterio) ?></span>
+                    <span class="ministerio-arrow" aria-hidden="true">▾</span>
                 </div>
+            </button>
 
-                <div class="mt-3">
-                    <span class="meta-pill">Anfitrión: <?= htmlspecialchars($section['anfitrion']) ?></span>
+            <div class="ministerio-celulas" data-ministerio-body="1" hidden>
+                <div class="ministerio-celulas-grid">
+                    <?php foreach ($celulasMinisterio as $section): ?>
+                        <div class="dashboard-card" style="border-left-color:#28a745;">
+                            <h3><?= htmlspecialchars((string)$section['label']) ?></h3>
+                            <div class="section-meta" style="margin-bottom:10px;">
+                                <span class="meta-pill">Líder: <?= htmlspecialchars((string)$section['lider']) ?></span>
+                                <span class="meta-pill">Anfitrión: <?= htmlspecialchars((string)$section['anfitrion']) ?></span>
+                                <span class="meta-pill">Personas: <?= number_format((int)$section['total_personas']) ?></span>
+                            </div>
+
+                            <div class="section-meta" style="margin-bottom:12px;">
+                                <?php if (!empty($section['direccion'])): ?>
+                                    <span class="meta-pill">Dirección: <?= htmlspecialchars((string)$section['direccion']) ?></span>
+                                <?php endif; ?>
+                                <?php if (!empty($section['dia'])): ?>
+                                    <span class="meta-pill">Día: <?= htmlspecialchars((string)$section['dia']) ?></span>
+                                <?php endif; ?>
+                                <?php if (!empty($section['hora'])): ?>
+                                    <span class="meta-pill">Hora: <?= htmlspecialchars((string)$section['hora']) ?></span>
+                                <?php endif; ?>
+                            </div>
+
+                            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                <a href="<?= PUBLIC_URL ?>?url=celulas/detalle&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm btn-secondary">Ver personas</a>
+                                <a href="<?= PUBLIC_URL ?>?url=personas/crear&return_to=celulas&return_url=<?= urlencode(PUBLIC_URL . '?url=celulas') ?>&celula=<?= (int)$section['id_celula'] ?>" class="btn btn-sm btn-primary">+ Nueva persona</a>
+                                <?php if (AuthController::tienePermiso('asistencias', 'crear')): ?>
+                                    <a href="<?= PUBLIC_URL ?>?url=asistencias/registrar&celula=<?= (int)$section['id_celula'] ?>" class="btn btn-sm btn-success">Asistencias</a>
+                                <?php endif; ?>
+                                <a href="<?= PUBLIC_URL ?>?url=celulas/editar&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm btn-warning">Editar</a>
+                                <a href="<?= PUBLIC_URL ?>?url=celulas/eliminar&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm btn-danger" onclick="return confirm('¿Eliminar esta célula?')">Eliminar</a>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
             </div>
-        </details>
-    <?php endforeach; ?>
-</div>
-
-<div id="celulaModal" class="celula-modal" aria-hidden="true">
-    <div class="celula-modal__overlay" data-celula-close="1"></div>
-    <div class="celula-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="celulaModalTitle">
-        <div class="celula-modal__header">
-            <h3 id="celulaModalTitle" class="celula-modal__title">Detalle de célula</h3>
-            <button type="button" class="celula-modal__close" data-celula-close="1" aria-label="Cerrar">×</button>
         </div>
-        <div id="celulaModalBody" class="celula-modal__body"></div>
-    </div>
+    <?php endforeach; ?>
 </div>
 <?php else: ?>
     <div class="table-container">
@@ -146,126 +133,56 @@
 <?php endif; ?>
 
 <style>
-.celula-card > .collapse-content {
-    display: none;
+.ministerio-cards-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
 }
 
-.celula-card .collapse-arrow {
-    transform: none !important;
+.ministerio-card {
+    border-left-color: #17a2b8;
 }
 
-.celula-card > summary {
-    cursor: pointer;
-}
-
-.celula-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 1050;
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition: opacity 0.2s ease;
-}
-
-.celula-modal.is-open {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-}
-
-.celula-modal__overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(15, 27, 46, 0.58);
-    backdrop-filter: blur(2px);
-    opacity: 0;
-    transition: opacity 0.2s ease;
-}
-
-.celula-modal__dialog {
-    position: relative;
-    width: min(1100px, calc(100vw - 36px));
-    max-height: calc(100vh - 36px);
-    margin: 18px auto;
-    border-radius: 14px;
-    background: #ffffff;
-    box-shadow: 0 18px 45px rgba(20, 39, 72, 0.24);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    transform: translateY(22px) scale(0.985);
-    opacity: 0;
-    transition: transform 0.24s ease, opacity 0.24s ease;
-}
-
-.celula-modal.is-open .celula-modal__overlay {
-    opacity: 1;
-}
-
-.celula-modal.is-open .celula-modal__dialog {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-}
-
-.celula-modal__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 14px 18px;
-    border-bottom: 1px solid #d9e4f2;
-    background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
-}
-
-.celula-modal__title {
-    margin: 0;
-    color: #21457e;
-    font-size: 20px;
-    font-weight: 700;
-}
-
-.celula-modal__close {
+.ministerio-card-header {
+    width: 100%;
     border: 0;
-    background: #dbe6f8;
-    color: #1e4a89;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    font-size: 24px;
-    line-height: 1;
+    background: transparent;
+    padding: 0;
+    text-align: left;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
     cursor: pointer;
 }
 
-.celula-modal__body {
-    padding: 14px 18px 18px;
-    overflow: auto;
+.ministerio-arrow {
+    display: inline-block;
+    margin-left: 8px;
+    transition: transform .2s ease;
 }
 
-.celula-modal__body .collapse-content {
-    display: block;
-    padding: 0;
+.ministerio-card.is-open .ministerio-arrow {
+    transform: rotate(180deg);
 }
 
-.celula-modal__body .ministerio-detail-table {
-    min-width: 700px;
+.ministerio-celulas {
+    margin-top: 12px;
+}
+
+.ministerio-celulas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
 }
 
 @media (max-width: 800px) {
-    .celula-modal__dialog {
-        width: calc(100vw - 16px);
-        max-height: calc(100vh - 16px);
-        margin: 8px auto;
+    .ministerio-card-header {
+        align-items: flex-start;
     }
 
-    .celula-modal__header,
-    .celula-modal__body {
-        padding-left: 12px;
-        padding-right: 12px;
-    }
-
-    .celula-modal__title {
-        font-size: 18px;
+    .ministerio-celulas-grid {
+        grid-template-columns: 1fr;
     }
 }
 </style>
@@ -325,60 +242,28 @@
     })();
 
     (function() {
-        const modal = document.getElementById('celulaModal');
-        const modalTitle = document.getElementById('celulaModalTitle');
-        const modalBody = document.getElementById('celulaModalBody');
-        const cards = document.querySelectorAll('[data-celula-card="1"]');
-
-        if (!modal || !modalTitle || !modalBody || !cards.length) {
+        const cards = document.querySelectorAll('[data-ministerio-card="1"]');
+        if (!cards.length) {
             return;
         }
 
-        function abrirModal(title, contentHtml) {
-            modalTitle.textContent = title;
-            modalBody.innerHTML = contentHtml;
-            modal.classList.add('is-open');
-            modal.setAttribute('aria-hidden', 'false');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function cerrarModal() {
-            modal.classList.remove('is-open');
-            modal.setAttribute('aria-hidden', 'true');
-            modalBody.innerHTML = '';
-            document.body.style.overflow = '';
-        }
-
         cards.forEach(function(card) {
-            const summary = card.querySelector(':scope > summary');
-            const titleNode = card.querySelector(':scope > summary .collapse-title');
-            const contentNode = card.querySelector(':scope > .collapse-content');
-
-            if (!summary || !contentNode) {
+            const button = card.querySelector('[data-ministerio-toggle="1"]');
+            const body = card.querySelector('[data-ministerio-body="1"]');
+            if (!button || !body) {
                 return;
             }
 
-            summary.addEventListener('click', function(event) {
-                if (event.target.closest('a')) {
-                    return;
+            button.addEventListener('click', function() {
+                const isHidden = body.hasAttribute('hidden');
+                if (isHidden) {
+                    body.removeAttribute('hidden');
+                    card.classList.add('is-open');
+                } else {
+                    body.setAttribute('hidden', 'hidden');
+                    card.classList.remove('is-open');
                 }
-
-                event.preventDefault();
-                const title = titleNode ? titleNode.textContent.trim() : 'Detalle de célula';
-                abrirModal(title, contentNode.outerHTML);
             });
-        });
-
-        modal.addEventListener('click', function(event) {
-            if (event.target.closest('[data-celula-close="1"]')) {
-                cerrarModal();
-            }
-        });
-
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape' && modal.classList.contains('is-open')) {
-                cerrarModal();
-            }
         });
     })();
 </script>

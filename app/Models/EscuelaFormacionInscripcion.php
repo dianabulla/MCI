@@ -17,6 +17,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
             Id_Persona INT NULL,
             Nombre VARCHAR(160) NOT NULL,
             Genero VARCHAR(40) NULL,
+            Edad TINYINT UNSIGNED NULL,
             Telefono VARCHAR(40) NULL,
             Cedula VARCHAR(50) NULL,
             Lider VARCHAR(160) NULL,
@@ -44,6 +45,17 @@ class EscuelaFormacionInscripcion extends BaseModel {
             }
         } catch (Exception $e) {
             error_log('No se pudo asegurar columna Genero en escuela_formacion_inscripcion: ' . $e->getMessage());
+        }
+
+        try {
+            $stmt = $this->db->prepare("SHOW COLUMNS FROM {$this->table} LIKE ?");
+            $stmt->execute(['Edad']);
+            $col = $stmt->fetch();
+            if (empty($col)) {
+                $this->db->exec("ALTER TABLE {$this->table} ADD COLUMN Edad TINYINT UNSIGNED NULL AFTER Genero");
+            }
+        } catch (Exception $e) {
+            error_log('No se pudo asegurar columna Edad en escuela_formacion_inscripcion: ' . $e->getMessage());
         }
 
         try {
@@ -215,6 +227,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
             'Id_Persona' => $idPersona,
             'Nombre' => (string)($persona['Nombre'] ?? ''),
             'Genero' => trim((string)($persona['Genero'] ?? '')) !== '' ? (string)$persona['Genero'] : null,
+            'Edad' => null,
             'Telefono' => trim((string)($persona['Telefono'] ?? '')) !== '' ? (string)$persona['Telefono'] : null,
             'Cedula' => trim((string)($persona['Numero_Documento'] ?? '')) !== '' ? (string)$persona['Numero_Documento'] : null,
             'Lider' => trim((string)($persona['Nombre_Lider'] ?? '')) !== '' ? (string)$persona['Nombre_Lider'] : null,

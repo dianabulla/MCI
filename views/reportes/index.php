@@ -58,7 +58,9 @@ $indicadoresCelulas = $indicadores_celulas ?? [
         'nuevas_semestre' => 0,
         'cerradas_semestre' => 0,
         'reportadas_semana' => 0,
-        'no_reportadas_semana' => 0
+        'no_reportadas_semana' => 0,
+        'entregaron_sobre_sin_reportar' => 0,
+        'reportaron_sin_entregar_sobre' => 0,
     ],
     'por_ministerio' => [],
     'por_red' => []
@@ -832,6 +834,16 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
         <div class="report-kpi-label">No reportadas semana</div>
         <div class="report-kpi-value"><?= (int)($indicadoresCelulas['totales']['no_reportadas_semana'] ?? 0) ?></div>
     </button>
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-celula" data-kpi="entregaron_sobre_sin_reportar">
+        <div class="report-kpi-icon">💰</div>
+        <div class="report-kpi-label">Entregaron sobre sin reportar célula</div>
+        <div class="report-kpi-value"><?= (int)($indicadoresCelulas['totales']['entregaron_sobre_sin_reportar'] ?? 0) ?></div>
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-asistencia" data-kpi="reportaron_sin_entregar_sobre">
+        <div class="report-kpi-icon">🧾</div>
+        <div class="report-kpi-label">Reportaron pero no entregaron sobre</div>
+        <div class="report-kpi-value"><?= (int)($indicadoresCelulas['totales']['reportaron_sin_entregar_sobre'] ?? 0) ?></div>
+    </button>
     <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-asistencia" data-kpi="promedio_asistencia">
         <div class="report-kpi-icon">📈</div>
         <div class="report-kpi-label">Promedio asistencia</div>
@@ -1287,11 +1299,19 @@ document.querySelectorAll('.js-kpi-modal').forEach((btn) => {
             const rowsAsistencia = (Array.isArray(asistencia) ? asistencia : [])
                 .filter((item) => {
                     const reales = parseInt(item.Asistencias_Reales || 0, 10);
+                    const entregoSobre = parseInt(item.Entrego_Sobre || 0, 10) === 1;
+                    const reporto = reales > 0;
                     if (kpi === 'reportadas_semana') {
-                        return reales > 0;
+                        return reporto;
                     }
                     if (kpi === 'no_reportadas_semana') {
-                        return reales <= 0;
+                        return !reporto;
+                    }
+                    if (kpi === 'entregaron_sobre_sin_reportar') {
+                        return entregoSobre && !reporto;
+                    }
+                    if (kpi === 'reportaron_sin_entregar_sobre') {
+                        return reporto && !entregoSobre;
                     }
                     return true;
                 })
@@ -1299,13 +1319,20 @@ document.querySelectorAll('.js-kpi-modal').forEach((btn) => {
                     const esperadas = parseInt(item.Asistencias_Esperadas || 0, 10);
                     const reales = parseInt(item.Asistencias_Reales || 0, 10);
                     const porcentaje = esperadas > 0 ? Math.round((reales / esperadas) * 1000) / 10 : 0;
-                    return [item.Nombre_Celula || 'Sin célula', item.Nombre_Lider || 'Sin líder', esperadas, reales, `${porcentaje}%`];
+                    const entregoSobreTxt = parseInt(item.Entrego_Sobre || 0, 10) === 1 ? 'Sí' : 'No';
+                    return [item.Nombre_Celula || 'Sin célula', item.Nombre_Lider || 'Sin líder', esperadas, reales, `${porcentaje}%`, entregoSobreTxt];
                 });
 
             const tituloAsistencia = kpi === 'reportadas_semana'
                 ? 'Células · Reportadas esta semana'
-                : (kpi === 'no_reportadas_semana' ? 'Células · No reportadas esta semana' : 'Células · Promedio de asistencia');
-            abrirModalTarjeta(tituloAsistencia, ['Célula', 'Líder', 'Esperadas', 'Reales', '%'], rowsAsistencia);
+                : (kpi === 'no_reportadas_semana'
+                    ? 'Células · No reportadas esta semana'
+                    : (kpi === 'entregaron_sobre_sin_reportar'
+                        ? 'Células · Entregaron sobre sin reportar célula'
+                        : (kpi === 'reportaron_sin_entregar_sobre'
+                            ? 'Células · Reportaron pero no entregaron sobre'
+                            : 'Células · Promedio de asistencia')));
+            abrirModalTarjeta(tituloAsistencia, ['Célula', 'Líder', 'Esperadas', 'Reales', '%', 'Entregó sobre'], rowsAsistencia);
         }
     });
 });

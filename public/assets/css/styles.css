@@ -2583,3 +2583,119 @@ body.sidebar-collapsed .sidebar-arrow-toggle,
         display: none !important;
     }
 }
+
+    /* Campana global de pendientes en Ganar */
+    .ganar-alert-bell {
+        position: fixed;
+        right: 22px;
+        bottom: 26px;
+        width: 58px;
+        height: 58px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #1e4a89, #2e67b3);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        box-shadow: 0 10px 26px rgba(18, 47, 96, 0.34);
+        z-index: 1095;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .ganar-alert-bell:hover {
+        color: #fff;
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 14px 28px rgba(18, 47, 96, 0.4);
+    }
+
+    .ganar-alert-bell i {
+        font-size: 24px;
+    }
+
+    .ganar-alert-badge {
+        position: absolute;
+        top: -6px;
+        right: -2px;
+        min-width: 24px;
+        height: 24px;
+        padding: 0 6px;
+        border-radius: 999px;
+        background: #d7263d;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 24px;
+        text-align: center;
+        border: 2px solid #fff;
+    }
+
+    .ganar-alert-toast {
+        position: fixed;
+        right: 22px;
+        bottom: 96px;
+        width: min(360px, calc(100vw - 24px));
+        border-radius: 12px;
+        border: 1px solid #c8d8f0;
+        background: #f7fbff;
+        color: #0f2d57;
+        box-shadow: 0 12px 30px rgba(20, 43, 79, 0.2);
+        z-index: 1096;
+        padding: 12px 14px;
+        display: none;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .ganar-alert-toast.visible {
+        display: flex;
+    }
+
+    .ganar-alert-toast-content {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        flex: 1;
+    }
+
+    .ganar-alert-toast-content i {
+        font-size: 18px;
+        margin-top: 1px;
+        color: #1e4a89;
+    }
+
+    .ganar-alert-toast-content strong {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 3px;
+    }
+
+    .ganar-alert-toast-content p {
+        margin: 0;
+        font-size: 13px;
+        color: #314f78;
+    }
+
+    .ganar-alert-toast-close {
+        border: 0;
+        background: transparent;
+        color: #4a6288;
+        cursor: pointer;
+        padding: 2px;
+        line-height: 1;
+    }
+
+    @media (max-width: 980px) {
+        .ganar-alert-bell {
+            right: 14px;
+            bottom: 16px;
+            width: 54px;
+            height: 54px;
+        }
+
+        .ganar-alert-toast {
+            right: 12px;
+            bottom: 78px;
+            width: calc(100vw - 24px);
+        }
+    }
