@@ -71,6 +71,23 @@ class PersonaController extends BaseController {
         return $scheme . '://' . $host . $base . '/index.php?url=' . urlencode($route);
     }
 
+    private function normalizarGeneroBinario($genero) {
+        $genero = trim((string)$genero);
+        if ($genero === '') {
+            return null;
+        }
+
+        $generoLower = strtolower($genero);
+        if (in_array($generoLower, ['hombre', 'joven hombre', 'joven_hombre', 'masculino', 'm'], true)) {
+            return 'Hombre';
+        }
+        if (in_array($generoLower, ['mujer', 'joven mujer', 'joven_mujer', 'femenino', 'f'], true)) {
+            return 'Mujer';
+        }
+
+        return null;
+    }
+
     private function tieneModuloPermisoExplicito($modulo) {
         return isset($_SESSION['permisos'][$modulo]) && is_array($_SESSION['permisos'][$modulo]);
     }
@@ -2284,9 +2301,13 @@ class PersonaController extends BaseController {
             $_POST['usuario'] = trim((string)($_POST['usuario'] ?? ''));
 
             $idRolAsistente = $this->obtenerIdRolAsistenteDefault();
-            $idRolSeleccionado = AuthController::esAdministrador()
-                ? ($_POST['id_rol'] ?: null)
-                : ($idRolAsistente > 0 ? $idRolAsistente : null);
+            $asignarUsuarioActivo = AuthController::esAdministrador() && ((string)($_POST['asignar_usuario_activo'] ?? '0') === '1');
+            $idRolSeleccionado = ($idRolAsistente > 0) ? $idRolAsistente : null;
+
+            if ($asignarUsuarioActivo && isset($_POST['id_rol']) && $_POST['id_rol'] !== '') {
+                $idRolSeleccionado = $_POST['id_rol'];
+            }
+
             if ((int)$idRolSeleccionado <= 0 && $idRolAsistente > 0) {
                 $idRolSeleccionado = $idRolAsistente;
             }
@@ -2349,7 +2370,7 @@ class PersonaController extends BaseController {
                 'Numero_Documento' => $_POST['numero_documento'] ?: null,
                 'Fecha_Nacimiento' => $_POST['fecha_nacimiento'] ?: null,
                 'Edad' => $_POST['edad'] ?: null,
-                'Genero' => $_POST['genero'] ?: null,
+                'Genero' => $this->normalizarGeneroBinario($_POST['genero'] ?? null),
                 'Telefono' => $_POST['telefono'] ?: null,
                 'Email' => $_POST['email'] ?: null,
                 'Direccion' => $_POST['direccion'] ?: null,
@@ -2544,9 +2565,11 @@ class PersonaController extends BaseController {
             $_POST['usuario'] = trim((string)($_POST['usuario'] ?? ''));
 
             $personaAntes = $this->personaModel->getById($id);
-            $idRolSeleccionado = AuthController::esAdministrador()
-                ? (isset($_POST['id_rol']) && $_POST['id_rol'] !== '' ? $_POST['id_rol'] : ($personaAntes['Id_Rol'] ?? null))
-                : ($personaAntes['Id_Rol'] ?? null);
+            $asignarUsuarioActivo = AuthController::esAdministrador() && ((string)($_POST['asignar_usuario_activo'] ?? '0') === '1');
+            $idRolSeleccionado = $personaAntes['Id_Rol'] ?? null;
+            if ($asignarUsuarioActivo && isset($_POST['id_rol']) && $_POST['id_rol'] !== '') {
+                $idRolSeleccionado = $_POST['id_rol'];
+            }
             $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
             $idMinisterioNormalizado = $this->normalizarIdMinisterioPost($_POST['id_ministerio'] ?? null);
             $idLiderNormalizado = $this->normalizarIdLiderPost($_POST['id_lider'] ?? null, $id);
@@ -2590,7 +2613,7 @@ class PersonaController extends BaseController {
                 'Numero_Documento' => $_POST['numero_documento'] ?: null,
                 'Fecha_Nacimiento' => $_POST['fecha_nacimiento'] ?: null,
                 'Edad' => $_POST['edad'] ?: null,
-                'Genero' => $_POST['genero'] ?: null,
+                'Genero' => $this->normalizarGeneroBinario($_POST['genero'] ?? null),
                 'Telefono' => $_POST['telefono'] ?: null,
                 'Email' => $_POST['email'] ?: null,
                 'Direccion' => $_POST['direccion'] ?: null,

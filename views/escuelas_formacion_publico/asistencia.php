@@ -148,6 +148,7 @@
             margin-top: 16px;
             display: flex;
             justify-content: flex-end;
+            gap: 10px;
         }
 
         .btn {
@@ -165,6 +166,40 @@
         .btn:disabled {
             opacity: .6;
             cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            color: #2a5a56;
+            background: #eef7f6;
+            border: 1px solid #c8dfdc;
+            box-shadow: none;
+        }
+
+        .btn-secondary:hover {
+            background: #e4f1ef;
+        }
+
+        .toast {
+            position: fixed;
+            left: 50%;
+            bottom: 22px;
+            transform: translateX(-50%) translateY(10px);
+            background: #1f4f4c;
+            color: #fff;
+            border-radius: 999px;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .2s ease, transform .2s ease;
+            z-index: 1200;
+        }
+
+        .toast.active {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
         }
 
         @media (max-width: 720px) {
@@ -190,16 +225,16 @@
 
         <p class="help">Escribe teléfono o cédula. Si la persona ya está inscrita, se llenarán los datos automáticamente para registrar asistencia.</p>
 
-        <form method="POST" action="<?= PUBLIC_URL ?>?url=escuelas_formacion/asistencia-publica/guardar" id="form-asistencia-publica">
+        <form method="POST" action="<?= PUBLIC_URL ?>?url=escuelas_formacion/asistencia-publica/guardar" id="form-asistencia-publica" autocomplete="off">
             <div class="grid">
                 <div class="field">
                     <label for="telefono">Teléfono</label>
-                    <input type="text" id="telefono" name="telefono" value="<?= htmlspecialchars((string)($old['telefono'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej: 3001234567">
+                    <input type="text" id="telefono" name="telefono" required inputmode="numeric" pattern="[0-9]{4,}" minlength="4" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="<?= htmlspecialchars((string)($old['telefono'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej: 3001234567">
                 </div>
 
                 <div class="field">
                     <label for="cedula">Cédula</label>
-                    <input type="text" id="cedula" name="cedula" value="<?= htmlspecialchars((string)($old['cedula'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej: 12345678">
+                    <input type="text" id="cedula" name="cedula" required inputmode="numeric" pattern="[0-9]{4,}" minlength="4" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="<?= htmlspecialchars((string)($old['cedula'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej: 12345678">
                 </div>
 
                 <div class="field full">
@@ -228,11 +263,14 @@
             <div id="estado-busqueda" class="status"></div>
 
             <div class="actions">
+                <button type="button" class="btn btn-secondary" id="btn-limpiar-form">Limpiar formulario</button>
                 <button type="submit" class="btn" id="btn-guardar" disabled>Registrar asistencia</button>
             </div>
         </form>
     </div>
 </div>
+
+<div id="toast-feedback" class="toast" aria-live="polite"></div>
 
 <script>
 (function () {
@@ -244,10 +282,14 @@
     const generoInput = document.getElementById('genero');
     const ministerioInput = document.getElementById('ministerio');
     const inscripcionSelect = document.getElementById('id_inscripcion');
+    const form = document.getElementById('form-asistencia-publica');
     const estadoBusqueda = document.getElementById('estado-busqueda');
     const btnGuardar = document.getElementById('btn-guardar');
+    const btnLimpiarForm = document.getElementById('btn-limpiar-form');
+    const toastFeedback = document.getElementById('toast-feedback');
 
     let debounceTimer = null;
+    let toastTimer = null;
 
     function setEstado(tipo, mensaje) {
         estadoBusqueda.classList.remove('active', 'info', 'warn', 'error');
@@ -267,6 +309,22 @@
         }
     }
 
+    function mostrarToast(mensaje) {
+        if (!toastFeedback) {
+            return;
+        }
+
+        if (toastTimer) {
+            clearTimeout(toastTimer);
+        }
+
+        toastFeedback.textContent = String(mensaje || 'Listo');
+        toastFeedback.classList.add('active');
+        toastTimer = setTimeout(function () {
+            toastFeedback.classList.remove('active');
+        }, 1500);
+    }
+
     function limpiarDatos() {
         nombreInput.value = '';
         generoInput.value = '';
@@ -279,9 +337,23 @@
         const persona = data.persona || {};
         const programas = Array.isArray(data.programas) ? data.programas : [];
 
-        nombreInput.value = String(persona.nombre || '');
-        generoInput.value = String(persona.genero || '');
-        ministerioInput.value = String(persona.ministerio || '');
+        const asignarSiFalta = function(input, valor) {
+            if (!input) {
+                return;
+            }
+
+            const actual = String(input.value || '').trim();
+            const nuevoValor = String(valor || '').trim();
+            if (actual === '' && nuevoValor !== '') {
+                input.value = nuevoValor;
+            }
+        };
+
+        asignarSiFalta(telefonoInput, persona.telefono || '');
+        asignarSiFalta(cedulaInput, persona.cedula || '');
+        asignarSiFalta(nombreInput, persona.nombre || '');
+        asignarSiFalta(generoInput, persona.genero || '');
+        asignarSiFalta(ministerioInput, persona.ministerio || '');
 
         inscripcionSelect.innerHTML = '';
         if (programas.length === 0) {
@@ -336,10 +408,86 @@
         debounceTimer = setTimeout(buscar, 300);
     }
 
+    function esSoloDigitos(valor) {
+        return /^\d+$/.test(String(valor || '').trim());
+    }
+
+    cedulaInput.addEventListener('input', function () {
+        cedulaInput.value = String(cedulaInput.value || '').replace(/\D+/g, '');
+    });
+
+    telefonoInput.addEventListener('input', function () {
+        telefonoInput.value = String(telefonoInput.value || '').replace(/\D+/g, '');
+    });
+
     telefonoInput.addEventListener('input', programarBusqueda);
     cedulaInput.addEventListener('input', programarBusqueda);
     telefonoInput.addEventListener('blur', buscar);
     cedulaInput.addEventListener('blur', buscar);
+
+    form.addEventListener('submit', function (event) {
+        const telefono = String(telefonoInput.value || '').trim();
+        const cedula = String(cedulaInput.value || '').trim();
+
+        if (!telefono) {
+            event.preventDefault();
+            alert('El telefono es obligatorio.');
+            telefonoInput.focus();
+            return;
+        }
+
+        if (!cedula) {
+            event.preventDefault();
+            alert('La cedula es obligatoria.');
+            cedulaInput.focus();
+            return;
+        }
+
+        if (!esSoloDigitos(telefono)) {
+            event.preventDefault();
+            alert('El telefono solo puede contener numeros.');
+            telefonoInput.focus();
+            return;
+        }
+
+        if (!esSoloDigitos(cedula)) {
+            event.preventDefault();
+            alert('La cedula solo puede contener numeros.');
+            cedulaInput.focus();
+            return;
+        }
+
+        if (telefono.length < 4) {
+            event.preventDefault();
+            alert('El telefono debe tener al menos 4 numeros.');
+            telefonoInput.focus();
+            return;
+        }
+
+        if (cedula.length < 4) {
+            event.preventDefault();
+            alert('La cedula debe tener al menos 4 numeros.');
+            cedulaInput.focus();
+            return;
+        }
+    });
+
+    if (btnLimpiarForm) {
+        btnLimpiarForm.addEventListener('click', function () {
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+                debounceTimer = null;
+            }
+
+            form.reset();
+            telefonoInput.value = '';
+            cedulaInput.value = '';
+            limpiarDatos();
+            setEstado('', '');
+            telefonoInput.focus();
+            mostrarToast('Formulario limpiado');
+        });
+    }
 
     if ((telefonoInput.value || '').trim() !== '' || (cedulaInput.value || '').trim() !== '') {
         buscar();

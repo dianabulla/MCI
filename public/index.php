@@ -21,15 +21,52 @@ define('VIEWS', ROOT . '/views');
 // Cargar conexión a base de datos
 require_once ROOT . '/conexion.php';
 
-// Cargar configuración
-require_once APP . '/Config/config.php';
-require_once APP . '/Config/Database.php';
+// Cargar configuración con fallback de mayúsculas/minúsculas (Linux es case-sensitive)
+$configPathCandidates = [
+    APP . '/Config/config.php',
+    APP . '/config/config.php',
+];
+
+$databasePathCandidates = [
+    APP . '/Config/Database.php',
+    APP . '/config/Database.php',
+    APP . '/config/database.php',
+];
+
+$routesPathCandidates = [
+    APP . '/Config/routes.php',
+    APP . '/config/routes.php',
+];
+
+$configPath = null;
+foreach ($configPathCandidates as $candidate) {
+    if (is_file($candidate)) {
+        $configPath = $candidate;
+        break;
+    }
+}
+if ($configPath === null) {
+    die('No se encontró el archivo de configuración principal (config.php).');
+}
+require_once $configPath;
+
+$databasePath = null;
+foreach ($databasePathCandidates as $candidate) {
+    if (is_file($candidate)) {
+        $databasePath = $candidate;
+        break;
+    }
+}
+if ($databasePath === null) {
+    die('No se encontró el archivo de conexión de aplicación (Database.php).');
+}
+require_once $databasePath;
 
 // Fallback de URLs para entornos donde no estén definidas en config.php
 if (!defined('PUBLIC_URL')) {
     $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/public/index.php'));
     $publicPath = rtrim(dirname($scriptName), '/');
-    $publicBase = $publicPath !== '' ? $publicPath : '/public';
+    $publicBase = $publicPath !== '' ? $publicPath : '/';
     define('PUBLIC_URL', rtrim($publicBase, '/') . '/');
 }
 
@@ -46,7 +83,19 @@ if (!defined('ASSETS_URL')) {
 require_once APP . '/Controllers/BaseController.php';
 
 // Cargar rutas
-$routes = require_once APP . '/Config/routes.php';
+$routesPath = null;
+foreach ($routesPathCandidates as $candidate) {
+    if (is_file($candidate)) {
+        $routesPath = $candidate;
+        break;
+    }
+}
+
+if ($routesPath === null) {
+    die('No se encontró el archivo de rutas (routes.php).');
+}
+
+$routes = require_once $routesPath;
 
 if (!is_array($routes)) {
     $routes = [];
@@ -79,6 +128,7 @@ $rutasPublicas = [
     'teen/registro-publico',
     'teen/guardar-menor-publico',
     'teen/consulta-codigo',
+    'escuelas_formacion/codigos',
     'escuelas_formacion/registro-publico',
     'escuelas_formacion/registro-publico/buscar-persona',
     'escuelas_formacion/registro-publico/buscar-lideres',

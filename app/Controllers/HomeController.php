@@ -10,7 +10,7 @@ class HomeController extends BaseController {
     private function getProgramaEscuelaLabel($programa) {
         $map = [
             'universidad_vida' => 'Universidad de la Vida',
-            'encuentro' => 'Encuentro',
+            'encuentro' => 'Universidad de la Vida',
             'bautismo' => 'Bautismo',
             'capacitacion_destino' => 'Capacitación Destino',
             'capacitacion_destino_nivel_1' => 'Capacitación Destino - Nivel 1',
@@ -24,6 +24,11 @@ class HomeController extends BaseController {
         }
 
         return $map[$programa] ?? $programa;
+    }
+
+    private function normalizarProgramaConsolidar($programa) {
+        $programa = trim((string)$programa);
+        return $programa === 'encuentro' ? 'universidad_vida' : $programa;
     }
 
     private function construirOpcionesFiltroMinisterioLider($filtroCelulas) {
@@ -186,7 +191,13 @@ class HomeController extends BaseController {
 
     private function normalizarFiltroGeneroEscuela($valor) {
         $valor = strtolower(trim((string)$valor));
-        return in_array($valor, ['', 'todos', 'hombres', 'mujeres', 'joven_hombre', 'joven_mujer'], true) ? $valor : '';
+        if ($valor === 'joven_hombre') {
+            return 'hombres';
+        }
+        if ($valor === 'joven_mujer') {
+            return 'mujeres';
+        }
+        return in_array($valor, ['', 'todos', 'hombres', 'mujeres'], true) ? $valor : '';
     }
 
     private function esGeneroHombre($genero) {
@@ -232,16 +243,57 @@ class HomeController extends BaseController {
                 return $this->esGeneroMujer($genero);
             }
 
-            if ($filtroGenero === 'joven_hombre') {
-                return $this->esGeneroJovenHombre($genero);
-            }
-
-            if ($filtroGenero === 'joven_mujer') {
-                return $this->esGeneroJovenMujer($genero);
-            }
-
             return $this->esGeneroHombre($genero);
         }));
+    }
+
+    private function construirClaveUnicaInscripcion(array $inscripcion): string {
+        $idPersona = (int)($inscripcion['Id_Persona'] ?? 0);
+        if ($idPersona > 0) {
+            return 'id:' . $idPersona;
+        }
+
+        $cedula = preg_replace('/\D+/', '', (string)($inscripcion['Cedula'] ?? ''));
+        if ($cedula !== '') {
+            return 'cc:' . $cedula;
+        }
+
+        $telefono = preg_replace('/\D+/', '', (string)($inscripcion['Telefono'] ?? ''));
+        if ($telefono !== '') {
+            return 'tel:' . $telefono;
+        }
+
+        $nombre = strtolower(trim((string)($inscripcion['Nombre'] ?? '')));
+        if ($nombre !== '') {
+            return 'nom:' . $nombre;
+        }
+
+        return 'ins:' . (int)($inscripcion['Id_Inscripcion'] ?? 0);
+    }
+
+    private function deduplicarInscripcionesPorPersona(array $inscripciones): array {
+        $inscripciones = array_values($inscripciones);
+        usort($inscripciones, static function($a, $b) {
+            $fa = (string)($a['Fecha_Registro'] ?? '');
+            $fb = (string)($b['Fecha_Registro'] ?? '');
+            if ($fa === $fb) {
+                return (int)($b['Id_Inscripcion'] ?? 0) <=> (int)($a['Id_Inscripcion'] ?? 0);
+            }
+            return strcmp($fb, $fa);
+        });
+
+        $deduplicadas = [];
+        $vistas = [];
+        foreach ($inscripciones as $inscripcion) {
+            $clave = $this->construirClaveUnicaInscripcion((array)$inscripcion);
+            if (isset($vistas[$clave])) {
+                continue;
+            }
+            $vistas[$clave] = true;
+            $deduplicadas[] = $inscripcion;
+        }
+
+        return $deduplicadas;
     }
 
     private function coincideBusquedaLider(array $lider, $buscar) {
@@ -411,12 +463,11 @@ class HomeController extends BaseController {
             'ruta_exportar' => 'home/consolidar/exportar',
             'vista' => 'home/consolidar',
             'programa_default' => 'universidad_vida',
-            'programas_permitidos' => ['universidad_vida', 'encuentro'],
+            'programas_permitidos' => ['universidad_vida'],
             'programas_opciones' => [
                 'universidad_vida' => 'Universidad de la Vida',
-                'encuentro' => 'Encuentro',
             ],
-            'resumen_programas' => ['universidad_vida', 'encuentro'],
+            'resumen_programas' => ['universidad_vida'],
         ];
     }
 
@@ -438,6 +489,9 @@ class HomeController extends BaseController {
         if ($filtroProgramaInscripcion === 'capacitacion_destino') {
             $filtroProgramaInscripcion = 'capacitacion_destino_nivel_1';
         }
+        if ((string)($config['modulo'] ?? '') === 'consolidar') {
+            $filtroProgramaInscripcion = $this->normalizarProgramaConsolidar($filtroProgramaInscripcion);
+        }
 
         if ($filtroProgramaInscripcion === '' || !in_array($filtroProgramaInscripcion, $config['programas_permitidos'], true)) {
             $filtroProgramaInscripcion = $config['programa_default'];
@@ -449,16 +503,34 @@ class HomeController extends BaseController {
         $idMinisterioFiltro = ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null;
         $idLiderFiltro = ($filtroLider !== '' && (int)$filtroLider > 0) ? (int)$filtroLider : null;
 
-        $inscripcionesPublicas = $inscripcionModel->getListado(
-            $filtroProgramaInscripcion,
-            '',
-            300,
-            $filtroGenero,
-            $idMinisterioFiltro,
-            $idLiderFiltro
-        );
-        $inscripcionesPublicas = array_values(array_filter($inscripcionesPublicas, static function($ins) use ($filtroProgramaInscripcion) {
-            return (string)($ins['Programa'] ?? '') === $filtroProgramaInscripcion;
+        $programasConsulta = ((string)($config['modulo'] ?? '') === 'consolidar' && $filtroProgramaInscripcion === 'universidad_vida')
+            ? ['universidad_vida', 'encuentro']
+            : [$filtroProgramaInscripcion];
+
+        $inscripcionesPublicas = [];
+        foreach ($programasConsulta as $programaConsulta) {
+            $inscripcionesPrograma = $inscripcionModel->getListado(
+                $programaConsulta,
+                '',
+                300,
+                $filtroGenero,
+                $idMinisterioFiltro,
+                $idLiderFiltro
+            );
+
+            foreach ($inscripcionesPrograma as $inscripcionTmp) {
+                $idIns = (int)($inscripcionTmp['Id_Inscripcion'] ?? 0);
+                if ($idIns <= 0) {
+                    continue;
+                }
+                $inscripcionesPublicas[$idIns] = $inscripcionTmp;
+            }
+        }
+
+        $inscripcionesPublicas = $this->deduplicarInscripcionesPorPersona($inscripcionesPublicas);
+
+        $inscripcionesPublicas = array_values(array_filter($inscripcionesPublicas, static function($ins) use ($programasConsulta) {
+            return in_array((string)($ins['Programa'] ?? ''), $programasConsulta, true);
         }));
         $inscripcionesPublicas = $this->filtrarInscripcionesPorNombreFlexible($inscripcionesPublicas, $filtroBuscar);
 
@@ -481,7 +553,18 @@ class HomeController extends BaseController {
 
         $rowsDetalle = $this->filtrarReportePorNombreFlexible($rowsDetalle, $filtroBuscar);
 
-        $estadosDetalle = $estadoEscuelaModel->getEstadosDetallePorPrograma(array_column($rowsDetalle, 'id_persona'), $filtroProgramaInscripcion);
+        $estadosDetalle = [];
+        foreach ($programasConsulta as $programaConsulta) {
+            $estadosPrograma = $estadoEscuelaModel->getEstadosDetallePorPrograma(array_column($rowsDetalle, 'id_persona'), $programaConsulta);
+            foreach ($estadosPrograma as $idPersonaEstado => $estadoTmp) {
+                $idPersonaEstado = (int)$idPersonaEstado;
+                if (!isset($estadosDetalle[$idPersonaEstado])) {
+                    $estadosDetalle[$idPersonaEstado] = ['existe' => false, 'va' => false];
+                }
+                $estadosDetalle[$idPersonaEstado]['existe'] = !empty($estadosDetalle[$idPersonaEstado]['existe']) || !empty($estadoTmp['existe']);
+                $estadosDetalle[$idPersonaEstado]['va'] = !empty($estadosDetalle[$idPersonaEstado]['va']) || !empty($estadoTmp['va']);
+            }
+        }
         foreach ($rowsDetalle as &$rowDetalle) {
             $idPersona = (int)($rowDetalle['id_persona'] ?? 0);
             $detalleEstado = $estadosDetalle[$idPersona] ?? ['existe' => false, 'va' => false];
@@ -497,10 +580,14 @@ class HomeController extends BaseController {
         $resumenInscripciones = $inscripcionModel->getResumenProgramas();
         $tarjetasResumen = [];
         foreach ($config['resumen_programas'] as $programa) {
+            $totalTarjeta = (int)($resumenInscripciones[$programa] ?? 0);
+            if ((string)($config['modulo'] ?? '') === 'consolidar' && $programa === 'universidad_vida') {
+                $totalTarjeta += (int)($resumenInscripciones['encuentro'] ?? 0);
+            }
             $tarjetasResumen[] = [
                 'programa' => $programa,
                 'label' => $this->getProgramaEscuelaLabel($programa),
-                'total' => (int)($resumenInscripciones[$programa] ?? 0),
+                'total' => $totalTarjeta,
             ];
         }
 
@@ -546,6 +633,9 @@ class HomeController extends BaseController {
         if ($filtroProgramaInscripcion === 'capacitacion_destino') {
             $filtroProgramaInscripcion = 'capacitacion_destino_nivel_1';
         }
+        if ((string)($config['modulo'] ?? '') === 'consolidar') {
+            $filtroProgramaInscripcion = $this->normalizarProgramaConsolidar($filtroProgramaInscripcion);
+        }
 
         if ($filtroProgramaInscripcion === '' || !in_array($filtroProgramaInscripcion, $config['programas_permitidos'], true)) {
             $filtroProgramaInscripcion = $config['programa_default'];
@@ -562,16 +652,34 @@ class HomeController extends BaseController {
 
         $idMinisterioFiltro = ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null;
 
-        $inscripcionesPublicas = $inscripcionModel->getListado(
-            $filtroProgramaInscripcion,
-            '',
-            300,
-            'todos',
-            $idMinisterioFiltro,
-            null
-        );
-        $inscripcionesPublicas = array_values(array_filter($inscripcionesPublicas, static function($ins) use ($filtroProgramaInscripcion) {
-            return (string)($ins['Programa'] ?? '') === $filtroProgramaInscripcion;
+        $programasConsulta = ((string)($config['modulo'] ?? '') === 'consolidar' && $filtroProgramaInscripcion === 'universidad_vida')
+            ? ['universidad_vida', 'encuentro']
+            : [$filtroProgramaInscripcion];
+
+        $inscripcionesPublicas = [];
+        foreach ($programasConsulta as $programaConsulta) {
+            $inscripcionesPrograma = $inscripcionModel->getListado(
+                $programaConsulta,
+                '',
+                300,
+                'todos',
+                $idMinisterioFiltro,
+                null
+            );
+
+            foreach ($inscripcionesPrograma as $inscripcionTmp) {
+                $idIns = (int)($inscripcionTmp['Id_Inscripcion'] ?? 0);
+                if ($idIns <= 0) {
+                    continue;
+                }
+                $inscripcionesPublicas[$idIns] = $inscripcionTmp;
+            }
+        }
+
+        $inscripcionesPublicas = $this->deduplicarInscripcionesPorPersona($inscripcionesPublicas);
+
+        $inscripcionesPublicas = array_values(array_filter($inscripcionesPublicas, static function($ins) use ($programasConsulta) {
+            return in_array((string)($ins['Programa'] ?? ''), $programasConsulta, true);
         }));
 
         $rowsAsistencia = [];
@@ -588,6 +696,7 @@ class HomeController extends BaseController {
                 'nombre' => (string)($ins['Nombre'] ?? ''),
                 'lider' => (string)($ins['Lider'] ?? ''),
                 'ministerio' => (string)($ins['Nombre_Ministerio'] ?? ''),
+                'genero' => (string)($ins['Genero'] ?? ''),
             ];
         }
 
@@ -599,8 +708,48 @@ class HomeController extends BaseController {
         $idsPersona = array_map(static function($row) {
             return (int)($row['id_persona'] ?? 0);
         }, $rowsAsistencia);
-        $asistencias = $asistenciaModel->getAsistenciasPorPrograma($idsPersona, (string)$config['modulo'], $filtroProgramaInscripcion);
-        $fechasClases = $asistenciaModel->getFechasClases((string)$config['modulo'], $filtroProgramaInscripcion, $totalClases);
+        $asistencias = [];
+        foreach ($programasConsulta as $programaConsulta) {
+            $asistenciasPrograma = $asistenciaModel->getAsistenciasPorPrograma($idsPersona, (string)$config['modulo'], $programaConsulta);
+            foreach ($asistenciasPrograma as $idPersonaAsistencia => $clasesTmp) {
+                $idPersonaAsistencia = (int)$idPersonaAsistencia;
+                if (!isset($asistencias[$idPersonaAsistencia])) {
+                    $asistencias[$idPersonaAsistencia] = [];
+                }
+                foreach ((array)$clasesTmp as $numeroClaseTmp => $valorClaseTmp) {
+                    $numeroClaseTmp = (int)$numeroClaseTmp;
+                    if ($numeroClaseTmp <= 0) {
+                        continue;
+                    }
+                    $asistencias[$idPersonaAsistencia][$numeroClaseTmp] = !empty($asistencias[$idPersonaAsistencia][$numeroClaseTmp]) || !empty($valorClaseTmp);
+                }
+            }
+        }
+
+        $fechasClases = [];
+        $fechasClasesHombres = [];
+        $fechasClasesMujeres = [];
+        for ($i = 1; $i <= $totalClases; $i++) {
+            $fechasClases[$i] = '';
+            $fechasClasesHombres[$i] = '';
+            $fechasClasesMujeres[$i] = '';
+        }
+        foreach ($programasConsulta as $programaConsulta) {
+            $fechasPrograma = $asistenciaModel->getFechasClases((string)$config['modulo'], $programaConsulta, $totalClases);
+            $fechasProgramaHombres = $asistenciaModel->getFechasClases((string)$config['modulo'], $programaConsulta, $totalClases, 'hombres');
+            $fechasProgramaMujeres = $asistenciaModel->getFechasClases((string)$config['modulo'], $programaConsulta, $totalClases, 'mujeres');
+            for ($i = 1; $i <= $totalClases; $i++) {
+                if (($fechasClases[$i] ?? '') === '' && !empty($fechasPrograma[$i])) {
+                    $fechasClases[$i] = (string)$fechasPrograma[$i];
+                }
+                if (($fechasClasesHombres[$i] ?? '') === '' && !empty($fechasProgramaHombres[$i])) {
+                    $fechasClasesHombres[$i] = (string)$fechasProgramaHombres[$i];
+                }
+                if (($fechasClasesMujeres[$i] ?? '') === '' && !empty($fechasProgramaMujeres[$i])) {
+                    $fechasClasesMujeres[$i] = (string)$fechasProgramaMujeres[$i];
+                }
+            }
+        }
 
         foreach ($rowsAsistencia as &$row) {
             $idPersona = (int)($row['id_persona'] ?? 0);
@@ -612,13 +761,19 @@ class HomeController extends BaseController {
         unset($row);
 
         if ($filtroFechaDesde !== '' || $filtroFechaHasta !== '') {
-            $rowsAsistencia = array_values(array_filter($rowsAsistencia, static function($row) use ($fechasClases, $totalClases, $filtroFechaDesde, $filtroFechaHasta) {
+            $rowsAsistencia = array_values(array_filter($rowsAsistencia, static function($row) use ($fechasClases, $fechasClasesHombres, $fechasClasesMujeres, $totalClases, $filtroFechaDesde, $filtroFechaHasta) {
+                $generoRegistro = strtolower(trim((string)($row['genero'] ?? '')));
+                $esMujer = strpos($generoRegistro, 'mujer') !== false
+                    || strpos($generoRegistro, 'femen') !== false
+                    || in_array($generoRegistro, ['f', 'fem', 'female'], true);
+                $mapaFechas = $esMujer ? $fechasClasesMujeres : $fechasClasesHombres;
+
                 for ($i = 1; $i <= $totalClases; $i++) {
                     if (empty($row['clases'][$i])) {
                         continue;
                     }
 
-                    $fechaClase = (string)($fechasClases[$i] ?? '');
+                    $fechaClase = (string)($mapaFechas[$i] ?? ($fechasClases[$i] ?? ''));
                     if ($fechaClase === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaClase)) {
                         continue;
                     }
@@ -641,10 +796,14 @@ class HomeController extends BaseController {
         $resumenInscripciones = $inscripcionModel->getResumenProgramas();
         $tarjetasResumen = [];
         foreach ($config['resumen_programas'] as $programa) {
+            $totalTarjeta = (int)($resumenInscripciones[$programa] ?? 0);
+            if ((string)($config['modulo'] ?? '') === 'consolidar' && $programa === 'universidad_vida') {
+                $totalTarjeta += (int)($resumenInscripciones['encuentro'] ?? 0);
+            }
             $tarjetasResumen[] = [
                 'programa' => $programa,
                 'label' => $this->getProgramaEscuelaLabel($programa),
-                'total' => (int)($resumenInscripciones[$programa] ?? 0),
+                'total' => $totalTarjeta,
             ];
         }
 
@@ -663,6 +822,8 @@ class HomeController extends BaseController {
             'tarjetas_resumen' => $tarjetasResumen,
             'total_clases' => $totalClases,
             'fechas_clases' => $fechasClases,
+            'fechas_clases_hombres' => $fechasClasesHombres,
+            'fechas_clases_mujeres' => $fechasClasesMujeres,
             'rows_asistencia' => $rowsAsistencia,
         ];
     }
@@ -706,13 +867,31 @@ class HomeController extends BaseController {
         $filtroEventos = DataIsolation::generarFiltroEventos();
         $resumenInscripciones = $inscripcionModel->getResumenProgramas();
 
+        // La tarjeta principal de Consolidar debe reflejar exactamente lo mismo
+        // que se muestra en el panel de Consolidar (Hombres + Mujeres visibles).
+        $datosConsolidar = $this->obtenerDatosModuloFormacion('consolidar');
+        $inscripcionesConsolidar = $datosConsolidar['inscripciones_publicas'] ?? [];
+        $totalConsolidarPanel = 0;
+        foreach ($inscripcionesConsolidar as $inscripcionConsolidar) {
+            $generoRegistro = strtolower(trim((string)($inscripcionConsolidar['Genero'] ?? '')));
+            $esMujer = strpos($generoRegistro, 'mujer') !== false
+                || strpos($generoRegistro, 'femen') !== false
+                || in_array($generoRegistro, ['f', 'fem', 'female'], true);
+            $esHombre = strpos($generoRegistro, 'hombre') !== false
+                || strpos($generoRegistro, 'mascul') !== false
+                || in_array($generoRegistro, ['m', 'masc', 'male', 'h'], true);
+            if ($esMujer || $esHombre) {
+                $totalConsolidarPanel++;
+            }
+        }
+
         $data = [
             'totalPersonas' => count($personaModel->getAllActivosWithRole($filtroPersonas)),
             'totalCelulas' => count($celulaModel->getAllWithMemberCountAndRole($filtroCelulas)),
             'totalMinisterios' => count($ministerioModel->getAllWithMemberCountAndRole($filtroMinisterios)),
             'totalLideresCelula' => $personaModel->getTotalLideresCelulaWithRole($filtroPersonas),
             'eventosProximos' => $eventoModel->getUpcomingWithRole($filtroEventos),
-            'totalConsolidar' => (int)($resumenInscripciones['universidad_vida'] ?? 0) + (int)($resumenInscripciones['encuentro'] ?? 0),
+            'totalConsolidar' => (int)$totalConsolidarPanel,
             'totalDiscipular' => (int)($resumenInscripciones['bautismo'] ?? 0)
                 + (int)($resumenInscripciones['capacitacion_destino_nivel_1'] ?? 0)
                 + (int)($resumenInscripciones['capacitacion_destino_nivel_2'] ?? 0)
@@ -904,11 +1083,6 @@ class HomeController extends BaseController {
                 continue;
             }
 
-            $extension = strtolower((string)pathinfo($archivo, PATHINFO_EXTENSION));
-            if ($extension !== 'pdf') {
-                continue;
-            }
-
             $creadoTs = @filectime($ruta);
             if (!$creadoTs) {
                 $creadoTs = @filemtime($ruta);
@@ -932,7 +1106,7 @@ class HomeController extends BaseController {
 
     private function extraerInfoLoteMaterial(array $modulo, string $archivo): array {
         $base = preg_replace('/[^a-zA-Z0-9_\-]/', '_', strtolower((string)$modulo['prefijo_archivo']));
-        $pattern = '/^' . preg_quote($base, '/') . '_(\d{8}_\d{6}_\d{4})_(\d+)\.pdf$/i';
+        $pattern = '/^' . preg_quote($base, '/') . '_(\d{8}_\d{6}_\d{4})_(\d+)\.[a-z0-9]{1,10}$/i';
 
         if (preg_match($pattern, $archivo, $match) === 1) {
             return [
@@ -1271,23 +1445,13 @@ class HomeController extends BaseController {
             throw new Exception('El archivo supera el maximo de 20MB.');
         }
 
-        $nombreOriginal = trim((string)($archivo['name'] ?? 'material.pdf'));
+        $nombreOriginal = trim((string)($archivo['name'] ?? 'material.bin'));
         $extension = strtolower((string)pathinfo($nombreOriginal, PATHINFO_EXTENSION));
-        if ($extension !== 'pdf') {
-            throw new Exception('Solo se permiten archivos PDF.');
+        $extension = preg_replace('/[^a-z0-9]/', '', $extension);
+        if ($extension === '') {
+            $extension = 'bin';
         }
-
-        $mime = '';
-        if (function_exists('finfo_open')) {
-            $f = finfo_open(FILEINFO_MIME_TYPE);
-            if ($f !== false) {
-                $mime = (string)finfo_file($f, (string)($archivo['tmp_name'] ?? ''));
-                finfo_close($f);
-            }
-        }
-        if ($mime !== '' && $mime !== 'application/pdf') {
-            throw new Exception('El archivo no parece ser un PDF valido.');
-        }
+        $extension = substr($extension, 0, 10);
 
         $directorio = $this->obtenerDirectorioModuloMaterial($modulo);
         if (!is_dir($directorio) && !@mkdir($directorio, 0775, true) && !is_dir($directorio)) {
@@ -1297,9 +1461,9 @@ class HomeController extends BaseController {
         $base = preg_replace('/[^a-zA-Z0-9_\-]/', '_', strtolower((string)$modulo['prefijo_archivo']));
         if ($loteId !== '') {
             $indiceSeguro = max(1, $indice);
-            $nombreFinal = $base . '_' . $loteId . '_' . $indiceSeguro . '.pdf';
+            $nombreFinal = $base . '_' . $loteId . '_' . $indiceSeguro . '.' . $extension;
         } else {
-            $nombreFinal = $base . '_' . date('Ymd_His') . '_' . mt_rand(1000, 9999) . '.pdf';
+            $nombreFinal = $base . '_' . date('Ymd_His') . '_' . mt_rand(1000, 9999) . '.' . $extension;
         }
         $destino = $directorio . '/' . $nombreFinal;
 
@@ -1314,7 +1478,7 @@ class HomeController extends BaseController {
         $indice = 0;
 
         if (!isset($archivos['name'])) {
-            throw new Exception('Debes seleccionar al menos un archivo PDF.');
+            throw new Exception('Debes seleccionar al menos un archivo.');
         }
 
         if (is_array($archivos['name'])) {
@@ -1359,8 +1523,9 @@ class HomeController extends BaseController {
     }
 
     private function eliminarArchivoModuloMaterial(array $modulo, $archivo): bool {
-        $archivo = basename((string)$archivo);
-        if ($archivo === '' || strtolower((string)pathinfo($archivo, PATHINFO_EXTENSION)) !== 'pdf') {
+        $archivoRaw = (string)$archivo;
+        $archivo = basename($archivoRaw);
+        if ($archivo === '' || $archivo !== $archivoRaw) {
             return false;
         }
 
@@ -1403,7 +1568,7 @@ class HomeController extends BaseController {
             try {
                 if ($accion === 'subir') {
                     if (!isset($_FILES['material_pdf'])) {
-                        throw new Exception('Debes seleccionar un archivo PDF.');
+                        throw new Exception('Debes seleccionar al menos un archivo.');
                     }
                     $tituloTema = trim((string)($_POST['titulo'] ?? ''));
                     $descripcionTema = trim((string)($_POST['descripcion'] ?? ''));
@@ -1511,7 +1676,7 @@ class HomeController extends BaseController {
             exit;
         }
 
-        if ($archivo === '' || strtolower((string)pathinfo($archivo, PATHINFO_EXTENSION)) !== 'pdf') {
+        if ($archivo === '') {
             $this->redirect((string)($modulos[$moduloClave]['ruta'] ?? 'home/material') . '&mensaje=' . urlencode('Archivo invalido.') . '&tipo=error');
         }
 
@@ -1524,7 +1689,7 @@ class HomeController extends BaseController {
         try {
             $this->registrarVistaMaterialHub($moduloClave, $archivo, $idPersona);
         } catch (Throwable $e) {
-            // Si falla tracking, no bloquear apertura del PDF.
+            // Si falla tracking, no bloquear apertura del archivo.
         }
 
         header('Location: ' . rtrim(PUBLIC_URL, '/') . '/uploads/material_hub/' . rawurlencode($moduloClave) . '/' . rawurlencode($archivo));
@@ -1576,7 +1741,7 @@ class HomeController extends BaseController {
                 exit;
             }
 
-            if ($archivo === '' || strtolower((string)pathinfo($archivo, PATHINFO_EXTENSION)) !== 'pdf') {
+            if ($archivo === '') {
                 echo json_encode(['success' => false, 'message' => 'Archivo invalido']);
                 exit;
             }
@@ -1656,6 +1821,7 @@ class HomeController extends BaseController {
         $idPersona = (int)($_POST['id_persona'] ?? 0);
         $programa = trim((string)($_POST['programa'] ?? ''));
         $va = (int)($_POST['va'] ?? 0) === 1;
+        $programa = $this->normalizarProgramaConsolidar($programa);
 
         if ($idPersona <= 0 || $programa === '') {
             $this->json(['ok' => false, 'error' => 'Datos incompletos'], 422);
@@ -1722,6 +1888,9 @@ class HomeController extends BaseController {
         $programa = trim((string)($_POST['programa'] ?? ''));
         $clase = (int)($_POST['clase'] ?? 0);
         $asistioRaw = trim((string)($_POST['asistio'] ?? ''));
+        if ($modulo === 'consolidar') {
+            $programa = $this->normalizarProgramaConsolidar($programa);
+        }
 
         if ($idPersona <= 0 || $modulo === '' || $programa === '' || $clase <= 0) {
             $this->json(['ok' => false, 'error' => 'Datos incompletos'], 422);
@@ -1752,6 +1921,10 @@ class HomeController extends BaseController {
         $programa = trim((string)($_POST['programa'] ?? ''));
         $clase = (int)($_POST['clase'] ?? 0);
         $fecha = trim((string)($_POST['fecha'] ?? ''));
+        $grupo = strtolower(trim((string)($_POST['grupo'] ?? 'general')));
+        if ($modulo === 'consolidar') {
+            $programa = $this->normalizarProgramaConsolidar($programa);
+        }
 
         if ($modulo === '' || $programa === '' || $clase <= 0) {
             $this->json(['ok' => false, 'error' => 'Datos incompletos'], 422);
@@ -1761,15 +1934,20 @@ class HomeController extends BaseController {
             $this->json(['ok' => false, 'error' => 'Fecha invalida'], 422);
         }
 
+        if (!in_array($grupo, ['hombres', 'mujeres', 'general'], true)) {
+            $grupo = 'general';
+        }
+
         require_once APP . '/Models/EscuelaFormacionAsistenciaClase.php';
         $asistenciaModel = new EscuelaFormacionAsistenciaClase();
-        $ok = $asistenciaModel->upsertFechaClase($modulo, $programa, $clase, $fecha !== '' ? $fecha : null);
+        $ok = $asistenciaModel->upsertFechaClase($modulo, $programa, $clase, $fecha !== '' ? $fecha : null, $grupo);
 
         $this->json([
             'ok' => (bool)$ok,
             'modulo' => $modulo,
             'programa' => $programa,
             'clase' => $clase,
+            'grupo' => $grupo,
             'fecha' => $fecha,
         ]);
     }

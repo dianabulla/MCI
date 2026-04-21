@@ -355,4 +355,28 @@ class EscuelaFormacionInscripcion extends BaseModel {
 
         return $resumen;
     }
+
+    public function getTotalConsolidarUnico($filtroPersonas = '1=1') {
+        $filtroPersonas = trim((string)$filtroPersonas);
+        if ($filtroPersonas === '') {
+            $filtroPersonas = '1=1';
+        }
+
+        $sql = "SELECT COUNT(*) AS Total
+                FROM {$this->table} s
+                LEFT JOIN persona p ON s.Id_Persona = p.Id_Persona
+                                WHERE s.Programa = 'universidad_vida'
+                                    AND (
+                                        LOWER(TRIM(COALESCE(s.Genero, ''))) LIKE '%hombre%'
+                                        OR LOWER(TRIM(COALESCE(s.Genero, ''))) LIKE '%mascul%'
+                                        OR LOWER(TRIM(COALESCE(s.Genero, ''))) IN ('m', 'masc', 'male', 'h')
+                                        OR LOWER(TRIM(COALESCE(s.Genero, ''))) LIKE '%mujer%'
+                                        OR LOWER(TRIM(COALESCE(s.Genero, ''))) LIKE '%femen%'
+                                        OR LOWER(TRIM(COALESCE(s.Genero, ''))) IN ('f', 'fem', 'female')
+                                    )
+                  AND ({$filtroPersonas})";
+
+        $rows = $this->query($sql);
+        return (int)($rows[0]['Total'] ?? 0);
+    }
 }

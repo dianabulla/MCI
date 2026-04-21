@@ -13,6 +13,7 @@ class EscuelaFormacionRegistroController extends BaseController {
     private $inscripcionModel;
     private $soportaProceso = false;
     private $soportaOrigenGanar = false;
+    private $soportaEsAntiguo = false;
     private $soportaObservacionGanadoEn = false;
     private $soportaCreadoPor = false;
     private $soportaCanalCreacion = false;
@@ -33,10 +34,31 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         $this->soportaProceso = $this->personaModel->tieneColumna('Proceso');
         $this->soportaOrigenGanar = $this->personaModel->tieneColumna('Origen_Ganar');
+        $this->soportaEsAntiguo = $this->personaModel->tieneColumna('Es_Antiguo');
         $this->soportaObservacionGanadoEn = $this->personaModel->tieneColumna('Observacion_Ganado_En');
         $this->soportaCreadoPor = $this->personaModel->tieneColumna('Creado_Por');
         $this->soportaCanalCreacion = $this->personaModel->tieneColumna('Canal_Creacion');
         $this->soportaChecklistEscalera = $this->personaModel->tieneColumna('Escalera_Checklist');
+    }
+
+    private function buildAbsolutePublicUrl($route) {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $scheme = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
+        }
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $base = rtrim(PUBLIC_URL, '/');
+        return $scheme . '://' . $host . $base . '/index.php?url=' . urlencode($route);
+    }
+
+    public function codigos() {
+        $urlRegistro = $this->buildAbsolutePublicUrl('escuelas_formacion/registro-publico');
+        $urlAsistencia = $this->buildAbsolutePublicUrl('escuelas_formacion/asistencia-publica');
+
+        $this->view('escuelas_formacion_publico/codigos', [
+            'url_registro' => $urlRegistro,
+            'url_asistencia' => $urlAsistencia,
+        ]);
     }
 
     private function normalizarChecklistEscalera($checklist) {
@@ -275,7 +297,8 @@ class EscuelaFormacionRegistroController extends BaseController {
             return false;
         }
 
-        return preg_match('/^(\d)\1+$/', $digits) === 1;
+        // Invalida solo repeticiones consecutivas (p.ej. 111, 000, 5555).
+        return preg_match('/(\d)\1{' . max(1, $minLen - 1) . ',}/', $digits) === 1;
     }
 
     private function normalizarEdad($valor) {
@@ -285,6 +308,23 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         return (int)$valor;
+    }
+
+    private function normalizarGeneroBinario($genero) {
+        $genero = trim((string)$genero);
+        if ($genero === '') {
+            return '';
+        }
+
+        $generoLower = strtolower($genero);
+        if (in_array($generoLower, ['hombre', 'joven hombre', 'joven_hombre', 'masculino', 'm'], true)) {
+            return 'Hombre';
+        }
+        if (in_array($generoLower, ['mujer', 'joven mujer', 'joven_mujer', 'femenino', 'f'], true)) {
+            return 'Mujer';
+        }
+
+        return '';
     }
 
     private function separarNombreApellido($nombreCompleto) {
@@ -503,6 +543,10 @@ class EscuelaFormacionRegistroController extends BaseController {
             $data['Origen_Ganar'] = 'Domingo';
         }
 
+        if ($this->soportaEsAntiguo) {
+            $data['Es_Antiguo'] = 0;
+        }
+
         return (int)$this->personaModel->create($data);
     }
 
@@ -580,15 +624,39 @@ class EscuelaFormacionRegistroController extends BaseController {
         }, $inscripciones);
 
         $primera = $inscripciones[0];
+        $idPersonaPrimera = (int)($primera['Id_Persona'] ?? 0);
+        $personaReferencia = null;
+
+        if ($idPersonaPrimera > 0) {
+            $personaReferencia = $this->personaModel->getById($idPersonaPrimera);
+        }
+
+        if (empty($personaReferencia)) {
+            $personaReferencia = $this->personaModel->buscarParaInscripcionEscuela($cedula, $telefono, '');
+        }
+
+        $nombreReferencia = '';
+        if (!empty($personaReferencia)) {
+            $nombreReferencia = trim((string)($personaReferencia['Nombre'] ?? '') . ' ' . (string)($personaReferencia['Apellido'] ?? ''));
+        }
+
+        $cedulaInscripcion = trim((string)($primera['Cedula'] ?? ''));
+        $telefonoInscripcion = trim((string)($primera['Telefono'] ?? ''));
+        $cedulaReferencia = trim((string)($personaReferencia['Numero_Documento'] ?? ''));
+        $telefonoReferencia = trim((string)($personaReferencia['Telefono'] ?? ''));
+        $generoReferencia = trim((string)($personaReferencia['Genero'] ?? ''));
+        $ministerioReferencia = trim((string)($personaReferencia['Nombre_Ministerio'] ?? ''));
+        $liderReferencia = trim((string)($personaReferencia['Nombre_Lider'] ?? ''));
+
         $this->json([
             'encontrado' => true,
             'persona' => [
-                'nombre' => (string)($primera['Nombre'] ?? ''),
-                'genero' => (string)($primera['Genero'] ?? ''),
-                'telefono' => (string)($primera['Telefono'] ?? ''),
-                'cedula' => (string)($primera['Cedula'] ?? ''),
-                'lider' => (string)($primera['Lider'] ?? ''),
-                'ministerio' => (string)($primera['Nombre_Ministerio'] ?? ''),
+                'nombre' => (string)($primera['Nombre'] ?? '') !== '' ? (string)$primera['Nombre'] : $nombreReferencia,
+                'genero' => (string)($primera['Genero'] ?? '') !== '' ? (string)$primera['Genero'] : $generoReferencia,
+                'telefono' => $telefonoInscripcion !== '' ? $telefonoInscripcion : $telefonoReferencia,
+                'cedula' => $cedulaInscripcion !== '' ? $cedulaInscripcion : $cedulaReferencia,
+                'lider' => (string)($primera['Lider'] ?? '') !== '' ? (string)$primera['Lider'] : $liderReferencia,
+                'ministerio' => (string)($primera['Nombre_Ministerio'] ?? '') !== '' ? (string)$primera['Nombre_Ministerio'] : $ministerioReferencia,
             ],
             'programas' => $programas,
             'mensaje' => 'Datos cargados correctamente. Selecciona el programa y registra asistencia.'
@@ -605,6 +673,78 @@ class EscuelaFormacionRegistroController extends BaseController {
         $idInscripcion = ctype_digit($idInscripcionRaw) ? (int)$idInscripcionRaw : 0;
         $telefono = $this->normalizarTelefono($_POST['telefono'] ?? '');
         $cedula = $this->normalizarDocumento($_POST['cedula'] ?? '');
+
+        if ($telefono === '') {
+            $query = http_build_query([
+                'url' => 'escuelas_formacion/asistencia-publica',
+                'mensaje' => 'El telefono es obligatorio.',
+                'tipo' => 'error',
+                'telefono' => $telefono,
+                'cedula' => $cedula
+            ]);
+            header('Location: ' . PUBLIC_URL . '?' . $query);
+            exit;
+        }
+
+        if ($cedula === '') {
+            $query = http_build_query([
+                'url' => 'escuelas_formacion/asistencia-publica',
+                'mensaje' => 'La cedula es obligatoria.',
+                'tipo' => 'error',
+                'telefono' => $telefono,
+                'cedula' => $cedula
+            ]);
+            header('Location: ' . PUBLIC_URL . '?' . $query);
+            exit;
+        }
+
+        if (!preg_match('/^\d+$/', $telefono)) {
+            $query = http_build_query([
+                'url' => 'escuelas_formacion/asistencia-publica',
+                'mensaje' => 'El telefono solo puede contener numeros.',
+                'tipo' => 'error',
+                'telefono' => $telefono,
+                'cedula' => $cedula
+            ]);
+            header('Location: ' . PUBLIC_URL . '?' . $query);
+            exit;
+        }
+
+        if (!preg_match('/^\d+$/', $cedula)) {
+            $query = http_build_query([
+                'url' => 'escuelas_formacion/asistencia-publica',
+                'mensaje' => 'La cedula solo puede contener numeros.',
+                'tipo' => 'error',
+                'telefono' => $telefono,
+                'cedula' => $cedula
+            ]);
+            header('Location: ' . PUBLIC_URL . '?' . $query);
+            exit;
+        }
+
+        if (strlen($telefono) < 4) {
+            $query = http_build_query([
+                'url' => 'escuelas_formacion/asistencia-publica',
+                'mensaje' => 'El telefono debe tener al menos 4 numeros.',
+                'tipo' => 'error',
+                'telefono' => $telefono,
+                'cedula' => $cedula
+            ]);
+            header('Location: ' . PUBLIC_URL . '?' . $query);
+            exit;
+        }
+
+        if (strlen($cedula) < 4) {
+            $query = http_build_query([
+                'url' => 'escuelas_formacion/asistencia-publica',
+                'mensaje' => 'La cedula debe tener al menos 4 numeros.',
+                'tipo' => 'error',
+                'telefono' => $telefono,
+                'cedula' => $cedula
+            ]);
+            header('Location: ' . PUBLIC_URL . '?' . $query);
+            exit;
+        }
 
         if ($idInscripcion <= 0) {
             $query = http_build_query([
@@ -791,10 +931,8 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         $nombre = $this->normalizarTextoMayusculas($_POST['nombre'] ?? '');
-        $genero = trim((string)($_POST['genero'] ?? ''));
+        $genero = $this->normalizarGeneroBinario($_POST['genero'] ?? '');
         $edad = $this->normalizarEdad($_POST['edad'] ?? '');
-        $telefonoRaw = trim((string)($_POST['telefono'] ?? ''));
-        $cedulaRaw = trim((string)($_POST['cedula'] ?? ''));
         $telefono = $this->normalizarTelefono($_POST['telefono'] ?? '');
         $cedula = $this->normalizarDocumento($_POST['cedula'] ?? '');
         $lider = $this->normalizarTextoMayusculas($_POST['lider'] ?? '');
@@ -815,20 +953,20 @@ class EscuelaFormacionRegistroController extends BaseController {
             $errores[] = 'La edad debe estar entre 7 y 120 anos.';
         }
 
-        if ($this->esTextoBasuraDocumentoTelefono($telefonoRaw)) {
-            $errores[] = 'El telefono no puede contener valores como NO, N/A o similares.';
+        if ($telefono !== '' && !preg_match('/^\d+$/', $telefono)) {
+            $errores[] = 'El telefono solo puede contener numeros.';
         }
 
-        if ($this->esTextoBasuraDocumentoTelefono($cedulaRaw)) {
-            $errores[] = 'La cedula no puede contener valores como NO, N/A o similares.';
+        if ($telefono !== '' && strlen($telefono) < 4) {
+            $errores[] = 'El telefono debe tener al menos 4 numeros.';
         }
 
-        if ($telefono !== '' && $this->esNumeroRepetidoInvalido($telefono, 3)) {
-            $errores[] = 'El telefono no puede ser una secuencia repetida como 0000 o 1111.';
+        if ($cedula !== '' && !preg_match('/^\d+$/', $cedula)) {
+            $errores[] = 'La cedula solo puede contener numeros.';
         }
 
-        if ($cedula !== '' && $this->esNumeroRepetidoInvalido($cedula, 3)) {
-            $errores[] = 'La cedula no puede ser una secuencia repetida como 0000 o 1111.';
+        if ($cedula !== '' && strlen($cedula) < 4) {
+            $errores[] = 'La cedula debe tener al menos 4 numeros.';
         }
 
         if ($telefono === '') {
@@ -839,10 +977,6 @@ class EscuelaFormacionRegistroController extends BaseController {
             $errores[] = 'La cedula es obligatoria.';
         }
 
-        if ($cedula === '' || $telefono === '') {
-            $errores[] = 'Debe registrar telefono y cedula para validar duplicados con precision.';
-        }
-
         if ($idMinisterio <= 0) {
             $errores[] = 'Debe seleccionar un ministerio.';
         }
@@ -851,7 +985,7 @@ class EscuelaFormacionRegistroController extends BaseController {
             $errores[] = 'Debe seleccionar un programa válido.';
         }
 
-        $generosValidos = ['Hombre', 'Mujer', 'Joven Hombre', 'Joven Mujer'];
+        $generosValidos = ['Hombre', 'Mujer'];
         if (!in_array($genero, $generosValidos, true)) {
             $errores[] = 'Debe seleccionar un género válido.';
         }
@@ -876,7 +1010,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 $telefono = $this->normalizarTelefono((string)$persona['Telefono']);
             }
             if (trim((string)($persona['Genero'] ?? '')) !== '') {
-                $genero = trim((string)$persona['Genero']);
+                $genero = $this->normalizarGeneroBinario((string)$persona['Genero']);
             }
             if (trim((string)($persona['Numero_Documento'] ?? '')) !== '') {
                 $cedula = $this->normalizarDocumento((string)$persona['Numero_Documento']);

@@ -39,6 +39,36 @@ class EscuelaFormacionAsistenciaClase extends BaseModel {
 
         $this->execute($sqlAsistencia);
         $this->execute($sqlFechas);
+
+        if (!$this->tableHasColumn($this->tablaFechas, 'Grupo')) {
+            $this->execute("ALTER TABLE {$this->tablaFechas} ADD COLUMN Grupo VARCHAR(20) NOT NULL DEFAULT 'general' AFTER Programa");
+        }
+
+        if ($this->tableHasIndex($this->tablaFechas, 'uniq_modulo_programa_clase') && !$this->tableHasIndex($this->tablaFechas, 'uniq_modulo_programa_grupo_clase')) {
+            $this->execute("ALTER TABLE {$this->tablaFechas} DROP INDEX uniq_modulo_programa_clase");
+        }
+
+        if (!$this->tableHasIndex($this->tablaFechas, 'uniq_modulo_programa_grupo_clase')) {
+            $this->execute("ALTER TABLE {$this->tablaFechas} ADD UNIQUE KEY uniq_modulo_programa_grupo_clase (Modulo, Programa, Grupo, Numero_Clase)");
+        }
+    }
+
+    private function tableHasColumn(string $table, string $column): bool {
+        $rows = $this->query("SHOW COLUMNS FROM {$table} LIKE ?", [$column]);
+        return !empty($rows);
+    }
+
+    private function tableHasIndex(string $table, string $indexName): bool {
+        $rows = $this->query("SHOW INDEX FROM {$table} WHERE Key_name = ?", [$indexName]);
+        return !empty($rows);
+    }
+
+    private function normalizeGrupo(?string $grupo): string {
+        $grupo = strtolower(trim((string)$grupo));
+        if (!in_array($grupo, ['hombres', 'mujeres', 'general'], true)) {
+            return 'general';
+        }
+        return $grupo;
     }
 
     public function getAsistenciasPorPrograma(array $personIds, string $modulo, string $programa): array {
@@ -91,20 +121,23 @@ class EscuelaFormacionAsistenciaClase extends BaseModel {
         return $this->execute($sql, [$idPersona, $modulo, $programa, $numeroClase, $asistio ? 1 : 0]);
     }
 
-    public function getFechasClases(string $modulo, string $programa, int $totalClases = 5): array {
+    public function getFechasClases(string $modulo, string $programa, int $totalClases = 5, ?string $grupo = 'general'): array {
         $modulo = trim($modulo);
         $programa = trim($programa);
         $totalClases = max(1, $totalClases);
+        $grupo = $this->normalizeGrupo($grupo);
 
         if ($modulo === '' || $programa === '') {
             return [];
         }
 
-        $sql = "SELECT Numero_Clase, Fecha_Clase
+        $sql = "SELECT Numero_Clase, Fecha_Clase, Grupo
                 FROM {$this->tablaFechas}
-                WHERE Modulo = ? AND Programa = ?";
+                WHERE Modulo = ? AND Programa = ?
+                  AND Grupo IN (?, 'general')
+                ORDER BY Numero_Clase ASC, CASE WHEN Grupo = ? THEN 0 ELSE 1 END";
 
-        $rows = $this->query($sql, [$modulo, $programa]);
+        $rows = $this->query($sql, [$modulo, $programa, $grupo, $grupo]);
         $map = [];
 
         foreach ($rows as $row) {
@@ -112,7 +145,9 @@ class EscuelaFormacionAsistenciaClase extends BaseModel {
             if ($numeroClase <= 0) {
                 continue;
             }
-            $map[$numeroClase] = (string)($row['Fecha_Clase'] ?? '');
+            if (!array_key_exists($numeroClase, $map)) {
+                $map[$numeroClase] = (string)($row['Fecha_Clase'] ?? '');
+            }
         }
 
         for ($i = 1; $i <= $totalClases; $i++) {
@@ -125,9 +160,10 @@ class EscuelaFormacionAsistenciaClase extends BaseModel {
         return $map;
     }
 
-    public function upsertFechaClase(string $modulo, string $programa, int $numeroClase, ?string $fechaClase): bool {
+    public function upsertFechaClase(string $modulo, string $programa, int $numeroClase, ?string $fechaClase, ?string $grupo = 'general'): bool {
         $modulo = trim($modulo);
         $programa = trim($programa);
+        $grupo = $this->normalizeGrupo($grupo);
 
         if ($modulo === '' || $programa === '' || $numeroClase <= 0) {
             return false;
@@ -138,17 +174,18 @@ class EscuelaFormacionAsistenciaClase extends BaseModel {
             $fechaClase = null;
         }
 
-        $sql = "INSERT INTO {$this->tablaFechas} (Modulo, Programa, Numero_Clase, Fecha_Clase, Fecha_Actualizacion)
-                VALUES (?, ?, ?, ?, NOW())
+        $sql = "INSERT INTO {$this->tablaFechas} (Modulo, Programa, Grupo, Numero_Clase, Fecha_Clase, Fecha_Actualizacion)
+            VALUES (?, ?, ?, ?, ?, NOW())
                 ON DUPLICATE KEY UPDATE Fecha_Clase = VALUES(Fecha_Clase), Fecha_Actualizacion = NOW()";
 
-        return $this->execute($sql, [$modulo, $programa, $numeroClase, $fechaClase]);
+        return $this->execute($sql, [$modulo, $programa, $grupo, $numeroClase, $fechaClase]);
     }
 
-    public function getNumeroClasePorFecha(string $modulo, string $programa, ?string $fecha = null): int {
+        public function getNumeroClasePorFecha(string $modulo, string $programa, ?string $fecha = null, ?string $grupo = 'general'): int {
         $modulo = trim($modulo);
         $programa = trim($programa);
         $fecha = trim((string)($fecha ?? date('Y-m-d')));
+        $grupo = $this->normalizeGrupo($grupo);
 
         if ($modulo === '' || $programa === '' || $fecha === '') {
             return 0;
@@ -161,9 +198,11 @@ class EscuelaFormacionAsistenciaClase extends BaseModel {
         $rows = $this->query(
             "SELECT Numero_Clase
              FROM {$this->tablaFechas}
-             WHERE Modulo = ? AND Programa = ? AND Fecha_Clase = ?
+                         WHERE Modulo = ? AND Programa = ? AND Fecha_Clase = ?
+                             AND Grupo IN (?, 'general')
+                         ORDER BY CASE WHEN Grupo = ? THEN 0 ELSE 1 END
              LIMIT 1",
-            [$modulo, $programa, $fecha]
+                        [$modulo, $programa, $fecha, $grupo, $grupo]
         );
 
         if (empty($rows)) {

@@ -102,10 +102,8 @@ $urlVolver = $returnUrl !== ''
                     <label for="genero">Género</label>
                     <select id="genero" name="genero" class="form-control">
                         <option value="">Seleccionar...</option>
-                        <option value="Hombre" <?= isset($persona) && $persona['Genero'] == 'Hombre' ? 'selected' : '' ?>>Hombre</option>
-                        <option value="Mujer" <?= isset($persona) && $persona['Genero'] == 'Mujer' ? 'selected' : '' ?>>Mujer</option>
-                        <option value="Joven Hombre" <?= isset($persona) && $persona['Genero'] == 'Joven Hombre' ? 'selected' : '' ?>>Joven Hombre</option>
-                        <option value="Joven Mujer" <?= isset($persona) && $persona['Genero'] == 'Joven Mujer' ? 'selected' : '' ?>>Joven Mujer</option>
+                        <option value="Hombre" <?= isset($persona) && in_array((string)($persona['Genero'] ?? ''), ['Hombre', 'Joven Hombre'], true) ? 'selected' : '' ?>>Hombre</option>
+                        <option value="Mujer" <?= isset($persona) && in_array((string)($persona['Genero'] ?? ''), ['Mujer', 'Joven Mujer'], true) ? 'selected' : '' ?>>Mujer</option>
                     </select>
                 </div>
             </div>
@@ -486,7 +484,31 @@ $urlVolver = $returnUrl !== ''
         <!-- Acceso al Sistema - Solo Administradores -->
         <?php if (AuthController::esAdministrador()): ?>
         <?php
+        $rolAsistenteDefault = '';
+        if (!empty($roles) && is_array($roles)) {
+            foreach ($roles as $rolTmp) {
+                $nombreRolTmp = strtolower(trim((string)($rolTmp['Nombre_Rol'] ?? '')));
+                $nombreRolTmp = strtr($nombreRolTmp, [
+                    'á' => 'a',
+                    'é' => 'e',
+                    'í' => 'i',
+                    'ó' => 'o',
+                    'ú' => 'u',
+                    'ü' => 'u',
+                    'ñ' => 'n'
+                ]);
+                if (strpos($nombreRolTmp, 'asistente') !== false) {
+                    $rolAsistenteDefault = (string)($rolTmp['Id_Rol'] ?? '');
+                    break;
+                }
+            }
+        }
+
+        $esFormularioCreacion = !isset($persona['Id_Persona']);
         $rolSeleccionadoAdmin = (string)($post_data['id_rol'] ?? ($persona['Id_Rol'] ?? ''));
+        if ($rolSeleccionadoAdmin === '' && $esFormularioCreacion && $rolAsistenteDefault !== '') {
+            $rolSeleccionadoAdmin = $rolAsistenteDefault;
+        }
         $asignarUsuarioAbierto = !empty($post_data['asignar_usuario_activo']) || !empty($persona['Usuario']);
         ?>
         <div class="form-section" id="acceso_sistema_section">

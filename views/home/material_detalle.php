@@ -18,7 +18,7 @@ $rutaDetalleVistas = PUBLIC_URL . '?url=home/material/detalle-vistas&modulo=' . 
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
     <div>
         <h2 style="margin:0;"><?= htmlspecialchars($titulo) ?></h2>
-        <small style="color:#637087;">Gestiona módulos de material con varios PDFs por creación.</small>
+        <small style="color:#637087;">Gestiona módulos de material con varios archivos por creación.</small>
     </div>
     <a href="<?= PUBLIC_URL ?>?url=home/material" class="btn btn-secondary">Volver a Material</a>
 </div>
@@ -56,8 +56,8 @@ $rutaDetalleVistas = PUBLIC_URL . '?url=home/material/detalle-vistas&modulo=' . 
             <textarea id="descripcion" name="descripcion" class="form-control" rows="3" placeholder="Descripción opcional del material"></textarea>
         </div>
         <div class="form-group" style="margin-bottom: 12px;">
-            <label for="material_pdf">Archivo(s) PDF</label>
-            <input type="file" id="material_pdf" name="material_pdf[]" class="form-control" accept="application/pdf,.pdf" multiple required>
+            <label for="material_pdf">Archivo(s)</label>
+            <input type="file" id="material_pdf" name="material_pdf[]" class="form-control" multiple required>
             <small style="display:block; margin-top:6px; color:#666;">Máximo 20MB por archivo. Puedes subir varios en una sola creación.</small>
         </div>
         <button type="submit" class="btn btn-primary">Subir archivos</button>
@@ -101,7 +101,7 @@ $rutaDetalleVistas = PUBLIC_URL . '?url=home/material/detalle-vistas&modulo=' . 
                                 ?>
                             </td>
                             <td style="display:flex; gap:8px; flex-wrap:wrap;">
-                                <button type="button" class="btn btn-sm btn-secondary js-toggle-tema" data-target="<?= htmlspecialchars($temaId, ENT_QUOTES, 'UTF-8') ?>">Ver PDFs</button>
+                                <button type="button" class="btn btn-sm btn-secondary js-toggle-tema" data-target="<?= htmlspecialchars($temaId, ENT_QUOTES, 'UTF-8') ?>">Ver archivos</button>
                                 <button type="button" class="btn btn-sm btn-info js-ver-vistas" data-lote="<?= htmlspecialchars((string)($tema['lote_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">Ver quién vio</button>
                             </td>
                         </tr>
@@ -118,7 +118,7 @@ $rutaDetalleVistas = PUBLIC_URL . '?url=home/material/detalle-vistas&modulo=' . 
                                                     </div>
                                                 </div>
                                                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                                                    <a href="<?= htmlspecialchars((string)($archivo['url'] ?? '#')) ?>" target="_blank" class="btn btn-sm btn-success">Ver PDF</a>
+                                                    <a href="<?= htmlspecialchars((string)($archivo['url'] ?? '#')) ?>" target="_blank" class="btn btn-sm btn-success">Ver archivo</a>
                                                     <?php if ($puedeGestionar): ?>
                                                         <form method="POST" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>" onsubmit="return confirm('¿Eliminar este archivo?');" style="margin:0;">
                                                             <input type="hidden" name="accion" value="eliminar">

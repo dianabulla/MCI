@@ -373,11 +373,11 @@ class DataIsolation {
 
             if (!empty($ministerioIds)) {
                 $ministerioIdsSql = implode(',', array_map('intval', $ministerioIds));
-                return "($condicionAnclaje OR (p.Id_Ministerio IN ($ministerioIdsSql) AND p.Id_Lider IS NULL))";
+                return "($condicionAnclaje OR (p.Id_Ministerio IN ($ministerioIdsSql) AND (p.Id_Lider IS NULL OR p.Id_Lider <= 0)))";
             }
 
             if ($idMinisterio) {
-                return "($condicionAnclaje OR (p.Id_Ministerio = $idMinisterio AND p.Id_Lider IS NULL))";
+                return "($condicionAnclaje OR (p.Id_Ministerio = $idMinisterio AND (p.Id_Lider IS NULL OR p.Id_Lider <= 0)))";
             }
 
             return $condicionAnclaje;

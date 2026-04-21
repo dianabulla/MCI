@@ -19,7 +19,7 @@ $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/publ
 $publicPath = rtrim(dirname($scriptName), '/');
 
 if ($publicPath === '') {
-	$publicPath = '/public';
+	$publicPath = '/';
 }
 
 $basePath = preg_replace('#/public$#', '', $publicPath);

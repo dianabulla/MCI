@@ -156,6 +156,7 @@
             margin-top: 18px;
             display: flex;
             justify-content: flex-end;
+            gap: 10px;
         }
 
         .btn {
@@ -178,6 +179,17 @@
             transform: translateY(1px);
         }
 
+        .btn-secondary {
+            color: #2a5a56;
+            background: #eef7f6;
+            border: 1px solid #c8dfdc;
+            box-shadow: none;
+        }
+
+        .btn-secondary:hover {
+            background: #e4f1ef;
+        }
+
         .success-box {
             border: 1px solid #b8e2c6;
             background: #f3fbf5;
@@ -198,6 +210,29 @@
 
         .loader.active {
             display: block;
+        }
+
+        .toast {
+            position: fixed;
+            left: 50%;
+            bottom: 22px;
+            transform: translateX(-50%) translateY(10px);
+            background: #1f4f4c;
+            color: #fff;
+            border-radius: 999px;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .2s ease, transform .2s ease;
+            z-index: 1200;
+        }
+
+        .toast.active {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
         }
 
         .search-status {
@@ -313,11 +348,11 @@
         <?php else: ?>
             <p class="help">Debes registrar cédula y teléfono. Con esos datos se buscará la persona en la plataforma para autocompletar y evitar errores.</p>
 
-            <form method="POST" action="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/guardar" id="form-escuelas">
+            <form method="POST" action="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/guardar" id="form-escuelas" autocomplete="off">
                 <div class="grid">
                     <div class="field full">
                         <label for="nombre">Nombre <span class="req">*</span></label>
-                        <input type="text" id="nombre" name="nombre" required value="<?= htmlspecialchars((string)($old['nombre'] ?? '')) ?>">
+                        <input type="text" id="nombre" name="nombre" required autocomplete="off" autocapitalize="characters" spellcheck="false" value="<?= htmlspecialchars((string)($old['nombre'] ?? '')) ?>">
                     </div>
 
                     <div class="field">
@@ -326,8 +361,6 @@
                             <option value="">Seleccione...</option>
                             <option value="Hombre" <?= (string)($old['genero'] ?? '') === 'Hombre' ? 'selected' : '' ?>>Hombre</option>
                             <option value="Mujer" <?= (string)($old['genero'] ?? '') === 'Mujer' ? 'selected' : '' ?>>Mujer</option>
-                            <option value="Joven Hombre" <?= (string)($old['genero'] ?? '') === 'Joven Hombre' ? 'selected' : '' ?>>Joven Hombre</option>
-                            <option value="Joven Mujer" <?= (string)($old['genero'] ?? '') === 'Joven Mujer' ? 'selected' : '' ?>>Joven Mujer</option>
                         </select>
                     </div>
 
@@ -338,18 +371,18 @@
 
                     <div class="field">
                         <label for="telefono">Teléfono <span class="req">*</span></label>
-                        <input type="tel" id="telefono" name="telefono" required value="<?= htmlspecialchars((string)($old['telefono'] ?? '')) ?>" placeholder="Ej: 3001234567">
+                        <input type="tel" id="telefono" name="telefono" required inputmode="numeric" pattern="[0-9]{4,}" minlength="4" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="<?= htmlspecialchars((string)($old['telefono'] ?? '')) ?>" placeholder="Ej: 3001234567">
                     </div>
 
                     <div class="field">
                         <label for="cedula">Cédula <span class="req">*</span></label>
-                        <input type="text" id="cedula" name="cedula" required value="<?= htmlspecialchars((string)($old['cedula'] ?? '')) ?>" placeholder="Ej: 12345678">
+                        <input type="text" id="cedula" name="cedula" required inputmode="numeric" pattern="[0-9]{4,}" minlength="4" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="<?= htmlspecialchars((string)($old['cedula'] ?? '')) ?>" placeholder="Ej: 12345678">
                     </div>
 
                     <div class="field full">
                         <label for="lider">Líder <span class="req">*</span></label>
                         <div class="autocomplete-wrap">
-                            <input type="text" id="lider" name="lider" required value="<?= htmlspecialchars((string)($old['lider'] ?? '')) ?>" placeholder="Escribe para buscar líder real">
+                            <input type="text" id="lider" name="lider" required autocomplete="off" autocapitalize="characters" spellcheck="false" value="<?= htmlspecialchars((string)($old['lider'] ?? '')) ?>" placeholder="Escribe para buscar líder real">
                             <input type="hidden" id="id_lider" name="id_lider" value="<?= htmlspecialchars((string)($old['id_lider'] ?? '')) ?>">
                             <div id="lista-lideres" class="autocomplete-list"></div>
                         </div>
@@ -386,12 +419,15 @@
                 <p class="hint">Para mayor exactitud usamos primero cédula o teléfono; si no hay coincidencia, intentamos por nombre.</p>
 
                 <div class="actions">
+                    <button type="button" class="btn btn-secondary" id="btn-limpiar-form">Limpiar formulario</button>
                     <button type="submit" class="btn">Guardar inscripción</button>
                 </div>
             </form>
         <?php endif; ?>
     </div>
 </div>
+
+<div id="toast-feedback" class="toast" aria-live="polite"></div>
 
 <script>
 (function() {
@@ -407,8 +443,12 @@
     const idLider = document.getElementById('id_lider');
     const listaLideres = document.getElementById('lista-lideres');
     const ministerio = document.getElementById('id_ministerio');
+    const btnLimpiarForm = document.getElementById('btn-limpiar-form');
     const loader = document.getElementById('loader-busqueda');
     const estadoBusqueda = document.getElementById('estado-busqueda');
+    const toastFeedback = document.getElementById('toast-feedback');
+
+    let toastTimer = null;
 
     if (!form || !nombre || !genero || !edad || !telefono || !cedula || !lider || !idLider || !listaLideres || !ministerio) {
         return;
@@ -455,32 +495,50 @@
         estadoBusqueda.classList.add('info');
     }
 
+    function mostrarToast(mensaje) {
+        if (!toastFeedback) {
+            return;
+        }
+
+        if (toastTimer) {
+            clearTimeout(toastTimer);
+        }
+
+        toastFeedback.textContent = String(mensaje || 'Listo');
+        toastFeedback.classList.add('active');
+        toastTimer = setTimeout(function() {
+            toastFeedback.classList.remove('active');
+        }, 1500);
+    }
+
     function aplicarPersona(persona) {
         if (!persona || typeof persona !== 'object') {
             return;
         }
 
-        if (persona.nombre) {
-            nombre.value = String(persona.nombre);
-        }
-        if (persona.genero) {
-            genero.value = String(persona.genero);
-        }
-        if (persona.telefono) {
-            telefono.value = String(persona.telefono);
-        }
-        if (persona.cedula) {
-            cedula.value = String(persona.cedula);
-        }
-        if (persona.lider) {
-            lider.value = String(persona.lider);
-        }
-        if (persona.id_lider) {
+        const completarSiFalta = function(input, valor) {
+            if (!input) {
+                return;
+            }
+
+            const actual = String(input.value || '').trim();
+            const nuevo = String(valor || '').trim();
+            if (actual === '' && nuevo !== '') {
+                input.value = nuevo;
+            }
+        };
+
+        completarSiFalta(nombre, persona.nombre || '');
+        completarSiFalta(genero, persona.genero || '');
+        completarSiFalta(telefono, persona.telefono || '');
+        completarSiFalta(cedula, persona.cedula || '');
+        completarSiFalta(lider, persona.lider || '');
+
+        if (!String(idLider.value || '').trim() && persona.id_lider) {
             idLider.value = String(persona.id_lider);
-        } else {
-            idLider.value = '';
         }
-        if (persona.id_ministerio) {
+
+        if (!String(ministerio.value || '').trim() && persona.id_ministerio) {
             ministerio.value = String(persona.id_ministerio);
         }
 
@@ -589,31 +647,11 @@
         timer = setTimeout(buscarPersona, 450);
     }
 
-    function esTextoBasuraDocumentoTelefono(valor) {
-        const texto = String(valor || '').trim();
-        if (!texto) {
-            return false;
-        }
-
-        const normalizado = texto
-            .toUpperCase()
-            .replace(/\s+/g, '')
-            .replace(/[\.\-_\/]/g, '');
-
-        const bloqueados = ['NO', 'NA', 'N/A', 'NINGUNO', 'NINGUNA', 'SINDATO', 'SN', 'XX', 'XXX'];
-        return bloqueados.includes(normalizado);
-    }
-
-    function esNumeroRepetidoInvalido(valor) {
-        const digits = String(valor || '').replace(/\D+/g, '');
-        if (!digits || digits.length < 3) {
-            return false;
-        }
-        return /^(\d)\1+$/.test(digits);
-    }
-
     [nombre, telefono, cedula].forEach(function(input) {
         input.addEventListener('input', function() {
+            if (input === telefono || input === cedula) {
+                input.value = String(input.value || '').replace(/\D+/g, '');
+            }
             if (input === nombre || input === lider) {
                 toUpperCaseInput(input);
             }
@@ -654,25 +692,31 @@
             return;
         }
 
-        if (esTextoBasuraDocumentoTelefono(telefonoValor) || esTextoBasuraDocumentoTelefono(cedulaValor)) {
+        if (telefonoValor && !/^\d+$/.test(telefonoValor)) {
             event.preventDefault();
-            alert('Telefono y cedula no pueden contener valores como NO, N/A o similares.');
-            if (esTextoBasuraDocumentoTelefono(telefonoValor)) {
-                telefono.focus();
-            } else {
-                cedula.focus();
-            }
+            alert('El telefono solo puede contener numeros.');
+            telefono.focus();
             return;
         }
 
-        if (esNumeroRepetidoInvalido(telefonoValor) || esNumeroRepetidoInvalido(cedulaValor)) {
+        if (telefonoValor && telefonoValor.length < 4) {
             event.preventDefault();
-            alert('Telefono y cedula no pueden ser secuencias repetidas como 0000 o 1111.');
-            if (esNumeroRepetidoInvalido(telefonoValor)) {
-                telefono.focus();
-            } else {
-                cedula.focus();
-            }
+            alert('El telefono debe tener al menos 4 numeros.');
+            telefono.focus();
+            return;
+        }
+
+        if (cedulaValor && !/^\d+$/.test(cedulaValor)) {
+            event.preventDefault();
+            alert('La cedula solo puede contener numeros.');
+            cedula.focus();
+            return;
+        }
+
+        if (cedulaValor && cedulaValor.length < 4) {
+            event.preventDefault();
+            alert('La cedula debe tener al menos 4 numeros.');
+            cedula.focus();
             return;
         }
 
@@ -686,6 +730,35 @@
             }
         }
     });
+
+    if (btnLimpiarForm) {
+        btnLimpiarForm.addEventListener('click', function() {
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;
+            }
+
+            form.reset();
+            nombre.value = '';
+            genero.value = '';
+            edad.value = '';
+            telefono.value = '';
+            cedula.value = '';
+            lider.value = '';
+            if (form.elements.programa) {
+                form.elements.programa.value = '';
+            }
+            ministerio.value = '';
+            idLider.value = '';
+            cerrarListaLideres();
+            setEstadoBusqueda('', '');
+            setLoading(false);
+            toUpperCaseInput(nombre);
+            toUpperCaseInput(lider);
+            nombre.focus();
+            mostrarToast('Formulario limpiado');
+        });
+    }
 })();
 </script>
 </body>

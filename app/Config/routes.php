@@ -161,6 +161,7 @@ return [
 
     // Escuelas de Formación (Público - No requiere autenticación)
     'escuelas_formacion/registro-publico' => 'EscuelaFormacionRegistroController@index',
+    'escuelas_formacion/codigos' => 'EscuelaFormacionRegistroController@codigos',
     'escuelas_formacion/registro-publico/buscar-persona' => 'EscuelaFormacionRegistroController@buscarPersona',
     'escuelas_formacion/registro-publico/buscar-lideres' => 'EscuelaFormacionRegistroController@buscarLideres',
     'escuelas_formacion/registro-publico/guardar' => 'EscuelaFormacionRegistroController@guardar',
