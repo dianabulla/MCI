@@ -346,6 +346,17 @@
                 </div>
             </div>
         <?php else: ?>
+            <?php
+            $programaAnterior = (string)($old['programa'] ?? '');
+            $programaBaseSeleccionado = 'universidad_vida';
+            $programaNivelSeleccionado = 'capacitacion_destino_nivel_1';
+            if (in_array($programaAnterior, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+                $programaBaseSeleccionado = 'capacitacion_destino';
+                if (in_array($programaAnterior, ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+                    $programaNivelSeleccionado = $programaAnterior;
+                }
+            }
+            ?>
             <p class="help">Debes registrar cédula y teléfono. Con esos datos se buscará la persona en la plataforma para autocompletar y evitar errores.</p>
 
             <form method="POST" action="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/guardar" id="form-escuelas" autocomplete="off">
@@ -403,13 +414,17 @@
                     <div class="field">
                         <label for="programa">Programa <span class="req">*</span></label>
                         <select id="programa" name="programa" required>
-                            <option value="">Seleccione...</option>
-                            <option value="universidad_vida" <?= (string)($old['programa'] ?? '') === 'universidad_vida' ? 'selected' : '' ?>>Universidad de la Vida</option>
-                            <option value="encuentro" <?= (string)($old['programa'] ?? '') === 'encuentro' ? 'selected' : '' ?>>Encuentro</option>
-                            <option value="bautismo" <?= (string)($old['programa'] ?? '') === 'bautismo' ? 'selected' : '' ?>>Bautismo</option>
-                            <option value="capacitacion_destino_nivel_1" <?= (string)($old['programa'] ?? '') === 'capacitacion_destino_nivel_1' ? 'selected' : '' ?>>Capacitación Destino - Nivel 1 (Módulos 1 y 2)</option>
-                            <option value="capacitacion_destino_nivel_2" <?= (string)($old['programa'] ?? '') === 'capacitacion_destino_nivel_2' ? 'selected' : '' ?>>Capacitación Destino - Nivel 2 (Módulos 3 y 4)</option>
-                            <option value="capacitacion_destino_nivel_3" <?= (string)($old['programa'] ?? '') === 'capacitacion_destino_nivel_3' ? 'selected' : '' ?>>Capacitación Destino - Nivel 3 (Módulos 5 y 6)</option>
+                            <option value="universidad_vida" <?= $programaBaseSeleccionado === 'universidad_vida' ? 'selected' : '' ?>>Universidad de la Vida (Un encuentro con Jesús)</option>
+                            <option value="capacitacion_destino" <?= $programaBaseSeleccionado === 'capacitacion_destino' ? 'selected' : '' ?>>Capacitación Destino por niveles</option>
+                        </select>
+                    </div>
+
+                    <div class="field" id="wrap-programa-nivel" <?= $programaBaseSeleccionado === 'capacitacion_destino' ? '' : 'style="display:none;"' ?>>
+                        <label for="programa_nivel">Nivel de Capacitación Destino <span class="req">*</span></label>
+                        <select id="programa_nivel" name="programa_nivel" <?= $programaBaseSeleccionado === 'capacitacion_destino' ? 'required' : '' ?>>
+                            <option value="capacitacion_destino_nivel_1" <?= $programaNivelSeleccionado === 'capacitacion_destino_nivel_1' ? 'selected' : '' ?>>Nivel 1 (Módulos 1 y 2)</option>
+                            <option value="capacitacion_destino_nivel_2" <?= $programaNivelSeleccionado === 'capacitacion_destino_nivel_2' ? 'selected' : '' ?>>Nivel 2 (Módulos 3 y 4)</option>
+                            <option value="capacitacion_destino_nivel_3" <?= $programaNivelSeleccionado === 'capacitacion_destino_nivel_3' ? 'selected' : '' ?>>Nivel 3 (Módulos 5 y 6)</option>
                         </select>
                     </div>
                 </div>
@@ -443,6 +458,9 @@
     const idLider = document.getElementById('id_lider');
     const listaLideres = document.getElementById('lista-lideres');
     const ministerio = document.getElementById('id_ministerio');
+    const programa = document.getElementById('programa');
+    const wrapProgramaNivel = document.getElementById('wrap-programa-nivel');
+    const programaNivel = document.getElementById('programa_nivel');
     const btnLimpiarForm = document.getElementById('btn-limpiar-form');
     const loader = document.getElementById('loader-busqueda');
     const estadoBusqueda = document.getElementById('estado-busqueda');
@@ -450,7 +468,7 @@
 
     let toastTimer = null;
 
-    if (!form || !nombre || !genero || !edad || !telefono || !cedula || !lider || !idLider || !listaLideres || !ministerio) {
+    if (!form || !nombre || !genero || !edad || !telefono || !cedula || !lider || !idLider || !listaLideres || !ministerio || !programa || !wrapProgramaNivel || !programaNivel) {
         return;
     }
 
@@ -493,6 +511,12 @@
             return;
         }
         estadoBusqueda.classList.add('info');
+    }
+
+    function actualizarProgramaNivel() {
+        const esDestino = String(programa.value || '') === 'capacitacion_destino';
+        wrapProgramaNivel.style.display = esDestino ? '' : 'none';
+        programaNivel.required = esDestino;
     }
 
     function mostrarToast(mensaje) {
@@ -679,6 +703,11 @@
 
     toUpperCaseInput(nombre);
     toUpperCaseInput(lider);
+    actualizarProgramaNivel();
+
+    programa.addEventListener('change', function() {
+        actualizarProgramaNivel();
+    });
 
     form.addEventListener('submit', function(event) {
         const edadValor = parseInt(String(edad.value || '').trim(), 10);
@@ -746,10 +775,14 @@
             cedula.value = '';
             lider.value = '';
             if (form.elements.programa) {
-                form.elements.programa.value = '';
+                form.elements.programa.value = 'universidad_vida';
+            }
+            if (form.elements.programa_nivel) {
+                form.elements.programa_nivel.value = 'capacitacion_destino_nivel_1';
             }
             ministerio.value = '';
             idLider.value = '';
+            actualizarProgramaNivel();
             cerrarListaLideres();
             setEstadoBusqueda('', '');
             setLoading(false);

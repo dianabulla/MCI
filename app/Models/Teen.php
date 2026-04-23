@@ -117,7 +117,7 @@ class Teen extends BaseModel {
                     codigo_semana VARCHAR(24) NOT NULL,
                     registrado_en DATETIME DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE KEY uq_menor_domingo (id_menor, fecha_domingo),
-                    UNIQUE KEY uq_codigo_semana (codigo_semana),
+                    UNIQUE KEY uq_fecha_codigo_semana (fecha_domingo, codigo_semana),
                     KEY idx_fecha_domingo (fecha_domingo)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ");
@@ -126,8 +126,12 @@ class Teen extends BaseModel {
                 $this->execute("CREATE UNIQUE INDEX uq_menor_domingo ON {$this->tablaAsistenciaSemanal} (id_menor, fecha_domingo)");
             }
 
-            if (!$this->indexExists('uq_codigo_semana', $this->tablaAsistenciaSemanal)) {
-                $this->execute("CREATE UNIQUE INDEX uq_codigo_semana ON {$this->tablaAsistenciaSemanal} (codigo_semana)");
+            if ($this->indexExists('uq_codigo_semana', $this->tablaAsistenciaSemanal)) {
+                $this->execute("ALTER TABLE {$this->tablaAsistenciaSemanal} DROP INDEX uq_codigo_semana");
+            }
+
+            if (!$this->indexExists('uq_fecha_codigo_semana', $this->tablaAsistenciaSemanal)) {
+                $this->execute("CREATE UNIQUE INDEX uq_fecha_codigo_semana ON {$this->tablaAsistenciaSemanal} (fecha_domingo, codigo_semana)");
             }
         } catch (Throwable $e) {
             error_log('Error asegurando estructura de teen_menores_asistencia: ' . $e->getMessage());
@@ -158,6 +162,7 @@ class Teen extends BaseModel {
                        COALESCE(NULLIF(TRIM(COALESCE(p.Telefono, '')), ''), tm.telefono_contacto) AS Telefono_Acudiente_Actual,
                        COALESCE(agg.total_asistencias, 0) AS total_asistencias,
                        agg.ultima_fecha_asistencia,
+                      ult.codigo_semana AS ultimo_codigo_semana,
                        sem.codigo_semana AS codigo_semana_actual,
                        sem.registrado_en AS fecha_asistencia_actual
                 FROM {$this->tablaMenores} tm
@@ -170,6 +175,15 @@ class Teen extends BaseModel {
                     FROM {$this->tablaAsistenciaSemanal}
                     GROUP BY id_menor
                 ) agg ON agg.id_menor = tm.id
+                LEFT JOIN (
+                    SELECT a1.id_menor, a1.fecha_domingo, a1.codigo_semana
+                    FROM {$this->tablaAsistenciaSemanal} a1
+                    INNER JOIN (
+                        SELECT id_menor, MAX(fecha_domingo) AS max_domingo
+                        FROM {$this->tablaAsistenciaSemanal}
+                        GROUP BY id_menor
+                    ) ult1 ON ult1.id_menor = a1.id_menor AND ult1.max_domingo = a1.fecha_domingo
+                ) ult ON ult.id_menor = tm.id
                 LEFT JOIN {$this->tablaAsistenciaSemanal} sem ON sem.id_menor = tm.id
                     AND sem.fecha_domingo = DATE_SUB(CURDATE(), INTERVAL (DAYOFWEEK(CURDATE()) - 1) DAY)
                 ORDER BY tm.created_at DESC, tm.id DESC";
@@ -206,16 +220,23 @@ class Teen extends BaseModel {
         return !empty($rows);
     }
 
-    public function existeCodigoSemanal($codigo) {
+    public function existeCodigoSemanal($codigo, $fechaDomingo = null) {
         $codigo = trim((string)$codigo);
         if ($codigo === '') {
             return false;
         }
 
-        $rows = $this->query(
-            "SELECT id FROM {$this->tablaAsistenciaSemanal} WHERE codigo_semana = ? LIMIT 1",
-            [$codigo]
-        );
+        if ($fechaDomingo !== null && trim((string)$fechaDomingo) !== '') {
+            $rows = $this->query(
+                "SELECT id FROM {$this->tablaAsistenciaSemanal} WHERE codigo_semana = ? AND fecha_domingo = ? LIMIT 1",
+                [$codigo, $fechaDomingo]
+            );
+        } else {
+            $rows = $this->query(
+                "SELECT id FROM {$this->tablaAsistenciaSemanal} WHERE codigo_semana = ? LIMIT 1",
+                [$codigo]
+            );
+        }
 
         return !empty($rows);
     }
@@ -267,6 +288,8 @@ class Teen extends BaseModel {
             return null;
         }
 
+        $fechaDomingo = $this->getFechaDomingoSemana();
+
         $sql = "SELECT tm.*,
                        COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
                        TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, ''))) AS Nombre_Acudiente_Base,
@@ -284,9 +307,10 @@ class Teen extends BaseModel {
                     GROUP BY id_menor
                 ) agg ON agg.id_menor = tm.id
                 WHERE a.codigo_semana = ?
+                  AND a.fecha_domingo = ?
                 LIMIT 1";
 
-        $rows = $this->query($sql, [$codigoSemanal]);
+        $rows = $this->query($sql, [$codigoSemanal, $fechaDomingo]);
         return $rows[0] ?? null;
     }
 

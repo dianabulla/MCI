@@ -137,6 +137,30 @@ class PermisosController extends BaseController {
                     $stmt->execute([$valor, $idRol, $modulo]);
                 }
 
+                // Si se actualiza el rol del usuario actual, reflejar en sesión inmediatamente.
+                $rolSesion = (int)($_SESSION['usuario_rol'] ?? 0);
+                if ($rolSesion > 0 && $rolSesion === $idRol) {
+                    $moduloSesion = trim((string)$modulo);
+                    if ($moduloSesion !== '') {
+                        if (!isset($_SESSION['permisos'][$moduloSesion]) || !is_array($_SESSION['permisos'][$moduloSesion])) {
+                            $_SESSION['permisos'][$moduloSesion] = [
+                                'ver' => 0,
+                                'crear' => 0,
+                                'editar' => 0,
+                                'eliminar' => 0,
+                            ];
+                        }
+
+                        $accionSesion = str_replace('puede_', '', strtolower((string)$campo));
+                        if (in_array($accionSesion, ['ver', 'crear', 'editar', 'eliminar'], true)) {
+                            $_SESSION['permisos'][$moduloSesion][$accionSesion] = $valor ? 1 : 0;
+                        }
+
+                        $_SESSION['permisos_configurados'] = !empty($_SESSION['permisos']);
+                        $_SESSION['permisos_last_sync'] = time();
+                    }
+                }
+
                 echo json_encode(['success' => true]);
             } catch (Exception $e) {
                 echo json_encode(['success' => false, 'error' => $e->getMessage()]);
@@ -148,7 +172,7 @@ class PermisosController extends BaseController {
      * Obtener módulos disponibles
      */
     private function getModulos() {
-        return [
+        $modulosBase = [
             'personas' => 'Personas',
             'personas_formulario_publico' => 'Personas: Ver formulario publico',
             'personas_plantillas_whatsapp' => 'Personas: Ver plantillas WhatsApp',
@@ -163,10 +187,16 @@ class PermisosController extends BaseController {
             'asistencias' => 'Asistencias',
             'reportes' => 'Reportes',
             'transmisiones' => 'Transmisiones',
+            'escuelas_formacion' => 'Escuelas de Formación',
+            'escuelas_formacion_marcar_asistencia' => 'Escuelas: Marcar asistencia',
+            'escuelas_formacion_editar_fechas' => 'Escuelas: Editar fechas de clases',
             'entrega_obsequio' => 'Entrega de Obsequios',
             'registro_obsequio' => 'Registro de Obsequios',
             'teen' => 'Material Teens',
             'nehemias' => 'Nehemias',
+            'nehemias_cols_cedula' => 'Nehemias: Ver Cédula',
+            'nehemias_cols_telefono' => 'Nehemias: Ver Teléfono',
+            'nehemias_cols_subido_link' => 'Nehemias: Ver Link subido',
             'nehemias_cols_bogota_subio' => 'Nehemias: Ver En Bogotá se le subió',
             'nehemias_cols_puesto' => 'Nehemias: Ver Puesto',
             'nehemias_cols_mesa' => 'Nehemias: Ver Mesa',
@@ -175,6 +205,90 @@ class PermisosController extends BaseController {
             'nehemias_acciones_eliminar' => 'Nehemias: Botón eliminar',
             'permisos' => 'Permisos'
         ];
+
+        $modulosDetectados = array_unique(array_merge(
+            $this->getModulosDesdeBaseDatos(),
+            $this->getModulosDesdeCodigo()
+        ));
+
+        sort($modulosDetectados, SORT_NATURAL | SORT_FLAG_CASE);
+
+        foreach ($modulosDetectados as $modulo) {
+            if ($modulo === '' || isset($modulosBase[$modulo])) {
+                continue;
+            }
+
+            $modulosBase[$modulo] = $this->formatearNombreModulo($modulo);
+        }
+
+        return $modulosBase;
+    }
+
+    private function getModulosDesdeBaseDatos(): array {
+        try {
+            $sql = "SELECT DISTINCT Modulo FROM permisos WHERE Modulo IS NOT NULL AND TRIM(Modulo) <> ''";
+            $stmt = $this->db->query($sql);
+            $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+
+            $modulos = [];
+            foreach ($rows as $row) {
+                $modulo = trim((string)($row['Modulo'] ?? ''));
+                if ($modulo !== '') {
+                    $modulos[] = $modulo;
+                }
+            }
+
+            return array_values(array_unique($modulos));
+        } catch (Throwable $e) {
+            return [];
+        }
+    }
+
+    private function getModulosDesdeCodigo(): array {
+        $modulos = [];
+        $directorios = [
+            APP . '/Controllers',
+            APP . '/Helpers',
+            APP . '/Models',
+            VIEWS
+        ];
+
+        foreach ($directorios as $directorio) {
+            if (!is_dir($directorio)) {
+                continue;
+            }
+
+            $iterador = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directorio));
+            foreach ($iterador as $archivo) {
+                if (!$archivo->isFile() || strtolower((string)$archivo->getExtension()) !== 'php') {
+                    continue;
+                }
+
+                $contenido = @file_get_contents($archivo->getPathname());
+                if (!is_string($contenido) || $contenido === '') {
+                    continue;
+                }
+
+                if (preg_match_all('/AuthController::tienePermiso\s*\(\s*[\'\"]([^\'\"]+)[\'\"]\s*(?:,|\))/u', $contenido, $matches)) {
+                    foreach ((array)($matches[1] ?? []) as $modulo) {
+                        $modulo = trim((string)$modulo);
+                        if ($modulo !== '') {
+                            $modulos[] = $modulo;
+                        }
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique($modulos));
+    }
+
+    private function formatearNombreModulo(string $modulo): string {
+        $texto = str_replace(['_', '-'], ' ', trim($modulo));
+        $texto = preg_replace('/\s+/', ' ', (string)$texto);
+        $texto = ucwords(strtolower((string)$texto));
+
+        return $texto !== '' ? $texto : $modulo;
     }
 
     /**

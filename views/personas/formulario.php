@@ -147,8 +147,8 @@ $urlVolver = $returnUrl !== ''
             <h3 class="section-title"><?= $modoSoloEventosProcesos ? '🎯 Eventos y procesos' : '⛪ Información Ministerial' ?></h3>
             
             <div class="bloque-ministerial-general">
-                <div id="alerta_pastor" class="alert alert-info" style="display:none; margin-bottom: 15px;">
-                    <i class="bi bi-shield-check"></i> <strong>⭐ Esta persona es un Líder (Pastor)</strong> - Será tratada como líder en el sistema y reportará actividades de liderazgo.
+                <div class="alert alert-secondary" style="margin-bottom: 15px; background:#f7f9fc; border:1px solid #dbe4f0; color:#345;">
+                    <strong>Regla de jerarquía:</strong> Pastor cubre líderes de 12. Líder de 12 cubre líderes de célula y tiene cupo máximo de 12 líderes directos. Líder de célula cubre miembros de su célula. Los pastores no deben quedar con líder asignado.
                 </div>
                 
                 <div class="form-row">
@@ -167,16 +167,6 @@ $urlVolver = $returnUrl !== ''
                     <div id="celula_autocomplete" class="autocomplete-items"></div>
                     <small class="form-text text-muted">Escriba el nombre de la célula para buscarla y selecciónela de la lista</small>
                     <small id="celula_error" class="form-text text-danger" style="display:none;">Debes seleccionar una célula válida de la lista.</small>
-                </div>
-
-                <div class="form-group">
-                    <?php if (AuthController::esAdministrador()): ?>
-                        <label>Rol</label>
-                        <div class="form-control" style="background:#f8f9fb; color:#5f6d84;">Se asigna desde el botón "Asignar usuario"</div>
-                    <?php else: ?>
-                        <label>Acceso de usuario</label>
-                        <div class="form-control" style="background:#f8f9fb; color:#5f6d84;">Solo el administrador puede asignar usuario y rol.</div>
-                    <?php endif; ?>
                 </div>
 
                 <div class="form-group">
@@ -211,7 +201,7 @@ $urlVolver = $returnUrl !== ''
                     <input type="hidden" id="id_lider" name="id_lider" 
                            value="<?= htmlspecialchars((string)$liderIdSeleccionado) ?>">
                     <div id="lider_autocomplete" class="autocomplete-items"></div>
-                    <small class="form-text text-muted">Escriba el nombre del líder y selecciónelo de la lista</small>
+                          <small class="form-text text-muted">Escriba el nombre del líder y selecciónelo de la lista. La cobertura válida depende del rol que tendrá esta persona.</small>
                     <small id="lider_error" class="form-text text-danger" style="display:none;">Debes seleccionar un líder válido de la lista.</small>
                 </div>
 
@@ -481,100 +471,6 @@ $urlVolver = $returnUrl !== ''
             </div>
         </div>
 
-        <!-- Acceso al Sistema - Solo Administradores -->
-        <?php if (AuthController::esAdministrador()): ?>
-        <?php
-        $rolAsistenteDefault = '';
-        if (!empty($roles) && is_array($roles)) {
-            foreach ($roles as $rolTmp) {
-                $nombreRolTmp = strtolower(trim((string)($rolTmp['Nombre_Rol'] ?? '')));
-                $nombreRolTmp = strtr($nombreRolTmp, [
-                    'á' => 'a',
-                    'é' => 'e',
-                    'í' => 'i',
-                    'ó' => 'o',
-                    'ú' => 'u',
-                    'ü' => 'u',
-                    'ñ' => 'n'
-                ]);
-                if (strpos($nombreRolTmp, 'asistente') !== false) {
-                    $rolAsistenteDefault = (string)($rolTmp['Id_Rol'] ?? '');
-                    break;
-                }
-            }
-        }
-
-        $esFormularioCreacion = !isset($persona['Id_Persona']);
-        $rolSeleccionadoAdmin = (string)($post_data['id_rol'] ?? ($persona['Id_Rol'] ?? ''));
-        if ($rolSeleccionadoAdmin === '' && $esFormularioCreacion && $rolAsistenteDefault !== '') {
-            $rolSeleccionadoAdmin = $rolAsistenteDefault;
-        }
-        $asignarUsuarioAbierto = !empty($post_data['asignar_usuario_activo']) || !empty($persona['Usuario']);
-        ?>
-        <div class="form-section" id="acceso_sistema_section">
-            <h3 class="section-title">🔐 Acceso al Sistema</h3>
-            <button type="button" id="btn_asignar_usuario_toggle" class="btn btn-secondary" style="margin-bottom: 15px;">
-                Asignar usuario
-            </button>
-
-            <input type="hidden" name="asignar_usuario_activo" id="asignar_usuario_activo" value="<?= $asignarUsuarioAbierto ? '1' : '0' ?>">
-
-            <div id="asignar_usuario_panel" style="display:<?= $asignarUsuarioAbierto ? 'block' : 'none' ?>;">
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="id_rol">Rol</label>
-                    <select id="id_rol" name="id_rol" class="form-control">
-                        <option value="">Sin rol</option>
-                        <?php if (!empty($roles)): ?>
-                            <?php foreach ($roles as $rol): ?>
-                                <option value="<?= $rol['Id_Rol'] ?>" <?= (string)$rolSeleccionadoAdmin === (string)$rol['Id_Rol'] ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($rol['Nombre_Rol']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </select>
-                    <small class="form-text text-muted">Solo el administrador puede asignar o cambiar el rol.</small>
-                </div>
-            </div>
-
-            <div id="acceso_sistema_alerta" class="alert alert-warning" style="display:none; margin-bottom: 15px;">
-                El acceso al sistema no está disponible para personas con rol Asistente.
-            </div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="usuario">Usuario</label>
-                    <input type="text" id="usuario" name="usuario" class="form-control" 
-                           value="<?= htmlspecialchars($persona['Usuario'] ?? '') ?>"
-                           placeholder="Dejar vacío si no tendrá acceso al sistema">
-                    <small class="form-text text-muted">
-                        Si asigna un usuario, la persona podrá iniciar sesión en el sistema
-                    </small>
-                </div>
-
-                <div class="form-group">
-                    <label for="contrasena">
-                        Contraseña <?= isset($persona) ? '(Dejar vacío para mantener la actual)' : '' ?>
-                    </label>
-                    <input type="password" id="contrasena" name="contrasena" class="form-control" 
-                           placeholder="<?= isset($persona) ? 'Solo llenar si desea cambiar la contraseña' : 'Contraseña para acceso' ?>">
-                    <small class="form-text text-muted">
-                        Mínimo 6 caracteres
-                    </small>
-                </div>
-            </div>
-
-            <?php if (isset($persona) && !empty($persona['Ultimo_Acceso'])): ?>
-            <div class="alert alert-info" style="margin-top: 15px;">
-                <i class="bi bi-clock-history"></i> 
-                <strong>Último acceso:</strong> 
-                <?= date('d/m/Y H:i:s', strtotime($persona['Ultimo_Acceso'])) ?>
-            </div>
-            <?php endif; ?>
-            </div>
-        </div>
-        <?php endif; ?>
-
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Guardar</button>
             <a href="<?= $urlVolver ?>" class="btn btn-secondary">Cancelar</a>
@@ -594,7 +490,6 @@ $urlVolver = $returnUrl !== ''
 
 .modo-solo-eventos .form-section:not(.form-section-ministerial),
 .modo-solo-eventos .bloque-ministerial-general,
-.modo-solo-eventos #alerta_pastor,
 .modo-solo-eventos .section-title:not(.section-title) {
     display: none;
 }
@@ -867,14 +762,6 @@ const lideresDisponibles = [
     <?php endif; ?>
 ];
 
-// Control de acceso al sistema según rol seleccionado
-const rolSelect = document.getElementById('id_rol');
-const accesoSistemaSection = document.getElementById('acceso_sistema_section');
-const accesoSistemaAlerta = document.getElementById('acceso_sistema_alerta');
-const asignarUsuarioBtn = document.getElementById('btn_asignar_usuario_toggle');
-const asignarUsuarioPanel = document.getElementById('asignar_usuario_panel');
-const asignarUsuarioActivoInput = document.getElementById('asignar_usuario_activo');
-const alertaPastor = document.getElementById('alerta_pastor');
 const fechaNacimientoInput = document.getElementById('fecha_nacimiento');
 const edadInput = document.getElementById('edad');
 const liderSearchInput = document.getElementById('lider_search');
@@ -1103,25 +990,6 @@ function normalizarTexto(texto) {
         .trim();
 }
 
-function rolSeleccionadoEsAsistente() {
-    if (!rolSelect || rolSelect.selectedIndex < 0) {
-        return false;
-    }
-
-    const option = rolSelect.options[rolSelect.selectedIndex];
-    const textoRol = normalizarTexto(option ? option.text : '');
-    return textoRol.includes('asistente');
-}
-
-function rolSeleccionadoEsPastor() {
-    if (!rolSelect || rolSelect.selectedIndex < 0) {
-        return false;
-    }
-
-    const option = rolSelect.options[rolSelect.selectedIndex];
-    const textoRol = normalizarTexto(option ? option.text : '');
-    return textoRol.includes('pastor');
-}
 function obtenerCoincidenciaExacta(items, valor) {
     const texto = normalizarTexto(valor);
     if (!texto) {
@@ -1158,6 +1026,22 @@ function sincronizarSeleccionAutocomplete(input, hidden, items, errorEl, etiquet
     }
 
     const valor = (input.value || '').trim();
+    const hiddenValor = String(hidden.value || '').trim();
+
+    // Si ya existe un id válido en hidden, respetarlo para no bloquear el guardado
+    // cuando el usuario no está editando ese campo de autocomplete.
+    if (hiddenValor !== '') {
+        const seleccionPorId = items.find(item => String(item.id) === hiddenValor) || null;
+        if (seleccionPorId) {
+            input.value = seleccionPorId.nombre;
+            limpiarCampoInvalido(input, errorEl);
+            if (typeof actualizarAsignadoALiderChecklist === 'function') {
+                actualizarAsignadoALiderChecklist();
+            }
+            return true;
+        }
+    }
+
     if (valor === '') {
         hidden.value = '';
         limpiarCampoInvalido(input, errorEl);
@@ -1186,113 +1070,6 @@ function sincronizarSeleccionAutocomplete(input, hidden, items, errorEl, etiquet
     return false;
 }
 
-
-function actualizarAccesoSistemaPorRol() {
-    if (!accesoSistemaSection || !asignarUsuarioPanel) {
-        return;
-    }
-
-    const panelAbierto = asignarUsuarioPanel.style.display !== 'none';
-    const esAsistente = rolSeleccionadoEsAsistente();
-    const rolAsignado = rolSelect && rolSelect.value !== '';
-    const camposAcceso = [
-        document.getElementById('usuario'),
-        document.getElementById('contrasena')
-    ].filter(Boolean);
-
-    if (rolSelect) {
-        rolSelect.disabled = !panelAbierto;
-    }
-
-    if (!panelAbierto) {
-        if (asignarUsuarioActivoInput) {
-            asignarUsuarioActivoInput.value = '0';
-        }
-        if (accesoSistemaAlerta) {
-            accesoSistemaAlerta.style.display = 'none';
-        }
-        camposAcceso.forEach(campo => {
-            campo.disabled = true;
-        });
-        return;
-    }
-
-    if (asignarUsuarioActivoInput) {
-        asignarUsuarioActivoInput.value = '1';
-    }
-
-    if (!rolAsignado || esAsistente) {
-        if (accesoSistemaAlerta) {
-            accesoSistemaAlerta.textContent = !rolAsignado
-                ? 'Asigne un rol para habilitar el acceso al sistema.'
-                : 'El acceso al sistema no está disponible para personas con rol Asistente.';
-            accesoSistemaAlerta.style.display = 'block';
-        }
-
-        camposAcceso.forEach(campo => {
-            campo.disabled = true;
-            if (campo.id === 'usuario' || campo.id === 'contrasena') {
-                campo.value = '';
-            }
-        });
-        return;
-    }
-
-    if (accesoSistemaAlerta) {
-        accesoSistemaAlerta.style.display = 'none';
-    }
-    camposAcceso.forEach(campo => {
-        campo.disabled = false;
-    });
-}
-
-function actualizarFormularioPorRolPastor() {
-    const esPastor = rolSeleccionadoEsPastor();
-    
-    // Mostrar/ocultar indicador de Pastor
-    if (alertaPastor) {
-        alertaPastor.style.display = esPastor ? 'block' : 'none';
-    }
-    
-    // Desabilitar/habilitar campo Líder Asignado
-    if (liderSearchInput) {
-        if (esPastor) {
-            liderSearchInput.disabled = true;
-            liderSearchInput.value = '';
-            liderSearchInput.placeholder = 'No aplica (Esta persona es un Líder)';
-        } else {
-            liderSearchInput.disabled = false;
-            liderSearchInput.placeholder = 'Buscar líder...';
-        }
-    }
-    
-    if (esPastor && liderHiddenInput) {
-        liderHiddenInput.value = '';
-        limpiarCampoInvalido(liderSearchInput, liderError);
-    }
-
-    if (!esPastor) {
-        limpiarCampoInvalido(liderSearchInput, liderError);
-    }
-
-    actualizarAsignadoALiderChecklist();
-}
-
-if (rolSelect) {
-    rolSelect.addEventListener('change', actualizarAccesoSistemaPorRol);
-    rolSelect.addEventListener('change', actualizarFormularioPorRolPastor);
-}
-
-if (asignarUsuarioBtn && asignarUsuarioPanel) {
-    asignarUsuarioBtn.addEventListener('click', function() {
-        const panelAbierto = asignarUsuarioPanel.style.display !== 'none';
-        asignarUsuarioPanel.style.display = panelAbierto ? 'none' : 'block';
-        actualizarAccesoSistemaPorRol();
-    });
-}
-
-actualizarAccesoSistemaPorRol();
-actualizarFormularioPorRolPastor();
 
 if (ministerioSelect) {
     ministerioSelect.addEventListener('change', function() {
@@ -1405,7 +1182,7 @@ if (tipoPersonaRadios.length) {
 function inicializarMayusculasAutomaticas() {
     const campos = document.querySelectorAll('input[type="text"], textarea');
     campos.forEach(function(campo) {
-        if (!campo || campo.id === 'usuario') {
+        if (!campo) {
             return;
         }
 

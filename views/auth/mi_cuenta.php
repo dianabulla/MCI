@@ -39,14 +39,19 @@
 
                 <div class="mb-3">
                     <label for="contrasena_actual" class="form-label">Contraseña actual</label>
-                    <input
-                        type="password"
-                        class="form-control"
-                        id="contrasena_actual"
-                        name="contrasena_actual"
-                        required
-                        placeholder="Obligatoria para confirmar cambios"
-                    >
+                    <div class="password-toggle-wrap">
+                        <input
+                            type="password"
+                            class="form-control"
+                            id="contrasena_actual"
+                            name="contrasena_actual"
+                            required
+                            placeholder="Obligatoria para confirmar cambios"
+                        >
+                        <button type="button" class="password-toggle-btn" data-target="contrasena_actual" aria-label="Mostrar contraseña actual" title="Mostrar/Ocultar">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <hr>
@@ -54,26 +59,36 @@
 
                 <div class="mb-3">
                     <label for="contrasena_nueva" class="form-label">Nueva contraseña</label>
-                    <input
-                        type="password"
-                        class="form-control"
-                        id="contrasena_nueva"
-                        name="contrasena_nueva"
-                        minlength="6"
-                        placeholder="Mínimo 6 caracteres"
-                    >
+                    <div class="password-toggle-wrap">
+                        <input
+                            type="password"
+                            class="form-control"
+                            id="contrasena_nueva"
+                            name="contrasena_nueva"
+                            minlength="6"
+                            placeholder="Mínimo 6 caracteres"
+                        >
+                        <button type="button" class="password-toggle-btn" data-target="contrasena_nueva" aria-label="Mostrar nueva contraseña" title="Mostrar/Ocultar">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="mb-4">
                     <label for="contrasena_nueva_confirmacion" class="form-label">Confirmar nueva contraseña</label>
-                    <input
-                        type="password"
-                        class="form-control"
-                        id="contrasena_nueva_confirmacion"
-                        name="contrasena_nueva_confirmacion"
-                        minlength="6"
-                        placeholder="Repite la nueva contraseña"
-                    >
+                    <div class="password-toggle-wrap">
+                        <input
+                            type="password"
+                            class="form-control"
+                            id="contrasena_nueva_confirmacion"
+                            name="contrasena_nueva_confirmacion"
+                            minlength="6"
+                            placeholder="Repite la nueva contraseña"
+                        >
+                        <button type="button" class="password-toggle-btn" data-target="contrasena_nueva_confirmacion" aria-label="Mostrar confirmación de contraseña" title="Mostrar/Ocultar">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="d-flex gap-2">
@@ -86,5 +101,53 @@
         </div>
     </div>
 </div>
+
+<style>
+.password-toggle-wrap {
+    position: relative;
+}
+
+.password-toggle-wrap .form-control {
+    padding-right: 44px;
+}
+
+.password-toggle-btn {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    border: 0;
+    background: transparent;
+    color: #5f6f85;
+    padding: 4px;
+    line-height: 1;
+}
+
+.password-toggle-btn:hover {
+    color: #325fa9;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const toggles = document.querySelectorAll('.password-toggle-btn');
+
+    toggles.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const targetId = btn.getAttribute('data-target');
+            const input = document.getElementById(targetId);
+            const icon = btn.querySelector('i');
+            if (!input || !icon) {
+                return;
+            }
+
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+            icon.classList.toggle('bi-eye', !isPassword);
+            icon.classList.toggle('bi-eye-slash', isPassword);
+        });
+    });
+});
+</script>
 
 <?php include VIEWS . '/layout/footer.php'; ?>

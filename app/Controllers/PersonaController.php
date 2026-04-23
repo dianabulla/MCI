@@ -97,11 +97,7 @@ class PersonaController extends BaseController {
             return true;
         }
 
-        if ($this->tieneModuloPermisoExplicito('personas_plantillas_whatsapp')) {
-            return AuthController::tienePermiso('personas_plantillas_whatsapp', 'ver');
-        }
-
-        return AuthController::tienePermiso('personas', 'editar');
+        return AuthController::tienePermiso('personas_plantillas_whatsapp', 'ver');
     }
 
     private function puedeVerAtajoAsignados() {
@@ -109,11 +105,7 @@ class PersonaController extends BaseController {
             return true;
         }
 
-        if ($this->tieneModuloPermisoExplicito('personas_ganar_asignados')) {
-            return AuthController::tienePermiso('personas_ganar_asignados', 'ver');
-        }
-
-        return AuthController::tienePermiso('personas', 'editar');
+        return AuthController::tienePermiso('personas_ganar_asignados', 'ver');
     }
 
     private function puedeVerAtajoReasignados() {
@@ -121,11 +113,7 @@ class PersonaController extends BaseController {
             return true;
         }
 
-        if ($this->tieneModuloPermisoExplicito('personas_ganar_reasignados')) {
-            return AuthController::tienePermiso('personas_ganar_reasignados', 'ver');
-        }
-
-        return AuthController::tienePermiso('personas', 'editar');
+        return AuthController::tienePermiso('personas_ganar_reasignados', 'ver');
     }
 
     private function obtenerDestinatariosMinisterio($idMinisterio, $idPersonaExcluir = 0) {
@@ -831,6 +819,37 @@ class PersonaController extends BaseController {
         }));
     }
 
+    private function esRolLiderazgoPorIdRol($idRol) {
+        $idRol = (int)$idRol;
+        if ($idRol <= 0) {
+            return false;
+        }
+
+        $jerarquia = $this->personaModel->getJerarquiaByRol($idRol);
+        return in_array($jerarquia, ['pastor', 'lider_12', 'lider_celula'], true);
+    }
+
+    private function filtrarSoloDiscipulos(array $personas) {
+        return array_values(array_filter($personas, function($persona) {
+            return !$this->esRolLiderazgoPorIdRol((int)($persona['Id_Rol'] ?? 0));
+        }));
+    }
+
+    private function esRolDiscipularPorIdRol($idRol) {
+        $idRol = (int)$idRol;
+        if ($idRol <= 0) {
+            return false;
+        }
+
+        $rol = $this->rolModel->getById($idRol);
+        if (empty($rol['Nombre_Rol'])) {
+            return false;
+        }
+
+        $nombreRol = $this->textoSinAcentos((string)$rol['Nombre_Rol']);
+        return strpos($nombreRol, 'discipul') !== false || strpos($nombreRol, 'disipul') !== false;
+    }
+
     private function unirPersonasSinDuplicados(array $base, array $adicionales) {
         $resultado = $base;
         $ids = [];
@@ -1012,6 +1031,26 @@ class PersonaController extends BaseController {
 
         return array_values(array_filter($personas, static function($persona) use ($idLiderInt) {
             return (int)($persona['Id_Lider'] ?? 0) === $idLiderInt;
+        }));
+    }
+
+    private function filtrarPendientesPorConectarListado(array $personas) {
+        return array_values(array_filter($personas, function($persona) {
+            if ($this->esRolLiderazgoPorIdRol((int)($persona['Id_Rol'] ?? 0))) {
+                return false;
+            }
+
+            if (!$this->esRolDiscipularPorIdRol((int)($persona['Id_Rol'] ?? 0))) {
+                return false;
+            }
+
+            $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
+            $idLider = (int)($persona['Id_Lider'] ?? 0);
+            $idCelula = (int)($persona['Id_Celula'] ?? 0);
+            $esAntiguo = $this->esPersonaAntigua((array)$persona);
+
+            // Pendientes: solo discipulares antiguos con asignación incompleta.
+            return $esAntiguo && ($idMinisterio <= 0 || $idLider <= 0 || $idCelula <= 0);
         }));
     }
 
@@ -1331,6 +1370,145 @@ class PersonaController extends BaseController {
         return $this->idRolAsistenteCache;
     }
 
+    private function obtenerIdRolDiscipuloDefault() {
+        $idDiscipulo = 0;
+
+        try {
+            $roles = $this->rolModel->getAll();
+            foreach ((array)$roles as $rol) {
+                $nombreRol = $this->textoSinAcentos((string)($rol['Nombre_Rol'] ?? ''));
+                if (
+                    strpos($nombreRol, 'discipulo') !== false
+                    || strpos($nombreRol, 'disipulo') !== false
+                    || strpos($nombreRol, 'miembro') !== false
+                ) {
+                    $idDiscipulo = (int)($rol['Id_Rol'] ?? 0);
+                    if ($idDiscipulo > 0) {
+                        return $idDiscipulo;
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $idDiscipulo = 0;
+        }
+
+        if ($idDiscipulo > 0) {
+            return $idDiscipulo;
+        }
+
+        return (int)$this->obtenerIdRolAsistenteDefault();
+    }
+
+    private function validarYNormalizarReglasPorRol(array &$data) {
+        $idRol = (int)($data['Id_Rol'] ?? 0);
+        if ($idRol <= 0) {
+            return [
+                'ok' => true,
+                'message' => ''
+            ];
+        }
+
+        $jerarquia = $this->personaModel->getJerarquiaByRol($idRol);
+        $idLider = (int)($data['Id_Lider'] ?? 0);
+        $idMinisterio = (int)($data['Id_Ministerio'] ?? 0);
+
+        if ($jerarquia === 'pastor') {
+            $data['Id_Lider'] = null;
+
+            return [
+                'ok' => true,
+                'message' => ''
+            ];
+        }
+
+        if ($jerarquia === 'administrativo') {
+            $data['Id_Lider'] = null;
+            $data['Id_Ministerio'] = null;
+            $data['Id_Celula'] = null;
+
+            return [
+                'ok' => true,
+                'message' => ''
+            ];
+        }
+
+        if ($jerarquia === 'lider_12') {
+            $data['Id_Celula'] = null;
+
+            if ($idMinisterio <= 0) {
+                return [
+                    'ok' => false,
+                    'message' => 'Un líder de 12 debe tener ministerio asignado.'
+                ];
+            }
+
+            if ($idLider <= 0) {
+                return [
+                    'ok' => false,
+                    'message' => 'Un líder de 12 debe estar bajo cobertura de un pastor.'
+                ];
+            }
+
+            $lider = $this->personaModel->getById($idLider);
+            if (empty($lider)) {
+                return [
+                    'ok' => false,
+                    'message' => 'El líder asignado no existe.'
+                ];
+            }
+
+            $jerarquiaLider = $this->personaModel->getJerarquiaByRol((int)($lider['Id_Rol'] ?? 0));
+            if ($jerarquiaLider !== 'pastor') {
+                return [
+                    'ok' => false,
+                    'message' => 'Un líder de 12 solo puede quedar bajo cobertura de un pastor.'
+                ];
+            }
+
+            return [
+                'ok' => true,
+                'message' => ''
+            ];
+        }
+
+        if ($jerarquia === 'lider_celula') {
+            if ($idMinisterio <= 0) {
+                return [
+                    'ok' => false,
+                    'message' => 'Un líder de célula debe tener ministerio asignado.'
+                ];
+            }
+
+            if ($idLider <= 0) {
+                return [
+                    'ok' => false,
+                    'message' => 'Un líder de célula debe estar bajo cobertura de un líder de 12 o pastor.'
+                ];
+            }
+
+            $lider = $this->personaModel->getById($idLider);
+            if (empty($lider)) {
+                return [
+                    'ok' => false,
+                    'message' => 'El líder asignado no existe.'
+                ];
+            }
+
+            $jerarquiaLider = $this->personaModel->getJerarquiaByRol((int)($lider['Id_Rol'] ?? 0));
+            if (!in_array($jerarquiaLider, ['pastor', 'lider_12'], true)) {
+                return [
+                    'ok' => false,
+                    'message' => 'Un líder de célula solo puede quedar bajo cobertura de un pastor o líder de 12.'
+                ];
+            }
+        }
+
+        return [
+            'ok' => true,
+            'message' => ''
+        ];
+    }
+
     /**
      * Resolver anclaje automático cuando la creación viene desde asistencias.
      */
@@ -1435,19 +1613,34 @@ class PersonaController extends BaseController {
         $personasAntiguasIncompletas = $this->filtrarSoloPersonasAntiguas($personasAntiguasIncompletas);
         $personasAntiguasIncompletas = $this->filtrarPersonasPorMinisterioListado($personasAntiguasIncompletas, $filtroMinisterio);
         $personasAntiguasIncompletas = $this->filtrarPersonasPorLiderListado($personasAntiguasIncompletas, $filtroLider);
+
+        // Pendientes por conectar a célula/líder en la vista de Discipulos.
+        $personasPendientesConectar = $this->personaModel->getAllWithRole($filtroRol, true);
+        $personasPendientesConectar = $this->filtrarPersonasPorMinisterioListado($personasPendientesConectar, $filtroMinisterio);
+        $personasPendientesConectar = $this->filtrarPersonasPorLiderListado($personasPendientesConectar, $filtroLider);
+        $personasPendientesConectar = $this->filtrarPendientesPorConectarListado($personasPendientesConectar);
+
         // El resumen por rol respeta la búsqueda por nombre actual.
         $personasBaseFiltradasPorNombre = $this->filtrarPersonasPorNombreListado($personasBaseFiltradasPorLider, $filtroNombre);
         $personasAntiguasIncompletas = $this->filtrarPersonasPorNombreListado($personasAntiguasIncompletas, $filtroNombre);
+        $personasPendientesConectar = $this->filtrarPersonasPorNombreListado($personasPendientesConectar, $filtroNombre);
         $totalesPerfil = $this->contarPerfilesListado($personasBaseFiltradasPorNombre);
         $totalesPerfil['otros'] = (int)($totalesPerfil['otros'] ?? 0) + count($personasAntiguasIncompletas);
         $ignorarPerfilPorBusqueda = ($filtroNombre !== '');
         if ($ignorarPerfilPorBusqueda) {
             // Si hay búsqueda por nombre, mostrar coincidencias globales sin limitar por el rol activo.
             $personas = $this->unirPersonasSinDuplicados($personasBaseFiltradasPorNombre, $personasAntiguasIncompletas);
+            $personas = $this->unirPersonasSinDuplicados($personas, $personasPendientesConectar);
         } else {
             $personas = $this->filtrarPersonasPorPerfilListado($personasBaseFiltradasPorNombre, $filtroPerfil);
-            if ($filtroPerfil === 'otros') {
+            // Sin filtro explícito de perfil, mostrar también antiguas incompletas
+            // para evitar personas en limbo fuera de Discipulos/Pendientes.
+            if ($filtroPerfil === '' || $filtroPerfil === 'otros') {
                 $personas = $this->unirPersonasSinDuplicados($personas, $personasAntiguasIncompletas);
+            }
+
+            if ($filtroPerfil === '' || $filtroPerfil === 'discipulos') {
+                $personas = $this->unirPersonasSinDuplicados($personas, $personasPendientesConectar);
             }
         }
         $sugerenciasNombre = $this->obtenerSugerenciasNombreListado($personasBaseFiltradasPorLider);
@@ -1756,6 +1949,10 @@ class PersonaController extends BaseController {
             [$filtroFechaInicio, $filtroFechaFin] = [$filtroFechaFin, $filtroFechaInicio];
         }
 
+        // Si el usuario consulta por semana/rango, mostrar historico completo
+        // de ganados (incluyendo quienes ya tienen ubicacion completa).
+        $mostrarGanadosHistoricosPorFecha = ($filtroFechaInicio !== '' && $filtroFechaFin !== '');
+
         $usarVistaHistoricaGanados = (
             $filtroFechaInicio !== ''
             && $filtroFechaFin !== ''
@@ -1812,6 +2009,16 @@ class PersonaController extends BaseController {
         $personasBaseConteo = $this->filtrarSoloPersonasNuevas($personasBaseConteo);
         $personasBaseConteo = $this->enriquecerChecklistPersonas($personasBaseConteo);
         $personasBaseConteo = $this->filtrarPersonasPorNombreListado($personasBaseConteo, $filtroNombre);
+
+        if (!$mostrarGanadosHistoricosPorFecha) {
+            $personasBaseConteo = array_values(array_filter($personasBaseConteo, static function($persona) {
+                $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
+                $idLider = (int)($persona['Id_Lider'] ?? 0);
+                $idCelula = (int)($persona['Id_Celula'] ?? 0);
+                return !($idMinisterio > 0 && $idLider > 0 && $idCelula > 0);
+            }));
+        }
+
         $totalesOrigenPendiente = $this->contarOrigenesPendientes($personasBaseConteo);
 
         if ($hayFiltrosSinOrigen || ($filtroOrigen !== '')) {
@@ -1827,6 +2034,15 @@ class PersonaController extends BaseController {
         }
         $personas = $this->enriquecerChecklistPersonas($personas);
         $personas = $this->filtrarPersonasPorNombreListado($personas, $filtroNombre);
+
+        if (!$mostrarGanadosHistoricosPorFecha) {
+            $personas = array_values(array_filter($personas, static function($persona) {
+                $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
+                $idLider = (int)($persona['Id_Lider'] ?? 0);
+                $idCelula = (int)($persona['Id_Celula'] ?? 0);
+                return !($idMinisterio > 0 && $idLider > 0 && $idCelula > 0);
+            }));
+        }
 
         if ($filtroOrigen === 'no_disponible') {
             $personas = array_values(array_filter($personas, static function($persona) {
@@ -1873,8 +2089,87 @@ class PersonaController extends BaseController {
             'filtroFechaFinActual' => $filtroFechaFin,
             'filtroEtapaActual' => (string)($filtroEtapa ?? ''),
             'filtroOrigenActual' => (string)$filtroOrigen,
+            'mostrarGanadosHistoricosPorFecha' => $mostrarGanadosHistoricosPorFecha,
             'totalesOrigenPendiente' => $totalesOrigenPendiente,
             'puedeMarcarPrimerContactoGanar' => $this->puedeGestionarPrimerContactoGanar()
+        ]);
+    }
+
+    public function notificaciones() {
+        if (!AuthController::tienePermiso('personas', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $tipo = strtolower(trim((string)($_GET['tipo'] ?? 'conectar')));
+        if (!in_array($tipo, ['conectar', 'nuevas'], true)) {
+            $tipo = 'conectar';
+        }
+
+        $filtroRol = DataIsolation::generarFiltroPersonasPendienteConsolidar();
+        $personas = $this->personaModel->getAllWithRole($filtroRol, true);
+        $personas = $this->enriquecerChecklistPersonas($personas);
+        $personas = array_values(array_filter($personas, static function($persona) {
+            return empty($persona['Seguimiento_No_Disponible']);
+        }));
+
+        $pendientesConectar = [];
+        $nuevasAlmasGanadas = [];
+
+        foreach ($personas as $persona) {
+            $esNuevo = ((int)($persona['Es_Antiguo'] ?? 0) !== 1);
+            $esAntiguo = !$esNuevo;
+            $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
+            $idLider = (int)($persona['Id_Lider'] ?? 0);
+            $idCelula = (int)($persona['Id_Celula'] ?? 0);
+            $esLiderazgo = $this->esRolLiderazgoPorIdRol((int)($persona['Id_Rol'] ?? 0));
+
+            $faltantes = [];
+            if ($idMinisterio <= 0) {
+                $faltantes[] = 'Ministerio';
+            }
+            if ($idLider <= 0) {
+                $faltantes[] = 'Lider';
+            }
+            if ($idCelula <= 0) {
+                $faltantes[] = 'Celula';
+            }
+
+            $persona['_faltantes'] = $faltantes;
+            $persona['_proceso_actual'] = trim((string)($persona['Proceso'] ?? '')) !== ''
+                ? (string)$persona['Proceso']
+                : 'Ganar';
+
+            // Pendientes por conectar: solo falta de célula.
+            $esDiscipular = $this->esRolDiscipularPorIdRol((int)($persona['Id_Rol'] ?? 0));
+            if ($esAntiguo && !$esLiderazgo && $esDiscipular && ($idMinisterio <= 0 || $idLider <= 0 || $idCelula <= 0)) {
+                $pendientesConectar[] = $persona;
+            }
+
+            // Nuevos ingresos/asignaciones (categoría separada de pendientes).
+            if ($esNuevo && !$esLiderazgo) {
+                $nuevasAlmasGanadas[] = $persona;
+            }
+        }
+
+        $listaActiva = [];
+        $tituloListaActiva = '';
+        if ($tipo === 'conectar') {
+            $listaActiva = $pendientesConectar;
+            $tituloListaActiva = 'Personas pendientes por conectar';
+        } elseif ($tipo === 'nuevas') {
+            $listaActiva = $nuevasAlmasGanadas;
+            $tituloListaActiva = 'Personas nuevas en Almas ganadas';
+        }
+
+        $this->view('personas/notificaciones', [
+            'tipoNotificacionActiva' => $tipo,
+            'pendientesConectar' => $pendientesConectar,
+            'nuevasAlmasGanadas' => $nuevasAlmasGanadas,
+            'listaActiva' => $listaActiva,
+            'tituloListaActiva' => $tituloListaActiva,
+            'linkGestionPendientes' => PUBLIC_URL . '?url=personas&panel=pendientes_ubicacion',
+            'linkGestionNuevos' => PUBLIC_URL . '?url=personas/ganar'
         ]);
     }
 
@@ -1905,8 +2200,33 @@ class PersonaController extends BaseController {
         $filtroRol = DataIsolation::generarFiltroPersonas();
 
         $personas = $this->personaModel->getPersonasEscalera($filtroRol, $etapaConsulta);
-        $totalesEtapa = $this->personaModel->getTotalesEscalera($filtroRol);
+        $personas = $this->filtrarSoloDiscipulos($personas);
+        $totalesEtapa = $this->contarEtapasEscalera($personas);
+
         $reporteEscaleraMesActual = $this->personaModel->getReporteEscaleraMesActual($filtroRol);
+        $detallesFiltrados = [
+            'Ganar' => [],
+            'Consolidar' => [],
+            'Discipular' => [],
+            'Enviar' => [],
+            'sin_etapa' => []
+        ];
+
+        foreach ((array)($reporteEscaleraMesActual['detalles_etapa'] ?? []) as $etapaRep => $listaPersonas) {
+            $detallesFiltrados[$etapaRep] = $this->filtrarSoloDiscipulos((array)$listaPersonas);
+        }
+
+        $totalesEtapaReporte = [
+            'Ganar' => count($detallesFiltrados['Ganar']),
+            'Consolidar' => count($detallesFiltrados['Consolidar']),
+            'Discipular' => count($detallesFiltrados['Discipular']),
+            'Enviar' => count($detallesFiltrados['Enviar']),
+            'sin_etapa' => count($detallesFiltrados['sin_etapa'])
+        ];
+
+        $reporteEscaleraMesActual['detalles_etapa'] = $detallesFiltrados;
+        $reporteEscaleraMesActual['totales_etapa'] = $totalesEtapaReporte;
+        $reporteEscaleraMesActual['total_personas_mes'] = array_sum($totalesEtapaReporte);
 
         $puedeEditarChecklistEscalera = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
         $puedeMarcarPrimerContactoGanar = $this->puedeGestionarPrimerContactoGanar();
@@ -2055,6 +2375,21 @@ class PersonaController extends BaseController {
         $persona = $this->personaModel->getById($idPersona);
         if (!$persona) {
             $this->json(['success' => false, 'message' => 'Persona no encontrada'], 404);
+        }
+
+        $jerarquiaPersona = $this->personaModel->getJerarquiaByRol((int)($persona['Id_Rol'] ?? 0));
+        if (in_array($jerarquiaPersona, ['pastor', 'lider_12', 'lider_celula'], true)) {
+            $this->personaModel->ajustarEscaleraPorRol($idPersona, (int)($persona['Id_Rol'] ?? 0));
+            $personaActualizada = $this->personaModel->getById($idPersona);
+            $checklistLiderazgo = $this->normalizarChecklistEscalera(
+                json_decode((string)($personaActualizada['Escalera_Checklist'] ?? ''), true)
+            );
+            $this->json([
+                'success' => false,
+                'message' => 'La Escalera del Exito aplica solo para discipulos. En roles de liderazgo se completa automaticamente.',
+                'proceso' => (string)($personaActualizada['Proceso'] ?? 'Enviar'),
+                'checklist' => $checklistLiderazgo
+            ], 422);
         }
 
         $checklistActual = [];
@@ -2301,11 +2636,16 @@ class PersonaController extends BaseController {
             $_POST['usuario'] = trim((string)($_POST['usuario'] ?? ''));
 
             $idRolAsistente = $this->obtenerIdRolAsistenteDefault();
+            $idRolDiscipulo = $this->obtenerIdRolDiscipuloDefault();
             $asignarUsuarioActivo = AuthController::esAdministrador() && ((string)($_POST['asignar_usuario_activo'] ?? '0') === '1');
-            $idRolSeleccionado = ($idRolAsistente > 0) ? $idRolAsistente : null;
+            $idRolSeleccionado = ($idRolDiscipulo > 0) ? $idRolDiscipulo : null;
 
             if ($asignarUsuarioActivo && isset($_POST['id_rol']) && $_POST['id_rol'] !== '') {
                 $idRolSeleccionado = $_POST['id_rol'];
+            }
+
+            if ((int)$idRolSeleccionado <= 0 && $idRolDiscipulo > 0) {
+                $idRolSeleccionado = $idRolDiscipulo;
             }
 
             if ((int)$idRolSeleccionado <= 0 && $idRolAsistente > 0) {
@@ -2337,6 +2677,7 @@ class PersonaController extends BaseController {
                     'soportaConvencion' => $this->soportaConvencion,
                     'soportaProceso' => $this->soportaProceso,
                     'return_to' => $returnTo,
+                    'return_url' => $returnUrl,
                     'celula_retorno' => $celulaRetorno
                 ];
                 $this->view('personas/formulario', $viewData);
@@ -2413,6 +2754,7 @@ class PersonaController extends BaseController {
                     'soportaProceso' => $this->soportaProceso,
                     'soportaChecklistEscalera' => $this->soportaChecklistEscalera,
                     'return_to' => $returnTo,
+                    'return_url' => $returnUrl,
                     'celula_retorno' => $celulaRetorno
                 ];
                 $this->view('personas/formulario', $viewData);
@@ -2449,8 +2791,52 @@ class PersonaController extends BaseController {
                 $data = $this->resolverAnclajeDesdeAsistencia($celulaRetorno, $data);
             }
 
+            $validacionReglasRol = $this->validarYNormalizarReglasPorRol($data);
+            if (!$validacionReglasRol['ok']) {
+                $viewData = [
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => $validacionReglasRol['message'],
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'return_to' => $returnTo,
+                    'return_url' => $returnUrl,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $viewData);
+                return;
+            }
+
             if ($this->soportaFechaAsignacionLider) {
                 $data['Fecha_Asignacion_Lider'] = $this->resolverFechaAsignacionLider($data, null);
+            }
+
+            $validacionJerarquia = $this->personaModel->validarAsignacionJerarquica(
+                (int)($data['Id_Lider'] ?? 0),
+                (int)($data['Id_Rol'] ?? 0)
+            );
+
+            if (!$validacionJerarquia['ok']) {
+                $viewData = [
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => $validacionJerarquia['message'],
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'return_to' => $returnTo,
+                    'return_url' => $returnUrl,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $viewData);
+                return;
             }
             
             // Agregar campos de acceso al sistema si se proporcionan (solo admin)
@@ -2477,6 +2863,7 @@ class PersonaController extends BaseController {
                 $idPersonaNueva = (int)$this->personaModel->create($data);
 
                 if ($idPersonaNueva > 0) {
+                    $this->personaModel->ajustarEscaleraPorRol($idPersonaNueva, (int)($data['Id_Rol'] ?? 0));
                     $personaCreada = $this->personaModel->getById($idPersonaNueva);
                     if (!empty($personaCreada)) {
                         $this->encolarMensajeBienvenidaYAsignacion($personaCreada);
@@ -2513,6 +2900,7 @@ class PersonaController extends BaseController {
                     'soportaConvencion' => $this->soportaConvencion,
                     'soportaProceso' => $this->soportaProceso,
                     'return_to' => $returnTo,
+                    'return_url' => $returnUrl,
                     'celula_retorno' => $celulaRetorno
                 ];
                 $this->view('personas/formulario', $viewData);
@@ -2527,6 +2915,7 @@ class PersonaController extends BaseController {
                 'soportaConvencion' => $this->soportaConvencion,
                 'soportaProceso' => $this->soportaProceso,
                 'return_to' => $returnTo,
+                'return_url' => $returnUrl,
                 'celula_retorno' => $celulaRetorno
             ];
             $this->view('personas/formulario', $data);
@@ -2686,6 +3075,29 @@ class PersonaController extends BaseController {
                 $data['Fecha_Asignacion_Lider'] = $this->resolverFechaAsignacionLider($data, $personaAntes);
             }
 
+            $validacionReglasRol = $this->validarYNormalizarReglasPorRol($data);
+            if (!$validacionReglasRol['ok']) {
+                $persona = $this->personaModel->getById($id);
+                $viewData = [
+                    'persona' => $persona,
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => $validacionReglasRol['message'],
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'soportaChecklistEscalera' => $this->soportaChecklistEscalera,
+                    'return_to' => $returnTo,
+                    'return_url' => $returnUrl,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $viewData);
+                return;
+            }
+
             $this->marcarReasignacionManualSiAplica($data, $personaAntes);
             
             // Agregar campos de acceso al sistema si se proporcionan (solo admin)
@@ -2708,9 +3120,38 @@ class PersonaController extends BaseController {
             if (AuthController::esAdministrador() && isset($_POST['estado_cuenta'])) {
                 $data['Estado_Cuenta'] = $_POST['estado_cuenta'];
             }
+
+            $validacionJerarquia = $this->personaModel->validarAsignacionJerarquica(
+                (int)($data['Id_Lider'] ?? 0),
+                (int)($data['Id_Rol'] ?? 0),
+                (int)$id
+            );
+
+            if (!$validacionJerarquia['ok']) {
+                $persona = $this->personaModel->getById($id);
+                $viewData = [
+                    'persona' => $persona,
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => $validacionJerarquia['message'],
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'soportaChecklistEscalera' => $this->soportaChecklistEscalera,
+                    'return_to' => $returnTo,
+                    'return_url' => $returnUrl,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $viewData);
+                return;
+            }
             
             try {
                 $this->personaModel->update($id, $data);
+                $this->personaModel->ajustarEscaleraPorRol((int)$id, (int)($data['Id_Rol'] ?? 0));
 
                 $peticionAntes = trim((string)($personaAntes['Peticion'] ?? ''));
                 $peticionDespues = trim((string)($data['Peticion'] ?? ''));
@@ -2839,8 +3280,10 @@ class PersonaController extends BaseController {
         }
 
         $persona = $this->personaModel->getById($id);
+        $esEscaleraAutoPorRol = $this->esRolLiderazgoPorIdRol((int)($persona['Id_Rol'] ?? 0));
         $this->view('personas/detalle', [
             'persona' => $persona,
+            'es_escalera_auto_por_rol' => $esEscaleraAutoPorRol,
             'return_to' => $returnTo,
             'return_url' => $returnUrl
         ]);

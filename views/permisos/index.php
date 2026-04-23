@@ -126,6 +126,19 @@
 .perm-table td.perm-name { font-size: 13px; color: #1e293b; }
 .perm-table td.perm-name small { display: block; color: #94a3b8; font-size: 11px; margin-top: 1px; }
 
+.perm-search-wrap {
+    margin: 10px 0 14px;
+}
+
+.perm-search-input {
+    width: 100%;
+    max-width: 460px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+}
+
 /* Checkbox estilo toggle */
 .perm-cb {
     width: 18px; height: 18px;
@@ -185,6 +198,10 @@
         <?php endforeach; ?>
     </div>
 
+    <div class="perm-search-wrap">
+        <input type="text" id="perm-search" class="perm-search-input" placeholder="Buscar módulo o descripción...">
+    </div>
+
     <!-- Paneles por rol -->
     <?php
     $rolesProtegidos = [];
@@ -211,6 +228,9 @@
             'peticiones'       => ['Peticiones',        'Peticiones de oraciÃ³n'],
             'reportes'         => ['Reportes',          'Reportes y estadÃ­sticas'],
             'transmisiones'    => ['Transmisiones',     'Transmisiones en vivo'],
+            'escuelas_formacion' => ['Escuelas de FormaciÃ³n', 'Registro y asistencias de escuelas de formaciÃ³n'],
+            'escuelas_formacion_marcar_asistencia' => ['Escuelas: Marcar asistencia', 'Permite marcar/desmarcar asistencias en la matriz de Escuelas'],
+            'escuelas_formacion_editar_fechas' => ['Escuelas: Editar fechas de clases', 'Permite editar fechas de clases en la matriz de Escuelas'],
             'teen'             => ['Material Teens',     'Material educativo para adolescentes'],
         ],
         'Obsequios' => [
@@ -219,6 +239,9 @@
         ],
         'Nehemias' => [
             'nehemias'                => ['Nehemias (general)',             'Acceso al mÃ³dulo Nehemias'],
+            'nehemias_cols_cedula'    => ['Ver: CÃ©dula',                   'Columna cÃ©dula en Nehemias'],
+            'nehemias_cols_telefono'  => ['Ver: TelÃ©fono',                 'Columna telÃ©fono en Nehemias'],
+            'nehemias_cols_subido_link'=> ['Ver: Link subido',             'Columna link subido en Nehemias'],
             'nehemias_cols_bogota_subio'=> ['Ver: En BogotÃ¡ se le subiÃ³',  'Columna especÃ­fica del reporte'],
             'nehemias_cols_puesto'    => ['Ver: Puesto',                   'Columna puesto en Nehemias'],
             'nehemias_cols_mesa'      => ['Ver: Mesa',                     'Columna mesa en Nehemias'],
@@ -279,6 +302,7 @@
                 </tr>
             </thead>
             <tbody>
+                <?php $modulosMostrados = []; ?>
                 <?php foreach ($gruposModulos as $grupoNombre => $grupoItems):
                     // Filtrar solo los mÃ³dulos que existen en $modulos
                     $itemsVis = array_filter($grupoItems, fn($k) => isset($modulos[$k]), ARRAY_FILTER_USE_KEY);
@@ -288,6 +312,7 @@
                     <td colspan="5"><?= $grupoNombre ?></td>
                 </tr>
                 <?php foreach ($itemsVis as $mk => [$mnombre, $mdesc]):
+                    $modulosMostrados[$mk] = true;
                     $permiso = $permisos[$idRol][$mk] ?? null;
                     $pVer  = $permiso ? (int)$permiso['Puede_Ver']    : 0;
                     $pCre  = $permiso ? (int)$permiso['Puede_Crear']  : 0;
@@ -319,6 +344,46 @@
                 </tr>
                 <?php endforeach; ?>
                 <?php endforeach; ?>
+
+                <?php
+                    $modulosRestantes = array_diff_key($modulos, $modulosMostrados);
+                ?>
+                <?php if (!empty($modulosRestantes)): ?>
+                <tr class="perm-group-header">
+                    <td colspan="5">Otros mÃ³dulos detectados</td>
+                </tr>
+                <?php foreach ($modulosRestantes as $mk => $mnombre):
+                    $permiso = $permisos[$idRol][$mk] ?? null;
+                    $pVer  = $permiso ? (int)$permiso['Puede_Ver']    : 0;
+                    $pCre  = $permiso ? (int)$permiso['Puede_Crear']  : 0;
+                    $pEdi  = $permiso ? (int)$permiso['Puede_Editar'] : 0;
+                    $pEli  = $permiso ? (int)$permiso['Puede_Eliminar']:0;
+                ?>
+                <tr>
+                    <td class="perm-name">
+                        <?= htmlspecialchars((string)$mnombre) ?>
+                        <small>MÃ³dulo detectado automÃ¡ticamente en BD o cÃ³digo.</small>
+                    </td>
+                    <?php foreach ([
+                        ['puede_ver',      $pVer, 'Ver'],
+                        ['puede_crear',    $pCre, 'Crear'],
+                        ['puede_editar',   $pEdi, 'Editar'],
+                        ['puede_eliminar', $pEli, 'Eliminar'],
+                    ] as [$campo, $val, $label]): ?>
+                    <td class="perm-check-cell">
+                        <input type="checkbox"
+                            class="perm-cb permiso-check"
+                            data-rol="<?= $idRol ?>"
+                            data-modulo="<?= htmlspecialchars((string)$mk, ENT_QUOTES, 'UTF-8') ?>"
+                            data-campo="<?= $campo ?>"
+                            title="<?= $label ?> â€” <?= htmlspecialchars((string)$mnombre) ?> (<?= htmlspecialchars($rol['Nombre_Rol']) ?>)"
+                            <?= $val ? 'checked' : '' ?>
+                            <?= $esRolProtegido ? 'disabled' : '' ?>>
+                    </td>
+                    <?php endforeach; ?>
+                </tr>
+                <?php endforeach; ?>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>
@@ -449,6 +514,33 @@
             if (panel) panel.classList.add('active');
         });
     });
+
+    const searchInput = document.getElementById('perm-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', function () {
+            const term = String(this.value || '').toLowerCase().trim();
+            document.querySelectorAll('.perm-panel').forEach((panel) => {
+                const rows = panel.querySelectorAll('tbody tr:not(.perm-group-header)');
+                rows.forEach((row) => {
+                    const texto = String(row.querySelector('.perm-name')?.innerText || '').toLowerCase();
+                    row.style.display = (term === '' || texto.includes(term)) ? '' : 'none';
+                });
+
+                panel.querySelectorAll('tbody tr.perm-group-header').forEach((headerRow) => {
+                    let next = headerRow.nextElementSibling;
+                    let hayVisible = false;
+                    while (next && !next.classList.contains('perm-group-header')) {
+                        if (next.style.display !== 'none') {
+                            hayVisible = true;
+                            break;
+                        }
+                        next = next.nextElementSibling;
+                    }
+                    headerRow.style.display = hayVisible ? '' : 'none';
+                });
+            });
+        });
+    }
 
 })();
 </script>

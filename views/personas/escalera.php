@@ -71,7 +71,7 @@ $reporteMes = $reporteEscaleraMesActual ?? [
     <h2>Escalera del Éxito</h2>
     <div class="page-actions personas-mobile-stack">
         <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill">Personas</a>
-        <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill">Pendiente por consolidar</a>
+        <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill">Almas ganadas</a>
         <a href="<?= PUBLIC_URL ?>?url=personas/escalera" class="btn btn-nav-pill active">Escalera del Éxito</a>
     </div>
 </div>

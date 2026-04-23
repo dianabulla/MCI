@@ -1,11 +1,13 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
+<?php $volverUrlAsistencias = (string)($return_url ?? (PUBLIC_URL . '?url=asistencias')); ?>
+
 <div class="page-header">
     <h2>Asistencias por Célula</h2>
     <div>
-        <a href="<?= PUBLIC_URL ?>?url=asistencias" class="btn btn-secondary">← Volver</a>
+        <a href="<?= htmlspecialchars($volverUrlAsistencias) ?>" class="btn btn-secondary">← Volver</a>
         <?php if (!empty($celula['Id_Celula'])): ?>
-            <a href="<?= PUBLIC_URL ?>?url=asistencias/registrar&celula=<?= (int)$celula['Id_Celula'] ?>" class="btn btn-primary">+ Registrar Asistencia</a>
+            <a href="<?= PUBLIC_URL ?>?url=asistencias/registrar&celula=<?= (int)$celula['Id_Celula'] ?>&return_url=<?= urlencode($volverUrlAsistencias) ?>" class="btn btn-primary">+ Registrar Asistencia</a>
         <?php endif; ?>
     </div>
 </div>

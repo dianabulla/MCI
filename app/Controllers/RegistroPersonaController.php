@@ -101,6 +101,39 @@ class RegistroPersonaController extends BaseController {
         return $this->idRolAsistenteCache;
     }
 
+    private function obtenerIdRolDiscipuloDefault() {
+        try {
+            $rows = $this->personaModel->query("SELECT Id_Rol, Nombre_Rol FROM rol ORDER BY Id_Rol ASC");
+            foreach ((array)$rows as $row) {
+                $nombreRol = strtolower(trim((string)($row['Nombre_Rol'] ?? '')));
+                $nombreRol = strtr($nombreRol, [
+                    'á' => 'a',
+                    'é' => 'e',
+                    'í' => 'i',
+                    'ó' => 'o',
+                    'ú' => 'u',
+                    'ü' => 'u',
+                    'ñ' => 'n'
+                ]);
+
+                if (
+                    strpos($nombreRol, 'discipulo') !== false
+                    || strpos($nombreRol, 'disipulo') !== false
+                    || strpos($nombreRol, 'miembro') !== false
+                ) {
+                    $id = (int)($row['Id_Rol'] ?? 0);
+                    if ($id > 0) {
+                        return $id;
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            // fall through
+        }
+
+        return (int)$this->obtenerIdRolAsistenteDefault();
+    }
+
     private function normalizarDocumentoInput($valor) {
         $valor = trim((string)$valor);
         if ($valor === '') {
@@ -309,9 +342,14 @@ class RegistroPersonaController extends BaseController {
             'Estado_Cuenta' => 'Activo'
         ];
 
-        $idRolAsistente = $this->obtenerIdRolAsistenteDefault();
-        if ($idRolAsistente > 0) {
-            $data['Id_Rol'] = $idRolAsistente;
+        $idRolDiscipulo = $this->obtenerIdRolDiscipuloDefault();
+        if ($idRolDiscipulo > 0) {
+            $data['Id_Rol'] = $idRolDiscipulo;
+        } else {
+            $idRolAsistente = $this->obtenerIdRolAsistenteDefault();
+            if ($idRolAsistente > 0) {
+                $data['Id_Rol'] = $idRolAsistente;
+            }
         }
 
         if ($this->soportaCreadoPor) {

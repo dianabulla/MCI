@@ -87,6 +87,8 @@ $tablaGanarMinisterio = $tabla_ganar_ministerio ?? [
     'totales' => ['meses' => array_fill(1, 12, 0), 's1' => 0, 's2' => 0, 'anual' => 0],
     'detalle_lideres' => []
 ];
+$tablaSeguimientoLideresCelula = $tabla_seguimiento_lideres_celula ?? [];
+$tablaEstadoSemanalCelulas = $tabla_estado_semanal_celulas ?? [];
 
 $reporteGanadosFinSemanaAnterior = $reporte_ganados_fin_semana_anterior ?? [
     'inicio' => '',
@@ -145,7 +147,13 @@ $resumenEscuelasInscripciones = $resumen_escuelas_inscripciones ?? [
 $escuelasTotalRegistroPublico = (int)($resumenEscuelasInscripciones['total'] ?? 0);
 $escuelasTotalOtraTabla = (int)($reporteEscuelasUv['total'] ?? 0);
 $escuelasTotalGeneral = $escuelasTotalRegistroPublico + $escuelasTotalOtraTabla;
+$escuelasTotalConsolidar =
+    (int)($resumenEscuelasInscripciones['universidad_vida'] ?? 0)
+    + (int)($resumenEscuelasInscripciones['encuentro'] ?? 0)
+    + (int)($resumenEscuelasInscripciones['bautismo'] ?? 0);
+$escuelasTotalDiscipular = (int)($resumenEscuelasInscripciones['capacitacion_destino'] ?? 0);
 $inscripcionesEscuelas = $inscripciones_escuelas ?? [];
+$tablaEscuelasUvMinisterioGenero = $tabla_escuelas_uv_ministerio_genero ?? [];
 $inscripcionesEscuelasJson = json_encode($inscripcionesEscuelas, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
 if ($inscripcionesEscuelasJson === false) {
     $inscripcionesEscuelasJson = '[]';
@@ -502,12 +510,12 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
             <h3 style="margin-bottom:4px;">Reporte de Ganados del fin de semana anterior</h3>
             <small style="color:#60708a;">Rango: <?= htmlspecialchars((string)($reporteGanadosFinSemanaAnterior['inicio'] ?? '')) ?> a <?= htmlspecialchars((string)($reporteGanadosFinSemanaAnterior['fin'] ?? '')) ?></small>
         </div>
-        <button type="button" id="toggleGanadosSemanaAnteriorBtn" class="btn btn-secondary">Ver detalle</button>
+        <button type="button" id="toggleGanadosSemanaAnteriorBtn" class="btn btn-secondary">Ocultar detalle</button>
     </div>
 
-    <div id="reporteGanadosSemanaAnteriorDetalle" style="display:none;">
+    <div id="reporteGanadosSemanaAnteriorDetalle" style="display:block;">
     <?php if (!empty($reporteGanadosFinSemanaAnterior['rows'])): ?>
-        <div class="table-container" style="margin-bottom: 12px;">
+        <div class="table-container table-container--always-visible" style="margin-bottom: 12px; display:block;">
             <table class="data-table">
                 <thead>
                     <tr>
@@ -520,7 +528,15 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
                 <tbody>
                     <?php foreach (($reporteGanadosFinSemanaAnterior['rows'] ?? []) as $row): ?>
                         <tr>
-                            <td><?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio')) ?></td>
+                            <td>
+                                <button
+                                    type="button"
+                                    class="report-link-button js-ganados-fin-ministerio"
+                                    data-ministerio="<?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio'), ENT_QUOTES, 'UTF-8') ?>"
+                                >
+                                    <?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio')) ?>
+                                </button>
+                            </td>
                             <td><strong><?= (int)($row['ganados'] ?? 0) ?></strong></td>
                             <td><?= (int)($row['asignados'] ?? 0) ?></td>
                             <td><?= (int)($row['por_verificar'] ?? 0) ?></td>
@@ -614,30 +630,15 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 </div>
 
 <div class="report-kpi-grid report-chart-context" style="margin-bottom: 18px;">
-    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-celula" data-kpi="uv">
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-celula" data-kpi="consolidar_modulo">
         <div class="report-kpi-icon">🎓</div>
-        <div class="report-kpi-label">Universidad de la Vida</div>
-        <div class="report-kpi-value"><?= (int)($resumenEscuelasInscripciones['universidad_vida'] ?? 0) ?></div>
+        <div class="report-kpi-label">Universidad de la Vida (Consolidar)</div>
+        <div class="report-kpi-value"><?= (int)$escuelasTotalConsolidar ?></div>
     </button>
-    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-domingo" data-kpi="encuentro">
-        <div class="report-kpi-icon">🤝</div>
-        <div class="report-kpi-label">Encuentro</div>
-        <div class="report-kpi-value"><?= (int)($resumenEscuelasInscripciones['encuentro'] ?? 0) ?></div>
-    </button>
-    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-escalera" data-kpi="bautismo">
-        <div class="report-kpi-icon">💧</div>
-        <div class="report-kpi-label">Bautismo</div>
-        <div class="report-kpi-value"><?= (int)($resumenEscuelasInscripciones['bautismo'] ?? 0) ?></div>
-    </button>
-    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-asistencia" data-kpi="capacitacion_destino">
+    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-asistencia" data-kpi="discipular_modulo">
         <div class="report-kpi-icon">📚</div>
-        <div class="report-kpi-label">Capacitación Destino</div>
-        <div class="report-kpi-value"><?= (int)($resumenEscuelasInscripciones['capacitacion_destino'] ?? 0) ?></div>
-    </button>
-    <button type="button" class="report-kpi-card report-kpi-button js-kpi-modal kpi-celula" data-kpi="total_inscripciones">
-        <div class="report-kpi-icon">📝</div>
-        <div class="report-kpi-label">Total inscripciones</div>
-        <div class="report-kpi-value"><?= (int)$escuelasTotalGeneral ?></div>
+        <div class="report-kpi-label">Capacitación Destino (Discipular)</div>
+        <div class="report-kpi-value"><?= (int)$escuelasTotalDiscipular ?></div>
     </button>
 </div>
 
@@ -646,161 +647,60 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     <div id="chartEscuelasProgramas"></div>
 </div>
 
-<div class="card report-card report-table-only" style="margin-bottom: 18px; padding: 14px;">
-    <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="filters-inline" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
-        <input type="hidden" name="url" value="reportes">
-        <input type="hidden" name="tipo" value="escuelas">
-        <input type="hidden" name="fecha_referencia" value="<?= htmlspecialchars((string)$fecha_referencia) ?>">
-        <input type="hidden" name="fecha_inicio" value="<?= htmlspecialchars((string)$fechaInicioFiltro) ?>">
-        <input type="hidden" name="fecha_fin" value="<?= htmlspecialchars((string)$fechaFinFiltro) ?>">
-        <input type="hidden" name="ministerio" value="<?= htmlspecialchars((string)$filtro_ministerio) ?>">
-        <input type="hidden" name="lider" value="<?= htmlspecialchars((string)$filtro_lider) ?>">
-        <input type="hidden" name="celula" value="<?= htmlspecialchars((string)$filtro_celula) ?>">
-
-        <div class="form-group" style="margin:0; min-width:220px;">
-            <label for="escuela_programa">Programa</label>
-            <select id="escuela_programa" name="escuela_programa" class="form-control">
-                <option value="" <?= $filtroEscuelaPrograma === '' ? 'selected' : '' ?>>Todos</option>
-                <option value="universidad_vida" <?= $filtroEscuelaPrograma === 'universidad_vida' ? 'selected' : '' ?>>Universidad de la Vida</option>
-                <option value="encuentro" <?= $filtroEscuelaPrograma === 'encuentro' ? 'selected' : '' ?>>Encuentro</option>
-                <option value="bautismo" <?= $filtroEscuelaPrograma === 'bautismo' ? 'selected' : '' ?>>Bautismo</option>
-                <option value="capacitacion_destino" <?= $filtroEscuelaPrograma === 'capacitacion_destino' ? 'selected' : '' ?>>Capacitación Destino</option>
-            </select>
-        </div>
-
-        <div class="form-group" style="margin:0; min-width:280px;">
-            <label for="escuela_buscar">Buscar</label>
-            <input type="text" id="escuela_buscar" name="escuela_buscar" class="form-control" placeholder="Nombre, cédula, teléfono o líder" value="<?= htmlspecialchars($filtroEscuelaBuscar) ?>">
-        </div>
-
-        <div class="filters-actions" style="display:flex;gap:8px;">
-            <button type="submit" class="btn btn-primary">Filtrar</button>
-            <a href="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'escuelas', 'escuela_programa' => '', 'escuela_buscar' => ''])) ?>" class="btn btn-secondary">Limpiar</a>
-        </div>
-    </form>
-</div>
-
-<div id="reporteEscuelasResumenProgramas" class="card report-card report-table-only" style="margin-bottom: 18px;">
+<div id="reporteEscuelasUvPorMinisterio" class="card report-card report-table-only" style="margin-bottom: 22px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-        <h3 style="margin:0;">Resumen por tipo de programa</h3>
-        <small style="color:#637087;">Conteo actual de inscripciones</small>
+        <h3 style="margin:0;">Universidad de la Vida por ministerio</h3>
+        <small style="color:#637087;">Inscritos por género, total y asistencias generales por ministerio</small>
     </div>
     <div class="table-container">
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>Programa</th>
-                    <th style="width:160px;">Cantidad</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Universidad de la Vida</td>
-                    <td><strong><?= (int)($resumenEscuelasInscripciones['universidad_vida'] ?? 0) ?></strong></td>
-                </tr>
-                <tr>
-                    <td>Encuentro</td>
-                    <td><strong><?= (int)($resumenEscuelasInscripciones['encuentro'] ?? 0) ?></strong></td>
-                </tr>
-                <tr>
-                    <td>Bautismo</td>
-                    <td><strong><?= (int)($resumenEscuelasInscripciones['bautismo'] ?? 0) ?></strong></td>
-                </tr>
-                <tr>
-                    <td>Capacitación Destino</td>
-                    <td><strong><?= (int)($resumenEscuelasInscripciones['capacitacion_destino'] ?? 0) ?></strong></td>
-                </tr>
-                <tr class="reporte-metas-total-row">
-                    <td><strong>TOTAL</strong></td>
-                    <td><strong><?= (int)($resumenEscuelasInscripciones['total'] ?? 0) ?></strong></td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<div id="reporteEscuelasDetalleUv" class="card report-card report-table-only" style="margin-bottom: 18px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-        <h3 style="margin:0;">Detalle Universidad de la Vida</h3>
-        <small style="color:#637087;">Total: <?= (int)($reporteEscuelasUv['total'] ?? 0) ?></small>
-    </div>
-    <div class="table-container">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Persona</th>
                     <th>Ministerio</th>
-                    <th>Líder</th>
-                    <th>Célula</th>
-                    <th style="width:120px;">Asiste</th>
+                    <th style="color:#1e4a89;">Inscritos H</th>
+                    <th style="color:#8b1c62;">Inscritas M</th>
+                    <th style="color:#166534;">Inscritos Total</th>
+                    <th style="color:#7c3aed;">Asistencias General</th>
                 </tr>
             </thead>
             <tbody>
-                <?php if (!empty($reporteEscuelasUv['rows'])): ?>
-                    <?php foreach (($reporteEscuelasUv['rows'] ?? []) as $rowUv): ?>
-                        <tr>
-                            <td><?= htmlspecialchars((string)($rowUv['nombre'] ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($rowUv['ministerio'] ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($rowUv['lider'] ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($rowUv['celula'] ?? '')) ?></td>
-                            <td><?= !empty($rowUv['va']) ? 'Sí' : 'No' ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <tr>
-                        <td colspan="5" class="text-center">No hay personas para Universidad de la Vida con estos filtros.</td>
-                    </tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<div id="reporteEscuelasRegistrosPublicos" class="card report-card report-table-only" style="margin-bottom: 22px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-        <h3 style="margin:0;">Registros del formulario público</h3>
-        <small style="color:#637087;">Mostrando <?= (int)count($inscripcionesEscuelas) ?> registros recientes</small>
-    </div>
-    <div class="table-container">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Fecha</th>
-                    <th>Nombre</th>
-                    <th>Líder</th>
-                    <th>Ministerio</th>
-                    <th>Programa</th>
-                    <th>Asistencia clase</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (!empty($inscripcionesEscuelas)): ?>
-                    <?php foreach ($inscripcionesEscuelas as $ins): ?>
+                <?php
+                $totInsH = 0;
+                $totInsM = 0;
+                $totInsT = 0;
+                $totAsisGen = 0;
+                ?>
+                <?php if (!empty($tablaEscuelasUvMinisterioGenero)): ?>
+                    <?php foreach ($tablaEscuelasUvMinisterioGenero as $filaUvMin): ?>
                         <?php
-                        $programaRaw = (string)($ins['Programa'] ?? '');
-                        $programaLabels = [
-                            'universidad_vida' => 'Universidad de la Vida',
-                            'encuentro' => 'Encuentro',
-                            'bautismo' => 'Bautismo',
-                            'capacitacion_destino' => 'Capacitación Destino',
-                            'capacitacion_destino_nivel_1' => 'Capacitación Destino - Nivel 1',
-                            'capacitacion_destino_nivel_2' => 'Capacitación Destino - Nivel 2',
-                            'capacitacion_destino_nivel_3' => 'Capacitación Destino - Nivel 3',
-                        ];
-                        $programaLabel = $programaLabels[$programaRaw] ?? $programaRaw;
+                        $insH = (int)($filaUvMin['Inscritos_Hombres'] ?? 0);
+                        $insM = (int)($filaUvMin['Inscritos_Mujeres'] ?? 0);
+                        $insT = (int)($filaUvMin['Inscritos_Total'] ?? 0);
+                        $asisGen = (int)($filaUvMin['Asistieron_Total'] ?? 0);
+
+                        $totInsH += $insH;
+                        $totInsM += $insM;
+                        $totInsT += $insT;
+                        $totAsisGen += $asisGen;
                         ?>
                         <tr>
-                            <td><?= htmlspecialchars((string)substr((string)($ins['Fecha_Registro'] ?? ''), 0, 16)) ?></td>
-                            <td><?= htmlspecialchars((string)($ins['Nombre'] ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
-                            <td><?= htmlspecialchars((string)($ins['Nombre_Ministerio'] ?? '')) ?></td>
-                            <td><?= htmlspecialchars($programaLabel) ?></td>
-                            <td><?= ((int)($ins['Asistio_Clase'] ?? -1) === 1) ? 'Sí' : ((((int)($ins['Asistio_Clase'] ?? -1) === 0) ? 'No' : 'Pendiente')) ?></td>
+                            <td><?= htmlspecialchars((string)($filaUvMin['Ministerio'] ?? 'Sin ministerio')) ?></td>
+                            <td style="color:#1e4a89;"><strong><?= $insH ?></strong></td>
+                            <td style="color:#8b1c62;"><strong><?= $insM ?></strong></td>
+                            <td style="color:#166534;"><strong><?= $insT ?></strong></td>
+                            <td style="color:#7c3aed;"><strong><?= $asisGen ?></strong></td>
                         </tr>
                     <?php endforeach; ?>
+                    <tr class="reporte-metas-total-row">
+                        <td><strong>TOTAL</strong></td>
+                        <td style="color:#1e4a89;"><strong><?= $totInsH ?></strong></td>
+                        <td style="color:#8b1c62;"><strong><?= $totInsM ?></strong></td>
+                        <td style="color:#166534;"><strong><?= $totInsT ?></strong></td>
+                        <td style="color:#7c3aed;"><strong><?= $totAsisGen ?></strong></td>
+                    </tr>
                 <?php else: ?>
                     <tr>
-                        <td colspan="6" class="text-center">No hay inscripciones públicas con esos filtros.</td>
+                        <td colspan="5" class="text-center">No hay inscripciones de Universidad de la Vida disponibles.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>
@@ -890,6 +790,82 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
         <?php else: ?>
             <p style="margin:0; color:#64748b;">Sin datos por red</p>
         <?php endif; ?>
+    </div>
+</div>
+
+<div class="card report-card report-table-only report-celulas-tabla-compacta" style="margin-bottom: 12px;">
+    <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:6px;">
+        <div>
+            <h3 style="margin-bottom:4px;">Seguimiento de líderes por ministerio</h3>
+            <small style="color:#60708a;">Semanas sin registrar célula (ordenado de mayor a menor)</small>
+        </div>
+    </div>
+
+    <div class="table-container" style="margin-top:0;">
+        <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas">
+            <thead>
+                <tr>
+                    <th>Célula</th>
+                    <th>Último reporte</th>
+                    <th style="width:160px;">Semanas sin registrar</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($tablaSeguimientoLideresCelula)): ?>
+                    <?php foreach ($tablaSeguimientoLideresCelula as $filaSeguimiento): ?>
+                        <tr>
+                            <td><?= htmlspecialchars((string)($filaSeguimiento['celula'] ?? 'Sin nombre')) ?></td>
+                            <td><?= htmlspecialchars((string)($filaSeguimiento['ultima_fecha_reporte'] ?? '') ?: 'Nunca') ?></td>
+                            <td><strong><?= (int)($filaSeguimiento['semanas_sin_registrar'] ?? 0) ?></strong></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="3" class="text-center">Sin datos para seguimiento de líderes.</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card report-card report-table-only report-celulas-tabla-compacta" style="margin-bottom: 12px;">
+    <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:6px;">
+        <div>
+            <h3 style="margin-bottom:4px;">Estado semanal por célula</h3>
+            <small style="color:#60708a;">Incluye la información de tarjetas: reportadas, no reportadas, sobre sin reporte y reportó sin sobre</small>
+        </div>
+    </div>
+
+    <div class="table-container" style="margin-top:0;">
+        <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas">
+            <thead>
+                <tr>
+                    <th>Célula</th>
+                    <th style="width:120px;">Reportadas semana</th>
+                    <th style="width:140px;">No reportadas semana</th>
+                    <th style="width:170px;">Entregaron sobre sin reportar</th>
+                    <th style="width:170px;">Reportaron pero no entregaron</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($tablaEstadoSemanalCelulas)): ?>
+                    <?php foreach ($tablaEstadoSemanalCelulas as $filaEstado): ?>
+                        <tr>
+                            <td><?= htmlspecialchars((string)($filaEstado['celula'] ?? 'Sin nombre')) ?></td>
+                            <td><strong><?= (int)($filaEstado['reportadas_semana'] ?? 0) === 1 ? 'Sí' : 'No' ?></strong></td>
+                            <td><strong><?= (int)($filaEstado['no_reportadas_semana'] ?? 0) === 1 ? 'Sí' : 'No' ?></strong></td>
+                            <td><strong><?= (int)($filaEstado['entregaron_sobre_sin_reportar'] ?? 0) === 1 ? 'Sí' : 'No' ?></strong></td>
+                            <td><strong><?= (int)($filaEstado['reportaron_sin_entregar_sobre'] ?? 0) === 1 ? 'Sí' : 'No' ?></strong></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="5" class="text-center">Sin datos de estado semanal por célula.</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
     </div>
 </div>
 
@@ -1062,6 +1038,7 @@ const detalleLideresAperturas = <?= json_encode($tablaAperturasCelulas['detalle_
 const detalleLideresGanar = <?= json_encode($tablaGanarMinisterio['detalle_lideres'] ?? []) ?>;
 const detallesTablasMinisterial = <?= json_encode($detallesTablasMinisterial ?? [], JSON_UNESCAPED_UNICODE) ?>;
 const detallesGananciaMinisterial = <?= json_encode($detallesGananciaMinisterial ?? [], JSON_UNESCAPED_UNICODE) ?>;
+const detallesGanadosFinSemana = <?= json_encode($reporteGanadosFinSemanaAnterior['detalles'] ?? [], JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR) ?>;
 const reporteEscuelasUv = <?= json_encode($reporteEscuelasUv ?? ['total' => 0, 'rows' => []], JSON_UNESCAPED_UNICODE) ?>;
 const resumenEscuelasInscripciones = <?= json_encode($resumenEscuelasInscripciones ?? [], JSON_UNESCAPED_UNICODE) ?>;
 const escuelasTotalRegistroPublico = <?= (int)$escuelasTotalRegistroPublico ?>;
@@ -1220,6 +1197,44 @@ document.querySelectorAll('.js-kpi-modal').forEach((btn) => {
         }
 
         if (tipoReporte === 'escuelas') {
+            if (kpi === 'consolidar_modulo') {
+                const rowsConsolidar = (Array.isArray(inscripcionesEscuelasData) ? inscripcionesEscuelasData : [])
+                    .filter((item) => {
+                        const prog = String(item.Programa || '');
+                        return prog === 'universidad_vida' || prog === 'encuentro' || prog === 'bautismo';
+                    })
+                    .map((item) => [
+                        String(item.Fecha_Registro || '').slice(0, 16),
+                        item.Nombre || '',
+                        item.Lider || 'Sin líder',
+                        item.Nombre_Ministerio || 'Sin ministerio',
+                        etiquetaProgramaEscuela(item.Programa || ''),
+                        String(item.Asistio_Clase || '') === '1' ? 'Sí' : (String(item.Asistio_Clase || '') === '0' ? 'No' : 'Pendiente')
+                    ]);
+
+                abrirModalTarjeta('Escuelas · Módulo Consolidar (Universidad de la Vida)', ['Fecha', 'Nombre', 'Líder', 'Ministerio', 'Programa', 'Asistencia'], rowsConsolidar);
+                return;
+            }
+
+            if (kpi === 'discipular_modulo') {
+                const rowsDiscipular = (Array.isArray(inscripcionesEscuelasData) ? inscripcionesEscuelasData : [])
+                    .filter((item) => {
+                        const prog = String(item.Programa || '');
+                        return prog.indexOf('capacitacion_destino') === 0;
+                    })
+                    .map((item) => [
+                        String(item.Fecha_Registro || '').slice(0, 16),
+                        item.Nombre || '',
+                        item.Lider || 'Sin líder',
+                        item.Nombre_Ministerio || 'Sin ministerio',
+                        etiquetaProgramaEscuela(item.Programa || ''),
+                        String(item.Asistio_Clase || '') === '1' ? 'Sí' : (String(item.Asistio_Clase || '') === '0' ? 'No' : 'Pendiente')
+                    ]);
+
+                abrirModalTarjeta('Escuelas · Módulo Discipular (Capacitación Destino)', ['Fecha', 'Nombre', 'Líder', 'Ministerio', 'Programa', 'Asistencia'], rowsDiscipular);
+                return;
+            }
+
             if (kpi === 'uv') {
                 const rowsUv = (Array.isArray(reporteEscuelasUv.rows) ? reporteEscuelasUv.rows : []).map((item) => [
                     item.nombre || '',
@@ -1316,11 +1331,8 @@ document.querySelectorAll('.js-kpi-modal').forEach((btn) => {
                     return true;
                 })
                 .map((item) => {
-                    const esperadas = parseInt(item.Asistencias_Esperadas || 0, 10);
-                    const reales = parseInt(item.Asistencias_Reales || 0, 10);
-                    const porcentaje = esperadas > 0 ? Math.round((reales / esperadas) * 1000) / 10 : 0;
                     const entregoSobreTxt = parseInt(item.Entrego_Sobre || 0, 10) === 1 ? 'Sí' : 'No';
-                    return [item.Nombre_Celula || 'Sin célula', item.Nombre_Lider || 'Sin líder', esperadas, reales, `${porcentaje}%`, entregoSobreTxt];
+                    return [item.Nombre_Celula || 'Sin célula', entregoSobreTxt];
                 });
 
             const tituloAsistencia = kpi === 'reportadas_semana'
@@ -1332,7 +1344,7 @@ document.querySelectorAll('.js-kpi-modal').forEach((btn) => {
                         : (kpi === 'reportaron_sin_entregar_sobre'
                             ? 'Células · Reportaron pero no entregaron sobre'
                             : 'Células · Promedio de asistencia')));
-            abrirModalTarjeta(tituloAsistencia, ['Célula', 'Líder', 'Esperadas', 'Reales', '%', 'Entregó sobre'], rowsAsistencia);
+            abrirModalTarjeta(tituloAsistencia, ['Célula', 'Entregó sobre'], rowsAsistencia);
         }
     });
 });
@@ -1490,6 +1502,30 @@ if (tipoReporte === 'personas') {
     botonesKpiDetalle.forEach((boton) => {
         boton.addEventListener('click', () => {
             abrirDetalleKpi(String(boton.dataset.origen || ''));
+        });
+    });
+
+    document.querySelectorAll('.js-ganados-fin-ministerio').forEach((boton) => {
+        boton.addEventListener('click', () => {
+            const ministerio = String(boton.dataset.ministerio || 'Sin ministerio');
+            const filas = Array.isArray(detallesGanadosFinSemana[ministerio]) ? detallesGanadosFinSemana[ministerio] : [];
+            reporteDetalleModalTitle.textContent = `Ganados fin de semana - ${ministerio}`;
+            if (!filas.length) {
+                reporteDetalleModalBody.innerHTML = '<tr><td colspan="6" class="text-center">Sin personas para este ministerio</td></tr>';
+            } else {
+                reporteDetalleModalBody.innerHTML = filas.map((item) => {
+                    const persona = escaparHtml(`${item.Nombre || ''} ${item.Apellido || ''}`.trim() || 'Sin nombre');
+                    const lider = escaparHtml(item.Nombre_Lider || 'Sin líder');
+                    const celula = escaparHtml(item.Nombre_Celula || 'Sin célula');
+                    const ministerioTexto = escaparHtml(item.Nombre_Ministerio || 'Sin ministerio');
+                    const proceso = escaparHtml(item.Proceso || '');
+                    const fecha = escaparHtml(item.Fecha_Registro || '');
+                    return `<tr><td>${persona}</td><td>${lider}</td><td>${celula}</td><td>${ministerioTexto}</td><td>${proceso}</td><td>${fecha}</td></tr>`;
+                }).join('');
+            }
+
+            reporteDetalleModal.classList.add('is-open');
+            reporteDetalleModal.setAttribute('aria-hidden', 'false');
         });
     });
 
@@ -1815,6 +1851,10 @@ if (tipoReporte === 'personas') {
 #reportesVisualContainer .table-container,
 #reportesVisualContainer details {
     display: none;
+}
+
+#reportesVisualContainer .table-container.table-container--always-visible {
+    display: block !important;
 }
 
 #reportesVisualContainer .ganar-extra-section {
@@ -2597,6 +2637,21 @@ html.show-report-charts #reportesVisualContainer [id^="chart"] {
     max-width: 140px;
     white-space: normal;
     word-break: break-word;
+}
+
+.report-celulas-tabla-compacta {
+    padding: 10px 12px;
+}
+
+.data-table--seguimiento-celulas th,
+.data-table--seguimiento-celulas td {
+    padding: 5px 6px;
+    font-size: 12px;
+    line-height: 1.15;
+}
+
+.data-table--seguimiento-celulas td strong {
+    font-size: 12px;
 }
 
 details summary {

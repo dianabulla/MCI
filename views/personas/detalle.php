@@ -28,6 +28,13 @@ if ($returnTo === 'celulas') {
     </div>
 </div>
 
+<?php if (!empty($es_escalera_auto_por_rol)): ?>
+<div class="alert alert-info" style="margin-bottom: 16px; border: 1px solid #b8d8ff; background: #eff7ff; color: #1c4a7a;">
+    <strong>Escalera del Exito automatica por rol:</strong>
+    Esta persona tiene rol de liderazgo (Pastor, Lider de 12 o Lider de celula), por lo que la Escalera del Exito se completa automaticamente.
+</div>
+<?php endif; ?>
+
 <div class="detail-container">
     <div class="detail-section">
         <h3>Información Personal</h3>

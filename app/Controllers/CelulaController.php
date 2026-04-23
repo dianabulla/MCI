@@ -465,6 +465,67 @@ class CelulaController extends BaseController {
                     return;
                 }
 
+                if ($accion === 'editar') {
+                    $puedeEditarMaterial = AuthController::esAdministrador()
+                        || AuthController::tienePermiso('materiales_celulas', 'editar')
+                        || AuthController::tienePermiso('materiales_celulas', 'crear');
+
+                    if (!$puedeEditarMaterial) {
+                        throw new Exception('No tienes permiso para editar material.');
+                    }
+
+                    $archivoActual = basename(trim((string)($_POST['archivo_actual'] ?? '')));
+                    $archivoNuevo = basename(trim((string)($_POST['archivo_nuevo'] ?? '')));
+
+                    if ($archivoActual === '' || strtolower(pathinfo($archivoActual, PATHINFO_EXTENSION)) !== 'pdf') {
+                        throw new Exception('Archivo actual inválido.');
+                    }
+
+                    if ($archivoNuevo === '') {
+                        throw new Exception('Debes indicar el nuevo nombre del archivo.');
+                    }
+
+                    if (strtolower(pathinfo($archivoNuevo, PATHINFO_EXTENSION)) !== 'pdf') {
+                        $archivoNuevo .= '.pdf';
+                    }
+
+                    $archivoNuevo = preg_replace('/[\\\\\/:*?"<>|]/', '_', $archivoNuevo);
+                    $archivoNuevo = trim((string)$archivoNuevo);
+                    if ($archivoNuevo === '' || strtolower(pathinfo($archivoNuevo, PATHINFO_EXTENSION)) !== 'pdf') {
+                        throw new Exception('Nombre de archivo inválido.');
+                    }
+
+                    if (strcasecmp($archivoActual, $archivoNuevo) === 0) {
+                        throw new Exception('El nuevo nombre es igual al actual.');
+                    }
+
+                    $rutaActual = $directorioMateriales . '/' . $archivoActual;
+                    if (!is_file($rutaActual)) {
+                        throw new Exception('El archivo a editar no existe.');
+                    }
+
+                    $rutaNueva = $directorioMateriales . '/' . $archivoNuevo;
+                    if (file_exists($rutaNueva)) {
+                        throw new Exception('Ya existe un archivo con ese nombre.');
+                    }
+
+                    if (!@rename($rutaActual, $rutaNueva)) {
+                        throw new Exception('No se pudo renombrar el archivo.');
+                    }
+
+                    try {
+                        $this->asegurarTablaVistasMateriales();
+                        require ROOT . '/conexion.php';
+                        $stmtActualizarVistas = $pdo->prepare("UPDATE material_celula_vista SET Archivo = ? WHERE Archivo = ?");
+                        $stmtActualizarVistas->execute([$archivoNuevo, $archivoActual]);
+                    } catch (Throwable $e) {
+                        // No revertir renombrado de archivo por un fallo de tracking.
+                    }
+
+                    $this->redirect('celulas/materiales&mensaje=' . urlencode('Material PDF renombrado correctamente') . '&tipo=success');
+                    return;
+                }
+
                 if (!AuthController::tienePermiso('materiales_celulas', 'crear')) {
                     throw new Exception('No tienes permiso para subir material.');
                 }
@@ -479,6 +540,7 @@ class CelulaController extends BaseController {
                 }
 
                 $nombreOriginal = trim((string)($archivo['name'] ?? 'material.pdf'));
+                $nombreOriginal = basename($nombreOriginal);
                 $extension = strtolower(pathinfo($nombreOriginal, PATHINFO_EXTENSION));
                 if ($extension !== 'pdf') {
                     throw new Exception('Solo se permiten archivos PDF.');
@@ -505,16 +567,18 @@ class CelulaController extends BaseController {
                     throw new Exception('El archivo no es un PDF válido.');
                 }
 
-                $base = pathinfo($nombreOriginal, PATHINFO_FILENAME);
-                $base = preg_replace('/[^a-zA-Z0-9_\-\s]/', '', $base);
-                $base = preg_replace('/\s+/', '_', (string)$base);
-                $base = trim((string)$base, '_-');
-                if ($base === '') {
-                    $base = 'material_celula';
+                // Mantener nombre original del archivo (sin prefijos automáticos).
+                $nombreFinal = preg_replace('/[\\\\\/:*?"<>|]/', '_', $nombreOriginal);
+                $nombreFinal = trim((string)$nombreFinal);
+                if ($nombreFinal === '' || strtolower(pathinfo($nombreFinal, PATHINFO_EXTENSION)) !== 'pdf') {
+                    throw new Exception('Nombre de archivo inválido.');
                 }
 
-                $nombreFinal = date('Ymd_His') . '_' . substr((string)md5(uniqid((string)mt_rand(), true)), 0, 8) . '_' . $base . '.pdf';
                 $destino = $directorioMateriales . '/' . $nombreFinal;
+
+                if (file_exists($destino)) {
+                    throw new Exception('Ya existe un archivo con ese nombre. Renómbralo y vuelve a subirlo.');
+                }
 
                 if (!move_uploaded_file($tmp, $destino)) {
                     throw new Exception('No se pudo guardar el PDF en el servidor.');

@@ -4,34 +4,39 @@ $puedeVerPersona = AuthController::esAdministrador() || AuthController::tienePer
 $puedeEditarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
 $puedeEliminarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'eliminar');
 $puedeExportarPersonas = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
-$tienePermisoAsignadosExplicito = isset($_SESSION['permisos']['personas_ganar_asignados']) && is_array($_SESSION['permisos']['personas_ganar_asignados']);
-$tienePermisoReasignadosExplicito = isset($_SESSION['permisos']['personas_ganar_reasignados']) && is_array($_SESSION['permisos']['personas_ganar_reasignados']);
 $puedeVerAtajoAsignados = AuthController::esAdministrador()
-    || ($tienePermisoAsignadosExplicito
-        ? AuthController::tienePermiso('personas_ganar_asignados', 'ver')
-        : AuthController::tienePermiso('personas', 'editar'));
+    || AuthController::tienePermiso('personas_ganar_asignados', 'ver');
 $puedeVerAtajoReasignados = AuthController::esAdministrador()
-    || ($tienePermisoReasignadosExplicito
-        ? AuthController::tienePermiso('personas_ganar_reasignados', 'ver')
-        : AuthController::tienePermiso('personas', 'editar'));
+    || AuthController::tienePermiso('personas_ganar_reasignados', 'ver');
 $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPersona;
 ?>
 
-<div class="page-header">
-    <h2>Pendiente por consolidar</h2>
-    <div class="page-actions personas-mobile-stack">
-        <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill">Personas</a>
-        <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill active">Pendiente por consolidar</a>
-        <?php if ($puedeExportarPersonas): ?>
-        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel&modo=ganar<?= ($filtroMinisterioActual ?? '') !== '' ? '&ministerio=' . urlencode((string)$filtroMinisterioActual) : '' ?><?= ($filtroLiderActual ?? '') !== '' ? '&lider=' . urlencode((string)$filtroLiderActual) : '' ?><?= !empty($filtroSinLiderActual) ? '&sin_lider=1' : '' ?><?= !empty($filtroSinCelulaActual) ? '&sin_celula=1' : '' ?><?= ($filtroNombreActual ?? '') !== '' ? '&buscar=' . urlencode((string)$filtroNombreActual) : '' ?><?= ($filtroSemanaRefActual ?? '') !== '' ? '&semana_ref=' . urlencode((string)$filtroSemanaRefActual) : '' ?><?= ($filtroFechaInicioActual ?? '') !== '' ? '&fecha_inicio=' . urlencode((string)$filtroFechaInicioActual) : '' ?><?= ($filtroFechaFinActual ?? '') !== '' ? '&fecha_fin=' . urlencode((string)$filtroFechaFinActual) : '' ?><?= ($filtroOrigenActual ?? '') !== '' ? '&origen=' . urlencode((string)$filtroOrigenActual) : '' ?>" class="btn btn-success">
-            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
-        </a>
-        <?php endif; ?>
-        <?php if (AuthController::tienePermiso('personas', 'crear')): ?>
-        <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="btn btn-primary">+ Nueva Persona</a>
-        <?php endif; ?>
+<div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
+    <h2 style="margin:0;">Almas ganadas</h2>
+    <div class="personas-header-actions">
+        <div class="personas-action-group personas-action-group-nav">
+            <a href="<?= PUBLIC_URL ?>?url=personas" class="personas-action-pill">Discipulos</a>
+            <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="personas-action-pill is-active" aria-current="page">Almas ganadas</a>
+        </div>
+        <div class="personas-action-group">
+            <?php if ($puedeExportarPersonas): ?>
+            <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel&modo=ganar<?= ($filtroMinisterioActual ?? '') !== '' ? '&ministerio=' . urlencode((string)$filtroMinisterioActual) : '' ?><?= ($filtroLiderActual ?? '') !== '' ? '&lider=' . urlencode((string)$filtroLiderActual) : '' ?><?= !empty($filtroSinLiderActual) ? '&sin_lider=1' : '' ?><?= !empty($filtroSinCelulaActual) ? '&sin_celula=1' : '' ?><?= ($filtroNombreActual ?? '') !== '' ? '&buscar=' . urlencode((string)$filtroNombreActual) : '' ?><?= ($filtroSemanaRefActual ?? '') !== '' ? '&semana_ref=' . urlencode((string)$filtroSemanaRefActual) : '' ?><?= ($filtroFechaInicioActual ?? '') !== '' ? '&fecha_inicio=' . urlencode((string)$filtroFechaInicioActual) : '' ?><?= ($filtroFechaFinActual ?? '') !== '' ? '&fecha_fin=' . urlencode((string)$filtroFechaFinActual) : '' ?><?= ($filtroOrigenActual ?? '') !== '' ? '&origen=' . urlencode((string)$filtroOrigenActual) : '' ?>" class="personas-action-pill">
+                <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
+            </a>
+            <?php endif; ?>
+            <?php if (AuthController::tienePermiso('personas', 'crear')): ?>
+            <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="personas-action-pill">+ Nuevo Discipulo</a>
+            <?php endif; ?>
+        </div>
     </div>
 </div>
+
+<?php if (!empty($mostrarGanadosHistoricosPorFecha)): ?>
+<div class="alert alert-info" style="margin-bottom: 14px;">
+    <i class="bi bi-clock-history"></i>
+    Vista histórica activa por semana/rango: se muestran también las almas ya ubicadas con asignación completa (líder, célula y ministerio).
+</div>
+<?php endif; ?>
 
 <?php
 $filtroMinisterioPendiente = (string)($filtroMinisterioActual ?? '');
@@ -212,7 +217,7 @@ $returnUrlGanar = $buildPendientesUrl();
 
 <div class="alert alert-success" style="margin-bottom: 20px;">
     <i class="bi bi-check-circle"></i>
-    Total pendiente por consolidar: <strong><?= count($personas) ?></strong> persona(s)
+    Total almas ganadas: <strong><?= count($personas) ?></strong> persona(s)
 </div>
 
 <div class="table-container">
@@ -429,7 +434,7 @@ $returnUrlGanar = $buildPendientesUrl();
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="<?= $mostrarAcciones ? '7' : '6' ?>" class="text-center">No hay personas pendientes por consolidar</td>
+                    <td colspan="<?= $mostrarAcciones ? '7' : '6' ?>" class="text-center">No hay almas ganadas registradas</td>
                 </tr>
             <?php endif; ?>
         </tbody>
@@ -437,6 +442,52 @@ $returnUrlGanar = $buildPendientesUrl();
 </div>
 
 <style>
+.personas-header-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.personas-action-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid #d5e2f3;
+    border-radius: 999px;
+    background: #f8fbff;
+}
+
+.personas-action-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: #2a4a73;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    transition: all 0.16s ease;
+}
+
+.personas-action-pill:hover {
+    background: #edf4ff;
+    color: #1c4478;
+}
+
+.personas-action-pill.is-active {
+    background: #1f5ea8;
+    border-color: #1f5ea8;
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(20, 58, 101, 0.28);
+}
+
 .proceso-tag {
     display: inline-block;
     font-weight: 700;
@@ -1003,6 +1054,18 @@ $returnUrlGanar = $buildPendientesUrl();
 
 .escalera-status-msg.success {
     color: #1e7f39;
+}
+
+@media (max-width: 800px) {
+    .personas-header-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .personas-action-group {
+        max-width: 100%;
+        overflow-x: auto;
+    }
 }
 </style>
 

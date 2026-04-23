@@ -214,6 +214,36 @@ class Asistencia extends BaseModel {
         return $resultado;
     }
 
+    public function getUltimaFechaReportePorCelula(array $idsCelula) {
+        $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function($id) {
+            return $id > 0;
+        })));
+
+        if (empty($idsCelula)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));
+        $sql = "SELECT Id_Celula, MAX(Fecha_Asistencia) AS Ultima_Fecha_Reporte
+                FROM {$this->table}
+                WHERE Id_Celula IN ({$placeholders})
+                GROUP BY Id_Celula";
+
+        $rows = $this->query($sql, $idsCelula);
+        $resultado = [];
+
+        foreach ($rows as $row) {
+            $idCelula = (int)($row['Id_Celula'] ?? 0);
+            if ($idCelula <= 0) {
+                continue;
+            }
+
+            $resultado[$idCelula] = (string)($row['Ultima_Fecha_Reporte'] ?? '');
+        }
+
+        return $resultado;
+    }
+
     public function getEstadoEntregoSobrePorCelulaSemana(array $idsCelula, $semanaInicio) {
         $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function($id) {
             return $id > 0;

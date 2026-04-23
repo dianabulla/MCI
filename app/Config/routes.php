@@ -40,6 +40,7 @@ return [
     // Personas
     'personas' => 'PersonaController@index',
     'personas/ganar' => 'PersonaController@ganar',
+    'personas/notificaciones' => 'PersonaController@notificaciones',
     'personas/escalera' => 'PersonaController@escalera',
     'personas/actualizarChecklistEscalera' => 'PersonaController@actualizarChecklistEscalera',
     'personas/plantillas-whatsapp' => 'PersonaController@plantillasWhatsapp',
@@ -87,8 +88,22 @@ return [
     'ministerios/crear' => 'MinisterioController@crear',
     'ministerios/editar' => 'MinisterioController@editar',
     'ministerios/actualizarMeta' => 'MinisterioController@actualizarMeta',
+    'ministerios/lideres' => 'MinisterioController@lideres',
+    'ministerios/equipo-principal' => 'MinisterioController@equipoPrincipal',
+    'ministerios/equipo-12' => 'MinisterioController@equipo12',
+    'ministerios/lideres-celula' => 'MinisterioController@lideresCelula',
     'ministerios/eliminar' => 'MinisterioController@eliminar',
     'ministerios/exportarExcel' => 'MinisterioController@exportarExcel',
+
+    // Cuentas
+    'cuentas' => 'CuentaController@index',
+    'cuentas/crear' => 'CuentaController@crear',
+    'cuentas/editar' => 'CuentaController@editar',
+    'cuentas/editar' => 'CuentaController@editar',
+    'cuentas/crear' => 'CuentaController@crear',
+
+    // Cuentas
+    'cuentas' => 'CuentaController@index',
     
     // Roles
     'roles' => 'RolController@index',

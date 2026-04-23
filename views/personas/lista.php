@@ -5,49 +5,48 @@ $puedeEditarPersona = AuthController::esAdministrador() || AuthController::tiene
 $puedeEliminarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'eliminar');
 $puedeCrearPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'crear');
 $puedeExportarPersonas = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
-$tienePermisoPlantillasExplicito = isset($_SESSION['permisos']['personas_plantillas_whatsapp']) && is_array($_SESSION['permisos']['personas_plantillas_whatsapp']);
 $puedeGestionPlantillas = AuthController::esAdministrador()
-    || ($tienePermisoPlantillasExplicito
-        ? AuthController::tienePermiso('personas_plantillas_whatsapp', 'ver')
-        : AuthController::tienePermiso('personas', 'editar'));
-$tienePermisoFormularioPublicoExplicito = isset($_SESSION['permisos']['personas_formulario_publico']) && is_array($_SESSION['permisos']['personas_formulario_publico']);
+    || AuthController::tienePermiso('personas_plantillas_whatsapp', 'ver');
 $puedeVerFormularioPublico = AuthController::esAdministrador()
-    || ($tienePermisoFormularioPublicoExplicito
-        ? AuthController::tienePermiso('personas_formulario_publico', 'ver')
-        : $puedeCrearPersona);
+    || AuthController::tienePermiso('personas_formulario_publico', 'ver');
 $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPersona;
+$mostrarEscaleraRapida = true;
 ?>
 
-<div class="page-header">
-    <h2>Personas</h2>
-    <div class="page-actions personas-mobile-stack">
-        <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-nav-pill active">Personas</a>
-        <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-nav-pill">Pendiente por consolidar</a>
-        <?php if ($puedeVerFormularioPublico): ?>
-        <a href="<?= PUBLIC_URL ?>?url=registro_personas" class="btn btn-primary" target="_blank" rel="noopener">
-            <i class="bi bi-box-arrow-up-right"></i> Formulario público
-        </a>
-        <?php endif; ?>
-        <?php if ($puedeExportarPersonas): ?>
-        <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel<?= !empty($_GET['perfil']) ? '&perfil=' . urlencode((string)$_GET['perfil']) : '' ?><?= !empty($_GET['ministerio']) ? '&ministerio=' . urlencode((string)$_GET['ministerio']) : '' ?><?= !empty($_GET['lider']) ? '&lider=' . urlencode((string)$_GET['lider']) : '' ?><?= !empty($_GET['buscar']) ? '&buscar=' . urlencode((string)$_GET['buscar']) : '' ?>" class="btn btn-success">
-            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
-        </a>
-        <?php endif; ?>
-        <?php if ($puedeGestionPlantillas): ?>
-        <a href="<?= PUBLIC_URL ?>?url=personas/plantillas-whatsapp" class="btn btn-secondary">
-            <i class="bi bi-chat-dots"></i> Plantilla mensaje what
-        </a>
-        <?php endif; ?>
-        <?php if ($puedeCrearPersona): ?>
-        <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="btn btn-primary">+ Nueva Persona</a>
-        <?php endif; ?>
+<div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
+    <h2 style="margin:0;">Discipulos</h2>
+    <div class="personas-header-actions">
+        <div class="personas-action-group personas-action-group-nav">
+            <a href="<?= PUBLIC_URL ?>?url=personas" class="personas-action-pill is-active" aria-current="page">Discipulos</a>
+            <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="personas-action-pill">Almas ganadas</a>
+        </div>
+        <div class="personas-action-group">
+            <?php if ($puedeVerFormularioPublico): ?>
+            <a href="<?= PUBLIC_URL ?>?url=registro_personas" class="personas-action-pill" target="_blank" rel="noopener">
+                <i class="bi bi-box-arrow-up-right"></i> Formulario público
+            </a>
+            <?php endif; ?>
+            <?php if ($puedeExportarPersonas): ?>
+            <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel<?= !empty($_GET['ministerio']) ? '&ministerio=' . urlencode((string)$_GET['ministerio']) : '' ?><?= !empty($_GET['lider']) ? '&lider=' . urlencode((string)$_GET['lider']) : '' ?><?= !empty($_GET['buscar']) ? '&buscar=' . urlencode((string)$_GET['buscar']) : '' ?>" class="personas-action-pill">
+                <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
+            </a>
+            <?php endif; ?>
+            <?php if ($puedeGestionPlantillas): ?>
+            <a href="<?= PUBLIC_URL ?>?url=personas/plantillas-whatsapp" class="personas-action-pill">
+                <i class="bi bi-chat-dots"></i> Plantilla mensaje what
+            </a>
+            <?php endif; ?>
+            <?php if ($puedeCrearPersona): ?>
+            <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="personas-action-pill">+ Nuevo Discipulo</a>
+            <?php endif; ?>
+        </div>
     </div>
 </div>
 
 <div class="card" style="margin-bottom: 16px;">
     <div class="card-body">
         <?php
-        $filtroPerfilListado = (string)($filtroPerfilActual ?? ($_GET['perfil'] ?? ''));
+        $filtroPerfilListado = '';
         $filtroMinisterioListado = (string)($filtroMinisterioActual ?? ($_GET['ministerio'] ?? ''));
         $filtroLiderListado = (string)($filtroLiderActual ?? ($_GET['lider'] ?? ''));
         $lideresFiltradosFormulario = array_values(array_filter(($lideres ?? []), static function($lider) use ($filtroMinisterioListado) {
@@ -64,7 +63,6 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
         }));
         $queryBasePersonas = [
             'url' => 'personas',
-            'perfil' => $filtroPerfilListado,
             'ministerio' => $filtroMinisterioListado,
             'lider' => $filtroLiderListado,
             'buscar' => (string)($filtroNombreActual ?? ($_GET['buscar'] ?? ''))
@@ -80,7 +78,6 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
         ?>
         <form method="GET" action="<?= PUBLIC_URL ?>" class="filters-inline" id="filtro_perfil_form">
             <input type="hidden" name="url" value="personas">
-            <input type="hidden" name="perfil" value="<?= htmlspecialchars($filtroPerfilListado) ?>">
             <div class="form-group">
                 <label for="filtro_ministerio" style="font-size: 14px; margin-bottom: 5px;">Filtro por ministerio</label>
                 <select id="filtro_ministerio" name="ministerio" class="form-control">
@@ -128,7 +125,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-search"></i> Buscar
                 </button>
-                <?php if (!empty($_GET['perfil']) || !empty($_GET['buscar']) || !empty($_GET['ministerio']) || !empty($_GET['lider'])): ?>
+                <?php if (!empty($_GET['buscar']) || !empty($_GET['ministerio']) || !empty($_GET['lider'])): ?>
                 <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-secondary">
                     <i class="bi bi-x-circle"></i> Limpiar
                 </a>
@@ -138,45 +135,129 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
     </div>
 </div>
 
-<div class="card" style="margin-bottom: 16px;">
-    <div class="card-body" style="padding: 12px 16px;">
-        <?php $perfilActivo = (string)($filtroPerfilActual ?? ($_GET['perfil'] ?? '')); ?>
-        <?php $qsMinisterio = ((string)($filtroMinisterioActual ?? '') !== '') ? '&ministerio=' . urlencode((string)$filtroMinisterioActual) : ''; ?>
-        <?php $qsLider = ((string)($filtroLiderActual ?? '') !== '') ? '&lider=' . urlencode((string)$filtroLiderActual) : ''; ?>
-        <?php $qsBuscar = !empty($filtroNombreActual) ? '&buscar=' . urlencode((string)$filtroNombreActual) : ''; ?>
-        <?php $totalResumenRoles = (int)($totalesPerfil['lideres_12'] ?? 0) + (int)($totalesPerfil['lideres_celula'] ?? 0) + (int)($totalesPerfil['asistentes'] ?? 0) + (int)($totalesPerfil['otros'] ?? 0); ?>
-        <div class="resumen-roles-total">
-            Total en listado actual: <strong><?= $totalResumenRoles ?></strong>
-        </div>
-        <div class="personas-resumen-roles">
-            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=lideres_12<?= $qsMinisterio ?><?= $qsLider ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'lideres_12' ? 'active' : '' ?>">
-                <span class="resumen-role-label">Líder de 12</span>
-                <strong class="resumen-role-value"><?= (int)($totalesPerfil['lideres_12'] ?? 0) ?></strong>
-            </a>
-            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=lideres_celula<?= $qsMinisterio ?><?= $qsLider ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'lideres_celula' ? 'active' : '' ?>">
-                <span class="resumen-role-label">Líder de célula</span>
-                <strong class="resumen-role-value"><?= (int)($totalesPerfil['lideres_celula'] ?? 0) ?></strong>
-            </a>
-            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=asistentes<?= $qsMinisterio ?><?= $qsLider ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'asistentes' ? 'active' : '' ?>">
-                <span class="resumen-role-label">Asistentes</span>
-                <strong class="resumen-role-value"><?= (int)($totalesPerfil['asistentes'] ?? 0) ?></strong>
-            </a>
-            <a href="<?= PUBLIC_URL ?>?url=personas&perfil=otros<?= $qsMinisterio ?><?= $qsLider ?><?= $qsBuscar ?>" class="resumen-role-item <?= $perfilActivo === 'otros' ? 'active' : '' ?>">
-                <span class="resumen-role-label">Otros (incluye antiguas sin consolidar)</span>
-                <strong class="resumen-role-value"><?= (int)($totalesPerfil['otros'] ?? 0) ?></strong>
-            </a>
-        </div>
+<?php
+$normalizarRolPerfil = static function($rolNombre) {
+    $rol = strtolower(trim((string)$rolNombre));
+    return strtr($rol, [
+        'á' => 'a',
+        'é' => 'e',
+        'í' => 'i',
+        'ó' => 'o',
+        'ú' => 'u',
+        'ü' => 'u',
+        'ñ' => 'n'
+    ]);
+};
+
+$resolverCategoriaPerfil = static function(array $persona) use ($normalizarRolPerfil) {
+    $rolNormalizado = $normalizarRolPerfil($persona['Nombre_Rol'] ?? '');
+    $idRol = (int)($persona['Id_Rol'] ?? 0);
+    $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
+    $idCelula = (int)($persona['Id_Celula'] ?? 0);
+    $idLider = (int)($persona['Id_Lider'] ?? 0);
+    $tieneAsignacionCompleta = ($idMinisterio > 0 && $idCelula > 0 && $idLider > 0);
+
+    if (strpos($rolNormalizado, 'pastor') !== false) {
+        return 'pastores';
+    }
+
+    if (
+        $idRol === 8
+        || strpos($rolNormalizado, 'lider de 12') !== false
+        || strpos($rolNormalizado, 'lider 12') !== false
+        || strpos($rolNormalizado, 'lideres de 12') !== false
+    ) {
+        return 'lideres_12';
+    }
+
+    if (
+        strpos($rolNormalizado, 'lider de celula') !== false
+        || strpos($rolNormalizado, 'lider celula') !== false
+    ) {
+        return 'lideres_celula';
+    }
+
+    $esRolDiscipular = (strpos($rolNormalizado, 'discipul') !== false || strpos($rolNormalizado, 'disipul') !== false);
+    if ($esRolDiscipular && $tieneAsignacionCompleta) {
+        return 'discipulos';
+    }
+
+    return 'otros_ocultos';
+};
+
+$esPendienteUbicacionRed = static function(array $persona) {
+    $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
+    $idLider = (int)($persona['Id_Lider'] ?? 0);
+    $idCelula = (int)($persona['Id_Celula'] ?? 0);
+    $esAntiguo = (int)($persona['Es_Antiguo'] ?? 1) === 1;
+    $rolNormalizado = strtolower(trim((string)($persona['Nombre_Rol'] ?? '')));
+    $rolNormalizado = strtr($rolNormalizado, [
+        'á' => 'a',
+        'é' => 'e',
+        'í' => 'i',
+        'ó' => 'o',
+        'ú' => 'u',
+        'ü' => 'u',
+        'ñ' => 'n'
+    ]);
+    $esRolDiscipular = (strpos($rolNormalizado, 'discipul') !== false || strpos($rolNormalizado, 'disipul') !== false);
+
+    return $esAntiguo && $esRolDiscipular && ($idMinisterio <= 0 || $idLider <= 0 || $idCelula <= 0);
+};
+
+$conteoPorPerfil = [
+    'pastores' => ['id' => 'pastores', 'label' => 'Pastores', 'total' => 0, 'color' => '#7c3aed', 'meta' => 'Discipulos'],
+    'lideres_12' => ['id' => 'lideres_12', 'label' => 'Lideres de 12', 'total' => 0, 'color' => '#0ea5a4', 'meta' => 'Discipulos'],
+    'lideres_celula' => ['id' => 'lideres_celula', 'label' => 'Lideres de celula', 'total' => 0, 'color' => '#f59e0b', 'meta' => 'Discipulos'],
+    'discipulos' => ['id' => 'discipulos', 'label' => 'Discipulos', 'total' => 0, 'color' => '#10b981', 'meta' => 'Discipulos'],
+    'pendientes_ubicacion' => ['id' => 'pendientes_ubicacion', 'label' => 'Por conectar a celula', 'total' => 0, 'color' => '#2563eb', 'meta' => 'Asignacion ministerial']
+];
+
+foreach (($personas ?? []) as $personaTmp) {
+    $categoriaTmp = $resolverCategoriaPerfil((array)$personaTmp);
+    if (isset($conteoPorPerfil[$categoriaTmp])) {
+        $conteoPorPerfil[$categoriaTmp]['total']++;
+    }
+
+    if ($esPendienteUbicacionRed((array)$personaTmp)) {
+        $conteoPorPerfil['pendientes_ubicacion']['total']++;
+    }
+}
+
+$perfilActivoVisual = '';
+?>
+
+<div class="dashboard-grid personas-perfiles-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin:0 0 16px; gap:10px;">
+    <?php foreach ($conteoPorPerfil as $resumenPerfil): ?>
+    <button
+        type="button"
+        class="dashboard-card personas-perfil-card js-perfil-card <?= $perfilActivoVisual === (string)$resumenPerfil['id'] ? 'is-active' : '' ?>"
+        data-perfil-id="<?= htmlspecialchars((string)$resumenPerfil['id']) ?>"
+        style="border-left-color:<?= htmlspecialchars((string)$resumenPerfil['color']) ?>; text-align:left; cursor:pointer;"
+    >
+        <h3><?= htmlspecialchars((string)$resumenPerfil['label']) ?></h3>
+        <div class="value" style="color:<?= htmlspecialchars((string)$resumenPerfil['color']) ?>;"><?= (int)$resumenPerfil['total'] ?></div>
+        <small style="color:#637087;"><?= htmlspecialchars((string)($resumenPerfil['meta'] ?? 'Discipulos')) ?></small>
+    </button>
+    <?php endforeach; ?>
+</div>
+
+<div id="discipulosHintSeleccion" class="card" style="margin-bottom: 14px; <?= $perfilActivoVisual !== '' ? 'display:none;' : '' ?>">
+    <div class="card-body" style="padding: 12px 16px; color:#5b6d88;">
+        Selecciona una tarjeta para ver los discipulos de esa clasificacion.
     </div>
 </div>
 
-<div class="table-container">
+<div id="discipulosTableWrap" class="table-container" <?= $perfilActivoVisual !== '' ? '' : 'hidden' ?>>
     <table class="data-table ganar-table mobile-persona-accordion">
         <thead>
             <tr>
                 <th>Nombre</th>
                 <th>Ministerio</th>
                 <th>Líder</th>
+                <?php if ($mostrarEscaleraRapida): ?>
                 <th class="escalera-inline-col">Escalera rápida</th>
+                <?php endif; ?>
                 <?php if ($mostrarAcciones): ?><th class="action-col">Acciones</th><?php endif; ?>
             </tr>
         </thead>
@@ -213,9 +294,13 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                         $checklistEscalera['Enviar'][$i] = !empty($checklistEscalera['Enviar'][$i]);
                     }
                     $checklistEscaleraJson = htmlspecialchars((string)json_encode($checklistEscalera, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
-                    $puedeEditarEscaleraInline = !empty($puedeEditarPersona);
+                    $rowPerfilId = $resolverCategoriaPerfil((array)$persona);
+                    $esFilaDiscipulo = ($rowPerfilId === 'discipulos');
+                    $filaPendienteUbicacion = $esPendienteUbicacionRed((array)$persona);
+                    $mostrarEscaleraFila = ($esFilaDiscipulo || $filaPendienteUbicacion);
+                    $puedeEditarEscaleraInline = !empty($puedeEditarPersona) && $mostrarEscaleraFila;
                     ?>
-                    <tr>
+                    <tr class="js-discipulo-row" data-perfil-id="<?= htmlspecialchars((string)$rowPerfilId) ?>" data-pendiente-ubicacion="<?= $filaPendienteUbicacion ? '1' : '0' ?>">
                         <td>
                             <span class="ganar-cell-truncate persona-nombre-cell" title="<?= htmlspecialchars($persona['Nombre'] . ' ' . $persona['Apellido']) ?>">
                                 <?= htmlspecialchars($persona['Nombre'] . ' ' . $persona['Apellido']) ?>
@@ -223,7 +308,9 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                         </td>
                         <td><?= htmlspecialchars($persona['Nombre_Ministerio'] ?? 'Sin ministerio') ?></td>
                         <td><?= htmlspecialchars(trim((string)($persona['Nombre_Lider'] ?? '')) ?: 'Sin líder') ?></td>
+                        <?php if ($mostrarEscaleraRapida): ?>
                         <td class="escalera-inline-col">
+                            <?php if ($mostrarEscaleraFila): ?>
                             <div
                                 class="escalera-inline-card js-inline-escalera"
                                 data-persona-id="<?= (int)($persona['Id_Persona'] ?? 0) ?>"
@@ -269,7 +356,13 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                                     <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Enviar" data-indice="2" <?= !empty($checklistEscalera['Enviar'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Célula</span></label>
                                 </div>
                             </div>
+                            <?php else: ?>
+                            <span style="display:inline-block;padding:4px 8px;border-radius:999px;background:#f2f4f7;color:#5f6b7a;font-size:12px;font-weight:600;">
+                                Automática por rol
+                            </span>
+                            <?php endif; ?>
                         </td>
+                        <?php endif; ?>
                         <?php if ($mostrarAcciones): ?>
                         <td class="action-col">
                             <div class="action-buttons action-buttons-compact">
@@ -309,7 +402,8 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="<?= $mostrarAcciones ? '5' : '4' ?>" class="text-center">No hay personas registradas</td>
+                    <?php $columnasBase = 3 + ($mostrarEscaleraRapida ? 1 : 0) + ($mostrarAcciones ? 1 : 0); ?>
+                    <td colspan="<?= (string)$columnasBase ?>" class="text-center">No hay discipulos registrados</td>
                 </tr>
             <?php endif; ?>
         </tbody>
@@ -321,48 +415,69 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
     font-weight: 700;
 }
 
-.personas-resumen-roles {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+.personas-header-actions {
+    display: flex;
     gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
-.resumen-roles-total {
-    margin-bottom: 10px;
-    font-size: 13px;
-    color: #3d4f6a;
-}
-
-.resumen-role-item {
-    border: 1px solid #d8e2f1;
-    border-radius: 10px;
+.personas-action-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid #d5e2f3;
+    border-radius: 999px;
     background: #f8fbff;
-    padding: 10px 12px;
+}
+
+.personas-action-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: #2a4a73;
     text-decoration: none;
-    transition: background .15s, border-color .15s, box-shadow .15s;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    transition: all 0.16s ease;
 }
 
-.resumen-role-item:hover {
-    background: #eef5ff;
-    border-color: #b9cdee;
+.personas-action-pill:hover {
+    background: #edf4ff;
+    color: #1c4478;
 }
 
-.resumen-role-item.active {
-    background: #e7f1ff;
-    border-color: #4f8edc;
-    box-shadow: inset 0 0 0 1px rgba(79, 142, 220, 0.25);
+.personas-action-pill.is-active {
+    background: #1f5ea8;
+    border-color: #1f5ea8;
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(20, 58, 101, 0.28);
 }
 
-.resumen-role-label {
-    display: block;
-    font-size: 12px;
-    color: #5b6b84;
-    margin-bottom: 2px;
+.personas-perfil-card {
+    appearance: none;
+    border-top: 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-left-width: 3px;
+    border-left-style: solid;
+    transition: transform 0.16s ease, box-shadow 0.16s ease;
 }
 
-.resumen-role-value {
-    font-size: 20px;
-    color: #244a84;
+.personas-perfil-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(15, 35, 61, 0.08);
+}
+
+.personas-perfil-card.is-active {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12), 0 10px 22px rgba(15, 35, 61, 0.08);
 }
 
 .action-buttons-compact {
@@ -819,6 +934,18 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 
 .escalera-status-msg.success {
     color: #1e7f39;
+}
+
+@media (max-width: 800px) {
+    .personas-header-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .personas-action-group {
+        max-width: 100%;
+        overflow-x: auto;
+    }
 }
 </style>
 
@@ -1288,6 +1415,75 @@ if (filtroNombre && filtroPerfilForm) {
             cerrarModal();
         }
     });
+})();
+</script>
+
+<script>
+(function() {
+    const cards = Array.from(document.querySelectorAll('.js-perfil-card'));
+    const rows = Array.from(document.querySelectorAll('.js-discipulo-row'));
+    const tableWrap = document.getElementById('discipulosTableWrap');
+    const hint = document.getElementById('discipulosHintSeleccion');
+
+    if (!cards.length || !rows.length) {
+        return;
+    }
+
+    function aplicarFiltro(perfilId) {
+        const objetivo = String(perfilId || '').trim();
+
+        cards.forEach(function(card) {
+            card.classList.toggle('is-active', String(card.dataset.perfilId || '') === objetivo);
+        });
+
+        if (objetivo === '') {
+            rows.forEach(function(row) {
+                row.style.display = 'none';
+            });
+            if (tableWrap) {
+                tableWrap.setAttribute('hidden', 'hidden');
+            }
+            if (hint) {
+                hint.style.display = '';
+            }
+            return;
+        }
+
+        if (tableWrap) {
+            tableWrap.removeAttribute('hidden');
+        }
+        if (hint) {
+            hint.style.display = 'none';
+        }
+
+        rows.forEach(function(row) {
+            const rowPerfil = String(row.dataset.perfilId || 'discipulos');
+            const esPendienteUbicacion = String(row.dataset.pendienteUbicacion || '0') === '1';
+            const mostrar = objetivo === 'pendientes_ubicacion'
+                ? esPendienteUbicacion
+                : rowPerfil === objetivo;
+            row.style.display = mostrar ? '' : 'none';
+        });
+    }
+
+    cards.forEach(function(card) {
+        card.addEventListener('click', function() {
+            aplicarFiltro(String(card.dataset.perfilId || ''));
+        });
+    });
+
+    const cardInicial = cards.find(function(card) {
+        return card.classList.contains('is-active');
+    });
+    const params = new URLSearchParams(window.location.search || '');
+    const panelSolicitado = String(params.get('panel') || '').trim();
+    const cardSolicitada = cards.find(function(card) {
+        return String(card.dataset.perfilId || '') === panelSolicitado;
+    });
+    const perfilInicial = cardSolicitada
+        ? panelSolicitado
+        : (cardInicial ? String(cardInicial.dataset.perfilId || '') : '');
+    aplicarFiltro(perfilInicial);
 })();
 </script>
 

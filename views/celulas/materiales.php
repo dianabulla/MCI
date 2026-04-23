@@ -54,6 +54,12 @@
                         <td style="display:flex; gap:8px; flex-wrap:wrap;">
                             <a href="<?= htmlspecialchars((string)$material['url']) ?>" target="_blank" class="btn btn-sm btn-success">Ver PDF</a>
                             <button type="button" class="btn btn-sm btn-info js-ver-vistas" data-archivo="<?= htmlspecialchars((string)$material['nombre_archivo'], ENT_QUOTES, 'UTF-8') ?>">Ver quién vio</button>
+                            <form method="POST" class="js-form-editar-material" style="margin:0;">
+                                <input type="hidden" name="accion" value="editar">
+                                <input type="hidden" name="archivo_actual" value="<?= htmlspecialchars((string)$material['nombre_archivo'], ENT_QUOTES, 'UTF-8') ?>">
+                                <input type="hidden" name="archivo_nuevo" value="">
+                                <button type="button" class="btn btn-sm btn-warning js-editar-material" data-archivo="<?= htmlspecialchars((string)$material['nombre_archivo'], ENT_QUOTES, 'UTF-8') ?>">Editar</button>
+                            </form>
                             <form method="POST" onsubmit="return confirm('¿Seguro que deseas eliminar este PDF?');" style="margin:0;">
                                 <input type="hidden" name="accion" value="eliminar">
                                 <input type="hidden" name="archivo" value="<?= htmlspecialchars((string)$material['nombre_archivo'], ENT_QUOTES, 'UTF-8') ?>">
@@ -121,11 +127,42 @@
     document.addEventListener('DOMContentLoaded', function() {
         const modalElement = document.getElementById('modal-vistas-material');
         const botones = document.querySelectorAll('.js-ver-vistas');
+        const botonesEditar = document.querySelectorAll('.js-editar-material');
 
         botones.forEach(btn => {
             btn.addEventListener('click', function() {
                 const archivo = this.getAttribute('data-archivo');
                 abrirModalVistas(archivo);
+            });
+        });
+
+        botonesEditar.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const archivoActual = String(this.getAttribute('data-archivo') || '').trim();
+                const form = this.closest('.js-form-editar-material');
+                if (!archivoActual || !form) {
+                    return;
+                }
+
+                const sugerido = archivoActual.replace(/\.pdf$/i, '');
+                const nuevoBase = prompt('Nuevo nombre del archivo (sin .pdf):', sugerido);
+                if (nuevoBase === null) {
+                    return;
+                }
+
+                const limpio = String(nuevoBase || '').trim();
+                if (limpio === '') {
+                    alert('Debes ingresar un nombre válido.');
+                    return;
+                }
+
+                const inputNuevo = form.querySelector('input[name="archivo_nuevo"]');
+                if (!inputNuevo) {
+                    return;
+                }
+
+                inputNuevo.value = limpio + '.pdf';
+                form.submit();
             });
         });
 

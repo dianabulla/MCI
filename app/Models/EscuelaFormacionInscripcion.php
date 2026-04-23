@@ -302,9 +302,14 @@ class EscuelaFormacionInscripcion extends BaseModel {
 
         $sql = "SELECT
                     s.*,
-                    CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, '')) AS Nombre_Persona_Actual
+                    TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, ''))) AS Nombre_Persona_Actual,
+                    p.Genero AS Genero_Persona_Actual,
+                    TRIM(CONCAT(COALESCE(lp.Nombre, ''), ' ', COALESCE(lp.Apellido, ''))) AS Lider_Persona_Actual,
+                    mp.Nombre_Ministerio AS Nombre_Ministerio_Persona_Actual
                 FROM {$this->table} s
-                LEFT JOIN persona p ON s.Id_Persona = p.Id_Persona";
+                LEFT JOIN persona p ON s.Id_Persona = p.Id_Persona
+                LEFT JOIN persona lp ON p.Id_Lider = lp.Id_Persona
+                LEFT JOIN ministerio mp ON p.Id_Ministerio = mp.Id_Ministerio";
 
         if (!empty($where)) {
             $sql .= ' WHERE ' . implode(' AND ', $where);
@@ -378,5 +383,54 @@ class EscuelaFormacionInscripcion extends BaseModel {
 
         $rows = $this->query($sql);
         return (int)($rows[0]['Total'] ?? 0);
+    }
+
+    public function getResumenUvPorMinisterioGenero($idMinisterio = null, $idLider = null) {
+        $idMinisterio = (int)$idMinisterio;
+        $idLider = (int)$idLider;
+
+        $where = ["s.Programa = 'universidad_vida'"];
+        $params = [];
+
+        if ($idMinisterio > 0) {
+            $where[] = '(s.Id_Ministerio = ? OR p.Id_Ministerio = ?)';
+            $params[] = $idMinisterio;
+            $params[] = $idMinisterio;
+        }
+
+        if ($idLider > 0) {
+            $where[] = 'p.Id_Lider = ?';
+            $params[] = $idLider;
+        }
+
+        $ministerioExpr = "COALESCE(NULLIF(TRIM(s.Nombre_Ministerio), ''), NULLIF(TRIM(ms.Nombre_Ministerio), ''), NULLIF(TRIM(mp.Nombre_Ministerio), ''), 'Sin ministerio')";
+        $generoExpr = "LOWER(TRIM(COALESCE(
+                            NULLIF(CONVERT(s.Genero USING utf8mb4) COLLATE utf8mb4_general_ci, ''),
+                            NULLIF(CONVERT(p.Genero USING utf8mb4) COLLATE utf8mb4_general_ci, ''),
+                            ''
+                        )))";
+
+        $esHombre = "({$generoExpr} LIKE '%hombre%' OR {$generoExpr} LIKE '%mascul%' OR {$generoExpr} IN ('m', 'masc', 'male', 'h'))";
+        $esMujer = "({$generoExpr} LIKE '%mujer%' OR {$generoExpr} LIKE '%femen%' OR {$generoExpr} IN ('f', 'fem', 'female'))";
+
+        $sql = "SELECT
+                    {$ministerioExpr} AS Ministerio,
+                    COUNT(*) AS Inscritos_Total,
+                    SUM(CASE WHEN {$esHombre} THEN 1 ELSE 0 END) AS Inscritos_Hombres,
+                    SUM(CASE WHEN {$esMujer} THEN 1 ELSE 0 END) AS Inscritos_Mujeres,
+                    SUM(CASE WHEN NOT ({$esHombre} OR {$esMujer}) THEN 1 ELSE 0 END) AS Inscritos_Sin_Genero,
+                    SUM(CASE WHEN s.Asistio_Clase = 1 THEN 1 ELSE 0 END) AS Asistieron_Total,
+                    SUM(CASE WHEN s.Asistio_Clase = 1 AND {$esHombre} THEN 1 ELSE 0 END) AS Asistieron_Hombres,
+                    SUM(CASE WHEN s.Asistio_Clase = 1 AND {$esMujer} THEN 1 ELSE 0 END) AS Asistieron_Mujeres,
+                    SUM(CASE WHEN s.Asistio_Clase = 1 AND NOT ({$esHombre} OR {$esMujer}) THEN 1 ELSE 0 END) AS Asistieron_Sin_Genero
+                FROM {$this->table} s
+                LEFT JOIN persona p ON s.Id_Persona = p.Id_Persona
+                LEFT JOIN ministerio ms ON s.Id_Ministerio = ms.Id_Ministerio
+                LEFT JOIN ministerio mp ON p.Id_Ministerio = mp.Id_Ministerio
+                WHERE " . implode(' AND ', $where) . "
+                GROUP BY {$ministerioExpr}
+                ORDER BY {$ministerioExpr} ASC";
+
+        return $this->query($sql, $params);
     }
 }

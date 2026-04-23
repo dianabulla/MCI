@@ -41,6 +41,24 @@ class AsistenciaController extends BaseController {
         return [$inicio, $fin, $inicio->format('o-\\WW')];
     }
 
+    private function resolverReturnUrlAsistencias($rawReturnUrl = '') {
+        $default = PUBLIC_URL . '?url=asistencias';
+        $url = trim((string)$rawReturnUrl);
+        if ($url === '') {
+            return $default;
+        }
+
+        if (strpos($url, PUBLIC_URL) !== 0) {
+            return $default;
+        }
+
+        if (strpos($url, '?url=asistencias') === false) {
+            return $default;
+        }
+
+        return $url;
+    }
+
     public function index() {
         if (!AuthController::tienePermiso('asistencias', 'ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
@@ -205,6 +223,7 @@ class AsistenciaController extends BaseController {
             $sectionData = [
                 'id_celula' => $idCelula,
                 'label' => (string)($celula['Nombre_Celula'] ?? 'Célula sin nombre'),
+                'ministerio' => (string)($celula['Nombre_Ministerio_Lider'] ?? 'Sin ministerio'),
                 'lider' => (string)($celula['Nombre_Lider'] ?? 'Sin líder'),
                 'anfitrion' => (string)($celula['Nombre_Anfitrion'] ?? 'Sin anfitrión'),
                 'entrego_sobre' => !empty($estadoEntregoSobre[$idCelula]),
@@ -381,6 +400,7 @@ class AsistenciaController extends BaseController {
         }
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $returnUrl = $this->resolverReturnUrlAsistencias($_POST['return_url'] ?? '');
             $idCelula = $_POST['id_celula'];
             $fecha = $_POST['fecha'];
             $asistencias = $_POST['asistencias'] ?? [];
@@ -417,8 +437,10 @@ class AsistenciaController extends BaseController {
                 );
             }
             
-            $this->redirect('asistencias');
+            header('Location: ' . $returnUrl);
+            exit;
         } else {
+            $returnUrl = $this->resolverReturnUrlAsistencias($_GET['return_url'] ?? '');
             $filtroCelulas = DataIsolation::generarFiltroCelulas();
             $filtroPersonas = DataIsolation::generarFiltroPersonas();
             $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
@@ -439,10 +461,20 @@ class AsistenciaController extends BaseController {
                 }
             }
 
+            $fechaPreseleccionada = date('Y-m-d');
+            if (!empty($_GET['fecha'])) {
+                $fechaSolicitada = trim((string)$_GET['fecha']);
+                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaSolicitada)) {
+                    $fechaPreseleccionada = $fechaSolicitada;
+                }
+            }
+
             $data = [
                 'celulas' => $celulas,
                 'personas' => $personas,
                 'celula_preseleccionada' => $celulaPreseleccionada,
+                'fecha_preseleccionada' => $fechaPreseleccionada,
+                'return_url' => $returnUrl,
                 'conteo_asistencias_por_persona' => $conteoAsistenciasPorPersona
             ];
             $this->view('asistencias/formulario', $data);
@@ -458,10 +490,12 @@ class AsistenciaController extends BaseController {
 
         $asistencias = $this->asistenciaModel->getByCelula($idCelula);
         $celula = $this->celulaModel->getById($idCelula);
+        $returnUrl = $this->resolverReturnUrlAsistencias($_GET['return_url'] ?? '');
         
         $this->view('asistencias/porCelula', [
             'asistencias' => $asistencias,
-            'celula' => $celula
+            'celula' => $celula,
+            'return_url' => $returnUrl
         ]);
     }
 }

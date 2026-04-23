@@ -12,6 +12,8 @@ $filtroFechaHasta = (string)($filtro_fecha_hasta ?? '');
 $programaReporte = (string)($programa_reporte ?? '');
 $programaReporteLabel = (string)($programa_reporte_label ?? 'Programa');
 $rowsAsistencia = $rows_asistencia ?? [];
+$puedeMarcarAsistencia = !empty($puede_marcar_asistencia);
+$puedeEditarFechasAsistencia = !empty($puede_editar_fechas_asistencia);
 $fechasClases = $fechas_clases ?? [];
 $fechasClasesHombres = $fechas_clases_hombres ?? $fechasClases;
 $fechasClasesMujeres = $fechas_clases_mujeres ?? $fechasClases;
@@ -22,6 +24,13 @@ $totalClases = (int)($total_clases ?? 5);
 if ($totalClases <= 0) {
     $totalClases = 5;
 }
+$puedeEditarPersonaFormacion = class_exists('AuthController') && AuthController::tienePermiso('personas', 'editar');
+
+$parametrosRetornoFormacion = $_GET;
+if (!isset($parametrosRetornoFormacion['url']) || trim((string)$parametrosRetornoFormacion['url']) === '') {
+    $parametrosRetornoFormacion['url'] = $rutaAsistencias;
+}
+$returnUrlFormacion = '?' . http_build_query($parametrosRetornoFormacion);
 
  $ministerioLabelSeleccionado = 'Todos';
 if ($filtroMinisterio !== '') {
@@ -62,6 +71,16 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
         </div>
         <small style="color:#4f6480;">Encabezado por clase con fecha editable.</small>
     </div>
+    <?php if (!$puedeMarcarAsistencia): ?>
+        <div class="alert alert-warning" style="margin:10px 0 0 0; padding:8px 10px; font-size:12px;">
+            Tu rol no tiene permiso para marcar asistencias en esta matriz.
+        </div>
+    <?php endif; ?>
+    <?php if (!$puedeEditarFechasAsistencia): ?>
+        <div class="alert alert-warning" style="margin:10px 0 0 0; padding:8px 10px; font-size:12px;">
+            Tu rol no tiene permiso para editar fechas de clases.
+        </div>
+    <?php endif; ?>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
         <span class="filter-chip">Ministerio: <?= htmlspecialchars($ministerioLabelSeleccionado) ?></span>
         <span class="filter-chip">Desde: <?= $filtroFechaDesde !== '' ? htmlspecialchars($filtroFechaDesde) : 'Sin filtro' ?></span>
@@ -230,6 +249,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                     <tr>
                         <th class="sticky-col-left">Nombre Completo</th>
                         <th class="sticky-col-left-2">Lider</th>
+                        <th>Accion</th>
                         <?php for ($i = 1; $i <= $totalClases; $i++): ?>
                             <th class="th-clase">
                                 <div class="clase-head">CL<?= $i ?></div>
@@ -238,6 +258,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                                     class="form-control form-control-sm js-fecha-clase"
                                     data-clase="<?= $i ?>"
                                     value="<?= htmlspecialchars((string)($fechasClasesHombres[$i] ?? '')) ?>"
+                                    <?= $puedeEditarFechasAsistencia ? '' : 'disabled' ?>
                                 >
                             </th>
                         <?php endfor; ?>
@@ -251,6 +272,14 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                             <tr>
                                 <td class="sticky-col-left col-nowrap col-nombre"><?= htmlspecialchars((string)($row['nombre'] ?? '')) ?></td>
                                 <td class="sticky-col-left-2 col-nowrap col-lider"><?= htmlspecialchars((string)($row['lider'] ?? '')) ?></td>
+                                <td class="text-center">
+                                    <?php $idPersonaRow = (int)($row['id_persona'] ?? 0); ?>
+                                    <?php if ($puedeEditarPersonaFormacion && $idPersonaRow > 0): ?>
+                                        <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $idPersonaRow ?>&return_to=formacion&return_url=<?= urlencode($returnUrlFormacion) ?>" class="btn btn-secondary btn-sm">Editar</a>
+                                    <?php else: ?>
+                                        <span style="color:#9aa8bb;">-</span>
+                                    <?php endif; ?>
+                                </td>
                                 <?php for ($i = 1; $i <= $totalClases; $i++): ?>
                                     <?php $activo = !empty($row['clases'][$i]); ?>
                                     <?php if ($activo) { $totalAsistencias++; } ?>
@@ -262,6 +291,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                                             data-clase="<?= $i ?>"
                                             data-activo="<?= $activo ? '1' : '0' ?>"
                                             aria-label="Marcar asistencia clase <?= $i ?>"
+                                            <?= $puedeMarcarAsistencia ? '' : 'disabled' ?>
                                         ><?= $activo ? 'X' : '' ?></button>
                                     </td>
                                 <?php endfor; ?>
@@ -270,7 +300,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="<?= 3 + $totalClases ?>" class="text-center">No hay hombres para este programa con los filtros seleccionados.</td>
+                            <td colspan="<?= 4 + $totalClases ?>" class="text-center">No hay hombres para este programa con los filtros seleccionados.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -285,6 +315,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                     <tr>
                         <th class="sticky-col-left">Nombre Completo</th>
                         <th class="sticky-col-left-2">Lider</th>
+                        <th>Accion</th>
                         <?php for ($i = 1; $i <= $totalClases; $i++): ?>
                             <th class="th-clase">
                                 <div class="clase-head">CL<?= $i ?></div>
@@ -293,6 +324,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                                     class="form-control form-control-sm js-fecha-clase"
                                     data-clase="<?= $i ?>"
                                     value="<?= htmlspecialchars((string)($fechasClasesMujeres[$i] ?? '')) ?>"
+                                    <?= $puedeEditarFechasAsistencia ? '' : 'disabled' ?>
                                 >
                             </th>
                         <?php endfor; ?>
@@ -306,6 +338,14 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                             <tr>
                                 <td class="sticky-col-left col-nowrap col-nombre"><?= htmlspecialchars((string)($row['nombre'] ?? '')) ?></td>
                                 <td class="sticky-col-left-2 col-nowrap col-lider"><?= htmlspecialchars((string)($row['lider'] ?? '')) ?></td>
+                                <td class="text-center">
+                                    <?php $idPersonaRow = (int)($row['id_persona'] ?? 0); ?>
+                                    <?php if ($puedeEditarPersonaFormacion && $idPersonaRow > 0): ?>
+                                        <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $idPersonaRow ?>&return_to=formacion&return_url=<?= urlencode($returnUrlFormacion) ?>" class="btn btn-secondary btn-sm">Editar</a>
+                                    <?php else: ?>
+                                        <span style="color:#9aa8bb;">-</span>
+                                    <?php endif; ?>
+                                </td>
                                 <?php for ($i = 1; $i <= $totalClases; $i++): ?>
                                     <?php $activo = !empty($row['clases'][$i]); ?>
                                     <?php if ($activo) { $totalAsistencias++; } ?>
@@ -317,6 +357,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                                             data-clase="<?= $i ?>"
                                             data-activo="<?= $activo ? '1' : '0' ?>"
                                             aria-label="Marcar asistencia clase <?= $i ?>"
+                                            <?= $puedeMarcarAsistencia ? '' : 'disabled' ?>
                                         ><?= $activo ? 'X' : '' ?></button>
                                     </td>
                                 <?php endfor; ?>
@@ -325,7 +366,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="<?= 3 + $totalClases ?>" class="text-center">No hay mujeres para este programa con los filtros seleccionados.</td>
+                            <td colspan="<?= 4 + $totalClases ?>" class="text-center">No hay mujeres para este programa con los filtros seleccionados.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>

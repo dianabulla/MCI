@@ -4,15 +4,18 @@
  */
 
 require_once APP . '/Models/Persona.php';
+require_once APP . '/Models/UsuarioAcceso.php';
 require_once APP . '/Helpers/DataIsolation.php';
 
 class AuthController extends BaseController {
     private $personaModel;
+    private $usuarioAccesoModel;
 
     private const ROL_ADMINISTRADOR_ID = 6;
 
     public function __construct() {
         $this->personaModel = new Persona();
+        $this->usuarioAccesoModel = new UsuarioAcceso();
     }
 
     /**
@@ -30,8 +33,12 @@ class AuthController extends BaseController {
             $usuario = $_POST['usuario'] ?? '';
             $contrasena = $_POST['contrasena'] ?? '';
             
-            // Validar credenciales
+            // Validar credenciales primero contra personas (compatibilidad) y
+            // luego contra cuentas de acceso desacopladas.
             $user = $this->personaModel->autenticar($usuario, $contrasena);
+            if (!$user) {
+                $user = $this->usuarioAccesoModel->autenticar($usuario, $contrasena);
+            }
 
             if ($user) {
                 // Verificar estado de la cuenta
@@ -154,6 +161,108 @@ class AuthController extends BaseController {
     }
 
     /**
+     * Permite a la cuenta activa cambiar su propio usuario y contraseña.
+     */
+    public function miCuenta() {
+        if (!self::estaAutenticado()) {
+            $this->redirect('auth/login');
+            return;
+        }
+
+        $origenCuenta = (string)($_SESSION['auth_user_source'] ?? 'persona');
+        $idPersonaSesion = (int)($_SESSION['usuario_id'] ?? 0);
+        $idAuthSesion = (int)($_SESSION['auth_user_id'] ?? 0);
+
+        $cuentaActual = null;
+        if ($origenCuenta === 'acceso' && $idAuthSesion > 0) {
+            $cuentaActual = $this->usuarioAccesoModel->getById($idAuthSesion);
+        } elseif ($idPersonaSesion > 0) {
+            $cuentaActual = $this->personaModel->getById($idPersonaSesion);
+            $origenCuenta = 'persona';
+        }
+
+        if (empty($cuentaActual)) {
+            session_destroy();
+            $this->redirect('auth/login');
+            return;
+        }
+
+        $viewPersona = [
+            'Usuario' => (string)($cuentaActual['Usuario'] ?? ''),
+        ];
+        $error = null;
+        $success = null;
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $usuarioNuevo = trim((string)($_POST['usuario'] ?? ''));
+            $contrasenaActual = (string)($_POST['contrasena_actual'] ?? '');
+            $contrasenaNueva = (string)($_POST['contrasena_nueva'] ?? '');
+            $contrasenaConfirmacion = (string)($_POST['contrasena_nueva_confirmacion'] ?? '');
+
+            if ($usuarioNuevo === '' || strlen($usuarioNuevo) < 3) {
+                $error = 'El usuario debe tener mínimo 3 caracteres.';
+            } elseif ($contrasenaActual === '') {
+                $error = 'Debes escribir tu contraseña actual para confirmar los cambios.';
+            } else {
+                $hashActual = (string)($cuentaActual['Contrasena'] ?? '');
+                if ($hashActual === '' || !password_verify($contrasenaActual, $hashActual)) {
+                    $error = 'La contraseña actual no es correcta.';
+                }
+            }
+
+            if ($error === null && $contrasenaNueva !== '') {
+                if (strlen($contrasenaNueva) < 6) {
+                    $error = 'La nueva contraseña debe tener mínimo 6 caracteres.';
+                } elseif ($contrasenaNueva !== $contrasenaConfirmacion) {
+                    $error = 'La confirmación de la nueva contraseña no coincide.';
+                }
+            }
+
+            $excludePersonaId = $origenCuenta === 'persona' ? $idPersonaSesion : null;
+            $excludeAccesoId = $origenCuenta === 'acceso' ? $idAuthSesion : null;
+
+            if ($error === null) {
+                $usuarioDuplicadoPersona = $this->personaModel->existeUsuario($usuarioNuevo, $excludePersonaId);
+                $usuarioDuplicadoAcceso = $this->usuarioAccesoModel->existeUsuario($usuarioNuevo, $excludeAccesoId);
+                if ($usuarioDuplicadoPersona || $usuarioDuplicadoAcceso) {
+                    $error = 'Ese usuario ya existe en el sistema.';
+                }
+            }
+
+            if ($error === null) {
+                $dataUpdate = [
+                    'Usuario' => $usuarioNuevo,
+                ];
+
+                if ($contrasenaNueva !== '') {
+                    $dataUpdate['Contrasena'] = password_hash($contrasenaNueva, PASSWORD_BCRYPT);
+                }
+
+                if ($origenCuenta === 'acceso' && $idAuthSesion > 0) {
+                    $this->usuarioAccesoModel->update($idAuthSesion, $dataUpdate);
+                    $cuentaActual = $this->usuarioAccesoModel->getById($idAuthSesion);
+                } else {
+                    $this->personaModel->update($idPersonaSesion, $dataUpdate);
+                    $cuentaActual = $this->personaModel->getById($idPersonaSesion);
+                }
+
+                $viewPersona['Usuario'] = (string)($cuentaActual['Usuario'] ?? $usuarioNuevo);
+                $success = $contrasenaNueva !== ''
+                    ? 'Tus credenciales fueron actualizadas correctamente.'
+                    : 'Tu usuario fue actualizado correctamente.';
+            } else {
+                $viewPersona['Usuario'] = $usuarioNuevo !== '' ? $usuarioNuevo : (string)($cuentaActual['Usuario'] ?? '');
+            }
+        }
+
+        $this->view('auth/mi_cuenta', [
+            'persona' => $viewPersona,
+            'error' => $error,
+            'success' => $success,
+        ]);
+    }
+
+    /**
      * Cerrar sesión
      */
     public function logout() {
@@ -187,14 +296,23 @@ class AuthController extends BaseController {
 
     private function obtenerPermisosNormalizados($idRol) {
         $permisos = $this->personaModel->getPermisosPorRol($idRol);
+        return self::normalizarPermisosDesdeFilas((array)$permisos);
+    }
+
+    private static function normalizarPermisosDesdeFilas(array $permisos): array {
         $resultado = [];
 
         foreach ($permisos as $permiso) {
-            $resultado[$permiso['Modulo']] = [
-                'ver' => $permiso['Puede_Ver'],
-                'crear' => $permiso['Puede_Crear'],
-                'editar' => $permiso['Puede_Editar'],
-                'eliminar' => $permiso['Puede_Eliminar']
+            $modulo = trim((string)($permiso['Modulo'] ?? ''));
+            if ($modulo === '') {
+                continue;
+            }
+
+            $resultado[$modulo] = [
+                'ver' => !empty($permiso['Puede_Ver']) ? 1 : 0,
+                'crear' => !empty($permiso['Puede_Crear']) ? 1 : 0,
+                'editar' => !empty($permiso['Puede_Editar']) ? 1 : 0,
+                'eliminar' => !empty($permiso['Puede_Eliminar']) ? 1 : 0
             ];
         }
 
@@ -206,28 +324,55 @@ class AuthController extends BaseController {
             $_SESSION['account_pool'] = [];
         }
 
+        $origenCuenta = isset($user['Id_Usuario_Acceso']) ? 'acceso' : 'persona';
         $idUsuario = (int)($user['Id_Persona'] ?? 0);
+        $idAuthUser = isset($user['Id_Usuario_Acceso'])
+            ? (int)($user['Id_Usuario_Acceso'] ?? 0)
+            : $idUsuario;
         $idRol = (int)($user['Id_Rol'] ?? 0);
         $permisos = $this->obtenerPermisosNormalizados($idRol);
 
-        $_SESSION['usuario_id'] = $idUsuario;
-        $_SESSION['usuario_nombre'] = trim((string)($user['Nombre'] ?? '') . ' ' . (string)($user['Apellido'] ?? ''));
+        $nombreSesion = trim((string)($user['Nombre'] ?? '') . ' ' . (string)($user['Apellido'] ?? ''));
+        if ($nombreSesion === '') {
+            $nombreSesion = trim((string)($user['Nombre_Mostrar'] ?? ''));
+        }
+        if ($nombreSesion === '') {
+            $nombreSesion = trim((string)($user['Usuario'] ?? 'Usuario'));
+        }
+
+        $idMinisterio = $user['Id_Ministerio'] ?? null;
+        $idMinisterio = ($idMinisterio !== null && $idMinisterio !== '') ? (int)$idMinisterio : null;
+
+        $_SESSION['auth_user_id'] = $idAuthUser;
+        $_SESSION['auth_user_source'] = $origenCuenta;
+        // Compatibilidad: usuario_id conserva semantica de Id_Persona.
+        // Para cuentas administrativas puras queda en 0.
+        $_SESSION['usuario_id'] = $idUsuario > 0 ? $idUsuario : 0;
+        $_SESSION['usuario_persona_id'] = $idUsuario > 0 ? $idUsuario : null;
+        $_SESSION['usuario_nombre'] = $nombreSesion;
         $_SESSION['usuario_rol'] = $idRol;
         $_SESSION['usuario_rol_nombre'] = (string)($user['Nombre_Rol'] ?? '');
-        $_SESSION['usuario_ministerio'] = $user['Id_Ministerio'] ?? null;
+        $_SESSION['usuario_ministerio'] = $idMinisterio;
         $_SESSION['permisos'] = $permisos;
-        $_SESSION['active_account_id'] = $idUsuario;
+        $_SESSION['permisos_configurados'] = !empty($permisos);
+        $_SESSION['permisos_last_sync'] = time();
+        $_SESSION['active_account_id'] = $idUsuario > 0 ? $idUsuario : 0;
         $_SESSION['mostrar_alerta_ganar_pendiente'] = true;
 
-        $_SESSION['account_pool'][$idUsuario] = [
-            'id' => $idUsuario,
-            'nombre' => $_SESSION['usuario_nombre'],
-            'rol_nombre' => $_SESSION['usuario_rol_nombre'],
-            'ministerio_id' => $_SESSION['usuario_ministerio'],
-            'permisos' => $permisos
-        ];
+        if ($idUsuario > 0) {
+            $_SESSION['account_pool'][$idUsuario] = [
+                'id' => $idUsuario,
+                'nombre' => $_SESSION['usuario_nombre'],
+                'rol_nombre' => $_SESSION['usuario_rol_nombre'],
+                'ministerio_id' => $_SESSION['usuario_ministerio'],
+                'permisos' => $permisos
+            ];
+            $this->personaModel->actualizarUltimoAcceso($idUsuario);
+        }
 
-        $this->personaModel->actualizarUltimoAcceso($idUsuario);
+        if ($origenCuenta === 'acceso' && $idAuthUser > 0) {
+            $this->usuarioAccesoModel->actualizarUltimoAcceso($idAuthUser);
+        }
     }
 
     /**
@@ -236,6 +381,13 @@ class AuthController extends BaseController {
     public static function tienePermiso($modulo, $accion = 'ver') {
         if (self::esAdministrador()) {
             return true;
+        }
+
+        self::sincronizarPermisosSesionActual();
+
+        $modulo = trim((string)$modulo);
+        if ($modulo === '') {
+            return false;
         }
 
         $accion = strtolower(trim((string)$accion));
@@ -249,6 +401,12 @@ class AuthController extends BaseController {
             return !empty($_SESSION['permisos'][$modulo][$accion]);
         }
 
+        // Si el rol YA tiene matriz de permisos configurada,
+        // cualquier modulo no configurado debe negar por defecto.
+        if (!empty($_SESSION['permisos_configurados'])) {
+            return false;
+        }
+
         // Compatibilidad: para roles con acceso total de datos, permitir acceso
         // cuando aun no exista configuracion explicita del modulo.
         if (DataIsolation::tieneAccesoTotal()) {
@@ -258,11 +416,44 @@ class AuthController extends BaseController {
         return false;
     }
 
+    public static function sincronizarPermisosSesionActual($forzar = false) {
+        if (!self::estaAutenticado()) {
+            return;
+        }
+
+        $ultimoSync = (int)($_SESSION['permisos_last_sync'] ?? 0);
+        if (!$forzar && $ultimoSync > 0 && (time() - $ultimoSync) < 30) {
+            return;
+        }
+
+        $idRol = (int)($_SESSION['usuario_rol'] ?? 0);
+        if ($idRol <= 0) {
+            return;
+        }
+
+        try {
+            $personaModel = new Persona();
+            $filas = $personaModel->getPermisosPorRol($idRol);
+            $permisos = self::normalizarPermisosDesdeFilas((array)$filas);
+
+            $_SESSION['permisos'] = $permisos;
+            $_SESSION['permisos_configurados'] = !empty($permisos);
+            $_SESSION['permisos_last_sync'] = time();
+
+            $activeAccountId = (int)($_SESSION['active_account_id'] ?? 0);
+            if ($activeAccountId > 0 && isset($_SESSION['account_pool'][$activeAccountId])) {
+                $_SESSION['account_pool'][$activeAccountId]['permisos'] = $permisos;
+            }
+        } catch (Throwable $e) {
+            // Si falla sync, mantener permisos actuales en sesión.
+        }
+    }
+
     /**
      * Verificar si está autenticado
      */
     public static function estaAutenticado() {
-        return isset($_SESSION['usuario_id']);
+        return isset($_SESSION['auth_user_id']) || isset($_SESSION['usuario_id']);
     }
 
     /**

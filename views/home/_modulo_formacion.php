@@ -20,6 +20,13 @@ $tarjetasResumen = $tarjetas_resumen ?? [];
 $vistaActual = (string)($vista_actual ?? 'registro');
 $registroActivo = $vistaActual !== 'asistencias';
 $asistenciasActivo = $vistaActual === 'asistencias';
+$puedeEditarPersonaFormacion = class_exists('AuthController') && AuthController::tienePermiso('personas', 'editar');
+
+$parametrosRetornoFormacion = $_GET;
+if (!isset($parametrosRetornoFormacion['url']) || trim((string)$parametrosRetornoFormacion['url']) === '') {
+    $parametrosRetornoFormacion['url'] = $rutaBase;
+}
+$returnUrlFormacion = '?' . http_build_query($parametrosRetornoFormacion);
 
 $filtrosActivos = 0;
 if ($filtroBuscar !== '') { $filtrosActivos++; }
@@ -116,17 +123,26 @@ if ($filtroGenero !== '' && $filtroGenero !== 'todos') { $filtrosActivos++; }
                 <tr>
                     <th>Persona</th>
                     <th>Lider</th>
+                    <th style="width:120px;">Accion</th>
                     <th style="width:180px;">Se inscribe</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (!empty($reportePendientes['rows'])): ?>
                     <?php foreach (($reportePendientes['rows'] ?? []) as $row): ?>
+                        <?php $idPersonaRow = (int)($row['id_persona'] ?? 0); ?>
                         <tr>
                             <td class="col-nowrap col-nombre"><?= htmlspecialchars((string)($row['nombre'] ?? '')) ?></td>
                             <td class="col-nowrap col-lider"><?= htmlspecialchars((string)($row['lider'] ?? '')) ?></td>
                             <td class="text-center">
-                                <div class="uv-checklist-options" data-persona="<?= (int)($row['id_persona'] ?? 0) ?>" data-programa="<?= htmlspecialchars($programaReporte) ?>">
+                                <?php if ($puedeEditarPersonaFormacion && $idPersonaRow > 0): ?>
+                                    <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $idPersonaRow ?>&return_to=formacion&return_url=<?= urlencode($returnUrlFormacion) ?>" class="btn btn-secondary btn-sm">Editar</a>
+                                <?php else: ?>
+                                    <span style="color:#9aa8bb;">-</span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-center">
+                                <div class="uv-checklist-options" data-persona="<?= $idPersonaRow ?>" data-programa="<?= htmlspecialchars($programaReporte) ?>">
                                     <button type="button" class="uv-check-option js-uv-estado-option" data-value="1" aria-label="Marcar Si">
                                         <span class="uv-box"></span>
                                         <span>Si</span>
@@ -141,7 +157,7 @@ if ($filtroGenero !== '' && $filtroGenero !== 'todos') { $filtrosActivos++; }
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="3" class="text-center">No hay personas pendientes para <?= htmlspecialchars($programaReporteLabel) ?> con estos filtros.</td>
+                        <td colspan="4" class="text-center">No hay personas pendientes para <?= htmlspecialchars($programaReporteLabel) ?> con estos filtros.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>
@@ -176,12 +192,13 @@ if ($filtroGenero !== '' && $filtroGenero !== 'todos') { $filtrosActivos++; }
         $inscripcionesSinClasificar[] = $ins;
     }
 
-    $registroVistaInicial = !empty($inscripcionesHombres) ? 'hombres' : (!empty($inscripcionesMujeres) ? 'mujeres' : 'hombres');
+    $registroVistaInicial = 'hombres';
     $registroHombresActivo = $registroVistaInicial === 'hombres';
     $registroMujeresActivo = $registroVistaInicial === 'mujeres';
+    $sinGeneroRegistrados = (int)count($inscripcionesSinClasificar);
     $hombresRegistrados = (int)count($inscripcionesHombres);
     $mujeresRegistradas = (int)count($inscripcionesMujeres);
-    $totalRegistrosVisibles = $hombresRegistrados + $mujeresRegistradas;
+    $totalRegistrosVisibles = $hombresRegistrados + $mujeresRegistradas + $sinGeneroRegistrados;
     ?>
 
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
@@ -233,22 +250,31 @@ if ($filtroGenero !== '' && $filtroGenero !== 'todos') { $filtrosActivos++; }
                         <th>Cedula</th>
                         <th>Telefono</th>
                         <th>Lider</th>
+                        <th style="width:120px;">Accion</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (!empty($inscripcionesHombres)): ?>
                         <?php foreach ($inscripcionesHombres as $ins): ?>
+                            <?php $idPersonaIns = (int)($ins['Id_Persona'] ?? 0); ?>
                             <tr>
                                 <td><?= htmlspecialchars((string)($ins['Fecha_Registro'] ?? '')) ?></td>
                                 <td class="col-nowrap col-nombre"><?= htmlspecialchars((string)($ins['Nombre'] ?? '')) ?></td>
                                 <td><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
                                 <td><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
                                 <td class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
+                                <td class="text-center">
+                                    <?php if ($puedeEditarPersonaFormacion && $idPersonaIns > 0): ?>
+                                        <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $idPersonaIns ?>&return_to=formacion&return_url=<?= urlencode($returnUrlFormacion) ?>" class="btn btn-secondary btn-sm">Editar</a>
+                                    <?php else: ?>
+                                        <span style="color:#9aa8bb;">-</span>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="5" class="text-center">No hay registros de hombres para los filtros seleccionados.</td>
+                            <td colspan="6" class="text-center">No hay registros de hombres para los filtros seleccionados.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -266,22 +292,31 @@ if ($filtroGenero !== '' && $filtroGenero !== 'todos') { $filtrosActivos++; }
                         <th>Cedula</th>
                         <th>Telefono</th>
                         <th>Lider</th>
+                        <th style="width:120px;">Accion</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (!empty($inscripcionesMujeres)): ?>
                         <?php foreach ($inscripcionesMujeres as $ins): ?>
+                            <?php $idPersonaIns = (int)($ins['Id_Persona'] ?? 0); ?>
                             <tr>
                                 <td><?= htmlspecialchars((string)($ins['Fecha_Registro'] ?? '')) ?></td>
                                 <td class="col-nowrap col-nombre"><?= htmlspecialchars((string)($ins['Nombre'] ?? '')) ?></td>
                                 <td><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
                                 <td><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
                                 <td class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
+                                <td class="text-center">
+                                    <?php if ($puedeEditarPersonaFormacion && $idPersonaIns > 0): ?>
+                                        <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $idPersonaIns ?>&return_to=formacion&return_url=<?= urlencode($returnUrlFormacion) ?>" class="btn btn-secondary btn-sm">Editar</a>
+                                    <?php else: ?>
+                                        <span style="color:#9aa8bb;">-</span>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="5" class="text-center">No hay registros de mujeres para los filtros seleccionados.</td>
+                            <td colspan="6" class="text-center">No hay registros de mujeres para los filtros seleccionados.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -291,7 +326,7 @@ if ($filtroGenero !== '' && $filtroGenero !== 'todos') { $filtrosActivos++; }
 
     <?php if (!empty($inscripcionesSinClasificar)): ?>
         <small style="display:block; margin-top:10px; color:#637087;">
-            Hay <?= (int)count($inscripcionesSinClasificar) ?> registro(s) sin género reconocible y no se muestran en Hombre/Mujer.
+            Hay <?= (int)count($inscripcionesSinClasificar) ?> registro(s) sin género reconocible que no se muestran en Hombre/Mujer.
         </small>
     <?php endif; ?>
 </div>

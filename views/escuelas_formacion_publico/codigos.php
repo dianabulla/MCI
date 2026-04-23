@@ -136,6 +136,30 @@
         .btn.secondary {
             background: #2f4f4c;
         }
+
+        .btn.download {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #1a5276;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 10px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn.download:hover {
+            background: #154360;
+        }
+
+        .btn.download svg {
+            flex-shrink: 0;
+        }
     </style>
 </head>
 <body>
@@ -154,7 +178,16 @@
                 <?php $qrRegistro = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' . rawurlencode((string)$url_registro); ?>
                 <input class="url" type="text" readonly value="<?= htmlspecialchars((string)$url_registro, ENT_QUOTES, 'UTF-8') ?>" onclick="this.select()">
                 <div class="qr-wrap">
-                    <img src="<?= htmlspecialchars($qrRegistro, ENT_QUOTES, 'UTF-8') ?>" alt="QR formulario registro escuelas">
+                    <img id="qr-img-registro" src="<?= htmlspecialchars($qrRegistro, ENT_QUOTES, 'UTF-8') ?>" alt="QR formulario registro escuelas">
+                </div>
+                <div style="text-align:center;">
+                    <a class="btn download js-descargar-qr"
+                       href="<?= htmlspecialchars($qrRegistro . '&format=png', ENT_QUOTES, 'UTF-8') ?>"
+                       download="qr_registro_escuelas.png"
+                       data-filename="qr_registro_escuelas.png">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
+                        Descargar QR
+                    </a>
                 </div>
             </div>
 
@@ -164,7 +197,16 @@
                 <?php $qrAsistencia = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' . rawurlencode((string)$url_asistencia); ?>
                 <input class="url" type="text" readonly value="<?= htmlspecialchars((string)$url_asistencia, ENT_QUOTES, 'UTF-8') ?>" onclick="this.select()">
                 <div class="qr-wrap">
-                    <img src="<?= htmlspecialchars($qrAsistencia, ENT_QUOTES, 'UTF-8') ?>" alt="QR formulario asistencia escuelas">
+                    <img id="qr-img-asistencia" src="<?= htmlspecialchars($qrAsistencia, ENT_QUOTES, 'UTF-8') ?>" alt="QR formulario asistencia escuelas">
+                </div>
+                <div style="text-align:center;">
+                    <a class="btn download js-descargar-qr"
+                       href="<?= htmlspecialchars($qrAsistencia . '&format=png', ENT_QUOTES, 'UTF-8') ?>"
+                       download="qr_asistencia_escuelas.png"
+                       data-filename="qr_asistencia_escuelas.png">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
+                        Descargar QR
+                    </a>
                 </div>
             </div>
         </div>
@@ -175,5 +217,32 @@
         </div>
     </div>
 </div>
+
+<script>
+document.querySelectorAll('.js-descargar-qr').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+        var url = this.getAttribute('href');
+        var filename = this.getAttribute('data-filename') || 'qr.png';
+
+        // Descarga via fetch+blob para forzar el dialogo save-as aunque sea cross-origin
+        e.preventDefault();
+        fetch(url)
+            .then(function(res) { return res.blob(); })
+            .then(function(blob) {
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(function() { URL.revokeObjectURL(a.href); }, 5000);
+            })
+            .catch(function() {
+                // Fallback: abrir en nueva ventana si fetch falla por CORS
+                window.open(url, '_blank');
+            });
+    });
+});
+</script>
 </body>
 </html>

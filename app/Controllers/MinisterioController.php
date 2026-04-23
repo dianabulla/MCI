@@ -390,6 +390,10 @@ class MinisterioController extends BaseController {
                 $checklist = $this->construirChecklistEfectivo($miembro);
 
                 $esLiderCelula = ((int)($miembro['Id_Rol'] ?? 0) === 3) || (strpos($rolNombreNorm, 'lider de celula') !== false);
+                $esLider12 = ((int)($miembro['Id_Rol'] ?? 0) === 8)
+                    || (strpos($rolNombreNorm, 'lider de 12') !== false)
+                    || (strpos($rolNombreNorm, 'lider 12') !== false)
+                    || (strpos($rolNombreNorm, 'lideres de 12') !== false);
                 $esAsistenteCelula = strpos($rolNombreNorm, 'asistente') !== false;
                 $tieneCelula = trim((string)($miembro['Nombre_Celula'] ?? '')) !== '';
 
@@ -399,6 +403,10 @@ class MinisterioController extends BaseController {
                     'nombre' => $nombreCompleto !== '' ? $nombreCompleto : 'Sin nombre',
                     'rol' => (string)($miembro['Nombre_Rol'] ?? 'Sin rol'),
                     'telefono' => (string)($miembro['Telefono'] ?? ''),
+                    'direccion' => (string)($miembro['Direccion'] ?? ''),
+                    'genero' => (string)($miembro['Genero'] ?? ''),
+                    'id_lider' => (int)($miembro['Id_Lider'] ?? 0),
+                    'nombre_lider' => trim((string)($miembro['Nombre_Lider'] ?? '')),
                     'documento' => (string)($miembro['Numero_Documento'] ?? ''),
                     'celula' => (string)($miembro['Nombre_Celula'] ?? ''),
                     'tipo_reunion' => (string)($miembro['Tipo_Reunion'] ?? ''),
@@ -406,6 +414,7 @@ class MinisterioController extends BaseController {
                     'match_total_personas' => true,
                     'match_celulas' => $tieneCelula,
                     'match_lideres_celula' => $esLiderCelula,
+                    'match_lideres_12' => $esLider12,
                     'match_asistentes_celula' => $esAsistenteCelula,
                     'match_ganados_semana_total' => $esGanadoSemanaTotal,
                     'match_ganados_semana_celula' => $esGanadoSemanaTotal && strpos($tipoReunionNorm, 'celula') !== false,
@@ -449,6 +458,173 @@ class MinisterioController extends BaseController {
             'meta_guardada' => ($_GET['meta_guardada'] ?? '') === '1',
             'return_url' => $returnUrl
         ]);
+    }
+
+    public function lideres() {
+        $this->redirect('ministerios/equipo-principal');
+    }
+
+    public function equipo12() {
+        $this->equipoPrincipal();
+    }
+
+    public function equipoPrincipal() {
+        if (!AuthController::tienePermiso('ministerios', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $filtroPersonas = DataIsolation::generarFiltroPersonas();
+        $lideres = $this->personaModel->getResumenLideresCelulaWithRole($filtroPersonas);
+
+        $idMinisterioFiltro = (int)($_GET['id_ministerio'] ?? 0);
+        $nombreMinisterioFiltro = '';
+
+        if ($idMinisterioFiltro > 0) {
+            $lideres = array_values(array_filter($lideres, static function ($lider) use ($idMinisterioFiltro) {
+                return (int)($lider['Id_Ministerio'] ?? 0) === $idMinisterioFiltro;
+            }));
+
+            $ministerio = $this->ministerioModel->getById($idMinisterioFiltro);
+            $nombreMinisterioFiltro = trim((string)($ministerio['Nombre_Ministerio'] ?? ''));
+        }
+
+        $esGeneroMujer = static function ($genero) {
+            $g = strtolower(trim((string)$genero));
+            return (strpos($g, 'mujer') !== false) || (strpos($g, 'femen') !== false);
+        };
+
+        $redEquipo12 = $this->construirRedEquipo12($lideres, $esGeneroMujer);
+
+        $this->view('ministerios/lideres', [
+            'equipos_12_hombres' => $redEquipo12['equipos_12_hombres'],
+            'equipos_12_mujeres' => $redEquipo12['equipos_12_mujeres'],
+            'resumen_equipo_12' => $redEquipo12['resumen'],
+            'id_ministerio_filtro' => $idMinisterioFiltro,
+            'nombre_ministerio_filtro' => $nombreMinisterioFiltro,
+        ]);
+    }
+
+    public function lideresCelula() {
+        if (!AuthController::tienePermiso('ministerios', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $filtroPersonas = DataIsolation::generarFiltroPersonas();
+        $lideres = $this->personaModel->getResumenLideresCelulaWithRole($filtroPersonas);
+
+        $idMinisterioFiltro = (int)($_GET['id_ministerio'] ?? 0);
+        $nombreMinisterioFiltro = '';
+
+        if ($idMinisterioFiltro > 0) {
+            $lideres = array_values(array_filter($lideres, static function ($lider) use ($idMinisterioFiltro) {
+                return (int)($lider['Id_Ministerio'] ?? 0) === $idMinisterioFiltro;
+            }));
+
+            $ministerio = $this->ministerioModel->getById($idMinisterioFiltro);
+            $nombreMinisterioFiltro = trim((string)($ministerio['Nombre_Ministerio'] ?? ''));
+        }
+
+        $esGeneroMujer = static function ($genero) {
+            $g = strtolower(trim((string)$genero));
+            return (strpos($g, 'mujer') !== false) || (strpos($g, 'femen') !== false);
+        };
+
+        $lideresCelulaHombres = [];
+        $lideresCelulaMujeres = [];
+
+        foreach ($lideres as $lider) {
+            if ((int)($lider['Es_Lider_Celula'] ?? 0) !== 1) {
+                continue;
+            }
+
+            $nodo = $this->normalizarNodoEquipo12($lider, $esGeneroMujer);
+            if (!empty($nodo['es_mujer'])) {
+                $lideresCelulaMujeres[] = $nodo;
+            } else {
+                $lideresCelulaHombres[] = $nodo;
+            }
+        }
+
+        usort($lideresCelulaHombres, [$this, 'compararNodosEquipo12']);
+        usort($lideresCelulaMujeres, [$this, 'compararNodosEquipo12']);
+
+        $this->view('ministerios/lideres_celula', [
+            'lideres_celula_hombres' => $lideresCelulaHombres,
+            'lideres_celula_mujeres' => $lideresCelulaMujeres,
+            'id_ministerio_filtro' => $idMinisterioFiltro,
+            'nombre_ministerio_filtro' => $nombreMinisterioFiltro,
+        ]);
+    }
+
+    private function construirRedEquipo12(array $lideres, callable $esGeneroMujer) {
+        $equiposPorId = [];
+
+        foreach ($lideres as $lider) {
+            if ((int)($lider['Es_Lider_12'] ?? 0) !== 1) {
+                continue;
+            }
+
+            $idPersona = (int)($lider['Id_Persona'] ?? 0);
+            if ($idPersona <= 0) {
+                continue;
+            }
+
+            $equiposPorId[$idPersona] = [
+                'lider' => $this->normalizarNodoEquipo12($lider, $esGeneroMujer)
+            ];
+        }
+
+        $equipos12Hombres = [];
+        $equipos12Mujeres = [];
+
+        foreach ($equiposPorId as $equipo) {
+            if (!empty($equipo['lider']['es_mujer'])) {
+                $equipos12Mujeres[] = $equipo;
+            } else {
+                $equipos12Hombres[] = $equipo;
+            }
+        }
+
+        usort($equipos12Hombres, [$this, 'compararEquipos12']);
+        usort($equipos12Mujeres, [$this, 'compararEquipos12']);
+
+        return [
+            'equipos_12_hombres' => $equipos12Hombres,
+            'equipos_12_mujeres' => $equipos12Mujeres,
+            'resumen' => [
+                'total_equipos_12' => count($equiposPorId),
+                'total_hombres' => count($equipos12Hombres),
+                'total_mujeres' => count($equipos12Mujeres),
+            ],
+        ];
+    }
+
+    private function normalizarNodoEquipo12(array $lider, callable $esGeneroMujer) {
+        $nombre = trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? ''));
+
+        return [
+            'id_persona' => (int)($lider['Id_Persona'] ?? 0),
+            'nombre' => $nombre !== '' ? $nombre : 'Sin nombre',
+            'telefono' => trim((string)($lider['Telefono'] ?? '')),
+            'direccion' => trim((string)($lider['Direccion'] ?? '')),
+            'ministerio' => trim((string)($lider['Nombre_Ministerio'] ?? '')),
+            'id_lider' => (int)($lider['Id_Lider'] ?? 0),
+            'nombre_lider' => trim((string)($lider['Nombre_Lider'] ?? '')),
+            'tipo_liderazgo' => trim((string)($lider['Tipo_Liderazgo'] ?? '')),
+            'total_personas' => (int)($lider['Total_Personas'] ?? 0),
+            'ultimo_reporte_celula' => (string)($lider['Ultimo_Reporte_Celula'] ?? ''),
+            'es_mujer' => $esGeneroMujer($lider['Genero'] ?? ''),
+        ];
+    }
+
+    private function compararNodosEquipo12(array $a, array $b) {
+        return strcasecmp((string)($a['nombre'] ?? ''), (string)($b['nombre'] ?? ''));
+    }
+
+    private function compararEquipos12(array $a, array $b) {
+        return $this->compararNodosEquipo12($a['lider'] ?? [], $b['lider'] ?? []);
     }
 
     private function usuarioPuedeEditarMinisterio($idMinisterio) {

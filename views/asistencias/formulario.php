@@ -1,15 +1,18 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
+<?php $volverUrlAsistencias = (string)($return_url ?? (PUBLIC_URL . '?url=asistencias')); ?>
+
 <div class="page-header">
     <h2>Registrar Asistencia</h2>
     <div class="page-actions">
         <a id="persona_nueva_link" href="<?= PUBLIC_URL ?>index.php?url=personas/crear&return_to=asistencia<?= !empty($celula_preseleccionada) ? '&celula=' . (int)$celula_preseleccionada : '' ?>" class="btn btn-primary">Persona Nueva</a>
-        <a href="<?= PUBLIC_URL ?>index.php?url=asistencias" class="btn btn-secondary">Volver</a>
+        <a href="<?= htmlspecialchars($volverUrlAsistencias) ?>" class="btn btn-secondary">Volver</a>
     </div>
 </div>
 
 <div class="form-container" style="max-width: 800px;">
     <form method="POST" id="formAsistencia">
+        <input type="hidden" name="return_url" value="<?= htmlspecialchars($volverUrlAsistencias) ?>">
         <div class="form-group autocomplete-wrapper">
             <label for="celula_search">Célula</label>
             <input type="text" id="celula_search" class="form-control"
@@ -22,7 +25,7 @@
 
         <div class="form-group">
             <label for="fecha">Fecha</label>
-            <input type="date" id="fecha" name="fecha" class="form-control" value="<?= date('Y-m-d') ?>" required>
+            <input type="date" id="fecha" name="fecha" class="form-control" value="<?= htmlspecialchars((string)($fecha_preseleccionada ?? date('Y-m-d'))) ?>" required>
         </div>
 
         <div class="form-group">
@@ -52,7 +55,7 @@
 
         <div class="form-actions" id="botones-accion" style="display: none; margin-top: 30px;">
             <button type="submit" class="btn btn-primary">Guardar Asistencias</button>
-            <a href="<?= PUBLIC_URL ?>index.php?url=asistencias" class="btn btn-secondary">Cancelar</a>
+            <a href="<?= htmlspecialchars($volverUrlAsistencias) ?>" class="btn btn-secondary">Cancelar</a>
         </div>
     </form>
 </div>

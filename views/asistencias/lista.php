@@ -1,13 +1,7 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
-<div class="page-header">
+<div class="page-header" id="top-asistencias">
     <h2>Reporte Semanal de Asistencias</h2>
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="<?= PUBLIC_URL ?>?url=asistencias/exportarExcel<?= !empty($_GET['semana']) ? '&semana=' . urlencode((string)$_GET['semana']) : '' ?><?= !empty($_GET['ministerio']) ? '&ministerio=' . urlencode((string)$_GET['ministerio']) : '' ?><?= !empty($_GET['lider']) ? '&lider=' . urlencode((string)$_GET['lider']) : '' ?><?= !empty($_GET['reporte']) ? '&reporte=' . urlencode((string)$_GET['reporte']) : '' ?>" class="btn btn-success">
-            <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
-        </a>
-        <a href="<?= PUBLIC_URL ?>?url=celulas" class="btn btn-secondary">Ir a Células (registrar)</a>
-    </div>
 </div>
 
 <?php
@@ -30,25 +24,40 @@ $seccionesNoReportaronConSobre = array_values(array_filter($sectionsVisibles, st
 $seccionesReportaronConSobre = array_values(array_filter($sectionsVisibles, static function ($section) {
     return !empty($section['si_reporto_semana']) && !empty($section['entrego_sobre']);
 }));
+
+$queryPersistente = [];
+if (!empty($_GET['semana'])) {
+    $queryPersistente['semana'] = (string)$_GET['semana'];
+}
+if (!empty($_GET['ministerio'])) {
+    $queryPersistente['ministerio'] = (string)$_GET['ministerio'];
+}
+if (!empty($_GET['lider'])) {
+    $queryPersistente['lider'] = (string)$_GET['lider'];
+}
+if (!empty($_GET['reporte'])) {
+    $queryPersistente['reporte'] = (string)$_GET['reporte'];
+}
+$returnUrlAsistencias = PUBLIC_URL . '?url=asistencias' . (!empty($queryPersistente) ? '&' . http_build_query($queryPersistente) : '');
+
+$fechaSemanaAnterior = date('Y-m-d', strtotime('-7 days'));
+try {
+    $baseSemana = new DateTimeImmutable((string)($semana_inicio ?? date('Y-m-d')));
+    $fechaSemanaAnterior = $baseSemana->modify('-7 days')->format('Y-m-d');
+} catch (Throwable $e) {
+    $fechaSemanaAnterior = date('Y-m-d', strtotime('-7 days'));
+}
+
 ?>
 
 <div class="card" style="margin-bottom: 16px;">
     <div class="card-body" style="padding: 12px 16px;">
-        <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
-            <span class="meta-pill"><strong>Semana:</strong> <?= htmlspecialchars((string)($semana_inicio ?? '')) ?> al <?= htmlspecialchars((string)($semana_fin ?? '')) ?></span>
-            <span class="meta-pill" style="background:#e9f8ef; border-color:#c6ebd4; color:#1f7a44;">Reportaron: <?= (int)count($seccionesReportaron) ?></span>
-            <span class="meta-pill" style="background:#fff0f1; border-color:#f0d0d4; color:#9b2e3a;">No reportaron: <?= (int)count($seccionesNoReportaron) ?></span>
-            <span class="meta-pill" style="background:#edf4ff; border-color:#c9dbff; color:#1f4b99;">Entregaron sobre: <?= (int)count($seccionesEntregaronSobre) ?>/<?= (int)count($sectionsVisibles) ?></span>
-            <span class="meta-pill" style="background:#e9f8ef; border-color:#bfe4cb; color:#176a39;">Reportó y entregó sobre: <?= (int)count($seccionesReportaronConSobre) ?></span>
-            <span class="meta-pill" style="background:#fff8e8; border-color:#f1ddb1; color:#8a6400;">Reportó célula y no entregó sobre: <?= (int)count($seccionesReportaronSinSobre) ?></span>
-            <span class="meta-pill" style="background:#f3ecff; border-color:#dac8ff; color:#5b3d99;">No reportó célula y sí entregó sobre: <?= (int)count($seccionesNoReportaronConSobre) ?></span>
-            <span class="meta-pill">Total células: <?= (int)count($sectionsVisibles) ?></span>
-        </div>
+        <strong>Semana:</strong> <?= htmlspecialchars((string)($semana_inicio ?? '')) ?> al <?= htmlspecialchars((string)($semana_fin ?? '')) ?>
     </div>
 </div>
 
 <div class="form-container" style="margin-bottom: 20px;">
-    <form method="GET" class="filter-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; align-items: end;">
+    <form method="GET" class="filter-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: end;">
         <input type="hidden" name="url" value="asistencias">
 
         <div class="form-group" style="margin-bottom: 0;">
@@ -103,89 +112,135 @@ $seccionesReportaronConSobre = array_values(array_filter($sectionsVisibles, stat
 </div>
 
 <?php if (!empty($sectionsVisibles)): ?>
-<div class="asistencia-semanal-columns">
-    <div class="asistencia-semanal-column">
-        <div class="asistencia-semanal-column-title">
-            <i class="bi bi-check2-circle"></i> Reportaron esta semana (<?= (int)count($seccionesReportaron) ?>)
+<div class="dashboard-grid asistencia-summary-grid" style="grid-template-columns: repeat(2, minmax(0, 320px)); margin:18px 0;">
+    <button type="button" class="dashboard-card asistencia-summary-card is-active" data-target-tabla="reportaron" style="border-left-color:#1f7a44; text-align:left; cursor:pointer;">
+        <h3>Reportaron esta semana</h3>
+        <div class="value" style="color:#1f7a44;"><?= (int)count($seccionesReportaron) ?></div>
+        <small style="color:#637087;">Clic para ver el listado completo ordenado.</small>
+    </button>
+
+    <button type="button" class="dashboard-card asistencia-summary-card" data-target-tabla="no-reportaron" style="border-left-color:#c92a2a; text-align:left; cursor:pointer;">
+        <h3>No reportaron esta semana</h3>
+        <div class="value" style="color:#c92a2a;"><?= (int)count($seccionesNoReportaron) ?></div>
+        <small style="color:#637087;">Clic para ver el listado completo ordenado.</small>
+    </button>
+</div>
+
+<div id="tabla-reportaron" class="card asistencia-detalle-card" style="margin-bottom: 18px;">
+    <div class="asistencia-detalle-header">
+        <div>
+            <h3 style="margin-bottom:4px;">Células que reportaron</h3>
+            <small style="color:#60708a;">Vista completa de células con reporte para la semana seleccionada</small>
         </div>
-
-        <?php if (!empty($seccionesReportaron)): ?>
-            <?php foreach ($seccionesReportaron as $section): ?>
-                <div class="section-collapse asistencia-simple-card">
-                    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-                        <div class="collapse-title" style="margin-bottom:0;">
-                            <i class="bi bi-check2-square"></i> <?= htmlspecialchars($section['label']) ?>
-                        </div>
-                        <a class="view-group-btn" href="<?= PUBLIC_URL ?>?url=asistencias/porCelula&id=<?= (int)$section['id_celula'] ?>">Ver detalle</a>
-                    </div>
-
-                    <div class="section-meta" style="margin-top:10px;">
-                        <span class="meta-pill">Registros semana: <?= number_format((int)$section['total_registros']) ?></span>
-                        <span class="meta-pill" style="background:#e9f8ef; border-color:#c6ebd4; color:#1f7a44;">Reportó esta semana</span>
-                    </div>
-
-                    <div class="entrego-sobre-row">
-                        <label class="entrego-sobre-label">
-                            <input
-                                type="checkbox"
-                                class="entrego-sobre-check"
-                                data-id-celula="<?= (int)$section['id_celula'] ?>"
-                                data-semana-inicio="<?= htmlspecialchars((string)($semana_inicio ?? '')) ?>"
-                                <?= !empty($section['entrego_sobre']) ? 'checked' : '' ?>
-                            >
-                            Entrego sobre
-                        </label>
-                        <span class="entrego-sobre-status" aria-live="polite"></span>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-        <?php else: ?>
-            <div class="section-collapse asistencia-simple-card">
-                <div class="section-meta"><span class="meta-pill">No hay células en esta lista</span></div>
-            </div>
-        <?php endif; ?>
     </div>
 
-    <div class="asistencia-semanal-column">
-        <div class="asistencia-semanal-column-title" style="color:#9b2e3a; border-color:#f0d0d4; background:#fff4f5;">
-            <i class="bi bi-x-circle"></i> No reportaron esta semana (<?= (int)count($seccionesNoReportaron) ?>)
+    <div class="table-container asistencia-table-wrap asistencia-table-wrap--full">
+        <table class="data-table asistencia-data-table">
+            <thead>
+                <tr>
+                    <th>Célula</th>
+                    <th>Ministerio</th>
+                    <th>Estado</th>
+                    <th>Entregó sobre</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($seccionesReportaron)): ?>
+                    <?php foreach ($seccionesReportaron as $section): ?>
+                        <tr>
+                            <td><strong><?= htmlspecialchars((string)($section['label'] ?? 'Sin célula')) ?></strong></td>
+                            <td><?= htmlspecialchars((string)($section['ministerio'] ?? 'Sin ministerio')) ?></td>
+                            <td><span class="meta-pill" style="background:#e9f8ef; border-color:#c6ebd4; color:#1f7a44;">Reportó esta semana</span></td>
+                            <td>
+                                <div class="entrego-sobre-row entrego-sobre-row--table">
+                                    <label class="entrego-sobre-label">
+                                        <span>Sí</span>
+                                        <input
+                                            type="checkbox"
+                                            class="entrego-sobre-check"
+                                            data-id-celula="<?= (int)$section['id_celula'] ?>"
+                                            data-semana-inicio="<?= htmlspecialchars((string)($semana_inicio ?? '')) ?>"
+                                            <?= !empty($section['entrego_sobre']) ? 'checked' : '' ?>
+                                        >
+                                    </label>
+                                    <span class="entrego-sobre-status" aria-live="polite"></span>
+                                </div>
+                            </td>
+                            <td>
+                                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                    <a class="btn btn-sm btn-secondary" href="<?= PUBLIC_URL ?>?url=asistencias/porCelula&id=<?= (int)$section['id_celula'] ?>&return_url=<?= urlencode($returnUrlAsistencias) ?>">Ver detalle</a>
+                                    <a class="btn btn-sm btn-primary" href="<?= PUBLIC_URL ?>?url=asistencias/registrar&celula=<?= (int)$section['id_celula'] ?>&fecha=<?= urlencode($fechaSemanaAnterior) ?>&return_url=<?= urlencode($returnUrlAsistencias) ?>" title="Registrar asistencia en una semana anterior">Reportar semana anterior</a>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="5" class="asistencia-empty-cell">No hay células en esta lista</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="tabla-no-reportaron" class="card asistencia-detalle-card" hidden>
+    <div class="asistencia-detalle-header">
+        <div>
+            <h3 style="margin-bottom:4px;">Células que no reportaron</h3>
+            <small style="color:#60708a;">Vista completa de células pendientes por reportar en la semana seleccionada</small>
         </div>
+    </div>
 
-        <?php if (!empty($seccionesNoReportaron)): ?>
-            <?php foreach ($seccionesNoReportaron as $section): ?>
-                <div class="section-collapse asistencia-simple-card">
-                    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-                        <div class="collapse-title" style="margin-bottom:0;">
-                            <i class="bi bi-check2-square"></i> <?= htmlspecialchars($section['label']) ?>
-                        </div>
-                        <a class="view-group-btn" href="<?= PUBLIC_URL ?>?url=asistencias/porCelula&id=<?= (int)$section['id_celula'] ?>">Ver detalle</a>
-                    </div>
-
-                    <div class="section-meta" style="margin-top:10px;">
-                        <span class="meta-pill">Registros semana: <?= number_format((int)$section['total_registros']) ?></span>
-                        <span class="meta-pill" style="background:#fff0f1; border-color:#f0d0d4; color:#9b2e3a;">No reportó esta semana</span>
-                    </div>
-
-                    <div class="entrego-sobre-row">
-                        <label class="entrego-sobre-label">
-                            <input
-                                type="checkbox"
-                                class="entrego-sobre-check"
-                                data-id-celula="<?= (int)$section['id_celula'] ?>"
-                                data-semana-inicio="<?= htmlspecialchars((string)($semana_inicio ?? '')) ?>"
-                                <?= !empty($section['entrego_sobre']) ? 'checked' : '' ?>
-                            >
-                            Entrego sobre
-                        </label>
-                        <span class="entrego-sobre-status" aria-live="polite"></span>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-        <?php else: ?>
-            <div class="section-collapse asistencia-simple-card">
-                <div class="section-meta"><span class="meta-pill">No hay células en esta lista</span></div>
-            </div>
-        <?php endif; ?>
+    <div class="table-container asistencia-table-wrap asistencia-table-wrap--full">
+        <table class="data-table asistencia-data-table">
+            <thead>
+                <tr>
+                    <th>Célula</th>
+                    <th>Ministerio</th>
+                    <th>Estado</th>
+                    <th>Entregó sobre</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($seccionesNoReportaron)): ?>
+                    <?php foreach ($seccionesNoReportaron as $section): ?>
+                        <tr>
+                            <td><strong><?= htmlspecialchars((string)($section['label'] ?? 'Sin célula')) ?></strong></td>
+                            <td><?= htmlspecialchars((string)($section['ministerio'] ?? 'Sin ministerio')) ?></td>
+                            <td><span class="meta-pill" style="background:#fff0f1; border-color:#f0d0d4; color:#9b2e3a;">No reportó esta semana</span></td>
+                            <td>
+                                <div class="entrego-sobre-row entrego-sobre-row--table">
+                                    <label class="entrego-sobre-label">
+                                        <span>Sí</span>
+                                        <input
+                                            type="checkbox"
+                                            class="entrego-sobre-check"
+                                            data-id-celula="<?= (int)$section['id_celula'] ?>"
+                                            data-semana-inicio="<?= htmlspecialchars((string)($semana_inicio ?? '')) ?>"
+                                            <?= !empty($section['entrego_sobre']) ? 'checked' : '' ?>
+                                        >
+                                    </label>
+                                    <span class="entrego-sobre-status" aria-live="polite"></span>
+                                </div>
+                            </td>
+                            <td>
+                                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                    <a class="btn btn-sm btn-secondary" href="<?= PUBLIC_URL ?>?url=asistencias/porCelula&id=<?= (int)$section['id_celula'] ?>&return_url=<?= urlencode($returnUrlAsistencias) ?>">Ver detalle</a>
+                                    <a class="btn btn-sm btn-primary" href="<?= PUBLIC_URL ?>?url=asistencias/registrar&celula=<?= (int)$section['id_celula'] ?>&fecha=<?= urlencode($fechaSemanaAnterior) ?>&return_url=<?= urlencode($returnUrlAsistencias) ?>" title="Registrar asistencia en una semana anterior">Reportar semana anterior</a>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="5" class="asistencia-empty-cell">No hay células en esta lista</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
     </div>
 </div>
 <?php else: ?>
@@ -195,25 +250,97 @@ $seccionesReportaronConSobre = array_values(array_filter($sectionsVisibles, stat
 <?php endif; ?>
 
 <style>
-.asistencia-semanal-columns {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+.asistencia-summary-grid {
     gap: 14px;
 }
 
-.asistencia-semanal-column {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+.asistencia-summary-card {
+    appearance: none;
+    border-top: 0;
+    border-right: 0;
+    border-bottom: 0;
+    width: 100%;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, outline 0.18s ease;
 }
 
-.asistencia-semanal-column-title {
-    border: 1px solid #c6ebd4;
-    background: #f1fbf4;
-    color: #1f7a44;
-    border-radius: 10px;
-    padding: 10px 12px;
-    font-weight: 700;
+.asistencia-summary-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(15, 35, 61, 0.08);
+}
+
+.asistencia-summary-card.is-active {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12), 0 10px 22px rgba(15, 35, 61, 0.08);
+}
+
+.asistencia-summary-card:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.22);
+    outline-offset: 2px;
+}
+
+.asistencia-table-wrap {
+    margin-top: 0;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    box-shadow: none;
+    border: 1px solid #e2e8f0;
+}
+
+.asistencia-table-wrap--full {
+    margin-top: 14px;
+}
+
+.asistencia-detalle-card {
+    margin-bottom: 18px;
+    scroll-margin-top: 20px;
+}
+
+.asistencia-detalle-card:target {
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
+.asistencia-detalle-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.asistencia-data-table th:nth-child(5),
+.asistencia-data-table td:nth-child(5) {
+    white-space: nowrap;
+}
+
+.asistencia-data-table td {
+    vertical-align: middle;
+}
+
+.asistencia-data-table th,
+.asistencia-data-table td {
+    padding: 6px 8px;
+    font-size: 12px;
+    line-height: 1.25;
+}
+
+.asistencia-data-table th {
+    font-size: 11.5px;
+}
+
+.asistencia-data-table .meta-pill {
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+.asistencia-data-table .btn {
+    padding: 4px 8px;
+    font-size: 11px;
+    line-height: 1.2;
+}
+
+.asistencia-empty-cell {
+    text-align: center;
+    color: #64748b;
+    padding: 18px 12px;
 }
 
 .entrego-sobre-row {
@@ -224,13 +351,20 @@ $seccionesReportaronConSobre = array_values(array_filter($sectionsVisibles, stat
     flex-wrap: wrap;
 }
 
+.entrego-sobre-row--table {
+    margin-top: 0;
+    gap: 4px;
+    justify-content: flex-start;
+}
+
 .entrego-sobre-label {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    font-weight: 600;
+    gap: 6px;
+    font-weight: 500;
     color: #334155;
     cursor: pointer;
+    font-size: 12px;
 }
 
 .entrego-sobre-check {
@@ -254,8 +388,8 @@ $seccionesReportaronConSobre = array_values(array_filter($sectionsVisibles, stat
 }
 
 @media (max-width: 980px) {
-    .asistencia-semanal-columns {
-        grid-template-columns: 1fr;
+    .asistencia-summary-grid {
+        grid-template-columns: 1fr !important;
     }
 }
 </style>
@@ -380,6 +514,52 @@ $seccionesReportaronConSobre = array_values(array_filter($sectionsVisibles, stat
             });
         });
     })();
+
+    (function() {
+        const tarjetasResumen = Array.from(document.querySelectorAll('.asistencia-summary-card'));
+        if (!tarjetasResumen.length) {
+            return;
+        }
+
+        const tablasDetalle = {
+            reportaron: document.getElementById('tabla-reportaron'),
+            'no-reportaron': document.getElementById('tabla-no-reportaron')
+        };
+
+        function activarTabla(target, shouldScroll) {
+            tarjetasResumen.forEach(function(tarjeta) {
+                tarjeta.classList.toggle('is-active', String(tarjeta.dataset.targetTabla || '') === target);
+            });
+
+            Object.keys(tablasDetalle).forEach(function(key) {
+                const panel = tablasDetalle[key];
+                if (!panel) {
+                    return;
+                }
+
+                if (key === target) {
+                    panel.removeAttribute('hidden');
+                } else {
+                    panel.setAttribute('hidden', 'hidden');
+                }
+            });
+
+            const panelActivo = tablasDetalle[target];
+            if (shouldScroll && panelActivo) {
+                panelActivo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        tarjetasResumen.forEach(function(tarjeta) {
+            tarjeta.addEventListener('click', function() {
+                const target = String(tarjeta.dataset.targetTabla || 'reportaron');
+                activarTabla(target, true);
+            });
+        });
+
+        activarTabla('reportaron', false);
+    })();
+
 </script>
 
 <?php include VIEWS . '/layout/footer.php'; ?>

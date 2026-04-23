@@ -72,6 +72,29 @@ class TeenController extends BaseController {
         return $codigo;
     }
 
+    private function getFechaDomingoSemana(?DateTimeInterface $fechaReferencia = null) {
+        $base = $fechaReferencia ? DateTimeImmutable::createFromInterface($fechaReferencia) : new DateTimeImmutable('today');
+        if ($base === false) {
+            $base = new DateTimeImmutable('today');
+        }
+
+        $diaSemana = (int)$base->format('w');
+        if ($diaSemana > 0) {
+            $base = $base->modify('-' . $diaSemana . ' days');
+        }
+
+        return $base->format('Y-m-d');
+    }
+
+    private function resolverGrupoMenor(array $menor) {
+        $edad = (int)($menor['edad'] ?? $menor['Edad'] ?? 0);
+        return ($edad <= 9) ? 'kids' : 'teen';
+    }
+
+    private function obtenerPrefijoCodigoKids() {
+        return 'KS';
+    }
+
     private function generarCodigoRegistroUnico() {
         for ($i = 0; $i < 15; $i++) {
             $numero = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
@@ -84,22 +107,33 @@ class TeenController extends BaseController {
         throw new Exception('No fue posible generar un código único. Intenta nuevamente.');
     }
 
-    private function generarCodigoSemanalUnico() {
-        for ($i = 0; $i < 20; $i++) {
+    private function generarCodigoSemanalUnico(array $menor, ?DateTimeInterface $fechaReferencia = null) {
+        $fechaDomingo = $this->getFechaDomingoSemana($fechaReferencia);
+        $grupo = $this->resolverGrupoMenor($menor);
+        $prefijo = $grupo === 'kids'
+            ? $this->obtenerPrefijoCodigoKids()
+            : 'TNS';
+
+        for ($i = 0; $i < 120; $i++) {
             $numero = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-            $codigo = 'TS-' . date('ymd') . '-' . $numero;
-            if (!$this->teenModel->existeCodigoSemanal($codigo)) {
+            $codigo = $prefijo . substr($numero, -2);
+            if (!$this->teenModel->existeCodigoSemanal($codigo, $fechaDomingo)) {
                 return $codigo;
             }
         }
 
-        throw new Exception('No fue posible generar un código semanal único. Intenta nuevamente.');
+        throw new Exception('No fue posible generar un código semanal corto único para esta semana.');
     }
 
     private function obtenerOCrearAsistenciaSemanal($idMenor) {
         $idMenor = (int)$idMenor;
         if ($idMenor <= 0) {
             throw new Exception('ID de menor inválido para registrar asistencia semanal.');
+        }
+
+        $menor = $this->teenModel->getMenorRegistradoById($idMenor);
+        if (empty($menor)) {
+            throw new Exception('No se encontró la información del menor para generar el código semanal.');
         }
 
         $existente = $this->teenModel->getAsistenciaSemanalActualByMenor($idMenor);
@@ -110,7 +144,7 @@ class TeenController extends BaseController {
             ];
         }
 
-        $codigoSemanal = $this->generarCodigoSemanalUnico();
+        $codigoSemanal = $this->generarCodigoSemanalUnico($menor);
         $ok = $this->teenModel->registrarAsistenciaSemanal($idMenor, $codigoSemanal);
         if (!$ok) {
             throw new Exception('No se pudo registrar la asistencia semanal.');

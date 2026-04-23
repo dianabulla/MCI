@@ -1,11 +1,33 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
+<?php
+$clasificarGrupoRegistro = static function(array $registro) {
+    $edadRegistro = (int)($registro['edad'] ?? 0);
+    return ($edadRegistro <= 9) ? 'kids' : 'teen';
+};
+
+$registrosTeens = [];
+$registrosKids = [];
+foreach (($registros ?? []) as $registroTmp) {
+    if ($clasificarGrupoRegistro((array)$registroTmp) === 'kids') {
+        $registrosKids[] = $registroTmp;
+    } else {
+        $registrosTeens[] = $registroTmp;
+    }
+}
+?>
+
 <div class="page-header">
     <h2>Registro teens-kids</h2>
-    <div class="page-actions personas-mobile-stack" style="display:flex; gap:8px; flex-wrap:wrap;">
+</div>
+
+<div class="card teen-topbar-card" style="margin-bottom:20px;">
+    <div class="card-body">
+        <div class="page-actions personas-mobile-stack teen-topbar-actions">
         <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-nav-pill active">Registro teens-kids</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=teen/codigos" class="btn btn-nav-pill">Códigos</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-publico" target="_blank" class="btn btn-primary">Nuevo registro</a>
+        </div>
     </div>
 </div>
 
@@ -15,64 +37,59 @@
     </div>
 <?php endif; ?>
 
-<div class="card" style="margin-bottom:20px;">
-    <div class="card-body" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-        <span style="color:#4d5f7b; font-weight:600;">Filtrar grupo:</span>
-        <button type="button" class="btn btn-sm btn-secondary js-filtro-grupo active" data-grupo="todos">Todos</button>
-        <button type="button" class="btn btn-sm btn-secondary js-filtro-grupo" data-grupo="teen">Teens</button>
-        <button type="button" class="btn btn-sm btn-secondary js-filtro-grupo" data-grupo="kids">Kids</button>
-    </div>
+<div class="teen-resumen-grid" style="margin-bottom:20px;">
+    <button type="button" class="dashboard-card teen-resumen-card teen-resumen-teen teen-toggle-card" data-target="teen-panel-teens" aria-expanded="false">
+        <h3>Teens</h3>
+        <div class="value"><?= count($registrosTeens) ?></div>
+        <small>Haz clic para ver la información</small>
+    </button>
+    <button type="button" class="dashboard-card teen-resumen-card teen-resumen-kids teen-toggle-card" data-target="teen-panel-kids" aria-expanded="false">
+        <h3>Kids</h3>
+        <div class="value"><?= count($registrosKids) ?></div>
+        <small>Haz clic para ver la información</small>
+    </button>
 </div>
 
-<div class="card">
+<div id="teen-panel-teens" class="card teen-section-card teen-collapsible-panel is-collapsed" style="margin-bottom:20px;">
     <div class="card-body">
-        <h3 style="margin-top:0;">Menores registrados</h3>
+        <div class="teen-section-head">
+            <div>
+                <h3 style="margin-top:0;">Teens</h3>
+                <p>Solo se muestra el último código semanal vigente o el último registrado.</p>
+            </div>
+            <span class="teen-chip teen-chip-teen"><?= count($registrosTeens) ?> registros</span>
+        </div>
 
-        <?php if (!empty($registros ?? [])): ?>
+        <?php if (!empty($registrosTeens)): ?>
             <div class="table-container">
                 <table class="data-table teen-registros-table">
                     <thead>
                         <tr>
-                            <th>Código</th>
-                            <th>Código semanal</th>
+                            <th>Código actual</th>
                             <th>Menor</th>
                             <th>Acudiente</th>
                             <th>Contacto</th>
                             <th>Edad</th>
-                            <th>Nacimiento</th>
                             <th>Ministerio</th>
                             <th>Asiste célula</th>
                             <th>Total asistencias</th>
                             <th>Último domingo</th>
-                            <th>Barrio</th>
                             <th>Registro</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach (($registros ?? []) as $registro): ?>
-                            <?php
-                                $edadRegistro = (int)($registro['edad'] ?? 0);
-                                if ($edadRegistro >= 4 && $edadRegistro <= 9) {
-                                    $grupoRegistro = 'kids';
-                                } elseif ($edadRegistro >= 10 && $edadRegistro <= 13) {
-                                    $grupoRegistro = 'teen';
-                                } else {
-                                    $grupoRegistro = 'otros';
-                                }
-                            ?>
-                            <tr data-grupo="<?= $grupoRegistro ?>">
-                                <td><strong><?= htmlspecialchars((string)($registro['codigo_registro'] ?? '')) ?></strong></td>
-                                <td><strong><?= htmlspecialchars((string)($registro['codigo_semana_actual'] ?? '—')) ?></strong></td>
+                        <?php foreach ($registrosTeens as $registro): ?>
+                            <?php $codigoVisible = (string)($registro['codigo_semana_actual'] ?? ($registro['ultimo_codigo_semana'] ?? '')); ?>
+                            <tr>
+                                <td><strong><?= htmlspecialchars($codigoVisible !== '' ? $codigoVisible : '—') ?></strong></td>
                                 <td class="teen-nowrap teen-strong"><?= htmlspecialchars((string)($registro['nombre_menor'] ?? '')) ?></td>
                                 <td class="teen-nowrap"><?= htmlspecialchars((string)($registro['Nombre_Acudiente_Base'] ?: ($registro['nombre_acudiente'] ?? ''))) ?></td>
                                 <td class="teen-nowrap teen-strong"><?= htmlspecialchars((string)($registro['Telefono_Acudiente_Actual'] ?? ($registro['telefono_contacto'] ?? ''))) ?></td>
                                 <td><?= (int)($registro['edad'] ?? 0) ?></td>
-                                <td class="teen-nowrap"><?= !empty($registro['fecha_nacimiento']) ? htmlspecialchars((string)$registro['fecha_nacimiento']) : '—' ?></td>
                                 <td class="teen-nowrap"><?= htmlspecialchars((string)($registro['Nombre_Ministerio'] ?? 'Sin ministerio')) ?></td>
                                 <td><?= !empty($registro['asiste_celula']) ? 'Sí' : 'No' ?></td>
                                 <td><strong><?= (int)($registro['total_asistencias'] ?? 0) ?></strong></td>
                                 <td class="teen-nowrap"><?= !empty($registro['ultima_fecha_asistencia']) ? htmlspecialchars((string)$registro['ultima_fecha_asistencia']) : '—' ?></td>
-                                <td class="teen-nowrap"><?= htmlspecialchars((string)($registro['barrio'] ?? '')) ?></td>
                                 <td class="teen-nowrap"><?= !empty($registro['created_at']) ? htmlspecialchars((string)$registro['created_at']) : '—' ?></td>
                             </tr>
                         <?php endforeach; ?>
@@ -80,26 +97,167 @@
                 </table>
             </div>
         <?php else: ?>
-            <p style="margin:0; color:#666;">Aún no hay menores registrados.</p>
+            <p style="margin:0; color:#666;">Aún no hay teens registrados.</p>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div id="teen-panel-kids" class="card teen-section-card teen-collapsible-panel is-collapsed">
+    <div class="card-body">
+        <div class="teen-section-head">
+            <div>
+                <h3 style="margin-top:0;">Kids</h3>
+                <p>El código visible usa el prefijo KS y dos dígitos semanales.</p>
+            </div>
+            <span class="teen-chip teen-chip-kids"><?= count($registrosKids) ?> registros</span>
+        </div>
+
+        <?php if (!empty($registrosKids)): ?>
+            <div class="table-container">
+                <table class="data-table teen-registros-table">
+                    <thead>
+                        <tr>
+                            <th>Código actual</th>
+                            <th>Menor</th>
+                            <th>Acudiente</th>
+                            <th>Contacto</th>
+                            <th>Edad</th>
+                            <th>Ministerio</th>
+                            <th>Asiste célula</th>
+                            <th>Total asistencias</th>
+                            <th>Último domingo</th>
+                            <th>Registro</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($registrosKids as $registro): ?>
+                            <?php $codigoVisible = (string)($registro['codigo_semana_actual'] ?? ($registro['ultimo_codigo_semana'] ?? '')); ?>
+                            <tr>
+                                <td><strong><?= htmlspecialchars($codigoVisible !== '' ? $codigoVisible : '—') ?></strong></td>
+                                <td class="teen-nowrap teen-strong"><?= htmlspecialchars((string)($registro['nombre_menor'] ?? '')) ?></td>
+                                <td class="teen-nowrap"><?= htmlspecialchars((string)($registro['Nombre_Acudiente_Base'] ?: ($registro['nombre_acudiente'] ?? ''))) ?></td>
+                                <td class="teen-nowrap teen-strong"><?= htmlspecialchars((string)($registro['Telefono_Acudiente_Actual'] ?? ($registro['telefono_contacto'] ?? ''))) ?></td>
+                                <td><?= (int)($registro['edad'] ?? 0) ?></td>
+                                <td class="teen-nowrap"><?= htmlspecialchars((string)($registro['Nombre_Ministerio'] ?? 'Sin ministerio')) ?></td>
+                                <td><?= !empty($registro['asiste_celula']) ? 'Sí' : 'No' ?></td>
+                                <td><strong><?= (int)($registro['total_asistencias'] ?? 0) ?></strong></td>
+                                <td class="teen-nowrap"><?= !empty($registro['ultima_fecha_asistencia']) ? htmlspecialchars((string)$registro['ultima_fecha_asistencia']) : '—' ?></td>
+                                <td class="teen-nowrap"><?= !empty($registro['created_at']) ? htmlspecialchars((string)$registro['created_at']) : '—' ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <p style="margin:0; color:#666;">Aún no hay kids registrados.</p>
         <?php endif; ?>
     </div>
 </div>
 
 <style>
-.teen-grid {
+.teen-resumen-grid {
     display:grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap:14px;
 }
 
-.js-filtro-grupo.active {
-    background: #2f65b5;
-    color: #fff;
-    border-color: #2f65b5;
+.teen-resumen-card {
+    border-left: 3px solid transparent;
+    width:100%;
+    text-align:left;
+    cursor:pointer;
+    border-top:none;
+    border-right:none;
+    border-bottom:none;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
 
-.teen-grid-full {
-    grid-column: 1 / -1;
+.teen-resumen-card .value {
+    font-size: 42px;
+    font-weight: 800;
+    line-height: 1;
+    margin: 10px 0 6px;
+}
+
+.teen-resumen-teen {
+    border-left-color: #1f66d1;
+}
+
+.teen-resumen-teen .value {
+    color: #1f66d1;
+}
+
+.teen-resumen-kids {
+    border-left-color: #0aa678;
+}
+
+.teen-resumen-kids .value {
+    color: #0aa678;
+}
+
+.teen-resumen-card small {
+    color:#5f728f;
+    font-weight:600;
+}
+
+.teen-resumen-card:hover {
+    transform: translateY(-2px);
+}
+
+.teen-resumen-card.is-active {
+    box-shadow: 0 18px 34px rgba(31, 102, 209, 0.16);
+}
+
+.teen-topbar-card .card-body {
+    padding: 16px 18px;
+}
+
+.teen-topbar-actions {
+    align-items:center;
+}
+
+.teen-section-card {
+    overflow: hidden;
+}
+
+.teen-collapsible-panel.is-collapsed {
+    display:none;
+}
+
+.teen-section-head {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    margin-bottom: 14px;
+}
+
+.teen-section-head p {
+    margin: 4px 0 0;
+    color:#5f728f;
+    font-size: 13px;
+}
+
+.teen-chip {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:8px 12px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:700;
+    white-space:nowrap;
+}
+
+.teen-chip-teen {
+    background:#eaf1ff;
+    color:#1f66d1;
+}
+
+.teen-chip-kids {
+    background:#e8fbf5;
+    color:#0aa678;
 }
 
 .autocomplete-items {
@@ -131,12 +289,6 @@
     box-shadow:0 0 0 0.2rem rgba(220,53,69,.15) !important;
 }
 
-.teen-codigo-grid {
-    display:grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap:16px;
-}
-
 .teen-registros-table th,
 .teen-registros-table td {
     vertical-align: top;
@@ -148,7 +300,7 @@
 }
 
 .teen-registros-table {
-    min-width: 1660px;
+    min-width: 1220px;
     width: max-content;
     table-layout: auto !important;
 }
@@ -156,66 +308,51 @@
 .teen-registros-table th:first-child,
 .teen-registros-table td:first-child {
     white-space: nowrap;
-    min-width: 120px;
+    min-width: 140px;
 }
 
 .teen-registros-table th:nth-child(2),
 .teen-registros-table td:nth-child(2) {
-    min-width: 140px;
+    min-width: 230px;
 }
 
 .teen-registros-table th:nth-child(3),
 .teen-registros-table td:nth-child(3) {
-    min-width: 230px;
+    min-width: 190px;
 }
 
 .teen-registros-table th:nth-child(4),
 .teen-registros-table td:nth-child(4) {
-    min-width: 190px;
+    min-width: 145px;
 }
 
 .teen-registros-table th:nth-child(5),
 .teen-registros-table td:nth-child(5) {
-    min-width: 145px;
+    min-width: 75px;
 }
 
 .teen-registros-table th:nth-child(6),
 .teen-registros-table td:nth-child(6) {
-    min-width: 75px;
+    min-width: 185px;
 }
 
 .teen-registros-table th:nth-child(7),
 .teen-registros-table td:nth-child(7) {
-    min-width: 130px;
+    min-width: 120px;
 }
 
 .teen-registros-table th:nth-child(8),
 .teen-registros-table td:nth-child(8) {
-    min-width: 185px;
+    min-width: 125px;
 }
 
 .teen-registros-table th:nth-child(9),
 .teen-registros-table td:nth-child(9) {
-    min-width: 120px;
+    min-width: 135px;
 }
 
 .teen-registros-table th:nth-child(10),
 .teen-registros-table td:nth-child(10) {
-    min-width: 125px;
-}
-
-.teen-registros-table th:nth-child(11),
-.teen-registros-table td:nth-child(11) {
-    min-width: 135px;
-}
-
-.teen-registros-table th:nth-child(12),
-.teen-registros-table td:nth-child(12) {
-    min-width: 150px;
-}
-
-.teen-registros-table th:nth-child(13),
-.teen-registros-table td:nth-child(13) {
     min-width: 175px;
 }
 
@@ -232,30 +369,41 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const botonesGrupo = Array.from(document.querySelectorAll('.js-filtro-grupo'));
-    const filasRegistros = Array.from(document.querySelectorAll('.teen-registros-table tbody tr[data-grupo]'));
+    const tarjetasToggle = Array.from(document.querySelectorAll('.teen-toggle-card'));
+    const panelesToggle = Array.from(document.querySelectorAll('.teen-collapsible-panel'));
 
-    function aplicarFiltroGrupo(grupo) {
-        filasRegistros.forEach(function(fila) {
-            const grupoFila = String(fila.getAttribute('data-grupo') || '');
-            const visible = (grupo === 'todos') || (grupoFila === grupo);
-            fila.style.display = visible ? '' : 'none';
+    function abrirPanelTeen(targetId) {
+        panelesToggle.forEach(function(panel) {
+            const mostrar = panel.id === targetId;
+            panel.classList.toggle('is-collapsed', !mostrar);
         });
 
-        botonesGrupo.forEach(function(btn) {
-            btn.classList.toggle('active', btn.getAttribute('data-grupo') === grupo);
+        tarjetasToggle.forEach(function(card) {
+            const activa = String(card.getAttribute('data-target') || '') === targetId;
+            card.classList.toggle('is-active', activa);
+            card.setAttribute('aria-expanded', activa ? 'true' : 'false');
         });
     }
 
-    botonesGrupo.forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            aplicarFiltroGrupo(String(btn.getAttribute('data-grupo') || 'todos'));
+    tarjetasToggle.forEach(function(card) {
+        card.addEventListener('click', function() {
+            const targetId = String(card.getAttribute('data-target') || '');
+            const expanded = card.getAttribute('aria-expanded') === 'true';
+
+            if (expanded) {
+                panelesToggle.forEach(function(panel) {
+                    panel.classList.add('is-collapsed');
+                });
+                tarjetasToggle.forEach(function(item) {
+                    item.classList.remove('is-active');
+                    item.setAttribute('aria-expanded', 'false');
+                });
+                return;
+            }
+
+            abrirPanelTeen(targetId);
         });
     });
-
-    if (botonesGrupo.length > 0) {
-        aplicarFiltroGrupo('todos');
-    }
 
     const form = document.getElementById('formRegistroMenor');
     const acudienteInput = document.getElementById('acudiente_busqueda');

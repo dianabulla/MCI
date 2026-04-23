@@ -1,0 +1,18 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="mciBg" x1="36" y1="30" x2="214" y2="222" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D7ECFF"/>
+      <stop offset="1" stop-color="#8FC4F6"/>
+    </linearGradient>
+  </defs>
+  <circle cx="128" cy="128" r="112" fill="url(#mciBg)"/>
+
+  <path d="M52 173L88 84V173" stroke="#0A2340" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M88 84L114 137" stroke="#0A2340" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M114 137L142 84" stroke="#0A2340" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <path d="M120 173V84" stroke="#0A2340" stroke-width="7.5" stroke-linecap="round"/>
+
+  <path d="M190 98C181 88 171 84 160 84C135 84 123 103 123 128C123 153 135 173 160 173C171 173 181 169 190 158" stroke="#0A2340" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M191 84V173" stroke="#0A2340" stroke-width="7.5" stroke-linecap="round"/>
+</svg>

@@ -940,6 +940,7 @@ class EscuelaFormacionRegistroController extends BaseController {
         $idMinisterioRaw = trim((string)($_POST['id_ministerio'] ?? ''));
         $idMinisterio = ctype_digit($idMinisterioRaw) ? (int)$idMinisterioRaw : 0;
         $programa = trim((string)($_POST['programa'] ?? ''));
+        $programaNivel = trim((string)($_POST['programa_nivel'] ?? ''));
 
         $errores = [];
 
@@ -981,8 +982,16 @@ class EscuelaFormacionRegistroController extends BaseController {
             $errores[] = 'Debe seleccionar un ministerio.';
         }
 
-        if (!in_array($programa, ['universidad_vida', 'encuentro', 'bautismo', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+        if (!in_array($programa, ['universidad_vida', 'capacitacion_destino'], true)) {
             $errores[] = 'Debe seleccionar un programa válido.';
+        }
+
+        if ($programa === 'capacitacion_destino') {
+            if (!in_array($programaNivel, ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+                $errores[] = 'Debe seleccionar un nivel válido de Capacitación Destino.';
+            } else {
+                $programa = $programaNivel;
+            }
         }
 
         $generosValidos = ['Hombre', 'Mujer'];
@@ -1078,7 +1087,8 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'lider' => $lider,
                 'id_lider' => (string)$idLider,
                 'id_ministerio' => $idMinisterioRaw,
-                'programa' => $programa
+                'programa' => $programa,
+                'programa_nivel' => $programaNivel
             ]);
             header('Location: ' . PUBLIC_URL . '?' . $query);
             exit;
@@ -1151,7 +1161,8 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'lider' => $lider,
                 'id_lider' => (string)$idLider,
                 'id_ministerio' => (string)$idMinisterio,
-                'programa' => $programa
+                'programa' => $programa,
+                'programa_nivel' => $programaNivel
             ]);
             header('Location: ' . PUBLIC_URL . '?' . $query);
             exit;

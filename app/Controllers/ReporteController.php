@@ -280,10 +280,20 @@ class ReporteController extends BaseController {
     }
 
     private function construirReporteGanadosFinSemanaAnterior($fechaInicioSemanaActual, $fechaFinSemanaActual, $filtroRol, $filtroMinisterio = '', $filtroLider = '') {
-        $inicioAnterior = date('Y-m-d', strtotime((string)$fechaInicioSemanaActual . ' -7 days'));
-        $finAnterior = date('Y-m-d', strtotime((string)$fechaFinSemanaActual . ' -7 days'));
+        // El rango semanal recibido ya corresponde al contexto seleccionado en filtros.
+        // Evitamos restar otra semana para no dejar el reporte corrido dos semanas atrás.
+        $inicioAnterior = (string)$fechaInicioSemanaActual;
+        $finAnterior = (string)$fechaFinSemanaActual;
 
         $resumen = $this->personaModel->getResumenGanadosFinSemanaAnteriorPorMinisterioWithRole(
+            $inicioAnterior,
+            $finAnterior,
+            $filtroRol,
+            $filtroMinisterio,
+            $filtroLider
+        );
+
+        $detallePersonas = $this->personaModel->getDetalleGanadosFinSemanaAnteriorPorMinisterioWithRole(
             $inicioAnterior,
             $finAnterior,
             $filtroRol,
@@ -326,11 +336,25 @@ class ReporteController extends BaseController {
         $lineasTexto[] = '1 No olviden enviarme su líder encargado de la consolidación de su ministerio';
         $lineasTexto[] = '2 Todos deben actualizar el Drive de consolidación Diciembre 2025 y Enero y Febrero de 2026';
 
+        $detallesPorMinisterio = [];
+        foreach ($detallePersonas as $itemDetalle) {
+            $ministerio = trim((string)($itemDetalle['Nombre_Ministerio'] ?? ''));
+            if ($ministerio === '') {
+                $ministerio = 'Sin ministerio';
+            }
+
+            if (!isset($detallesPorMinisterio[$ministerio])) {
+                $detallesPorMinisterio[$ministerio] = [];
+            }
+            $detallesPorMinisterio[$ministerio][] = $itemDetalle;
+        }
+
         return [
             'inicio' => $inicioAnterior,
             'fin' => $finAnterior,
             'rows' => $rows,
             'totales' => $totales,
+            'detalles' => $detallesPorMinisterio,
             'texto' => implode("\n", $lineasTexto)
         ];
     }
@@ -758,6 +782,120 @@ class ReporteController extends BaseController {
             'detalle_lideres' => $detalleLideres,
             'inicio' => $fechaInicio,
             'fin' => $fechaFin
+        ];
+    }
+
+    private function construirTablasSeguimientoCelulas(array $celulas, array $asistenciaCelulas, $fechaInicioSemana) {
+        $inicioSemana = trim((string)$fechaInicioSemana);
+        $inicioSemanaTs = strtotime($inicioSemana);
+        if ($inicioSemanaTs === false) {
+            $inicioSemanaTs = strtotime(date('Y-m-d'));
+        }
+
+        $idsCelula = array_values(array_unique(array_filter(array_map(static function($item) {
+            return (int)($item['Id_Celula'] ?? 0);
+        }, $celulas), static function($id) {
+            return $id > 0;
+        })));
+
+        $ultimasFechas = $this->asistenciaModel->getUltimaFechaReportePorCelula($idsCelula);
+        $asistenciaMap = [];
+        foreach ($asistenciaCelulas as $filaAsistencia) {
+            $idCelula = (int)($filaAsistencia['Id_Celula'] ?? 0);
+            if ($idCelula <= 0) {
+                continue;
+            }
+            $asistenciaMap[$idCelula] = $filaAsistencia;
+        }
+
+        $rowsSeguimiento = [];
+        $rowsEstado = [];
+
+        foreach ($celulas as $celula) {
+            $idCelula = (int)($celula['Id_Celula'] ?? 0);
+            if ($idCelula <= 0) {
+                continue;
+            }
+
+            $ministerio = trim((string)($celula['Nombre_Ministerio_Lider'] ?? ''));
+            if ($ministerio === '') {
+                $ministerio = 'Sin ministerio';
+            }
+
+            $lider = trim((string)($celula['Nombre_Lider'] ?? ''));
+            if ($lider === '') {
+                $lider = 'Sin líder';
+            }
+
+            $nombreCelula = trim((string)($celula['Nombre_Celula'] ?? ''));
+            if ($nombreCelula === '') {
+                $nombreCelula = 'Sin nombre';
+            }
+
+            $filaAsistencia = $asistenciaMap[$idCelula] ?? [];
+            $reportoSemana = (int)($filaAsistencia['Reuniones_Realizadas'] ?? 0) > 0;
+            $entregoSobre = !empty($filaAsistencia['Entrego_Sobre']);
+
+            $ultimaFechaReporteRaw = trim((string)($ultimasFechas[$idCelula] ?? ''));
+            $ultimaFechaReporte = $ultimaFechaReporteRaw !== '' ? substr($ultimaFechaReporteRaw, 0, 10) : '';
+            $ultimaFechaTs = $ultimaFechaReporte !== '' ? strtotime($ultimaFechaReporte) : false;
+
+            $semanasSinRegistrar = 0;
+            if ($ultimaFechaTs !== false) {
+                $diffDias = (int)floor(($inicioSemanaTs - $ultimaFechaTs) / 86400);
+                $semanasSinRegistrar = $diffDias > 0 ? (int)floor($diffDias / 7) : 0;
+            } else {
+                $fechaApertura = trim((string)($celula['Fecha_Apertura'] ?? ''));
+                $fechaApertura = $fechaApertura !== '' ? substr($fechaApertura, 0, 10) : '';
+                $fechaAperturaTs = $fechaApertura !== '' ? strtotime($fechaApertura) : false;
+                if ($fechaAperturaTs !== false) {
+                    $diffDiasApertura = (int)floor(($inicioSemanaTs - $fechaAperturaTs) / 86400);
+                    $semanasSinRegistrar = $diffDiasApertura > 0 ? (int)floor($diffDiasApertura / 7) : 0;
+                }
+            }
+
+            $rowsSeguimiento[] = [
+                'ministerio' => $ministerio,
+                'lider' => $lider,
+                'celula' => $nombreCelula,
+                'ultima_fecha_reporte' => $ultimaFechaReporte,
+                'semanas_sin_registrar' => $semanasSinRegistrar
+            ];
+
+            $rowsEstado[] = [
+                'ministerio' => $ministerio,
+                'lider' => $lider,
+                'celula' => $nombreCelula,
+                'reportadas_semana' => $reportoSemana ? 1 : 0,
+                'no_reportadas_semana' => $reportoSemana ? 0 : 1,
+                'entregaron_sobre_sin_reportar' => ($entregoSobre && !$reportoSemana) ? 1 : 0,
+                'reportaron_sin_entregar_sobre' => ($reportoSemana && !$entregoSobre) ? 1 : 0,
+            ];
+        }
+
+        usort($rowsSeguimiento, static function($a, $b) {
+            $cmpSemanas = (int)($b['semanas_sin_registrar'] ?? 0) <=> (int)($a['semanas_sin_registrar'] ?? 0);
+            if ($cmpSemanas !== 0) {
+                return $cmpSemanas;
+            }
+            $cmpMinisterio = strcmp((string)($a['ministerio'] ?? ''), (string)($b['ministerio'] ?? ''));
+            if ($cmpMinisterio !== 0) {
+                return $cmpMinisterio;
+            }
+            return strcmp((string)($a['lider'] ?? ''), (string)($b['lider'] ?? ''));
+        });
+
+        usort($rowsEstado, static function($a, $b) {
+            $cmpMinisterio = strcmp((string)($a['ministerio'] ?? ''), (string)($b['ministerio'] ?? ''));
+            if ($cmpMinisterio !== 0) {
+                return $cmpMinisterio;
+            }
+            return strcmp((string)($a['celula'] ?? ''), (string)($b['celula'] ?? ''));
+        });
+
+        return [
+            'seguimiento_lideres' => $rowsSeguimiento,
+            'estado_celulas' => $rowsEstado,
         ];
     }
 
@@ -1728,6 +1866,19 @@ class ReporteController extends BaseController {
         }
         unset($filaAsistenciaReporte);
 
+        $celulasSeguimientoBase = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas, $filtroMinisterio, $filtroLider);
+        if ($filtroCelula !== '') {
+            if ((string)$filtroCelula === '0') {
+                $celulasSeguimientoBase = [];
+            } else {
+                $idCelulaSeguimiento = (int)$filtroCelula;
+                $celulasSeguimientoBase = array_values(array_filter($celulasSeguimientoBase, static function($item) use ($idCelulaSeguimiento) {
+                    return (int)($item['Id_Celula'] ?? 0) === $idCelulaSeguimiento;
+                }));
+            }
+        }
+        $tablasSeguimientoCelulas = $this->construirTablasSeguimientoCelulas($celulasSeguimientoBase, $asistenciaCelulas, $fechaInicio);
+
         $filtroProgramaEscuelas = trim((string)($_GET['escuela_programa'] ?? ''));
         $filtroBusquedaEscuelas = trim((string)($_GET['escuela_buscar'] ?? ''));
         if (!in_array($filtroProgramaEscuelas, ['', 'universidad_vida', 'encuentro', 'bautismo', 'capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
@@ -1756,6 +1907,10 @@ class ReporteController extends BaseController {
 
         $resumenEscuelasInscripciones = $this->escuelaInscripcionModel->getResumenProgramas();
         $inscripcionesEscuelas = $this->escuelaInscripcionModel->getListado($filtroProgramaEscuelas, $filtroBusquedaEscuelas, 200);
+        $tablaEscuelasUvMinisterioGenero = $this->escuelaInscripcionModel->getResumenUvPorMinisterioGenero(
+            ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null,
+            ($filtroLider !== '' && (int)$filtroLider > 0) ? (int)$filtroLider : null
+        );
 
         $data = [
             'tipo_reporte' => $tipoReporte,
@@ -1787,6 +1942,8 @@ class ReporteController extends BaseController {
             'asistencia_celulas' => $asistenciaCelulas,
             'cumplimiento_metas' => $cumplimientoMetas,
             'indicadores_celulas' => $indicadoresCelulas,
+            'tabla_seguimiento_lideres_celula' => $tablasSeguimientoCelulas['seguimiento_lideres'] ?? [],
+            'tabla_estado_semanal_celulas' => $tablasSeguimientoCelulas['estado_celulas'] ?? [],
             'tabla_aperturas_celulas' => $tablaAperturasCelulas,
             'tabla_ganar_ministerio' => $tablaGanarMinisterio,
             'tarjetas_universidad_vida' => $tarjetasUniversidadVida,
@@ -1799,6 +1956,7 @@ class ReporteController extends BaseController {
             'reporte_escuelas_uv' => $reporteEscuelasUv,
             'resumen_escuelas_inscripciones' => $resumenEscuelasInscripciones,
             'inscripciones_escuelas' => $inscripcionesEscuelas,
+            'tabla_escuelas_uv_ministerio_genero' => $tablaEscuelasUvMinisterioGenero,
             'filtro_escuela_programa' => $filtroProgramaEscuelas,
             'filtro_escuela_buscar' => $filtroBusquedaEscuelas,
         ];
