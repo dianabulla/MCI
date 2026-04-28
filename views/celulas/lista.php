@@ -1,7 +1,10 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
-<div class="page-header">
-    <h2>Células</h2>
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+    <h2 style="margin:0;">Células</h2>
+    <?php if (AuthController::tienePermiso('celulas', 'crear')): ?>
+        <a href="<?= PUBLIC_URL ?>?url=celulas/crear" class="btn btn-primary">+ Nueva célula</a>
+    <?php endif; ?>
 </div>
 
 <div class="form-container" style="margin-bottom: 20px;">

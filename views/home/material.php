@@ -38,6 +38,26 @@ $tipo = (string)($tipo ?? '');
     .material-card:hover {
         transform: translateY(-3px);
         box-shadow: 0 10px 24px rgba(30, 56, 98, 0.16);
+        border-color: #b9d0ec;
+    }
+
+    .material-card:focus-visible {
+        outline: 0;
+        border-color: #1f5ea8;
+        box-shadow: 0 0 0 3px rgba(31, 94, 168, 0.18), 0 10px 24px rgba(30, 56, 98, 0.18);
+    }
+
+    .material-card.is-active {
+        border-color: #1f5ea8;
+        background: linear-gradient(180deg, #1f5ea8 0%, #1a518f 100%);
+        color: #ffffff;
+        box-shadow: 0 10px 24px rgba(23, 62, 110, 0.28);
+    }
+
+    .material-card.is-active .meta,
+    .material-card.is-active .total,
+    .material-card.is-active h3 {
+        color: #ffffff;
     }
 
     .material-card-top {
@@ -96,6 +116,7 @@ $tipo = (string)($tipo ?? '');
         <a
             href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars((string)($meta['ruta'] ?? 'home/material')) ?>"
             class="material-card"
+            data-material-card="<?= htmlspecialchars((string)$clave, ENT_QUOTES, 'UTF-8') ?>"
         >
             <div class="material-card-top">
                 <span class="material-card-icon" style="background: <?= htmlspecialchars((string)($meta['color'] ?? '#1e4a89')) ?>;">
@@ -112,5 +133,40 @@ $tipo = (string)($tipo ?? '');
 </div>
 
 <p class="material-tip">Selecciona una tarjeta para abrir su vista separada y gestionar los archivos de ese módulo.</p>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var storageKey = 'material_card_selected';
+    var cards = document.querySelectorAll('[data-material-card]');
+
+    function activarCard(cardId) {
+        cards.forEach(function(card) {
+            var id = card.getAttribute('data-material-card') || '';
+            card.classList.toggle('is-active', id === cardId);
+        });
+    }
+
+    try {
+        var selected = localStorage.getItem(storageKey) || '';
+        if (selected) {
+            activarCard(selected);
+        }
+    } catch (e) {
+        // Ignorar bloqueo de storage en navegadores restringidos.
+    }
+
+    cards.forEach(function(card) {
+        card.addEventListener('click', function() {
+            var id = card.getAttribute('data-material-card') || '';
+            activarCard(id);
+            try {
+                localStorage.setItem(storageKey, id);
+            } catch (e) {
+                // Ignorar bloqueo de storage en navegadores restringidos.
+            }
+        });
+    });
+});
+</script>
 
 <?php include VIEWS . '/layout/footer.php'; ?>

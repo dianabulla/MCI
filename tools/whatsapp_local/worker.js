@@ -234,7 +234,7 @@ async function obtenerPendientes(limit) {
      FROM whatsapp_local_queue
      WHERE estado = 'pendiente' AND intentos < ?
        AND (programado_en IS NULL OR programado_en <= NOW())
-     ORDER BY id ASC
+     ORDER BY CASE WHEN tipo_evento = 'felicitacion_cumpleanos' THEN 0 ELSE 1 END ASC, id ASC
      LIMIT ?`,
     [MAX_ATTEMPTS, limit]
   );

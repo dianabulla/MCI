@@ -33,6 +33,7 @@ $puedeVerMaterial = AuthController::esAdministrador()
     || AuthController::tienePermiso('eventos', 'ver');
 $puedeVerMinisterios = $puedeVer('ministerios');
 $puedeVerRegistroTeensKids = $puedeVer('teen');
+$puedeVerEventosMenu = AuthController::esAdministrador() || AuthController::tienePermiso('eventos', 'ver');
 
 $puedeVerPendientesGanar = $puedeVerGanar;
 $totalPendientesGanar = 0;
@@ -221,7 +222,7 @@ if ($puedeVerPendientesGanar) {
             </a>
             <?php endif; ?>
 
-            <?php if ($puedeVer('eventos')): ?>
+            <?php if ($puedeVerEventosMenu): ?>
             <a class="sidebar-link <?= $isActive(['eventos']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=eventos">
                 <span class="sidebar-link-icon"><i class="bi bi-calendar-event"></i></span><span class="sidebar-link-text">Eventos</span>
             </a>

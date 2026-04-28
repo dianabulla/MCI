@@ -68,7 +68,11 @@
 
         .media img,
         .media video {
+            width: 100%;
             max-width: 100%;
+            max-height: 520px;
+            object-fit: contain;
+            background: #0f172a;
             border-radius: 8px;
             border: 1px solid #e5e7eb;
             display: block;
@@ -105,6 +109,11 @@
             color: #fff;
         }
 
+        .btn-video {
+            background: #7c3aed;
+            color: #fff;
+        }
+
         .btn-copy {
             background: #e5e7eb;
             color: #111827;
@@ -121,8 +130,8 @@
 
         /* Tarjeta usada para convertir a imagen */
         .share-card {
-            width: 900px;
-            max-width: 900px;
+            width: 1080px;
+            max-width: 1080px;
             background: linear-gradient(180deg, #ffffff 0%, #f7fafc 100%);
             border-radius: 24px;
             overflow: hidden;
@@ -184,13 +193,17 @@
             overflow: hidden;
             background: #f3f4f6;
             border: 1px solid #e5e7eb;
+            aspect-ratio: 16 / 9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .share-card-image {
             width: 100%;
+            height: 100%;
             display: block;
-            object-fit: cover;
-            max-height: 820px;
+            object-fit: contain;
         }
 
         .share-card-footer {
@@ -204,7 +217,7 @@
             position: fixed;
             left: -99999px;
             top: 0;
-            width: 950px;
+            width: 1120px;
             padding: 20px;
             background: #ffffff;
             z-index: -1;
@@ -242,6 +255,9 @@
                     $imagenSrc = $imagenEvento !== ''
                         ? rtrim(PUBLIC_URL, '/') . '/uploads/eventos/' . rawurlencode($imagenEvento)
                         : '';
+                    $videoSrc = $videoEvento !== ''
+                        ? rtrim(PUBLIC_URL, '/') . '/uploads/eventos/' . rawurlencode($videoEvento)
+                        : '';
                 ?>
 
                 <article class="evento">
@@ -268,7 +284,7 @@
 
                             <?php if ($videoEvento !== ''): ?>
                                 <video controls preload="metadata">
-                                    <source src="<?= rtrim(PUBLIC_URL, '/') . '/uploads/eventos/' . rawurlencode($videoEvento) ?>">
+                                    <source src="<?= $videoSrc ?>">
                                     Tu navegador no soporta video HTML5.
                                 </video>
                             <?php endif; ?>
@@ -276,12 +292,38 @@
                     <?php endif; ?>
 
                     <div class="acciones">
+                        <?php if ($imagenEvento !== ''): ?>
+                            <a class="btn btn-download" href="<?= $imagenSrc ?>" download="evento-<?= $eventoId ?>-imagen" target="_blank" rel="noopener">
+                                Descargar imagen
+                            </a>
+
+                            <button
+                                type="button"
+                                class="btn btn-share"
+                                onclick="compartirArchivo('<?= htmlspecialchars($imagenSrc, ENT_QUOTES, 'UTF-8') ?>', 'evento-<?= $eventoId ?>-imagen.jpg', 'image/jpeg', 'imagen')">
+                                Compartir imagen
+                            </button>
+                        <?php endif; ?>
+
+                        <?php if ($videoEvento !== ''): ?>
+                            <a class="btn btn-download" href="<?= $videoSrc ?>" download="evento-<?= $eventoId ?>-video" target="_blank" rel="noopener">
+                                Descargar video
+                            </a>
+
+                            <button
+                                type="button"
+                                class="btn btn-video"
+                                onclick="compartirArchivo('<?= htmlspecialchars($videoSrc, ENT_QUOTES, 'UTF-8') ?>', 'evento-<?= $eventoId ?>-video.mp4', 'video/mp4', 'video')">
+                                Compartir video
+                            </button>
+                        <?php endif; ?>
+
                         <button type="button" class="btn btn-share" onclick="compartirImagenEvento(<?= $eventoId ?>)">
-                            Compartir imagen
+                            Compartir tarjeta
                         </button>
 
-                        <button type="button" class="btn btn-download" onclick="descargarImagenEvento(<?= $eventoId ?>)">
-                            Descargar imagen
+                        <button type="button" class="btn btn-copy" onclick="descargarImagenEvento(<?= $eventoId ?>)">
+                            Descargar tarjeta
                         </button>
                     </div>
                 </article>
@@ -403,6 +445,48 @@
                 alert('No se pudo compartir la imagen del evento.');
                 console.error(error);
             }
+        }
+
+        async function compartirArchivo(url, nombreArchivo, mimeType, tipo) {
+            try {
+                const response = await fetch(url, { credentials: 'same-origin' });
+                if (!response.ok) {
+                    throw new Error('No se pudo descargar el archivo para compartir.');
+                }
+
+                const blob = await response.blob();
+                const typeFinal = blob.type || mimeType || 'application/octet-stream';
+                const archivo = new File([blob], nombreArchivo, { type: typeFinal });
+
+                if (navigator.canShare && navigator.canShare({ files: [archivo] }) && navigator.share) {
+                    await navigator.share({
+                        files: [archivo],
+                        title: 'Evento',
+                        text: 'Te comparto este ' + (tipo || 'archivo')
+                    });
+                    return;
+                }
+
+                await descargarArchivo(blob, nombreArchivo);
+                alert('Tu navegador no permite compartir ' + (tipo || 'el archivo') + ' directamente. Se descargó para que lo envíes.');
+            } catch (error) {
+                if (error && error.name === 'AbortError') {
+                    return;
+                }
+                alert('No se pudo compartir ' + (tipo || 'el archivo') + '.');
+                console.error(error);
+            }
+        }
+
+        async function descargarArchivo(blob, nombreArchivo) {
+            const url = URL.createObjectURL(blob);
+            const enlace = document.createElement('a');
+            enlace.href = url;
+            enlace.download = nombreArchivo;
+            document.body.appendChild(enlace);
+            enlace.click();
+            document.body.removeChild(enlace);
+            URL.revokeObjectURL(url);
         }
     </script>
 </body>

@@ -1505,6 +1505,37 @@ class Persona extends BaseModel {
     }
 
     /**
+     * Obtener personas registradas desde el formulario público de Escuelas de Formación (Universidad de la Vida)
+     */
+    public function getPersonasUniversidadVida($filtroRol = '') {
+        $canalFormacion = 'Escuelas Formacion (Formulario publico)';
+        $where = [
+            "(p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)",
+            "p.Canal_Creacion = ?",
+        ];
+        $params = [$canalFormacion];
+
+        if (trim((string)$filtroRol) !== '') {
+            $where[] = '(' . $filtroRol . ')';
+        }
+
+        $sql = "SELECT p.*,
+                    c.Nombre_Celula,
+                    r.Nombre_Rol,
+                    m.Nombre_Ministerio,
+                    TRIM(CONCAT(COALESCE(lid.Nombre, ''), ' ', COALESCE(lid.Apellido, ''))) AS Nombre_Lider
+                FROM {$this->table} p
+                LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
+                LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
+                LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
+                LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
+                WHERE " . implode(' AND ', $where) . "
+                ORDER BY p.Fecha_Registro DESC, p.Id_Persona DESC";
+
+        return $this->query($sql, $params);
+    }
+
+    /**
      * Obtener personas con filtros y aislamiento de rol
      */
     public function getWithFiltersAndRole($filtroRol, $idMinisterio = null, $idLider = null, $soloGanar = false, $estadoCuenta = null, $idCelula = null, $proceso = null, $origen = null, $fechaInicioRegistro = null, $fechaFinRegistro = null) {

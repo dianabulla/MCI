@@ -2168,6 +2168,189 @@ class ReporteController extends BaseController {
         );
     }
 
+    public function dashboardGanar() {
+        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('reportes', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $anio = (int)($_GET['anio'] ?? date('Y'));
+        if ($anio < 2020 || $anio > ((int)date('Y') + 2)) {
+            $anio = (int)date('Y');
+        }
+
+        $filtroMinisterio = $_GET['ministerio'] ?? '';
+        $filtroLider      = $_GET['lider'] ?? '';
+
+        $filtroRol        = DataIsolation::generarFiltroPersonas();
+        $filtroCelulas    = DataIsolation::generarFiltroCelulas();
+        $filtroMinisterios = DataIsolation::generarFiltroMinisterios();
+
+        $opcionesFiltro = $this->construirOpcionesFiltroMinisterioLider($filtroCelulas);
+        $filtroMinisterio = ($filtroMinisterio !== '' && isset($opcionesFiltro['ministerio_ids_permitidos'][(int)$filtroMinisterio])) ? (int)$filtroMinisterio : '';
+        $filtroLider      = ($filtroLider !== '' && isset($opcionesFiltro['lider_ids_permitidos'][(int)$filtroLider])) ? (int)$filtroLider : '';
+
+        $fechaInicioAnio = sprintf('%04d-01-01', $anio);
+        $fechaFinAnio    = sprintf('%04d-12-31', $anio);
+
+        $idMinisterioFiltro = ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null;
+        $idLiderFiltro      = ($filtroLider !== '' && (int)$filtroLider > 0) ? (int)$filtroLider : null;
+
+        $personasAnio = $this->personaModel->getWithFiltersAndRole(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            null,
+            null,
+            null,
+            null,
+            null,
+            $fechaInicioAnio,
+            $fechaFinAnio
+        );
+
+        // Totales anuales por mes (para gráfica de tendencia)
+        $mesesLabels = [
+            1 => 'Ene', 2 => 'Feb', 3 => 'Mar', 4 => 'Abr',
+            5 => 'May', 6 => 'Jun', 7 => 'Jul', 8 => 'Ago',
+            9 => 'Sep', 10 => 'Oct', 11 => 'Nov', 12 => 'Dic'
+        ];
+        $gananciasMensuales = array_fill(1, 12, ['celula' => 0, 'iglesia' => 0, 'total' => 0]);
+
+        // Acumulado por ministerio
+        $porMinisterioMap = [];
+
+        // Datos por edades
+        $porEdades = ['Kids' => 0, 'Teens' => 0, 'Rocas' => 0, 'Jovenes' => 0, 'Adultos' => 0, 'Adultos_Mayores' => 0, 'Sin_Dato' => 0];
+
+        foreach ($personasAnio as $persona) {
+            if (!$this->esPersonaNueva($persona)) {
+                continue;
+            }
+            $fechaYmd = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
+            $ts = strtotime($fechaYmd);
+            if ($ts === false || (int)date('Y', $ts) !== $anio) {
+                continue;
+            }
+            $mes    = (int)date('n', $ts);
+            $origen = $this->clasificarOrigenGanar($persona);
+            $col    = ($origen === 'celula') ? 'celula' : 'iglesia';
+            $gananciasMensuales[$mes][$col]++;
+            $gananciasMensuales[$mes]['total']++;
+
+            $ministerio = trim((string)($persona['Nombre_Ministerio'] ?? '')) ?: 'Sin ministerio';
+            if (!isset($porMinisterioMap[$ministerio])) {
+                $porMinisterioMap[$ministerio] = ['nombre' => $ministerio, 'total' => 0, 'celula' => 0, 'iglesia' => 0];
+            }
+            $porMinisterioMap[$ministerio]['total']++;
+            $porMinisterioMap[$ministerio][$col]++;
+
+            // Edades
+            $edad = (int)($persona['Edad'] ?? 0);
+            if ($edad >= 3 && $edad <= 8) {
+                $porEdades['Kids']++;
+            } elseif ($edad >= 9 && $edad <= 12) {
+                $porEdades['Teens']++;
+            } elseif ($edad >= 13 && $edad <= 17) {
+                $porEdades['Rocas']++;
+            } elseif ($edad >= 18 && $edad <= 30) {
+                $porEdades['Jovenes']++;
+            } elseif ($edad >= 31 && $edad <= 59) {
+                $porEdades['Adultos']++;
+            } elseif ($edad >= 60) {
+                $porEdades['Adultos_Mayores']++;
+            } else {
+                $porEdades['Sin_Dato']++;
+            }
+        }
+
+        // Totales semestrales
+        $totalS1 = 0;
+        $totalS2 = 0;
+        $totalAnual = 0;
+        for ($m = 1; $m <= 12; $m++) {
+            $t = (int)$gananciasMensuales[$m]['total'];
+            $totalAnual += $t;
+            if ($m <= 6) {
+                $totalS1 += $t;
+            } else {
+                $totalS2 += $t;
+            }
+        }
+
+        // Semáforo: Verde 121-180, Amarillo 61-120, Rojo 1-60
+        // Se aplica al total de cada semestre y al total anual
+        $semaforoFn = static function(int $valor): string {
+            if ($valor >= 121) {
+                return 'verde';
+            }
+            if ($valor >= 61) {
+                return 'amarillo';
+            }
+            return 'rojo';
+        };
+
+        $mesActual = (int)date('n');
+        $mesesTranscurridosS1 = min(6, max(1, $mesActual));
+        $mesesTranscurridosS2 = max(0, $mesActual - 6);
+
+        // Cumplimiento de metas (semestre actual)
+        $cumplimientoMetas = $this->construirTablaCumplimientoMetas(
+            date('Y-m-d'),
+            $filtroRol,
+            $filtroMinisterios,
+            $filtroMinisterio,
+            $filtroLider,
+            ''
+        );
+
+        // Semáforo por ministerio: % de meta cumplida
+        $porMinisterioConMeta = [];
+        foreach ($cumplimientoMetas['rows'] ?? [] as $rowMeta) {
+            $nombre    = (string)($rowMeta['ministerio'] ?? '');
+            $meta      = (int)($rowMeta['meta'] ?? 0);
+            $ganados   = (int)($rowMeta['ganados'] ?? 0);
+            $pct       = $meta > 0 ? (int)round(($ganados / $meta) * 100) : 0;
+            if ($pct >= 75) {
+                $semaforo = 'verde';
+            } elseif ($pct >= 40) {
+                $semaforo = 'amarillo';
+            } else {
+                $semaforo = 'rojo';
+            }
+            $porMinisterioConMeta[] = [
+                'ministerio' => $nombre,
+                'meta'       => $meta,
+                'ganados'    => $ganados,
+                'pendiente'  => (int)($rowMeta['pendiente'] ?? 0),
+                'pct'        => $pct,
+                'semaforo'   => $semaforo,
+            ];
+        }
+
+        arsort($porMinisterioMap);
+
+        $this->view('reportes/dashboard_ganar', [
+            'anio'                   => $anio,
+            'filtro_ministerio'      => (string)$filtroMinisterio,
+            'filtro_lider'           => (string)$filtroLider,
+            'ministerios_disponibles' => $opcionesFiltro['ministerios_disponibles'],
+            'lideres_disponibles'    => $opcionesFiltro['lideres_disponibles'],
+            'meses_labels'           => $mesesLabels,
+            'ganancias_mensuales'    => $gananciasMensuales,
+            'por_ministerio'         => array_values($porMinisterioMap),
+            'por_edades'             => $porEdades,
+            'total_s1'               => $totalS1,
+            'total_s2'               => $totalS2,
+            'total_anual'            => $totalAnual,
+            'semaforo_s1'            => $semaforoFn($totalS1),
+            'semaforo_s2'            => $semaforoFn($totalS2),
+            'semaforo_anual'         => $semaforoFn($totalAnual),
+            'cumplimiento_metas'     => $cumplimientoMetas,
+            'ministerios_con_meta'   => $porMinisterioConMeta,
+        ]);
+    }
+
     public function almasGanadas() {
         $fechaInicio = $_GET['fecha_inicio'] ?? date('Y-m-01');
         $fechaFin = $_GET['fecha_fin'] ?? date('Y-m-t');

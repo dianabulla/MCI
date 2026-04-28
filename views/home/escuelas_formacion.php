@@ -36,8 +36,7 @@ if ($filtroGenero !== '' && $filtroGenero !== 'todos') { $filtrosActivos++; }
         </div>
         <div class="action-group">
             <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/codigos" class="action-pill" target="_blank" rel="noopener">Códigos QR</a>
-            <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico" class="action-pill" target="_blank" rel="noopener">Formulario público</a>
-            <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/asistencia-publica" class="action-pill" target="_blank" rel="noopener">Asistencia pública</a>
+            <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico" class="action-pill" target="_blank" rel="noopener">Registro / Asistencia</a>
             <a href="<?= PUBLIC_URL ?>?url=home" class="action-pill">Volver al panel</a>
         </div>
     </div>

@@ -13,6 +13,10 @@ $color = (string)($modulo['color'] ?? '#1e4a89');
 $icono = (string)($modulo['icono'] ?? 'bi bi-journal-bookmark-fill');
 $clave = (string)($modulo['clave'] ?? '');
 $tieneSubmodulos = !empty($tiene_submodulos);
+$esCapacitacionDestino = $clave === 'capacitacion_destino';
+$esUniversidadVida = $clave === 'universidad_vida';
+$usaTarjetasTipoMaterial = $esCapacitacionDestino || $esUniversidadVida;
+$configCapacitacionDestino = (array)($config_capacitacion_destino ?? []);
 $rutaDetalleVistas = PUBLIC_URL . '?url=home/material/detalle-vistas&modulo=' . rawurlencode($clave);
 
 $temasClase = [];
@@ -177,6 +181,370 @@ if ($tieneSubmodulos) {
     .submodulo-body .data-table td.col-acciones {
         width: 300px;
     }
+
+    .cap-destino-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 12px;
+    }
+
+    .cap-destino-grid .submodulo-wrap {
+        margin-bottom: 0;
+    }
+
+    .cap-destino-main-switch {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .cap-main-tab {
+        border: 1px solid #dbe6f5;
+        border-radius: 14px;
+        padding: 12px 14px;
+        background: linear-gradient(180deg, #f7fbff 0%, #eef4ff 100%);
+        color: #2f4f78;
+        font-weight: 700;
+        text-align: left;
+        cursor: pointer;
+        transition: all .16s ease;
+    }
+
+    .cap-main-tab small {
+        display: block;
+        margin-top: 4px;
+        font-weight: 500;
+        color: #5f7596;
+    }
+
+    .cap-main-tab:hover {
+        border-color: #bfd3ee;
+        transform: translateY(-1px);
+    }
+
+    .cap-main-tab.is-active {
+        border-color: #1f5ea8;
+        background: linear-gradient(180deg, #1f5ea8 0%, #1a518f 100%);
+        color: #fff;
+        box-shadow: 0 6px 18px rgba(23, 62, 110, 0.25);
+    }
+
+    .cap-main-tab.is-active small {
+        color: #dbe8ff;
+    }
+
+    .cap-destino-grid .submodulo-title {
+        font-size: 15px;
+    }
+
+    .cap-entry-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 14px;
+        margin-bottom: 16px;
+    }
+
+    .cap-entry-card {
+        border: 1px solid #d6e3f4;
+        border-radius: 16px;
+        padding: 16px;
+        background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+        box-shadow: 0 10px 20px rgba(22, 63, 110, 0.08);
+        cursor: pointer;
+    }
+
+    .cap-entry-card:hover {
+        border-color: #b9d0ec;
+        transform: translateY(-1px);
+    }
+
+    .cap-entry-card.is-active {
+        border-color: #1f5ea8;
+        background: linear-gradient(180deg, #1f5ea8 0%, #1a518f 100%);
+        box-shadow: 0 8px 20px rgba(23, 62, 110, 0.28);
+    }
+
+    .cap-entry-card.is-active h4,
+    .cap-entry-card.is-active p {
+        color: #ffffff;
+    }
+
+    .cap-entry-card h4 {
+        margin: 0 0 6px 0;
+        color: #1f4d84;
+    }
+
+    .cap-entry-card p {
+        margin: 0;
+        color: #617694;
+        font-size: 13px;
+    }
+
+    .cap-panel {
+        display: none;
+        margin-top: 12px;
+    }
+
+    .cap-panel.is-open {
+        display: block;
+    }
+
+    .cap-destino-grid .submodulo-wrap {
+        margin-bottom: 10px;
+    }
+
+    .cap-destino-grid .submodulo-head {
+        cursor: pointer;
+    }
+
+    .cap-destino-grid .submodulo-body {
+        display: none;
+    }
+
+    .cap-destino-grid .submodulo-wrap.is-selected {
+        border-color: #1f5ea8;
+        box-shadow: 0 6px 14px rgba(23, 62, 110, 0.16);
+    }
+
+    .cap-destino-grid .submodulo-wrap.is-selected .submodulo-head {
+        background: linear-gradient(180deg, #eef5ff 0%, #f8fbff 100%);
+    }
+
+    .cap-detail-view {
+        margin-top: 14px;
+        border: 1px solid #dbe6f5;
+        border-radius: 12px;
+        background: #fff;
+        overflow: hidden;
+    }
+
+    .cap-detail-view.is-hidden {
+        display: none;
+    }
+
+    .cap-detail-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-bottom: 1px solid #e6eef9;
+        background: #f7fbff;
+    }
+
+    .cap-detail-header h4 {
+        margin: 0;
+        color: #274f81;
+        font-size: 15px;
+    }
+
+    .cap-detail-header small {
+        color: #60758f;
+        font-weight: 600;
+    }
+
+    .cap-detail-body {
+        padding: 10px;
+    }
+
+    .material-gallery-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1200;
+        display: none;
+        background: rgba(8, 14, 27, 0.92);
+        backdrop-filter: blur(4px);
+    }
+
+    .material-gallery-modal.is-open {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .material-gallery-shell {
+        width: min(1200px, 100%);
+        max-height: calc(100vh - 40px);
+        background: linear-gradient(180deg, #0f1b30 0%, #132645 100%);
+        border: 1px solid rgba(190, 210, 240, 0.16);
+        border-radius: 20px;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .material-gallery-topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 18px;
+        border-bottom: 1px solid rgba(190, 210, 240, 0.12);
+        color: #f4f8ff;
+    }
+
+    .material-gallery-topbar h3 {
+        margin: 0;
+        font-size: 18px;
+    }
+
+    .material-gallery-topbar small {
+        display: block;
+        color: #bdd0ec;
+        margin-top: 4px;
+    }
+
+    .material-gallery-close {
+        border: 0;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        width: 38px;
+        height: 38px;
+        font-size: 20px;
+        cursor: pointer;
+    }
+
+    .material-gallery-stage {
+        display: grid;
+        grid-template-columns: 68px minmax(0, 1fr) 68px;
+        align-items: stretch;
+        gap: 8px;
+        padding: 14px 16px 10px;
+        min-height: 0;
+        flex: 1;
+    }
+
+    .material-gallery-nav {
+        border: 0;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+        font-size: 28px;
+        cursor: pointer;
+        transition: background .15s ease;
+    }
+
+    .material-gallery-nav:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.14);
+    }
+
+    .material-gallery-nav:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+
+    .material-gallery-figure {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .material-gallery-frame {
+        flex: 1;
+        min-height: 360px;
+        max-height: calc(100vh - 240px);
+        border-radius: 18px;
+        overflow: hidden;
+        background: rgba(2, 8, 18, 0.78);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .material-gallery-frame img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #0a1220;
+    }
+
+    .material-gallery-caption {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        color: #e8f0fc;
+        font-size: 14px;
+    }
+
+    .material-gallery-caption strong {
+        display: block;
+        font-size: 15px;
+    }
+
+    .material-gallery-caption a {
+        color: #8ec5ff;
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    .material-gallery-caption a:hover {
+        text-decoration: underline;
+    }
+
+    .material-gallery-thumbs {
+        display: flex;
+        gap: 10px;
+        padding: 0 16px 16px;
+        overflow-x: auto;
+    }
+
+    .material-gallery-thumb {
+        border: 2px solid transparent;
+        border-radius: 12px;
+        padding: 0;
+        background: transparent;
+        cursor: pointer;
+        overflow: hidden;
+        width: 92px;
+        min-width: 92px;
+        height: 66px;
+        opacity: 0.7;
+    }
+
+    .material-gallery-thumb.is-active {
+        border-color: #7fc2ff;
+        opacity: 1;
+        box-shadow: 0 0 0 3px rgba(127, 194, 255, 0.16);
+    }
+
+    .material-gallery-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    @media (max-width: 768px) {
+        .material-gallery-modal.is-open {
+            padding: 10px;
+        }
+
+        .material-gallery-shell {
+            max-height: calc(100vh - 20px);
+        }
+
+        .material-gallery-stage {
+            grid-template-columns: 48px minmax(0, 1fr) 48px;
+            padding: 10px;
+        }
+
+        .material-gallery-frame {
+            min-height: 240px;
+            max-height: calc(100vh - 260px);
+        }
+
+        .material-gallery-caption {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
 </style>
 
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
@@ -228,6 +596,24 @@ if ($tieneSubmodulos) {
                 </select>
             </div>
         <?php endif; ?>
+        <?php if ($esCapacitacionDestino): ?>
+            <div class="form-group" style="margin-bottom: 12px;">
+                <label for="nivel">Nivel</label>
+                <select id="nivel" name="nivel" class="form-control" required>
+                    <option value="1">Nivel 1</option>
+                    <option value="2">Nivel 2</option>
+                    <option value="3">Nivel 3</option>
+                </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 12px;">
+                <label for="modulo_numero">Módulo</label>
+                <select id="modulo_numero" name="modulo_numero" class="form-control" required>
+                    <option value="1">Módulo 1</option>
+                    <option value="2">Módulo 2</option>
+                </select>
+            </div>
+        <?php endif; ?>
         <div class="form-group" style="margin-bottom: 12px;">
             <label for="material_pdf">Archivo(s)</label>
             <input type="file" id="material_pdf" name="material_pdf[]" class="form-control" multiple required>
@@ -238,10 +624,25 @@ if ($tieneSubmodulos) {
 </div>
 <?php endif; ?>
 
+<?php if ($usaTarjetasTipoMaterial): ?>
+<div class="cap-entry-grid">
+    <article class="cap-entry-card js-open-cap-modal" data-target="clase" role="button" tabindex="0" aria-label="Abrir Material clase">
+        <h4>Material clase</h4>
+        <p>Haz clic para ver en esta misma pantalla el contenido de clase.</p>
+    </article>
+    <article class="cap-entry-card js-open-cap-modal" data-target="profesor" role="button" tabindex="0" aria-label="Abrir Material profesor">
+        <h4>Material profesor</h4>
+        <p>Haz clic para ver en esta misma pantalla el contenido para profesor.</p>
+    </article>
+</div>
+
+<div id="cap-inline-panel" class="cap-panel" aria-hidden="true">
+<?php endif; ?>
+
 <div class="card" style="padding:14px;">
     <h3 style="margin-top:0;">Módulos de material</h3>
 
-    <?php if ($tieneSubmodulos): ?>
+    <?php if ($tieneSubmodulos && !$usaTarjetasTipoMaterial): ?>
         <div class="submodulo-tabs" role="tablist" aria-label="Submódulos de material">
             <button type="button" class="submodulo-tab is-active js-submodulo-tab" data-target="submodulo-panel-clase" role="tab" aria-selected="true">Material clase</button>
             <button type="button" class="submodulo-tab js-submodulo-tab" data-target="submodulo-panel-profesor" role="tab" aria-selected="false">Material profesor</button>
@@ -250,36 +651,91 @@ if ($tieneSubmodulos) {
 
     <?php if (!empty($temas)): ?>
         <?php
-            $bloques = $tieneSubmodulos
-                ? [
-                    ['titulo' => 'Material clase', 'temas' => $temasClase],
-                    ['titulo' => 'Material profesor', 'temas' => $temasProfesor],
-                ]
-                : [
-                    ['titulo' => 'Temas', 'temas' => $temas],
+            if ($tieneSubmodulos && $esCapacitacionDestino) {
+                $bloques = [];
+                $colecciones = [
+                    ['categoria' => 'clase', 'titulo' => 'Material clase', 'temas' => $temasClase],
+                    ['categoria' => 'profesor', 'titulo' => 'Material profesor', 'temas' => $temasProfesor],
                 ];
+
+                foreach ($colecciones as $coleccionTmp) {
+                    foreach ($configCapacitacionDestino as $nivelTmp => $modulosTmp) {
+                        foreach ((array)$modulosTmp as $moduloTmp) {
+                            $temasBloqueTmp = array_values(array_filter((array)$coleccionTmp['temas'], static function($temaTmp) use ($nivelTmp, $moduloTmp) {
+                                return (int)($temaTmp['nivel'] ?? 0) === (int)$nivelTmp
+                                    && (int)($temaTmp['modulo_numero'] ?? 0) === (int)$moduloTmp;
+                            }));
+
+                            $bloques[] = [
+                                'titulo' => 'Nivel ' . (int)$nivelTmp . ' / Módulo ' . (int)$moduloTmp,
+                                'temas' => $temasBloqueTmp,
+                                'nivel' => (int)$nivelTmp,
+                                'modulo_numero' => (int)$moduloTmp,
+                                'categoria' => (string)$coleccionTmp['categoria'],
+                            ];
+                        }
+                    }
+                }
+            } elseif ($tieneSubmodulos && $usaTarjetasTipoMaterial) {
+                $bloques = [
+                    ['titulo' => 'Material clase',    'temas' => $temasClase,    'categoria' => 'clase'],
+                    ['titulo' => 'Material profesor', 'temas' => $temasProfesor, 'categoria' => 'profesor'],
+                ];
+            } else {
+                $bloques = $tieneSubmodulos
+                    ? [
+                        ['titulo' => 'Material clase',    'temas' => $temasClase],
+                        ['titulo' => 'Material profesor', 'temas' => $temasProfesor],
+                    ]
+                    : [
+                        ['titulo' => 'Temas', 'temas' => $temas],
+                    ];
+            }
         ?>
+
+        <?php if ($usaTarjetasTipoMaterial): ?><div class="cap-destino-grid"><?php endif; ?>
 
         <?php foreach ($bloques as $bloqueIndex => $bloque): ?>
             <?php
                 $tituloBloque = (string)($bloque['titulo'] ?? 'Temas');
                 $claseCssBloque = 'submodulo-wrap';
-                $panelIdBloque = '';
+                $panelIdBloque = 'submodulo-panel-' . $bloqueIndex;
+
                 if (stripos($tituloBloque, 'profesor') !== false) {
                     $claseCssBloque .= ' submodulo-profesor';
-                    $panelIdBloque = 'submodulo-panel-profesor';
+                    if (!$usaTarjetasTipoMaterial) {
+                        $panelIdBloque = 'submodulo-panel-profesor';
+                    }
                 } elseif (stripos($tituloBloque, 'clase') !== false) {
                     $claseCssBloque .= ' submodulo-clase';
-                    $panelIdBloque = 'submodulo-panel-clase';
+                    if (!$usaTarjetasTipoMaterial) {
+                        $panelIdBloque = 'submodulo-panel-clase';
+                    }
                 }
                 $totalTemasBloque = count((array)($bloque['temas'] ?? []));
 
-                if ($tieneSubmodulos && $panelIdBloque === 'submodulo-panel-profesor') {
+                if ($tieneSubmodulos && !$usaTarjetasTipoMaterial && $panelIdBloque === 'submodulo-panel-profesor') {
                     $claseCssBloque .= ' is-hidden';
                 }
             ?>
 
-            <div id="<?= htmlspecialchars($panelIdBloque, ENT_QUOTES, 'UTF-8') ?>" class="<?= htmlspecialchars($claseCssBloque, ENT_QUOTES, 'UTF-8') ?>" role="tabpanel">
+            <?php
+                $categoriaBloque = strtolower(trim((string)($bloque['categoria'] ?? 'general')));
+                if ($categoriaBloque === '') {
+                    $categoriaBloque = 'general';
+                }
+                if ($usaTarjetasTipoMaterial) {
+                    $claseCssBloque .= ' is-hidden';
+                }
+            ?>
+
+            <div
+                id="<?= htmlspecialchars($panelIdBloque, ENT_QUOTES, 'UTF-8') ?>"
+                class="<?= htmlspecialchars($claseCssBloque, ENT_QUOTES, 'UTF-8') ?> js-cap-block"
+                data-cap-categoria="<?= htmlspecialchars($categoriaBloque, ENT_QUOTES, 'UTF-8') ?>"
+                data-cap-titulo="<?= htmlspecialchars($tituloBloque, ENT_QUOTES, 'UTF-8') ?>"
+                data-cap-total="<?= (int)$totalTemasBloque ?>"
+                role="tabpanel">
                 <div class="submodulo-head">
                     <h4 class="submodulo-title"><?= htmlspecialchars($tituloBloque) ?></h4>
                     <span class="submodulo-meta"><?= (int)$totalTemasBloque ?> tema(s)</span>
@@ -307,6 +763,24 @@ if ($tieneSubmodulos) {
                                 $temaAgregarArchivosId = 'tema-add-files-' . $bloqueIndex . '-' . $index;
                                 $archivosTema = (array)($tema['archivos'] ?? []);
                                 $categoriaTema = strtolower(trim((string)($tema['categoria'] ?? 'general')));
+                                $imagenesTema = [];
+                                foreach ($archivosTema as $archivoTemaGaleria) {
+                                    $nombreGaleria = (string)($archivoTemaGaleria['nombre'] ?? '');
+                                    $extGaleria = strtolower((string)pathinfo($nombreGaleria, PATHINFO_EXTENSION));
+                                    if (!in_array($extGaleria, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+                                        continue;
+                                    }
+
+                                    $imagenesTema[] = [
+                                        'src' => rtrim(PUBLIC_URL, '/') . '/uploads/material_hub/' . rawurlencode($clave) . '/' . rawurlencode($nombreGaleria),
+                                        'nombre' => $nombreGaleria,
+                                        'abrir' => (string)($archivoTemaGaleria['url'] ?? '#'),
+                                    ];
+                                }
+                                $imagenesTemaJson = json_encode($imagenesTema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                                if ($imagenesTemaJson === false) {
+                                    $imagenesTemaJson = '[]';
+                                }
                                 ?>
                                 <tr>
                                     <td class="col-titulo" title="<?= htmlspecialchars((string)($tema['titulo'] ?? 'Tema de material'), ENT_QUOTES, 'UTF-8') ?>"><strong><?= htmlspecialchars((string)($tema['titulo'] ?? 'Tema de material')) ?></strong></td>
@@ -314,12 +788,6 @@ if ($tieneSubmodulos) {
                                     <td class="col-descripcion" title="<?= htmlspecialchars($descripcionTema, ENT_QUOTES, 'UTF-8') ?>">
                                         <span class="descripcion-cell">
                                             <span class="descripcion-preview"><?= htmlspecialchars($descripcionTema) ?></span>
-                                            <button
-                                                type="button"
-                                                class="btn-link-compact js-leer-descripcion"
-                                                data-titulo="<?= htmlspecialchars((string)($tema['titulo'] ?? 'Tema de material'), ENT_QUOTES, 'UTF-8') ?>"
-                                                data-descripcion="<?= htmlspecialchars($descripcionTema, ENT_QUOTES, 'UTF-8') ?>"
-                                            >Leer más</button>
                                         </span>
                                     </td>
                                     <td><?= (int)($tema['total_archivos'] ?? 0) ?></td>
@@ -332,6 +800,11 @@ if ($tieneSubmodulos) {
                                     </td>
                                     <td class="col-acciones" style="display:flex; gap:8px; flex-wrap:wrap;">
                                         <button type="button" class="btn btn-sm btn-secondary js-toggle-tema" data-target="<?= htmlspecialchars($temaId, ENT_QUOTES, 'UTF-8') ?>">Ver archivos</button>
+                                        <?php if (!empty($imagenesTema)): ?>
+                                            <button type="button" class="btn btn-sm btn-warning js-abrir-galeria-tema"
+                                                data-tema="<?= htmlspecialchars((string)($tema['titulo'] ?? 'Tema de material'), ENT_QUOTES, 'UTF-8') ?>"
+                                                data-images='<?= htmlspecialchars($imagenesTemaJson, ENT_QUOTES, 'UTF-8') ?>'>Presentar</button>
+                                        <?php endif; ?>
                                         <button type="button" class="btn btn-sm btn-info js-ver-vistas" data-lote="<?= htmlspecialchars((string)($tema['lote_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">Ver quién vio</button>
                                         <?php if ($puedeGestionar): ?>
                                             <button type="button" class="btn btn-sm btn-success js-toggle-agregar-archivos" data-target="<?= htmlspecialchars($temaAgregarArchivosId, ENT_QUOTES, 'UTF-8') ?>">Agregar archivos</button>
@@ -373,6 +846,29 @@ if ($tieneSubmodulos) {
                                                     <input type="hidden" name="categoria" value="general">
                                                 <?php endif; ?>
 
+                                                <?php if ($esCapacitacionDestino): ?>
+                                                    <?php
+                                                        $nivelTemaEdit = (int)($tema['nivel'] ?? 0);
+                                                        $nivelTemaEdit = in_array($nivelTemaEdit, [1, 2, 3], true) ? $nivelTemaEdit : 1;
+                                                        $moduloTemaEdit = (int)($tema['modulo_numero'] ?? 0);
+                                                    ?>
+                                                    <div>
+                                                        <label style="font-size:12px; color:#576b86;">Nivel</label>
+                                                        <select name="nivel" class="form-control js-cap-destino-nivel">
+                                                            <option value="1" <?= $nivelTemaEdit === 1 ? 'selected' : '' ?>>Nivel 1</option>
+                                                            <option value="2" <?= $nivelTemaEdit === 2 ? 'selected' : '' ?>>Nivel 2</option>
+                                                            <option value="3" <?= $nivelTemaEdit === 3 ? 'selected' : '' ?>>Nivel 3</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label style="font-size:12px; color:#576b86;">Módulo</label>
+                                                        <select name="modulo_numero" class="form-control js-cap-destino-modulo" data-selected="<?= (int)$moduloTemaEdit ?>"></select>
+                                                    </div>
+                                                <?php else: ?>
+                                                    <input type="hidden" name="nivel" value="0">
+                                                    <input type="hidden" name="modulo_numero" value="0">
+                                                <?php endif; ?>
+
                                                 <div>
                                                     <button type="submit" class="btn btn-sm btn-primary">Guardar cambios</button>
                                                 </div>
@@ -407,7 +903,7 @@ if ($tieneSubmodulos) {
                                     <td colspan="6">
                                         <?php if (!empty($archivosTema)): ?>
                                             <div style="display:flex; flex-wrap:wrap; gap:12px;">
-                                                <?php foreach ($archivosTema as $archivo): ?>
+                                                <?php foreach ($archivosTema as $indexArchivoActual => $archivo): ?>
                                                     <?php
                                                     $nombreArchivo = (string)($archivo['nombre'] ?? '');
                                                     $extArchivo = strtolower(pathinfo($nombreArchivo, PATHINFO_EXTENSION));
@@ -416,6 +912,16 @@ if ($tieneSubmodulos) {
                                                     $esImagen = in_array($extArchivo, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
                                                     $esVideo  = in_array($extArchivo, ['mp4', 'webm', 'mov']);
                                                     $esPdf    = $extArchivo === 'pdf';
+                                                    $indexImagenEnTema = 0;
+                                                    if ($esImagen) {
+                                                        foreach ($archivosTema as $i => $arch) {
+                                                            if ($i >= $indexArchivoActual) break;
+                                                            $extArch = strtolower((string)pathinfo((string)($arch['nombre'] ?? ''), PATHINFO_EXTENSION));
+                                                            if (in_array($extArch, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+                                                                $indexImagenEnTema++;
+                                                            }
+                                                        }
+                                                    }
                                                     // Iconos por tipo para archivos no previsualizable
                                                     $iconosExt = ['docx'=>'bi-file-word','doc'=>'bi-file-word','xlsx'=>'bi-file-excel','xls'=>'bi-file-excel','pptx'=>'bi-file-ppt','ppt'=>'bi-file-ppt','zip'=>'bi-file-zip','rar'=>'bi-file-zip','mp3'=>'bi-file-music','wav'=>'bi-file-music'];
                                                     $iconoCls = $iconosExt[$extArchivo] ?? 'bi-file-earmark';
@@ -453,7 +959,15 @@ if ($tieneSubmodulos) {
                                                             </div>
                                                             <div style="font-size:11px; color:#8a9bb5;"><?= number_format((float)($archivo['peso_kb'] ?? 0), 1) ?> KB</div>
                                                             <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:auto;">
-                                                                <a href="<?= $urlVerArchivo ?>" target="_blank" class="btn btn-sm btn-success" style="font-size:11px; padding:3px 8px;">Abrir</a>
+                                                                <?php if ($esImagen): ?>
+                                                                    <button type="button" class="btn btn-sm btn-success js-abrir-galeria-desde-archivo"
+                                                                        data-tema="<?= htmlspecialchars((string)($tema['titulo'] ?? 'Tema de material'), ENT_QUOTES, 'UTF-8') ?>"
+                                                                        data-images='<?= htmlspecialchars($imagenesTemaJson, ENT_QUOTES, 'UTF-8') ?>'
+                                                                        data-index="<?= (int)$indexImagenEnTema ?>"
+                                                                        style="font-size:11px; padding:3px 8px;">Abrir</button>
+                                                                <?php else: ?>
+                                                                    <a href="<?= $urlVerArchivo ?>" target="_blank" class="btn btn-sm btn-success" style="font-size:11px; padding:3px 8px;">Abrir</a>
+                                                                <?php endif; ?>
                                                                 <?php if ($puedeGestionar): ?>
                                                                     <form method="POST" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>" onsubmit="return confirm('¿Eliminar este archivo?');" style="margin:0;">
                                                                         <input type="hidden" name="accion" value="eliminar">
@@ -484,10 +998,24 @@ if ($tieneSubmodulos) {
                 </div>
             </div>
         <?php endforeach; ?>
+
+        <?php if ($usaTarjetasTipoMaterial): ?></div>
+            <div id="cap-detail-view" class="cap-detail-view is-hidden" aria-live="polite">
+                <div class="cap-detail-header">
+                    <h4 id="cap-detail-title">Selecciona una categoría de material</h4>
+                    <small id="cap-detail-meta"></small>
+                </div>
+                <div id="cap-detail-body" class="cap-detail-body"></div>
+            </div>
+        <?php endif; ?>
     <?php else: ?>
         <p style="margin:0; color:#666;">No hay temas cargados en este módulo.</p>
     <?php endif; ?>
 </div>
+
+<?php if ($usaTarjetasTipoMaterial): ?>
+</div>
+<?php endif; ?>
 
 <form id="form-eliminar-tema" method="POST" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>" style="display:none;">
     <input type="hidden" name="accion" value="eliminar_tema">
@@ -532,25 +1060,254 @@ if ($tieneSubmodulos) {
     </div>
 </div>
 
-<div id="modal-descripcion-material"    <div style="background:white; margin:40px auto; padding:24px; border-radius:8px; max-width:720px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px;">
-            <h3 id="modal-descripcion-titulo" style="margin:0;">Descripción</h3>
-            <button type="button" class="btn btn-sm" id="modal-descripcion-cerrar" style="padding:5px 10px;">x</button>
+<div id="material-gallery-modal" class="material-gallery-modal" aria-hidden="true">
+    <div class="material-gallery-shell" role="dialog" aria-modal="true" aria-labelledby="material-gallery-title">
+        <div class="material-gallery-topbar">
+            <div>
+                <h3 id="material-gallery-title">Presentación de imágenes</h3>
+                <small id="material-gallery-counter">0 / 0</small>
+            </div>
+            <button type="button" class="material-gallery-close" id="material-gallery-close" aria-label="Cerrar presentación">×</button>
         </div>
-        <div id="modal-descripcion-texto" style="white-space:pre-wrap; color:#2c3e55; line-height:1.45;"></div>
+        <div class="material-gallery-stage">
+            <button type="button" class="material-gallery-nav" id="material-gallery-prev" aria-label="Imagen anterior">‹</button>
+            <div class="material-gallery-figure">
+                <div class="material-gallery-frame">
+                    <img id="material-gallery-image" src="" alt="">
+                </div>
+                <div class="material-gallery-caption">
+                    <div>
+                        <strong id="material-gallery-name">Imagen</strong>
+                        <span id="material-gallery-help">Usa las flechas del teclado o las miniaturas para navegar.</span>
+                    </div>
+                    <a id="material-gallery-open" href="#" target="_blank" rel="noopener">Abrir archivo</a>
+                </div>
+            </div>
+            <button type="button" class="material-gallery-nav" id="material-gallery-next" aria-label="Imagen siguiente">›</button>
+        </div>
+        <div id="material-gallery-thumbs" class="material-gallery-thumbs"></div>
     </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    var configCapDestino = <?= json_encode($configCapacitacionDestino, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+
+    function poblarModulosCapDestino(selectNivel, selectModulo) {
+        if (!selectNivel || !selectModulo) {
+            return;
+        }
+
+        var nivel = String(selectNivel.value || '1');
+        var modulos = configCapDestino[nivel] || [];
+        var seleccionadoPrevio = String(selectModulo.getAttribute('data-selected') || selectModulo.value || '');
+
+        selectModulo.innerHTML = '';
+        modulos.forEach(function(moduloNumero) {
+            var opt = document.createElement('option');
+            opt.value = String(moduloNumero);
+            opt.textContent = 'Módulo ' + String(moduloNumero);
+            if (String(moduloNumero) === seleccionadoPrevio) {
+                opt.selected = true;
+            }
+            selectModulo.appendChild(opt);
+        });
+
+        if (selectModulo.options.length > 0 && selectModulo.selectedIndex === -1) {
+            selectModulo.selectedIndex = 0;
+        }
+
+        selectModulo.setAttribute('data-selected', selectModulo.value || '');
+    }
+
+    var nivelNuevo = document.getElementById('nivel');
+    var moduloNuevo = document.getElementById('modulo_numero');
+    if (nivelNuevo && moduloNuevo) {
+        poblarModulosCapDestino(nivelNuevo, moduloNuevo);
+        nivelNuevo.addEventListener('change', function() {
+            moduloNuevo.setAttribute('data-selected', '');
+            poblarModulosCapDestino(nivelNuevo, moduloNuevo);
+        });
+    }
+
+    document.querySelectorAll('.js-cap-destino-nivel').forEach(function(selectNivel) {
+        var contenedor = selectNivel.closest('form');
+        if (!contenedor) {
+            return;
+        }
+
+        var selectModulo = contenedor.querySelector('.js-cap-destino-modulo');
+        if (!selectModulo) {
+            return;
+        }
+
+        poblarModulosCapDestino(selectNivel, selectModulo);
+        selectNivel.addEventListener('change', function() {
+            selectModulo.setAttribute('data-selected', '');
+            poblarModulosCapDestino(selectNivel, selectModulo);
+        });
+    });
+
     var modalElement = document.getElementById('modal-vistas-material');
-    var modalDescripcion = document.getElementById('modal-descripcion-material');
-    var modalDescripcionTitulo = document.getElementById('modal-descripcion-titulo');
-    var modalDescripcionTexto = document.getElementById('modal-descripcion-texto');
-    var modalDescripcionCerrar = document.getElementById('modal-descripcion-cerrar');
     var botones = document.querySelectorAll('.js-ver-vistas');
     var botonesTema = document.querySelectorAll('.js-toggle-tema');
-    var botonesLeerDescripcion = document.querySelectorAll('.js-leer-descripcion');
+    var galeriaModal = document.getElementById('material-gallery-modal');
+    var galeriaTitulo = document.getElementById('material-gallery-title');
+    var galeriaContador = document.getElementById('material-gallery-counter');
+    var galeriaImagen = document.getElementById('material-gallery-image');
+    var galeriaNombre = document.getElementById('material-gallery-name');
+    var galeriaAbrir = document.getElementById('material-gallery-open');
+    var galeriaPrev = document.getElementById('material-gallery-prev');
+    var galeriaNext = document.getElementById('material-gallery-next');
+    var galeriaThumbs = document.getElementById('material-gallery-thumbs');
+    var galeriaClose = document.getElementById('material-gallery-close');
+    var estadoGaleria = {
+        items: [],
+        index: 0,
+        tema: ''
+    };
+
+    function renderizarGaleria() {
+        if (!galeriaModal || !galeriaImagen || !estadoGaleria.items.length) {
+            return;
+        }
+
+        if (estadoGaleria.index < 0) {
+            estadoGaleria.index = 0;
+        }
+        if (estadoGaleria.index >= estadoGaleria.items.length) {
+            estadoGaleria.index = estadoGaleria.items.length - 1;
+        }
+
+        var actual = estadoGaleria.items[estadoGaleria.index];
+        galeriaImagen.src = actual.src || '';
+        galeriaImagen.alt = actual.nombre || 'Imagen del material';
+        galeriaNombre.textContent = actual.nombre || 'Imagen';
+        galeriaAbrir.href = actual.abrir || actual.src || '#';
+        galeriaContador.textContent = (estadoGaleria.index + 1) + ' / ' + estadoGaleria.items.length;
+        galeriaTitulo.textContent = estadoGaleria.tema || 'Presentación de imágenes';
+        galeriaPrev.disabled = estadoGaleria.items.length <= 1;
+        galeriaNext.disabled = estadoGaleria.items.length <= 1;
+
+        if (galeriaThumbs) {
+            Array.prototype.forEach.call(galeriaThumbs.querySelectorAll('.material-gallery-thumb'), function(btn, idx) {
+                btn.classList.toggle('is-active', idx === estadoGaleria.index);
+            });
+        }
+    }
+
+    function abrirGaleria(items, tema, indexInicial) {
+        if (!galeriaModal || !Array.isArray(items) || !items.length) {
+            return;
+        }
+
+        estadoGaleria.items = items;
+        estadoGaleria.index = typeof indexInicial === 'number' ? indexInicial : 0;
+        estadoGaleria.tema = tema || 'Presentación de imágenes';
+
+        if (galeriaThumbs) {
+            galeriaThumbs.innerHTML = '';
+            items.forEach(function(item, idx) {
+                var thumb = document.createElement('button');
+                thumb.type = 'button';
+                thumb.className = 'material-gallery-thumb';
+                thumb.setAttribute('aria-label', 'Ir a imagen ' + (idx + 1));
+
+                var thumbImg = document.createElement('img');
+                thumbImg.src = item.src || '';
+                thumbImg.alt = item.nombre || ('Imagen ' + (idx + 1));
+                thumb.appendChild(thumbImg);
+
+                thumb.addEventListener('click', function() {
+                    estadoGaleria.index = idx;
+                    renderizarGaleria();
+                });
+
+                galeriaThumbs.appendChild(thumb);
+            });
+        }
+
+        galeriaModal.classList.add('is-open');
+        galeriaModal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        renderizarGaleria();
+    }
+
+    function cerrarGaleria() {
+        if (!galeriaModal) {
+            return;
+        }
+
+        galeriaModal.classList.remove('is-open');
+        galeriaModal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+        estadoGaleria.items = [];
+        estadoGaleria.index = 0;
+        estadoGaleria.tema = '';
+
+        if (galeriaImagen) {
+            galeriaImagen.src = '';
+            galeriaImagen.alt = '';
+        }
+        if (galeriaThumbs) {
+            galeriaThumbs.innerHTML = '';
+        }
+    }
+
+    function moverGaleria(delta) {
+        if (!estadoGaleria.items.length) {
+            return;
+        }
+
+        var total = estadoGaleria.items.length;
+        estadoGaleria.index = (estadoGaleria.index + delta + total) % total;
+        renderizarGaleria();
+    }
+
+    document.querySelectorAll('.js-abrir-galeria-tema').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var tema = btn.getAttribute('data-tema') || 'Presentación de imágenes';
+            var data = btn.getAttribute('data-images') || '[]';
+
+            try {
+                var items = JSON.parse(data);
+                abrirGaleria(items, tema, 0);
+            } catch (error) {
+                console.error('No se pudo abrir la galería del tema.', error);
+            }
+        });
+    });
+
+    document.querySelectorAll('.js-abrir-galeria-desde-archivo').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var tema = btn.getAttribute('data-tema') || 'Presentación de imágenes';
+            var data = btn.getAttribute('data-images') || '[]';
+            var index = parseInt(btn.getAttribute('data-index') || '0', 10);
+
+            try {
+                var items = JSON.parse(data);
+                abrirGaleria(items, tema, index);
+            } catch (error) {
+                console.error('No se pudo abrir la galería desde el archivo.', error);
+            }
+        });
+    });
+
+    if (galeriaPrev) {
+        galeriaPrev.addEventListener('click', function() {
+            moverGaleria(-1);
+        });
+    }
+
+    if (galeriaNext) {
+        galeriaNext.addEventListener('click', function() {
+            moverGaleria(1);
+        });
+    }
+
+    if (galeriaClose) {
+        galeriaClose.addEventListener('click', cerrarGaleria);
+    }
 
     botonesTema.forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -592,6 +1349,140 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    var tabsMainCapDestino = document.querySelectorAll('.js-cap-main-tab');
+    var capEntryCards = document.querySelectorAll('.js-open-cap-modal');
+
+    function marcarTarjetaPrincipalActiva(categoriaObjetivo) {
+        var categoria = (categoriaObjetivo || '').toLowerCase();
+        capEntryCards.forEach(function(card) {
+            var target = (card.getAttribute('data-target') || '').toLowerCase();
+            card.classList.toggle('is-active', target === categoria);
+        });
+    }
+
+    function activarCategoriaPrincipal(categoriaObjetivo) {
+        var categoria = (categoriaObjetivo || '').toLowerCase();
+        if (!categoria) {
+            categoria = 'clase';
+        }
+
+        marcarTarjetaPrincipalActiva(categoria);
+
+        tabsMainCapDestino.forEach(function(tabBtn) {
+            var target = (tabBtn.getAttribute('data-target') || '').toLowerCase();
+            var activo = target === categoria;
+            tabBtn.classList.toggle('is-active', activo);
+            tabBtn.setAttribute('aria-selected', activo ? 'true' : 'false');
+        });
+
+        document.querySelectorAll('.js-cap-block').forEach(function(panel) {
+            var categoriaPanel = (panel.getAttribute('data-cap-categoria') || '').toLowerCase();
+            var mostrar = categoriaPanel === categoria;
+            panel.classList.toggle('is-hidden', !mostrar);
+            panel.classList.remove('is-selected');
+        });
+
+        if (capDetailView && capDetailBody) {
+            restaurarDetalleCapacitacion();
+            capDetailView.classList.add('is-hidden');
+            capDetailBody.innerHTML = '';
+            if (capDetailTitle) {
+                capDetailTitle.textContent = 'Selecciona un nivel y módulo';
+            }
+            if (capDetailMeta) {
+                capDetailMeta.textContent = '';
+            }
+        }
+    }
+
+    var capInlinePanel = document.getElementById('cap-inline-panel');
+
+    document.querySelectorAll('.js-open-cap-modal').forEach(function(card) {
+        var abrirPanel = function() {
+            if (!capInlinePanel) {
+                return;
+            }
+            var target = card.getAttribute('data-target') || 'clase';
+            activarCategoriaPrincipal(target);
+            capInlinePanel.classList.add('is-open');
+            capInlinePanel.setAttribute('aria-hidden', 'false');
+            capInlinePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Si solo hay un bloque visible (ej. UV sin niveles/módulos), lo seleccionamos automáticamente
+            var bloquesVisibles = Array.from(document.querySelectorAll('.js-cap-block')).filter(function(b) {
+                return !b.classList.contains('is-hidden');
+            });
+            if (bloquesVisibles.length === 1) {
+                mostrarDetalleCapacitacion(bloquesVisibles[0]);
+            }
+        };
+
+        card.addEventListener('click', abrirPanel);
+        card.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                abrirPanel();
+            }
+        });
+    });
+
+    var capDetailView = document.getElementById('cap-detail-view');
+    var capDetailTitle = document.getElementById('cap-detail-title');
+    var capDetailMeta = document.getElementById('cap-detail-meta');
+    var capDetailBody = document.getElementById('cap-detail-body');
+    var capDetalleActualBloque = null;
+    var capDetalleActualBody = null;
+
+    function restaurarDetalleCapacitacion() {
+        if (!capDetalleActualBloque || !capDetalleActualBody) {
+            return;
+        }
+        capDetalleActualBloque.appendChild(capDetalleActualBody);
+        capDetalleActualBody.style.display = 'none';
+        capDetalleActualBloque = null;
+        capDetalleActualBody = null;
+    }
+
+    function mostrarDetalleCapacitacion(bloque) {
+        if (!bloque || !capDetailView || !capDetailBody) {
+            return;
+        }
+
+        document.querySelectorAll('.js-cap-block').forEach(function(item) {
+            item.classList.remove('is-selected');
+        });
+        bloque.classList.add('is-selected');
+
+        var body = bloque.querySelector('.submodulo-body');
+        if (!body) {
+            return;
+        }
+
+        restaurarDetalleCapacitacion();
+        capDetailBody.appendChild(body);
+        body.style.display = 'block';
+        capDetalleActualBloque = bloque;
+        capDetalleActualBody = body;
+
+        if (capDetailTitle) {
+            capDetailTitle.textContent = bloque.getAttribute('data-cap-titulo') || 'Detalle';
+        }
+        if (capDetailMeta) {
+            capDetailMeta.textContent = (bloque.getAttribute('data-cap-total') || '0') + ' tema(s)';
+        }
+
+        capDetailView.classList.remove('is-hidden');
+    }
+
+    document.querySelectorAll('.cap-destino-grid .submodulo-head').forEach(function(head) {
+        head.addEventListener('click', function() {
+            var bloque = head.closest('.submodulo-wrap');
+            if (!bloque || bloque.classList.contains('is-hidden')) {
+                return;
+            }
+            mostrarDetalleCapacitacion(bloque);
+        });
+    });
+
     var botonesEditarTema = document.querySelectorAll('.js-toggle-editar-tema');
     botonesEditarTema.forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -622,22 +1513,6 @@ document.addEventListener('DOMContentLoaded', function() {
             abrirModalVistas(lote);
         });
     });
-
-    botonesLeerDescripcion.forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            var titulo = this.getAttribute('data-titulo') || 'Descripción';
-            var descripcion = this.getAttribute('data-descripcion') || 'Sin descripción';
-            modalDescripcionTitulo.textContent = titulo;
-            modalDescripcionTexto.textContent = descripcion;
-            modalDescripcion.style.display = 'block';
-        });
-    });
-
-    if (modalDescripcionCerrar) {
-        modalDescripcionCerrar.addEventListener('click', function() {
-            modalDescripcion.style.display = 'none';
-        });
-    }
 
     function abrirModalVistas(lote) {
         document.getElementById('modal-content-loading').style.display = 'block';
@@ -703,13 +1578,35 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    if (modalDescripcion) {
-        modalDescripcion.addEventListener('click', function(e) {
-            if (e.target === modalDescripcion) {
-                modalDescripcion.style.display = 'none';
+    if (galeriaModal) {
+        galeriaModal.addEventListener('click', function(e) {
+            if (e.target === galeriaModal) {
+                cerrarGaleria();
             }
         });
     }
+
+    document.addEventListener('keydown', function(e) {
+        if (!galeriaModal || !galeriaModal.classList.contains('is-open')) {
+            return;
+        }
+
+        if (e.key === 'Escape') {
+            cerrarGaleria();
+            return;
+        }
+
+        if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            moverGaleria(-1);
+            return;
+        }
+
+        if (e.key === 'ArrowRight' || e.key === ' ') {
+            e.preventDefault();
+            moverGaleria(1);
+        }
+    });
 
     // === Eliminar clase ===
     var formEliminarTema = document.getElementById('form-eliminar-tema');

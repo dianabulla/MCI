@@ -404,9 +404,8 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 </div>
 
 <div class="report-top-strip" id="reportTopStrip" style="margin-bottom: 14px;">
+    <button type="button" class="report-top-strip-tab" data-mode="resumen">Ver reporte</button>
     <button type="button" class="report-top-strip-tab" data-mode="tablas">Ver tablas</button>
-    <button type="button" class="report-top-strip-tab" data-mode="graficos">Ver gráficos</button>
-    <button type="button" id="btnVolverReportes" class="report-top-strip-tab report-back-reportes">Volver a reportes</button>
 </div>
 
 <div class="card report-card report-toolbar-card" style="margin-bottom: 18px; padding: 14px;">
@@ -419,6 +418,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
         </select>
     </div>
     <div class="report-toolbar-actions">
+        <a href="<?= PUBLIC_URL ?>index.php?url=reportes/dashboard-ganar" class="btn btn-primary" title="Abrir dashboard de Ganar">Dashboard Ganar</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=reportes&tipo=<?= urlencode($tipoReporte) ?>" class="report-icon-btn" title="Refrescar">☁</a>
     </div>
 </div>
@@ -1053,40 +1053,30 @@ const etiquetasCelulas = nombresCelulas.map(nombre => {
 });
 
 const reportTopStrip = document.getElementById('reportTopStrip');
-const btnVolverReportes = document.getElementById('btnVolverReportes');
 const reportModeButtons = reportTopStrip ? reportTopStrip.querySelectorAll('[data-mode]') : [];
 const STORAGE_MODE_KEY = 'reportes_view_mode';
 
 const aplicarModoReporte = (modo) => {
     const root = document.documentElement;
-    root.classList.remove('show-report-tables', 'show-report-charts');
+    root.classList.remove('show-report-tables');
 
     if (modo === 'tablas') {
         root.classList.add('show-report-tables');
     }
 
-    if (modo === 'graficos') {
-        root.classList.add('show-report-charts');
-
-        if (typeof window.__renderReportCharts === 'function') {
-            window.__renderReportCharts();
-        }
-
-        // Fuerza recálculo de ApexCharts cuando el contenedor pasa de oculto a visible.
-        setTimeout(() => {
-            window.dispatchEvent(new Event('resize'));
-        }, 80);
-    }
-
     reportModeButtons.forEach((btn) => {
         btn.classList.toggle('is-active', String(btn.dataset.mode || '') === modo);
     });
+
+    if (modo === 'tablas') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 };
 
 if (reportModeButtons.length) {
     reportModeButtons.forEach((btn) => {
         btn.addEventListener('click', () => {
-            const modoSeleccionado = String(btn.dataset.mode || 'tablas');
+            const modoSeleccionado = String(btn.dataset.mode || 'resumen');
             aplicarModoReporte(modoSeleccionado);
             try {
                 localStorage.setItem(STORAGE_MODE_KEY, modoSeleccionado);
@@ -1096,10 +1086,10 @@ if (reportModeButtons.length) {
         });
     });
 
-    let modoInicial = 'dashboard';
+    let modoInicial = 'resumen';
     try {
         const guardado = String(localStorage.getItem(STORAGE_MODE_KEY) || '').trim();
-        if (guardado === 'tablas' || guardado === 'graficos' || guardado === 'dashboard') {
+        if (guardado === 'resumen' || guardado === 'tablas') {
             modoInicial = guardado;
         }
     } catch (e) {
@@ -1107,18 +1097,6 @@ if (reportModeButtons.length) {
     }
 
     aplicarModoReporte(modoInicial);
-}
-
-if (btnVolverReportes) {
-    btnVolverReportes.addEventListener('click', () => {
-        aplicarModoReporte('dashboard');
-        try {
-            localStorage.setItem(STORAGE_MODE_KEY, 'dashboard');
-        } catch (e) {
-            // Ignorar errores de almacenamiento del navegador.
-        }
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
 }
 
 const toggleGanadosSemanaAnteriorBtn = document.getElementById('toggleGanadosSemanaAnteriorBtn');
@@ -1396,9 +1374,6 @@ if (tipoReporte === 'personas') {
     };
 
     window.__renderReportCharts = renderGraficosPersonas;
-    if (document.documentElement.classList.contains('show-report-charts')) {
-        renderGraficosPersonas();
-    }
 
     const botonesKpiDetalle = document.querySelectorAll('.js-kpi-detalle');
     const reporteDetalleModal = document.querySelector('#reporteDetalleModal');
@@ -1857,11 +1832,11 @@ if (tipoReporte === 'personas') {
     display: block !important;
 }
 
-#reportesVisualContainer .ganar-extra-section {
+#reportesVisualContainer .ganar-extra-section,
+#reportesVisualContainer .report-table-only {
     display: none;
 }
 
-#reportesVisualContainer .report-table-only,
 #reportesVisualContainer .report-chart-only {
     display: none;
 }
@@ -1885,38 +1860,6 @@ html.show-report-tables #reportesVisualContainer details {
 }
 
 html.show-report-tables #reportesVisualContainer .ganar-extra-section {
-    display: block !important;
-}
-
-html.show-report-charts #reportesVisualContainer .ganar-extra-section {
-    display: block;
-}
-
-html.show-report-charts .report-toolbar-card,
-html.show-report-charts .report-filters-card {
-    display: none !important;
-}
-
-html.show-report-charts #reportesVisualContainer > * {
-    display: none !important;
-}
-
-html.show-report-charts #reportesVisualContainer .report-chart-only {
-    display: block !important;
-}
-
-html.show-report-charts #reportesVisualContainer .report-chart-only details,
-html.show-report-charts #reportesVisualContainer .report-chart-only .table-container {
-    display: none !important;
-}
-
-html.show-report-charts #reportesVisualContainer .ganar-extra-section {
-    display: none !important;
-}
-
-html.show-report-charts #reportesVisualContainer .btn-chart-toggle,
-html.show-report-charts #reportesVisualContainer .rpt-chart-wrap,
-html.show-report-charts #reportesVisualContainer [id^="chart"] {
     display: block !important;
 }
 

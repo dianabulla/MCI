@@ -15,6 +15,47 @@ class EventoController extends BaseController {
     private const MAX_IMAGE_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
     private const MAX_VIDEO_UPLOAD_BYTES = 500 * 1024 * 1024; // 500MB
 
+    private function esAdminEventos() {
+        return AuthController::esAdministrador();
+    }
+
+    private function ordenarItemsPublicosRecientes($items) {
+        $items = is_array($items) ? $items : [];
+
+        usort($items, static function($a, $b) {
+            $desdeA = strtotime((string)($a['Fecha_Publicacion_Desde'] ?? '')) ?: 0;
+            $desdeB = strtotime((string)($b['Fecha_Publicacion_Desde'] ?? '')) ?: 0;
+            if ($desdeA !== $desdeB) {
+                return $desdeB <=> $desdeA;
+            }
+
+            $creacionA = strtotime((string)($a['Fecha_Creacion'] ?? '')) ?: 0;
+            $creacionB = strtotime((string)($b['Fecha_Creacion'] ?? '')) ?: 0;
+            if ($creacionA !== $creacionB) {
+                return $creacionB <=> $creacionA;
+            }
+
+            return ((int)($b['Id_Contenido'] ?? 0)) <=> ((int)($a['Id_Contenido'] ?? 0));
+        });
+
+        return $items;
+    }
+
+    private function eventoSigueVigenteParaPublico(array $evento) {
+        $fecha = trim((string)($evento['Fecha_Evento'] ?? ''));
+        if ($fecha === '') {
+            return false;
+        }
+
+        $hora = trim((string)($evento['Hora_Evento'] ?? ''));
+        $timestampEvento = strtotime($fecha . ' ' . ($hora !== '' ? $hora : '23:59:59'));
+        if ($timestampEvento === false) {
+            return false;
+        }
+
+        return $timestampEvento >= time();
+    }
+
     public function __construct() {
         $this->eventoModel = new Evento();
         $this->eventoModuloModel = new EventoModulo();
@@ -36,10 +77,76 @@ class EventoController extends BaseController {
                 'titulo' => 'Capacitación destino',
                 'route_privada' => 'eventos/capacitacion-destino',
                 'route_publica' => 'eventos/capacitacion-destino/publico'
+            ],
+            'otros' => [
+                'tipo' => 'otros',
+                'titulo' => 'Otros',
+                'route_privada' => 'eventos/otros',
+                'route_publica' => 'eventos/otros/publico'
             ]
         ];
 
         return $map[$tipo] ?? null;
+    }
+
+    private function getResumenModulosEventos() {
+        $modulos = [
+            [
+                'tipo' => 'reuniones',
+                'titulo' => 'Reuniones',
+                'descripcion' => 'Módulo principal actual con los próximos eventos generales.',
+                'route_privada' => 'eventos',
+                'route_publica' => 'eventos/proximos',
+                'variant' => 'reuniones'
+            ],
+            array_merge($this->getModuloConfig('universidad_vida'), [
+                'descripcion' => 'Contenido y QR público del módulo de Universidad de la Vida.',
+                'variant' => 'uv'
+            ]),
+            array_merge($this->getModuloConfig('capacitacion_destino'), [
+                'descripcion' => 'Contenido y QR público del módulo de Capacitación Destino.',
+                'variant' => 'destino'
+            ]),
+            array_merge($this->getModuloConfig('otros'), [
+                'descripcion' => 'Contenido y QR público para reuniones o campañas adicionales.',
+                'variant' => 'otros'
+            ])
+        ];
+
+        foreach ($modulos as &$modulo) {
+            $urlPublica = $this->buildAbsolutePublicUrl((string)($modulo['route_publica'] ?? 'eventos/proximos'));
+            $modulo['url_publica'] = $urlPublica;
+            $modulo['qr_url'] = 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=' . urlencode($urlPublica);
+            $modulo['visible_publico'] = $this->moduloTieneContenidoPublico((string)($modulo['tipo'] ?? ''));
+        }
+        unset($modulo);
+
+        return $modulos;
+    }
+
+    private function moduloTieneContenidoPublico($tipo) {
+        $tipo = strtolower(trim((string)$tipo));
+
+        if ($tipo === 'reuniones') {
+            $eventos = (array)$this->eventoModel->getUpcoming();
+
+            foreach ($eventos as $evento) {
+                if ((int)($evento['Permitir_Compartir'] ?? 1) === 1 && $this->eventoSigueVigenteParaPublico((array)$evento)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        $items = (array)$this->eventoModuloModel->getByModulo($tipo);
+        foreach ($items as $item) {
+            if ((int)($item['Estado_Activo'] ?? 1) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function redirigirModulo($tipo) {
@@ -53,7 +160,7 @@ class EventoController extends BaseController {
     }
 
     private function renderModuloContenido($tipo) {
-        if (!AuthController::tienePermiso('eventos', 'ver')) {
+        if (!AuthController::tienePermiso('eventos', 'ver') && !AuthController::esAdministrador()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -61,6 +168,13 @@ class EventoController extends BaseController {
         $config = $this->getModuloConfig($tipo);
         if (!$config) {
             $this->redirect('eventos');
+            return;
+        }
+
+        // Cualquier usuario autenticado que no sea admin se envía a la versión pública,
+        // incluso si no tiene el permiso específico de "eventos".
+        if (!$this->esAdminEventos()) {
+            $this->redirect($config['route_publica']);
             return;
         }
 
@@ -91,15 +205,29 @@ class EventoController extends BaseController {
     }
 
     public function index() {
+        if (!AuthController::tienePermiso('eventos', 'ver') && !AuthController::esAdministrador()) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
         $filtroEventos = DataIsolation::generarFiltroEventos();
         $eventos = $this->eventoModel->getAllWithRole($filtroEventos);
         $urlEventosPublicos = $this->buildAbsolutePublicUrl('eventos/proximos');
         $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=' . urlencode($urlEventosPublicos);
+        $modulosEventos = $this->getResumenModulosEventos();
+
+        if (!$this->esAdminEventos()) {
+            $modulosEventos = array_values(array_filter($modulosEventos, static function($modulo) {
+                return !empty($modulo['visible_publico']);
+            }));
+        }
 
         $this->view('eventos/lista', [
             'eventos' => $eventos,
             'urlEventosPublicos' => $urlEventosPublicos,
-            'qrUrl' => $qrUrl
+            'qrUrl' => $qrUrl,
+            'modulosEventos' => $modulosEventos,
+            'esAdminEventos' => $this->esAdminEventos()
         ]);
     }
 
@@ -131,7 +259,7 @@ class EventoController extends BaseController {
     }
 
     public function crear() {
-        if (!AuthController::tienePermiso('eventos', 'crear')) {
+        if (!$this->esAdminEventos()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -166,7 +294,7 @@ class EventoController extends BaseController {
     }
 
     public function editar() {
-        if (!AuthController::tienePermiso('eventos', 'editar')) {
+        if (!$this->esAdminEventos()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -238,7 +366,7 @@ class EventoController extends BaseController {
     }
 
     public function eliminar() {
-        if (!AuthController::tienePermiso('eventos', 'eliminar')) {
+        if (!$this->esAdminEventos()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -256,14 +384,30 @@ class EventoController extends BaseController {
     }
 
     public function proximosPublico() {
-        $eventos = $this->eventoModel->getUpcoming();
+        // Reuniones es un módulo público independiente con su propia vista informativa.
+        $eventos = (array)$this->eventoModel->getUpcoming();
 
-        foreach ($eventos as &$evento) {
-            $evento['Url_Compartir_Evento'] = $this->buildAbsolutePublicUrl(
-                'eventos/compartir&id=' . (int)($evento['Id_Evento'] ?? 0)
-            );
-        }
-        unset($evento);
+        // Solo mostrar eventos vigentes y marcados como compartibles públicamente.
+        $eventos = array_values(array_filter($eventos, static function($evento) {
+            return (int)($evento['Permitir_Compartir'] ?? 1) === 1;
+        }));
+
+        $eventos = array_values(array_filter($eventos, function($evento) {
+            return $this->eventoSigueVigenteParaPublico((array)$evento);
+        }));
+
+        usort($eventos, static function($a, $b) {
+            $fechaA = trim((string)($a['Fecha_Evento'] ?? ''));
+            $horaA = trim((string)($a['Hora_Evento'] ?? ''));
+            $tsA = strtotime($fechaA . ' ' . ($horaA !== '' ? $horaA : '23:59:59')) ?: 0;
+
+            $fechaB = trim((string)($b['Fecha_Evento'] ?? ''));
+            $horaB = trim((string)($b['Hora_Evento'] ?? ''));
+            $tsB = strtotime($fechaB . ' ' . ($horaB !== '' ? $horaB : '23:59:59')) ?: 0;
+
+            // Orden cronológico: primero el más próximo.
+            return $tsA <=> $tsB;
+        });
 
         $this->view('eventos/proximos_publico', ['eventos' => $eventos]);
     }
@@ -313,8 +457,12 @@ class EventoController extends BaseController {
         $this->renderModuloContenido('capacitacion_destino');
     }
 
+    public function otros() {
+        $this->renderModuloContenido('otros');
+    }
+
     public function guardarModuloContenido() {
-        if (!AuthController::tienePermiso('eventos', 'crear') && !AuthController::tienePermiso('eventos', 'editar')) {
+        if (!$this->esAdminEventos()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -402,7 +550,7 @@ class EventoController extends BaseController {
     }
 
     public function duplicarModuloContenido() {
-        if (!AuthController::tienePermiso('eventos', 'crear')) {
+        if (!$this->esAdminEventos()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -426,7 +574,7 @@ class EventoController extends BaseController {
     }
 
     public function eliminarModuloContenido() {
-        if (!AuthController::tienePermiso('eventos', 'eliminar')) {
+        if (!$this->esAdminEventos()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -459,10 +607,41 @@ class EventoController extends BaseController {
             return;
         }
 
-        $items = $this->eventoModuloModel->getByModuloPublico($config['tipo']);
+        // Mostrar contenido publicado (activo) aunque su rango de fechas haya pasado.
+        $items = $this->eventoModuloModel->getByModulo($config['tipo']);
+        $items = array_values(array_filter($items, static function($item) {
+            return (int)($item['Estado_Activo'] ?? 1) === 1;
+        }));
+        $items = $this->ordenarItemsPublicosRecientes($items);
+
+        $modulosPublicos = [];
+        $modulosBase = [
+            [
+                'tipo' => 'reuniones',
+                'titulo' => 'Reuniones',
+                'route_publica' => 'eventos/proximos',
+            ],
+            $this->getModuloConfig('universidad_vida'),
+            $this->getModuloConfig('capacitacion_destino'),
+            $this->getModuloConfig('otros'),
+        ];
+
+        foreach ($modulosBase as $moduloTmp) {
+            if (empty($moduloTmp)) {
+                continue;
+            }
+
+            $modulosPublicos[] = [
+                'tipo' => (string)$moduloTmp['tipo'],
+                'titulo' => (string)$moduloTmp['titulo'],
+                'url_publica' => $this->buildAbsolutePublicUrl((string)$moduloTmp['route_publica']),
+            ];
+        }
+
         $this->view('eventos/modulo_publico', [
             'modulo' => $config,
-            'items' => $items
+            'items' => $items,
+            'modulosPublicos' => $modulosPublicos
         ]);
     }
 
@@ -472,6 +651,10 @@ class EventoController extends BaseController {
 
     public function capacitacionDestinoPublico() {
         $this->renderModuloPublico('capacitacion_destino');
+    }
+
+    public function otrosPublico() {
+        $this->renderModuloPublico('otros');
     }
 
     private function procesarArchivo($campo, $extensionesPermitidas, $maxBytes) {

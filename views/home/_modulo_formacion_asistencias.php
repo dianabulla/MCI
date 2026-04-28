@@ -5,12 +5,14 @@ $configModulo = $config_modulo ?? [];
 $tituloModulo = (string)($configModulo['titulo'] ?? 'Modulo');
 $rutaBase = (string)($configModulo['ruta_base'] ?? 'home');
 $rutaAsistencias = (string)($configModulo['ruta_asistencias'] ?? $rutaBase);
+$moduloFormacionActual = strtolower(trim((string)($configModulo['modulo'] ?? '')));
 
 $filtroMinisterio = (string)($filtro_ministerio ?? '');
 $filtroFechaDesde = (string)($filtro_fecha_desde ?? '');
 $filtroFechaHasta = (string)($filtro_fecha_hasta ?? '');
 $programaReporte = (string)($programa_reporte ?? '');
 $programaReporteLabel = (string)($programa_reporte_label ?? 'Programa');
+$tarjetasResumen = $tarjetas_resumen ?? [];
 $rowsAsistencia = $rows_asistencia ?? [];
 $puedeMarcarAsistencia = !empty($puede_marcar_asistencia);
 $puedeEditarFechasAsistencia = !empty($puede_editar_fechas_asistencia);
@@ -24,6 +26,18 @@ $totalClases = (int)($total_clases ?? 5);
 if ($totalClases <= 0) {
     $totalClases = 5;
 }
+$encuentroDobleClase5 = !empty($encuentro_doble_clase5);
+$inscProgramaSolicitado = trim((string)($_GET['insc_programa'] ?? ''));
+$mostrarDetalleDiscipular = !($moduloFormacionActual === 'discipular' && $inscProgramaSolicitado === '');
+$labelClase = static function(int $i) use ($encuentroDobleClase5): string {
+    if ($encuentroDobleClase5 && $i === 5) {
+        return 'Encuentro dia 1';
+    }
+    if ($encuentroDobleClase5 && $i === 6) {
+        return 'Encuentro dia 2';
+    }
+    return 'CL' . $i;
+};
 $puedeEditarPersonaFormacion = class_exists('AuthController') && AuthController::tienePermiso('personas', 'editar');
 
 $parametrosRetornoFormacion = $_GET;
@@ -32,7 +46,7 @@ if (!isset($parametrosRetornoFormacion['url']) || trim((string)$parametrosRetorn
 }
 $returnUrlFormacion = '?' . http_build_query($parametrosRetornoFormacion);
 
- $ministerioLabelSeleccionado = 'Todos';
+$ministerioLabelSeleccionado = 'Todos';
 if ($filtroMinisterio !== '') {
     foreach (($ministerios_disponibles ?? []) as $ministerioItem) {
         if ((string)($ministerioItem['Id_Ministerio'] ?? '') === $filtroMinisterio) {
@@ -46,6 +60,34 @@ $filtrosActivos = 0;
 if ($filtroMinisterio !== '') { $filtrosActivos++; }
 if ($filtroFechaDesde !== '') { $filtrosActivos++; }
 if ($filtroFechaHasta !== '') { $filtrosActivos++; }
+
+$moduloFormacionActual = strtolower(trim((string)($configModulo['modulo'] ?? '')));
+$submodulosDiscipular = [];
+if ($moduloFormacionActual === 'discipular') {
+    $tarjetasResumenMap = [];
+    foreach ($tarjetasResumen as $tarjetaResumen) {
+        $tarjetasResumenMap[(string)($tarjetaResumen['programa'] ?? '')] = (int)($tarjetaResumen['total'] ?? 0);
+    }
+
+    $programasDiscipular = [
+        'capacitacion_destino_nivel_1' => 'Nivel 1',
+        'capacitacion_destino_nivel_2' => 'Nivel 2',
+        'capacitacion_destino_nivel_3' => 'Nivel 3',
+    ];
+
+    foreach ($programasDiscipular as $clavePrograma => $labelPrograma) {
+        $paramsSubmodulo = $_GET;
+        $paramsSubmodulo['url'] = $rutaAsistencias;
+        $paramsSubmodulo['insc_programa'] = $clavePrograma;
+        $submodulosDiscipular[] = [
+            'programa' => $clavePrograma,
+            'label' => $labelPrograma,
+            'total' => (int)($tarjetasResumenMap[$clavePrograma] ?? 0),
+            'url' => PUBLIC_URL . '?' . http_build_query($paramsSubmodulo),
+            'active' => $programaReporte === $clavePrograma,
+        ];
+    }
+}
 ?>
 
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
@@ -63,6 +105,37 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
         </div>
     </div>
 </div>
+
+<?php if (!empty($submodulosDiscipular)): ?>
+    <div class="dashboard-grid" style="grid-template-columns:repeat(3,minmax(0,1fr)); margin:0 0 14px 0;">
+        <?php foreach ($submodulosDiscipular as $submodulo): ?>
+            <a href="<?= htmlspecialchars((string)$submodulo['url']) ?>" class="gender-card dashboard-card <?= !empty($submodulo['active']) ? 'is-active' : '' ?>" style="border-left-color:<?= !empty($submodulo['active']) ? '#1f5ea8' : '#7a4e08' ?>; text-decoration:none; color:inherit;">
+                <div class="gender-card-toggle" style="cursor:pointer;">
+                    <span class="gender-card-title-wrap">
+                        <span class="gender-avatar" aria-hidden="true">📘</span>
+                        <span>Capacitación Destino - <?= htmlspecialchars((string)$submodulo['label']) ?></span>
+                    </span>
+                    <span class="gender-card-icon">Ver</span>
+                </div>
+                <div class="gender-card-metric">
+                    <div class="gender-kpi-grid">
+                        <div class="gender-kpi-box" style="width:100%;">
+                            <span class="kpi-label">Inscritos</span>
+                            <strong class="kpi-value" style="color:#7a4e08;"><?= (int)($submodulo['total'] ?? 0) ?></strong>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+
+<?php if ($moduloFormacionActual === 'discipular' && !$mostrarDetalleDiscipular): ?>
+    <div class="card report-card" style="margin-bottom:18px; padding:18px; text-align:center;">
+        <h3 style="margin:0 0 8px 0;">Selecciona un nivel de Capacitación Destino</h3>
+        <small style="color:#637087;">Cada nivel abre su vista independiente de asistencias y registros del formulario.</small>
+    </div>
+<?php else: ?>
 
 <div class="card report-card" style="margin-bottom:12px; padding:10px 14px; background:#f6fbff; border-color:#d9e6f5;">
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
@@ -87,10 +160,14 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
         <span class="filter-chip">Hasta: <?= $filtroFechaHasta !== '' ? htmlspecialchars($filtroFechaHasta) : 'Sin filtro' ?></span>
     </div>
 </div>
+<?php endif; ?>
 
 <div class="card report-card" style="margin-bottom:18px; padding:14px;">
     <form method="GET" action="<?= PUBLIC_URL ?>" class="filters-inline" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
         <input type="hidden" name="url" value="<?= htmlspecialchars($rutaAsistencias) ?>">
+        <?php if ($programaReporte !== ''): ?>
+            <input type="hidden" name="insc_programa" value="<?= htmlspecialchars($programaReporte) ?>">
+        <?php endif; ?>
 
         <div class="form-group" style="margin:0; min-width:220px;">
             <label for="filtro_ministerio">Ministerio</label>
@@ -125,62 +202,79 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
 
 <div class="card report-card" style="padding:14px;">
     <?php
-    $rowsAsistenciaHombres = [];
-    $rowsAsistenciaMujeres = [];
-    $rowsAsistenciaSinClasificar = [];
+    $rowsAsistenciaJovenes = [];
+    $rowsAsistenciaTeens = [];
+    $rowsAsistenciaHombresAdultos = [];
+    $rowsAsistenciaMujeresAdultas = [];
+    $rowsAsistenciaOtros = [];
 
     foreach ($rowsAsistencia as $rowTmp) {
+        $edadTmp = (int)($rowTmp['edad'] ?? 0);
         $generoRegistro = strtolower(trim((string)($rowTmp['genero'] ?? '')));
-        if (strpos($generoRegistro, 'mujer') !== false || strpos($generoRegistro, 'femen') !== false) {
-            $rowsAsistenciaMujeres[] = $rowTmp;
-            continue;
-        }
+        $esMujer = strpos($generoRegistro, 'mujer') !== false
+            || strpos($generoRegistro, 'femen') !== false
+            || in_array($generoRegistro, ['f', 'fem', 'female'], true);
+        $esHombre = strpos($generoRegistro, 'hombre') !== false
+            || strpos($generoRegistro, 'mascul') !== false
+            || in_array($generoRegistro, ['m', 'masc', 'male', 'h'], true);
 
-        if (strpos($generoRegistro, 'hombre') !== false || strpos($generoRegistro, 'mascul') !== false || $generoRegistro === 'm') {
-            $rowsAsistenciaHombres[] = $rowTmp;
-            continue;
+        if ($edadTmp >= 14 && $edadTmp <= 28) {
+            $rowsAsistenciaJovenes[] = $rowTmp;
+        } elseif ($edadTmp >= 9 && $edadTmp <= 13) {
+            $rowsAsistenciaTeens[] = $rowTmp;
+        } elseif (($edadTmp >= 29 || $edadTmp <= 0) && $esHombre) {
+            $rowsAsistenciaHombresAdultos[] = $rowTmp;
+        } elseif (($edadTmp >= 29 || $edadTmp <= 0) && $esMujer) {
+            $rowsAsistenciaMujeresAdultas[] = $rowTmp;
+        } else {
+            $rowsAsistenciaOtros[] = $rowTmp;
         }
-
-        $rowsAsistenciaSinClasificar[] = $rowTmp;
     }
 
-    $asistenciaVistaInicial = !empty($rowsAsistenciaHombres) ? 'hombres' : (!empty($rowsAsistenciaMujeres) ? 'mujeres' : 'hombres');
-    $asistenciaHombresActivo = $asistenciaVistaInicial === 'hombres';
-    $asistenciaMujeresActivo = $asistenciaVistaInicial === 'mujeres';
-
-    $hombresRegistrados = (int)count($rowsAsistenciaHombres);
-    $mujeresRegistradas = (int)count($rowsAsistenciaMujeres);
-
-    $hombresAsistieron = 0;
-    foreach ($rowsAsistenciaHombres as $rowTmp) {
-        $asistio = false;
-        for ($i = 1; $i <= $totalClases; $i++) {
-            if (!empty($rowTmp['clases'][$i])) {
-                $asistio = true;
-                break;
+    $calcularAsistieron = static function(array $rows, int $totalClases): int {
+        $total = 0;
+        foreach ($rows as $rowTmp) {
+            $asistio = false;
+            for ($i = 1; $i <= $totalClases; $i++) {
+                if (!empty($rowTmp['clases'][$i])) {
+                    $asistio = true;
+                    break;
+                }
+            }
+            if ($asistio) {
+                $total++;
             }
         }
-        if ($asistio) {
-            $hombresAsistieron++;
-        }
-    }
+        return $total;
+    };
 
-    $mujeresAsistieron = 0;
-    foreach ($rowsAsistenciaMujeres as $rowTmp) {
-        $asistio = false;
-        for ($i = 1; $i <= $totalClases; $i++) {
-            if (!empty($rowTmp['clases'][$i])) {
-                $asistio = true;
-                break;
-            }
-        }
-        if ($asistio) {
-            $mujeresAsistieron++;
-        }
-    }
+    $asistenciaVistaInicial = !empty($rowsAsistenciaJovenes)
+        ? 'jovenes'
+        : (!empty($rowsAsistenciaTeens)
+            ? 'teens'
+            : (!empty($rowsAsistenciaHombresAdultos)
+                ? 'hombres_adultos'
+                : 'mujeres_adultas'));
 
-    $hombresPendientes = max(0, $hombresRegistrados - $hombresAsistieron);
-    $mujeresPendientes = max(0, $mujeresRegistradas - $mujeresAsistieron);
+    $asistenciaJovenesActivo = $asistenciaVistaInicial === 'jovenes';
+    $asistenciaTeensActivo = $asistenciaVistaInicial === 'teens';
+    $asistenciaHombresAdultosActivo = $asistenciaVistaInicial === 'hombres_adultos';
+    $asistenciaMujeresAdultasActivo = $asistenciaVistaInicial === 'mujeres_adultas';
+
+    $jovenesRegistrados = (int)count($rowsAsistenciaJovenes);
+    $teensRegistrados = (int)count($rowsAsistenciaTeens);
+    $hombresAdultosRegistrados = (int)count($rowsAsistenciaHombresAdultos);
+    $mujeresAdultasRegistradas = (int)count($rowsAsistenciaMujeresAdultas);
+
+    $jovenesAsistieron = $calcularAsistieron($rowsAsistenciaJovenes, $totalClases);
+    $teensAsistieron = $calcularAsistieron($rowsAsistenciaTeens, $totalClases);
+    $hombresAdultosAsistieron = $calcularAsistieron($rowsAsistenciaHombresAdultos, $totalClases);
+    $mujeresAdultasAsistieron = $calcularAsistieron($rowsAsistenciaMujeresAdultas, $totalClases);
+
+    $jovenesPendientes = max(0, $jovenesRegistrados - $jovenesAsistieron);
+    $teensPendientes = max(0, $teensRegistrados - $teensAsistieron);
+    $hombresAdultosPendientes = max(0, $hombresAdultosRegistrados - $hombresAdultosAsistieron);
+    $mujeresAdultasPendientes = max(0, $mujeresAdultasRegistradas - $mujeresAdultasAsistieron);
     ?>
 
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
@@ -189,11 +283,11 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
     </div>
 
     <div class="dashboard-grid" style="margin-bottom:12px;">
-        <div class="gender-card dashboard-card <?= $asistenciaHombresActivo ? 'is-active' : '' ?>" style="border-left-color:#1e4a89;">
-            <button type="button" class="gender-card-toggle js-gender-view-btn" data-view-target="asistencia_view_hombres">
+        <div class="gender-card dashboard-card <?= $asistenciaJovenesActivo ? 'is-active' : '' ?>" style="border-left-color:#1e6b3c;">
+            <button type="button" class="gender-card-toggle js-gender-view-btn" data-view-target="asistencia_view_jovenes">
                 <span class="gender-card-title-wrap">
-                    <span class="gender-avatar gender-avatar-male" aria-hidden="true">👨</span>
-                    <span>Hombres</span>
+                    <span class="gender-avatar" aria-hidden="true">🧑</span>
+                    <span>Jóvenes <small style="font-weight:400;color:#637087;">(14-28 años)</small></span>
                 </span>
                 <span class="gender-card-icon">Ver</span>
             </button>
@@ -201,25 +295,77 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                 <div class="gender-kpi-grid">
                     <div class="gender-kpi-box">
                         <span class="kpi-label">Registrados</span>
-                        <strong class="kpi-value" style="color:#1e4a89;"><?= $hombresRegistrados ?></strong>
+                        <strong class="kpi-value" style="color:#1e6b3c;"><?= $jovenesRegistrados ?></strong>
                     </div>
                     <div class="gender-kpi-box">
                         <span class="kpi-label">Asistieron</span>
-                        <strong class="kpi-value" style="color:#166534;"><?= $hombresAsistieron ?></strong>
+                        <strong class="kpi-value" style="color:#166534;"><?= $jovenesAsistieron ?></strong>
                     </div>
                     <div class="gender-kpi-box">
                         <span class="kpi-label">Pendientes</span>
-                        <strong class="kpi-value" style="color:#b45309;"><?= $hombresPendientes ?></strong>
+                        <strong class="kpi-value" style="color:#b45309;"><?= $jovenesPendientes ?></strong>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="gender-card dashboard-card <?= $asistenciaMujeresActivo ? 'is-active' : '' ?>" style="border-left-color:#8b1c62;">
-            <button type="button" class="gender-card-toggle js-gender-view-btn" data-view-target="asistencia_view_mujeres">
+        <div class="gender-card dashboard-card <?= $asistenciaTeensActivo ? 'is-active' : '' ?>" style="border-left-color:#7b3fa0;">
+            <button type="button" class="gender-card-toggle js-gender-view-btn" data-view-target="asistencia_view_teens">
+                <span class="gender-card-title-wrap">
+                    <span class="gender-avatar" aria-hidden="true">🧒</span>
+                    <span>Teens <small style="font-weight:400;color:#637087;">(9-13 años)</small></span>
+                </span>
+                <span class="gender-card-icon">Ver</span>
+            </button>
+            <div class="gender-card-metric">
+                <div class="gender-kpi-grid">
+                    <div class="gender-kpi-box">
+                        <span class="kpi-label">Registrados</span>
+                        <strong class="kpi-value" style="color:#7b3fa0;"><?= $teensRegistrados ?></strong>
+                    </div>
+                    <div class="gender-kpi-box">
+                        <span class="kpi-label">Asistieron</span>
+                        <strong class="kpi-value" style="color:#166534;"><?= $teensAsistieron ?></strong>
+                    </div>
+                    <div class="gender-kpi-box">
+                        <span class="kpi-label">Pendientes</span>
+                        <strong class="kpi-value" style="color:#b45309;"><?= $teensPendientes ?></strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="gender-card dashboard-card <?= $asistenciaHombresAdultosActivo ? 'is-active' : '' ?>" style="border-left-color:#1e4a89;">
+            <button type="button" class="gender-card-toggle js-gender-view-btn" data-view-target="asistencia_view_hombres_adultos">
+                <span class="gender-card-title-wrap">
+                    <span class="gender-avatar gender-avatar-male" aria-hidden="true">👨</span>
+                    <span>Hombres <small style="font-weight:400;color:#637087;">(29+ años)</small></span>
+                </span>
+                <span class="gender-card-icon">Ver</span>
+            </button>
+            <div class="gender-card-metric">
+                <div class="gender-kpi-grid">
+                    <div class="gender-kpi-box">
+                        <span class="kpi-label">Registrados</span>
+                        <strong class="kpi-value" style="color:#1e4a89;"><?= $hombresAdultosRegistrados ?></strong>
+                    </div>
+                    <div class="gender-kpi-box">
+                        <span class="kpi-label">Asistieron</span>
+                        <strong class="kpi-value" style="color:#166534;"><?= $hombresAdultosAsistieron ?></strong>
+                    </div>
+                    <div class="gender-kpi-box">
+                        <span class="kpi-label">Pendientes</span>
+                        <strong class="kpi-value" style="color:#b45309;"><?= $hombresAdultosPendientes ?></strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="gender-card dashboard-card <?= $asistenciaMujeresAdultasActivo ? 'is-active' : '' ?>" style="border-left-color:#8b1c62;">
+            <button type="button" class="gender-card-toggle js-gender-view-btn" data-view-target="asistencia_view_mujeres_adultas">
                 <span class="gender-card-title-wrap">
                     <span class="gender-avatar gender-avatar-female" aria-hidden="true">👩</span>
-                    <span>Mujeres</span>
+                    <span>Mujeres <small style="font-weight:400;color:#637087;">(29+ años)</small></span>
                 </span>
                 <span class="gender-card-icon">Ver</span>
             </button>
@@ -227,22 +373,154 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                 <div class="gender-kpi-grid">
                     <div class="gender-kpi-box">
                         <span class="kpi-label">Registradas</span>
-                        <strong class="kpi-value" style="color:#8b1c62;"><?= $mujeresRegistradas ?></strong>
+                        <strong class="kpi-value" style="color:#8b1c62;"><?= $mujeresAdultasRegistradas ?></strong>
                     </div>
                     <div class="gender-kpi-box">
                         <span class="kpi-label">Asistieron</span>
-                        <strong class="kpi-value" style="color:#166534;"><?= $mujeresAsistieron ?></strong>
+                        <strong class="kpi-value" style="color:#166534;"><?= $mujeresAdultasAsistieron ?></strong>
                     </div>
                     <div class="gender-kpi-box">
                         <span class="kpi-label">Pendientes</span>
-                        <strong class="kpi-value" style="color:#b45309;"><?= $mujeresPendientes ?></strong>
+                        <strong class="kpi-value" style="color:#b45309;"><?= $mujeresAdultasPendientes ?></strong>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="asistencia_view_hombres" class="gender-full-view" <?= $asistenciaHombresActivo ? '' : 'hidden' ?>>
+    <div id="asistencia_view_jovenes" class="gender-full-view" <?= $asistenciaJovenesActivo ? '' : 'hidden' ?>>
+        <div class="table-container">
+            <table class="data-table asistencia-matriz-table" data-modulo="<?= htmlspecialchars((string)($configModulo['modulo'] ?? '')) ?>" data-programa="<?= htmlspecialchars($programaReporte) ?>" data-grupo="general">
+                <thead>
+                    <tr>
+                        <th class="sticky-col-left">Nombre Completo</th>
+                        <th class="sticky-col-left-2">Lider</th>
+                        <th>Accion</th>
+                        <?php for ($i = 1; $i <= $totalClases; $i++): ?>
+                            <th class="th-clase">
+                                <div class="clase-head"><?= htmlspecialchars($labelClase($i)) ?></div>
+                                <input
+                                    type="date"
+                                    class="form-control form-control-sm js-fecha-clase"
+                                    data-clase="<?= $i ?>"
+                                    value="<?= htmlspecialchars((string)($fechasClases[$i] ?? '')) ?>"
+                                    <?= $puedeEditarFechasAsistencia ? '' : 'disabled' ?>
+                                >
+                            </th>
+                        <?php endfor; ?>
+                        <th class="th-total-asistencia">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($rowsAsistenciaJovenes)): ?>
+                        <?php foreach ($rowsAsistenciaJovenes as $row): ?>
+                            <?php $totalAsistencias = 0; ?>
+                            <tr>
+                                <td class="sticky-col-left col-nowrap col-nombre"><?= htmlspecialchars((string)($row['nombre'] ?? '')) ?></td>
+                                <td class="sticky-col-left-2 col-nowrap col-lider"><?= htmlspecialchars((string)($row['lider'] ?? '')) ?></td>
+                                <td class="text-center">
+                                    <?php $idPersonaRow = (int)($row['id_persona'] ?? 0); ?>
+                                    <?php if ($puedeEditarPersonaFormacion && $idPersonaRow > 0): ?>
+                                        <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $idPersonaRow ?>&return_to=formacion&return_url=<?= urlencode($returnUrlFormacion) ?>" class="btn btn-secondary btn-sm">Editar</a>
+                                    <?php else: ?>
+                                        <span style="color:#9aa8bb;">-</span>
+                                    <?php endif; ?>
+                                </td>
+                                <?php for ($i = 1; $i <= $totalClases; $i++): ?>
+                                    <?php $activo = !empty($row['clases'][$i]); ?>
+                                    <?php if ($activo) { $totalAsistencias++; } ?>
+                                    <td class="text-center">
+                                        <button
+                                            type="button"
+                                            class="btn-matriz-x js-asistencia-cell <?= $activo ? 'is-active' : '' ?>"
+                                            data-id-persona="<?= (int)($row['id_persona'] ?? 0) ?>"
+                                            data-clase="<?= $i ?>"
+                                            data-activo="<?= $activo ? '1' : '0' ?>"
+                                            aria-label="Marcar asistencia <?= htmlspecialchars($labelClase($i)) ?>"
+                                            <?= $puedeMarcarAsistencia ? '' : 'disabled' ?>
+                                        ><?= $activo ? 'X' : '' ?></button>
+                                    </td>
+                                <?php endfor; ?>
+                                <td class="text-center"><strong class="js-total-asistencias"><?= (int)$totalAsistencias ?></strong></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="<?= 4 + $totalClases ?>" class="text-center">No hay jóvenes de 14-28 años para este programa con los filtros seleccionados.</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="asistencia_view_teens" class="gender-full-view" <?= $asistenciaTeensActivo ? '' : 'hidden' ?>>
+        <div class="table-container">
+            <table class="data-table asistencia-matriz-table" data-modulo="<?= htmlspecialchars((string)($configModulo['modulo'] ?? '')) ?>" data-programa="<?= htmlspecialchars($programaReporte) ?>" data-grupo="general">
+                <thead>
+                    <tr>
+                        <th class="sticky-col-left">Nombre Completo</th>
+                        <th class="sticky-col-left-2">Lider</th>
+                        <th>Accion</th>
+                        <?php for ($i = 1; $i <= $totalClases; $i++): ?>
+                            <th class="th-clase">
+                                <div class="clase-head"><?= htmlspecialchars($labelClase($i)) ?></div>
+                                <input
+                                    type="date"
+                                    class="form-control form-control-sm js-fecha-clase"
+                                    data-clase="<?= $i ?>"
+                                    value="<?= htmlspecialchars((string)($fechasClases[$i] ?? '')) ?>"
+                                    <?= $puedeEditarFechasAsistencia ? '' : 'disabled' ?>
+                                >
+                            </th>
+                        <?php endfor; ?>
+                        <th class="th-total-asistencia">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($rowsAsistenciaTeens)): ?>
+                        <?php foreach ($rowsAsistenciaTeens as $row): ?>
+                            <?php $totalAsistencias = 0; ?>
+                            <tr>
+                                <td class="sticky-col-left col-nowrap col-nombre"><?= htmlspecialchars((string)($row['nombre'] ?? '')) ?></td>
+                                <td class="sticky-col-left-2 col-nowrap col-lider"><?= htmlspecialchars((string)($row['lider'] ?? '')) ?></td>
+                                <td class="text-center">
+                                    <?php $idPersonaRow = (int)($row['id_persona'] ?? 0); ?>
+                                    <?php if ($puedeEditarPersonaFormacion && $idPersonaRow > 0): ?>
+                                        <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $idPersonaRow ?>&return_to=formacion&return_url=<?= urlencode($returnUrlFormacion) ?>" class="btn btn-secondary btn-sm">Editar</a>
+                                    <?php else: ?>
+                                        <span style="color:#9aa8bb;">-</span>
+                                    <?php endif; ?>
+                                </td>
+                                <?php for ($i = 1; $i <= $totalClases; $i++): ?>
+                                    <?php $activo = !empty($row['clases'][$i]); ?>
+                                    <?php if ($activo) { $totalAsistencias++; } ?>
+                                    <td class="text-center">
+                                        <button
+                                            type="button"
+                                            class="btn-matriz-x js-asistencia-cell <?= $activo ? 'is-active' : '' ?>"
+                                            data-id-persona="<?= (int)($row['id_persona'] ?? 0) ?>"
+                                            data-clase="<?= $i ?>"
+                                            data-activo="<?= $activo ? '1' : '0' ?>"
+                                            aria-label="Marcar asistencia <?= htmlspecialchars($labelClase($i)) ?>"
+                                            <?= $puedeMarcarAsistencia ? '' : 'disabled' ?>
+                                        ><?= $activo ? 'X' : '' ?></button>
+                                    </td>
+                                <?php endfor; ?>
+                                <td class="text-center"><strong class="js-total-asistencias"><?= (int)$totalAsistencias ?></strong></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="<?= 4 + $totalClases ?>" class="text-center">No hay teens de 9-13 años para este programa con los filtros seleccionados.</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="asistencia_view_hombres_adultos" class="gender-full-view" <?= $asistenciaHombresAdultosActivo ? '' : 'hidden' ?>>
         <div class="table-container">
             <table class="data-table asistencia-matriz-table" data-modulo="<?= htmlspecialchars((string)($configModulo['modulo'] ?? '')) ?>" data-programa="<?= htmlspecialchars($programaReporte) ?>" data-grupo="hombres">
                 <thead>
@@ -252,7 +530,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                         <th>Accion</th>
                         <?php for ($i = 1; $i <= $totalClases; $i++): ?>
                             <th class="th-clase">
-                                <div class="clase-head">CL<?= $i ?></div>
+                                <div class="clase-head"><?= htmlspecialchars($labelClase($i)) ?></div>
                                 <input
                                     type="date"
                                     class="form-control form-control-sm js-fecha-clase"
@@ -266,8 +544,8 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (!empty($rowsAsistenciaHombres)): ?>
-                        <?php foreach ($rowsAsistenciaHombres as $row): ?>
+                    <?php if (!empty($rowsAsistenciaHombresAdultos)): ?>
+                        <?php foreach ($rowsAsistenciaHombresAdultos as $row): ?>
                             <?php $totalAsistencias = 0; ?>
                             <tr>
                                 <td class="sticky-col-left col-nowrap col-nombre"><?= htmlspecialchars((string)($row['nombre'] ?? '')) ?></td>
@@ -290,7 +568,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                                             data-id-persona="<?= (int)($row['id_persona'] ?? 0) ?>"
                                             data-clase="<?= $i ?>"
                                             data-activo="<?= $activo ? '1' : '0' ?>"
-                                            aria-label="Marcar asistencia clase <?= $i ?>"
+                                            aria-label="Marcar asistencia <?= htmlspecialchars($labelClase($i)) ?>"
                                             <?= $puedeMarcarAsistencia ? '' : 'disabled' ?>
                                         ><?= $activo ? 'X' : '' ?></button>
                                     </td>
@@ -300,7 +578,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="<?= 4 + $totalClases ?>" class="text-center">No hay hombres para este programa con los filtros seleccionados.</td>
+                            <td colspan="<?= 4 + $totalClases ?>" class="text-center">No hay hombres de 29+ años para este programa con los filtros seleccionados.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -308,7 +586,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
         </div>
     </div>
 
-    <div id="asistencia_view_mujeres" class="gender-full-view" <?= $asistenciaMujeresActivo ? '' : 'hidden' ?>>
+    <div id="asistencia_view_mujeres_adultas" class="gender-full-view" <?= $asistenciaMujeresAdultasActivo ? '' : 'hidden' ?>>
         <div class="table-container">
             <table class="data-table asistencia-matriz-table" data-modulo="<?= htmlspecialchars((string)($configModulo['modulo'] ?? '')) ?>" data-programa="<?= htmlspecialchars($programaReporte) ?>" data-grupo="mujeres">
                 <thead>
@@ -318,7 +596,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                         <th>Accion</th>
                         <?php for ($i = 1; $i <= $totalClases; $i++): ?>
                             <th class="th-clase">
-                                <div class="clase-head">CL<?= $i ?></div>
+                                <div class="clase-head"><?= htmlspecialchars($labelClase($i)) ?></div>
                                 <input
                                     type="date"
                                     class="form-control form-control-sm js-fecha-clase"
@@ -332,8 +610,8 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (!empty($rowsAsistenciaMujeres)): ?>
-                        <?php foreach ($rowsAsistenciaMujeres as $row): ?>
+                    <?php if (!empty($rowsAsistenciaMujeresAdultas)): ?>
+                        <?php foreach ($rowsAsistenciaMujeresAdultas as $row): ?>
                             <?php $totalAsistencias = 0; ?>
                             <tr>
                                 <td class="sticky-col-left col-nowrap col-nombre"><?= htmlspecialchars((string)($row['nombre'] ?? '')) ?></td>
@@ -356,7 +634,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                                             data-id-persona="<?= (int)($row['id_persona'] ?? 0) ?>"
                                             data-clase="<?= $i ?>"
                                             data-activo="<?= $activo ? '1' : '0' ?>"
-                                            aria-label="Marcar asistencia clase <?= $i ?>"
+                                            aria-label="Marcar asistencia <?= htmlspecialchars($labelClase($i)) ?>"
                                             <?= $puedeMarcarAsistencia ? '' : 'disabled' ?>
                                         ><?= $activo ? 'X' : '' ?></button>
                                     </td>
@@ -366,7 +644,7 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="<?= 4 + $totalClases ?>" class="text-center">No hay mujeres para este programa con los filtros seleccionados.</td>
+                            <td colspan="<?= 4 + $totalClases ?>" class="text-center">No hay mujeres de 29+ años para este programa con los filtros seleccionados.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -374,9 +652,9 @@ if ($filtroFechaHasta !== '') { $filtrosActivos++; }
         </div>
     </div>
 
-    <?php if (!empty($rowsAsistenciaSinClasificar)): ?>
+    <?php if (!empty($rowsAsistenciaOtros)): ?>
         <small style="display:block; margin-top:10px; color:#637087;">
-            Hay <?= (int)count($rowsAsistenciaSinClasificar) ?> persona(s) sin género reconocible y no se muestran en Hombre/Mujer.
+            Hay <?= (int)count($rowsAsistenciaOtros) ?> persona(s) sin edad válida, menores de 9 años o mayores de 29 sin género reconocible.
         </small>
     <?php endif; ?>
 </div>

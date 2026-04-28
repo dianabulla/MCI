@@ -503,14 +503,13 @@ class HomeController extends BaseController {
                 'ruta_exportar' => 'home/discipular/exportar',
                 'vista' => 'home/discipular',
                 'programa_default' => 'capacitacion_destino_nivel_1',
-                'programas_permitidos' => ['bautismo', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'],
+                'programas_permitidos' => ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'],
                 'programas_opciones' => [
-                    'bautismo' => 'Bautismo',
                     'capacitacion_destino_nivel_1' => 'Capacitación Destino - Nivel 1',
                     'capacitacion_destino_nivel_2' => 'Capacitación Destino - Nivel 2',
                     'capacitacion_destino_nivel_3' => 'Capacitación Destino - Nivel 3',
                 ],
-                'resumen_programas' => ['bautismo', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'],
+                'resumen_programas' => ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'],
             ];
         }
 
@@ -532,11 +531,13 @@ class HomeController extends BaseController {
 
     private function obtenerDatosModuloFormacion($modulo) {
         require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+        require_once APP . '/Models/EscuelaFormacionAsistenciaClase.php';
         require_once APP . '/Helpers/DataIsolation.php';
 
         $config = $this->obtenerConfiguracionModuloFormacion($modulo);
         $estadoEscuelaModel = new EscuelaFormacionEstado();
         $inscripcionModel = new EscuelaFormacionInscripcion();
+        $asistenciaModel = new EscuelaFormacionAsistenciaClase();
         $filtroCelulas = DataIsolation::generarFiltroCelulas();
         $opcionesFiltro = $this->construirOpcionesFiltroMinisterioLider($filtroCelulas);
 
@@ -596,6 +597,7 @@ class HomeController extends BaseController {
         foreach ($inscripcionesPublicas as &$inscripcionTmp) {
             $nombreActual = trim((string)($inscripcionTmp['Nombre_Persona_Actual'] ?? ''));
             $generoActual = trim((string)($inscripcionTmp['Genero_Persona_Actual'] ?? ''));
+            $edadActual = (int)($inscripcionTmp['Edad_Persona_Actual'] ?? 0);
             $liderActual = trim((string)($inscripcionTmp['Lider_Persona_Actual'] ?? ''));
             $ministerioActual = trim((string)($inscripcionTmp['Nombre_Ministerio_Persona_Actual'] ?? ''));
 
@@ -604,6 +606,9 @@ class HomeController extends BaseController {
             }
             if ($generoActual !== '') {
                 $inscripcionTmp['Genero'] = $generoActual;
+            }
+            if ($edadActual > 0) {
+                $inscripcionTmp['Edad'] = $edadActual;
             }
             if ($liderActual !== '') {
                 $inscripcionTmp['Lider'] = $liderActual;
@@ -659,6 +664,119 @@ class HomeController extends BaseController {
             return empty($row['procesado']);
         }));
 
+        $idsPersonaInscritas = array_values(array_unique(array_filter(array_map(static function($inscripcion) {
+            return (int)($inscripcion['Id_Persona'] ?? 0);
+        }, $inscripcionesPublicas), static function($idPersona) {
+            return $idPersona > 0;
+        })));
+
+        $personasConAsistenciaReal = [];
+        foreach ($programasConsulta as $programaConsulta) {
+            $asistenciasPrograma = $asistenciaModel->getAsistenciasPorPrograma($idsPersonaInscritas, (string)($config['modulo'] ?? ''), $programaConsulta);
+            foreach ($asistenciasPrograma as $idPersonaAsistencia => $clasesAsistencia) {
+                foreach ((array)$clasesAsistencia as $asistioClase) {
+                    if (!empty($asistioClase)) {
+                        $personasConAsistenciaReal[(int)$idPersonaAsistencia] = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        $tablaUvPorMinisterioMap = [];
+        $detalleLideresMinisterioUvMap = [];
+        foreach ($inscripcionesPublicas as $inscripcionUv) {
+            if ((string)($inscripcionUv['Programa'] ?? '') !== 'universidad_vida') {
+                continue;
+            }
+
+            $ministerioNombre = trim((string)($inscripcionUv['Nombre_Ministerio'] ?? ''));
+            if ($ministerioNombre === '') {
+                $ministerioNombre = 'Sin ministerio';
+            }
+
+            $liderNombre = trim((string)($inscripcionUv['Lider'] ?? ''));
+            if ($liderNombre === '') {
+                $liderNombre = 'Sin lider';
+            }
+
+            $edadUv = (int)($inscripcionUv['Edad'] ?? 0);
+            $generoUv = strtolower(trim((string)($inscripcionUv['Genero'] ?? '')));
+            $esMujerUv = strpos($generoUv, 'mujer') !== false
+                || strpos($generoUv, 'femen') !== false
+                || in_array($generoUv, ['f', 'fem', 'female'], true);
+            $esHombreUv = strpos($generoUv, 'hombre') !== false
+                || strpos($generoUv, 'mascul') !== false
+                || in_array($generoUv, ['m', 'masc', 'male', 'h'], true);
+            $esJovenUv = $edadUv >= 14 && $edadUv <= 28;
+
+            if (!isset($tablaUvPorMinisterioMap[$ministerioNombre])) {
+                $tablaUvPorMinisterioMap[$ministerioNombre] = [
+                    'ministerio' => $ministerioNombre,
+                    'hombres' => 0,
+                    'mujeres' => 0,
+                    'jovenes' => 0,
+                    'asistencias_reales' => 0,
+                    'total' => 0,
+                ];
+            }
+            if (!isset($detalleLideresMinisterioUvMap[$ministerioNombre])) {
+                $detalleLideresMinisterioUvMap[$ministerioNombre] = [];
+            }
+            if (!isset($detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre])) {
+                $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre] = [
+                    'lider' => $liderNombre,
+                    'hombres' => 0,
+                    'mujeres' => 0,
+                    'jovenes' => 0,
+                    'asistencias_reales' => 0,
+                    'total' => 0,
+                ];
+            }
+
+            if ($esJovenUv) {
+                $tablaUvPorMinisterioMap[$ministerioNombre]['jovenes']++;
+                $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['jovenes']++;
+            } elseif ($esHombreUv) {
+                $tablaUvPorMinisterioMap[$ministerioNombre]['hombres']++;
+                $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['hombres']++;
+            } elseif ($esMujerUv) {
+                $tablaUvPorMinisterioMap[$ministerioNombre]['mujeres']++;
+                $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['mujeres']++;
+            }
+
+            $tablaUvPorMinisterioMap[$ministerioNombre]['total']++;
+            $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['total']++;
+
+            $idPersonaInscripcionUv = (int)($inscripcionUv['Id_Persona'] ?? 0);
+            if ($idPersonaInscripcionUv > 0 && !empty($personasConAsistenciaReal[$idPersonaInscripcionUv])) {
+                $tablaUvPorMinisterioMap[$ministerioNombre]['asistencias_reales']++;
+                $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['asistencias_reales']++;
+            }
+        }
+
+        $tablaUvPorMinisterio = array_values($tablaUvPorMinisterioMap);
+        usort($tablaUvPorMinisterio, static function($a, $b) {
+            $cmpTotal = ((int)($b['total'] ?? 0)) <=> ((int)($a['total'] ?? 0));
+            if ($cmpTotal !== 0) {
+                return $cmpTotal;
+            }
+            return strcmp((string)($a['ministerio'] ?? ''), (string)($b['ministerio'] ?? ''));
+        });
+
+        $detalleLideresMinisterioUv = [];
+        foreach ($detalleLideresMinisterioUvMap as $ministerioNombre => $detalleLideres) {
+            $rowsLideres = array_values($detalleLideres);
+            usort($rowsLideres, static function($a, $b) {
+                $cmpTotal = ((int)($b['total'] ?? 0)) <=> ((int)($a['total'] ?? 0));
+                if ($cmpTotal !== 0) {
+                    return $cmpTotal;
+                }
+                return strcmp((string)($a['lider'] ?? ''), (string)($b['lider'] ?? ''));
+            });
+            $detalleLideresMinisterioUv[$ministerioNombre] = $rowsLideres;
+        }
+
         $resumenInscripciones = $inscripcionModel->getResumenProgramas();
         $tarjetasResumen = [];
         foreach ($config['resumen_programas'] as $programa) {
@@ -693,6 +811,8 @@ class HomeController extends BaseController {
             'programa_reporte_label' => $this->getProgramaEscuelaLabel($filtroProgramaInscripcion),
             'filtro_insc_programa' => $filtroProgramaInscripcion,
             'programas_opciones' => $config['programas_opciones'],
+            'tabla_uv_ministerio' => $tablaUvPorMinisterio,
+            'detalle_lideres_ministerio_uv' => $detalleLideresMinisterioUv,
         ];
     }
 
@@ -768,6 +888,7 @@ class HomeController extends BaseController {
         foreach ($inscripcionesPublicas as &$inscripcionTmp) {
             $nombreActual = trim((string)($inscripcionTmp['Nombre_Persona_Actual'] ?? ''));
             $generoActual = trim((string)($inscripcionTmp['Genero_Persona_Actual'] ?? ''));
+            $edadActual = (int)($inscripcionTmp['Edad_Persona_Actual'] ?? 0);
             $liderActual = trim((string)($inscripcionTmp['Lider_Persona_Actual'] ?? ''));
             $ministerioActual = trim((string)($inscripcionTmp['Nombre_Ministerio_Persona_Actual'] ?? ''));
 
@@ -776,6 +897,9 @@ class HomeController extends BaseController {
             }
             if ($generoActual !== '') {
                 $inscripcionTmp['Genero'] = $generoActual;
+            }
+            if ($edadActual > 0) {
+                $inscripcionTmp['Edad'] = $edadActual;
             }
             if ($liderActual !== '') {
                 $inscripcionTmp['Lider'] = $liderActual;
@@ -800,6 +924,7 @@ class HomeController extends BaseController {
                 'nombre' => (string)($ins['Nombre'] ?? ''),
                 'lider' => (string)($ins['Lider'] ?? ''),
                 'ministerio' => (string)($ins['Nombre_Ministerio'] ?? ''),
+                'edad' => (int)($ins['Edad'] ?? 0),
                 'genero' => (string)($ins['Genero'] ?? ''),
             ];
         }
@@ -808,7 +933,8 @@ class HomeController extends BaseController {
             return strcasecmp((string)($a['nombre'] ?? ''), (string)($b['nombre'] ?? ''));
         });
 
-        $totalClases = 5;
+        $encuentroDobleClase5 = ((string)($config['modulo'] ?? '') === 'consolidar' && $filtroProgramaInscripcion === 'universidad_vida');
+        $totalClases = $encuentroDobleClase5 ? 6 : 5;
         $idsPersona = array_map(static function($row) {
             return (int)($row['id_persona'] ?? 0);
         }, $rowsAsistencia);
@@ -929,6 +1055,7 @@ class HomeController extends BaseController {
             'fechas_clases_hombres' => $fechasClasesHombres,
             'fechas_clases_mujeres' => $fechasClasesMujeres,
             'rows_asistencia' => $rowsAsistencia,
+            'encuentro_doble_clase5' => $encuentroDobleClase5,
             'puede_marcar_asistencia' => $this->puedeMarcarAsistenciaEscuelasFormacion(),
             'puede_editar_fechas_asistencia' => $this->puedeEditarFechasEscuelasFormacion(),
         ];
@@ -1330,6 +1457,15 @@ class HomeController extends BaseController {
                 (string)($modulo['clave'] ?? ''),
                 (string)($meta['categoria'] ?? 'general')
             );
+            $tema['nivel'] = $this->normalizarNivelMaterialTema(
+                (string)($modulo['clave'] ?? ''),
+                (int)($meta['nivel'] ?? 0)
+            );
+            $tema['modulo_numero'] = $this->normalizarModuloMaterialTema(
+                (string)($modulo['clave'] ?? ''),
+                (int)($tema['nivel'] ?? 0),
+                (int)($meta['modulo_numero'] ?? 0)
+            );
 
             $fechaMeta = trim((string)($meta['fecha_creacion'] ?? ''));
             if ($fechaMeta !== '') {
@@ -1356,6 +1492,38 @@ class HomeController extends BaseController {
 
     private function moduloMaterialTieneSubmodulos(string $modulo): bool {
         return in_array(trim($modulo), ['universidad_vida', 'capacitacion_destino'], true);
+    }
+
+    private function obtenerConfiguracionNivelesCapacitacionDestino(): array {
+        return [
+            1 => [1, 2],
+            2 => [3, 4],
+            3 => [4, 5],
+        ];
+    }
+
+    private function normalizarNivelMaterialTema(string $modulo, $nivel): int {
+        if (trim($modulo) !== 'capacitacion_destino') {
+            return 0;
+        }
+
+        $nivel = (int)$nivel;
+        return isset($this->obtenerConfiguracionNivelesCapacitacionDestino()[$nivel]) ? $nivel : 0;
+    }
+
+    private function normalizarModuloMaterialTema(string $modulo, int $nivel, $moduloNumero): int {
+        if (trim($modulo) !== 'capacitacion_destino') {
+            return 0;
+        }
+
+        $moduloNumero = (int)$moduloNumero;
+        $config = $this->obtenerConfiguracionNivelesCapacitacionDestino();
+
+        if (!isset($config[$nivel]) || !in_array($moduloNumero, $config[$nivel], true)) {
+            return 0;
+        }
+
+        return $moduloNumero;
     }
 
     private function normalizarCategoriaMaterialTema(string $modulo, string $categoria): string {
@@ -1462,14 +1630,36 @@ class HomeController extends BaseController {
         } catch (Throwable $e) {
             // Evitar bloquear la carga por compatibilidad de esquema.
         }
+
+        try {
+            $columnaNivel = $pdo->query("SHOW COLUMNS FROM material_hub_tema LIKE 'Nivel'");
+            $existeNivel = $columnaNivel ? $columnaNivel->fetch(PDO::FETCH_ASSOC) : false;
+            if (!$existeNivel) {
+                $pdo->exec("ALTER TABLE material_hub_tema ADD COLUMN Nivel TINYINT UNSIGNED NULL AFTER Categoria");
+            }
+        } catch (Throwable $e) {
+            // Compatibilidad hacia atras.
+        }
+
+        try {
+            $columnaModuloNumero = $pdo->query("SHOW COLUMNS FROM material_hub_tema LIKE 'Modulo_Numero'");
+            $existeModuloNumero = $columnaModuloNumero ? $columnaModuloNumero->fetch(PDO::FETCH_ASSOC) : false;
+            if (!$existeModuloNumero) {
+                $pdo->exec("ALTER TABLE material_hub_tema ADD COLUMN Modulo_Numero TINYINT UNSIGNED NULL AFTER Nivel");
+            }
+        } catch (Throwable $e) {
+            // Compatibilidad hacia atras.
+        }
     }
 
-    private function guardarTemaMaterialHub(string $modulo, string $loteId, string $titulo, string $descripcion = '', string $categoria = 'general'): void {
+    private function guardarTemaMaterialHub(string $modulo, string $loteId, string $titulo, string $descripcion = '', string $categoria = 'general', int $nivel = 0, int $moduloNumero = 0): void {
         $modulo = trim($modulo);
         $loteId = trim($loteId);
         $titulo = trim($titulo);
         $descripcion = trim($descripcion);
         $categoria = $this->normalizarCategoriaMaterialTema($modulo, $categoria);
+        $nivel = $this->normalizarNivelMaterialTema($modulo, $nivel);
+        $moduloNumero = $this->normalizarModuloMaterialTema($modulo, $nivel, $moduloNumero);
 
         if ($modulo === '' || $loteId === '' || $titulo === '') {
             return;
@@ -1482,11 +1672,24 @@ class HomeController extends BaseController {
             return;
         }
 
-        $sql = "INSERT INTO material_hub_tema (Modulo, Lote_Id, Titulo, Descripcion, Categoria)
-            VALUES (?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE Titulo = VALUES(Titulo), Descripcion = VALUES(Descripcion), Categoria = VALUES(Categoria)";
+        $sql = "INSERT INTO material_hub_tema (Modulo, Lote_Id, Titulo, Descripcion, Categoria, Nivel, Modulo_Numero)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                Titulo = VALUES(Titulo),
+                Descripcion = VALUES(Descripcion),
+                Categoria = VALUES(Categoria),
+                Nivel = VALUES(Nivel),
+                Modulo_Numero = VALUES(Modulo_Numero)";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$modulo, $loteId, $titulo, $descripcion !== '' ? $descripcion : null, $categoria]);
+        $stmt->execute([
+            $modulo,
+            $loteId,
+            $titulo,
+            $descripcion !== '' ? $descripcion : null,
+            $categoria,
+            $nivel > 0 ? $nivel : null,
+            $moduloNumero > 0 ? $moduloNumero : null,
+        ]);
     }
 
     private function obtenerMetadatosTemasMaterialHub(string $modulo): array {
@@ -1502,7 +1705,7 @@ class HomeController extends BaseController {
             return [];
         }
 
-        $stmt = $pdo->prepare("SELECT Lote_Id, Titulo, Descripcion, Categoria, Fecha_Creacion FROM material_hub_tema WHERE Modulo = ?");
+        $stmt = $pdo->prepare("SELECT Lote_Id, Titulo, Descripcion, Categoria, Nivel, Modulo_Numero, Fecha_Creacion FROM material_hub_tema WHERE Modulo = ?");
         $stmt->execute([$modulo]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
@@ -1517,6 +1720,8 @@ class HomeController extends BaseController {
                 'titulo' => (string)($row['Titulo'] ?? ''),
                 'descripcion' => (string)($row['Descripcion'] ?? ''),
                 'categoria' => (string)($row['Categoria'] ?? 'general'),
+                'nivel' => (int)($row['Nivel'] ?? 0),
+                'modulo_numero' => (int)($row['Modulo_Numero'] ?? 0),
                 'fecha_creacion' => (string)($row['Fecha_Creacion'] ?? ''),
             ];
         }
@@ -1619,7 +1824,7 @@ class HomeController extends BaseController {
         }
     }
 
-    private function guardarArchivosModuloMaterial(array $modulo, array $archivos, string $titulo = '', string $descripcion = '', string $categoria = 'general'): array {
+    private function guardarArchivosModuloMaterial(array $modulo, array $archivos, string $titulo = '', string $descripcion = '', string $categoria = 'general', int $nivel = 0, int $moduloNumero = 0): array {
         $count = 0;
         $loteId = date('Ymd_His') . '_' . mt_rand(1000, 9999);
         $indice = 0;
@@ -1661,7 +1866,7 @@ class HomeController extends BaseController {
         if ($titulo === '') {
             $titulo = $this->formatearTituloTemaMaterial($loteId, time());
         }
-        $this->guardarTemaMaterialHub((string)($modulo['clave'] ?? ''), $loteId, $titulo, $descripcion, $categoria);
+        $this->guardarTemaMaterialHub((string)($modulo['clave'] ?? ''), $loteId, $titulo, $descripcion, $categoria, $nivel, $moduloNumero);
 
         return [
             'cantidad' => $count,
@@ -1838,11 +2043,21 @@ class HomeController extends BaseController {
                     $tituloTema = trim((string)($_POST['titulo'] ?? ''));
                     $descripcionTema = trim((string)($_POST['descripcion'] ?? ''));
                     $categoriaTema = trim((string)($_POST['categoria'] ?? 'general'));
+                    $nivelTema = (int)($_POST['nivel'] ?? 0);
+                    $moduloNumeroTema = (int)($_POST['modulo_numero'] ?? 0);
                     if ($tituloTema === '') {
                         throw new Exception('El titulo del modulo es obligatorio.');
                     }
 
-                    $resultadoCarga = $this->guardarArchivosModuloMaterial($moduloSeleccionado, $_FILES['material_pdf'], $tituloTema, $descripcionTema, $categoriaTema);
+                    if ((string)($moduloSeleccionado['clave'] ?? '') === 'capacitacion_destino') {
+                        $nivelValido = $this->normalizarNivelMaterialTema('capacitacion_destino', $nivelTema);
+                        $moduloValido = $this->normalizarModuloMaterialTema('capacitacion_destino', $nivelValido, $moduloNumeroTema);
+                        if ($nivelValido <= 0 || $moduloValido <= 0) {
+                            throw new Exception('Selecciona una combinación válida de nivel y módulo para Capacitación Destino.');
+                        }
+                    }
+
+                    $resultadoCarga = $this->guardarArchivosModuloMaterial($moduloSeleccionado, $_FILES['material_pdf'], $tituloTema, $descripcionTema, $categoriaTema, $nivelTema, $moduloNumeroTema);
                     $cantidadSubida = (int)($resultadoCarga['cantidad'] ?? 0);
                     $mensajeCarga = $cantidadSubida > 1
                         ? 'Material creado en una sola carga con ' . $cantidadSubida . ' archivos.'
@@ -1855,6 +2070,8 @@ class HomeController extends BaseController {
                     $tituloTema = trim((string)($_POST['titulo'] ?? ''));
                     $descripcionTema = trim((string)($_POST['descripcion'] ?? ''));
                     $categoriaTema = trim((string)($_POST['categoria'] ?? 'general'));
+                    $nivelTema = (int)($_POST['nivel'] ?? 0);
+                    $moduloNumeroTema = (int)($_POST['modulo_numero'] ?? 0);
 
                     if ($loteId === '') {
                         throw new Exception('Tema invalido para editar.');
@@ -1864,7 +2081,15 @@ class HomeController extends BaseController {
                         throw new Exception('El titulo del modulo es obligatorio.');
                     }
 
-                    $this->guardarTemaMaterialHub((string)($moduloSeleccionado['clave'] ?? ''), $loteId, $tituloTema, $descripcionTema, $categoriaTema);
+                    if ((string)($moduloSeleccionado['clave'] ?? '') === 'capacitacion_destino') {
+                        $nivelValido = $this->normalizarNivelMaterialTema('capacitacion_destino', $nivelTema);
+                        $moduloValido = $this->normalizarModuloMaterialTema('capacitacion_destino', $nivelValido, $moduloNumeroTema);
+                        if ($nivelValido <= 0 || $moduloValido <= 0) {
+                            throw new Exception('Selecciona una combinación válida de nivel y módulo para Capacitación Destino.');
+                        }
+                    }
+
+                    $this->guardarTemaMaterialHub((string)($moduloSeleccionado['clave'] ?? ''), $loteId, $tituloTema, $descripcionTema, $categoriaTema, $nivelTema, $moduloNumeroTema);
                     $this->redirect((string)($moduloSeleccionado['ruta'] ?? 'home/material') . '&mensaje=' . urlencode('Material editado correctamente.') . '&tipo=success');
                 }
 
@@ -1916,6 +2141,7 @@ class HomeController extends BaseController {
             'temas' => $temas,
             'total_archivos' => $totalArchivos,
             'tiene_submodulos' => $this->moduloMaterialTieneSubmodulos((string)($modulo['clave'] ?? '')),
+            'config_capacitacion_destino' => $this->obtenerConfiguracionNivelesCapacitacionDestino(),
             'puede_gestionar' => $this->puedeGestionarModuloMaterial($modulo),
             'mensaje' => (string)($_GET['mensaje'] ?? ''),
             'tipo' => (string)($_GET['tipo'] ?? ''),
@@ -2164,7 +2390,11 @@ class HomeController extends BaseController {
         $ok = $estadoEscuelaModel->upsertEstado($idPersona, $programa, $va);
 
         $registroActualizado = false;
-        if ($ok && $va) {
+        if (
+            $ok
+            && $va
+            && !in_array($programa, ['universidad_vida', 'encuentro', 'bautismo'], true)
+        ) {
             require_once APP . '/Models/EscuelaFormacionInscripcion.php';
             $inscripcionModel = new EscuelaFormacionInscripcion();
             $registroActualizado = (bool)$inscripcionModel->crearDesdePersonaSiNoExiste($idPersona, $programa);
@@ -2175,6 +2405,47 @@ class HomeController extends BaseController {
             'va' => $va,
             'registro_actualizado' => $registroActualizado
         ]);
+    }
+
+    public function eliminarInscripcionFormacion() {
+        if (!AuthController::tienePermiso('personas', 'eliminar')) {
+            $this->json(['ok' => false, 'error' => 'No autorizado'], 403);
+        }
+
+        $idInscripcion = (int)($_POST['id_inscripcion'] ?? 0);
+        $returnUrl = trim((string)($_POST['return_url'] ?? ''));
+        if ($returnUrl === '' || $returnUrl[0] !== '?') {
+            $returnUrl = '?url=home/consolidar';
+        }
+
+        if ($idInscripcion <= 0) {
+            header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('Inscripción inválida para eliminar.'));
+            exit;
+        }
+
+        require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+        $inscripcionModel = new EscuelaFormacionInscripcion();
+        $inscripcion = $inscripcionModel->getByIdInscripcion($idInscripcion);
+
+        if (empty($inscripcion)) {
+            header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('La inscripción no existe o ya fue eliminada.'));
+            exit;
+        }
+
+        $idPersonaInscripcion = (int)($inscripcion['Id_Persona'] ?? 0);
+        if ($idPersonaInscripcion > 0 && !$this->puedeGestionarPersonaFormacion($idPersonaInscripcion)) {
+            header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('Sin acceso para eliminar esta inscripción.'));
+            exit;
+        }
+
+        $ok = $inscripcionModel->delete($idInscripcion);
+        $mensaje = $ok
+            ? 'Inscripción eliminada correctamente.'
+            : 'No se pudo eliminar la inscripción.';
+        $tipo = $ok ? 'success' : 'error';
+
+        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=' . urlencode($tipo) . '&mensaje=' . urlencode($mensaje));
+        exit;
     }
 
     public function actualizarAsistenciaClaseEscuelaFormacion() {
@@ -2216,6 +2487,77 @@ class HomeController extends BaseController {
             'asistio' => $asistio
         ]);
     }
+
+        public function cambiarSegmentoInscripcion() {
+                $accion = trim((string)($_POST['accion'] ?? ''));
+                if ($accion === 'eliminar_inscripcion') {
+                    if (!AuthController::tienePermiso('personas', 'eliminar')) {
+                        $this->json(['ok' => false, 'error' => 'No autorizado'], 403);
+                    }
+
+                    $idInscripcion = (int)($_POST['id_inscripcion'] ?? 0);
+                    $returnUrl = trim((string)($_POST['return_url'] ?? ''));
+                    if ($returnUrl === '' || $returnUrl[0] !== '?') {
+                        $returnUrl = '?url=home/consolidar';
+                    }
+
+                    if ($idInscripcion <= 0) {
+                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('Inscripción inválida para eliminar.'));
+                        exit;
+                    }
+
+                    require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+                    $inscripcionModel = new EscuelaFormacionInscripcion();
+                    $inscripcion = $inscripcionModel->getByIdInscripcion($idInscripcion);
+
+                    if (empty($inscripcion)) {
+                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('La inscripción no existe o ya fue eliminada.'));
+                        exit;
+                    }
+
+                    $idPersonaInscripcion = (int)($inscripcion['Id_Persona'] ?? 0);
+                    if ($idPersonaInscripcion > 0 && !$this->puedeGestionarPersonaFormacion($idPersonaInscripcion)) {
+                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('Sin acceso para eliminar esta inscripción.'));
+                        exit;
+                    }
+
+                    $ok = $inscripcionModel->delete($idInscripcion);
+                    $mensaje = $ok
+                        ? 'Inscripción eliminada correctamente.'
+                        : 'No se pudo eliminar la inscripción.';
+                    $tipo = $ok ? 'success' : 'error';
+
+                    header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=' . urlencode($tipo) . '&mensaje=' . urlencode($mensaje));
+                    exit;
+                }
+
+                if (!$this->puedeEditarEscuelasFormacion()) {
+                    $this->json(['ok' => false, 'error' => 'No autorizado'], 403);
+                }
+
+            $idInscripcion = (int)($_POST['id_inscripcion'] ?? 0);
+            $segmentoNuevo = trim((string)($_POST['segmento_nuevo'] ?? ''));
+
+            if ($idInscripcion <= 0) {
+                $this->json(['ok' => false, 'error' => 'Inscripción inválida'], 422);
+            }
+
+            require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+            $inscripcionModel = new EscuelaFormacionInscripcion();
+            $inscripcion = $inscripcionModel->getByIdInscripcion($idInscripcion);
+            $idPersonaInscripcion = (int)($inscripcion['Id_Persona'] ?? 0);
+            if ($idPersonaInscripcion <= 0 || !$this->puedeGestionarPersonaFormacion($idPersonaInscripcion)) {
+                $this->json(['ok' => false, 'error' => 'Sin acceso a esta inscripción'], 403);
+            }
+
+            $ok = $inscripcionModel->actualizarSegmentoPreferido($idInscripcion, $segmentoNuevo);
+
+            $this->json([
+                'ok' => (bool)$ok,
+                'id_inscripcion' => $idInscripcion,
+                'segmento_nuevo' => $segmentoNuevo
+            ]);
+        }
 
     public function actualizarAsistenciaMatrizEscuelaFormacion() {
         if (!$this->puedeMarcarAsistenciaEscuelasFormacion()) {

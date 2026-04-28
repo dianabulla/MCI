@@ -8,6 +8,7 @@ require_once APP . '/Models/Celula.php';
 require_once APP . '/Models/Ministerio.php';
 require_once APP . '/Models/Rol.php';
 require_once APP . '/Models/Peticion.php';
+require_once APP . '/Models/EscuelaFormacionInscripcion.php';
 require_once APP . '/Models/WhatsappLocalQueue.php';
 require_once APP . '/Models/WhatsappMensajeTemplate.php';
 require_once APP . '/Controllers/AuthController.php';
@@ -191,6 +192,11 @@ class PersonaController extends BaseController {
             return;
         }
 
+        // Solo notificar líderes cuando la persona es NUEVA (Es_Antiguo = 0)
+        if ((int)($personaNueva['Es_Antiguo'] ?? 1) === 1) {
+            return;
+        }
+
         $idPersona = (int)($personaNueva['Id_Persona'] ?? 0);
         $idCelula = (int)($personaNueva['Id_Celula'] ?? 0);
         $nombrePersona = trim((string)($personaNueva['Nombre'] ?? '') . ' ' . (string)($personaNueva['Apellido'] ?? ''));
@@ -261,6 +267,11 @@ class PersonaController extends BaseController {
 
     private function encolarNotificacionCambiosAsignacion(array $personaAntes, array $personaDespues) {
         if (!$this->whatsappLocalQueueModel) {
+            return;
+        }
+
+        // Solo notificar líderes cuando la persona es NUEVA (Es_Antiguo = 0)
+        if ((int)($personaDespues['Es_Antiguo'] ?? 1) === 1) {
             return;
         }
 
@@ -1953,11 +1964,11 @@ class PersonaController extends BaseController {
         // de ganados (incluyendo quienes ya tienen ubicacion completa).
         $mostrarGanadosHistoricosPorFecha = ($filtroFechaInicio !== '' && $filtroFechaFin !== '');
 
-        $usarVistaHistoricaGanados = (
-            $filtroFechaInicio !== ''
-            && $filtroFechaFin !== ''
-            && in_array($filtroOrigen, ['celula', 'domingo'], true)
-        );
+        // Al filtrar por origen 'celula' o 'domingo' también se muestra el historial
+        // completo (incluyendo personas ya asignadas), igual que con rango de fechas.
+        $esVistaHistoricaPorOrigen = in_array($filtroOrigen, ['celula', 'domingo'], true);
+
+        $usarVistaHistoricaGanados = $esVistaHistoricaPorOrigen;
 
         // Si se consulta por rango + origen de ganar, mostrar registros históricos
         // aunque ya estén asignados o en etapas posteriores.
@@ -2019,12 +2030,23 @@ class PersonaController extends BaseController {
             }));
         }
 
+        // Excluir personas de Escuelas de Formación (tienen su propia sección "Universidad de la Vida")
+        if ($this->soportaCanalCreacion) {
+            $personasBaseConteo = array_values(array_filter($personasBaseConteo, static function($p) {
+                return trim((string)($p['Canal_Creacion'] ?? '')) !== 'Escuelas Formacion (Formulario publico)';
+            }));
+        }
+
         $totalesOrigenPendiente = $this->contarOrigenesPendientes($personasBaseConteo);
 
+        // Para orígenes 'celula'/'domingo' no restringir por asignación incompleta
+        // (mostrar todos los ganados en ese origen, incluyendo ya asignados).
+        $soloGanarListado = $esVistaHistoricaPorOrigen ? null : true;
+
         if ($hayFiltrosSinOrigen || ($filtroOrigen !== '')) {
-            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, true, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
+            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, $soloGanarListado, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         } else {
-            $personas = $this->personaModel->getAllWithRole($filtroRol, true, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
+            $personas = $this->personaModel->getAllWithRole($filtroRol, $soloGanarListado, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         }
 
         // En la pestaña "No se dispone" no limitar a solo nuevas para evitar
@@ -2035,7 +2057,7 @@ class PersonaController extends BaseController {
         $personas = $this->enriquecerChecklistPersonas($personas);
         $personas = $this->filtrarPersonasPorNombreListado($personas, $filtroNombre);
 
-        if (!$mostrarGanadosHistoricosPorFecha) {
+        if (!$mostrarGanadosHistoricosPorFecha && !$esVistaHistoricaPorOrigen) {
             $personas = array_values(array_filter($personas, static function($persona) {
                 $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
                 $idLider = (int)($persona['Id_Lider'] ?? 0);
@@ -2066,6 +2088,13 @@ class PersonaController extends BaseController {
             }
         }
 
+        // Excluir personas de Escuelas de Formación (tienen su propia sección "Universidad de la Vida")
+        if ($this->soportaCanalCreacion) {
+            $personas = array_values(array_filter($personas, static function($p) {
+                return trim((string)($p['Canal_Creacion'] ?? '')) !== 'Escuelas Formacion (Formulario publico)';
+            }));
+        }
+
         $ministerios = $contextoFiltros['ministerios'];
         $lideres = $contextoFiltros['lideres'];
 
@@ -2092,6 +2121,30 @@ class PersonaController extends BaseController {
             'mostrarGanadosHistoricosPorFecha' => $mostrarGanadosHistoricosPorFecha,
             'totalesOrigenPendiente' => $totalesOrigenPendiente,
             'puedeMarcarPrimerContactoGanar' => $this->puedeGestionarPrimerContactoGanar()
+        ]);
+    }
+
+    public function universidadVida() {
+        if (!AuthController::tienePermiso('personas', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        if (!$this->soportaCanalCreacion) {
+            header('Location: ' . BASE_URL . '/public/?url=personas');
+            exit;
+        }
+
+        $filtroNombre = preg_replace('/\s+/u', ' ', trim((string)($_GET['buscar'] ?? '')));
+        $filtroRol = DataIsolation::generarFiltroPersonas();
+
+        $personas = $this->personaModel->getPersonasUniversidadVida($filtroRol);
+        $personas = $this->filtrarPersonasPorNombreListado($personas, $filtroNombre);
+
+        $this->view('personas/universidad_vida', [
+            'personas' => $personas,
+            'filtroNombreActual' => $filtroNombre,
+            'totalPersonas' => count($personas),
         ]);
     }
 
@@ -3153,6 +3206,9 @@ class PersonaController extends BaseController {
                 $this->personaModel->update($id, $data);
                 $this->personaModel->ajustarEscaleraPorRol((int)$id, (int)($data['Id_Rol'] ?? 0));
 
+                // Reflejar cambios de la persona en el registro de Escuelas de Formación.
+                (new EscuelaFormacionInscripcion())->sincronizarDatosDesdePersona((int)$id);
+
                 $peticionAntes = trim((string)($personaAntes['Peticion'] ?? ''));
                 $peticionDespues = trim((string)($data['Peticion'] ?? ''));
                 if ($peticionDespues !== '' && $peticionDespues !== $peticionAntes) {
@@ -3199,6 +3255,9 @@ class PersonaController extends BaseController {
 
                         if (!empty($dataReintento)) {
                             $this->personaModel->update($id, $dataReintento);
+
+                            // Reflejar cambios de la persona en el registro de Escuelas de Formación.
+                            (new EscuelaFormacionInscripcion())->sincronizarDatosDesdePersona((int)$id);
 
                             $peticionAntes = trim((string)($personaAntes['Peticion'] ?? ''));
                             $peticionDespues = trim((string)($data['Peticion'] ?? ''));

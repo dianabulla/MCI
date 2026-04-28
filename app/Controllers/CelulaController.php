@@ -687,18 +687,16 @@ class CelulaController extends BaseController {
         }
         
         try {
-            $filtroPersonas = $this->getFiltroPersonasBusqueda();
-
-            // Buscar líderes específicos: Líder de célula (3), Pastores (6), Líder de 12 (8)
+            // Buscar líderes: Líder de célula (3), Pastores (6), Líder de 12 (8)
+            // Sin filtro DataIsolation para permitir asignar cualquier líder del sistema.
             $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono, r.Nombre_Rol as Rol
                     FROM persona p
                     LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
                     WHERE p.Id_Rol IN (3, 6, 8)
                     AND (p.Nombre LIKE ? OR p.Apellido LIKE ?)
                     AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
-                AND ($filtroPersonas)
                     ORDER BY p.Nombre, p.Apellido
-                    LIMIT 20";
+                    LIMIT 30";
             
             $searchTerm = "%$term%";
             $lideres = $this->personaModel->query($sql, [$searchTerm, $searchTerm]);
@@ -730,16 +728,14 @@ class CelulaController extends BaseController {
         }
         
         try {
-            $filtroPersonas = $this->getFiltroPersonasBusqueda();
-
+            // Sin filtro DataIsolation para permitir asignar cualquier líder de 12 del sistema.
             $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono
                     FROM persona p
                     WHERE p.Id_Rol = 8
                     AND (p.Nombre LIKE ? OR p.Apellido LIKE ?)
                     AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
-                AND ($filtroPersonas)
                     ORDER BY p.Nombre, p.Apellido
-                    LIMIT 20";
+                    LIMIT 30";
             
             $searchTerm = "%$term%";
             $lideres = $this->personaModel->query($sql, [$searchTerm, $searchTerm]);
@@ -771,17 +767,15 @@ class CelulaController extends BaseController {
         }
         
         try {
-            $filtroPersonas = $this->getFiltroPersonasBusqueda();
-
+            // Sin filtro DataIsolation para permitir asignar cualquier pastor del sistema.
             $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono, r.Nombre_Rol as Rol
                     FROM persona p
                     LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
                     WHERE p.Id_Rol = 6
                     AND (p.Nombre LIKE ? OR p.Apellido LIKE ?)
                     AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
-                AND ($filtroPersonas)
                     ORDER BY p.Nombre, p.Apellido
-                    LIMIT 20";
+                    LIMIT 30";
             
             $searchTerm = "%$term%";
             $pastores = $this->personaModel->query($sql, [$searchTerm, $searchTerm]);

@@ -19,6 +19,7 @@ $mostrarEscaleraRapida = true;
         <div class="personas-action-group personas-action-group-nav">
             <a href="<?= PUBLIC_URL ?>?url=personas" class="personas-action-pill is-active" aria-current="page">Discipulos</a>
             <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="personas-action-pill">Almas ganadas</a>
+            <a href="<?= PUBLIC_URL ?>?url=personas/universidad-vida" class="personas-action-pill">Universidad de la Vida</a>
         </div>
         <div class="personas-action-group">
             <?php if ($puedeVerFormularioPublico): ?>

@@ -36,10 +36,13 @@ return [
     'home/escuelas-formacion/actualizar-asistencia-clase' => 'HomeController@actualizarAsistenciaClaseEscuelaFormacion',
     'home/escuelas-formacion/actualizar-matriz-asistencia' => 'HomeController@actualizarAsistenciaMatrizEscuelaFormacion',
     'home/escuelas-formacion/actualizar-fecha-clase' => 'HomeController@actualizarFechaClaseEscuelaFormacion',
+    'home/cambiar-segmento-inscripcion' => 'HomeController@cambiarSegmentoInscripcion',
+    'home/eliminar-inscripcion-formacion' => 'HomeController@eliminarInscripcionFormacion',
     
     // Personas
     'personas' => 'PersonaController@index',
     'personas/ganar' => 'PersonaController@ganar',
+    'personas/universidad-vida' => 'PersonaController@universidadVida',
     'personas/notificaciones' => 'PersonaController@notificaciones',
     'personas/escalera' => 'PersonaController@escalera',
     'personas/actualizarChecklistEscalera' => 'PersonaController@actualizarChecklistEscalera',
@@ -124,11 +127,13 @@ return [
     'eventos/compartir' => 'EventoController@compartirPublico',
     'eventos/universidad-vida' => 'EventoController@universidadVida',
     'eventos/capacitacion-destino' => 'EventoController@capacitacionDestino',
+    'eventos/otros' => 'EventoController@otros',
     'eventos/modulo/guardar' => 'EventoController@guardarModuloContenido',
     'eventos/modulo/duplicar' => 'EventoController@duplicarModuloContenido',
     'eventos/modulo/eliminar' => 'EventoController@eliminarModuloContenido',
     'eventos/universidad-vida/publico' => 'EventoController@universidadVidaPublico',
     'eventos/capacitacion-destino/publico' => 'EventoController@capacitacionDestinoPublico',
+    'eventos/otros/publico' => 'EventoController@otrosPublico',
     
     // Peticiones
     'peticiones' => 'PeticionController@index',
@@ -151,6 +156,7 @@ return [
     // Reportes
     'reportes' => 'ReporteController@index',
     'reportes/ministerial' => 'ReporteController@ministerial',
+    'reportes/dashboard-ganar' => 'ReporteController@dashboardGanar',
     'reportes/almasGanadas' => 'ReporteController@almasGanadas',
     'reportes/asistenciaCelulas' => 'ReporteController@asistenciaCelulas',
     'reportes/exportarExcel' => 'ReporteController@exportarExcel',
@@ -180,6 +186,10 @@ return [
     'escuelas_formacion/registro-publico/buscar-persona' => 'EscuelaFormacionRegistroController@buscarPersona',
     'escuelas_formacion/registro-publico/buscar-lideres' => 'EscuelaFormacionRegistroController@buscarLideres',
     'escuelas_formacion/registro-publico/guardar' => 'EscuelaFormacionRegistroController@guardar',
+    'escuelas_formacion/registro-publico/ticket' => 'EscuelaFormacionRegistroController@ticket',
+    'escuelas_formacion/pagos' => 'EscuelaFormacionRegistroController@pagos',
+    'escuelas_formacion/pagos/consolidar' => 'EscuelaFormacionRegistroController@pagosConsolidar',
+    'escuelas_formacion/pagos/enviar' => 'EscuelaFormacionRegistroController@pagosEnviar',
     'escuelas_formacion/asistencia-publica' => 'EscuelaFormacionRegistroController@asistenciaPublica',
     'escuelas_formacion/asistencia-publica/buscar' => 'EscuelaFormacionRegistroController@buscarAsistenciaPublica',
     'escuelas_formacion/asistencia-publica/guardar' => 'EscuelaFormacionRegistroController@guardarAsistenciaPublica',

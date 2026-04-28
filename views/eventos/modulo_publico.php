@@ -1,4 +1,7 @@
 <!DOCTYPE html>
+<?php
+$tipoActual = (string)($modulo['tipo'] ?? '');
+?>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
