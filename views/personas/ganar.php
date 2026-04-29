@@ -230,6 +230,7 @@ $returnUrlGanar = $buildPendientesUrl();
                 <th>Líder</th>
                 <th>Ministerio</th>
                 <th>Ganado en</th>
+                <th>Fecha de registro</th>
                 <th class="escalera-inline-col">Escalera rápida</th>
                 <?php if ($mostrarAcciones): ?><th class="action-col">Acciones</th><?php endif; ?>
             </tr>
@@ -257,7 +258,19 @@ $returnUrlGanar = $buildPendientesUrl();
                     $observacionNoDisponible = (string)($checklistEscalera['_meta']['no_disponible_observacion'] ?? '');
                     $asignadoALiderMinisterio = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
                     $tieneCelulaAsignada = !empty($persona['Id_Celula']);
+                    $puedeAsignarDesdeAccion = ((int)($persona['Id_Ministerio'] ?? 0) <= 0)
+                        && ((int)($persona['Id_Lider'] ?? 0) <= 0)
+                        && ((int)($persona['Id_Celula'] ?? 0) <= 0);
                     $puedeEditarEscaleraInline = !empty($puedeMarcarPrimerContactoGanar);
+                    $fechaRegistroLabel = '';
+                    $fechaRegistroRaw = trim((string)($persona['Fecha_Registro'] ?? ''));
+                    if ($fechaRegistroRaw !== '') {
+                        try {
+                            $fechaRegistroLabel = (new DateTime($fechaRegistroRaw))->format('d/m/Y H:i');
+                        } catch (Exception $e) {
+                            $fechaRegistroLabel = $fechaRegistroRaw;
+                        }
+                    }
                     ?>
                     <tr>
                         <td>
@@ -299,6 +312,11 @@ $returnUrlGanar = $buildPendientesUrl();
                             ?>
                             <span class="ganar-cell-truncate" title="<?= htmlspecialchars($ganadoEn) ?>">
                                 <?= htmlspecialchars($ganadoEn) ?>
+                            </span>
+                        </td>
+                        <td>
+                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($fechaRegistroLabel !== '' ? $fechaRegistroLabel : 'Sin fecha') ?>">
+                                <?= htmlspecialchars($fechaRegistroLabel !== '' ? $fechaRegistroLabel : 'Sin fecha') ?>
                             </span>
                         </td>
                         <td class="escalera-inline-col">
@@ -403,20 +421,6 @@ $returnUrlGanar = $buildPendientesUrl();
                             <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlGanar) ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
                                 <i class="bi bi-eye"></i>
                             </a>
-                            <button
-                                type="button"
-                                class="action-icon-btn action-icon-huella js-trazabilidad-btn"
-                                title="Ver huella de creación"
-                                aria-label="Ver huella de creación"
-                                data-persona-nombre="<?= htmlspecialchars(trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
-                                data-persona-fecha="<?= htmlspecialchars((string)($persona['Fecha_Registro'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                data-persona-creador="<?= htmlspecialchars(trim((string)($persona['Nombre_Creador'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
-                                data-persona-usuario-creador="<?= htmlspecialchars(trim((string)($persona['Usuario_Creador'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
-                                data-persona-creador-id="<?= (int)($persona['Creado_Por'] ?? 0) ?>"
-                                data-persona-canal="<?= htmlspecialchars((string)($persona['Canal_Creacion'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                            >
-                                <i class="bi bi-fingerprint"></i>
-                            </button>
                             <?php endif; ?>
                             <?php if (AuthController::tienePermiso('personas', 'editar')): ?>
                             <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlGanar) ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
@@ -429,17 +433,21 @@ $returnUrlGanar = $buildPendientesUrl();
                             </a>
                             <?php endif; ?>
                             </div>
-                            <?php if (AuthController::tienePermiso('personas', 'editar')): ?>
+                            <?php if (AuthController::tienePermiso('personas', 'editar') && $puedeAsignarDesdeAccion): ?>
                             <form method="POST" action="<?= PUBLIC_URL ?>?url=personas/asignarMinisterioGanar" class="ganar-assign-form">
                                 <input type="hidden" name="id_persona" value="<?= (int)($persona['Id_Persona'] ?? 0) ?>">
                                 <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrlGanar, ENT_QUOTES, 'UTF-8') ?>">
+                                <button type="button" class="ganar-assign-trigger js-asignar-trigger" aria-expanded="false">
+                                    Asignar a <i class="bi bi-arrow-right"></i>
+                                </button>
                                 <select
                                     name="id_ministerio_asignar"
-                                    class="form-control ganar-assign-select js-auto-asignar-ministerio"
+                                    class="form-control ganar-assign-select js-auto-asignar-ministerio js-asignar-select"
                                     data-current="<?= (int)($persona['Id_Ministerio'] ?? 0) ?>"
+                                    hidden
                                     required
                                 >
-                                    <option value="">Asignar a...</option>
+                                    <option value="">Selecciona ministerio...</option>
                                     <?php foreach (($ministerios ?? []) as $ministerioOpt): ?>
                                         <?php $idMinisterioOpt = (int)($ministerioOpt['Id_Ministerio'] ?? 0); ?>
                                         <option value="<?= $idMinisterioOpt ?>" <?= ((int)($persona['Id_Ministerio'] ?? 0) === $idMinisterioOpt) ? 'selected' : '' ?>>
@@ -455,7 +463,7 @@ $returnUrlGanar = $buildPendientesUrl();
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="<?= $mostrarAcciones ? '7' : '6' ?>" class="text-center">No hay almas ganadas registradas</td>
+                    <td colspan="<?= $mostrarAcciones ? '8' : '7' ?>" class="text-center">No hay almas ganadas registradas</td>
                 </tr>
             <?php endif; ?>
         </tbody>
@@ -572,6 +580,26 @@ $returnUrlGanar = $buildPendientesUrl();
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
+}
+
+.ganar-assign-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 31px;
+    padding: 0 10px;
+    border: 1px solid #cbd8ef;
+    border-radius: 8px;
+    background: #f2f7ff;
+    color: #1f4f86;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.ganar-assign-trigger:hover {
+    background: #e8f1ff;
 }
 
 .ganar-assign-select {
@@ -1128,6 +1156,35 @@ $returnUrlGanar = $buildPendientesUrl();
 
 <script>
 (function() {
+    const botonesAsignar = document.querySelectorAll('.js-asignar-trigger');
+    if (botonesAsignar.length) {
+        botonesAsignar.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const form = btn.closest('form');
+                if (!form) {
+                    return;
+                }
+
+                const selectEl = form.querySelector('.js-asignar-select');
+                if (!selectEl) {
+                    return;
+                }
+
+                selectEl.hidden = false;
+                btn.setAttribute('aria-expanded', 'true');
+                selectEl.focus();
+
+                if (typeof selectEl.showPicker === 'function') {
+                    try {
+                        selectEl.showPicker();
+                    } catch (e) {
+                        // Algunos navegadores bloquean showPicker.
+                    }
+                }
+            });
+        });
+    }
+
     const selectsAsignarMinisterio = document.querySelectorAll('.js-auto-asignar-ministerio');
     if (selectsAsignarMinisterio.length) {
         selectsAsignarMinisterio.forEach(function(selectEl) {

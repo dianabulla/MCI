@@ -39,6 +39,7 @@ $puedeVerPendientesGanar = $puedeVerGanar;
 $totalPendientesGanar = 0;
 $totalPendientesPorConectar = 0;
 $totalNuevasAlmasGanadas = 0;
+$totalUniversidadVida = 0;
 $totalCampanaGanar = 0;
 $mostrarAlertaIngresoGanar = !empty($_SESSION['mostrar_alerta_ganar_pendiente']);
 
@@ -87,12 +88,19 @@ if ($puedeVerPendientesGanar) {
 
         $totalPendientesPorConectar = 0;
         $totalNuevasAlmasGanadas = 0;
+        $totalUniversidadVida = 0;
         $idsPendientesPorConectar = [];
         $idsNuevasAlmasGanadas = [];
+        $idsUniversidadVida = [];
 
         foreach ((array)$personasCampana as $personaTmp) {
             $esNuevo = ((int)($personaTmp['Es_Antiguo'] ?? 0) !== 1);
             $esAntiguo = !$esNuevo;
+
+            $canalCreacion = trim((string)($personaTmp['Canal_Creacion'] ?? ''));
+            if ($canalCreacion === 'Escuelas Formacion (Formulario publico)') {
+                continue;
+            }
 
             $checklistRaw = (string)($personaTmp['Escalera_Checklist'] ?? '');
             $noDisponible = false;
@@ -132,14 +140,35 @@ if ($puedeVerPendientesGanar) {
             }
         }
 
+        // Notificación para Universidad de la Vida: mismas reglas de la vista
+        // (personas del formulario público con asignación incompleta).
+        $filtroRolUniversidad = DataIsolation::generarFiltroPersonas();
+        $personasUniversidad = $personaCampanaModel->getPersonasUniversidadVida($filtroRolUniversidad);
+        foreach ((array)$personasUniversidad as $personaUvTmp) {
+            $idMinisterioUv = (int)($personaUvTmp['Id_Ministerio'] ?? 0);
+            $idLiderUv = (int)($personaUvTmp['Id_Lider'] ?? 0);
+            $idCelulaUv = (int)($personaUvTmp['Id_Celula'] ?? 0);
+            $asignacionCompletaUv = ($idMinisterioUv > 0 && $idLiderUv > 0 && $idCelulaUv > 0);
+            if ($asignacionCompletaUv) {
+                continue;
+            }
+
+            $totalUniversidadVida++;
+            $idPersonaUv = (int)($personaUvTmp['Id_Persona'] ?? 0);
+            if ($idPersonaUv > 0) {
+                $idsUniversidadVida[$idPersonaUv] = true;
+            }
+        }
+
         $totalPendientesGanar = $totalNuevasAlmasGanadas;
-        $idsCampanaUnicos = $idsPendientesPorConectar + $idsNuevasAlmasGanadas;
+        $idsCampanaUnicos = $idsPendientesPorConectar + $idsNuevasAlmasGanadas + $idsUniversidadVida;
         $totalCampanaGanar = count($idsCampanaUnicos);
     } catch (Exception $e) {
         error_log('No se pudo cargar contador de pendientes en Ganar: ' . $e->getMessage());
         $totalPendientesGanar = 0;
         $totalPendientesPorConectar = 0;
         $totalNuevasAlmasGanadas = 0;
+        $totalUniversidadVida = 0;
         $totalCampanaGanar = 0;
     }
 }
@@ -319,13 +348,14 @@ if ($puedeVerPendientesGanar) {
             type="button"
             class="ganar-alert-bell"
             id="ganarAlertBell"
-            title="Pendientes por conectar: <?= (int)$totalPendientesPorConectar ?> · Nuevas en Almas ganadas: <?= (int)$totalNuevasAlmasGanadas ?>"
+            title="Pendientes por conectar: <?= (int)$totalPendientesPorConectar ?> · Nuevas en Almas ganadas: <?= (int)$totalNuevasAlmasGanadas ?> · Universidad de la Vida: <?= (int)$totalUniversidadVida ?>"
             aria-label="Abrir resumen de notificaciones"
             aria-expanded="false"
             aria-controls="ganarAlertPanel"
             data-pendientes="<?= (int)$totalCampanaGanar ?>"
             data-pendientes-conectar="<?= (int)$totalPendientesPorConectar ?>"
             data-nuevas-ganadas="<?= (int)$totalNuevasAlmasGanadas ?>"
+            data-universidad-vida="<?= (int)$totalUniversidadVida ?>"
         >
             <i class="bi bi-bell-fill"></i>
             <?php if ((int)$totalCampanaGanar > 0): ?>
@@ -358,6 +388,15 @@ if ($puedeVerPendientesGanar) {
                 </span>
                 <span class="ganar-alert-item-count"><?= (int)$totalNuevasAlmasGanadas ?></span>
             </a>
+
+            <a href="<?= PUBLIC_URL ?>?url=personas/universidad-vida" class="ganar-alert-item">
+                <span class="ganar-alert-item-icon icon-nuevos"><i class="bi bi-mortarboard-fill"></i></span>
+                <span class="ganar-alert-item-content">
+                    <span class="ganar-alert-item-title">Universidad de la Vida</span>
+                    <span class="ganar-alert-item-desc">Inscritos pendientes de ubicación en U. de la Vida</span>
+                </span>
+                <span class="ganar-alert-item-count"><?= (int)$totalUniversidadVida ?></span>
+            </a>
         </div>
 
         <div
@@ -374,7 +413,8 @@ if ($puedeVerPendientesGanar) {
                     <strong>Resumen de seguimiento</strong>
                     <p>
                         Pendientes por conectar: <strong><?= (int)$totalPendientesPorConectar ?></strong><br>
-                        Nuevas en Almas ganadas: <strong><?= (int)$totalNuevasAlmasGanadas ?></strong>
+                        Nuevas en Almas ganadas: <strong><?= (int)$totalNuevasAlmasGanadas ?></strong><br>
+                        Universidad de la Vida: <strong><?= (int)$totalUniversidadVida ?></strong>
                     </p>
                 </div>
             </div>

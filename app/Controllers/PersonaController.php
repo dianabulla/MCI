@@ -2178,6 +2178,11 @@ class PersonaController extends BaseController {
         $personas = array_values(array_filter($personas, static function($persona) {
             return empty($persona['Seguimiento_No_Disponible']);
         }));
+        if ($this->soportaCanalCreacion) {
+            $personas = array_values(array_filter($personas, static function($persona) {
+                return trim((string)($persona['Canal_Creacion'] ?? '')) !== 'Escuelas Formacion (Formulario publico)';
+            }));
+        }
 
         $pendientesConectar = [];
         $nuevasAlmasGanadas = [];
