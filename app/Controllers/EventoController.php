@@ -23,19 +23,19 @@ class EventoController extends BaseController {
         $items = is_array($items) ? $items : [];
 
         usort($items, static function($a, $b) {
-            $desdeA = strtotime((string)($a['Fecha_Publicacion_Desde'] ?? '')) ?: 0;
-            $desdeB = strtotime((string)($b['Fecha_Publicacion_Desde'] ?? '')) ?: 0;
-            if ($desdeA !== $desdeB) {
-                return $desdeB <=> $desdeA;
+            $ordenA = (int)($a['Orden'] ?? 0);
+            $ordenB = (int)($b['Orden'] ?? 0);
+            if ($ordenA !== $ordenB) {
+                return $ordenA <=> $ordenB;
             }
 
-            $creacionA = strtotime((string)($a['Fecha_Creacion'] ?? '')) ?: 0;
-            $creacionB = strtotime((string)($b['Fecha_Creacion'] ?? '')) ?: 0;
+            $creacionA = strtotime((string)($a['Fecha_Creacion'] ?? '')) ?: PHP_INT_MAX;
+            $creacionB = strtotime((string)($b['Fecha_Creacion'] ?? '')) ?: PHP_INT_MAX;
             if ($creacionA !== $creacionB) {
-                return $creacionB <=> $creacionA;
+                return $creacionA <=> $creacionB;
             }
 
-            return ((int)($b['Id_Contenido'] ?? 0)) <=> ((int)($a['Id_Contenido'] ?? 0));
+            return ((int)($a['Id_Contenido'] ?? 0)) <=> ((int)($b['Id_Contenido'] ?? 0));
         });
 
         return $items;

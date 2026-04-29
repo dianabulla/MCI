@@ -167,6 +167,30 @@
             color: #758280;
         }
 
+        .abono-lock-box {
+            border: 1px dashed #c8dfdc;
+            background: #f6fbfa;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .abono-lock-status {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #5c6f6d;
+        }
+
+        .abono-lock-status.ok {
+            color: #1f7a3c;
+            font-weight: 600;
+        }
+
+        .abono-lock-status.err {
+            color: #9c3434;
+            font-weight: 600;
+        }
+
         .actions {
             margin-top: 18px;
             display: flex;
@@ -394,6 +418,12 @@
     </div>
 
     <div class="body">
+        <?php
+        $abonoAuth = is_array($abono_auth ?? null) ? $abono_auth : ['autorizado' => false, 'nombre' => ''];
+        $abonoAutorizado = !empty($abonoAuth['autorizado']);
+        $abonoNombreAuth = (string)($abonoAuth['nombre'] ?? '');
+        ?>
+
         <?php if (!empty($mensaje)): ?>
             <div class="alert <?= ($tipo_mensaje ?? '') === 'success' ? 'success' : 'error' ?>">
                 <?= htmlspecialchars((string)$mensaje) ?>
@@ -549,10 +579,37 @@
 
                 <div class="section" id="section-pago-material">
                     <h3 class="section-title">5. Abonos</h3>
+
+                    <div style="margin-bottom:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                        <button type="button" class="btn btn-secondary" id="btn-mostrar-acceso-abono" <?= $abonoAutorizado ? 'style="display:none;"' : '' ?>>Habilitar abonos</button>
+                        <span style="font-size:12px; color:#5c6f6d;">Los campos de pago permanecen ocultos hasta validar un usuario autorizado.</span>
+                    </div>
+
+                    <div class="abono-lock-box" id="abono-lock-box" style="display:<?= $abonoAutorizado ? '' : 'none' ?>;">
+                        <div style="font-size:13px; margin-bottom:8px; color:#45615e;"><strong>Acceso restringido:</strong> para registrar abonos debes autenticar un usuario autorizado.</div>
+                        <div class="grid" style="gap:10px;">
+                            <div class="field">
+                                <label for="abono_usuario">Usuario</label>
+                                <input type="text" id="abono_usuario" autocomplete="username" placeholder="Usuario autorizado">
+                            </div>
+                            <div class="field">
+                                <label for="abono_contrasena">Contraseña</label>
+                                <input type="password" id="abono_contrasena" autocomplete="current-password" placeholder="Contraseña">
+                            </div>
+                        </div>
+                        <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+                            <button type="button" class="btn btn-secondary" id="btn-desbloquear-abono">Desbloquear abonos</button>
+                        </div>
+                        <div id="abono-lock-status" class="abono-lock-status <?= $abonoAutorizado ? 'ok' : '' ?>">
+                            <?= $abonoAutorizado ? ('Abonos habilitados por: ' . htmlspecialchars($abonoNombreAuth)) : 'Abonos bloqueados.' ?>
+                        </div>
+                    </div>
+
+                    <div id="abono-contenido" style="display:<?= $abonoAutorizado ? '' : 'none' ?>;">
                     <div class="grid">
                         <div class="field">
                             <label for="metodo_pago">Método de pago</label>
-                            <select id="metodo_pago" name="metodo_pago">
+                            <select id="metodo_pago" name="metodo_pago" <?= $abonoAutorizado ? '' : 'disabled' ?>>
                                 <option value="">Sin pago registrado</option>
                                 <option value="efectivo" <?= (string)($old['metodo_pago'] ?? '') === 'efectivo' ? 'selected' : '' ?>>Efectivo</option>
                             </select>
@@ -567,13 +624,15 @@
 
                         <div class="field" id="wrap-recibido-por" style="display:none;">
                             <label for="recibido_por">Quién recibió el pago <span class="req">*</span></label>
-                            <input type="text" id="recibido_por" name="recibido_por" maxlength="160" placeholder="Nombre de quien recibe" value="<?= htmlspecialchars((string)($old['recibido_por'] ?? '')) ?>">
+                            <input type="text" id="recibido_por" name="recibido_por" maxlength="160" placeholder="Nombre de quien recibe" value="<?= htmlspecialchars($abonoNombreAuth !== '' ? $abonoNombreAuth : (string)($old['recibido_por'] ?? '')) ?>" readonly>
                         </div>
                     </div>
                     <div style="margin-top:10px;">
-                        <button type="button" class="btn btn-secondary" id="btn-compartir-abono">Compartir formulario</button>
+                        <button type="button" class="btn btn-secondary" id="btn-compartir-abono" <?= $abonoAutorizado ? '' : 'disabled' ?>>Compartir formulario</button>
                     </div>
                     <p style="margin:8px 0 0; font-size:12px; color:#888;">El número de referencia de pago es generado automáticamente por el sistema al guardar.</p>
+                    </div>
+                    </div>
                 </div>
 
                 <div class="loader" id="loader-busqueda">Buscando coincidencias en Personas...</div>
@@ -595,6 +654,7 @@
 (function() {
     const endpointBuscar = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/registro-publico/buscar-persona') ?>;
     const endpointLideres = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/registro-publico/buscar-lideres') ?>;
+    const endpointValidarAbono = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/registro-publico/validar-abono') ?>;
     const form = document.getElementById('form-escuelas');
     const sectionDatosPersonales = document.getElementById('section-datos-personales');
     const nombre = document.getElementById('nombre');
@@ -628,6 +688,13 @@
     const btnGuardarInscripcion = document.getElementById('btn-guardar-inscripcion');
     const btnLimpiarForm = document.getElementById('btn-limpiar-form');
     const btnCompartirAbono = document.getElementById('btn-compartir-abono');
+    const btnMostrarAccesoAbono = document.getElementById('btn-mostrar-acceso-abono');
+    const abonoLockBox = document.getElementById('abono-lock-box');
+    const abonoContenido = document.getElementById('abono-contenido');
+    const btnDesbloquearAbono = document.getElementById('btn-desbloquear-abono');
+    const abonoUsuario = document.getElementById('abono_usuario');
+    const abonoContrasena = document.getElementById('abono_contrasena');
+    const abonoLockStatus = document.getElementById('abono-lock-status');
     const loader = document.getElementById('loader-busqueda');
     const estadoBusqueda = document.getElementById('estado-busqueda');
     const toastFeedback = document.getElementById('toast-feedback');
@@ -638,6 +705,8 @@
     const personaResumenTelefono = document.getElementById('persona-resumen-telefono');
     let personaExistente = false;
     let modoSoloAsistencia = false;
+    let abonoAutorizado = <?= !empty($abonoAutorizado) ? 'true' : 'false' ?>;
+    let abonoNombreAutorizado = <?= json_encode((string)$abonoNombreAuth, JSON_UNESCAPED_UNICODE) ?>;
 
     let toastTimer = null;
 
@@ -647,17 +716,81 @@
 
     let timer = null;
 
+    if (abonoLockBox) {
+        abonoLockBox.dataset.visible = abonoAutorizado ? '1' : '0';
+    }
+
+    function actualizarAccesoAbono() {
+        if (abonoLockBox) {
+            abonoLockBox.style.display = abonoAutorizado || abonoLockBox.dataset.visible === '1' ? '' : 'none';
+        }
+        if (btnMostrarAccesoAbono) {
+            btnMostrarAccesoAbono.style.display = abonoAutorizado ? 'none' : '';
+        }
+    }
+
+    if (btnMostrarAccesoAbono) {
+        btnMostrarAccesoAbono.addEventListener('click', function() {
+            if (abonoLockBox) {
+                abonoLockBox.dataset.visible = '1';
+            }
+            actualizarAccesoAbono();
+            if (abonoUsuario) {
+                abonoUsuario.focus();
+            }
+        });
+    }
+
     function actualizarCamposPago() {
+        if (!abonoAutorizado) {
+            actualizarAccesoAbono();
+            if (abonoContenido) {
+                abonoContenido.style.display = 'none';
+            }
+            if (metodoPago) {
+                metodoPago.value = '';
+                metodoPago.disabled = true;
+            }
+            if (wrapValorPago) wrapValorPago.style.display = 'none';
+            if (wrapRecibidoPor) wrapRecibidoPor.style.display = 'none';
+            if (valorPago) valorPago.value = '';
+            if (recibidoPor) recibidoPor.value = abonoNombreAutorizado || '';
+            return;
+        }
+
+        actualizarAccesoAbono();
+        if (abonoContenido) {
+            abonoContenido.style.display = '';
+        }
+
+        if (metodoPago) {
+            metodoPago.disabled = false;
+        }
+
         const tienePago = !!String(metodoPago ? metodoPago.value : '').trim();
         if (!tienePago) {
             if (wrapValorPago) wrapValorPago.style.display = 'none';
             if (wrapRecibidoPor) wrapRecibidoPor.style.display = 'none';
             if (valorPago) valorPago.value = '';
-            if (recibidoPor) recibidoPor.value = '';
+            if (recibidoPor) recibidoPor.value = abonoNombreAutorizado || '';
             return;
         }
         if (wrapValorPago) wrapValorPago.style.display = '';
         if (wrapRecibidoPor) wrapRecibidoPor.style.display = '';
+        if (recibidoPor) recibidoPor.value = abonoNombreAutorizado || '';
+    }
+
+    function actualizarEstadoBloqueoAbono(mensaje, tipo) {
+        if (!abonoLockStatus) {
+            return;
+        }
+        abonoLockStatus.classList.remove('ok', 'err');
+        if (tipo === 'ok') {
+            abonoLockStatus.classList.add('ok');
+        } else if (tipo === 'err') {
+            abonoLockStatus.classList.add('err');
+        }
+        abonoLockStatus.textContent = String(mensaje || '');
     }
 
     function setModoSoloAsistencia(activo) {
@@ -1108,6 +1241,68 @@
         });
     }
 
+    if (btnDesbloquearAbono) {
+        btnDesbloquearAbono.addEventListener('click', async function() {
+            const usuario = String(abonoUsuario ? abonoUsuario.value : '').trim();
+            const contrasena = String(abonoContrasena ? abonoContrasena.value : '');
+
+            if (!usuario || !contrasena) {
+                actualizarEstadoBloqueoAbono('Debes escribir usuario y contraseña.', 'err');
+                return;
+            }
+
+            btnDesbloquearAbono.disabled = true;
+            btnDesbloquearAbono.textContent = 'Validando...';
+
+            try {
+                const payload = new URLSearchParams();
+                payload.set('usuario', usuario);
+                payload.set('contrasena', contrasena);
+
+                const response = await fetch(endpointValidarAbono, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: payload.toString()
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data || !data.success) {
+                    throw new Error((data && data.mensaje) ? data.mensaje : 'No fue posible desbloquear abonos.');
+                }
+
+                abonoAutorizado = true;
+                abonoNombreAutorizado = String(data.nombre || '').trim();
+                if (abonoLockBox) {
+                    abonoLockBox.dataset.visible = '1';
+                }
+                if (recibidoPor) {
+                    recibidoPor.value = abonoNombreAutorizado;
+                }
+                if (abonoContrasena) {
+                    abonoContrasena.value = '';
+                }
+                if (btnCompartirAbono) {
+                    btnCompartirAbono.disabled = false;
+                }
+                if (abonoContenido) {
+                    abonoContenido.style.display = '';
+                }
+
+                actualizarEstadoBloqueoAbono('Abonos habilitados por: ' + abonoNombreAutorizado, 'ok');
+                actualizarCamposPago();
+                mostrarToast('Abonos desbloqueados');
+            } catch (error) {
+                actualizarEstadoBloqueoAbono(String(error.message || 'Credenciales inválidas.'), 'err');
+            } finally {
+                btnDesbloquearAbono.disabled = false;
+                btnDesbloquearAbono.textContent = 'Desbloquear abonos';
+            }
+        });
+    }
+
     toUpperCaseInput(nombre);
     toUpperCaseInput(lider);
     actualizarModoCamposPersonaExistente(false);
@@ -1138,6 +1333,13 @@
             const metodo = String(metodoPago ? metodoPago.value : '').trim();
             const valor = parseFloat(String(valorPago ? valorPago.value : '').trim() || '0');
             const quiereAbono = !!metodo || (Number.isFinite(valor) && valor > 0);
+
+            if (quiereAbono && !abonoAutorizado) {
+                event.preventDefault();
+                alert('Debes desbloquear la sección de abonos con usuario y contraseña.');
+                if (abonoUsuario) abonoUsuario.focus();
+                return;
+            }
 
             if (!quiereAsistencia && !quiereAbono) {
                 event.preventDefault();
@@ -1268,7 +1470,7 @@
                 valorPago.value = '';
             }
             if (recibidoPor) {
-                recibidoPor.value = '';
+                recibidoPor.value = abonoNombreAutorizado || '';
             }
             if (inputAccion) {
                 inputAccion.value = 'registro';
@@ -1328,6 +1530,16 @@
 
             window.prompt('Copia este enlace para compartir:', window.location.href);
         });
+    }
+
+    if (!abonoAutorizado) {
+        actualizarEstadoBloqueoAbono('Abonos bloqueados.', '');
+    } else if (abonoNombreAutorizado) {
+        actualizarEstadoBloqueoAbono('Abonos habilitados por: ' + abonoNombreAutorizado, 'ok');
+    }
+    actualizarAccesoAbono();
+    if (btnCompartirAbono) {
+        btnCompartirAbono.disabled = !abonoAutorizado;
     }
 
     sincronizarEdadConFechaNacimiento();

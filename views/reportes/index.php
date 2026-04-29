@@ -1008,11 +1008,12 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     <div class="celula-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="reporteTarjetaModalTitle">
         <div class="celula-modal__header">
             <h3 id="reporteTarjetaModalTitle" class="celula-modal__title">Detalle de tarjeta</h3>
+            <button type="button" class="btn btn-secondary btn-sm" id="reporteTarjetaModalExportBtn">Descargar tabla como imagen</button>
             <button type="button" class="celula-modal__close" data-reporte-tarjeta-close="1" aria-label="Cerrar">×</button>
         </div>
         <div class="celula-modal__body">
-            <div class="table-container" style="display:block;">
-                <table class="data-table data-table--compacta-celula">
+            <div class="table-container" id="reporteTarjetaModalTableContainer" style="display:block;">
+                <table class="data-table data-table--compacta-celula" id="reporteTarjetaModalTable">
                     <thead>
                         <tr id="reporteTarjetaModalHead"></tr>
                     </thead>
@@ -1024,6 +1025,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
 const procesoGanar = <?= json_encode($procesoGanar) ?>;
 const resumenOrigen = <?= json_encode($resumenOrigen ?? []) ?>;
@@ -1099,6 +1101,190 @@ if (reportModeButtons.length) {
     aplicarModoReporte(modoInicial);
 }
 
+const slugTexto = (valor) => String(valor || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 70);
+
+const descargarTablaComoImagen = async ({ tabla, contenedor, baseNombre, boton, exigirVisible = true, mensajeNoVisible = '' }) => {
+    if (typeof html2canvas !== 'function') {
+        alert('No fue posible cargar la librería de descarga de imagen.');
+        return;
+    }
+
+    if (!tabla || !contenedor) {
+        alert('No se encontró la tabla para exportar.');
+        return;
+    }
+
+    const tablaVisible = !!(tabla.offsetWidth || tabla.offsetHeight || tabla.getClientRects().length);
+    if (exigirVisible && !tablaVisible) {
+        alert(mensajeNoVisible || 'Para descargar esta tabla, primero hazla visible.');
+        return;
+    }
+
+    const textoOriginal = boton ? boton.textContent : '';
+    let exportHost = null;
+
+    if (boton) {
+        boton.disabled = true;
+        boton.textContent = 'Generando imagen...';
+    }
+
+    try {
+        const anchoRealTabla = Math.max(
+            tabla.scrollWidth,
+            contenedor.scrollWidth,
+            contenedor.offsetWidth,
+            900
+        );
+
+        const host = document.createElement('div');
+        exportHost = host;
+        host.style.position = 'fixed';
+        host.style.left = '-99999px';
+        host.style.top = '0';
+        host.style.width = (anchoRealTabla + 40) + 'px';
+        host.style.opacity = '0';
+        host.style.pointerEvents = 'none';
+        host.style.zIndex = '-1';
+
+        const wrap = document.createElement('div');
+        wrap.className = 'report-table-export-wrap';
+        wrap.style.background = '#ffffff';
+        wrap.style.padding = '20px';
+        wrap.style.width = '100%';
+        wrap.style.boxSizing = 'border-box';
+
+        const style = document.createElement('style');
+        style.textContent = `
+            .report-table-export-wrap { width: 100% !important; }
+            .report-table-export-wrap table { border-collapse: collapse !important; width: 100% !important; table-layout: auto !important; }
+            .report-table-export-wrap thead { display: table-header-group !important; }
+            .report-table-export-wrap tbody { display: table-row-group !important; }
+            .report-table-export-wrap tfoot { display: table-footer-group !important; }
+            .report-table-export-wrap tr { display: table-row !important; }
+            .report-table-export-wrap th,
+            .report-table-export-wrap td {
+                display: table-cell !important;
+                position: static !important;
+                float: none !important;
+                clear: none !important;
+                vertical-align: middle !important;
+                padding: 6px 10px !important;
+                line-height: 1.3 !important;
+                box-sizing: border-box !important;
+                border: 1px solid #dee2e6 !important;
+            }
+            .report-table-export-wrap th { white-space: nowrap !important; background: #f8f9fa !important; font-weight: bold !important; }
+            .report-table-export-wrap td {
+                white-space: normal !important;
+                overflow-wrap: anywhere !important;
+                word-break: break-word !important;
+            }
+            .report-table-export-wrap td::before,
+            .report-table-export-wrap td::after { content: none !important; display: none !important; }
+        `;
+
+        const tablaClon = tabla.cloneNode(true);
+        tablaClon.querySelectorAll('button').forEach((btnEl) => {
+            const span = document.createElement('span');
+            span.textContent = String(btnEl.textContent || '').trim();
+            btnEl.replaceWith(span);
+        });
+
+        wrap.appendChild(style);
+        wrap.appendChild(tablaClon);
+        host.appendChild(wrap);
+        document.body.appendChild(host);
+
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        const exportWidth = Math.ceil(host.offsetWidth);
+        const exportHeight = Math.ceil(wrap.scrollHeight);
+
+        const canvas = await html2canvas(wrap, {
+            backgroundColor: '#ffffff',
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            width: exportWidth,
+            height: exportHeight,
+            windowWidth: exportWidth,
+            windowHeight: exportHeight,
+            scrollX: 0,
+            scrollY: 0
+        });
+
+        if (host.parentNode) {
+            host.parentNode.removeChild(host);
+        }
+        exportHost = null;
+
+        const enlace = document.createElement('a');
+        enlace.href = canvas.toDataURL('image/png');
+        enlace.download = `${baseNombre}.png`;
+        document.body.appendChild(enlace);
+        enlace.click();
+        enlace.remove();
+    } catch (error) {
+        alert('No se pudo generar la imagen de la tabla.');
+    } finally {
+        if (exportHost && exportHost.parentNode) {
+            exportHost.parentNode.removeChild(exportHost);
+        }
+        if (boton) {
+            boton.disabled = false;
+            boton.textContent = textoOriginal;
+        }
+    }
+};
+
+const instalarBotonesDescargaTablas = () => {
+    const contenedores = document.querySelectorAll('#reportesVisualContainer .table-container');
+    let indice = 1;
+
+    contenedores.forEach((contenedor) => {
+        const tabla = contenedor.querySelector('table');
+        if (!tabla || contenedor.dataset.exportImageReady === '1') {
+            return;
+        }
+
+        contenedor.dataset.exportImageReady = '1';
+
+        const barra = document.createElement('div');
+        barra.className = 'report-table-export-bar';
+
+        const boton = document.createElement('button');
+        boton.type = 'button';
+        boton.className = 'btn btn-secondary btn-sm report-table-export-btn';
+        boton.textContent = 'Descargar tabla como imagen';
+
+        boton.addEventListener('click', async () => {
+            const cardPadre = contenedor.closest('.card');
+            const titulo = cardPadre ? cardPadre.querySelector('h3, h4') : null;
+            const baseNombre = slugTexto(titulo ? titulo.textContent : '') || `tabla_${indice}`;
+            await descargarTablaComoImagen({
+                tabla,
+                contenedor,
+                baseNombre,
+                boton,
+                exigirVisible: true,
+                mensajeNoVisible: 'Para descargar esta tabla, primero hazla visible en la vista de tablas.'
+            });
+        });
+
+        barra.appendChild(boton);
+        contenedor.insertBefore(barra, contenedor.firstChild);
+        indice += 1;
+    });
+};
+
+instalarBotonesDescargaTablas();
+
 const toggleGanadosSemanaAnteriorBtn = document.getElementById('toggleGanadosSemanaAnteriorBtn');
 const reporteGanadosSemanaAnteriorDetalle = document.getElementById('reporteGanadosSemanaAnteriorDetalle');
 if (toggleGanadosSemanaAnteriorBtn && reporteGanadosSemanaAnteriorDetalle) {
@@ -1113,6 +1299,9 @@ const reporteTarjetaModal = document.getElementById('reporteTarjetaModal');
 const reporteTarjetaModalTitle = document.getElementById('reporteTarjetaModalTitle');
 const reporteTarjetaModalHead = document.getElementById('reporteTarjetaModalHead');
 const reporteTarjetaModalBody = document.getElementById('reporteTarjetaModalBody');
+const reporteTarjetaModalTable = document.getElementById('reporteTarjetaModalTable');
+const reporteTarjetaModalTableContainer = document.getElementById('reporteTarjetaModalTableContainer');
+const reporteTarjetaModalExportBtn = document.getElementById('reporteTarjetaModalExportBtn');
 
 const escapeHtml = (valor) => String(valor ?? '')
     .replace(/&/g, '&amp;')
@@ -1152,6 +1341,20 @@ const cerrarModalTarjeta = () => {
 document.querySelectorAll('[data-reporte-tarjeta-close="1"]').forEach((btn) => {
     btn.addEventListener('click', cerrarModalTarjeta);
 });
+
+if (reporteTarjetaModalExportBtn) {
+    reporteTarjetaModalExportBtn.addEventListener('click', async () => {
+        const titulo = reporteTarjetaModalTitle ? String(reporteTarjetaModalTitle.textContent || '').trim() : '';
+        const baseNombre = slugTexto(titulo) || 'detalle_tarjeta';
+        await descargarTablaComoImagen({
+            tabla: reporteTarjetaModalTable,
+            contenedor: reporteTarjetaModalTableContainer,
+            baseNombre,
+            boton: reporteTarjetaModalExportBtn,
+            exigirVisible: false
+        });
+    });
+}
 
 const etiquetaProgramaEscuela = (programaRaw) => {
     const mapa = {
@@ -1962,6 +2165,16 @@ html.show-report-tables #reportesVisualContainer .ganar-extra-section {
     display: flex;
     gap: 8px;
     align-items: center;
+}
+
+.report-table-export-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 8px;
+}
+
+.report-table-export-btn {
+    font-size: 12px;
 }
 
 .report-icon-btn {

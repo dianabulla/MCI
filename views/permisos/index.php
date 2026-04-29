@@ -1,10 +1,10 @@
 ﻿<?php require_once VIEWS . '/layout/header.php'; ?>
 
 <style>
-/* â”€â”€ PÃ¡gina de permisos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Pagina de permisos */
 .perm-page { max-width: 960px; margin: 0 auto; }
 
-/* PestaÃ±as de roles */
+/* Pestanas de roles */
 .perm-tabs {
     display: flex;
     flex-wrap: nowrap;
@@ -92,7 +92,7 @@
     border: 1px solid #86efac;
 }
 
-/* Tabla de mÃ³dulos */
+/* Tabla de modulos */
 .perm-table {
     width: 100%;
     border-collapse: collapse;
@@ -166,7 +166,7 @@
 </style>
 
 <div class="page-header">
-    <h2><i class="bi bi-shield-check"></i> AdministraciÃ³n de Permisos</h2>
+    <h2><i class="bi bi-shield-check"></i> Administracion de Permisos</h2>
 </div>
 
 <div class="perm-page">
@@ -178,7 +178,7 @@
         En los demas roles, los checks de esta pantalla definen la visibilidad real de cada modulo.
     </div>
 
-    <!-- PestaÃ±as de roles -->
+    <!-- Pestanas de roles -->
     <div class="perm-tabs">
         <?php foreach ($roles as $i => $rol):
             $idRol = $rol['Id_Rol'];
@@ -206,13 +206,13 @@
     <?php
     $rolesProtegidos = [];
     foreach ($roles as $r) {
-        $rn = strtolower(trim(strtr($r['Nombre_Rol'], ['Ã¡'=>'a','Ã©'=>'e','Ã­'=>'i','Ã³'=>'o','Ãº'=>'u','Ã±'=>'n'])));
+        $rn = strtolower(trim(strtr($r['Nombre_Rol'], ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ñ'=>'n'])));
         if ((int)$r['Id_Rol'] === 6 || strpos($rn, 'admin') !== false) {
             $rolesProtegidos[] = (int)$r['Id_Rol'];
         }
     }
 
-    // Grupos visuales de mÃ³dulos
+    // Grupos visuales de modulos
     $gruposModulos = [
         'Principal' => [
             'personas'         => ['Personas',         'Permisos generales del modulo (listado y CRUD principal).'],
@@ -220,15 +220,15 @@
             'personas_plantillas_whatsapp' => ['Personas: Plantillas WhatsApp', 'Controla acceso a Plantillas WhatsApp de Personas.'],
             'personas_ganar_asignados' => ['Pendiente: Atajo Asignados', 'Controla la visibilidad del atajo Asignados en Pendiente por consolidar.'],
             'personas_ganar_reasignados' => ['Pendiente: Atajo Reasignados', 'Controla la visibilidad del atajo Reasignados en Pendiente por consolidar.'],
-            'celulas'          => ['CÃ©lulas',           'GestiÃ³n de cÃ©lulas y miembros'],
-            'materiales_celulas'=> ['Materiales CÃ©lulas','Archivos PDF para cÃ©lulas'],
+            'celulas'          => ['Celulas',           'Gestion de celulas y miembros'],
+            'materiales_celulas'=> ['Materiales Celulas','Archivos PDF para celulas'],
             'ministerios'      => ['Ministerios',       'Ver y gestionar ministerios'],
-            'asistencias'      => ['Asistencias',       'Registro de asistencias a cÃ©lulas'],
+            'asistencias'      => ['Asistencias',       'Registro de asistencias a celulas'],
             'eventos'          => ['Eventos',           'Eventos y actividades generales'],
-            'peticiones'       => ['Peticiones',        'Peticiones de oraciÃ³n'],
-            'reportes'         => ['Reportes',          'Reportes y estadÃ­sticas'],
+            'peticiones'       => ['Peticiones',        'Peticiones de oracion'],
+            'reportes'         => ['Reportes',          'Reportes y estadisticas'],
             'transmisiones'    => ['Transmisiones',     'Transmisiones en vivo'],
-            'escuelas_formacion' => ['Escuelas de FormaciÃ³n', 'Registro y asistencias de escuelas de formaciÃ³n'],
+            'escuelas_formacion' => ['Escuelas de Formacion', 'Registro y asistencias de escuelas de formacion'],
             'escuelas_formacion_marcar_asistencia' => ['Escuelas: Marcar asistencia', 'Permite marcar/desmarcar asistencias en la matriz de Escuelas'],
             'escuelas_formacion_editar_fechas' => ['Escuelas: Editar fechas de clases', 'Permite editar fechas de clases en la matriz de Escuelas'],
             'teen'             => ['Material Teens',     'Material educativo para adolescentes'],
@@ -238,20 +238,20 @@
             'registro_obsequio'  => ['Registro de Obsequios', 'Consultar registros de obsequios'],
         ],
         'Nehemias' => [
-            'nehemias'                => ['Nehemias (general)',             'Acceso al mÃ³dulo Nehemias'],
-            'nehemias_cols_cedula'    => ['Ver: CÃ©dula',                   'Columna cÃ©dula en Nehemias'],
-            'nehemias_cols_telefono'  => ['Ver: TelÃ©fono',                 'Columna telÃ©fono en Nehemias'],
+            'nehemias'                => ['Nehemias (general)',             'Acceso al modulo Nehemias'],
+            'nehemias_cols_cedula'    => ['Ver: Cedula',                   'Columna cedula en Nehemias'],
+            'nehemias_cols_telefono'  => ['Ver: Telefono',                 'Columna telefono en Nehemias'],
             'nehemias_cols_subido_link'=> ['Ver: Link subido',             'Columna link subido en Nehemias'],
-            'nehemias_cols_bogota_subio'=> ['Ver: En BogotÃ¡ se le subiÃ³',  'Columna especÃ­fica del reporte'],
+            'nehemias_cols_bogota_subio'=> ['Ver: En Bogota se le subio',  'Columna especifica del reporte'],
             'nehemias_cols_puesto'    => ['Ver: Puesto',                   'Columna puesto en Nehemias'],
             'nehemias_cols_mesa'      => ['Ver: Mesa',                     'Columna mesa en Nehemias'],
             'nehemias_cols_acepta'    => ['Ver: Acepta',                   'Columna acepta en Nehemias'],
-            'nehemias_acciones_editar'=> ['BotÃ³n Editar',                  'Permite editar registros Nehemias'],
-            'nehemias_acciones_eliminar'=> ['BotÃ³n Eliminar',              'Permite eliminar registros Nehemias'],
+            'nehemias_acciones_editar'=> ['Boton Editar',                  'Permite editar registros Nehemias'],
+            'nehemias_acciones_eliminar'=> ['Boton Eliminar',              'Permite eliminar registros Nehemias'],
         ],
         'Sistema' => [
-            'roles'    => ['Roles',    'GestiÃ³n de roles de usuario'],
-            'permisos' => ['Permisos', 'AdministraciÃ³n de permisos'],
+            'roles'    => ['Roles',    'Gestion de roles de usuario'],
+            'permisos' => ['Permisos', 'Administracion de permisos'],
         ],
     ];
     ?>
@@ -276,7 +276,7 @@
                 <?php else: ?>
                 <button type="button" class="btn-perm-all btn-perm-solo-ver"
                     data-rol="<?= $idRol ?>" data-accion="solo_ver">
-                    <i class="bi bi-eye"></i> SÃ³lo leer todo
+                    <i class="bi bi-eye"></i> Solo leer todo
                 </button>
                 <button type="button" class="btn-perm-all btn-perm-activar"
                     data-rol="<?= $idRol ?>" data-accion="activar">
@@ -290,11 +290,11 @@
             </div>
         </div>
 
-        <!-- Tabla de mÃ³dulos -->
+        <!-- Tabla de modulos -->
         <table class="perm-table">
             <thead>
                 <tr>
-                    <th>MÃ³dulo</th>
+                    <th>Modulo</th>
                     <th>Ver</th>
                     <th>Crear</th>
                     <th>Editar</th>
@@ -304,7 +304,7 @@
             <tbody>
                 <?php $modulosMostrados = []; ?>
                 <?php foreach ($gruposModulos as $grupoNombre => $grupoItems):
-                    // Filtrar solo los mÃ³dulos que existen en $modulos
+                    // Filtrar solo los modulos que existen en $modulos
                     $itemsVis = array_filter($grupoItems, fn($k) => isset($modulos[$k]), ARRAY_FILTER_USE_KEY);
                     if (empty($itemsVis)) continue;
                 ?>
@@ -336,7 +336,7 @@
                             data-rol="<?= $idRol ?>"
                             data-modulo="<?= $mk ?>"
                             data-campo="<?= $campo ?>"
-                            title="<?= $label ?> â€” <?= htmlspecialchars($mnombre) ?> (<?= htmlspecialchars($rol['Nombre_Rol']) ?>)"
+                            title="<?= $label ?> - <?= htmlspecialchars($mnombre) ?> (<?= htmlspecialchars($rol['Nombre_Rol']) ?>)"
                             <?= $val ? 'checked' : '' ?>
                             <?= $esRolProtegido ? 'disabled' : '' ?>>
                     </td>
@@ -350,7 +350,7 @@
                 ?>
                 <?php if (!empty($modulosRestantes)): ?>
                 <tr class="perm-group-header">
-                    <td colspan="5">Otros mÃ³dulos detectados</td>
+                    <td colspan="5">Otros modulos detectados</td>
                 </tr>
                 <?php foreach ($modulosRestantes as $mk => $mnombre):
                     $permiso = $permisos[$idRol][$mk] ?? null;
@@ -362,7 +362,7 @@
                 <tr>
                     <td class="perm-name">
                         <?= htmlspecialchars((string)$mnombre) ?>
-                        <small>MÃ³dulo detectado automÃ¡ticamente en BD o cÃ³digo.</small>
+                        <small>Modulo detectado automaticamente en BD o codigo.</small>
                     </td>
                     <?php foreach ([
                         ['puede_ver',      $pVer, 'Ver'],
@@ -376,7 +376,7 @@
                             data-rol="<?= $idRol ?>"
                             data-modulo="<?= htmlspecialchars((string)$mk, ENT_QUOTES, 'UTF-8') ?>"
                             data-campo="<?= $campo ?>"
-                            title="<?= $label ?> â€” <?= htmlspecialchars((string)$mnombre) ?> (<?= htmlspecialchars($rol['Nombre_Rol']) ?>)"
+                            title="<?= $label ?> - <?= htmlspecialchars((string)$mnombre) ?> (<?= htmlspecialchars($rol['Nombre_Rol']) ?>)"
                             <?= $val ? 'checked' : '' ?>
                             <?= $esRolProtegido ? 'disabled' : '' ?>>
                     </td>
@@ -391,7 +391,7 @@
 
 </div><!-- .perm-page -->
 
-<!-- Toast de confirmaciÃ³n -->
+<!-- Toast de confirmacion -->
 <div id="perm-toast"><i class="bi bi-check-circle"></i> <span id="perm-toast-msg">Permiso actualizado</span></div>
 
 <script>
@@ -403,7 +403,7 @@
         . '?url=permisos/actualizar'
     ) ?>;
 
-    /* â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* Toast */
     let toastTimer = null;
     function showToast(msg, tipo) {
         const el = document.getElementById('perm-toast');
@@ -416,7 +416,7 @@
         toastTimer = setTimeout(() => { el.style.opacity = '0'; setTimeout(() => { el.style.display = 'none'; el.style.opacity = '1'; }, 300); }, 2500);
     }
 
-    /* â”€â”€ Actualizar badge de pestaÃ±a â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* Actualizar badge de pestana */
     function actualizarBadge(idRol) {
         const panel = document.getElementById('rol-' + idRol);
         if (!panel) return;
@@ -426,7 +426,7 @@
         if (tab) tab.textContent = activos + '/' + total;
     }
 
-    /* â”€â”€ Guardar un permiso â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* Guardar un permiso */
     function guardarPermiso(cb, onError) {
         const { rol, modulo, campo } = cb.dataset;
         const valor = cb.checked ? 1 : 0;
@@ -449,19 +449,19 @@
         });
     }
 
-    /* â”€â”€ Checkbox individual â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* Checkbox individual */
     document.querySelectorAll('.permiso-check').forEach(cb => {
         cb.addEventListener('change', function () { guardarPermiso(this); });
     });
 
-    /* â”€â”€ Botones masivos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* Botones masivos */
     document.querySelectorAll('.btn-perm-all').forEach(btn => {
         btn.addEventListener('click', function () {
             const idRol = this.dataset.rol;
             const accion = this.dataset.accion;
 
             const labels = { activar: 'Activar TODO', desactivar: 'Quitar TODO', solo_ver: 'Dejar solo lectura' };
-            if (!confirm('Â¿' + (labels[accion] || accion) + ' para este rol?')) return;
+            if (!confirm('¿' + (labels[accion] || accion) + ' para este rol?')) return;
 
             const panel = document.getElementById('rol-' + idRol);
             const cbs   = panel.querySelectorAll('.permiso-check');
@@ -488,6 +488,21 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
                     body: `id_rol=${encodeURIComponent(rol)}&modulo=${encodeURIComponent(modulo)}&campo=${encodeURIComponent(campo)}&valor=${encodeURIComponent(valor)}`
+                })
+                .then(r => r.text())
+                .then(txt => {
+                    let data;
+                    try {
+                        data = JSON.parse(txt);
+                    } catch (e) {
+                        throw new Error('Respuesta inválida del servidor');
+                    }
+
+                    if (!data || !data.success) {
+                        throw new Error(data?.error || 'Error al guardar permisos');
+                    }
+
+                    return true;
                 });
             });
 
@@ -504,7 +519,7 @@
         });
     });
 
-    /* â”€â”€ PestaÃ±as â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* Pestanas */
     document.querySelectorAll('.perm-tab-btn').forEach(tab => {
         tab.addEventListener('click', function () {
             document.querySelectorAll('.perm-tab-btn').forEach(t => t.classList.remove('active'));

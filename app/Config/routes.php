@@ -185,6 +185,7 @@ return [
     'escuelas_formacion/codigos' => 'EscuelaFormacionRegistroController@codigos',
     'escuelas_formacion/registro-publico/buscar-persona' => 'EscuelaFormacionRegistroController@buscarPersona',
     'escuelas_formacion/registro-publico/buscar-lideres' => 'EscuelaFormacionRegistroController@buscarLideres',
+    'escuelas_formacion/registro-publico/validar-abono' => 'EscuelaFormacionRegistroController@validarAccesoAbono',
     'escuelas_formacion/registro-publico/guardar' => 'EscuelaFormacionRegistroController@guardar',
     'escuelas_formacion/registro-publico/ticket' => 'EscuelaFormacionRegistroController@ticket',
     'escuelas_formacion/pagos' => 'EscuelaFormacionRegistroController@pagos',

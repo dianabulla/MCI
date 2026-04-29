@@ -99,73 +99,113 @@ class PermisosController extends BaseController {
      * Actualizar permisos
      */
     public function actualizar() {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $idRol = (int)$_POST['id_rol'];
-            $modulo = $_POST['modulo'] ?? '';
-            $campo  = $_POST['campo'] ?? '';
-            $valor  = (int)$_POST['valor'];
+        header('Content-Type: application/json; charset=UTF-8');
 
-            // Validar campo para evitar inyección SQL (whitelist)
-            $campoDb = $this->getCampoDb($campo);
-            if ($campoDb === null) {
-                echo json_encode(['success' => false, 'error' => 'Campo no válido']);
-                return;
-            }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Método no permitido']);
+            return;
+        }
 
-            try {
-                // Verificar si existe el permiso
-                $sql = "SELECT Id_Permiso FROM permisos WHERE Id_Rol = ? AND Modulo = ?";
+        $idRol = (int)($_POST['id_rol'] ?? 0);
+        $modulo = trim((string)($_POST['modulo'] ?? ''));
+        $campo  = trim((string)($_POST['campo'] ?? ''));
+        $valor  = (int)($_POST['valor'] ?? 0);
+
+        if ($idRol <= 0) {
+            echo json_encode(['success' => false, 'error' => 'Rol no válido']);
+            return;
+        }
+
+        if ($modulo === '') {
+            echo json_encode(['success' => false, 'error' => 'Módulo no válido']);
+            return;
+        }
+
+        if ($valor !== 0 && $valor !== 1) {
+            echo json_encode(['success' => false, 'error' => 'Valor no válido']);
+            return;
+        }
+
+        if ($this->esRolProtegido($idRol)) {
+            echo json_encode(['success' => false, 'error' => 'El rol protegido no se puede modificar']);
+            return;
+        }
+
+        // Validar campo para evitar inyección SQL (whitelist)
+        $campoDb = $this->getCampoDb($campo);
+        if ($campoDb === null) {
+            echo json_encode(['success' => false, 'error' => 'Campo no válido']);
+            return;
+        }
+
+        try {
+            // Verificar si existe el permiso
+            $sql = "SELECT Id_Permiso FROM permisos WHERE Id_Rol = ? AND Modulo = ?";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([$idRol, $modulo]);
+            $permiso = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($permiso) {
+                // Actualizar
+                $sql = "UPDATE permisos SET $campoDb = ? WHERE Id_Permiso = ?";
+                $stmt = $this->db->prepare($sql);
+                $stmt->execute([$valor, $permiso['Id_Permiso']]);
+            } else {
+                // Crear nuevo permiso con todo en 0
+                $sql = "INSERT INTO permisos (Id_Rol, Modulo, Puede_Ver, Puede_Crear, Puede_Editar, Puede_Eliminar) 
+                        VALUES (?, ?, 0, 0, 0, 0)";
                 $stmt = $this->db->prepare($sql);
                 $stmt->execute([$idRol, $modulo]);
-                $permiso = $stmt->fetch(PDO::FETCH_ASSOC);
 
-                if ($permiso) {
-                    // Actualizar
-                    $sql = "UPDATE permisos SET $campoDb = ? WHERE Id_Permiso = ?";
-                    $stmt = $this->db->prepare($sql);
-                    $stmt->execute([$valor, $permiso['Id_Permiso']]);
-                } else {
-                    // Crear nuevo permiso con todo en 0
-                    $sql = "INSERT INTO permisos (Id_Rol, Modulo, Puede_Ver, Puede_Crear, Puede_Editar, Puede_Eliminar) 
-                            VALUES (?, ?, 0, 0, 0, 0)";
-                    $stmt = $this->db->prepare($sql);
-                    $stmt->execute([$idRol, $modulo]);
-
-                    // Actualizar el campo específico
-                    $sql = "UPDATE permisos SET $campoDb = ? WHERE Id_Rol = ? AND Modulo = ?";
-                    $stmt = $this->db->prepare($sql);
-                    $stmt->execute([$valor, $idRol, $modulo]);
-                }
-
-                // Si se actualiza el rol del usuario actual, reflejar en sesión inmediatamente.
-                $rolSesion = (int)($_SESSION['usuario_rol'] ?? 0);
-                if ($rolSesion > 0 && $rolSesion === $idRol) {
-                    $moduloSesion = trim((string)$modulo);
-                    if ($moduloSesion !== '') {
-                        if (!isset($_SESSION['permisos'][$moduloSesion]) || !is_array($_SESSION['permisos'][$moduloSesion])) {
-                            $_SESSION['permisos'][$moduloSesion] = [
-                                'ver' => 0,
-                                'crear' => 0,
-                                'editar' => 0,
-                                'eliminar' => 0,
-                            ];
-                        }
-
-                        $accionSesion = str_replace('puede_', '', strtolower((string)$campo));
-                        if (in_array($accionSesion, ['ver', 'crear', 'editar', 'eliminar'], true)) {
-                            $_SESSION['permisos'][$moduloSesion][$accionSesion] = $valor ? 1 : 0;
-                        }
-
-                        $_SESSION['permisos_configurados'] = !empty($_SESSION['permisos']);
-                        $_SESSION['permisos_last_sync'] = time();
-                    }
-                }
-
-                echo json_encode(['success' => true]);
-            } catch (Exception $e) {
-                echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+                // Actualizar el campo específico
+                $sql = "UPDATE permisos SET $campoDb = ? WHERE Id_Rol = ? AND Modulo = ?";
+                $stmt = $this->db->prepare($sql);
+                $stmt->execute([$valor, $idRol, $modulo]);
             }
+
+            // Si se actualiza el rol del usuario actual, reflejar en sesión inmediatamente.
+            $rolSesion = (int)($_SESSION['usuario_rol'] ?? 0);
+            if ($rolSesion > 0 && $rolSesion === $idRol) {
+                $moduloSesion = trim((string)$modulo);
+                if ($moduloSesion !== '') {
+                    if (!isset($_SESSION['permisos'][$moduloSesion]) || !is_array($_SESSION['permisos'][$moduloSesion])) {
+                        $_SESSION['permisos'][$moduloSesion] = [
+                            'ver' => 0,
+                            'crear' => 0,
+                            'editar' => 0,
+                            'eliminar' => 0,
+                        ];
+                    }
+
+                    $accionSesion = str_replace('puede_', '', strtolower((string)$campo));
+                    if (in_array($accionSesion, ['ver', 'crear', 'editar', 'eliminar'], true)) {
+                        $_SESSION['permisos'][$moduloSesion][$accionSesion] = $valor ? 1 : 0;
+                    }
+
+                    $_SESSION['permisos_configurados'] = !empty($_SESSION['permisos']);
+                    $_SESSION['permisos_last_sync'] = time();
+                }
+            }
+
+            echo json_encode(['success' => true]);
+        } catch (Throwable $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
+    }
+
+    private function esRolProtegido(int $idRol): bool {
+        if ($idRol === 6) {
+            return true;
+        }
+
+        $rol = $this->rolModel->getById($idRol);
+        if (!$rol) {
+            return false;
+        }
+
+        $nombreRol = strtolower((string)($rol['Nombre_Rol'] ?? ''));
+        return strpos($nombreRol, 'admin') !== false;
     }
 
     /**

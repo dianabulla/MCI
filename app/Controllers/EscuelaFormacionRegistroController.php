@@ -6,12 +6,14 @@
 require_once APP . '/Models/Persona.php';
 require_once APP . '/Models/Ministerio.php';
 require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+require_once APP . '/Models/UsuarioAcceso.php';
 require_once APP . '/Controllers/AuthController.php';
 
 class EscuelaFormacionRegistroController extends BaseController {
     private $personaModel;
     private $ministerioModel;
     private $inscripcionModel;
+    private $usuarioAccesoModel;
     private $soportaProceso = false;
     private $soportaOrigenGanar = false;
     private $soportaEsAntiguo = false;
@@ -36,6 +38,7 @@ class EscuelaFormacionRegistroController extends BaseController {
         $this->personaModel = new Persona();
         $this->ministerioModel = new Ministerio();
         $this->inscripcionModel = new EscuelaFormacionInscripcion();
+        $this->usuarioAccesoModel = new UsuarioAcceso();
 
         $this->personaModel->ensureProcesoColumnExists();
         $this->personaModel->ensureOrigenGanarColumnExists();
@@ -54,6 +57,142 @@ class EscuelaFormacionRegistroController extends BaseController {
         $this->soportaEmail = $this->personaModel->tieneColumna('Email');
         $this->soportaDireccion = $this->personaModel->tieneColumna('Direccion');
         $this->soportaFechaNacimiento = $this->personaModel->tieneColumna('Fecha_Nacimiento');
+    }
+
+    private function asegurarSesionAbono() {
+        if (session_status() === PHP_SESSION_NONE) {
+            @session_start();
+        }
+    }
+
+    private function construirNombreUsuarioAutorizado(array $user): string {
+        $nombre = trim((string)($user['Nombre_Mostrar'] ?? ''));
+        if ($nombre !== '') {
+            return $nombre;
+        }
+
+        $nombrePersona = trim((string)($user['Nombre'] ?? '') . ' ' . (string)($user['Apellido'] ?? ''));
+        if ($nombrePersona !== '') {
+            return $nombrePersona;
+        }
+
+        $usuario = trim((string)($user['Usuario'] ?? ''));
+        return $usuario !== '' ? $usuario : 'USUARIO AUTORIZADO';
+    }
+
+    private function esRolAdministradorSegunUsuario(array $user): bool {
+        $idRol = (int)($user['Id_Rol'] ?? 0);
+        if ($idRol === 6) {
+            return true;
+        }
+
+        $rolNombre = function_exists('mb_strtolower')
+            ? mb_strtolower(trim((string)($user['Nombre_Rol'] ?? '')), 'UTF-8')
+            : strtolower(trim((string)($user['Nombre_Rol'] ?? '')));
+
+        return strpos($rolNombre, 'admin') !== false;
+    }
+
+    private function usuarioPuedeDesbloquearAbono(array $user): bool {
+        if ($this->esRolAdministradorSegunUsuario($user)) {
+            return true;
+        }
+
+        $idRol = (int)($user['Id_Rol'] ?? 0);
+        if ($idRol <= 0) {
+            return false;
+        }
+
+        $permisos = (array)$this->personaModel->getPermisosPorRol($idRol);
+        $map = [];
+        foreach ($permisos as $permiso) {
+            $modulo = trim((string)($permiso['Modulo'] ?? ''));
+            if ($modulo === '') {
+                continue;
+            }
+            $map[$modulo] = [
+                'ver' => !empty($permiso['Puede_Ver']),
+                'crear' => !empty($permiso['Puede_Crear']),
+                'editar' => !empty($permiso['Puede_Editar']),
+                'eliminar' => !empty($permiso['Puede_Eliminar']),
+            ];
+        }
+
+        $tiene = static function(array $mapa, string $modulo): bool {
+            if (!isset($mapa[$modulo])) {
+                return false;
+            }
+            return !empty($mapa[$modulo]['ver']) || !empty($mapa[$modulo]['crear']) || !empty($mapa[$modulo]['editar']);
+        };
+
+        return $tiene($map, 'escuelas_formacion') || $tiene($map, 'asistencias');
+    }
+
+    private function obtenerAutorizacionAbonoSesion(): array {
+        $this->asegurarSesionAbono();
+        $auth = $_SESSION['escuelas_formacion_abono_auth'] ?? null;
+        if (!is_array($auth)) {
+            return ['autorizado' => false, 'nombre' => ''];
+        }
+
+        $expira = (int)($auth['expira'] ?? 0);
+        if ($expira <= time()) {
+            unset($_SESSION['escuelas_formacion_abono_auth']);
+            return ['autorizado' => false, 'nombre' => ''];
+        }
+
+        $nombre = trim((string)($auth['nombre'] ?? ''));
+        return ['autorizado' => $nombre !== '', 'nombre' => $nombre];
+    }
+
+    private function limpiarAutorizacionAbonoSesion(): void {
+        $this->asegurarSesionAbono();
+        unset($_SESSION['escuelas_formacion_abono_auth']);
+    }
+
+    public function validarAccesoAbono() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->json(['success' => false, 'mensaje' => 'Metodo no permitido'], 405);
+            return;
+        }
+
+        $usuario = trim((string)($_POST['usuario'] ?? ''));
+        $contrasena = (string)($_POST['contrasena'] ?? '');
+
+        if ($usuario === '' || $contrasena === '') {
+            $this->json(['success' => false, 'mensaje' => 'Usuario y contrasena son obligatorios.'], 422);
+            return;
+        }
+
+        $user = $this->personaModel->autenticar($usuario, $contrasena);
+        if (!$user && $this->usuarioAccesoModel->existeTabla()) {
+            $user = $this->usuarioAccesoModel->autenticar($usuario, $contrasena);
+        }
+
+        if (!$user) {
+            $this->json(['success' => false, 'mensaje' => 'Credenciales invalidas.'], 401);
+            return;
+        }
+
+        if (!$this->usuarioPuedeDesbloquearAbono((array)$user)) {
+            $this->json(['success' => false, 'mensaje' => 'Este usuario no tiene permiso para registrar abonos.'], 403);
+            return;
+        }
+
+        $nombre = $this->normalizarTextoMayusculas($this->construirNombreUsuarioAutorizado((array)$user));
+        $this->asegurarSesionAbono();
+        $_SESSION['escuelas_formacion_abono_auth'] = [
+            'nombre' => $nombre,
+            'usuario' => $usuario,
+            'at' => time(),
+            'expira' => time() + (8 * 60 * 60),
+        ];
+
+        $this->json([
+            'success' => true,
+            'mensaje' => 'Acceso a abonos habilitado.',
+            'nombre' => $nombre,
+        ]);
     }
 
     private function buildAbsolutePublicUrl($route) {
@@ -708,12 +847,17 @@ class EscuelaFormacionRegistroController extends BaseController {
     }
 
     public function index() {
+        // El formulario publico siempre debe abrir bloqueado; no reutiliza
+        // una autorizacion vieja del mismo navegador o de una sesion previa.
+        $this->limpiarAutorizacionAbonoSesion();
+        $authAbono = ['autorizado' => false, 'nombre' => ''];
         $this->view('escuelas_formacion_publico/formulario', [
             'ministerios' => $this->ministerioModel->getAll(),
             'mensaje' => $_GET['mensaje'] ?? null,
             'tipo_mensaje' => $_GET['tipo'] ?? null,
             'registro_exitoso' => isset($_GET['exito']) && $_GET['exito'] === '1',
             'referencia_pago' => (string)($_GET['referencia_pago'] ?? ''),
+            'abono_auth' => $authAbono,
             'old' => [
                 'identificador' => (string)($_GET['identificador'] ?? ''),
                 'nombre' => (string)($_GET['nombre'] ?? ''),
@@ -731,7 +875,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'metodo_pago' => (string)($_GET['metodo_pago'] ?? ''),
                 'tipo_pago' => (string)($_GET['tipo_pago'] ?? ''),
                 'valor_pago' => (string)($_GET['valor_pago'] ?? ''),
-                'recibido_por' => (string)($_GET['recibido_por'] ?? '')
+                'recibido_por' => (string)($_GET['recibido_por'] ?? ($authAbono['nombre'] ?? ''))
             ]
         ]);
     }
@@ -1345,7 +1489,8 @@ class EscuelaFormacionRegistroController extends BaseController {
             $metodoPago = trim((string)($_POST['metodo_pago'] ?? '')) !== '' ? 'efectivo' : '';
             $tipoPago = 'abono';
             $valorPago = trim((string)($_POST['valor_pago'] ?? '')) !== '' ? round((float)$_POST['valor_pago'], 2) : 0;
-            $recibidoPor = $this->normalizarTextoMayusculas($_POST['recibido_por'] ?? '');
+            $authAbono = $this->obtenerAutorizacionAbonoSesion();
+            $recibidoPor = $this->normalizarTextoMayusculas((string)($authAbono['nombre'] ?? ''));
 
             if ($idInscripcionAsistencia <= 0) {
                 $query = http_build_query(['url' => 'escuelas_formacion/registro-publico', 'mensaje' => 'Debes seleccionar una inscripción válida.', 'tipo' => 'error']);
@@ -1375,6 +1520,12 @@ class EscuelaFormacionRegistroController extends BaseController {
 
             if ($quiereRegistrarPago && $valorPago <= 0) {
                 $query = http_build_query(['url' => 'escuelas_formacion/registro-publico', 'mensaje' => 'El valor del abono debe ser mayor a 0.', 'tipo' => 'error']);
+                header('Location: ' . PUBLIC_URL . '?' . $query);
+                exit;
+            }
+
+            if ($quiereRegistrarPago && empty($authAbono['autorizado'])) {
+                $query = http_build_query(['url' => 'escuelas_formacion/registro-publico', 'mensaje' => 'Debes desbloquear la seccion de abonos con usuario y contrasena.', 'tipo' => 'error']);
                 header('Location: ' . PUBLIC_URL . '?' . $query);
                 exit;
             }
@@ -1447,7 +1598,14 @@ class EscuelaFormacionRegistroController extends BaseController {
             $metodoPago = trim((string)($_POST['metodo_pago'] ?? '')) !== '' ? 'efectivo' : '';
             $tipoPago = 'abono';
             $valorPago = trim((string)($_POST['valor_pago'] ?? '')) !== '' ? round((float)$_POST['valor_pago'], 2) : 0;
-            $recibidoPor = $this->normalizarTextoMayusculas($_POST['recibido_por'] ?? '');
+            $authAbono = $this->obtenerAutorizacionAbonoSesion();
+            $recibidoPor = $this->normalizarTextoMayusculas((string)($authAbono['nombre'] ?? ''));
+
+            if (empty($authAbono['autorizado'])) {
+                $query = http_build_query(['url' => 'escuelas_formacion/registro-publico', 'mensaje' => 'Debes desbloquear la seccion de abonos con usuario y contrasena.', 'tipo' => 'error']);
+                header('Location: ' . PUBLIC_URL . '?' . $query);
+                exit;
+            }
 
             if ($idInscripcionAsistencia <= 0) {
                 $query = http_build_query(['url' => 'escuelas_formacion/registro-publico', 'mensaje' => 'Debes seleccionar una inscripción para registrar el abono.', 'tipo' => 'error']);
@@ -1578,7 +1736,10 @@ class EscuelaFormacionRegistroController extends BaseController {
         $metodoPago = trim((string)($_POST['metodo_pago'] ?? '')) !== '' ? 'efectivo' : '';
         $tipoPago = 'abono';
         $valorPago = ($metodoPago !== '' && trim((string)($_POST['valor_pago'] ?? '')) !== '') ? round((float)$_POST['valor_pago'], 2) : null;
-        $recibidoPor = $this->normalizarTextoMayusculas($_POST['recibido_por'] ?? '');
+        $authAbono = $this->obtenerAutorizacionAbonoSesion();
+        $recibidoPor = $metodoPago !== ''
+            ? $this->normalizarTextoMayusculas((string)($authAbono['nombre'] ?? ''))
+            : '';
 
         $errores = [];
 
@@ -1604,6 +1765,10 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         if ($metodoPago !== '' && ($valorPago === null || $valorPago <= 0)) {
             $errores[] = 'El valor del abono debe ser mayor a 0.';
+        }
+
+        if ($metodoPago !== '' && empty($authAbono['autorizado'])) {
+            $errores[] = 'Debes desbloquear la seccion de abonos con usuario y contrasena.';
         }
 
         if ($metodoPago !== '' && $recibidoPor === '') {

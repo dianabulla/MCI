@@ -20,6 +20,24 @@ $cumplimientoMetas  = $cumplimiento_metas ?? [];
 $ministeriosDisp    = $ministerios_disponibles ?? [];
 $lideresDisp        = $lideres_disponibles ?? [];
 
+// G12-GANAR totales
+$totalesG12 = $totales_g12 ?? ['gi' => 0, 'gc' => 0, 'fv' => 0, 'v' => 0, 'total' => 0];
+$g12GI      = (int)($totalesG12['gi'] ?? 0);
+$g12GC      = (int)($totalesG12['gc'] ?? 0);
+$g12FV      = (int)($totalesG12['fv'] ?? 0);
+$g12V       = (int)($totalesG12['v'] ?? 0);
+
+// Indicador semanal por Líder
+$lideresH   = $lideres_semanal_hombre ?? [];
+$lideresM   = $lideres_semanal_mujer ?? [];
+$fechaInicioSem = $fecha_inicio_semanal ?? date('Y-m-d', strtotime('-7 days'));
+$fechaFinSem = $fecha_fin_semanal ?? date('Y-m-d');
+$semSemanal = [
+    'verde'   => ['bg' => '#22c55e', 'label' => 'Excelente'],
+    'amarillo'=> ['bg' => '#eab308', 'label' => 'En proceso'],
+    'rojo'    => ['bg' => '#ef4444', 'label' => 'Atención'],
+];
+
 // Construir URL base del dashboard conservando filtros
 $baseUrl = PUBLIC_URL . 'index.php?url=reportes/dashboard-ganar&anio=' . $anio;
 if ($filtroMinisterio !== '') {
@@ -288,6 +306,102 @@ $semMeta      = $pctMeta >= 75 ? 'verde' : ($pctMeta >= 40 ? 'amarillo' : 'rojo'
         <div class="dash-kpi-sub">Meta: <?= $metaTotal ?> · Ganados: <?= $totalAnual ?></div>
         <span class="dash-kpi-badge badge-<?= $semMeta ?>"><?= $semaforoInfo[$semMeta]['label'] ?? '' ?></span>
     </div>
+    <?php endif; ?>
+</div>
+
+<!-- ── G12-GANAR ──────────────────────────────────────────────────────────── -->
+<div class="card report-card" style="margin-bottom:22px; padding:18px;">
+    <h4 style="margin:0 0 16px 0; font-size:.97rem; color:#374151; font-weight:700;">
+        G12-GANAR · <?= $anio ?>
+    </h4>
+    <div style="display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap;">
+        <!-- Tabla resumen -->
+        <table style="border-collapse:collapse; min-width:130px; font-size:.92rem;">
+            <tbody>
+                <tr>
+                    <td style="background:#eab308; color:#1a1a1a; font-weight:700; padding:6px 12px; border:1px solid #ccc;">GI</td>
+                    <td style="padding:6px 14px; border:1px solid #ccc; font-weight:600;"><?= $g12GI ?></td>
+                </tr>
+                <tr>
+                    <td style="background:#dc2626; color:#fff; font-weight:700; padding:6px 12px; border:1px solid #ccc;">GC</td>
+                    <td style="padding:6px 14px; border:1px solid #ccc; font-weight:600;"><?= $g12GC ?></td>
+                </tr>
+                <tr>
+                    <td style="background:#16a34a; color:#fff; font-weight:700; padding:6px 12px; border:1px solid #ccc;">FV</td>
+                    <td style="padding:6px 14px; border:1px solid #ccc; font-weight:600;"><?= $g12FV ?></td>
+                </tr>
+                <tr>
+                    <td style="background:#3b82f6; color:#fff; font-weight:700; padding:6px 12px; border:1px solid #ccc;">V</td>
+                    <td style="padding:6px 14px; border:1px solid #ccc; font-weight:600;"><?= $g12V ?></td>
+                </tr>
+            </tbody>
+        </table>
+        <!-- Gráfica de barras -->
+        <div style="flex:1; min-width:260px; max-width:520px;">
+            <canvas id="chartG12Ganar" height="160"></canvas>
+        </div>
+    </div>
+    <p style="margin:10px 0 0 0; font-size:.78rem; color:#64748b;">
+        GI = Ganados en iglesia · GC = Ganados en célula · FV = Fonovisita · V = Visita
+    </p>
+</div>
+
+<!-- ── Indicador Semanal por Líder ────────────────────────────────────── -->
+<div class="card report-card" style="margin-bottom:22px; padding:18px;">
+    <h4 style="margin:0 0 14px 0; font-size:.97rem; color:#374151; font-weight:700;">
+        Indicador semanal por Líder
+    </h4>
+    <small style="color:#64748b; display:block; margin-bottom:14px;">
+        Ganados del <?= date('d/m/Y', strtotime($fechaInicioSem)) ?> al <?= date('d/m/Y', strtotime($fechaFinSem)) ?> · 
+        Verde ≥ 20 · Amarillo 10–19 · Rojo 1–9
+    </small>
+
+    <!-- Hombres -->
+    <?php if (!empty($lideresH)): ?>
+    <div style="margin-bottom:20px;">
+        <h5 style="margin:0 0 10px 0; font-size:.85rem; color:#475569; font-weight:700;">👨 Hombres</h5>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
+            <?php foreach ($lideresH as $lid): ?>
+            <div style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:12px; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,.05);">
+                <div style="font-size:.8rem; color:#475569; margin-bottom:6px; font-weight:600;">
+                    <?= htmlspecialchars(trim($lid['nombre'] . ' ' . $lid['apellido'])) ?>
+                </div>
+                <div style="background:<?= $semSemanal[$lid['semaforo']]['bg'] ?>; color:<?= stripos($lid['semaforo'], 'amarillo') !== false ? '#1a1a1a' : '#fff' ?>; font-weight:700; padding:8px; border-radius:6px; font-size:.95rem; margin-bottom:6px;">
+                    <?= $lid['ganados'] ?>
+                </div>
+                <div style="font-size:.72rem; color:#64748b;">
+                    <?= htmlspecialchars($semSemanal[$lid['semaforo']]['label']) ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- Mujeres -->
+    <?php if (!empty($lideresM)): ?>
+    <div>
+        <h5 style="margin:0 0 10px 0; font-size:.85rem; color:#475569; font-weight:700;">👩 Mujeres</h5>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
+            <?php foreach ($lideresM as $lid): ?>
+            <div style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:12px; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,.05);">
+                <div style="font-size:.8rem; color:#475569; margin-bottom:6px; font-weight:600;">
+                    <?= htmlspecialchars(trim($lid['nombre'] . ' ' . $lid['apellido'])) ?>
+                </div>
+                <div style="background:<?= $semSemanal[$lid['semaforo']]['bg'] ?>; color:<?= stripos($lid['semaforo'], 'amarillo') !== false ? '#1a1a1a' : '#fff' ?>; font-weight:700; padding:8px; border-radius:6px; font-size:.95rem; margin-bottom:6px;">
+                    <?= $lid['ganados'] ?>
+                </div>
+                <div style="font-size:.72rem; color:#64748b;">
+                    <?= htmlspecialchars($semSemanal[$lid['semaforo']]['label']) ?>
+                </div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if (empty($lideresH) && empty($lideresM)): ?>
+    <p style="color:#94a3b8; font-size:.85rem; margin:0;">No hay líderes configurados o sin ganados esta semana.</p>
     <?php endif; ?>
 </div>
 
@@ -563,6 +677,42 @@ $semMeta      = $pctMeta >= 75 ? 'verde' : ($pctMeta >= 40 ? 'amarillo' : 'rojo'
                 responsive: true,
                 plugins: { legend: { display: false } },
                 scales: { x: { beginAtZero: true } }
+            }
+        });
+    }
+
+    // ── Gráfica G12-GANAR (barras) ───────────────────────────────────────
+    const ctxG12 = document.getElementById('chartG12Ganar');
+    if (ctxG12) {
+        new Chart(ctxG12, {
+            type: 'bar',
+            data: {
+                labels: ['GI', 'GC', 'FV', 'V'],
+                datasets: [{
+                    label: 'G12-GANAR',
+                    data: [<?= $g12GI ?>, <?= $g12GC ?>, <?= $g12FV ?>, <?= $g12V ?>],
+                    backgroundColor: ['#eab308', '#dc2626', '#16a34a', '#3b82f6'],
+                    borderRadius: 6,
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: 'G12-GANAR · <?= $anio ?>', font: { size: 14 } },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                const labels = ['Ganados en iglesia','Ganados en célula','Fonovisita','Visita'];
+                                return labels[ctx.dataIndex] + ': ' + ctx.raw;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 50 } }
+                }
             }
         });
     }

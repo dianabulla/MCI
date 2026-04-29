@@ -2330,6 +2330,54 @@ class ReporteController extends BaseController {
 
         arsort($porMinisterioMap);
 
+        // Tabla G12-GANAR: GI, GC, FV, V
+        $tablaG12 = $this->construirTablaGanarMensual($personasAnio, $anio);
+        $totalesG12 = $tablaG12['totales'] ?? ['gi' => 0, 'gc' => 0, 'fv' => 0, 'v' => 0, 'total' => 0];
+
+        // Indicador semanal por Líder
+        $fechaFin = date('Y-m-d');
+        $fechaInicio = date('Y-m-d', strtotime('-7 days'));
+        $lideres12 = $this->personaModel->getLideres12();
+        $lideresSemanal = [];
+
+        foreach ($lideres12 as $lider) {
+            $idLider = (int)($lider['Id_Persona'] ?? 0);
+            $filtroRolTemp = "p.Id_Lider = $idLider AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)";
+            $personasDelLider = $this->personaModel->getWithFiltersAndRole($filtroRolTemp, null, null, true, null, null, null, null, $fechaInicio, $fechaFin);
+            
+            $ganadosSemana = 0;
+            foreach ($personasDelLider as $p) {
+                if ($this->esPersonaNueva($p)) {
+                    $ganadosSemana++;
+                }
+            }
+
+            $genero = (string)($lider['Genero'] ?? '');
+            $generoNormalizado = stripos($genero, 'mujer') !== false ? 'Mujer' : 'Hombre';
+            
+            $semaforo = 'rojo';
+            if ($ganadosSemana >= 20) {
+                $semaforo = 'verde';
+            } elseif ($ganadosSemana >= 10) {
+                $semaforo = 'amarillo';
+            }
+
+            $lideresSemanal[] = [
+                'id'       => $idLider,
+                'nombre'   => trim((string)($lider['Nombre'] ?? '')),
+                'apellido' => trim((string)($lider['Apellido'] ?? '')),
+                'genero'   => $generoNormalizado,
+                'ganados'  => $ganadosSemana,
+                'semaforo' => $semaforo,
+            ];
+        }
+
+        // Separar por género
+        $lideresHombre = array_filter($lideresSemanal, fn($l) => $l['genero'] === 'Hombre');
+        $lideresMujer = array_filter($lideresSemanal, fn($l) => $l['genero'] === 'Mujer');
+        usort($lideresHombre, fn($a, $b) => strcmp($a['apellido'], $b['apellido']));
+        usort($lideresMujer, fn($a, $b) => strcmp($a['apellido'], $b['apellido']));
+
         $this->view('reportes/dashboard_ganar', [
             'anio'                   => $anio,
             'filtro_ministerio'      => (string)$filtroMinisterio,
@@ -2348,6 +2396,11 @@ class ReporteController extends BaseController {
             'semaforo_anual'         => $semaforoFn($totalAnual),
             'cumplimiento_metas'     => $cumplimientoMetas,
             'ministerios_con_meta'   => $porMinisterioConMeta,
+            'totales_g12'            => $totalesG12,
+            'lideres_semanal_hombre' => array_values($lideresHombre),
+            'lideres_semanal_mujer'  => array_values($lideresMujer),
+            'fecha_inicio_semanal'   => $fechaInicio,
+            'fecha_fin_semanal'      => $fechaFin,
         ]);
     }
 

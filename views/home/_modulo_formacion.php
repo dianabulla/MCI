@@ -52,7 +52,7 @@ if (!isset($parametrosRetornoFormacion['url']) || trim((string)$parametrosRetorn
 }
 $returnUrlFormacion = '?' . http_build_query($parametrosRetornoFormacion);
 
-$renderAccionesRegistroFormacion = static function(array $ins, int $idPersonaIns, string $segmentoActual) use ($puedeEditarPersonaFormacion, $puedeEditarRegistroFormacion, $puedeEliminarInscripcionFormacion, $returnUrlFormacion) {
+$renderAccionesRegistroFormacion = static function(array $ins, int $idPersonaIns, string $segmentoActual) use ($puedeEditarPersonaFormacion, $puedeEditarRegistroFormacion, $puedeEliminarInscripcionFormacion, $returnUrlFormacion, $moduloFormacionActual) {
     $idInscripcion = (int)($ins['Id_Inscripcion'] ?? 0);
     $nombreInscripcion = (string)($ins['Nombre'] ?? '');
     ob_start();
@@ -244,8 +244,8 @@ if ($moduloFormacionActual === 'discipular') {
         <small style="color:#637087;">Inscritos por hombres, mujeres y jóvenes</small>
     </div>
 
-    <div class="table-container">
-        <table class="data-table">
+    <div class="table-container formacion-resumen-table-wrap">
+        <table class="data-table formacion-resumen-table">
             <thead>
                 <tr>
                     <th>Ministerio</th>
@@ -661,8 +661,8 @@ if ($moduloFormacionActual === 'discipular') {
             <strong>Ministerio:</strong>
             <span id="modal-ministerio-uv-nombre" style="color:#0a6e6a;">-</span>
         </div>
-        <div class="table-container">
-            <table class="data-table data-table--compacta-celula">
+        <div class="table-container formacion-detalle-ministerio-wrap">
+            <table class="data-table data-table--compacta-celula formacion-detalle-ministerio-table">
                 <thead>
                     <tr>
                         <th>Líder</th>
@@ -996,6 +996,52 @@ if ($moduloFormacionActual === 'discipular') {
     table-layout: auto;
     width: max-content;
     min-width: 100%;
+}
+
+.formacion-resumen-table-wrap {
+    max-height: 420px;
+    overflow-y: auto;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.formacion-resumen-table {
+    width: 100%;
+    min-width: 100%;
+    table-layout: auto;
+}
+
+.formacion-resumen-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #eef4ff;
+}
+
+.formacion-detalle-ministerio-wrap {
+    max-height: 52vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+.formacion-detalle-ministerio-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: auto;
+}
+
+.formacion-detalle-ministerio-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #eef4ff;
+}
+
+.formacion-detalle-ministerio-table th:first-child,
+.formacion-detalle-ministerio-table td:first-child {
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .uv-table-ordenada th,
