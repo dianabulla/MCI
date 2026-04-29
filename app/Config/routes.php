@@ -46,6 +46,7 @@ return [
     'personas/notificaciones' => 'PersonaController@notificaciones',
     'personas/escalera' => 'PersonaController@escalera',
     'personas/actualizarChecklistEscalera' => 'PersonaController@actualizarChecklistEscalera',
+    'personas/asignarMinisterioGanar' => 'PersonaController@asignarMinisterioGanar',
     'personas/plantillas-whatsapp' => 'PersonaController@plantillasWhatsapp',
     'personas/plantillas-whatsapp/programar' => 'PersonaController@programarPlantillaWhatsapp',
     'personas/crear' => 'PersonaController@crear',

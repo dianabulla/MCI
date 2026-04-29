@@ -1145,10 +1145,14 @@ class PersonaController extends BaseController {
             return 'celula';
         }
 
-        // Regla de negocio en pendientes:
-        // - Asignados: ganado en iglesia, sin invitador y con líder/ministerio asignado.
-        // - Domingo/Iglesia: resto de no-célula (incluye quien llegó solo y aún no se asigna).
-        if ($invitadoPor === '' && $tieneAsignacion) {
+        // Mantener la misma regla del listado SQL para evitar desfases en tarjetas:
+        // - Célula: Tipo_Reunion contiene "celula".
+        // - Iglesia/Domingo: cualquier no-célula (incluye "Otros", "Somos Uno", etc.).
+        // - Asignados: no-célula + sin invitador + con líder/ministerio asignado.
+        $esIglesia = (strpos($tipoReunion, 'celula') === false);
+        $tieneInvitador = ($invitadoPor !== '');
+
+        if ($esIglesia && !$tieneInvitador && $tieneAsignacion) {
             return 'asignados';
         }
 
@@ -1968,7 +1972,7 @@ class PersonaController extends BaseController {
         // completo (incluyendo personas ya asignadas), igual que con rango de fechas.
         $esVistaHistoricaPorOrigen = in_array($filtroOrigen, ['celula', 'domingo'], true);
 
-        $usarVistaHistoricaGanados = $esVistaHistoricaPorOrigen;
+        $usarVistaHistoricaGanados = $esVistaHistoricaPorOrigen || $mostrarGanadosHistoricosPorFecha;
 
         // Si se consulta por rango + origen de ganar, mostrar registros históricos
         // aunque ya estén asignados o en etapas posteriores.
@@ -2012,10 +2016,11 @@ class PersonaController extends BaseController {
             || ($filtroFechaInicio !== '' && $filtroFechaFin !== '');
 
         // Totales rápidos por origen sin limitar por el botón seleccionado.
+        $soloGanarBaseConteo = $usarVistaHistoricaGanados ? null : true;
         if ($hayFiltrosSinOrigen) {
-            $personasBaseConteo = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, true, $filtroEstado, $filtroCelula, $filtroEtapa, '', $filtroFechaInicio, $filtroFechaFin);
+            $personasBaseConteo = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, $soloGanarBaseConteo, $filtroEstado, $filtroCelula, $filtroEtapa, '', $filtroFechaInicio, $filtroFechaFin);
         } else {
-            $personasBaseConteo = $this->personaModel->getAllWithRole($filtroRol, true, $filtroEstado, $filtroCelula, $filtroEtapa, '', $filtroFechaInicio, $filtroFechaFin);
+            $personasBaseConteo = $this->personaModel->getAllWithRole($filtroRol, $soloGanarBaseConteo, $filtroEstado, $filtroCelula, $filtroEtapa, '', $filtroFechaInicio, $filtroFechaFin);
         }
         $personasBaseConteo = $this->filtrarSoloPersonasNuevas($personasBaseConteo);
         $personasBaseConteo = $this->enriquecerChecklistPersonas($personasBaseConteo);
@@ -2041,7 +2046,7 @@ class PersonaController extends BaseController {
 
         // Para orígenes 'celula'/'domingo' no restringir por asignación incompleta
         // (mostrar todos los ganados en ese origen, incluyendo ya asignados).
-        $soloGanarListado = $esVistaHistoricaPorOrigen ? null : true;
+        $soloGanarListado = $usarVistaHistoricaGanados ? null : true;
 
         if ($hayFiltrosSinOrigen || ($filtroOrigen !== '')) {
             $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, $soloGanarListado, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
@@ -2139,6 +2144,14 @@ class PersonaController extends BaseController {
         $filtroRol = DataIsolation::generarFiltroPersonas();
 
         $personas = $this->personaModel->getPersonasUniversidadVida($filtroRol);
+        $personas = array_values(array_filter($personas, function($persona) {
+            // Regla de negocio: cuando ya tiene célula + líder + ministerio,
+            // deja Universidad de la Vida y pasa a la gestión de Discípulos.
+            $tieneAsignacionCompleta = $this->personaTieneAsignacionLiderYMinisterio((array)$persona)
+                && $this->personaTieneCelulaAsignada((array)$persona);
+
+            return !$tieneAsignacionCompleta;
+        }));
         $personas = $this->filtrarPersonasPorNombreListado($personas, $filtroNombre);
 
         $this->view('personas/universidad_vida', [
@@ -2520,6 +2533,75 @@ class PersonaController extends BaseController {
             'proceso' => $nuevoProceso,
             'checklist' => $checklistNormalizado
         ]);
+    }
+
+    public function asignarMinisterioGanar() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('personas/ganar');
+            return;
+        }
+
+        if (!AuthController::tienePermiso('personas', 'editar')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $idPersona = (int)($_POST['id_persona'] ?? 0);
+        $idMinisterio = (int)($_POST['id_ministerio_asignar'] ?? 0);
+        $returnUrl = (string)($_POST['return_url'] ?? '');
+
+        if ($idPersona <= 0 || $idMinisterio <= 0) {
+            $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+            return;
+        }
+
+        $filtroRol = DataIsolation::generarFiltroPersonas();
+        if (!$this->personaModel->puedeEditarEscaleraPorRol($idPersona, $filtroRol)) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $contextoFiltros = $this->getContextoFiltrosVisibles();
+        if (!empty($contextoFiltros['restringido']) && is_array($contextoFiltros['ministerioIdsPermitidos'])) {
+            $permitidos = array_map('intval', $contextoFiltros['ministerioIdsPermitidos']);
+            if (!in_array($idMinisterio, $permitidos, true)) {
+                header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+                exit;
+            }
+        }
+
+        $ministerio = $this->ministerioModel->getById($idMinisterio);
+        if (empty($ministerio)) {
+            $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+            return;
+        }
+
+        $personaAntes = $this->personaModel->getById($idPersona);
+        if (empty($personaAntes)) {
+            $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+            return;
+        }
+
+        $dataActualizar = [
+            'Id_Ministerio' => $idMinisterio
+        ];
+
+        if ($this->soportaFechaAsignacionLider) {
+            $dataAsignacion = [
+                'Id_Lider' => (int)($personaAntes['Id_Lider'] ?? 0),
+                'Id_Ministerio' => $idMinisterio
+            ];
+            $dataActualizar['Fecha_Asignacion_Lider'] = $this->resolverFechaAsignacionLider($dataAsignacion, $personaAntes);
+        }
+
+        $this->personaModel->update($idPersona, $dataActualizar);
+
+        $personaDespues = $this->personaModel->getById($idPersona);
+        if (!empty($personaDespues)) {
+            $this->encolarNotificacionCambiosAsignacion((array)$personaAntes, (array)$personaDespues);
+        }
+
+        $this->redirigirConRetorno($returnUrl, 'personas/ganar');
     }
 
     public function exportarExcel() {

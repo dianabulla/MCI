@@ -26,6 +26,9 @@ class ReporteController extends BaseController {
         $this->ministerioModel = new Ministerio();
         $this->escuelaInscripcionModel = new EscuelaFormacionInscripcion();
         $this->escuelaEstadoModel = new EscuelaFormacionEstado();
+
+        // Asegura el filtro de "solo nuevas" en reportes de Ganar.
+        $this->personaModel->ensureEsAntiguoColumnExists();
     }
 
     private function calcularRangoSemanaDomingoADomingo($fechaReferencia) {
@@ -1084,8 +1087,8 @@ class ReporteController extends BaseController {
      * Incluye: Célula, Domingo, Somos Uno, Otro.
      * Excluye explícitamente Migrados.
      */
-    private function esOrigenValidoUniversidadVida(array $persona): bool {
-        if (!$this->esPersonaNueva($persona)) {
+    private function esOrigenValidoUniversidadVida(array $persona, bool $soloNuevas = true): bool {
+        if ($soloNuevas && !$this->esPersonaNueva($persona)) {
             return false;
         }
 
@@ -1311,7 +1314,8 @@ class ReporteController extends BaseController {
             foreach ($peldanos as $col => $idx) {
                 $marcado = false;
                 if ($etapa === 'Consolidar' && $col === 'uv') {
-                    $marcado = $this->esOrigenValidoUniversidadVida($persona);
+                    // En tablas de Consolidar se permite histórico completo (nuevos + antiguos).
+                    $marcado = $this->esOrigenValidoUniversidadVida($persona, false);
                 } else {
                     $marcado = $this->peldanoMarcado($checklist, $etapa, $idx, $proceso);
                 }
@@ -1490,7 +1494,7 @@ class ReporteController extends BaseController {
             $checklist = $this->obtenerChecklist($persona);
             $detalle = $this->construirDetallePersonaReporteMinisterial($persona);
 
-            if ($this->esOrigenValidoUniversidadVida($persona)) {
+            if ($this->esOrigenValidoUniversidadVida($persona, false)) {
                 $rowsMap[$ministerio]['uv']++;
                 $totales['uv']++;
                 $detalles[$ministerio]['uv'][] = $detalle;

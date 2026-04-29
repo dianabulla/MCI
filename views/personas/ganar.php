@@ -429,6 +429,26 @@ $returnUrlGanar = $buildPendientesUrl();
                             </a>
                             <?php endif; ?>
                             </div>
+                            <?php if (AuthController::tienePermiso('personas', 'editar')): ?>
+                            <form method="POST" action="<?= PUBLIC_URL ?>?url=personas/asignarMinisterioGanar" class="ganar-assign-form">
+                                <input type="hidden" name="id_persona" value="<?= (int)($persona['Id_Persona'] ?? 0) ?>">
+                                <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrlGanar, ENT_QUOTES, 'UTF-8') ?>">
+                                <select
+                                    name="id_ministerio_asignar"
+                                    class="form-control ganar-assign-select js-auto-asignar-ministerio"
+                                    data-current="<?= (int)($persona['Id_Ministerio'] ?? 0) ?>"
+                                    required
+                                >
+                                    <option value="">Asignar a...</option>
+                                    <?php foreach (($ministerios ?? []) as $ministerioOpt): ?>
+                                        <?php $idMinisterioOpt = (int)($ministerioOpt['Id_Ministerio'] ?? 0); ?>
+                                        <option value="<?= $idMinisterioOpt ?>" <?= ((int)($persona['Id_Ministerio'] ?? 0) === $idMinisterioOpt) ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars((string)($ministerioOpt['Nombre_Ministerio'] ?? 'Ministerio')) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </form>
+                            <?php endif; ?>
                         </td>
                         <?php endif; ?>
                     </tr>
@@ -525,8 +545,8 @@ $returnUrlGanar = $buildPendientesUrl();
 
 .ganar-table th.action-col,
 .ganar-table td.action-col {
-    white-space: nowrap;
-    min-width: 120px;
+    white-space: normal;
+    min-width: 220px;
     vertical-align: top;
 }
 
@@ -539,11 +559,27 @@ $returnUrlGanar = $buildPendientesUrl();
 
 .ganar-table .action-buttons.action-buttons-compact {
     flex-wrap: nowrap !important;
-    justify-content: center;
+    justify-content: flex-start;
+    margin-bottom: 6px;
 }
 
 .ganar-table .action-buttons.action-buttons-compact .action-icon-btn {
     flex: 0 0 auto;
+}
+
+.ganar-assign-form {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.ganar-assign-select {
+    min-width: 140px;
+    max-width: 190px;
+    height: 31px;
+    font-size: 12px;
+    padding: 4px 8px;
 }
 
 .action-icon-btn {
@@ -1091,6 +1127,33 @@ $returnUrlGanar = $buildPendientesUrl();
 </div>
 
 <script>
+(function() {
+    const selectsAsignarMinisterio = document.querySelectorAll('.js-auto-asignar-ministerio');
+    if (selectsAsignarMinisterio.length) {
+        selectsAsignarMinisterio.forEach(function(selectEl) {
+            selectEl.addEventListener('change', function() {
+                const form = selectEl.closest('form');
+                if (!form) {
+                    return;
+                }
+
+                if (form.dataset.submitting === '1') {
+                    return;
+                }
+
+                const nuevoValor = String(selectEl.value || '').trim();
+                const valorActual = String(selectEl.getAttribute('data-current') || '').trim();
+                if (nuevoValor === '' || nuevoValor === valorActual) {
+                    return;
+                }
+
+                form.dataset.submitting = '1';
+                form.submit();
+            });
+        });
+    }
+})();
+
 (function() {
     const btnCopiar = document.getElementById('btnCopiarUrlRegistroPersonas');
     if (!btnCopiar) {

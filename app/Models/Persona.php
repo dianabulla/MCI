@@ -522,6 +522,10 @@ class Persona extends BaseModel {
             $where[] = '(' . $filtroRol . ')';
         }
 
+        if ($this->tieneColumna('Es_Antiguo')) {
+            $where[] = 'p.Es_Antiguo = 0';
+        }
+
         if ($idCelula !== null && $idCelula !== '') {
             if ((string)$idCelula === '0') {
                 $where[] = 'p.Id_Celula IS NULL';
