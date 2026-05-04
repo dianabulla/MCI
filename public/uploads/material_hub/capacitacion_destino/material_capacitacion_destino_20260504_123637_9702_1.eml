@@ -1,0 +1,1189 @@
+Delivered-To: sfccorreo00@gmail.com
+Received: by 2002:a05:7022:1288:b0:12a:7797:56a7 with SMTP id oy8csp307509dlb;
+        Fri, 17 Apr 2026 10:14:51 -0700 (PDT)
+X-Forwarded-Encrypted: i=2;
+ AFNElJ+CIMllxJeq7o3h1QJE69KCU5VqrMkqQCJgHzLBNU/Uo+ThX/ORq2OwLsjRpaFCg7IQQ/4VjeE2iMhmRw==@gmail.com
+X-Received: by 2002:a05:620a:2844:b0:8cd:c011:fcc3 with SMTP id
+ af79cd13be357-8e78fd23ceamr484649585a.24.1776446091208;
+        Fri, 17 Apr 2026 10:14:51 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1776446091; cv=none;
+        d=google.com; s=arc-20240605;
+        b=D6+wS7qzbraGp/kbCTC4pQ33GLdVBE27D2ClXUSBOfZS7RpKT03D1WNRUuzo4ahGTK
+         hWdVCYI9fg3LjoUDKQKJcPEhj4gvSzCiKz4tzpyLbMFXhhnM4yLcYr8nZnWLoKO22tD5
+         7xWDwKHhg95g77cirnl7ftv1cq67WyS6hGLVIxpShdaT5K2B7OkMHJ7fE12UyVUR4CKA
+         uWBaYc9Av/TafEVrUOvMoIbd9uPjH2cl3JmqwV+idsXKcXuEZR6nujCXy1nBLpgTYRjY
+         tJ0KbDST3xWKvJhcfBrW/9sceXm98IWAA0gTMHQ1r+EV5OMHwwZ3eipktBDMqfBMQl4H
+         G5BA==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com;
+ s=arc-20240605;
+        h=cc:to:subject:message-id:mime-version:from:date
+         :content-transfer-encoding:dkim-signature:dkim-signature;
+        bh=o9ENHp5aTbW49Y+JAZlVNSN/E5WZqKaonCy6swE6J6g=;
+        fh=etAx3SIeIW5KvKikUUw3ZTNYZvenuHdC2H4RnVTNHGw=;
+        b=L0cXNq/OSZaCGOeJ33vhRDE3uTG9UK2wLX+RI4yWCZWHF3ESsdEImzjnRLC2fdC01w
+         WBMimBj4UbzilztGhcVcxPW+skieXbTMqwu56MaGUQefDBHM57C2NnxSHFYF/e9Ihf8H
+         UX7OfC7LYD/CD7n7oFCiyRMdxcFW+CWAQvW9xrz1F/TlPRP96uN6lFZSIunadB1Tyml0
+         6mzLhXg+vN0ro5azvB7O1aFnR9+uWuKqL1s+B4Atb7hrLEI8/3CnDPvfbXoG9EljwhOw
+         UJwT5fnzlnKtGsjHPUdTYKn0jqYOm5Hmw6iSWj9zmUs3sl7O0wbPeB8GF0uZnTYZVbrT
+         KvJw==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@superfinanciera.gov.co header.s=s1
+ header.b=GOTweIH5;
+       dkim=pass header.i=@sendgrid.info header.s=smtpapi header.b=Haer3qwa;
+       spf=pass (google.com: domain of
+ bounces+24089676-3de5-sfccorreo00=gmail.com@em2546.superfinanciera.gov.co
+ designates 159.183.150.226 as permitted sender)
+ smtp.mailfrom="bounces+24089676-3de5-sfccorreo00=gmail.com@em2546.superfinanciera.gov.co";
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE)
+ header.from=superfinanciera.gov.co
+Return-Path: 
+ <bounces+24089676-3de5-sfccorreo00=gmail.com@em2546.superfinanciera.gov.co>
+Received: from o1.ptr123.superfinanciera.gov.co
+ (o1.ptr123.superfinanciera.gov.co. [159.183.150.226])
+        by mx.google.com with ESMTPS id
+ af79cd13be357-8e7db569a6bsi232650585a.551.2026.04.17.10.14.50
+        for <sfccorreo00@gmail.com>
+        (version=TLS1_3 cipher=TLS_AES_128_GCM_SHA256 bits=128/128);
+        Fri, 17 Apr 2026 10:14:51 -0700 (PDT)
+Received-SPF: pass (google.com: domain of
+ bounces+24089676-3de5-sfccorreo00=gmail.com@em2546.superfinanciera.gov.co
+ designates 159.183.150.226 as permitted sender) client-ip=159.183.150.226;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@superfinanciera.gov.co header.s=s1
+ header.b=GOTweIH5;
+       dkim=pass header.i=@sendgrid.info header.s=smtpapi header.b=Haer3qwa;
+       spf=pass (google.com: domain of
+ bounces+24089676-3de5-sfccorreo00=gmail.com@em2546.superfinanciera.gov.co
+ designates 159.183.150.226 as permitted sender)
+ smtp.mailfrom="bounces+24089676-3de5-sfccorreo00=gmail.com@em2546.superfinanciera.gov.co";
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE)
+ header.from=superfinanciera.gov.co
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+ d=superfinanciera.gov.co;
+	h=content-transfer-encoding:content-type:date:from:mime-version:subject:
+	to:cc:cc:content-type:date:feedback-id:from:subject:to;
+	s=s1; t=1776446090; bh=o9ENHp5aTbW49Y+JAZlVNSN/E5WZqKaonCy6swE6J6g=;
+	b=GOTweIH5EL60xKxpKEv9BcUs8QXaOEgcJC6gPZUqQwPOEvaV9T+7EfKEPBZPtehhlkf5
+	uTEizgRKU6XPtmQHi6N1jyrr5jZVYncGiycf1YNNOKumUMa0abXD8LceFzoYhyG3oSEOEf
+	cxheVTsVn8Mqtp16BjgHhKCBv2WXxrs1NxmZkLP1g68JaPcNMfpep/tbqdHt27HdIJrteL
+	XlckVtht7mclGUfSl5uFKz7wyUor9ubP/sLUAWKD22gBTa4y303j5FSivLWPNTcJcgNo8T
+	YWSGDeTjC9Xgmm6PmdX1GnRCwD/AUow+K9wcpK14RUD59CihRPsLsUP5pxNpdeEw==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=sendgrid.info;
+	h=content-transfer-encoding:content-type:date:from:mime-version:subject:
+	to:cc:cc:content-type:date:feedback-id:from:subject:to;
+	s=smtpapi; t=1776446090; bh=o9ENHp5aTbW49Y+JAZlVNSN/E5WZqKaonCy6swE6J6g=;
+	b=Haer3qwa9gLtgEPStFrfTel1cWlMBaZnYalCzesTkQNiqEoJ9VgjiCKoBsMcPLGvwP/L
+	P+8LCAg6+6PCREeHxByK74mHPdAoGirqa/YPgMDIaXPl7kRc39zxRYdjB6G+mhduA0xFkr
+	LeBT5Z2NX6z2blFGP+0kIq2iHpjuf0MGA=
+Received: by recvd-canary-5445dccdc7-hr4kf with SMTP id
+ recvd-canary-5445dccdc7-hr4kf-1-69E26A8A-34
+	2026-04-17 17:14:50.342532223 +0000 UTC m=+605511.533479535
+Received: from MjQwODk2NzY (unknown)
+	by geopod-ismtpd-19 (SG) with HTTP
+	id SBum3j6bRhml0h8inlGv6Q
+	Fri, 17 Apr 2026 17:14:50.308 +0000 (UTC)
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/html; charset=utf-8
+Date: Fri, 17 Apr 2026 17:14:50 +0000 (UTC)
+From: cuentaservicio002@superfinanciera.gov.co
+Mime-Version: 1.0
+Message-ID: <SBum3j6bRhml0h8inlGv6Q@geopod-ismtpd-19>
+Subject: 171776446089661027 Acuso de recibido
+X-SG-EID: 
+ =?us-ascii?Q?u001=2ERzpVSFa5+T8lAdI26hTspO4=2F12MHSS5jLtq1kjxtYBGcB7kP7=2FiPRLDdV?=
+ =?us-ascii?Q?u9nWts+oRHag8G4DU381b4JFHz8web=2F6o9TmOtP?=
+ =?us-ascii?Q?qIek92uu+czf8WFf97COQx1vt304Gw7DhlNZGhV?=
+ =?us-ascii?Q?T+Z0clEHy2Ny4WEPmGPkiap5BgDTTWGey9kXUCS?=
+ =?us-ascii?Q?4r7=2FZbOEJdWfVxpdRRAhgsmFUjdbq+Mw9KOVtpo?=
+ =?us-ascii?Q?wZtRm0u+RQlS3y1AdIlQZJXz6WraX9bylJWqxze?= =?us-ascii?Q?J=2F+4?=
+X-SG-ID: 
+ =?us-ascii?Q?u001=2ESdBcvi+Evd=2FbQef8eZF3BpTL9BgbK5wfSJMJGMsmprDsPyUTnMagHRCjb?=
+ =?us-ascii?Q?=2F65Gubl5IXJNUVbEVC7gsxnEw8YEbZRTb9HDKUm?=
+ =?us-ascii?Q?CWRCpidrK9GCPD3r3ye2v+8m+Pqt+1b8Pr9S3zS?=
+ =?us-ascii?Q?O8agPXaQ9Edr5EZaDLcWn+y=2FcR6IkzT+Ei9GVqa?=
+ =?us-ascii?Q?mXhg4fU0jHSFsW6GL7RM3zozmB6bmXlHhosSX+n?=
+ =?us-ascii?Q?Q=3D=3D?=
+To: chepito7777777@gmail.com
+Cc: cuentaservicio002@superfinanciera.gov.co
+Bcc: sfccorreo00@gmail.com
+X-Entity-ID: u001.HChO/x5X5VLcJ1HkJtcDHg==
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org=
+/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html data-editor-version=3D"2" class=3D"sg-campaigns" xmlns=3D"http://www.=
+w3.org/1999/xhtml">
+    <head>
+      <meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3Dutf=
+-8">
+      <meta name=3D"viewport" content=3D"width=3Ddevice-width, initial-scal=
+e=3D1, minimum-scale=3D1, maximum-scale=3D1">
+      <!--[if !mso]><!-->
+      <meta http-equiv=3D"X-UA-Compatible" content=3D"IE=3DEdge">
+      <!--<![endif]-->
+      <!--[if (gte mso 9)|(IE)]>
+      <xml>
+        <o:OfficeDocumentSettings>
+          <o:AllowPNG/>
+          <o:PixelsPerInch>96</o:PixelsPerInch>
+        </o:OfficeDocumentSettings>
+      </xml>
+      <![endif]-->
+      <!--[if (gte mso 9)|(IE)]>
+  <style type=3D"text/css">
+    body {width: 600px;margin: 0 auto;}
+    table {border-collapse: collapse;}
+    table, td {mso-table-lspace: 0pt;mso-table-rspace: 0pt;}
+    img {-ms-interpolation-mode: bicubic;}
+  </style>
+<![endif]-->
+      <style type=3D"text/css">
+    body, p, div {
+      font-family: arial,helvetica,sans-serif;
+      font-size: 14px;
+    }
+    body {
+      color: #000000;
+    }
+    body a {
+      color: #1188E6;
+      text-decoration: none;
+    }
+    p { margin: 0; padding: 0; }
+    table.wrapper {
+      width:100% !important;
+      table-layout: fixed;
+      -webkit-font-smoothing: antialiased;
+      -webkit-text-size-adjust: 100%;
+      -moz-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    img.max-width {
+      max-width: 100% !important;
+    }
+    .column.of-2 {
+      width: 50%;
+    }
+    .column.of-3 {
+      width: 33.333%;
+    }
+    .column.of-4 {
+      width: 25%;
+    }
+    ul ul ul ul  {
+      list-style-type: disc !important;
+    }
+    ol ol {
+      list-style-type: lower-roman !important;
+    }
+    ol ol ol {
+      list-style-type: lower-latin !important;
+    }
+    ol ol ol ol {
+      list-style-type: decimal !important;
+    }
+    @media screen and (max-width:480px) {
+      .preheader .rightColumnContent,
+      .footer .rightColumnContent {
+        text-align: left !important;
+      }
+      .preheader .rightColumnContent div,
+      .preheader .rightColumnContent span,
+      .footer .rightColumnContent div,
+      .footer .rightColumnContent span {
+        text-align: left !important;
+      }
+      .preheader .rightColumnContent,
+      .preheader .leftColumnContent {
+        font-size: 80% !important;
+        padding: 5px 0;
+      }
+      table.wrapper-mobile {
+        width: 100% !important;
+        table-layout: fixed;
+      }
+      img.max-width {
+        height: auto !important;
+        max-width: 100% !important;
+      }
+      a.bulletproof-button {
+        display: block !important;
+        width: auto !important;
+        font-size: 80%;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+      }
+      .columns {
+        width: 100% !important;
+      }
+      .column {
+        display: block !important;
+        width: 100% !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+      }
+      .social-icon-column {
+        display: inline-block !important;
+      }
+    }
+  </style>
+      <!--user entered Head Start--><!--End Head user entered-->
+    </head>
+    <body>
+      <center class=3D"wrapper" data-link-color=3D"#1188E6" data-body-style=
+=3D"font-size:14px; font-family:arial,helvetica,sans-serif; color:#000000; =
+background-color:#FFFFFF;">
+        <div class=3D"webkit">
+          <table cellpadding=3D"0" cellspacing=3D"0" border=3D"0" width=3D"=
+100%" class=3D"wrapper" bgcolor=3D"#FFFFFF">
+            <tr>
+              <td valign=3D"top" bgcolor=3D"#FFFFFF" width=3D"100%">
+                <table width=3D"100%" role=3D"content-container" class=3D"o=
+uter" align=3D"center" cellpadding=3D"0" cellspacing=3D"0" border=3D"0">
+                  <tr>
+                    <td width=3D"100%">
+                      <table width=3D"100%" cellpadding=3D"0" cellspacing=
+=3D"0" border=3D"0">
+                        <tr>
+                          <td>
+                            <!--[if mso]>
+    <center>
+    <table><tr><td width=3D"600">
+  <![endif]-->
+                                    <table width=3D"100%" cellpadding=3D"0"=
+ cellspacing=3D"0" border=3D"0" style=3D"width:100%; max-width:600px;" alig=
+n=3D"center">
+                                      <tr>
+                                        <td role=3D"modules-container" styl=
+e=3D"padding:0px 0px 0px 0px; color:#000000; text-align:left;" bgcolor=3D"#=
+FFFFFF" width=3D"100%" align=3D"left"><table class=3D"module preheader preh=
+eader-hide" role=3D"module" data-type=3D"preheader" border=3D"0" cellpaddin=
+g=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"display: none !important;=
+ mso-hide: all; visibility: hidden; opacity: 0; color: transparent; height:=
+ 0; width: 0;">
+    <tr>
+      <td role=3D"module-content">
+        <p></p>
+      </td>
+    </tr>
+  </table><table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" align=3D"=
+center" width=3D"100%" role=3D"module" data-type=3D"columns" style=3D"paddi=
+ng:10px 0px 10px 0px;" bgcolor=3D"#3366CC" data-distribution=3D"1">
+    <tbody>
+      <tr role=3D"module-content">
+        <td height=3D"100%" valign=3D"top"><table width=3D"600" style=3D"wi=
+dth:600px; border-spacing:0; border-collapse:collapse; margin:0px 0px 0px 0=
+px;" cellpadding=3D"0" cellspacing=3D"0" align=3D"left" border=3D"0" bgcolo=
+r=3D"" class=3D"column column-0">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table cla=
+ss=3D"wrapper" role=3D"module" data-type=3D"image" border=3D"0" cellpadding=
+=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-layout: fixed;" data=
+-muid=3D"87774348-3b3a-4e97-ab5b-695db41b9af0">
+    <tbody>
+      <tr>
+        <td style=3D"font-size:6px; line-height:10px; padding:10px 0px 10px=
+ 0px;" valign=3D"top" align=3D"left">
+          <img class=3D"max-width" border=3D"0" style=3D"display:block; col=
+or:#000000; text-decoration:none; font-family:Helvetica, arial, sans-serif;=
+ font-size:16px;" width=3D"180" alt=3D"" data-proportionally-constrained=3D=
+"true" data-responsive=3D"false" src=3D"http://cdn.mcauto-images-production=
+.sendgrid.net/3fb7eccc84503460/51b6c4a9-16c0-4229-9a70-d6dfea306290/209x46.=
+png" height=3D"40">
+        </td>
+      </tr>
+    </tbody>
+  </table></td>
+        </tr>
+      </tbody>
+    </table></td>
+      </tr>
+    </tbody>
+  </table><table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" align=3D"=
+center" width=3D"100%" role=3D"module" data-type=3D"columns" style=3D"paddi=
+ng:20px 0px 0px 0px;" bgcolor=3D"#FFFFFF" data-distribution=3D"1,1,1">
+    <tbody>
+      <tr role=3D"module-content">
+        <td height=3D"100%" valign=3D"top"><table width=3D"186" style=3D"wi=
+dth:186px; border-spacing:0; border-collapse:collapse; margin:0px 10px 0px =
+0px;" cellpadding=3D"0" cellspacing=3D"0" align=3D"left" border=3D"0" bgcol=
+or=3D"" class=3D"column column-0">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table cla=
+ss=3D"module" role=3D"module" data-type=3D"spacer" border=3D"0" cellpadding=
+=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-layout: fixed;" data=
+-muid=3D"aa90b11a-de33-4a3d-9c19-956acd187ea3">
+    <tbody>
+      <tr>
+        <td style=3D"padding:0px 0px 30px 0px;" role=3D"module-content" bgc=
+olor=3D"">
+        </td>
+      </tr>
+    </tbody>
+  </table></td>
+        </tr>
+      </tbody>
+    </table><table width=3D"186" style=3D"width:186px; border-spacing:0; bo=
+rder-collapse:collapse; margin:0px 10px 0px 10px;" cellpadding=3D"0" cellsp=
+acing=3D"0" align=3D"left" border=3D"0" bgcolor=3D"" class=3D"column column=
+-1">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table cla=
+ss=3D"wrapper" role=3D"module" data-type=3D"image" border=3D"0" cellpadding=
+=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-layout: fixed;" data=
+-muid=3D"d1110851-b37b-4570-8229-0fbafc51783d">
+    <tbody>
+      <tr>
+        <td style=3D"font-size:6px; line-height:10px; padding:10px 0px 0px =
+0px;" valign=3D"top" align=3D"left">
+         =20
+        <a href=3D"http://cdn.mcauto-images-production.sendgrid.net/f2ca4c9=
+39516845b/abc894c3-11cf-42cd-af6a-0d2a3329e02e/237x100.png"><img class=3D"m=
+ax-width" border=3D"0" style=3D"display:block; color:#000000; text-decorati=
+on:none; font-family:Helvetica, arial, sans-serif; font-size:16px; max-widt=
+h:100% !important; width:100%; height:auto !important;" width=3D"186" alt=
+=3D"" data-proportionally-constrained=3D"true" data-responsive=3D"true" src=
+=3D"http://cdn.mcauto-images-production.sendgrid.net/f2ca4c939516845b/d8e9f=
+c94-8eb0-440b-b0c9-656128ddaffd/645x112.png"></a></td>
+      </tr>
+    </tbody>
+  </table></td>
+        </tr>
+      </tbody>
+    </table><table width=3D"186" style=3D"width:186px; border-spacing:0; bo=
+rder-collapse:collapse; margin:0px 0px 0px 10px;" cellpadding=3D"0" cellspa=
+cing=3D"0" align=3D"left" border=3D"0" bgcolor=3D"" class=3D"column column-=
+2">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"></td>
+        </tr>
+      </tbody>
+    </table></td>
+      </tr>
+    </tbody>
+  </table><table class=3D"module" role=3D"module" data-type=3D"spacer" bord=
+er=3D"0" cellpadding=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-=
+layout: fixed;" data-muid=3D"b1ca99a8-6e2b-44dc-8df3-ec34b1815ccc">
+    <tbody>
+      <tr>
+        <td style=3D"padding:0px 0px 20px 0px;" role=3D"module-content" bgc=
+olor=3D"">
+        </td>
+      </tr>
+    </tbody>
+  </table><table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" align=3D"=
+center" width=3D"100%" role=3D"module" data-type=3D"columns" style=3D"paddi=
+ng:10px 15px 10px 15px;" bgcolor=3D"#ffffff" data-distribution=3D"1">
+    <tbody>
+      <tr role=3D"module-content">
+        <td height=3D"100%" valign=3D"top"><table width=3D"570" style=3D"wi=
+dth:570px; border-spacing:0; border-collapse:collapse; margin:0px 0px 0px 0=
+px;" cellpadding=3D"0" cellspacing=3D"0" align=3D"left" border=3D"0" bgcolo=
+r=3D"" class=3D"column column-0">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table cla=
+ss=3D"module" role=3D"module" data-type=3D"text" border=3D"0" cellpadding=
+=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-layout: fixed;" data=
+-muid=3D"c36f19cf-fdc9-4f28-82dd-2c08cb554341" data-mc-module-version=3D"20=
+19-10-22">
+    <tbody>
+      <tr>
+        <td style=3D"padding:25px 10px 25px 10px; line-height:22px; text-al=
+ign:inherit; background-color:#1A3366;" height=3D"100%" valign=3D"top" bgco=
+lor=3D"#1A3366" role=3D"module-content"><div><div style=3D"font-family: inh=
+erit; text-align: center"><span style=3D"color: #ffffff; font-size: 24px; f=
+ont-style: normal; font-variant-ligatures: normal; font-variant-caps: norma=
+l; font-weight: 700; letter-spacing: normal; orphans: 2; text-align: center=
+; text-indent: 0px; text-transform: none; white-space-collapse: preserve; t=
+ext-wrap-mode: wrap; text-wrap-style: initial; widows: 2; word-spacing: 0px=
+; -webkit-text-stroke-width: 0px; background-color: rgb(26, 51, 102); text-=
+decoration-thickness: initial; text-decoration-style: initial; text-decorat=
+ion-color: initial; float: none; display: inline; font-family: arial, helve=
+tica, sans-serif">Nueva queja registrada</span></div>
+<div style=3D"font-family: inherit; text-align: center"><span style=3D"colo=
+r: #ffffff; font-size: 14px; font-style: normal; font-variant-ligatures: no=
+rmal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; =
+orphans: 2; text-align: center; text-indent: 0px; text-transform: none; whi=
+te-space-collapse: preserve; text-wrap-mode: wrap; text-wrap-style: initial=
+; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; background-=
+color: rgb(26, 51, 102); text-decoration-thickness: initial; text-decoratio=
+n-style: initial; text-decoration-color: initial; float: none; display: inl=
+ine; font-family: arial, helvetica, sans-serif">Superintendencia Financiera=
+ de Colombia</span></div><div></div></div></td>
+      </tr>
+    </tbody>
+  </table></td>
+        </tr>
+      </tbody>
+    </table></td>
+      </tr>
+    </tbody>
+  </table><table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" align=3D"=
+center" width=3D"100%" role=3D"module" data-type=3D"columns" style=3D"paddi=
+ng:0px 0px 0px 0px;" bgcolor=3D"#FFFFFF" data-distribution=3D"1">
+    <tbody>
+      <tr role=3D"module-content">
+        <td height=3D"100%" valign=3D"top"><table width=3D"520" style=3D"wi=
+dth:520px; border-spacing:0; border-collapse:collapse; margin:0px 40px 0px =
+40px;" cellpadding=3D"0" cellspacing=3D"0" align=3D"left" border=3D"0" bgco=
+lor=3D"" class=3D"column column-0">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table cla=
+ss=3D"module" role=3D"module" data-type=3D"text" border=3D"0" cellpadding=
+=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-layout: fixed;" data=
+-muid=3D"7efa0a20-eece-4751-ba2a-640553bd2041" data-mc-module-version=3D"20=
+19-10-22">
+    <tbody>
+      <tr>
+        <td style=3D"padding:18px 20px 0px 20px; line-height:28px; text-ali=
+gn:inherit;" height=3D"100%" valign=3D"top" bgcolor=3D"" role=3D"module-con=
+tent"><div><div style=3D"font-family: inherit; text-align: center"><span st=
+yle=3D"box-sizing: border-box; padding-top: 0px; padding-right: 0px; paddin=
+g-bottom: 0px; padding-left: 0px; margin-top: 0px; margin-right: 0px; margi=
+n-bottom: 0px; margin-left: 0px; font-style: inherit; font-variant-ligature=
+s: inherit; font-variant-caps: inherit; font-variant-numeric: inherit; font=
+-variant-east-asian: inherit; font-weight: inherit; font-stretch: inherit; =
+line-height: inherit; vertical-align: baseline; border-top-width: 0px; bord=
+er-right-width: 0px; border-bottom-width: 0px; border-left-width: 0px; bord=
+er-top-style: initial; border-right-style: initial; border-bottom-style: in=
+itial; border-left-style: initial; border-top-color: initial; border-right-=
+color: initial; border-bottom-color: initial; border-left-color: initial; b=
+order-image-source: initial; border-image-slice: initial; border-image-widt=
+h: initial; border-image-outset: initial; border-image-repeat: initial; tex=
+t-align: center; letter-spacing: normal; orphans: 2; text-indent: 0px; text=
+-transform: none; white-space-collapse: preserve; text-wrap-mode: wrap; tex=
+t-wrap-style: initial; widows: 2; word-spacing: 0px; -webkit-text-stroke-wi=
+dth: 0px; background-color: rgb(255, 255, 255); text-decoration-thickness: =
+initial; text-decoration-style: initial; text-decoration-color: initial; fo=
+nt-size: 18px; color: #8c8c8c; font-family: arial, helvetica, sans-serif">E=
+stimado Usuario:</span></div><div></div></div></td>
+      </tr>
+    </tbody>
+  </table><table class=3D"module" role=3D"module" data-type=3D"text" border=
+=3D"0" cellpadding=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-la=
+yout: fixed;" data-muid=3D"7ad404bf-e2e7-4be1-b8a9-eff317f3d2e4" data-mc-mo=
+dule-version=3D"2019-10-22">
+    <tbody>
+      <tr>
+        <td style=3D"padding:0px 0px 18px 0px; line-height:24px; text-align=
+:inherit;" height=3D"100%" valign=3D"top" bgcolor=3D"" role=3D"module-conte=
+nt"><div><div style=3D"font-family: inherit; text-align: center"><span styl=
+e=3D"font-size: 24px; color: #4e4e4e; font-family: arial, helvetica, sans-s=
+erif"><strong>Jose Albeiro Pardo Mora</strong></span></div><div></div></div=
+></td>
+      </tr>
+    </tbody>
+  </table></td>
+        </tr>
+      </tbody>
+    </table></td>
+      </tr>
+    </tbody>
+  </table><table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" align=3D"=
+center" width=3D"100%" role=3D"module" data-type=3D"columns" style=3D"paddi=
+ng:0px 0px 0px 0px;" bgcolor=3D"#FFFFFF" data-distribution=3D"1">
+    <tbody>
+      <tr role=3D"module-content">
+        <td height=3D"100%" valign=3D"top"><table width=3D"540" style=3D"wi=
+dth:540px; border-spacing:0; border-collapse:collapse; margin:0px 30px 0px =
+30px;" cellpadding=3D"0" cellspacing=3D"0" align=3D"left" border=3D"0" bgco=
+lor=3D"" class=3D"column column-0">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table cla=
+ss=3D"module" role=3D"module" data-type=3D"text" border=3D"0" cellpadding=
+=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-layout: fixed;" data=
+-muid=3D"5488ef6f-ec7f-4ccc-8874-0e3adc10b63e" data-mc-module-version=3D"20=
+19-10-22">
+    <tbody>
+      <tr>
+        <td style=3D"padding:18px 0px 18px 0px; line-height:22px; text-alig=
+n:inherit;" height=3D"100%" valign=3D"top" bgcolor=3D"" role=3D"module-cont=
+ent"><div><div style=3D"font-family: inherit; text-align: center"><span sty=
+le=3D"font-style: normal; font-variant-ligatures: normal; font-variant-caps=
+: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align:=
+ left; text-indent: 0px; text-transform: none; white-space-collapse: preser=
+ve; text-wrap-mode: wrap; text-wrap-style: initial; widows: 2; word-spacing=
+: 0px; -webkit-text-stroke-width: 0px; text-decoration-thickness: initial; =
+text-decoration-style: initial; text-decoration-color: initial; float: none=
+; display: inline; color: #000000; background-color: transparent; font-size=
+: 14px; font-family: arial, helvetica, sans-serif">Hemos recibido tu queja =
+en contra de </span><span style=3D"font-style: normal; font-variant-ligatur=
+es: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: no=
+rmal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none;=
+ white-space-collapse: preserve; text-wrap-mode: wrap; text-wrap-style: ini=
+tial; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; text-de=
+coration-thickness: initial; text-decoration-style: initial; text-decoratio=
+n-color: initial; float: none; display: inline; color: #000000; background-=
+color: transparent; font-size: 14px; font-family: arial, helvetica, sans-se=
+rif"><strong>Bancolombia S.A.</strong></span><span style=3D"font-style: nor=
+mal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight=
+: 400; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0=
+px; text-transform: none; white-space-collapse: preserve; text-wrap-mode: w=
+rap; text-wrap-style: initial; widows: 2; word-spacing: 0px; -webkit-text-s=
+troke-width: 0px; text-decoration-thickness: initial; text-decoration-style=
+: initial; text-decoration-color: initial; float: none; display: inline; co=
+lor: #000000; background-color: transparent; font-size: 14px; font-family: =
+arial, helvetica, sans-serif"> y ha sido radicada el </span><span style=3D"=
+font-style: normal; font-variant-ligatures: normal; font-variant-caps: norm=
+al; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: left;=
+ text-indent: 0px; text-transform: none; white-space-collapse: preserve; te=
+xt-wrap-mode: wrap; text-wrap-style: initial; widows: 2; word-spacing: 0px;=
+ -webkit-text-stroke-width: 0px; text-decoration-thickness: initial; text-d=
+ecoration-style: initial; text-decoration-color: initial; float: none; disp=
+lay: inline; color: #000000; background-color: transparent; font-size: 14px=
+; font-family: arial, helvetica, sans-serif"><strong></strong></span><span =
+style=3D"font-style: normal; font-variant-ligatures: normal; font-variant-c=
+aps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-ali=
+gn: left; text-indent: 0px; text-transform: none; white-space-collapse: pre=
+serve; text-wrap-mode: wrap; text-wrap-style: initial; widows: 2; word-spac=
+ing: 0px; -webkit-text-stroke-width: 0px; text-decoration-thickness: initia=
+l; text-decoration-style: initial; text-decoration-color: initial; float: n=
+one; display: inline; color: #000000; background-color: transparent; font-s=
+ize: 14px; font-family: arial, helvetica, sans-serif">, con el n=C3=BAmero:=
+</span></div>
+<div style=3D"font-family: inherit; text-align: center"><span style=3D"font=
+-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; =
+font-weight: 400; letter-spacing: normal; orphans: 2; text-align: left; tex=
+t-indent: 0px; text-transform: none; white-space-collapse: preserve; text-w=
+rap-mode: wrap; text-wrap-style: initial; widows: 2; word-spacing: 0px; -we=
+bkit-text-stroke-width: 0px; text-decoration-thickness: initial; text-decor=
+ation-style: initial; text-decoration-color: initial; float: none; display:=
+ inline; color: #000000; background-color: transparent; font-size: 14px; fo=
+nt-family: arial, helvetica, sans-serif"><br>
+</span><span style=3D"font-style: normal; font-variant-ligatures: normal; f=
+ont-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans=
+: 2; text-align: left; text-indent: 0px; text-transform: none; white-space-=
+collapse: preserve; text-wrap-mode: wrap; text-wrap-style: initial; widows:=
+ 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; text-decoration-thic=
+kness: initial; text-decoration-style: initial; text-decoration-color: init=
+ial; float: none; display: inline; background-color: transparent; font-size=
+: 24px; color: #1a3366; font-family: arial, helvetica, sans-serif"><strong>=
+171776446089661027</strong></span></div><div></div></div></td>
+      </tr>
+    </tbody>
+  </table></td>
+        </tr>
+      </tbody>
+    </table></td>
+      </tr>
+    </tbody>
+  </table><table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" align=3D"=
+center" width=3D"100%" role=3D"module" data-type=3D"columns" style=3D"paddi=
+ng:0px 0px 0px 0px;" bgcolor=3D"#FFFFFF" data-distribution=3D"1">
+    <tbody>
+      <tr role=3D"module-content">
+        <td height=3D"100%" valign=3D"top"><table width=3D"540" style=3D"wi=
+dth:540px; border-spacing:0; border-collapse:collapse; margin:0px 30px 0px =
+30px;" cellpadding=3D"0" cellspacing=3D"0" align=3D"left" border=3D"0" bgco=
+lor=3D"" class=3D"column column-0">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table cla=
+ss=3D"module" role=3D"module" data-type=3D"text" border=3D"0" cellpadding=
+=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-layout: fixed;" data=
+-muid=3D"0006b10c-5bee-4150-83fd-bed6c8c1d314" data-mc-module-version=3D"20=
+19-10-22">
+    <tbody>
+      <tr>
+        <td style=3D"padding:18px 0px 18px 0px; line-height:22px; text-alig=
+n:inherit;" height=3D"100%" valign=3D"top" bgcolor=3D"" role=3D"module-cont=
+ent"><div><div style=3D"font-family: inherit; text-align: center"><span sty=
+le=3D"white-space-collapse: preserve; text-wrap-mode: wrap; text-wrap-style=
+: initial; color: #4e4e4e; font-family: arial, helvetica, sans-serif">Para =
+el seguimiento de tu queja puedes ingresar al siguiente =C3=ADcono</span></=
+div><div></div></div></td>
+      </tr>
+    </tbody>
+  </table></td>
+        </tr>
+      </tbody>
+    </table></td>
+      </tr>
+    </tbody>
+  </table><table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" align=3D"=
+center" width=3D"100%" role=3D"module" data-type=3D"columns" style=3D"paddi=
+ng:0px 10px 0px 10px;" bgcolor=3D"#FFFFFF" data-distribution=3D"1">
+    <tbody>
+      <tr role=3D"module-content">
+        <td height=3D"100%" valign=3D"top"><table width=3D"560" style=3D"wi=
+dth:560px; border-spacing:0; border-collapse:collapse; margin:0px 10px 0px =
+10px;" cellpadding=3D"0" cellspacing=3D"0" align=3D"left" border=3D"0" bgco=
+lor=3D"" class=3D"column column-0">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table bor=
+der=3D"0" cellpadding=3D"0" cellspacing=3D"0" class=3D"module" data-role=3D=
+"module-button" data-type=3D"button" role=3D"module" style=3D"table-layout:=
+fixed;" width=3D"100%" data-muid=3D"a648d7e2-327e-442a-a0f0-ecb934263c61">
+      <tbody>
+        <tr>
+          <td align=3D"center" bgcolor=3D"" class=3D"outer-td" style=3D"pad=
+ding:0px 0px 0px 0px;">
+            <table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" class=
+=3D"wrapper-mobile" style=3D"text-align:center;">
+              <tbody>
+                <tr>
+                <td align=3D"center" bgcolor=3D"#3366CC" class=3D"inner-td"=
+ style=3D"border-radius:6px; font-size:16px; text-align:center; background-=
+color:inherit;">
+                  <a href=3D"https://smart.superfinanciera.gov.co" style=3D=
+"background-color:#3366CC; border:0px solid #333333; border-color:#333333; =
+border-radius:50px; border-width:0px; color:#ffffff; display:inline-block; =
+font-size:14px; font-weight:bold; letter-spacing:0px; line-height:normal; p=
+adding:15px 18px 15px 18px; text-align:center; text-decoration:none; border=
+-style:solid; font-family:helvetica,sans-serif;" target=3D"_blank">SEGUIMIE=
+NTO DE QUEJA</a>
+                </td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      </tbody>
+    </table></td>
+        </tr>
+      </tbody>
+    </table></td>
+      </tr>
+    </tbody>
+  </table><table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" align=3D"=
+center" width=3D"100%" role=3D"module" data-type=3D"columns" style=3D"paddi=
+ng:0px 0px 0px 0px;" bgcolor=3D"#FFFFFF" data-distribution=3D"1">
+    <tbody>
+      <tr role=3D"module-content">
+        <td height=3D"100%" valign=3D"top"><table width=3D"540" style=3D"wi=
+dth:540px; border-spacing:0; border-collapse:collapse; margin:0px 30px 0px =
+30px;" cellpadding=3D"0" cellspacing=3D"0" align=3D"left" border=3D"0" bgco=
+lor=3D"" class=3D"column column-0">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table cla=
+ss=3D"module" role=3D"module" data-type=3D"text" border=3D"0" cellpadding=
+=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-layout: fixed;" data=
+-muid=3D"0006b10c-5bee-4150-83fd-bed6c8c1d314.2" data-mc-module-version=3D"=
+2019-10-22">
+    <tbody>
+      <tr>
+        <td style=3D"padding:18px 0px 18px 0px; line-height:22px; text-alig=
+n:inherit;" height=3D"100%" valign=3D"top" bgcolor=3D"" role=3D"module-cont=
+ent"><div><div style=3D"font-family: inherit; text-align: center"><span sty=
+le=3D"font-family: arial, helvetica, sans-serif">Si a=C3=BAn no est=C3=A1s =
+registrado en nuestro sistema, te invitamos a dar click </span><a href=3D"h=
+ttps://smart.superfinanciera.gov.co/login"><span style=3D"font-family: aria=
+l, helvetica, sans-serif"><u><strong>aqu=C3=AD</strong></u></span></a><span=
+ style=3D"font-family: arial, helvetica, sans-serif"><u><strong>.</strong><=
+/u></span></div><div></div></div></td>
+      </tr>
+    </tbody>
+  </table></td>
+        </tr>
+      </tbody>
+    </table></td>
+      </tr>
+    </tbody>
+  </table><table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" align=3D"=
+center" width=3D"100%" role=3D"module" data-type=3D"columns" style=3D"paddi=
+ng:0px 0px 0px 0px;" bgcolor=3D"#FFFFFF" data-distribution=3D"1">
+    <tbody>
+      <tr role=3D"module-content">
+        <td height=3D"100%" valign=3D"top"><table width=3D"540" style=3D"wi=
+dth:540px; border-spacing:0; border-collapse:collapse; margin:0px 30px 0px =
+30px;" cellpadding=3D"0" cellspacing=3D"0" align=3D"left" border=3D"0" bgco=
+lor=3D"" class=3D"column column-0">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table cla=
+ss=3D"module" role=3D"module" data-type=3D"text" border=3D"0" cellpadding=
+=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-layout: fixed;" data=
+-muid=3D"0006b10c-5bee-4150-83fd-bed6c8c1d314.1" data-mc-module-version=3D"=
+2019-10-22">
+    <tbody>
+      <tr>
+        <td style=3D"padding:18px 0px 18px 0px; line-height:22px; text-alig=
+n:inherit;" height=3D"100%" valign=3D"top" bgcolor=3D"" role=3D"module-cont=
+ent"><div><div style=3D"font-family: inherit; text-align: center"><span sty=
+le=3D"font-family: arial, helvetica, sans-serif"><strong>Ten en cuenta lo s=
+iguiente:</strong></span></div>
+<div style=3D"font-family: inherit; text-align: center"><br></div>
+<div style=3D"font-family: inherit; text-align: start"><span style=3D"margi=
+n-top: 0px; margin-right: 0px; margin-bottom: 5px; margin-left: 0px; paddin=
+g-top: 0px; padding-right: 0px; padding-bottom: 0px; padding-left: 0px; fon=
+t-weight: bold; line-height: 1.2; letter-spacing: -1.4px; color: #3f3f3f; f=
+ont-style: normal; font-variant-ligatures: normal; font-variant-caps: norma=
+l; orphans: 2; text-align: start; text-indent: 0px; text-transform: none; w=
+idows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space-co=
+llapse: collapse; text-wrap-mode: wrap; text-wrap-style: initial; backgroun=
+d-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-decor=
+ation-style: initial; text-decoration-color: initial; font-size: 18px; font=
+-family: arial, helvetica, sans-serif">=E2=9C=93</span><span style=3D"font-=
+size: 18px; font-family: arial, helvetica, sans-serif"> </span><span style=
+=3D"font-family: arial, helvetica, sans-serif">Quien resolver=C3=A1 tu inco=
+nformidad ser=C3=A1 la entidad vigilada, ya que =C3=A9sta es quien te prest=
+a de forma directa el producto o servicio. Por lo tanto, se da traslado de =
+competencia de conformidad con el art=C3=ADculo 21 de la Ley 1775 de 2021.<=
+/span></div>
+<div style=3D"font-family: inherit; text-align: left"><br></div>
+<div style=3D"font-family: inherit; text-align: inherit"><span style=3D"box=
+-sizing: border-box; padding-top: 0px; padding-right: 0px; padding-bottom: =
+0px; padding-left: 0px; margin-top: 0px; margin-right: 0px; margin-bottom: =
+0px; margin-left: 0px; font-style: inherit; font-variant-ligatures: inherit=
+; font-variant-caps: inherit; font-variant-numeric: inherit; font-variant-e=
+ast-asian: inherit; font-variant-alternates: inherit; font-variant-position=
+: inherit; font-weight: inherit; font-stretch: inherit; line-height: inheri=
+t; font-optical-sizing: inherit; font-kerning: inherit; font-feature-settin=
+gs: inherit; font-variation-settings: inherit; font-size: 18px; vertical-al=
+ign: baseline; border-top-width: 0px; border-right-width: 0px; border-botto=
+m-width: 0px; border-left-width: 0px; border-top-style: initial; border-rig=
+ht-style: initial; border-bottom-style: initial; border-left-style: initial=
+; border-top-color: initial; border-right-color: initial; border-bottom-col=
+or: initial; border-left-color: initial; border-image-source: initial; bord=
+er-image-slice: initial; border-image-width: initial; border-image-outset: =
+initial; border-image-repeat: initial; orphans: 2; text-align: start; text-=
+indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-te=
+xt-stroke-width: 0px; white-space-collapse: collapse; text-wrap-mode: wrap;=
+ text-wrap-style: initial; text-decoration-thickness: initial; text-decorat=
+ion-style: initial; text-decoration-color: initial; letter-spacing: -1.4px;=
+ color: #3f3f3f; background-color: rgb(255, 255, 255); font-family: arial, =
+helvetica, sans-serif"><strong>=E2=9C=93</strong></span><span style=3D"font=
+-family: arial, helvetica, sans-serif"><strong> </strong></span><span style=
+=3D"font-family: arial, helvetica, sans-serif">Si tu queja est=C3=A1 relaci=
+onada con el tratamiento de tus </span><a href=3D"http://www.secretariasena=
+do.gov.co/senado/basedoc/ley_1266_2008.html"><span style=3D"font-family: ar=
+ial, helvetica, sans-serif"><u><strong>datos personales y/o reporte en cent=
+rales de informaci=C3=B3n</strong></u></span></a><span style=3D"font-family=
+: arial, helvetica, sans-serif">, debes tener en cuenta lo siguiente:</span=
+></div>
+<div style=3D"font-family: inherit; text-align: left"><br></div>
+<ul>
+  <li style=3D"text-align: left; font-family: arial, helvetica, sans-serif"=
+><span style=3D"font-family: arial, helvetica, sans-serif">Si consideras qu=
+e la informaci=C3=B3n contenida en una base de datos debe ser corregida, ac=
+tualizada, suprimida o que la misma controvierte la ley, debes presentar un=
+a reclamaci=C3=B3n directamente ante la entidad vigilada.</span></li>
+  <li style=3D"text-align: left; font-family: arial, helvetica, sans-serif"=
+><span style=3D"font-family: arial, helvetica, sans-serif">Dentro de los do=
+s (2) d=C3=ADas h=C3=A1biles siguientes a la presentaci=C3=B3n de la reclam=
+aci=C3=B3n, la entidad vigilada deber=C3=A1 efectuar una anotaci=C3=B3n ant=
+e las centrales de informaci=C3=B3n en la que se indique que la misma corre=
+sponde a un =E2=80=9C</span><span style=3D"font-family: arial, helvetica, s=
+ans-serif"><em>reclamo en tr=C3=A1mite</em></span><span style=3D"font-famil=
+y: arial, helvetica, sans-serif">=E2=80=9D o =E2=80=9Cen </span><span style=
+=3D"font-family: arial, helvetica, sans-serif"><em>discusi=C3=B3n judicial<=
+/em></span><span style=3D"font-family: arial, helvetica, sans-serif">=E2=80=
+=9D, seg=C3=BAn aplique.</span></li>
+  <li style=3D"text-align: left; font-family: arial, helvetica, sans-serif"=
+><span style=3D"font-family: arial, helvetica, sans-serif">Ten en cuenta qu=
+e, para los casos de suplantaci=C3=B3n, una vez la entidad vigilada reciba =
+la petici=C3=B3n y la documentaci=C3=B3n correspondiente, =C3=A9sta deber=
+=C3=A1 hacer la anotaci=C3=B3n respectiva ante las centrales de informaci=
+=C3=B3n como =E2=80=9C</span><span style=3D"font-family: arial, helvetica, =
+sans-serif"><em>v=C3=ADctima de falsedad personal</em></span><span style=3D=
+"font-family: arial, helvetica, sans-serif">=E2=80=9D.</span></li>
+  <li style=3D"text-align: left; font-family: arial, helvetica, sans-serif"=
+><span style=3D"font-family: arial, helvetica, sans-serif">La entidad vigil=
+ada debe darte las explicaciones frente a tu petici=C3=B3n o reclamaci=C3=
+=B3n, dentro de los quince (15) d=C3=ADas siguientes y prorrogables por qui=
+nce (15) d=C3=ADas m=C3=A1s, de lo contrario se entender=C3=A1 que tu petic=
+i=C3=B3n ha sido aceptada</span></li>
+  <li style=3D"text-align: left; font-family: arial, helvetica, sans-serif"=
+><span style=3D"font-family: arial, helvetica, sans-serif">Debes tener en c=
+uenta que como titular de la informaci=C3=B3n tienes derecho a:</span>
+    <ul>
+      <li style=3D"text-align: left; font-family: arial, helvetica, sans-se=
+rif"><span style=3D"font-family: arial, helvetica, sans-serif">Dar autoriza=
+ci=C3=B3n previa y expresa acerca del uso de tu informaci=C3=B3n y as=C3=AD=
+ mismo a revocarla.</span></li>
+      <li style=3D"text-align: left; font-family: arial, helvetica, sans-se=
+rif"><span style=3D"font-family: arial, helvetica, sans-serif">La entidad v=
+igilada deber=C3=A1 remitir de forma previa al reporte negativo ante centra=
+les de informaci=C3=B3n, una comunicaci=C3=B3n con m=C3=ADnimo veinte (20) =
+d=C3=ADas, la cual puede venir incluso en los extractos mensuales de tu obl=
+igaci=C3=B3n y dos comunicaciones respecto de obligaciones iguales o inferi=
+ores al 15% de un SMLMV.</span></li>
+    </ul>
+  </li>
+  <li style=3D"text-align: left; font-family: arial, helvetica, sans-serif"=
+><span style=3D"font-family: arial, helvetica, sans-serif">Ten en cuenta qu=
+e la </span><a href=3D"http://www.secretariasenado.gov.co/senado/basedoc/le=
+y_2157_2021.html"><span style=3D"font-family: arial, helvetica, sans-serif"=
+><u>Ley 2157 de 2021</u></span></a><span style=3D"font-family: arial, helve=
+tica, sans-serif">, regula los t=C3=A9rminos de permanencia del dato negati=
+vo.</span></li>
+</ul>
+<div style=3D"font-family: arial, helvetica, sans-serif; text-align: left">=
+<br></div>
+<div style=3D"font-family: inherit; text-align: inherit"><span style=3D"box=
+-sizing: border-box; padding-top: 0px; padding-right: 0px; padding-bottom: =
+0px; padding-left: 0px; margin-top: 0px; margin-right: 0px; margin-bottom: =
+0px; margin-left: 0px; font-style: inherit; font-variant-ligatures: inherit=
+; font-variant-caps: inherit; font-variant-numeric: inherit; font-variant-e=
+ast-asian: inherit; font-variant-alternates: inherit; font-variant-position=
+: inherit; font-weight: inherit; font-stretch: inherit; line-height: inheri=
+t; font-optical-sizing: inherit; font-kerning: inherit; font-feature-settin=
+gs: inherit; font-variation-settings: inherit; font-size: 18px; vertical-al=
+ign: baseline; border-top-width: 0px; border-right-width: 0px; border-botto=
+m-width: 0px; border-left-width: 0px; border-top-style: initial; border-rig=
+ht-style: initial; border-bottom-style: initial; border-left-style: initial=
+; border-top-color: initial; border-right-color: initial; border-bottom-col=
+or: initial; border-left-color: initial; border-image-source: initial; bord=
+er-image-slice: initial; border-image-width: initial; border-image-outset: =
+initial; border-image-repeat: initial; orphans: 2; text-align: start; text-=
+indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-te=
+xt-stroke-width: 0px; white-space-collapse: collapse; text-wrap-mode: wrap;=
+ text-wrap-style: initial; text-decoration-thickness: initial; text-decorat=
+ion-style: initial; text-decoration-color: initial; letter-spacing: -1.4px;=
+ color: #3f3f3f; background-color: rgb(255, 255, 255); font-family: arial, =
+helvetica, sans-serif"><strong>=E2=9C=93</strong></span><span style=3D"font=
+-family: arial, helvetica, sans-serif"><strong> </strong></span><span style=
+=3D"box-sizing: border-box; padding-top: 0px; padding-right: 0px; padding-b=
+ottom: 0px; padding-left: 0px; margin-top: 0px; margin-right: 0px; margin-b=
+ottom: 0px; margin-left: 0px; font-style: inherit; font-variant-ligatures: =
+inherit; font-variant-caps: inherit; font-variant-numeric: inherit; font-va=
+riant-east-asian: inherit; font-variant-alternates: inherit; font-variant-p=
+osition: inherit; font-weight: inherit; font-stretch: inherit; line-height:=
+ inherit; font-optical-sizing: inherit; font-kerning: inherit; font-feature=
+-settings: inherit; font-variation-settings: inherit; font-size: 14px; vert=
+ical-align: baseline; border-top-width: 0px; border-right-width: 0px; borde=
+r-bottom-width: 0px; border-left-width: 0px; border-top-style: initial; bor=
+der-right-style: initial; border-bottom-style: initial; border-left-style: =
+initial; border-top-color: initial; border-right-color: initial; border-bot=
+tom-color: initial; border-left-color: initial; border-image-source: initia=
+l; border-image-slice: initial; border-image-width: initial; border-image-o=
+utset: initial; border-image-repeat: initial; color: #000000; letter-spacin=
+g: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform:=
+ none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-=
+space-collapse: preserve; text-wrap-mode: wrap; text-wrap-style: initial; b=
+ackground-color: rgb(255, 255, 255); text-decoration-thickness: initial; te=
+xt-decoration-style: initial; text-decoration-color: initial; font-family: =
+arial, helvetica, sans-serif">Con el fin de lograr un trato justo para los =
+consumidores financieros, las quejas presentadas ante las entidades vigilad=
+as, defensores del consumidor financiero y/o esta Superintendencia ser=C3=
+=A1n tomadas como insumos para nuestras funciones de supervisi=C3=B3n, de a=
+cuerdo con las funciones del art=C3=ADculo 326 del Estatuto Org=C3=A1nico d=
+el Sistema Financiero. Lo anterior teniendo en cuenta nuestra competencia a=
+dministrativa.</span></div>
+<div style=3D"font-family: inherit; text-align: inherit"><br></div>
+<div style=3D"font-family: inherit; text-align: inherit"><span style=3D"box=
+-sizing: border-box; padding-top: 0px; padding-right: 0px; padding-bottom: =
+0px; padding-left: 0px; margin-top: 0px; margin-right: 0px; margin-bottom: =
+0px; margin-left: 0px; font-style: inherit; font-variant-ligatures: inherit=
+; font-variant-caps: inherit; font-variant-alternates: inherit; font-varian=
+t-numeric: inherit; font-variant-east-asian: inherit; font-variant-position=
+: inherit; font-weight: inherit; font-stretch: inherit; line-height: inheri=
+t; font-optical-sizing: inherit; font-kerning: inherit; font-feature-settin=
+gs: inherit; font-variation-settings: inherit; font-size: 18px; vertical-al=
+ign: baseline; border-top-width: 0px; border-right-width: 0px; border-botto=
+m-width: 0px; border-left-width: 0px; border-top-style: initial; border-rig=
+ht-style: initial; border-bottom-style: initial; border-left-style: initial=
+; border-top-color: initial; border-right-color: initial; border-bottom-col=
+or: initial; border-left-color: initial; border-image-source: initial; bord=
+er-image-slice: initial; border-image-width: initial; border-image-outset: =
+initial; border-image-repeat: initial; orphans: 2; text-align: start; text-=
+indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-te=
+xt-stroke-width: 0px; white-space-collapse: collapse; text-wrap-mode: wrap;=
+ text-wrap-style: initial; text-decoration-thickness: initial; text-decorat=
+ion-style: initial; text-decoration-color: initial; letter-spacing: -1.4px;=
+ color: #3f3f3f; background-color: rgb(255, 255, 255); font-family: arial, =
+helvetica, sans-serif"><strong>=E2=9C=93</strong></span><span style=3D"font=
+-family: arial, helvetica, sans-serif"><strong> </strong></span><span style=
+=3D"box-sizing: border-box; padding-top: 0px; padding-right: 0px; padding-b=
+ottom: 0px; padding-left: 0px; margin-top: 0px; margin-right: 0px; margin-b=
+ottom: 0px; margin-left: 0px; font-style: inherit; font-variant-ligatures: =
+inherit; font-variant-caps: inherit; font-variant-alternates: inherit; font=
+-variant-numeric: inherit; font-variant-east-asian: inherit; font-variant-p=
+osition: inherit; font-weight: inherit; font-stretch: inherit; line-height:=
+ inherit; font-optical-sizing: inherit; font-kerning: inherit; font-feature=
+-settings: inherit; font-variation-settings: inherit; font-size: 14px; vert=
+ical-align: baseline; border-top-width: 0px; border-right-width: 0px; borde=
+r-bottom-width: 0px; border-left-width: 0px; border-top-style: initial; bor=
+der-right-style: initial; border-bottom-style: initial; border-left-style: =
+initial; border-top-color: initial; border-right-color: initial; border-bot=
+tom-color: initial; border-left-color: initial; border-image-source: initia=
+l; border-image-slice: initial; border-image-width: initial; border-image-o=
+utset: initial; border-image-repeat: initial; color: #000000; letter-spacin=
+g: normal; orphans: 2; text-align: start; text-indent: 0px; text-transform:=
+ none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-=
+space-collapse: preserve; text-wrap-mode: wrap; text-wrap-style: initial; t=
+ext-decoration-thickness: initial; text-decoration-style: initial; text-dec=
+oration-color: initial; background-color: rgb(255, 255, 255); font-family: =
+arial, helvetica, sans-serif">Si buscas el reconocimiento de tus derechos o=
+ reclamar el incumplimiento de las obligaciones de la entidad vigilada, tam=
+bi=C3=A9n tienes a tu disposici=C3=B3n los siguientes servicios de la Super=
+financiera, que son gratuitos y puedes solicitar de forma simult=C3=A1nea.<=
+/span></div><div></div></div></td>
+      </tr>
+    </tbody>
+  </table></td>
+        </tr>
+      </tbody>
+    </table></td>
+      </tr>
+    </tbody>
+  </table><table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" align=3D"=
+center" width=3D"100%" role=3D"module" data-type=3D"columns" style=3D"paddi=
+ng:0px 0px 0px 0px;" bgcolor=3D"#FFFFFF" data-distribution=3D"1,1,1">
+    <tbody>
+      <tr role=3D"module-content">
+        <td height=3D"100%" valign=3D"top"><table width=3D"193" style=3D"wi=
+dth:193px; border-spacing:0; border-collapse:collapse; margin:0px 5px 0px 0=
+px;" cellpadding=3D"0" cellspacing=3D"0" align=3D"left" border=3D"0" bgcolo=
+r=3D"" class=3D"column column-0">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table cla=
+ss=3D"module" role=3D"module" data-type=3D"text" border=3D"0" cellpadding=
+=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-layout: fixed;" data=
+-muid=3D"d83bac95-187a-49d5-8958-05dd2d055197" data-mc-module-version=3D"20=
+19-10-22">
+    <tbody>
+      <tr>
+        <td style=3D"padding:18px 6px 18px 6px; line-height:22px; text-alig=
+n:inherit; background-color:#d7d7d7;" height=3D"100%" valign=3D"top" bgcolo=
+r=3D"#d7d7d7" role=3D"module-content"><div><div style=3D"font-family: inher=
+it; text-align: center"><span style=3D"background-color: rgb(215, 215, 215)=
+; font-family: arial, helvetica, sans-serif"><strong>Demanda</strong></span=
+></div>
+<div style=3D"font-family: inherit; text-align: center"><span style=3D"back=
+ground-color: rgb(215, 215, 215); font-family: arial, helvetica, sans-serif=
+">A trav=C3=A9s de esta alternativa un </span><span style=3D"background-col=
+or: rgb(215, 215, 215); font-family: arial, helvetica, sans-serif"><strong>=
+juez especializado </strong></span><span style=3D"background-color: rgb(215=
+, 215, 215); font-family: arial, helvetica, sans-serif">de la Superfinancie=
+ra decidir=C3=A1 sobre el asunto. Si tus pretensiones exceden los 40 SMLV, =
+deber=C3=A1s presentar tu demanda a trav=C3=A9s de un abogado.</span></div>
+<div style=3D"font-family: inherit; text-align: center"><br></div>
+<div style=3D"font-family: inherit; text-align: center"><span style=3D"back=
+ground-color: rgb(215, 215, 215); font-family: arial, helvetica, sans-serif=
+">Consulta m=C3=A1s </span><a href=3D"https://www.superfinanciera.gov.co/pu=
+blicaciones/61136/consumidor-financierofunciones-jurisdiccionales-61136/"><=
+span style=3D"background-color: rgb(215, 215, 215); font-family: arial, hel=
+vetica, sans-serif"><u>aqu=C3=AD</u></span></a><span style=3D"background-co=
+lor: rgb(215, 215, 215); font-family: arial, helvetica, sans-serif">.</span=
+></div>
+<div style=3D"font-family: inherit; text-align: center"><br></div>
+<div style=3D"font-family: inherit; text-align: center"><br></div><div></di=
+v></div></td>
+      </tr>
+    </tbody>
+  </table></td>
+        </tr>
+      </tbody>
+    </table><table width=3D"193" style=3D"width:193px; border-spacing:0; bo=
+rder-collapse:collapse; margin:0px 5px 0px 5px;" cellpadding=3D"0" cellspac=
+ing=3D"0" align=3D"left" border=3D"0" bgcolor=3D"" class=3D"column column-1=
+">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table cla=
+ss=3D"module" role=3D"module" data-type=3D"text" border=3D"0" cellpadding=
+=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-layout: fixed;" data=
+-muid=3D"d83bac95-187a-49d5-8958-05dd2d055197.1" data-mc-module-version=3D"=
+2019-10-22">
+    <tbody>
+      <tr>
+        <td style=3D"padding:18px 6px 18px 6px; line-height:22px; text-alig=
+n:inherit; background-color:#D7D7D7;" height=3D"100%" valign=3D"top" bgcolo=
+r=3D"#D7D7D7" role=3D"module-content"><div><div style=3D"font-family: inher=
+it; text-align: center"><span style=3D"background-color: rgb(215, 215, 215)=
+; font-family: arial, helvetica, sans-serif"><strong>Conciliaci=C3=B3n extr=
+ajudicial</strong></span></div>
+<div style=3D"font-family: inherit; text-align: center"><span style=3D"back=
+ground-color: rgb(215, 215, 215); font-family: arial, helvetica, sans-serif=
+">Sin necesidad de un abogado y con ayuda de un </span><span style=3D"backg=
+round-color: rgb(215, 215, 215); font-family: arial, helvetica, sans-serif"=
+><strong>conciliador </strong></span><span style=3D"background-color: rgb(2=
+15, 215, 215); font-family: arial, helvetica, sans-serif">de la Superfinanc=
+iera que act=C3=BAa como facilitador, podr=C3=A1s dialogar directamente con=
+ la Entidad para la soluci=C3=B3n del asunto</span></div>
+<div style=3D"font-family: inherit; text-align: center"><br></div>
+<div style=3D"font-family: inherit; text-align: center"><span style=3D"back=
+ground-color: rgb(215, 215, 215); font-family: arial, helvetica, sans-serif=
+">Consulta mas </span><a href=3D"https://www.superfinanciera.gov.co/publica=
+ciones/10112728/consumidor-financieroconciliacion-extrajudicial-10112728/">=
+<span style=3D"background-color: rgb(215, 215, 215); font-family: arial, he=
+lvetica, sans-serif"><u>aqu=C3=AD</u></span></a><span style=3D"background-c=
+olor: rgb(215, 215, 215); font-family: arial, helvetica, sans-serif">.</spa=
+n></div>
+<div style=3D"font-family: inherit; text-align: center"><br></div>
+<div style=3D"font-family: inherit; text-align: center"><br></div><div></di=
+v></div></td>
+      </tr>
+    </tbody>
+  </table></td>
+        </tr>
+      </tbody>
+    </table><table width=3D"193" style=3D"width:193px; border-spacing:0; bo=
+rder-collapse:collapse; margin:0px 0px 0px 5px;" cellpadding=3D"0" cellspac=
+ing=3D"0" align=3D"left" border=3D"0" bgcolor=3D"" class=3D"column column-2=
+">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table cla=
+ss=3D"module" role=3D"module" data-type=3D"text" border=3D"0" cellpadding=
+=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-layout: fixed;" data=
+-muid=3D"d83bac95-187a-49d5-8958-05dd2d055197.1.1" data-mc-module-version=
+=3D"2019-10-22">
+    <tbody>
+      <tr>
+        <td style=3D"padding:18px 6px 18px 6px; line-height:22px; text-alig=
+n:inherit; background-color:#D7D7D7;" height=3D"100%" valign=3D"top" bgcolo=
+r=3D"#D7D7D7" role=3D"module-content"><div><div style=3D"font-family: inher=
+it; text-align: center">Si decides presentar cualquiera de estas alternativ=
+as puedes hacerlo ingresando <a href=3D"https://www.superfinanciera.gov.co/=
+personas/"><u>aqu=C3=AD</u></a>.</div>
+<div style=3D"font-family: inherit; text-align: center"><br></div>
+<div style=3D"font-family: inherit; text-align: center">Ten presente que <s=
+trong>a trav=C3=A9s de la demanda o conciliaci=C3=B3n </strong>no se tramit=
+an asuntos relacionados con una entidad <strong>no vigilada</strong> por la=
+ Superfinanciera, temas laborales, de seguridad social o procesos ejecutivo=
+s</div><div></div></div></td>
+      </tr>
+    </tbody>
+  </table></td>
+        </tr>
+      </tbody>
+    </table></td>
+      </tr>
+    </tbody>
+  </table><table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" align=3D"=
+center" width=3D"100%" role=3D"module" data-type=3D"columns" style=3D"paddi=
+ng:0px 0px 0px 0px;" bgcolor=3D"#FFFFFF" data-distribution=3D"1">
+    <tbody>
+      <tr role=3D"module-content">
+        <td height=3D"100%" valign=3D"top"><table width=3D"540" style=3D"wi=
+dth:540px; border-spacing:0; border-collapse:collapse; margin:0px 30px 0px =
+30px;" cellpadding=3D"0" cellspacing=3D"0" align=3D"left" border=3D"0" bgco=
+lor=3D"" class=3D"column column-0">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table cla=
+ss=3D"module" role=3D"module" data-type=3D"text" border=3D"0" cellpadding=
+=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-layout: fixed;" data=
+-muid=3D"0006b10c-5bee-4150-83fd-bed6c8c1d314.2.1" data-mc-module-version=
+=3D"2019-10-22">
+    <tbody>
+      <tr>
+        <td style=3D"padding:18px 0px 18px 0px; line-height:22px; text-alig=
+n:inherit;" height=3D"100%" valign=3D"top" bgcolor=3D"" role=3D"module-cont=
+ent"><div><div style=3D"font-family: inherit; text-align: center">Recuerda =
+que para presentar la conciliaci=C3=B3n extrajudicial o demanda de acci=C3=
+=B3n de protecci=C3=B3n debes previamente presentar una queja contra la ent=
+idad vigilada</div>
+<div style=3D"font-family: inherit; text-align: center"><br></div>
+<div style=3D"font-family: inherit; text-align: center"><br></div>
+<div style=3D"font-family: inherit; text-align: left">Cordialmente,</div>
+<div style=3D"font-family: inherit; text-align: left"><strong>Superintenden=
+cia Financiera de Colombia</strong></div><div></div></div></td>
+      </tr>
+    </tbody>
+  </table></td>
+        </tr>
+      </tbody>
+    </table></td>
+      </tr>
+    </tbody>
+  </table><table class=3D"module" role=3D"module" data-type=3D"divider" bor=
+der=3D"0" cellpadding=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table=
+-layout: fixed;" data-muid=3D"fc61370f-0205-42ab-96ef-8f0f430de6dc">
+    <tbody>
+      <tr>
+        <td style=3D"padding:30px 0px 20px 0px;" role=3D"module-content" he=
+ight=3D"100%" valign=3D"top" bgcolor=3D"">
+          <table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" align=3D"=
+center" width=3D"100%" height=3D"1px" style=3D"line-height:1px; font-size:1=
+px;">
+            <tbody>
+              <tr>
+                <td style=3D"padding:0px 0px 1px 0px;" bgcolor=3D"#000000">=
+</td>
+              </tr>
+            </tbody>
+          </table>
+        </td>
+      </tr>
+    </tbody>
+  </table><table border=3D"0" cellpadding=3D"0" cellspacing=3D"0" align=3D"=
+center" width=3D"100%" role=3D"module" data-type=3D"columns" style=3D"paddi=
+ng:0px 0px 0px 0px;" bgcolor=3D"#FFFFFF" data-distribution=3D"1">
+    <tbody>
+      <tr role=3D"module-content">
+        <td height=3D"100%" valign=3D"top"><table width=3D"580" style=3D"wi=
+dth:580px; border-spacing:0; border-collapse:collapse; margin:0px 10px 0px =
+10px;" cellpadding=3D"0" cellspacing=3D"0" align=3D"left" border=3D"0" bgco=
+lor=3D"" class=3D"column column-0">
+      <tbody>
+        <tr>
+          <td style=3D"padding:0px;margin:0px;border-spacing:0;"><table cla=
+ss=3D"module" role=3D"module" data-type=3D"text" border=3D"0" cellpadding=
+=3D"0" cellspacing=3D"0" width=3D"100%" style=3D"table-layout: fixed;" data=
+-muid=3D"399b8b0b-7abb-4733-978e-2f94979bc0f7" data-mc-module-version=3D"20=
+19-10-22">
+    <tbody>
+      <tr>
+        <td style=3D"padding:18px 0px 18px 0px; line-height:22px; text-alig=
+n:inherit;" height=3D"100%" valign=3D"top" bgcolor=3D"" role=3D"module-cont=
+ent"><div><div style=3D"font-family: inherit; text-align: center"><span sty=
+le=3D"color: #000000; font-size: 14px; font-style: normal; font-variant-lig=
+atures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing=
+: normal; orphans: 2; text-align: center; text-indent: 0px; text-transform:=
+ none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; backgr=
+ound-color: rgb(255, 255, 255); text-decoration-thickness: initial; text-de=
+coration-style: initial; text-decoration-color: initial; white-space-collap=
+se: preserve; text-wrap-mode: wrap; text-wrap-style: initial; font-family: =
+arial, helvetica, sans-serif">En caso de requerir mayor informaci=C3=B3n en=
+viar un correo electr=C3=B3nico al:</span></div>
+<div style=3D"font-family: inherit; text-align: center"><span style=3D"font=
+-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; =
+font-weight: 400; letter-spacing: normal; orphans: 2; text-align: start; te=
+xt-indent: 0px; text-transform: none; white-space-collapse: preserve; text-=
+wrap-mode: wrap; text-wrap-style: initial; widows: 2; word-spacing: 0px; -w=
+ebkit-text-stroke-width: 0px; text-decoration-thickness: initial; text-deco=
+ration-style: initial; text-decoration-color: initial; float: none; display=
+: inline; font-size: 14px; background-color: rgb(255, 255, 255); color: #14=
+96e9; font-family: arial, helvetica, sans-serif"><u>super@superfinanciera.g=
+ov.co</u></span></div><div></div></div></td>
+      </tr>
+    </tbody>
+  </table></td>
+        </tr>
+      </tbody>
+    </table></td>
+      </tr>
+    </tbody>
+  </table><div data-role=3D"module-unsubscribe" class=3D"module" role=3D"mo=
+dule" data-type=3D"unsubscribe" style=3D"color:#444444; font-size:12px; lin=
+e-height:20px; padding:16px 16px 16px 16px; text-align:Center;" data-muid=
+=3D"4e838cf3-9892-4a6d-94d6-170e474d21e5"><div class=3D"Unsubscribe--addres=
+sLine"></div><p style=3D"font-size:12px; line-height:20px;"><a target=3D"_b=
+lank" class=3D"Unsubscribe--unsubscribeLink zzzzzzz" href=3D"<%asm_group_un=
+subscribe_raw_url%>" style=3D"">Darse de baja</a></p></div></td>
+                                      </tr>
+                                    </table>
+                                    <!--[if mso]>
+                                  </td>
+                                </tr>
+                              </table>
+                            </center>
+                            <![endif]-->
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </center>
+    </body>
+  </html>

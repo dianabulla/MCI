@@ -12,6 +12,7 @@ class Celula extends BaseModel {
     public function __construct() {
         parent::__construct();
         $this->ensureCamposReporteCelulas();
+        $this->ensureCampoTipoCelula();
     }
 
     private function columnExists($columnName) {
@@ -41,6 +42,17 @@ class Celula extends BaseModel {
         } catch (Throwable $e) {
             // Evita bloquear la aplicación si el motor no permite alter en este momento.
             error_log('No fue posible asegurar campos de reporte en celula: ' . $e->getMessage());
+        }
+    }
+
+    private function ensureCampoTipoCelula() {
+        try {
+            if (!$this->columnExists('Es_Antiguo')) {
+                // 0 = nueva, 1 = antigua
+                $this->execute("ALTER TABLE {$this->table} ADD COLUMN Es_Antiguo TINYINT(1) NOT NULL DEFAULT 0");
+            }
+        } catch (Throwable $e) {
+            error_log('No fue posible asegurar campo Es_Antiguo en celula: ' . $e->getMessage());
         }
     }
 

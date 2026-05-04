@@ -14,11 +14,11 @@ $totalS2            = (int)($total_s2 ?? 0);
 $totalAnual         = (int)($total_anual ?? 0);
 $semaforoS1         = (string)($semaforo_s1 ?? 'rojo');
 $semaforoS2         = (string)($semaforo_s2 ?? 'rojo');
-$semaforoAnual      = (string)($semaforo_anual ?? 'rojo');
 $ministeriosConMeta = $ministerios_con_meta ?? [];
 $cumplimientoMetas  = $cumplimiento_metas ?? [];
 $ministeriosDisp    = $ministerios_disponibles ?? [];
 $lideresDisp        = $lideres_disponibles ?? [];
+$dashboardMetasMinisterio = $dashboard_metas_ministerio ?? ['items' => [], 'periodos' => []];
 
 // G12-GANAR totales
 $totalesG12 = $totales_g12 ?? ['gi' => 0, 'gc' => 0, 'fv' => 0, 'v' => 0, 'total' => 0];
@@ -27,14 +27,14 @@ $g12GC      = (int)($totalesG12['gc'] ?? 0);
 $g12FV      = (int)($totalesG12['fv'] ?? 0);
 $g12V       = (int)($totalesG12['v'] ?? 0);
 
-// Indicador semanal por Líder
+// Indicador mensual por Líder
 $lideresH   = $lideres_semanal_hombre ?? [];
 $lideresM   = $lideres_semanal_mujer ?? [];
 $fechaInicioSem = $fecha_inicio_semanal ?? date('Y-m-d', strtotime('-7 days'));
 $fechaFinSem = $fecha_fin_semanal ?? date('Y-m-d');
 $semSemanal = [
-    'verde'   => ['bg' => '#22c55e', 'label' => 'Excelente'],
-    'amarillo'=> ['bg' => '#eab308', 'label' => 'En proceso'],
+    'verde'   => ['bg' => '#22c55e', 'label' => 'Cumplida'],
+    'amarillo'=> ['bg' => '#eab308', 'label' => 'En progreso'],
     'rojo'    => ['bg' => '#ef4444', 'label' => 'Atención'],
 ];
 
@@ -55,11 +55,6 @@ $ganarTotalJson   = json_encode(array_values(array_column($gananciasMensuales, '
 $ministerioNombresJson = json_encode(array_column($porMinisterio, 'nombre'), JSON_UNESCAPED_UNICODE);
 $ministerioTotalesJson = json_encode(array_column($porMinisterio, 'total'));
 $edadesJson        = json_encode(array_values($porEdades));
-
-$mesActual = (int)date('n');
-$mesActualLabel = $mesesLabels[$mesActual] ?? date('M');
-$totalMesActual = (int)($gananciasMensuales[$mesActual]['total'] ?? 0);
-$semaforoMes    = $totalMesActual >= 121 ? 'verde' : ($totalMesActual >= 61 ? 'amarillo' : 'rojo');
 
 // Semáforo helper - retorna clases CSS y texto
 $semaforoInfo = [
@@ -169,6 +164,31 @@ $semaforoInfo = [
 .dash-filters-form { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
 .dash-filters-form .form-group { margin:0; }
 .dash-filters-form select { padding:6px 10px; border-radius:8px; border:1px solid #d1d5db; font-size:.88rem; min-width:160px; }
+
+/* Dashboard de metas (semana/mes/año rotativo) */
+.dash-metas-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+.dash-metas-dots { display:flex; gap:6px; }
+.dash-metas-dot { width:9px; height:9px; border-radius:50%; border:0; background:#b9c9df; padding:0; }
+.dash-metas-dot.is-active { background:#1d4ed8; transform:scale(1.15); }
+.dash-metas-slide { display:none; }
+.dash-metas-slide.is-active { display:block; animation:dashMetasFade .3s ease; }
+.dash-metas-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
+.dash-metas-card { border:1px solid #d8e4f4; border-radius:12px; background:#fff; padding:10px; }
+.dash-metas-card-top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.dash-metas-card-title { color:#20406f; font-size:13px; font-weight:700; }
+.dash-metas-card-status { font-size:11px; font-weight:700; border-radius:999px; padding:2px 8px; white-space:nowrap; }
+.dash-metas-gauge { width:114px; height:114px; margin:10px auto; border-radius:50%; background:conic-gradient(var(--gauge-color) calc(var(--gauge-percent) * 1%), #e6edf7 0); display:grid; place-items:center; }
+.dash-metas-gauge-inner { width:78px; height:78px; border-radius:50%; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.dash-metas-gauge-inner strong { color:#1f3f70; font-size:16px; line-height:1; }
+.dash-metas-gauge-inner small { color:#617692; font-size:10px; }
+.dash-metas-metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+.dash-metas-metrics > div { background:#f6f9ff; border:1px solid #e3ebf8; border-radius:8px; padding:6px; text-align:center; }
+.dash-metas-metrics span { display:block; font-size:10px; color:#6a7f9a; }
+.dash-metas-metrics strong { color:#22477a; font-size:14px; }
+.dash-metas-pacing { margin-top:8px; font-size:11px; font-weight:700; border-radius:8px; padding:6px 8px; text-align:center; }
+.dash-metas-pacing.is-on-time { background:#e8f7ee; color:#1f7a45; }
+.dash-metas-pacing.is-late { background:#fff1f1; color:#b63838; }
+@keyframes dashMetasFade { from { opacity:.45; transform:translateY(4px);} to { opacity:1; transform:translateY(0);} }
 </style>
 
 <div class="dash-header">
@@ -228,86 +248,85 @@ $semaforoInfo = [
     </form>
 </div>
 
-<!-- Leyenda semáforo -->
-<div class="semaforo-leyenda">
-    <strong style="font-size:.82rem; color:#374151; margin-right:4px;">Semáforo:</strong>
-    <div class="semaforo-leyenda-item">
-        <div class="leyenda-dot" style="background:#22c55e;"></div>
-        <span>Verde: 121 – 180</span>
-    </div>
-    <div class="semaforo-leyenda-item">
-        <div class="leyenda-dot" style="background:#eab308;"></div>
-        <span>Amarillo: 61 – 120</span>
-    </div>
-    <div class="semaforo-leyenda-item">
-        <div class="leyenda-dot" style="background:#ef4444;"></div>
-        <span>Rojo: 1 – 60</span>
-    </div>
-</div>
-
-<!-- ── Indicadores semestrales ─────────────────────────────────────────────── -->
-<div class="dash-semestre-grid">
-    <?php
-    $semestresCard = [
-        ['label' => 'Semestre 1', 'sub' => 'Ene – Jun ' . $anio, 'total' => $totalS1, 'sem' => $semaforoS1],
-        ['label' => 'Semestre 2', 'sub' => 'Jul – Dic ' . $anio, 'total' => $totalS2, 'sem' => $semaforoS2],
-        ['label' => 'Total Anual ' . $anio, 'sub' => 'Ene – Dic', 'total' => $totalAnual, 'sem' => $semaforoAnual],
-    ];
-    foreach ($semestresCard as $card):
-        $info = $semaforoInfo[$card['sem']] ?? $semaforoInfo['rojo'];
-    ?>
-    <div class="card report-card" style="padding:18px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:12px;">
-        <div style="font-size:.88rem; font-weight:700; color:#374151;"><?= htmlspecialchars($card['label']) ?></div>
-        <div style="font-size:.78rem; color:#94a3b8;"><?= htmlspecialchars($card['sub']) ?></div>
-        <div class="semaforo-luz semaforo-<?= $card['sem'] ?>"><?= $card['total'] ?></div>
-        <div class="semaforo-etiqueta">
-            <?= $info['icon'] ?> <?= htmlspecialchars($info['label']) ?>
+<div class="card report-card" style="margin-bottom:22px; padding:14px 14px 12px;">
+    <div class="dash-metas-head">
+        <div>
+            <h4 style="margin:0 0 4px 0; font-size:1rem; color:#1f3f70;">Metas por Ministerio</h4>
+            <small style="color:#60708a;">Velocímetro automático: semana, mes y año (justo a tiempo).</small>
         </div>
+        <div class="dash-metas-dots" id="dashMetasDots"></div>
     </div>
-    <?php endforeach; ?>
+
+    <div id="dashMetasSlidesWrap">
+        <?php
+        $vistasDashMetas = [
+            'semana' => ['titulo' => 'Semana', 'sub' => 'Cumplimiento semanal por ministerio'],
+            'mes' => ['titulo' => 'Mes', 'sub' => 'Cumplimiento mensual por ministerio'],
+            'anio' => ['titulo' => 'Año', 'sub' => 'Cumplimiento anual por ministerio'],
+        ];
+        $idxDash = 0;
+        foreach ($vistasDashMetas as $keyVistaDash => $metaVistaDash):
+        ?>
+            <section class="dash-metas-slide<?= $idxDash === 0 ? ' is-active' : '' ?>" data-slide-index="<?= $idxDash ?>">
+                <div style="margin-bottom:8px;">
+                    <strong style="color:#1f3f70;"><?= htmlspecialchars($metaVistaDash['titulo']) ?></strong>
+                    <small style="color:#60708a; display:block;"><?= htmlspecialchars($metaVistaDash['sub']) ?></small>
+                </div>
+
+                <div class="dash-metas-grid">
+                    <?php if (!empty($dashboardMetasMinisterio['items'])): ?>
+                        <?php foreach ((array)$dashboardMetasMinisterio['items'] as $itemMetaDash): ?>
+                            <?php
+                            $bloqueVista = (array)($itemMetaDash[$keyVistaDash] ?? []);
+                            $estadoVista = (array)($bloqueVista['estado'] ?? []);
+                            $metaVista = (int)($bloqueVista['meta'] ?? 0);
+                            $logradoVista = (int)($bloqueVista['logrado'] ?? 0);
+                            $esperadoVista = (int)($bloqueVista['esperado'] ?? 0);
+                            $porcentajeVista = (float)($bloqueVista['porcentaje'] ?? 0);
+                            $porcentajeGauge = max(0, min(100, $porcentajeVista));
+                            $colorEstado = (string)($estadoVista['color'] ?? '#d64545');
+                            $labelEstado = (string)($estadoVista['label'] ?? 'Crítico');
+                            $justoATiempo = !empty($bloqueVista['justo_a_tiempo']);
+                            ?>
+                            <article class="dash-metas-card">
+                                <div class="dash-metas-card-top">
+                                    <span class="dash-metas-card-title"><?= htmlspecialchars((string)($itemMetaDash['ministerio'] ?? 'Ministerio')) ?></span>
+                                    <span class="dash-metas-card-status" style="background:<?= htmlspecialchars($colorEstado) ?>22;color:<?= htmlspecialchars($colorEstado) ?>;">
+                                        <?= htmlspecialchars($labelEstado) ?>
+                                    </span>
+                                </div>
+
+                                <div class="dash-metas-gauge" style="--gauge-color:<?= htmlspecialchars($colorEstado) ?>; --gauge-percent:<?= htmlspecialchars((string)$porcentajeGauge) ?>;">
+                                    <div class="dash-metas-gauge-inner">
+                                        <strong><?= number_format($porcentajeVista, 1) ?>%</strong>
+                                        <small>cumplimiento</small>
+                                    </div>
+                                </div>
+
+                                <div class="dash-metas-metrics">
+                                    <div><span>Logrado</span><strong><?= $logradoVista ?></strong></div>
+                                    <div><span>Meta</span><strong><?= $metaVista ?></strong></div>
+                                    <div><span>Esperado</span><strong><?= $esperadoVista ?></strong></div>
+                                </div>
+
+                                <div class="dash-metas-pacing <?= $justoATiempo ? 'is-on-time' : 'is-late' ?>">
+                                    <?= $justoATiempo ? 'Justo a tiempo' : 'Atrasado frente al ritmo esperado' ?>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="report-empty-state" style="grid-column:1/-1;">No hay ministerios con metas configuradas para mostrar.</div>
+                    <?php endif; ?>
+                </div>
+            </section>
+        <?php $idxDash++; endforeach; ?>
+    </div>
 </div>
 
-<!-- ── KPI Cards ───────────────────────────────────────────────────────────── -->
 <?php
-$totalCelula  = array_sum(array_column($gananciasMensuales, 'celula'));
-$totalIglesia = array_sum(array_column($gananciasMensuales, 'iglesia'));
 $metaTotal    = (int)($cumplimientoMetas['totales']['meta'] ?? 0);
 $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 0;
-$semMeta      = $pctMeta >= 75 ? 'verde' : ($pctMeta >= 40 ? 'amarillo' : 'rojo');
 ?>
-<div class="dash-kpi-grid">
-    <div class="dash-kpi-card kpi-<?= $semaforoMes ?>">
-        <div class="dash-kpi-label">Ganados este mes (<?= htmlspecialchars($mesActualLabel) ?>)</div>
-        <div class="dash-kpi-value"><?= $totalMesActual ?></div>
-        <span class="dash-kpi-badge badge-<?= $semaforoMes ?>"><?= $semaforoInfo[$semaforoMes]['label'] ?? '' ?></span>
-    </div>
-    <div class="dash-kpi-card kpi-<?= $semaforoAnual ?>">
-        <div class="dash-kpi-label">Total ganados <?= $anio ?></div>
-        <div class="dash-kpi-value"><?= $totalAnual ?></div>
-        <div class="dash-kpi-sub">S1: <?= $totalS1 ?> · S2: <?= $totalS2 ?></div>
-        <span class="dash-kpi-badge badge-<?= $semaforoAnual ?>"><?= $semaforoInfo[$semaforoAnual]['label'] ?? '' ?></span>
-    </div>
-    <div class="dash-kpi-card kpi-verde">
-        <div class="dash-kpi-label">Ganados en célula</div>
-        <div class="dash-kpi-value"><?= $totalCelula ?></div>
-        <div class="dash-kpi-sub"><?= $totalAnual > 0 ? round($totalCelula / $totalAnual * 100) : 0 ?>% del total</div>
-        <span class="dash-kpi-badge badge-verde">Célula</span>
-    </div>
-    <div class="dash-kpi-card kpi-verde">
-        <div class="dash-kpi-label">Ganados en iglesia</div>
-        <div class="dash-kpi-value"><?= $totalIglesia ?></div>
-        <div class="dash-kpi-sub"><?= $totalAnual > 0 ? round($totalIglesia / $totalAnual * 100) : 0 ?>% del total</div>
-        <span class="dash-kpi-badge badge-verde">Iglesia</span>
-    </div>
-    <?php if ($metaTotal > 0): ?>
-    <div class="dash-kpi-card kpi-<?= $semMeta ?>">
-        <div class="dash-kpi-label">Cumplimiento de meta semestral</div>
-        <div class="dash-kpi-value"><?= $pctMeta ?>%</div>
-        <div class="dash-kpi-sub">Meta: <?= $metaTotal ?> · Ganados: <?= $totalAnual ?></div>
-        <span class="dash-kpi-badge badge-<?= $semMeta ?>"><?= $semaforoInfo[$semMeta]['label'] ?? '' ?></span>
-    </div>
-    <?php endif; ?>
-</div>
 
 <!-- ── G12-GANAR ──────────────────────────────────────────────────────────── -->
 <div class="card report-card" style="margin-bottom:22px; padding:18px;">
@@ -346,14 +365,14 @@ $semMeta      = $pctMeta >= 75 ? 'verde' : ($pctMeta >= 40 ? 'amarillo' : 'rojo'
     </p>
 </div>
 
-<!-- ── Indicador Semanal por Líder ────────────────────────────────────── -->
+<!-- ── Indicador Mensual por Líder ────────────────────────────────────── -->
 <div class="card report-card" style="margin-bottom:22px; padding:18px;">
     <h4 style="margin:0 0 14px 0; font-size:.97rem; color:#374151; font-weight:700;">
-        Indicador semanal por Líder
+        Indicador mensual por Líder
     </h4>
     <small style="color:#64748b; display:block; margin-bottom:14px;">
-        Ganados del <?= date('d/m/Y', strtotime($fechaInicioSem)) ?> al <?= date('d/m/Y', strtotime($fechaFinSem)) ?> · 
-        Verde ≥ 20 · Amarillo 10–19 · Rojo 1–9
+        Ganados del <?= date('d/m/Y', strtotime($fechaInicioSem)) ?> al <?= date('d/m/Y', strtotime($fechaFinSem)) ?> ·
+        Meta personal mensual = (Meta anual del ministerio / 12) ÷ líderes del mismo género
     </small>
 
     <!-- Hombres -->
@@ -366,11 +385,17 @@ $semMeta      = $pctMeta >= 75 ? 'verde' : ($pctMeta >= 40 ? 'amarillo' : 'rojo'
                 <div style="font-size:.8rem; color:#475569; margin-bottom:6px; font-weight:600;">
                     <?= htmlspecialchars(trim($lid['nombre'] . ' ' . $lid['apellido'])) ?>
                 </div>
+                <div style="font-size:.68rem; color:#64748b; margin-bottom:6px;">
+                    <?= htmlspecialchars((string)($lid['ministerio'] ?? 'Sin ministerio')) ?>
+                </div>
                 <div style="background:<?= $semSemanal[$lid['semaforo']]['bg'] ?>; color:<?= stripos($lid['semaforo'], 'amarillo') !== false ? '#1a1a1a' : '#fff' ?>; font-weight:700; padding:8px; border-radius:6px; font-size:.95rem; margin-bottom:6px;">
                     <?= $lid['ganados'] ?>
                 </div>
+                <div style="font-size:.72rem; color:#475569; margin-bottom:4px; font-weight:600;">
+                    Meta: <?= (int)($lid['meta_personal_mensual'] ?? 0) ?> · Avance: <?= (int)($lid['avance_pct'] ?? 0) ?>%
+                </div>
                 <div style="font-size:.72rem; color:#64748b;">
-                    <?= htmlspecialchars($semSemanal[$lid['semaforo']]['label']) ?>
+                    <?= (int)($lid['meta_personal_mensual'] ?? 0) <= 0 ? 'Sin meta configurada' : htmlspecialchars($semSemanal[$lid['semaforo']]['label']) ?>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -388,11 +413,17 @@ $semMeta      = $pctMeta >= 75 ? 'verde' : ($pctMeta >= 40 ? 'amarillo' : 'rojo'
                 <div style="font-size:.8rem; color:#475569; margin-bottom:6px; font-weight:600;">
                     <?= htmlspecialchars(trim($lid['nombre'] . ' ' . $lid['apellido'])) ?>
                 </div>
+                <div style="font-size:.68rem; color:#64748b; margin-bottom:6px;">
+                    <?= htmlspecialchars((string)($lid['ministerio'] ?? 'Sin ministerio')) ?>
+                </div>
                 <div style="background:<?= $semSemanal[$lid['semaforo']]['bg'] ?>; color:<?= stripos($lid['semaforo'], 'amarillo') !== false ? '#1a1a1a' : '#fff' ?>; font-weight:700; padding:8px; border-radius:6px; font-size:.95rem; margin-bottom:6px;">
                     <?= $lid['ganados'] ?>
                 </div>
+                <div style="font-size:.72rem; color:#475569; margin-bottom:4px; font-weight:600;">
+                    Meta: <?= (int)($lid['meta_personal_mensual'] ?? 0) ?> · Avance: <?= (int)($lid['avance_pct'] ?? 0) ?>%
+                </div>
                 <div style="font-size:.72rem; color:#64748b;">
-                    <?= htmlspecialchars($semSemanal[$lid['semaforo']]['label']) ?>
+                    <?= (int)($lid['meta_personal_mensual'] ?? 0) <= 0 ? 'Sin meta configurada' : htmlspecialchars($semSemanal[$lid['semaforo']]['label']) ?>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -485,68 +516,6 @@ $semMeta      = $pctMeta >= 75 ? 'verde' : ($pctMeta >= 40 ? 'amarillo' : 'rojo'
     </div>
 </div>
 <?php endif; ?>
-
-<!-- ── Tabla desglose mensual ──────────────────────────────────────────────── -->
-<div class="card report-card" style="margin-bottom:22px; padding:18px;">
-    <h4 style="margin:0 0 14px 0; font-size:.97rem; color:#374151;">
-        Detalle mensual de ganados · <?= $anio ?>
-    </h4>
-    <div class="table-container">
-        <table class="dash-min-table">
-            <thead>
-                <tr>
-                    <th>Mes</th>
-                    <th>En célula</th>
-                    <th>En iglesia</th>
-                    <th>Total</th>
-                    <th>Semáforo</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php for ($m = 1; $m <= 12; $m++):
-                    $gc   = (int)($gananciasMensuales[$m]['celula'] ?? 0);
-                    $gi   = (int)($gananciasMensuales[$m]['iglesia'] ?? 0);
-                    $tot  = (int)($gananciasMensuales[$m]['total'] ?? 0);
-                    $sm   = $tot >= 121 ? 'verde' : ($tot >= 61 ? 'amarillo' : 'rojo');
-                    $info = $semaforoInfo[$sm];
-                    $esMesActual = ($m === $mesActual && $anio === (int)date('Y'));
-                ?>
-                <tr <?= $esMesActual ? 'style="background:#f0fdf4;"' : '' ?>>
-                    <td style="font-weight:<?= $esMesActual ? '700' : '400' ?>;">
-                        <?= htmlspecialchars($mesesLabels[$m] ?? '??') ?>
-                        <?php if ($esMesActual): ?><span style="font-size:.72rem;color:#22c55e;margin-left:4px;">← actual</span><?php endif; ?>
-                    </td>
-                    <td><?= $gc ?></td>
-                    <td><?= $gi ?></td>
-                    <td><strong><?= $tot ?></strong></td>
-                    <td>
-                        <?php if ($tot > 0): ?>
-                        <span class="dash-kpi-badge badge-<?= $sm ?>" style="font-size:.73rem;">
-                            <?= $info['icon'] . ' ' . htmlspecialchars($info['label']) ?>
-                        </span>
-                        <?php else: ?>
-                        <span style="color:#d1d5db; font-size:.8rem;">—</span>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-                <?php endfor; ?>
-            </tbody>
-            <tfoot>
-                <tr style="background:#f8fafc; font-weight:700;">
-                    <td>TOTAL</td>
-                    <td><?= $totalCelula ?></td>
-                    <td><?= $totalIglesia ?></td>
-                    <td><?= $totalAnual ?></td>
-                    <td>
-                        <span class="dash-kpi-badge badge-<?= $semaforoAnual ?>" style="font-size:.73rem;">
-                            <?= ($semaforoInfo[$semaforoAnual]['icon'] ?? '') . ' ' . htmlspecialchars($semaforoInfo[$semaforoAnual]['label'] ?? '') ?>
-                        </span>
-                    </td>
-                </tr>
-            </tfoot>
-        </table>
-    </div>
-</div>
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -715,6 +684,45 @@ $semMeta      = $pctMeta >= 75 ? 'verde' : ($pctMeta >= 40 ? 'amarillo' : 'rojo'
                 }
             }
         });
+    }
+
+    // ── Rotación automática de metas (semana/mes/año) ────────────────────
+    const slidesWrap = document.getElementById('dashMetasSlidesWrap');
+    const dotsWrap = document.getElementById('dashMetasDots');
+    if (slidesWrap && dotsWrap) {
+        const slides = Array.from(slidesWrap.querySelectorAll('.dash-metas-slide'));
+        if (slides.length > 0) {
+            let current = 0;
+            let timer = null;
+
+            const activar = (index) => {
+                current = index;
+                slides.forEach((slide, idx) => {
+                    slide.classList.toggle('is-active', idx === current);
+                });
+                Array.from(dotsWrap.querySelectorAll('.dash-metas-dot')).forEach((dot, idx) => {
+                    dot.classList.toggle('is-active', idx === current);
+                });
+            };
+
+            slides.forEach((_, idx) => {
+                const dot = document.createElement('button');
+                dot.type = 'button';
+                dot.className = 'dash-metas-dot' + (idx === 0 ? ' is-active' : '');
+                dot.setAttribute('aria-label', 'Ir a vista ' + (idx + 1));
+                dot.addEventListener('click', () => {
+                    activar(idx);
+                    if (timer) {
+                        clearInterval(timer);
+                    }
+                    timer = setInterval(() => activar((current + 1) % slides.length), 7000);
+                });
+                dotsWrap.appendChild(dot);
+            });
+
+            activar(0);
+            timer = setInterval(() => activar((current + 1) % slides.length), 7000);
+        }
     }
 })();
 </script>

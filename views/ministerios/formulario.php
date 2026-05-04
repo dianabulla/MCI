@@ -4,6 +4,11 @@
 $returnUrl = $return_url ?? null;
 $volverUrl = $returnUrl ?: (PUBLIC_URL . 'index.php?url=ministerios');
 $metas = $metas ?? [];
+$metaAnual = (int)($metas['meta_anual'] ?? 0);
+$metaMensual = (int)($metas['meta_mensual'] ?? 0);
+$metaSemanal = (int)($metas['meta_semanal'] ?? 0);
+$anioMeta = (int)($metas['anio_meta'] ?? date('Y'));
+$fechaMeta = sprintf('%04d-01-01', $anioMeta > 0 ? $anioMeta : (int)date('Y'));
 $metaGanadosS1 = (int)($metas['meta_ganados_s1'] ?? 0);
 $metaGanadosS2 = (int)($metas['meta_ganados_s2'] ?? 0);
 $metaUvS1 = (int)($metas['meta_uv_s1'] ?? 0);
@@ -52,6 +57,19 @@ $metaN3S2 = (int)($metas['meta_n3_s2'] ?? 0);
     color: #4b5f7e;
     font-size: 13px;
 }
+
+.metas-auto-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.metas-auto-help {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: #58708f;
+}
 </style>
 
 <div class="page-header">
@@ -81,13 +99,39 @@ $metaN3S2 = (int)($metas['meta_n3_s2'] ?? 0);
                 <h3 style="margin: 0 0 6px; color:#21457e; font-size: 17px;">Metas por semestre</h3>
                 <small style="color:#5f6f88;">Configura metas de almas ganadas y de cada evento de escalera/convenciones.</small>
 
+                <div class="metas-col" style="margin-top:10px;">
+                    <h4 style="margin-bottom:6px;">Configuración automática (por ministerio)</h4>
+                    <small style="color:#60708a;">Ingresa la meta anual y selecciona el año en calendario. El sistema calcula meta mensual y semanal automáticamente.</small>
+
+                    <div class="metas-auto-grid">
+                        <div>
+                            <label for="meta_anual">Meta anual (ganados)</label>
+                            <input type="number" min="0" step="1" id="meta_anual" name="meta_anual" class="form-control" value="<?= $metaAnual ?>">
+                        </div>
+                        <div>
+                            <label for="meta_anio_fecha">Calendario (año meta)</label>
+                            <input type="date" id="meta_anio_fecha" name="meta_anio_fecha" class="form-control" value="<?= htmlspecialchars($fechaMeta, ENT_QUOTES, 'UTF-8') ?>">
+                            <input type="hidden" id="anio_meta" name="anio_meta" value="<?= (int)$anioMeta ?>">
+                        </div>
+                        <div>
+                            <label for="meta_mensual">Meta mensual</label>
+                            <input type="number" min="0" step="1" id="meta_mensual" name="meta_mensual" class="form-control" value="<?= $metaMensual ?>" readonly>
+                        </div>
+                        <div>
+                            <label for="meta_semanal">Meta semanal</label>
+                            <input type="number" min="0" step="1" id="meta_semanal" name="meta_semanal" class="form-control" value="<?= $metaSemanal ?>" readonly>
+                        </div>
+                    </div>
+                    <p class="metas-auto-help">La meta semestral de ganados se distribuye automáticamente desde la meta anual según el calendario del año elegido.</p>
+                </div>
+
                 <div class="metas-grid">
                     <div class="metas-col">
                         <h4>Semestre 1 (Enero - Junio)</h4>
 
                         <div class="metas-row">
                             <label for="meta_ganados_s1">Meta almas ganadas</label>
-                            <input type="number" min="0" step="1" id="meta_ganados_s1" name="meta_ganados_s1" class="form-control" value="<?= $metaGanadosS1 ?>">
+                            <input type="number" min="0" step="1" id="meta_ganados_s1" name="meta_ganados_s1" class="form-control" value="<?= $metaGanadosS1 ?>" readonly>
                         </div>
 
                         <div class="metas-row">
@@ -121,7 +165,7 @@ $metaN3S2 = (int)($metas['meta_n3_s2'] ?? 0);
 
                         <div class="metas-row">
                             <label for="meta_ganados_s2">Meta almas ganadas</label>
-                            <input type="number" min="0" step="1" id="meta_ganados_s2" name="meta_ganados_s2" class="form-control" value="<?= $metaGanadosS2 ?>">
+                            <input type="number" min="0" step="1" id="meta_ganados_s2" name="meta_ganados_s2" class="form-control" value="<?= $metaGanadosS2 ?>" readonly>
                         </div>
 
                         <div class="metas-row">
@@ -160,5 +204,62 @@ $metaN3S2 = (int)($metas['meta_n3_s2'] ?? 0);
         </div>
     </form>
 </div>
+
+<script>
+(function() {
+    var inputAnual = document.getElementById('meta_anual');
+    var inputFecha = document.getElementById('meta_anio_fecha');
+    var inputAnio = document.getElementById('anio_meta');
+    var inputMensual = document.getElementById('meta_mensual');
+    var inputSemanal = document.getElementById('meta_semanal');
+    var inputS1 = document.getElementById('meta_ganados_s1');
+    var inputS2 = document.getElementById('meta_ganados_s2');
+
+    if (!inputAnual || !inputFecha || !inputAnio || !inputMensual || !inputSemanal || !inputS1 || !inputS2) {
+        return;
+    }
+
+    function getAnioSeleccionado() {
+        var fecha = String(inputFecha.value || '');
+        var match = fecha.match(/^(\d{4})-\d{2}-\d{2}$/);
+        if (match) {
+            return parseInt(match[1], 10);
+        }
+        return new Date().getFullYear();
+    }
+
+    function diasEnAnio(anio) {
+        var inicio = new Date(anio, 0, 1);
+        var fin = new Date(anio, 11, 31);
+        var diff = fin.getTime() - inicio.getTime();
+        return Math.floor(diff / 86400000) + 1;
+    }
+
+    function recalcularMetas() {
+        var anual = Math.max(0, parseInt(inputAnual.value || '0', 10) || 0);
+        var anio = getAnioSeleccionado();
+        inputAnio.value = String(anio);
+
+        var dias = diasEnAnio(anio);
+        var semanas = Math.ceil(dias / 7);
+
+        var mensual = anual <= 0 ? 0 : Math.round(anual / 12);
+        var semanal = anual <= 0 ? 0 : Math.ceil(anual / Math.max(1, semanas));
+
+        var diasS1 = Math.floor((new Date(anio, 5, 30).getTime() - new Date(anio, 0, 1).getTime()) / 86400000) + 1;
+        var metaS1 = anual <= 0 ? 0 : Math.round(anual * (diasS1 / dias));
+        var metaS2 = anual <= 0 ? 0 : Math.max(0, anual - metaS1);
+
+        inputMensual.value = String(mensual);
+        inputSemanal.value = String(semanal);
+        inputS1.value = String(metaS1);
+        inputS2.value = String(metaS2);
+    }
+
+    inputAnual.addEventListener('input', recalcularMetas);
+    inputFecha.addEventListener('change', recalcularMetas);
+    recalcularMetas();
+})();
+</script>
 
 <?php include VIEWS . '/layout/footer.php'; ?>

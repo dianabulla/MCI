@@ -25,7 +25,7 @@ $puedeVer = function(string $modulo) {
 
 $puedeVerGanar = $puedeVer('personas');
 $puedeVerConsolidar = $puedeVer('personas');
-$puedeVerDiscipular = $puedeVer('personas');
+$puedeVerDiscipular = $puedeVer('personas') || $puedeVer('discipular_evaluaciones');
 $puedeVerEnviar = $puedeVer('celulas');
 $puedeVerMaterial = AuthController::esAdministrador()
     || AuthController::tienePermiso('materiales_celulas', 'ver')
@@ -34,6 +34,13 @@ $puedeVerMaterial = AuthController::esAdministrador()
 $puedeVerMinisterios = $puedeVer('ministerios');
 $puedeVerRegistroTeensKids = $puedeVer('teen');
 $puedeVerEventosMenu = AuthController::esAdministrador() || AuthController::tienePermiso('eventos', 'ver');
+$puedeVerAsistencias = $puedeVer('asistencias');
+$puedeVerPeticiones = $puedeVer('peticiones');
+$puedeVerTransmisiones = $puedeVer('transmisiones');
+$puedeVerObsequios = $puedeVer('entrega_obsequio');
+$puedeVerNehemias = $puedeVer('nehemias');
+$puedeVerReportes = $puedeVer('reportes');
+$puedeVerRoles = $puedeVer('roles');
 
 $puedeVerPendientesGanar = $puedeVerGanar;
 $totalPendientesGanar = 0;
@@ -233,19 +240,19 @@ if ($puedeVerPendientesGanar) {
             </a>
             <?php endif; ?>
 
-            <?php if ($puedeVer('asistencias')): ?>
+            <?php if ($puedeVerAsistencias): ?>
             <a class="sidebar-link <?= $isActive(['asistencias']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=asistencias">
                 <span class="sidebar-link-icon"><i class="bi bi-check2-square"></i></span><span class="sidebar-link-text">Asistencias</span>
             </a>
             <?php endif; ?>
 
-            <?php if ($puedeVer('peticiones')): ?>
+            <?php if ($puedeVerPeticiones): ?>
             <a class="sidebar-link <?= $isActive(['peticiones']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=peticiones">
                 <span class="sidebar-link-icon"><i class="bi bi-chat-heart"></i></span><span class="sidebar-link-text">Peticiones</span>
             </a>
             <?php endif; ?>
 
-            <?php if ($puedeVer('transmisiones')): ?>
+            <?php if ($puedeVerTransmisiones): ?>
             <a class="sidebar-link <?= $isActive(['transmisiones']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=transmisiones">
                 <span class="sidebar-link-icon"><i class="bi bi-broadcast"></i></span><span class="sidebar-link-text">Transmisiones</span>
             </a>
@@ -257,25 +264,25 @@ if ($puedeVerPendientesGanar) {
             </a>
             <?php endif; ?>
 
-            <?php if ($puedeVer('entrega_obsequio')): ?>
+            <?php if ($puedeVerObsequios): ?>
             <a class="sidebar-link <?= $isActive(['entrega_obsequio', 'registro_obsequio']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=entrega_obsequio">
                 <span class="sidebar-link-icon"><i class="bi bi-gift-fill"></i></span><span class="sidebar-link-text">Obsequios</span>
             </a>
             <?php endif; ?>
 
-            <?php if ($puedeVer('nehemias')): ?>
+            <?php if ($puedeVerNehemias): ?>
             <a class="sidebar-link <?= $isActive(['nehemias']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=nehemias/lista">
                 <span class="sidebar-link-icon"><i class="bi bi-clipboard-data"></i></span><span class="sidebar-link-text">Nehemias</span>
             </a>
             <?php endif; ?>
 
-            <?php if ($puedeVer('reportes')): ?>
+            <?php if ($puedeVerReportes): ?>
             <a class="sidebar-link <?= $isActive(['reportes']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=reportes">
                 <span class="sidebar-link-icon"><i class="bi bi-bar-chart"></i></span><span class="sidebar-link-text">Reportes</span>
             </a>
             <?php endif; ?>
 
-            <?php if ($puedeVer('roles')): ?>
+            <?php if ($puedeVerRoles): ?>
             <a class="sidebar-link <?= $isActive(['roles']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=roles">
                 <span class="sidebar-link-icon"><i class="bi bi-person-badge"></i></span><span class="sidebar-link-text">Roles</span>
             </a>

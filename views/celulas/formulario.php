@@ -7,6 +7,32 @@
 
 <div class="form-container">
     <form method="POST">
+        <?php
+        $tipoCelulaSeleccionada = strtolower(trim((string)($_POST['tipo_celula'] ?? '')));
+        if (!in_array($tipoCelulaSeleccionada, ['nueva', 'antigua'], true)) {
+            if (isset($celula['Es_Antiguo'])) {
+                $tipoCelulaSeleccionada = ((int)$celula['Es_Antiguo'] === 1) ? 'antigua' : 'nueva';
+            } else {
+                $tipoCelulaSeleccionada = isset($celula) ? 'antigua' : 'nueva';
+            }
+        }
+        ?>
+
+        <div class="form-group">
+            <label>Tipo de célula</label>
+            <div class="tipo-celula-options">
+                <label class="tipo-celula-item">
+                    <input type="radio" name="tipo_celula" value="antigua" <?= $tipoCelulaSeleccionada === 'antigua' ? 'checked' : '' ?>>
+                    Célula antigua
+                </label>
+                <label class="tipo-celula-item">
+                    <input type="radio" name="tipo_celula" value="nueva" <?= $tipoCelulaSeleccionada === 'nueva' ? 'checked' : '' ?>>
+                    Célula nueva
+                </label>
+            </div>
+            <small class="form-text text-muted">Marca si la célula es antigua o nueva.</small>
+        </div>
+
         <div class="form-group">
             <label for="nombre_celula">Nombre de la Célula</label>
             <input type="text" id="nombre_celula" name="nombre_celula" class="form-control" 
@@ -174,6 +200,19 @@
 <style>
 .autocomplete-container {
     position: relative;
+}
+
+.tipo-celula-options {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.tipo-celula-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
 }
 
 .autocomplete-results {

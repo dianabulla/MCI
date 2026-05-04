@@ -90,6 +90,26 @@ $tablaGanarMinisterio = $tabla_ganar_ministerio ?? [
 $tablaSeguimientoLideresCelula = $tabla_seguimiento_lideres_celula ?? [];
 $tablaEstadoSemanalCelulas = $tabla_estado_semanal_celulas ?? [];
 
+$ministeriosTablasCelulas = [];
+$agregarMinisterioTablaCelula = static function($valor) use (&$ministeriosTablasCelulas) {
+    $nombre = trim((string)$valor);
+    if ($nombre === '') {
+        $nombre = 'Sin ministerio';
+    }
+    $ministeriosTablasCelulas[$nombre] = $nombre;
+};
+
+foreach ($tablaSeguimientoLideresCelula as $filaSeguimiento) {
+    $agregarMinisterioTablaCelula($filaSeguimiento['ministerio'] ?? '');
+}
+
+foreach ($tablaEstadoSemanalCelulas as $filaEstado) {
+    $agregarMinisterioTablaCelula($filaEstado['ministerio'] ?? '');
+}
+
+natcasesort($ministeriosTablasCelulas);
+$ministeriosTablasCelulas = array_values($ministeriosTablasCelulas);
+
 $reporteGanadosFinSemanaAnterior = $reporte_ganados_fin_semana_anterior ?? [
     'inicio' => '',
     'fin' => '',
@@ -165,6 +185,8 @@ $tipoReporte = (string)($tipo_reporte ?? 'personas');
 if (!in_array($tipoReporte, ['personas', 'celulas', 'escuelas'], true)) {
     $tipoReporte = 'personas';
 }
+$ministeriosDisponibles = (array)($ministerios_disponibles ?? []);
+$filtroMinisterioSeleccionado = (string)($filtro_ministerio ?? '');
 $esReportePersonas = $tipoReporte === 'personas';
 $esReporteCelulas = $tipoReporte === 'celulas';
 $esReporteEscuelas = $tipoReporte === 'escuelas';
@@ -445,8 +467,40 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 
 <?php if ($esReportePersonas): ?>
 <div class="card report-card report-chart-context" style="margin-bottom: 12px; padding: 12px 14px;">
-    <strong><?= htmlspecialchars($ganarLabel) ?></strong>
-    <span style="color:#64748b;">(<?= htmlspecialchars($ganarInicio) ?> a <?= htmlspecialchars($ganarFin) ?>)</span>
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+        <div>
+            <strong><?= htmlspecialchars($ganarLabel) ?></strong>
+            <span style="color:#64748b;">(<?= htmlspecialchars($ganarInicio) ?> a <?= htmlspecialchars($ganarFin) ?>)</span>
+        </div>
+        <form method="GET" action="<?= PUBLIC_URL ?>index.php" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+            <input type="hidden" name="url" value="reportes">
+            <input type="hidden" name="tipo" value="<?= htmlspecialchars($tipoReporte) ?>">
+            <input type="hidden" name="escala_ganar" value="<?= htmlspecialchars((string)$escalaGanar) ?>">
+            <input type="hidden" name="fecha_referencia" value="<?= htmlspecialchars((string)$fecha_referencia) ?>">
+            <input type="hidden" name="fecha_inicio" value="<?= htmlspecialchars((string)$fechaInicioFiltro) ?>">
+            <input type="hidden" name="fecha_fin" value="<?= htmlspecialchars((string)$fechaFinFiltro) ?>">
+            <input type="hidden" name="lider" value="<?= htmlspecialchars((string)$filtro_lider) ?>">
+            <input type="hidden" name="celula" value="<?= htmlspecialchars((string)$filtro_celula) ?>">
+            <input type="hidden" name="mes_meta" value="<?= htmlspecialchars((string)$filtroMesMeta) ?>">
+            <input type="hidden" name="mes_escalera" value="<?= htmlspecialchars((string)$mesEscaleraSeleccionado) ?>">
+            <div class="form-group" style="margin:0;min-width:260px;">
+                <label for="filtroMinisterioTarjetas" style="margin:0 0 4px 0;font-size:12px;color:#637087;">Ver tarjetas por ministerio</label>
+                <select id="filtroMinisterioTarjetas" name="ministerio" class="form-control" onchange="this.form.submit()">
+                    <option value="">Todos los ministerios</option>
+                    <?php foreach ($ministeriosDisponibles as $ministerioOpt): ?>
+                        <?php
+                        $idMinisterioOpt = (string)($ministerioOpt['Id_Ministerio'] ?? '');
+                        $nombreMinisterioOpt = (string)($ministerioOpt['Nombre_Ministerio'] ?? 'Sin ministerio');
+                        ?>
+                        <option value="<?= htmlspecialchars($idMinisterioOpt) ?>" <?= $filtroMinisterioSeleccionado === $idMinisterioOpt ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($nombreMinisterioOpt) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <a href="<?= htmlspecialchars($buildReporteUrl(['ministerio' => '', 'lider' => ''])) ?>" class="btn btn-secondary" style="height:38px;">Limpiar</a>
+        </form>
+    </div>
 </div>
 
 <div class="report-kpi-grid report-kpi-grid--ganar report-chart-context" style="margin-bottom: 18px;">
@@ -470,6 +524,18 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
         <div class="report-kpi-label">Total ganados esta semana</div>
         <div class="report-kpi-value"><?= (int)($resumenOrigen['Ganados_Celula'] ?? 0) + (int)($resumenOrigen['Ganados_Iglesia'] ?? ($resumenOrigen['Ganados_Domingo'] ?? 0)) + (int)($resumenOrigen['Asignados'] ?? 0) ?></div>
     </button>
+    <button type="button" class="report-kpi-card report-kpi-button kpi-celula js-kpi-detalle" data-origen="hombres_anio">
+        <div class="report-kpi-icon">👨</div>
+        <div class="report-kpi-label">Ganados en el año (Hombres)</div>
+        <div class="report-kpi-value"><?= (int)($ganar_anio_hombres ?? 0) ?></div>
+        <small style="color:#637087;">Año <?= (int)($ganar_anio_referencia ?? date('Y')) ?></small>
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button kpi-domingo js-kpi-detalle" data-origen="mujeres_anio">
+        <div class="report-kpi-icon">👩</div>
+        <div class="report-kpi-label">Ganados en el año (Mujeres)</div>
+        <div class="report-kpi-value"><?= (int)($ganar_anio_mujeres ?? 0) ?></div>
+        <small style="color:#637087;">Año <?= (int)($ganar_anio_referencia ?? date('Y')) ?></small>
+    </button>
 </div>
 
 <div class="card report-card report-chart-only" style="margin-bottom: 22px;">
@@ -485,6 +551,27 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
             <button type="button" class="celula-modal__close" data-reporte-close="1" aria-label="Cerrar">×</button>
         </div>
         <div class="celula-modal__body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:10px;align-items:end;">
+                <div>
+                    <label for="reporteDetalleFiltroTexto" style="font-size:12px;color:#60708a;">Buscar</label>
+                    <input type="text" id="reporteDetalleFiltroTexto" class="form-control" placeholder="Nombre, líder, célula...">
+                </div>
+                <div>
+                    <label for="reporteDetalleFiltroMinisterio" style="font-size:12px;color:#60708a;">Ministerio</label>
+                    <select id="reporteDetalleFiltroMinisterio" class="form-control">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="reporteDetalleFiltroProceso" style="font-size:12px;color:#60708a;">Proceso</label>
+                    <select id="reporteDetalleFiltroProceso" class="form-control">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div>
+                    <button type="button" id="reporteDetalleFiltroReset" class="btn btn-secondary" style="height:38px;">Limpiar filtros</button>
+                </div>
+            </div>
             <div class="table-container">
                 <table class="data-table data-table--compacta-celula">
                     <thead>
@@ -797,23 +884,34 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:6px;">
         <div>
             <h3 style="margin-bottom:4px;">Seguimiento de líderes por ministerio</h3>
-            <small style="color:#60708a;">Semanas sin registrar célula (ordenado de mayor a menor)</small>
+            <small style="color:#60708a;">Semanas sin registrar célula en <?= (int)substr((string)($fecha_referencia ?? date('Y-m-d')), 0, 4) ?> (ordenado de mayor a menor)</small>
+        </div>
+        <div class="report-table-filters">
+            <label for="reporteCelulasFiltroMinisterioSeguimiento">Ministerio</label>
+            <select id="reporteCelulasFiltroMinisterioSeguimiento" class="report-select-ministerio">
+                <option value="">Todos</option>
+                <?php foreach ($ministeriosTablasCelulas as $ministerioFiltro): ?>
+                    <option value="<?= htmlspecialchars((string)$ministerioFiltro, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$ministerioFiltro) ?></option>
+                <?php endforeach; ?>
+            </select>
         </div>
     </div>
 
     <div class="table-container" style="margin-top:0;">
-        <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas">
+        <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas" id="tablaSeguimientoCelulas">
             <thead>
                 <tr>
+                    <th>Ministerio</th>
                     <th>Célula</th>
                     <th>Último reporte</th>
                     <th style="width:160px;">Semanas sin registrar</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="tablaSeguimientoCelulasBody">
                 <?php if (!empty($tablaSeguimientoLideresCelula)): ?>
                     <?php foreach ($tablaSeguimientoLideresCelula as $filaSeguimiento): ?>
-                        <tr>
+                        <tr data-row-type="dato" data-ministerio="<?= htmlspecialchars((string)($filaSeguimiento['ministerio'] ?? 'Sin ministerio'), ENT_QUOTES, 'UTF-8') ?>">
+                            <td><?= htmlspecialchars((string)($filaSeguimiento['ministerio'] ?? 'Sin ministerio')) ?></td>
                             <td><?= htmlspecialchars((string)($filaSeguimiento['celula'] ?? 'Sin nombre')) ?></td>
                             <td><?= htmlspecialchars((string)($filaSeguimiento['ultima_fecha_reporte'] ?? '') ?: 'Nunca') ?></td>
                             <td><strong><?= (int)($filaSeguimiento['semanas_sin_registrar'] ?? 0) ?></strong></td>
@@ -821,7 +919,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="3" class="text-center">Sin datos para seguimiento de líderes.</td>
+                        <td colspan="4" class="text-center">Sin datos para seguimiento de líderes.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>
@@ -833,30 +931,79 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:6px;">
         <div>
             <h3 style="margin-bottom:4px;">Estado semanal por célula</h3>
-            <small style="color:#60708a;">Incluye la información de tarjetas: reportadas, no reportadas, sobre sin reporte y reportó sin sobre</small>
+            <small style="color:#60708a;">Vista separada por Sí/No para que sea más fácil leer qué células reportaron y cuáles no.</small>
+        </div>
+        <div class="report-table-filters report-table-filters--estado">
+            <div>
+                <label for="reporteCelulasFiltroMinisterioEstado">Ministerio</label>
+                <select id="reporteCelulasFiltroMinisterioEstado" class="report-select-ministerio">
+                    <option value="">Todos</option>
+                    <?php foreach ($ministeriosTablasCelulas as $ministerioFiltro): ?>
+                        <option value="<?= htmlspecialchars((string)$ministerioFiltro, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$ministerioFiltro) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label for="reporteCelulasFiltroEstadoReporte">Estado</label>
+                <select id="reporteCelulasFiltroEstadoReporte" class="report-select-ministerio">
+                    <option value="todos">Todos</option>
+                    <option value="si">Sí reportaron</option>
+                    <option value="no">No reportaron</option>
+                </select>
+            </div>
         </div>
     </div>
 
+    <?php
+    $estadoSemanalSi = array_values(array_filter($tablaEstadoSemanalCelulas, static function($fila) {
+        return (int)($fila['reportadas_semana'] ?? 0) === 1;
+    }));
+    $estadoSemanalNo = array_values(array_filter($tablaEstadoSemanalCelulas, static function($fila) {
+        return (int)($fila['reportadas_semana'] ?? 0) !== 1;
+    }));
+    ?>
+
+    <div class="report-estado-kpis">
+        <div class="report-estado-kpi report-estado-kpi--si">Sí reportaron: <strong id="estadoSemanalConteoSi"><?= count($estadoSemanalSi) ?></strong></div>
+        <div class="report-estado-kpi report-estado-kpi--no">No reportaron: <strong id="estadoSemanalConteoNo"><?= count($estadoSemanalNo) ?></strong></div>
+    </div>
+
     <div class="table-container" style="margin-top:0;">
-        <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas">
+        <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas" id="tablaEstadoSemanalCelulas">
             <thead>
                 <tr>
+                    <th>Ministerio</th>
                     <th>Célula</th>
-                    <th style="width:120px;">Reportadas semana</th>
-                    <th style="width:140px;">No reportadas semana</th>
+                    <th style="width:120px;">Reportó semana</th>
                     <th style="width:170px;">Entregaron sobre sin reportar</th>
                     <th style="width:170px;">Reportaron pero no entregaron</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="tablaEstadoSemanalCelulasBody">
                 <?php if (!empty($tablaEstadoSemanalCelulas)): ?>
-                    <?php foreach ($tablaEstadoSemanalCelulas as $filaEstado): ?>
-                        <tr>
+                    <tr class="estado-group-row" data-row-type="grupo" data-group="si">
+                        <td colspan="5">Sí reportaron (<?= count($estadoSemanalSi) ?>)</td>
+                    </tr>
+                    <?php foreach ($estadoSemanalSi as $filaEstado): ?>
+                        <tr data-row-type="dato" data-reporto="si" data-ministerio="<?= htmlspecialchars((string)($filaEstado['ministerio'] ?? 'Sin ministerio'), ENT_QUOTES, 'UTF-8') ?>">
+                            <td><?= htmlspecialchars((string)($filaEstado['ministerio'] ?? 'Sin ministerio')) ?></td>
                             <td><?= htmlspecialchars((string)($filaEstado['celula'] ?? 'Sin nombre')) ?></td>
-                            <td><strong><?= (int)($filaEstado['reportadas_semana'] ?? 0) === 1 ? 'Sí' : 'No' ?></strong></td>
-                            <td><strong><?= (int)($filaEstado['no_reportadas_semana'] ?? 0) === 1 ? 'Sí' : 'No' ?></strong></td>
-                            <td><strong><?= (int)($filaEstado['entregaron_sobre_sin_reportar'] ?? 0) === 1 ? 'Sí' : 'No' ?></strong></td>
-                            <td><strong><?= (int)($filaEstado['reportaron_sin_entregar_sobre'] ?? 0) === 1 ? 'Sí' : 'No' ?></strong></td>
+                            <td><span class="estado-pill estado-pill--si">Sí</span></td>
+                            <td><span class="estado-pill <?= (int)($filaEstado['entregaron_sobre_sin_reportar'] ?? 0) === 1 ? 'estado-pill--alerta' : 'estado-pill--no' ?>"><?= (int)($filaEstado['entregaron_sobre_sin_reportar'] ?? 0) === 1 ? 'Sí' : 'No' ?></span></td>
+                            <td><span class="estado-pill <?= (int)($filaEstado['reportaron_sin_entregar_sobre'] ?? 0) === 1 ? 'estado-pill--alerta' : 'estado-pill--no' ?>"><?= (int)($filaEstado['reportaron_sin_entregar_sobre'] ?? 0) === 1 ? 'Sí' : 'No' ?></span></td>
+                        </tr>
+                    <?php endforeach; ?>
+
+                    <tr class="estado-group-row" data-row-type="grupo" data-group="no">
+                        <td colspan="5">No reportaron (<?= count($estadoSemanalNo) ?>)</td>
+                    </tr>
+                    <?php foreach ($estadoSemanalNo as $filaEstado): ?>
+                        <tr data-row-type="dato" data-reporto="no" data-ministerio="<?= htmlspecialchars((string)($filaEstado['ministerio'] ?? 'Sin ministerio'), ENT_QUOTES, 'UTF-8') ?>">
+                            <td><?= htmlspecialchars((string)($filaEstado['ministerio'] ?? 'Sin ministerio')) ?></td>
+                            <td><?= htmlspecialchars((string)($filaEstado['celula'] ?? 'Sin nombre')) ?></td>
+                            <td><span class="estado-pill estado-pill--no">No</span></td>
+                            <td><span class="estado-pill <?= (int)($filaEstado['entregaron_sobre_sin_reportar'] ?? 0) === 1 ? 'estado-pill--alerta' : 'estado-pill--no' ?>"><?= (int)($filaEstado['entregaron_sobre_sin_reportar'] ?? 0) === 1 ? 'Sí' : 'No' ?></span></td>
+                            <td><span class="estado-pill <?= (int)($filaEstado['reportaron_sin_entregar_sobre'] ?? 0) === 1 ? 'estado-pill--alerta' : 'estado-pill--no' ?>"><?= (int)($filaEstado['reportaron_sin_entregar_sobre'] ?? 0) === 1 ? 'Sí' : 'No' ?></span></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
@@ -1583,6 +1730,10 @@ if (tipoReporte === 'personas') {
     const reporteDetalleModalBody = document.querySelector('#reporteDetalleModalBody');
     const reporteDetalleModalTitle = document.querySelector('#reporteDetalleModalTitle');
     const reporteDetalleModalClose = document.querySelectorAll('[data-reporte-close="1"]');
+    const reporteDetalleFiltroTexto = document.querySelector('#reporteDetalleFiltroTexto');
+    const reporteDetalleFiltroMinisterio = document.querySelector('#reporteDetalleFiltroMinisterio');
+    const reporteDetalleFiltroProceso = document.querySelector('#reporteDetalleFiltroProceso');
+    const reporteDetalleFiltroReset = document.querySelector('#reporteDetalleFiltroReset');
 
     const escaparHtml = (valor) => String(valor || '')
         .replace(/&/g, '&amp;')
@@ -1596,7 +1747,9 @@ if (tipoReporte === 'personas') {
         iglesia: 'Ganados en iglesia',
         domingo: 'Ganados en iglesia',
         asignados: 'Asignados',
-        todos: 'Todos los orígenes'
+        todos: 'Todos los orígenes',
+        hombres_anio: 'Ganados en el año (Hombres)',
+        mujeres_anio: 'Ganados en el año (Mujeres)'
     };
 
     const nombresMesMinisterial = {
@@ -1619,6 +1772,118 @@ if (tipoReporte === 'personas') {
         const proceso = String(item.proceso || item.Proceso || '');
         const fecha = String(item.fecha_registro || item.Fecha_Registro || '');
         return `<tr><td>${escaparHtml(nombre)}</td><td>${escaparHtml(lider)}</td><td>${escaparHtml(celula)}</td><td>${escaparHtml(ministerio)}</td><td>${escaparHtml(proceso)}</td><td>${escaparHtml(fecha)}</td></tr>`;
+    };
+
+    const reconstruirOpcionesFiltrosDetalle = () => {
+        if (!reporteDetalleModalBody || !reporteDetalleFiltroMinisterio || !reporteDetalleFiltroProceso) {
+            return;
+        }
+
+        const ministerios = new Set();
+        const procesos = new Set();
+        const filas = Array.from(reporteDetalleModalBody.querySelectorAll('tr'));
+
+        filas.forEach((fila) => {
+            const celdas = fila.querySelectorAll('td');
+            if (celdas.length < 6 || celdas[0].hasAttribute('colspan')) {
+                return;
+            }
+            const ministerio = String(celdas[3].textContent || '').trim();
+            const proceso = String(celdas[4].textContent || '').trim();
+            if (ministerio !== '') {
+                ministerios.add(ministerio);
+            }
+            if (proceso !== '') {
+                procesos.add(proceso);
+            }
+        });
+
+        const llenarSelect = (selectEl, valores, labelTodos) => {
+            const valorActual = String(selectEl.value || '');
+            selectEl.innerHTML = '';
+            const optTodos = document.createElement('option');
+            optTodos.value = '';
+            optTodos.textContent = labelTodos;
+            selectEl.appendChild(optTodos);
+
+            Array.from(valores).sort((a, b) => a.localeCompare(b, 'es')).forEach((valor) => {
+                const opt = document.createElement('option');
+                opt.value = valor;
+                opt.textContent = valor;
+                selectEl.appendChild(opt);
+            });
+
+            if (valorActual !== '' && Array.from(valores).includes(valorActual)) {
+                selectEl.value = valorActual;
+            }
+        };
+
+        llenarSelect(reporteDetalleFiltroMinisterio, ministerios, 'Todos');
+        llenarSelect(reporteDetalleFiltroProceso, procesos, 'Todos');
+    };
+
+    const aplicarFiltrosDetalle = () => {
+        if (!reporteDetalleModalBody) {
+            return;
+        }
+
+        const texto = String(reporteDetalleFiltroTexto ? reporteDetalleFiltroTexto.value : '').trim().toLowerCase();
+        const ministerioFiltro = String(reporteDetalleFiltroMinisterio ? reporteDetalleFiltroMinisterio.value : '').trim();
+        const procesoFiltro = String(reporteDetalleFiltroProceso ? reporteDetalleFiltroProceso.value : '').trim();
+
+        let visibles = 0;
+        const filas = Array.from(reporteDetalleModalBody.querySelectorAll('tr'));
+        filas.forEach((fila) => {
+            if (fila.getAttribute('data-filter-empty') === '1') {
+                fila.remove();
+                return;
+            }
+
+            const celdas = fila.querySelectorAll('td');
+            if (celdas.length < 6 || celdas[0].hasAttribute('colspan')) {
+                return;
+            }
+
+            const textoFila = String(fila.textContent || '').toLowerCase();
+            const ministerioFila = String(celdas[3].textContent || '').trim();
+            const procesoFila = String(celdas[4].textContent || '').trim();
+
+            const coincideTexto = texto === '' || textoFila.includes(texto);
+            const coincideMinisterio = ministerioFiltro === '' || ministerioFila === ministerioFiltro;
+            const coincideProceso = procesoFiltro === '' || procesoFila === procesoFiltro;
+            const mostrar = coincideTexto && coincideMinisterio && coincideProceso;
+
+            fila.style.display = mostrar ? '' : 'none';
+            if (mostrar) {
+                visibles += 1;
+            }
+        });
+
+        const filasDatos = Array.from(reporteDetalleModalBody.querySelectorAll('tr')).filter((fila) => {
+            const celdas = fila.querySelectorAll('td');
+            return celdas.length >= 6 && !celdas[0].hasAttribute('colspan');
+        });
+
+        if (filasDatos.length > 0 && visibles === 0) {
+            const vacio = document.createElement('tr');
+            vacio.setAttribute('data-filter-empty', '1');
+            vacio.innerHTML = '<td colspan="6" class="text-center">Sin resultados con los filtros aplicados</td>';
+            reporteDetalleModalBody.appendChild(vacio);
+        }
+    };
+
+    const prepararFiltrosDetalleModal = () => {
+        if (reporteDetalleFiltroTexto) {
+            reporteDetalleFiltroTexto.value = '';
+        }
+        if (reporteDetalleFiltroMinisterio) {
+            reporteDetalleFiltroMinisterio.value = '';
+        }
+        if (reporteDetalleFiltroProceso) {
+            reporteDetalleFiltroProceso.value = '';
+        }
+        reconstruirOpcionesFiltrosDetalle();
+        aplicarFiltrosDetalle();
     };
 
     const abrirDetalleKpi = (origen) => {
@@ -1665,6 +1930,8 @@ if (tipoReporte === 'personas') {
             }).join('');
         }
 
+        prepararFiltrosDetalleModal();
+
         reporteDetalleModal.classList.add('is-open');
         reporteDetalleModal.setAttribute('aria-hidden', 'false');
     };
@@ -1702,6 +1969,8 @@ if (tipoReporte === 'personas') {
                 }).join('');
             }
 
+            prepararFiltrosDetalleModal();
+
             reporteDetalleModal.classList.add('is-open');
             reporteDetalleModal.setAttribute('aria-hidden', 'false');
         });
@@ -1721,6 +1990,7 @@ if (tipoReporte === 'personas') {
             } else {
                 reporteDetalleModalBody.innerHTML = filas.map(construirFilaPersona).join('');
             }
+            prepararFiltrosDetalleModal();
             reporteDetalleModal.classList.add('is-open');
             reporteDetalleModal.setAttribute('aria-hidden', 'false');
         });
@@ -1748,6 +2018,7 @@ if (tipoReporte === 'personas') {
             } else {
                 reporteDetalleModalBody.innerHTML = filas.map(construirFilaPersona).join('');
             }
+            prepararFiltrosDetalleModal();
             reporteDetalleModal.classList.add('is-open');
             reporteDetalleModal.setAttribute('aria-hidden', 'false');
         });
@@ -1782,9 +2053,35 @@ if (tipoReporte === 'personas') {
             }).join('');
         }
 
+        prepararFiltrosDetalleModal();
+
         reporteDetalleModal.classList.add('is-open');
         reporteDetalleModal.setAttribute('aria-hidden', 'false');
     };
+
+    if (reporteDetalleFiltroTexto) {
+        reporteDetalleFiltroTexto.addEventListener('input', aplicarFiltrosDetalle);
+    }
+    if (reporteDetalleFiltroMinisterio) {
+        reporteDetalleFiltroMinisterio.addEventListener('change', aplicarFiltrosDetalle);
+    }
+    if (reporteDetalleFiltroProceso) {
+        reporteDetalleFiltroProceso.addEventListener('change', aplicarFiltrosDetalle);
+    }
+    if (reporteDetalleFiltroReset) {
+        reporteDetalleFiltroReset.addEventListener('click', () => {
+            if (reporteDetalleFiltroTexto) {
+                reporteDetalleFiltroTexto.value = '';
+            }
+            if (reporteDetalleFiltroMinisterio) {
+                reporteDetalleFiltroMinisterio.value = '';
+            }
+            if (reporteDetalleFiltroProceso) {
+                reporteDetalleFiltroProceso.value = '';
+            }
+            aplicarFiltrosDetalle();
+        });
+    }
 
     document.querySelectorAll('.js-escalera-detalle-etapa').forEach((boton) => {
         boton.addEventListener('click', () => {
@@ -1994,6 +2291,85 @@ if (tipoReporte === 'personas') {
             panelDetalle.style.display = 'none';
         });
     }
+
+    const filtroMinisterioSeguimiento = document.getElementById('reporteCelulasFiltroMinisterioSeguimiento');
+    const filtroMinisterioEstado = document.getElementById('reporteCelulasFiltroMinisterioEstado');
+    const filtroEstadoReporte = document.getElementById('reporteCelulasFiltroEstadoReporte');
+    const bodySeguimiento = document.getElementById('tablaSeguimientoCelulasBody');
+    const bodyEstado = document.getElementById('tablaEstadoSemanalCelulasBody');
+    const estadoConteoSi = document.getElementById('estadoSemanalConteoSi');
+    const estadoConteoNo = document.getElementById('estadoSemanalConteoNo');
+
+    const aplicarFiltrosSeguimiento = () => {
+        if (!bodySeguimiento) {
+            return;
+        }
+        const ministerioSeleccionado = String((filtroMinisterioSeguimiento && filtroMinisterioSeguimiento.value) || '').trim();
+        const filas = bodySeguimiento.querySelectorAll('tr[data-row-type="dato"]');
+        filas.forEach((fila) => {
+            const ministerioFila = String(fila.dataset.ministerio || '').trim();
+            const visible = ministerioSeleccionado === '' || ministerioFila === ministerioSeleccionado;
+            fila.style.display = visible ? '' : 'none';
+        });
+    };
+
+    const aplicarFiltrosEstado = () => {
+        if (!bodyEstado) {
+            return;
+        }
+        const ministerioSeleccionado = String((filtroMinisterioEstado && filtroMinisterioEstado.value) || '').trim();
+        const estadoSeleccionado = String((filtroEstadoReporte && filtroEstadoReporte.value) || 'todos');
+        const filas = bodyEstado.querySelectorAll('tr[data-row-type="dato"]');
+
+        let conteoSi = 0;
+        let conteoNo = 0;
+
+        filas.forEach((fila) => {
+            const ministerioFila = String(fila.dataset.ministerio || '').trim();
+            const reportoFila = String(fila.dataset.reporto || '').trim();
+            const pasaMinisterio = ministerioSeleccionado === '' || ministerioFila === ministerioSeleccionado;
+            const pasaEstado = estadoSeleccionado === 'todos' || reportoFila === estadoSeleccionado;
+            const visible = pasaMinisterio && pasaEstado;
+            fila.style.display = visible ? '' : 'none';
+
+            if (visible) {
+                if (reportoFila === 'si') {
+                    conteoSi++;
+                } else if (reportoFila === 'no') {
+                    conteoNo++;
+                }
+            }
+        });
+
+        bodyEstado.querySelectorAll('tr[data-row-type="grupo"]').forEach((filaGrupo) => {
+            const grupo = String(filaGrupo.dataset.group || '');
+            const totalGrupo = grupo === 'si' ? conteoSi : conteoNo;
+            filaGrupo.style.display = totalGrupo > 0 ? '' : 'none';
+            if (totalGrupo > 0) {
+                filaGrupo.innerHTML = `<td colspan="5">${grupo === 'si' ? 'Sí reportaron' : 'No reportaron'} (${totalGrupo})</td>`;
+            }
+        });
+
+        if (estadoConteoSi) {
+            estadoConteoSi.textContent = String(conteoSi);
+        }
+        if (estadoConteoNo) {
+            estadoConteoNo.textContent = String(conteoNo);
+        }
+    };
+
+    if (filtroMinisterioSeguimiento) {
+        filtroMinisterioSeguimiento.addEventListener('change', aplicarFiltrosSeguimiento);
+    }
+    if (filtroMinisterioEstado) {
+        filtroMinisterioEstado.addEventListener('change', aplicarFiltrosEstado);
+    }
+    if (filtroEstadoReporte) {
+        filtroEstadoReporte.addEventListener('change', aplicarFiltrosEstado);
+    }
+
+    aplicarFiltrosSeguimiento();
+    aplicarFiltrosEstado();
 }
 </script>
 
@@ -2020,6 +2396,93 @@ if (tipoReporte === 'personas') {
     background: #17324d;
     border-color: #17324d;
     color: #ffffff;
+}
+
+.report-table-filters {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.report-table-filters--estado > div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.report-table-filters label {
+    font-size: 12px;
+    color: #526581;
+    font-weight: 600;
+}
+
+.report-select-ministerio {
+    min-width: 170px;
+    border: 1px solid #c7d5e6;
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: #17324d;
+    background: #fff;
+}
+
+.report-estado-kpis {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.report-estado-kpi {
+    border-radius: 10px;
+    padding: 7px 10px;
+    font-size: 13px;
+    border: 1px solid transparent;
+}
+
+.report-estado-kpi--si {
+    background: #e8f8ef;
+    color: #146c43;
+    border-color: #b9e8ce;
+}
+
+.report-estado-kpi--no {
+    background: #feefef;
+    color: #a81f30;
+    border-color: #f3c7cd;
+}
+
+.estado-group-row td {
+    background: #f3f6fb;
+    color: #2f4c6d;
+    font-weight: 700;
+}
+
+.estado-pill {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid transparent;
+}
+
+.estado-pill--si {
+    background: #e8f8ef;
+    color: #146c43;
+    border-color: #b9e8ce;
+}
+
+.estado-pill--no {
+    background: #f2f4f7;
+    color: #5f6f85;
+    border-color: #d9e1ec;
+}
+
+.estado-pill--alerta {
+    background: #fff6e8;
+    color: #9a5a00;
+    border-color: #f0d29b;
 }
 
 .report-kpi-button.js-kpi-modal {

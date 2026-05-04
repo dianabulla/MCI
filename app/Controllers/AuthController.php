@@ -469,6 +469,15 @@ class AuthController extends BaseController {
         return strpos($rolNombre, 'admin') !== false;
     }
 
+    public static function esRolDiscipuloUsuario() {
+        if (self::esAdministrador()) {
+            return false;
+        }
+
+        $rolNombre = self::normalizarTexto((string)($_SESSION['usuario_rol_nombre'] ?? ''));
+        return strpos($rolNombre, 'discipul') !== false || strpos($rolNombre, 'disipul') !== false;
+    }
+
     private static function normalizarTexto($texto) {
         $texto = strtolower(trim((string) $texto));
         return strtr($texto, [

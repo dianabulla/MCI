@@ -52,6 +52,10 @@ class Ministerio extends BaseModel {
         $sql = "CREATE TABLE IF NOT EXISTS ministerio_meta (
                     Id_Ministerio INT NOT NULL,
                     Meta_Ganados INT NOT NULL DEFAULT 0,
+                    Meta_Anual_Ganados INT NOT NULL DEFAULT 0,
+                    Meta_Mensual_Ganados INT NOT NULL DEFAULT 0,
+                    Meta_Semanal_Ganados INT NOT NULL DEFAULT 0,
+                    Anio_Meta INT NOT NULL DEFAULT 0,
                     Meta_Ganados_S1 INT NOT NULL DEFAULT 0,
                     Meta_Ganados_S2 INT NOT NULL DEFAULT 0,
                     Meta_UV_S1 INT NOT NULL DEFAULT 0,
@@ -72,6 +76,10 @@ class Ministerio extends BaseModel {
 
         // Compatibilidad con instalaciones donde la tabla ya existía solo con Meta_Ganados.
         $columnas = [
+            'Meta_Anual_Ganados',
+            'Meta_Mensual_Ganados',
+            'Meta_Semanal_Ganados',
+            'Anio_Meta',
             'Meta_Ganados_S1',
             'Meta_Ganados_S2',
             'Meta_UV_S1',
@@ -105,6 +113,10 @@ class Ministerio extends BaseModel {
 
     private function metasDetallePorDefecto() {
         return [
+            'meta_anual' => 0,
+            'meta_mensual' => 0,
+            'meta_semanal' => 0,
+            'anio_meta' => 0,
             'meta_ganados_s1' => 0,
             'meta_ganados_s2' => 0,
             'meta_uv_s1' => 0,
@@ -180,6 +192,10 @@ class Ministerio extends BaseModel {
             }
 
             $metas = $this->metasDetallePorDefecto();
+            $metas['meta_anual'] = max(0, (int)($row['Meta_Anual_Ganados'] ?? 0));
+            $metas['meta_mensual'] = max(0, (int)($row['Meta_Mensual_Ganados'] ?? 0));
+            $metas['meta_semanal'] = max(0, (int)($row['Meta_Semanal_Ganados'] ?? 0));
+            $metas['anio_meta'] = max(0, (int)($row['Anio_Meta'] ?? 0));
             $metas['meta_ganados_s1'] = max(0, (int)($row['Meta_Ganados_S1'] ?? 0));
             $metas['meta_ganados_s2'] = max(0, (int)($row['Meta_Ganados_S2'] ?? 0));
             $metas['meta_uv_s1'] = max(0, (int)($row['Meta_UV_S1'] ?? 0));
@@ -198,6 +214,10 @@ class Ministerio extends BaseModel {
             if ($metas['meta_ganados_s1'] === 0 && $metas['meta_ganados_s2'] === 0 && $metaLegacy > 0) {
                 $metas['meta_ganados_s1'] = $metaLegacy;
                 $metas['meta_ganados_s2'] = $metaLegacy;
+            }
+
+            if ($metas['meta_anual'] === 0) {
+                $metas['meta_anual'] = max(0, $metas['meta_ganados_s1'] + $metas['meta_ganados_s2']);
             }
 
             $resultado[$id] = $metas;
@@ -237,6 +257,10 @@ class Ministerio extends BaseModel {
         $sql = "INSERT INTO ministerio_meta (
                     Id_Ministerio,
                     Meta_Ganados,
+                    Meta_Anual_Ganados,
+                    Meta_Mensual_Ganados,
+                    Meta_Semanal_Ganados,
+                    Anio_Meta,
                     Meta_Ganados_S1,
                     Meta_Ganados_S2,
                     Meta_UV_S1,
@@ -249,9 +273,13 @@ class Ministerio extends BaseModel {
                     Meta_Convencion_N2_S2,
                     Meta_Convencion_N3_S1,
                     Meta_Convencion_N3_S2
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     Meta_Ganados = VALUES(Meta_Ganados),
+                    Meta_Anual_Ganados = VALUES(Meta_Anual_Ganados),
+                    Meta_Mensual_Ganados = VALUES(Meta_Mensual_Ganados),
+                    Meta_Semanal_Ganados = VALUES(Meta_Semanal_Ganados),
+                    Anio_Meta = VALUES(Anio_Meta),
                     Meta_Ganados_S1 = VALUES(Meta_Ganados_S1),
                     Meta_Ganados_S2 = VALUES(Meta_Ganados_S2),
                     Meta_UV_S1 = VALUES(Meta_UV_S1),
@@ -269,6 +297,10 @@ class Ministerio extends BaseModel {
         return $this->execute($sql, [
             $idMinisterio,
             $metaLegacy,
+            $normalizadas['meta_anual'],
+            $normalizadas['meta_mensual'],
+            $normalizadas['meta_semanal'],
+            $normalizadas['anio_meta'],
             $normalizadas['meta_ganados_s1'],
             $normalizadas['meta_ganados_s2'],
             $normalizadas['meta_uv_s1'],

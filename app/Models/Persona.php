@@ -1827,6 +1827,51 @@ class Persona extends BaseModel {
         return $this->query($sql, $params);
     }
 
+    public function getDetalleGanadosGeneroWithRole($fechaInicio, $fechaFin, $filtroRol, $generoGrupo, $idMinisterio = '', $idLider = '') {
+        $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
+        $generoGrupo = strtolower(trim((string)$generoGrupo));
+
+        if ($generoGrupo === 'hombres') {
+            $filtroGenero = " AND p.Genero IN ('Hombre', 'Joven Hombre')";
+        } elseif ($generoGrupo === 'mujeres') {
+            $filtroGenero = " AND p.Genero IN ('Mujer', 'Joven Mujer')";
+        } else {
+            return [];
+        }
+
+        $sql = "SELECT
+                    p.Id_Persona,
+                    p.Nombre,
+                    p.Apellido,
+                    p.Fecha_Registro,
+                    p.Genero,
+                    p.Proceso,
+                    COALESCE(c.Nombre_Celula, 'Sin célula') AS Nombre_Celula,
+                    COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
+                    COALESCE(CONCAT(lid.Nombre, ' ', lid.Apellido), 'Sin líder') AS Nombre_Lider
+                FROM persona p
+                LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
+                LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
+                LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
+                WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
+                AND $filtroRol" . $filtroNuevas . $filtroGenero;
+
+        $params = [$fechaInicio, $fechaFin];
+
+        if ($idMinisterio !== null && $idMinisterio !== '' && (int)$idMinisterio > 0) {
+            $sql .= " AND p.Id_Ministerio = ?";
+            $params[] = (int)$idMinisterio;
+        }
+
+        if ($idLider !== null && $idLider !== '' && (int)$idLider > 0) {
+            $sql .= " AND p.Id_Lider = ?";
+            $params[] = (int)$idLider;
+        }
+
+        $sql .= " ORDER BY p.Fecha_Registro DESC, p.Id_Persona DESC";
+        return $this->query($sql, $params);
+    }
+
     /**
      * Resumen por ministerio para el reporte de fin de semana anterior.
      * Ganados: domingo con invitador.

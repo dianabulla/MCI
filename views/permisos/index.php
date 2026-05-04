@@ -231,6 +231,8 @@
             'escuelas_formacion' => ['Escuelas de Formacion', 'Registro y asistencias de escuelas de formacion'],
             'escuelas_formacion_marcar_asistencia' => ['Escuelas: Marcar asistencia', 'Permite marcar/desmarcar asistencias en la matriz de Escuelas'],
             'escuelas_formacion_editar_fechas' => ['Escuelas: Editar fechas de clases', 'Permite editar fechas de clases en la matriz de Escuelas'],
+            'discipular_evaluaciones' => ['Discipular: Evaluaciones', 'Controla acceso para ver y resolver evaluaciones, y CRUD segun permiso por rol.'],
+            'discipular_evaluaciones_fechas' => ['Discipular: Configurar fechas de evaluaciones', 'Permite definir las fechas en las que cada evaluacion estara habilitada para alumnos.'],
             'teen'             => ['Material Teens',     'Material educativo para adolescentes'],
         ],
         'Obsequios' => [

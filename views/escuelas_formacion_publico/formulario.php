@@ -566,12 +566,12 @@
 
                 <div class="section" id="section-inscripciones-existentes" style="display:none;">
                     <h3 class="section-title">4. Asistencia por programa inscrito</h3>
-                    <p style="margin:0 0 10px; font-size:13px; color:#55706d;">Selecciona la inscripción y, si aplica, marca asistencia para la clase de hoy.</p>
+                    <p style="margin:0 0 10px; font-size:13px; color:#55706d;">Selecciona la inscripción y la asistencia se marcará automáticamente para la clase de hoy.</p>
                     <div id="lista-inscripciones-existentes"></div>
                     <div style="margin-top:10px;">
                         <label style="display:flex; align-items:center; gap:8px; font-size:14px;">
                             <input type="checkbox" id="marcar_asistencia" name="marcar_asistencia" value="1" style="width:16px;height:16px;">
-                            Marcar asistencia a clase (si hay clase programada hoy)
+                            Asistencia a clase (se marca automáticamente al elegir inscripción)
                         </label>
                     </div>
                     <p id="msg-solo-asistencia" style="display:none; margin:12px 0 0; font-size:13px; color:#7a4b00; border-top:1px solid #f0dfb8; padding-top:10px;">Esta persona ya pertenece a formación. No se crea una nueva inscripción; solo se permite registrar asistencia y/o abonos.</p>
@@ -880,6 +880,10 @@
 
                 if (inputIdInscripcionAsistencia) {
                     inputIdInscripcionAsistencia.value = chk.checked ? idIns : '';
+                }
+
+                if (chkMarcarAsistencia) {
+                    chkMarcarAsistencia.checked = chk.checked;
                 }
             });
         });

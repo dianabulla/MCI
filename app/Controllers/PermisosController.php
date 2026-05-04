@@ -230,6 +230,8 @@ class PermisosController extends BaseController {
             'escuelas_formacion' => 'Escuelas de Formación',
             'escuelas_formacion_marcar_asistencia' => 'Escuelas: Marcar asistencia',
             'escuelas_formacion_editar_fechas' => 'Escuelas: Editar fechas de clases',
+            'discipular_evaluaciones' => 'Discipular: Evaluaciones',
+            'discipular_evaluaciones_fechas' => 'Discipular: Configurar fechas evaluaciones',
             'entrega_obsequio' => 'Entrega de Obsequios',
             'registro_obsequio' => 'Registro de Obsequios',
             'teen' => 'Material Teens',

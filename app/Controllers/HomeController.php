@@ -1466,6 +1466,7 @@ class HomeController extends BaseController {
                 (int)($tema['nivel'] ?? 0),
                 (int)($meta['modulo_numero'] ?? 0)
             );
+            $tema['leccion'] = trim((string)($meta['leccion'] ?? ''));
 
             $fechaMeta = trim((string)($meta['fecha_creacion'] ?? ''));
             if ($fechaMeta !== '') {
@@ -1498,7 +1499,7 @@ class HomeController extends BaseController {
         return [
             1 => [1, 2],
             2 => [3, 4],
-            3 => [4, 5],
+            3 => [5, 6],
         ];
     }
 
@@ -1650,9 +1651,82 @@ class HomeController extends BaseController {
         } catch (Throwable $e) {
             // Compatibilidad hacia atras.
         }
+
+        try {
+            $columnaLeccion = $pdo->query("SHOW COLUMNS FROM material_hub_tema LIKE 'Leccion'");
+            $existeLeccion = $columnaLeccion ? $columnaLeccion->fetch(PDO::FETCH_ASSOC) : false;
+            if (!$existeLeccion) {
+                $pdo->exec("ALTER TABLE material_hub_tema ADD COLUMN Leccion VARCHAR(120) NULL AFTER Modulo_Numero");
+            }
+        } catch (Throwable $e) {
+            // Compatibilidad hacia atras.
+        }
     }
 
-    private function guardarTemaMaterialHub(string $modulo, string $loteId, string $titulo, string $descripcion = '', string $categoria = 'general', int $nivel = 0, int $moduloNumero = 0): void {
+    private function asegurarTablaConfigModuloMaterial(): void {
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return;
+        }
+
+        $sql = "CREATE TABLE IF NOT EXISTS material_hub_modulo_config (
+                    Id_Config INT AUTO_INCREMENT PRIMARY KEY,
+                    Modulo VARCHAR(80) NOT NULL,
+                    Nivel TINYINT UNSIGNED NOT NULL,
+                    Modulo_Numero TINYINT UNSIGNED NOT NULL,
+                    Profesor_Nombre VARCHAR(255) NOT NULL DEFAULT '',
+                    UNIQUE KEY uq_modulo_nivel_numero (Modulo, Nivel, Modulo_Numero)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $pdo->exec($sql);
+    }
+
+    private function guardarProfesorNombreModulo(string $modulo, int $nivel, int $moduloNumero, string $profesorNombre): void {
+        $modulo = trim($modulo);
+        if ($modulo === '' || $nivel <= 0 || $moduloNumero <= 0) {
+            return;
+        }
+
+        $this->asegurarTablaConfigModuloMaterial();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return;
+        }
+
+        $sql = "INSERT INTO material_hub_modulo_config (Modulo, Nivel, Modulo_Numero, Profesor_Nombre)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE Profesor_Nombre = VALUES(Profesor_Nombre)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$modulo, $nivel, $moduloNumero, trim($profesorNombre)]);
+    }
+
+    private function obtenerProfesoresModulos(string $modulo): array {
+        $modulo = trim($modulo);
+        if ($modulo === '') {
+            return [];
+        }
+
+        $this->asegurarTablaConfigModuloMaterial();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return [];
+        }
+
+        $stmt = $pdo->prepare("SELECT Nivel, Modulo_Numero, Profesor_Nombre FROM material_hub_modulo_config WHERE Modulo = ?");
+        $stmt->execute([$modulo]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $map = [];
+        foreach ($rows as $row) {
+            $key = (int)($row['Nivel'] ?? 0) . '_' . (int)($row['Modulo_Numero'] ?? 0);
+            $map[$key] = (string)($row['Profesor_Nombre'] ?? '');
+        }
+
+        return $map;
+    }
+
+    private function guardarTemaMaterialHub(string $modulo, string $loteId, string $titulo, string $descripcion = '', string $categoria = 'general', int $nivel = 0, int $moduloNumero = 0, string $leccion = ''): void {
         $modulo = trim($modulo);
         $loteId = trim($loteId);
         $titulo = trim($titulo);
@@ -1660,6 +1734,7 @@ class HomeController extends BaseController {
         $categoria = $this->normalizarCategoriaMaterialTema($modulo, $categoria);
         $nivel = $this->normalizarNivelMaterialTema($modulo, $nivel);
         $moduloNumero = $this->normalizarModuloMaterialTema($modulo, $nivel, $moduloNumero);
+        $leccion = trim($leccion);
 
         if ($modulo === '' || $loteId === '' || $titulo === '') {
             return;
@@ -1672,14 +1747,15 @@ class HomeController extends BaseController {
             return;
         }
 
-        $sql = "INSERT INTO material_hub_tema (Modulo, Lote_Id, Titulo, Descripcion, Categoria, Nivel, Modulo_Numero)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+        $sql = "INSERT INTO material_hub_tema (Modulo, Lote_Id, Titulo, Descripcion, Categoria, Nivel, Modulo_Numero, Leccion)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 Titulo = VALUES(Titulo),
                 Descripcion = VALUES(Descripcion),
                 Categoria = VALUES(Categoria),
                 Nivel = VALUES(Nivel),
-                Modulo_Numero = VALUES(Modulo_Numero)";
+                Modulo_Numero = VALUES(Modulo_Numero),
+                Leccion = VALUES(Leccion)";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
             $modulo,
@@ -1689,6 +1765,7 @@ class HomeController extends BaseController {
             $categoria,
             $nivel > 0 ? $nivel : null,
             $moduloNumero > 0 ? $moduloNumero : null,
+            $leccion !== '' ? $leccion : null,
         ]);
     }
 
@@ -1705,7 +1782,7 @@ class HomeController extends BaseController {
             return [];
         }
 
-        $stmt = $pdo->prepare("SELECT Lote_Id, Titulo, Descripcion, Categoria, Nivel, Modulo_Numero, Fecha_Creacion FROM material_hub_tema WHERE Modulo = ?");
+        $stmt = $pdo->prepare("SELECT Lote_Id, Titulo, Descripcion, Categoria, Nivel, Modulo_Numero, Leccion, Fecha_Creacion FROM material_hub_tema WHERE Modulo = ?");
         $stmt->execute([$modulo]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
@@ -1722,6 +1799,7 @@ class HomeController extends BaseController {
                 'categoria' => (string)($row['Categoria'] ?? 'general'),
                 'nivel' => (int)($row['Nivel'] ?? 0),
                 'modulo_numero' => (int)($row['Modulo_Numero'] ?? 0),
+                'leccion' => (string)($row['Leccion'] ?? ''),
                 'fecha_creacion' => (string)($row['Fecha_Creacion'] ?? ''),
             ];
         }
@@ -1824,7 +1902,7 @@ class HomeController extends BaseController {
         }
     }
 
-    private function guardarArchivosModuloMaterial(array $modulo, array $archivos, string $titulo = '', string $descripcion = '', string $categoria = 'general', int $nivel = 0, int $moduloNumero = 0): array {
+    private function guardarArchivosModuloMaterial(array $modulo, array $archivos, string $titulo = '', string $descripcion = '', string $categoria = 'general', int $nivel = 0, int $moduloNumero = 0, string $leccion = ''): array {
         $count = 0;
         $loteId = date('Ymd_His') . '_' . mt_rand(1000, 9999);
         $indice = 0;
@@ -1866,7 +1944,7 @@ class HomeController extends BaseController {
         if ($titulo === '') {
             $titulo = $this->formatearTituloTemaMaterial($loteId, time());
         }
-        $this->guardarTemaMaterialHub((string)($modulo['clave'] ?? ''), $loteId, $titulo, $descripcion, $categoria, $nivel, $moduloNumero);
+        $this->guardarTemaMaterialHub((string)($modulo['clave'] ?? ''), $loteId, $titulo, $descripcion, $categoria, $nivel, $moduloNumero, $leccion);
 
         return [
             'cantidad' => $count,
@@ -2007,6 +2085,47 @@ class HomeController extends BaseController {
         return @unlink($ruta);
     }
 
+    private function construirRutaMaterialConContexto(array $modulo, array $contexto = [], string $mensaje = '', string $tipo = 'success'): string {
+        $rutaBase = (string)($modulo['ruta'] ?? 'home/material');
+
+        if ((string)($modulo['clave'] ?? '') === 'capacitacion_destino') {
+            $nivel = (int)($contexto['nivel'] ?? 0);
+            $moduloNumero = (int)($contexto['modulo'] ?? 0);
+            $categoria = strtolower(trim((string)($contexto['categoria'] ?? '')));
+            $leccion = trim((string)($contexto['leccion'] ?? ''));
+            $openLote = trim((string)($contexto['open_lote'] ?? ''));
+            $openPanel = strtolower(trim((string)($contexto['open_panel'] ?? '')));
+
+            if ($nivel > 0) {
+                $rutaBase .= '&cap_nivel=' . $nivel;
+            }
+            if ($moduloNumero > 0) {
+                $rutaBase .= '&cap_modulo=' . $moduloNumero;
+            }
+            if ($categoria === 'clase' || $categoria === 'profesor') {
+                $rutaBase .= '&cap_categoria=' . rawurlencode($categoria);
+            }
+            if ($leccion !== '') {
+                $rutaBase .= '&cap_leccion=' . rawurlencode($leccion);
+            }
+            if ($openLote !== '') {
+                $rutaBase .= '&cap_open_lote=' . rawurlencode($openLote);
+            }
+            if (in_array($openPanel, ['editar', 'archivos', 'agregar'], true)) {
+                $rutaBase .= '&cap_open_panel=' . rawurlencode($openPanel);
+            }
+        }
+
+        if ($mensaje !== '') {
+            $rutaBase .= '&mensaje=' . urlencode($mensaje);
+        }
+        if ($tipo !== '') {
+            $rutaBase .= '&tipo=' . urlencode($tipo);
+        }
+
+        return $rutaBase;
+    }
+
     private function renderDetalleMaterial(string $moduloActual): void {
         $modulos = $this->obtenerModulosMaterial();
         $modulosVisibles = array_filter($modulos, function($modulo) {
@@ -2031,8 +2150,17 @@ class HomeController extends BaseController {
             }
 
             $moduloSeleccionado = $modulosVisibles[$moduloPost];
+            $contextoRetorno = [
+                'nivel' => (int)($_POST['contexto_nivel'] ?? $_POST['nivel'] ?? 0),
+                'modulo' => (int)($_POST['contexto_modulo'] ?? $_POST['modulo_numero'] ?? 0),
+                'categoria' => trim((string)($_POST['contexto_categoria'] ?? $_POST['categoria'] ?? '')),
+                'leccion' => trim((string)($_POST['contexto_leccion'] ?? $_POST['leccion'] ?? '')),
+                'open_lote' => trim((string)($_POST['contexto_open_lote'] ?? '')),
+                'open_panel' => trim((string)($_POST['contexto_open_panel'] ?? '')),
+            ];
+
             if (!$this->puedeGestionarModuloMaterial($moduloSeleccionado)) {
-                $this->redirect((string)($moduloSeleccionado['ruta'] ?? 'home/material') . '&mensaje=' . urlencode('No tienes permiso para gestionar este material.') . '&tipo=error');
+                $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'No tienes permiso para gestionar este material.', 'error'));
             }
 
             try {
@@ -2045,6 +2173,7 @@ class HomeController extends BaseController {
                     $categoriaTema = trim((string)($_POST['categoria'] ?? 'general'));
                     $nivelTema = (int)($_POST['nivel'] ?? 0);
                     $moduloNumeroTema = (int)($_POST['modulo_numero'] ?? 0);
+                    $leccionTema = trim((string)($_POST['leccion'] ?? ''));
                     if ($tituloTema === '') {
                         throw new Exception('El titulo del modulo es obligatorio.');
                     }
@@ -2055,14 +2184,21 @@ class HomeController extends BaseController {
                         if ($nivelValido <= 0 || $moduloValido <= 0) {
                             throw new Exception('Selecciona una combinación válida de nivel y módulo para Capacitación Destino.');
                         }
+                        if ($leccionTema === '') {
+                            throw new Exception('La lección es obligatoria para Capacitación Destino (ej: Lección 1).');
+                        }
                     }
 
-                    $resultadoCarga = $this->guardarArchivosModuloMaterial($moduloSeleccionado, $_FILES['material_pdf'], $tituloTema, $descripcionTema, $categoriaTema, $nivelTema, $moduloNumeroTema);
+                    $resultadoCarga = $this->guardarArchivosModuloMaterial($moduloSeleccionado, $_FILES['material_pdf'], $tituloTema, $descripcionTema, $categoriaTema, $nivelTema, $moduloNumeroTema, $leccionTema);
                     $cantidadSubida = (int)($resultadoCarga['cantidad'] ?? 0);
                     $mensajeCarga = $cantidadSubida > 1
                         ? 'Material creado en una sola carga con ' . $cantidadSubida . ' archivos.'
                         : 'Material creado correctamente con 1 archivo.';
-                    $this->redirect((string)($moduloSeleccionado['ruta'] ?? 'home/material') . '&mensaje=' . urlencode($mensajeCarga) . '&tipo=success');
+                    $contextoRetorno['nivel'] = $nivelTema;
+                    $contextoRetorno['modulo'] = $moduloNumeroTema;
+                    $contextoRetorno['categoria'] = $categoriaTema;
+                    $contextoRetorno['leccion'] = $leccionTema;
+                    $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, $mensajeCarga, 'success'));
                 }
 
                 if ($accion === 'editar_tema') {
@@ -2072,6 +2208,7 @@ class HomeController extends BaseController {
                     $categoriaTema = trim((string)($_POST['categoria'] ?? 'general'));
                     $nivelTema = (int)($_POST['nivel'] ?? 0);
                     $moduloNumeroTema = (int)($_POST['modulo_numero'] ?? 0);
+                    $leccionTema = trim((string)($_POST['leccion'] ?? ''));
 
                     if ($loteId === '') {
                         throw new Exception('Tema invalido para editar.');
@@ -2087,10 +2224,59 @@ class HomeController extends BaseController {
                         if ($nivelValido <= 0 || $moduloValido <= 0) {
                             throw new Exception('Selecciona una combinación válida de nivel y módulo para Capacitación Destino.');
                         }
+                        if ($leccionTema === '') {
+                            throw new Exception('La lección es obligatoria para Capacitación Destino (ej: Lección 1).');
+                        }
                     }
 
-                    $this->guardarTemaMaterialHub((string)($moduloSeleccionado['clave'] ?? ''), $loteId, $tituloTema, $descripcionTema, $categoriaTema, $nivelTema, $moduloNumeroTema);
-                    $this->redirect((string)($moduloSeleccionado['ruta'] ?? 'home/material') . '&mensaje=' . urlencode('Material editado correctamente.') . '&tipo=success');
+                    $this->guardarTemaMaterialHub((string)($moduloSeleccionado['clave'] ?? ''), $loteId, $tituloTema, $descripcionTema, $categoriaTema, $nivelTema, $moduloNumeroTema, $leccionTema);
+                    $contextoRetorno['nivel'] = $nivelTema;
+                    $contextoRetorno['modulo'] = $moduloNumeroTema;
+                    $contextoRetorno['categoria'] = $categoriaTema;
+                    $contextoRetorno['leccion'] = $leccionTema;
+                    $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Material editado correctamente.', 'success'));
+                }
+
+                if ($accion === 'guardar_profesor_modulo') {
+                    $nivelProf = (int)($_POST['nivel'] ?? 0);
+                    $moduloNumProf = (int)($_POST['modulo_numero'] ?? 0);
+                    $profesorNombrePost = trim((string)($_POST['profesor_nombre'] ?? ''));
+
+                    if ($nivelProf <= 0 || $moduloNumProf <= 0) {
+                        throw new Exception('Nivel o módulo inválido.');
+                    }
+
+                    $this->guardarProfesorNombreModulo((string)($moduloSeleccionado['clave'] ?? ''), $nivelProf, $moduloNumProf, $profesorNombrePost);
+                    $contextoRetorno['nivel'] = $nivelProf;
+                    $contextoRetorno['modulo'] = $moduloNumProf;
+                    $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Profesor guardado correctamente.', 'success'));
+                }
+
+                if ($accion === 'guardar_profesor_modulo_grupo') {
+                    $moduloGrupo = (int)($_POST['modulo_grupo'] ?? 0);
+                    $profesorNombrePost = trim((string)($_POST['profesor_nombre'] ?? ''));
+
+                    if ((string)($moduloSeleccionado['clave'] ?? '') !== 'capacitacion_destino') {
+                        throw new Exception('Esta acción solo aplica para Capacitación Destino.');
+                    }
+
+                    $configCap = $this->obtenerConfiguracionNivelesCapacitacionDestino();
+                    $modulosDelGrupo = (array)($configCap[$moduloGrupo] ?? []);
+                    if ($moduloGrupo <= 0 || empty($modulosDelGrupo)) {
+                        throw new Exception('Módulo inválido.');
+                    }
+
+                    foreach ($modulosDelGrupo as $moduloNumeroTmp) {
+                        $this->guardarProfesorNombreModulo(
+                            (string)($moduloSeleccionado['clave'] ?? ''),
+                            $moduloGrupo,
+                            (int)$moduloNumeroTmp,
+                            $profesorNombrePost
+                        );
+                    }
+
+                    $contextoRetorno['nivel'] = $moduloGrupo;
+                    $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Profesor del módulo guardado correctamente.', 'success'));
                 }
 
                 if ($accion === 'agregar_archivos_tema') {
@@ -2103,7 +2289,7 @@ class HomeController extends BaseController {
                     $mensajeCarga = $cantidadSubida > 1
                         ? 'Se agregaron ' . $cantidadSubida . ' archivos al tema.'
                         : 'Se agregó 1 archivo al tema.';
-                    $this->redirect((string)($moduloSeleccionado['ruta'] ?? 'home/material') . '&mensaje=' . urlencode($mensajeCarga) . '&tipo=success');
+                    $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, $mensajeCarga, 'success'));
                 }
 
                 if ($accion === 'eliminar') {
@@ -2111,7 +2297,7 @@ class HomeController extends BaseController {
                     if (!$this->eliminarArchivoModuloMaterial($moduloSeleccionado, $archivo)) {
                         throw new Exception('No se pudo eliminar el archivo.');
                     }
-                    $this->redirect((string)($moduloSeleccionado['ruta'] ?? 'home/material') . '&mensaje=' . urlencode('Archivo eliminado correctamente.') . '&tipo=success');
+                    $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Archivo eliminado correctamente.', 'success'));
                 }
 
                 if ($accion === 'eliminar_tema') {
@@ -2120,12 +2306,12 @@ class HomeController extends BaseController {
                         throw new Exception('Tema inválido para eliminar.');
                     }
                     $cant = $this->eliminarTemaMaterialHub($moduloSeleccionado, $loteId);
-                    $this->redirect((string)($moduloSeleccionado['ruta'] ?? 'home/material') . '&mensaje=' . urlencode('Clase eliminada correctamente (' . $cant . ' archivo(s) borrados).') . '&tipo=success');
+                    $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Clase eliminada correctamente (' . $cant . ' archivo(s) borrados).', 'success'));
                 }
 
                 throw new Exception('Accion no valida.');
             } catch (Exception $e) {
-                $this->redirect((string)($moduloSeleccionado['ruta'] ?? 'home/material') . '&mensaje=' . urlencode($e->getMessage()) . '&tipo=error');
+                $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, $e->getMessage(), 'error'));
             }
         }
 
@@ -2142,6 +2328,9 @@ class HomeController extends BaseController {
             'total_archivos' => $totalArchivos,
             'tiene_submodulos' => $this->moduloMaterialTieneSubmodulos((string)($modulo['clave'] ?? '')),
             'config_capacitacion_destino' => $this->obtenerConfiguracionNivelesCapacitacionDestino(),
+            'profesores_modulos' => (string)($modulo['clave'] ?? '') === 'capacitacion_destino'
+                ? $this->obtenerProfesoresModulos('capacitacion_destino')
+                : [],
             'puede_gestionar' => $this->puedeGestionarModuloMaterial($modulo),
             'mensaje' => (string)($_GET['mensaje'] ?? ''),
             'tipo' => (string)($_GET['tipo'] ?? ''),
@@ -2225,7 +2414,51 @@ class HomeController extends BaseController {
             // Si falla tracking, no bloquear apertura del archivo.
         }
 
-        header('Location: ' . rtrim(PUBLIC_URL, '/') . '/uploads/material_hub/' . rawurlencode($moduloClave) . '/' . rawurlencode($archivo));
+        $extension = strtolower((string)pathinfo($rutaFisica, PATHINFO_EXTENSION));
+        $mimePorExtension = [
+            'pdf' => 'application/pdf',
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            'svg' => 'image/svg+xml',
+            'mp4' => 'video/mp4',
+            'webm' => 'video/webm',
+            'mov' => 'video/quicktime',
+            'mp3' => 'audio/mpeg',
+            'wav' => 'audio/wav',
+            'txt' => 'text/plain; charset=UTF-8',
+            'doc' => 'application/msword',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls' => 'application/vnd.ms-excel',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'ppt' => 'application/vnd.ms-powerpoint',
+            'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        ];
+
+        $mime = $mimePorExtension[$extension] ?? 'application/octet-stream';
+        $tamano = (int)@filesize($rutaFisica);
+
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        header('Content-Type: ' . $mime);
+        header('Content-Disposition: inline; filename="' . addslashes($archivo) . '"');
+        header('Content-Transfer-Encoding: binary');
+        header('Accept-Ranges: bytes');
+        if ($tamano > 0) {
+            header('Content-Length: ' . $tamano);
+        }
+
+        $fp = fopen($rutaFisica, 'rb');
+        if ($fp === false) {
+            $this->redirect((string)($modulos[$moduloClave]['ruta'] ?? 'home/material') . '&mensaje=' . urlencode('No se pudo abrir el archivo.') . '&tipo=error');
+        }
+
+        fpassthru($fp);
+        fclose($fp);
         exit;
     }
 
@@ -2313,7 +2546,10 @@ class HomeController extends BaseController {
     }
 
     public function discipular() {
-        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('personas', 'ver')) {
+        $puedeVerDiscipular = AuthController::esAdministrador()
+            || AuthController::tienePermiso('personas', 'ver');
+
+        if (!$puedeVerDiscipular) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }

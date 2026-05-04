@@ -2,8 +2,23 @@
 
 <?php
 $cardsDashboard = [];
+$esDiscipuloSoloDiscipular = AuthController::esRolDiscipuloUsuario()
+    && AuthController::tienePermiso('discipular_evaluaciones', 'ver')
+    && !AuthController::esAdministrador();
 
-if (AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver')) {
+if ($esDiscipuloSoloDiscipular) {
+    $cardsDashboard[] = [
+        'titulo' => 'Discipular',
+        'subtitulo' => 'Formacion y crecimiento',
+        'valor' => (int)($totalDiscipular ?? 0),
+        'accion' => 'Ver evaluaciones',
+        'href' => PUBLIC_URL . '?url=home/discipular/evaluaciones',
+        'icono' => 'bi-journal-richtext',
+        'clase' => 'discipular',
+    ];
+}
+
+if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver'))) {
     $cardsDashboard[] = [
         'titulo' => 'Ganar',
         'subtitulo' => 'Almas nuevas y primer contacto',
@@ -35,7 +50,22 @@ if (AuthController::esAdministrador() || AuthController::tienePermiso('personas'
     ];
 }
 
-if (AuthController::esAdministrador() || AuthController::tienePermiso('celulas', 'ver')) {
+if (!$esDiscipuloSoloDiscipular
+    && !AuthController::esAdministrador()
+    && !AuthController::tienePermiso('personas', 'ver')
+    && AuthController::tienePermiso('discipular_evaluaciones', 'ver')) {
+    $cardsDashboard[] = [
+        'titulo' => 'Discipular',
+        'subtitulo' => 'Formacion y crecimiento',
+        'valor' => (int)($totalDiscipular ?? 0),
+        'accion' => 'Ver evaluaciones',
+        'href' => PUBLIC_URL . '?url=home/discipular/evaluaciones',
+        'icono' => 'bi-journal-richtext',
+        'clase' => 'discipular',
+    ];
+}
+
+if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::tienePermiso('celulas', 'ver'))) {
     $cardsDashboard[] = [
         'titulo' => 'Enviar',
         'subtitulo' => 'Celulas activas en mision',
@@ -47,7 +77,7 @@ if (AuthController::esAdministrador() || AuthController::tienePermiso('celulas',
     ];
 }
 
-if (AuthController::esAdministrador() || AuthController::tienePermiso('materiales_celulas', 'ver') || AuthController::tienePermiso('teen', 'ver') || AuthController::tienePermiso('eventos', 'ver')) {
+if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::tienePermiso('materiales_celulas', 'ver') || AuthController::tienePermiso('teen', 'ver') || AuthController::tienePermiso('eventos', 'ver'))) {
     $cardsDashboard[] = [
         'titulo' => 'Material',
         'subtitulo' => 'Recursos para servir mejor',
@@ -59,7 +89,7 @@ if (AuthController::esAdministrador() || AuthController::tienePermiso('materiale
     ];
 }
 
-if (AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'ver')) {
+if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'ver'))) {
     $cardsDashboard[] = [
         'titulo' => 'Ministerios',
         'subtitulo' => 'Areas activas de servicio',
@@ -71,7 +101,7 @@ if (AuthController::esAdministrador() || AuthController::tienePermiso('ministeri
     ];
 }
 
-if (AuthController::esAdministrador() || AuthController::tienePermiso('teen', 'ver')) {
+if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::tienePermiso('teen', 'ver'))) {
     $cardsDashboard[] = [
         'titulo' => 'Registro Teens y Kids',
         'subtitulo' => 'Acompanamiento de nuevas generaciones',
@@ -112,7 +142,7 @@ if (AuthController::esAdministrador() || AuthController::tienePermiso('teen', 'v
     <?php endforeach; ?>
 </div>
 
-<?php if (!empty($eventosProximos) && (AuthController::esAdministrador() || AuthController::tienePermiso('eventos', 'ver'))): ?>
+<?php if (!$esDiscipuloSoloDiscipular && !empty($eventosProximos) && (AuthController::esAdministrador() || AuthController::tienePermiso('eventos', 'ver'))): ?>
 <div class="main-content" style="margin-top: 30px;">
     <h3>Próximos Eventos</h3>
     <table class="data-table">

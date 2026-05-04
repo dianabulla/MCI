@@ -6,6 +6,7 @@
 
 <?php
 $sectionsVisibles = is_array($sections ?? null) ? $sections : [];
+$puedeMarcarEntregoSobre = !empty($puede_marcar_entrego_sobre);
 $seccionesReportaron = array_values(array_filter($sectionsVisibles, static function ($section) {
     return !empty($section['si_reporto_semana']);
 }));
@@ -154,17 +155,23 @@ try {
                             <td><span class="meta-pill" style="background:#e9f8ef; border-color:#c6ebd4; color:#1f7a44;">Reportó esta semana</span></td>
                             <td>
                                 <div class="entrego-sobre-row entrego-sobre-row--table">
-                                    <label class="entrego-sobre-label">
-                                        <span>Sí</span>
-                                        <input
-                                            type="checkbox"
-                                            class="entrego-sobre-check"
-                                            data-id-celula="<?= (int)$section['id_celula'] ?>"
-                                            data-semana-inicio="<?= htmlspecialchars((string)($semana_inicio ?? '')) ?>"
-                                            <?= !empty($section['entrego_sobre']) ? 'checked' : '' ?>
-                                        >
-                                    </label>
-                                    <span class="entrego-sobre-status" aria-live="polite"></span>
+                                    <?php if ($puedeMarcarEntregoSobre): ?>
+                                        <label class="entrego-sobre-label">
+                                            <span>Sí</span>
+                                            <input
+                                                type="checkbox"
+                                                class="entrego-sobre-check"
+                                                data-can-toggle="1"
+                                                data-id-celula="<?= (int)$section['id_celula'] ?>"
+                                                data-semana-inicio="<?= htmlspecialchars((string)($semana_inicio ?? '')) ?>"
+                                                <?= !empty($section['entrego_sobre']) ? 'checked' : '' ?>
+                                            >
+                                        </label>
+                                        <span class="entrego-sobre-status" aria-live="polite"></span>
+                                    <?php else: ?>
+                                        <span class="meta-pill" style="background:#f4f7fb; border-color:#d5deea; color:#3f5675;"><?= !empty($section['entrego_sobre']) ? 'Sí' : 'No' ?></span>
+                                        <small style="color:#7a8ca5;">Solo administrativo</small>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                             <td>
@@ -213,17 +220,23 @@ try {
                             <td><span class="meta-pill" style="background:#fff0f1; border-color:#f0d0d4; color:#9b2e3a;">No reportó esta semana</span></td>
                             <td>
                                 <div class="entrego-sobre-row entrego-sobre-row--table">
-                                    <label class="entrego-sobre-label">
-                                        <span>Sí</span>
-                                        <input
-                                            type="checkbox"
-                                            class="entrego-sobre-check"
-                                            data-id-celula="<?= (int)$section['id_celula'] ?>"
-                                            data-semana-inicio="<?= htmlspecialchars((string)($semana_inicio ?? '')) ?>"
-                                            <?= !empty($section['entrego_sobre']) ? 'checked' : '' ?>
-                                        >
-                                    </label>
-                                    <span class="entrego-sobre-status" aria-live="polite"></span>
+                                    <?php if ($puedeMarcarEntregoSobre): ?>
+                                        <label class="entrego-sobre-label">
+                                            <span>Sí</span>
+                                            <input
+                                                type="checkbox"
+                                                class="entrego-sobre-check"
+                                                data-can-toggle="1"
+                                                data-id-celula="<?= (int)$section['id_celula'] ?>"
+                                                data-semana-inicio="<?= htmlspecialchars((string)($semana_inicio ?? '')) ?>"
+                                                <?= !empty($section['entrego_sobre']) ? 'checked' : '' ?>
+                                            >
+                                        </label>
+                                        <span class="entrego-sobre-status" aria-live="polite"></span>
+                                    <?php else: ?>
+                                        <span class="meta-pill" style="background:#f4f7fb; border-color:#d5deea; color:#3f5675;"><?= !empty($section['entrego_sobre']) ? 'Sí' : 'No' ?></span>
+                                        <small style="color:#7a8ca5;">Solo administrativo</small>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                             <td>
@@ -453,7 +466,7 @@ try {
         renderLideres();
         liderActual = '';
 
-        const checks = Array.from(document.querySelectorAll('.entrego-sobre-check'));
+        const checks = Array.from(document.querySelectorAll('.entrego-sobre-check[data-can-toggle="1"]'));
         checks.forEach(function(check) {
             check.addEventListener('change', function() {
                 const idCelula = String(check.dataset.idCelula || '');

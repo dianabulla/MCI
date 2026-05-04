@@ -265,7 +265,8 @@ class AsistenciaController extends BaseController {
             'filtro_ministerio_actual' => (string)$filtroMinisterio,
             'filtro_lider_actual' => (string)$filtroLider,
             'filtro_celula_actual' => (string)$filtroCelula,
-            'filtro_reporte_actual' => (string)$filtroReporte
+            'filtro_reporte_actual' => (string)$filtroReporte,
+            'puede_marcar_entrego_sobre' => AuthController::esAdministrador()
         ]);
     }
 
@@ -274,8 +275,7 @@ class AsistenciaController extends BaseController {
             $this->json(['success' => false, 'error' => 'Metodo no permitido'], 405);
         }
 
-        if (!AuthController::tienePermiso('asistencias', 'editar')
-            && !AuthController::tienePermiso('asistencias', 'crear')) {
+        if (!AuthController::esAdministrador()) {
             $this->json(['success' => false, 'error' => 'No autorizado'], 403);
         }
 
@@ -496,6 +496,111 @@ class AsistenciaController extends BaseController {
             'asistencias' => $asistencias,
             'celula' => $celula,
             'return_url' => $returnUrl
+        ]);
+    }
+
+    private function normalizarChecklistParaNoDisponible($checklist) {
+        $normalizado = [
+            'Ganar' => [false, false, false, false, false, false],
+            'Consolidar' => [false, false, false],
+            'Discipular' => [false, false, false],
+            'Enviar' => [false, false, false],
+            '_meta' => [
+                'no_disponible_observacion' => '',
+                'convenciones' => []
+            ]
+        ];
+
+        if (!is_array($checklist)) {
+            return $normalizado;
+        }
+
+        foreach (['Ganar', 'Consolidar', 'Discipular', 'Enviar'] as $etapa) {
+            if (isset($checklist[$etapa]) && is_array($checklist[$etapa])) {
+                foreach ($normalizado[$etapa] as $indice => $valor) {
+                    $normalizado[$etapa][$indice] = !empty($checklist[$etapa][$indice]);
+                }
+            }
+        }
+
+        if (isset($checklist['_meta']) && is_array($checklist['_meta'])) {
+            $normalizado['_meta']['no_disponible_observacion'] = trim((string)($checklist['_meta']['no_disponible_observacion'] ?? ''));
+        }
+
+        return $normalizado;
+    }
+
+    public function marcarNoDisponible() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->json(['success' => false, 'message' => 'Metodo no permitido'], 405);
+        }
+
+        if (!AuthController::tienePermiso('asistencias', 'crear') && !AuthController::tienePermiso('asistencias', 'editar')) {
+            $this->json(['success' => false, 'message' => 'No autorizado'], 403);
+        }
+
+        $idPersona = isset($_POST['id_persona']) ? (int)$_POST['id_persona'] : 0;
+        $observacion = trim((string)($_POST['observacion'] ?? ''));
+
+        if ($idPersona <= 0) {
+            $this->json(['success' => false, 'message' => 'Persona invalida'], 422);
+        }
+
+        if ($observacion === '') {
+            $this->json(['success' => false, 'message' => 'Debes escribir una observacion'], 422);
+        }
+
+        if (method_exists($this->personaModel, 'tieneColumna') && !$this->personaModel->tieneColumna('Escalera_Checklist')) {
+            $this->json(['success' => false, 'message' => 'Escalera del Exito no disponible en esta base de datos'], 400);
+        }
+
+        $filtroPersonas = DataIsolation::generarFiltroPersonas();
+        if (!$this->personaModel->puedeEditarEscaleraPorRol($idPersona, $filtroPersonas)) {
+            $this->json(['success' => false, 'message' => 'No tienes acceso a esta persona'], 403);
+        }
+
+        $persona = $this->personaModel->getById($idPersona);
+        if (!$persona) {
+            $this->json(['success' => false, 'message' => 'Persona no encontrada'], 404);
+        }
+
+        $checklistActual = [];
+        $rawChecklist = trim((string)($persona['Escalera_Checklist'] ?? ''));
+        if ($rawChecklist !== '') {
+            $decoded = json_decode($rawChecklist, true);
+            if (is_array($decoded)) {
+                $checklistActual = $decoded;
+            }
+        }
+
+        $checklistNormalizado = $this->normalizarChecklistParaNoDisponible($checklistActual);
+        $checklistNormalizado['Ganar'][5] = true;
+        $checklistNormalizado['_meta']['no_disponible_observacion'] = $observacion;
+
+        $checklistJson = json_encode($checklistNormalizado, JSON_UNESCAPED_UNICODE);
+        if ($checklistJson === false) {
+            $this->json(['success' => false, 'message' => 'No se pudo procesar el checklist'], 500);
+        }
+
+        $procesoActual = isset($persona['Proceso']) ? (string)$persona['Proceso'] : null;
+        $ok = $this->personaModel->updateEscaleraChecklistYProceso($idPersona, $checklistJson, $procesoActual);
+        if (!$ok) {
+            $this->json(['success' => false, 'message' => 'No se pudo guardar el estado No se dispone'], 500);
+        }
+
+        $okSalidaCelula = $this->personaModel->update($idPersona, [
+            'Id_Celula' => null
+        ]);
+        if (!$okSalidaCelula) {
+            $this->json(['success' => false, 'message' => 'No se pudo retirar la persona de la celula'], 500);
+        }
+
+        $this->personaModel->cambiarEstado($idPersona, 'Inactivo');
+
+        $this->json([
+            'success' => true,
+            'message' => 'Persona marcada como No se dispone',
+            'id_persona' => $idPersona
         ]);
     }
 }

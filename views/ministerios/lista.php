@@ -18,6 +18,7 @@ $puedeEditarMinisterio = AuthController::esAdministrador() || AuthController::ti
 $puedeEliminarMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'eliminar');
 $urlEquipoPrincipal = PUBLIC_URL . '?url=ministerios/equipo-principal';
 $urlLideresCelula = PUBLIC_URL . '?url=ministerios/lideres-celula';
+$fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));
 ?>
 
 <div class="page-header">
@@ -242,6 +243,7 @@ $urlLideresCelula = PUBLIC_URL . '?url=ministerios/lideres-celula';
         flex-direction: column;
         align-items: flex-start;
     }
+
 }
 </style>
 
@@ -267,6 +269,7 @@ $urlLideresCelula = PUBLIC_URL . '?url=ministerios/lideres-celula';
             event.stopPropagation();
         });
     });
+
 })();
 </script>
 

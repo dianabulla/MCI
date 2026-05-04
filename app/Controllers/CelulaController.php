@@ -162,6 +162,8 @@ class CelulaController extends BaseController {
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $idLider = $_POST['id_lider'] ?: null;
+            $tipoCelulaInput = strtolower(trim((string)($_POST['tipo_celula'] ?? 'nueva')));
+            $esCelulaAntigua = in_array($tipoCelulaInput, ['antigua', 'antiguo', '1'], true) ? 1 : 0;
 
             // Para líder de célula, forzar que la célula quede anclada al usuario logueado
             if (DataIsolation::esLiderCelula()) {
@@ -179,7 +181,8 @@ class CelulaController extends BaseController {
                 'Barrio' => $_POST['barrio'] ?: null,
                 'Red' => $_POST['red'] ?: null,
                 'Id_Anfitrion' => $_POST['id_anfitrion'] ?: null,
-                'Telefono_Anfitrion' => $_POST['telefono_anfitrion'] ?: null
+                'Telefono_Anfitrion' => $_POST['telefono_anfitrion'] ?: null,
+                'Es_Antiguo' => $esCelulaAntigua
             ];
             
             $this->celulaModel->create($data);
@@ -208,6 +211,8 @@ class CelulaController extends BaseController {
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $tipoCelulaInput = strtolower(trim((string)($_POST['tipo_celula'] ?? '')));
+            $celulaAntes = $this->celulaModel->getById($id);
             $data = [
                 'Nombre_Celula' => $_POST['nombre_celula'],
                 'Direccion_Celula' => $_POST['direccion_celula'],
@@ -221,6 +226,12 @@ class CelulaController extends BaseController {
                 'Id_Anfitrion' => $_POST['id_anfitrion'] ?: null,
                 'Telefono_Anfitrion' => $_POST['telefono_anfitrion'] ?: null
             ];
+
+            if ($tipoCelulaInput !== '') {
+                $data['Es_Antiguo'] = in_array($tipoCelulaInput, ['antigua', 'antiguo', '1'], true) ? 1 : 0;
+            } elseif (isset($celulaAntes['Es_Antiguo'])) {
+                $data['Es_Antiguo'] = ((int)$celulaAntes['Es_Antiguo'] === 1) ? 1 : 0;
+            }
             
             $this->celulaModel->update($id, $data);
             $this->redirect('celulas');

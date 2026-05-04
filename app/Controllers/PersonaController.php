@@ -2022,7 +2022,6 @@ class PersonaController extends BaseController {
         } else {
             $personasBaseConteo = $this->personaModel->getAllWithRole($filtroRol, $soloGanarBaseConteo, $filtroEstado, $filtroCelula, $filtroEtapa, '', $filtroFechaInicio, $filtroFechaFin);
         }
-        $personasBaseConteo = $this->filtrarSoloPersonasNuevas($personasBaseConteo);
         $personasBaseConteo = $this->enriquecerChecklistPersonas($personasBaseConteo);
         $personasBaseConteo = $this->filtrarPersonasPorNombreListado($personasBaseConteo, $filtroNombre);
 
@@ -2042,7 +2041,16 @@ class PersonaController extends BaseController {
             }));
         }
 
+        // No se dispone debe reflejar exactamente lo mismo que su pestaña/listado:
+        // no limitar a solo nuevas para no ocultar casos ya marcados.
+        $personasBaseConteoNoDisponible = $personasBaseConteo;
+
+        $personasBaseConteo = $this->filtrarSoloPersonasNuevas($personasBaseConteo);
+
         $totalesOrigenPendiente = $this->contarOrigenesPendientes($personasBaseConteo);
+        $totalesOrigenPendiente['no_disponible'] = count(array_filter($personasBaseConteoNoDisponible, static function($persona) {
+            return !empty($persona['Seguimiento_No_Disponible']);
+        }));
 
         // Para orígenes 'celula'/'domingo' no restringir por asignación incompleta
         // (mostrar todos los ganados en ese origen, incluyendo ya asignados).
@@ -2597,6 +2605,95 @@ class PersonaController extends BaseController {
                 'Id_Ministerio' => $idMinisterio
             ];
             $dataActualizar['Fecha_Asignacion_Lider'] = $this->resolverFechaAsignacionLider($dataAsignacion, $personaAntes);
+        }
+
+        $this->personaModel->update($idPersona, $dataActualizar);
+
+        $personaDespues = $this->personaModel->getById($idPersona);
+        if (!empty($personaDespues)) {
+            $this->encolarNotificacionCambiosAsignacion((array)$personaAntes, (array)$personaDespues);
+        }
+
+        $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+    }
+
+    public function reasignarMinisterioGanar() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('personas/ganar');
+            return;
+        }
+
+        if (!AuthController::tienePermiso('personas', 'editar')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $idPersona = (int)($_POST['id_persona'] ?? 0);
+        $idMinisterio = (int)($_POST['id_ministerio_reasignar'] ?? 0);
+        $returnUrl = (string)($_POST['return_url'] ?? '');
+
+        if ($idPersona <= 0 || $idMinisterio <= 0) {
+            $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+            return;
+        }
+
+        $filtroRol = DataIsolation::generarFiltroPersonas();
+        if (!$this->personaModel->puedeEditarEscaleraPorRol($idPersona, $filtroRol)) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $contextoFiltros = $this->getContextoFiltrosVisibles();
+        if (!empty($contextoFiltros['restringido']) && is_array($contextoFiltros['ministerioIdsPermitidos'])) {
+            $permitidos = array_map('intval', $contextoFiltros['ministerioIdsPermitidos']);
+            if (!in_array($idMinisterio, $permitidos, true)) {
+                header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+                exit;
+            }
+        }
+
+        $ministerio = $this->ministerioModel->getById($idMinisterio);
+        if (empty($ministerio)) {
+            $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+            return;
+        }
+
+        $personaAntes = $this->personaModel->getById($idPersona);
+        if (empty($personaAntes)) {
+            $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+            return;
+        }
+
+        $dataActualizar = [
+            'Id_Ministerio' => $idMinisterio
+        ];
+
+        if ($this->soportaFechaAsignacionLider) {
+            $dataAsignacion = [
+                'Id_Lider' => (int)($personaAntes['Id_Lider'] ?? 0),
+                'Id_Ministerio' => $idMinisterio
+            ];
+            $dataActualizar['Fecha_Asignacion_Lider'] = $this->resolverFechaAsignacionLider($dataAsignacion, $personaAntes);
+        }
+
+        // Marcar como reasignado manual en el checklist
+        if ($this->soportaChecklistEscalera) {
+            $checklistRaw = (string)($personaAntes['Escalera_Checklist'] ?? '');
+            $checklistActual = [];
+            if ($checklistRaw !== '') {
+                $tmp = json_decode($checklistRaw, true);
+                if (is_array($tmp)) {
+                    $checklistActual = $tmp;
+                }
+            }
+            $checklist = $this->normalizarChecklistEscalera($checklistActual);
+            $checklist['_meta']['reasignado_manual'] = true;
+            $checklist['_meta']['reasignado_manual_at'] = date('Y-m-d H:i:s');
+            $checklist['_meta']['reasignado_manual_motivo'] = 'Reasignacion manual desde almas ganadas';
+            $checklistJson = json_encode($checklist, JSON_UNESCAPED_UNICODE);
+            if ($checklistJson !== false) {
+                $dataActualizar['Escalera_Checklist'] = $checklistJson;
+            }
         }
 
         $this->personaModel->update($idPersona, $dataActualizar);

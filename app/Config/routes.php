@@ -30,6 +30,7 @@ return [
     'home/discipular' => 'HomeController@discipular',
     'home/discipular/asistencias' => 'HomeController@discipularAsistencias',
     'home/discipular/exportar' => 'HomeController@exportarDiscipular',
+    'home/discipular/evaluaciones' => 'DiscipularEvaluacionController@index',
     'home/escuelas-formacion' => 'HomeController@escuelasFormacion',
     'home/escuelas-formacion/exportar' => 'HomeController@exportarEscuelasFormacion',
     'home/escuelas-formacion/actualizar-estado' => 'HomeController@actualizarEstadoEscuelaFormacion',
@@ -47,6 +48,7 @@ return [
     'personas/escalera' => 'PersonaController@escalera',
     'personas/actualizarChecklistEscalera' => 'PersonaController@actualizarChecklistEscalera',
     'personas/asignarMinisterioGanar' => 'PersonaController@asignarMinisterioGanar',
+    'personas/reasignarMinisterioGanar' => 'PersonaController@reasignarMinisterioGanar',
     'personas/plantillas-whatsapp' => 'PersonaController@plantillasWhatsapp',
     'personas/plantillas-whatsapp/programar' => 'PersonaController@programarPlantillaWhatsapp',
     'personas/crear' => 'PersonaController@crear',
@@ -152,6 +154,7 @@ return [
     'asistencias/registrar' => 'AsistenciaController@registrar',
     'asistencias/porCelula' => 'AsistenciaController@porCelula',
     'asistencias/actualizarEntregoSobre' => 'AsistenciaController@actualizarEntregoSobre',
+    'asistencias/marcarNoDisponible' => 'AsistenciaController@marcarNoDisponible',
     'asistencias/exportarExcel' => 'AsistenciaController@exportarExcel',
     
     // Reportes

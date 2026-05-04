@@ -60,6 +60,20 @@
     </form>
 </div>
 
+<div id="modalNoDisponible" class="no-disponible-modal" aria-hidden="true">
+    <div class="no-disponible-modal__overlay" data-close-no-disponible="1"></div>
+    <div class="no-disponible-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="noDisponibleTitulo">
+        <h3 id="noDisponibleTitulo" style="margin-top:0;">Marcar como No se dispuso</h3>
+        <p id="noDisponiblePersona" style="margin:0 0 10px; color:#475569;"></p>
+        <label for="noDisponibleObservacion" style="display:block; font-weight:600; margin-bottom:6px;">Observación</label>
+        <textarea id="noDisponibleObservacion" class="form-control" rows="4" placeholder="Escribe la razón o contexto..."></textarea>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelarNoDisponible">Cancelar</button>
+            <button type="button" class="btn btn-danger btn-sm" id="btnGuardarNoDisponible">Guardar</button>
+        </div>
+    </div>
+</div>
+
 <style>
 .autocomplete-wrapper {
     position: relative;
@@ -111,6 +125,34 @@
     height: 16px;
     accent-color: #dc2626;
 }
+
+.no-disponible-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1200;
+}
+
+.no-disponible-modal.is-open {
+    display: flex;
+}
+
+.no-disponible-modal__overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.no-disponible-modal__dialog {
+    position: relative;
+    width: min(520px, calc(100vw - 24px));
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 24px 54px rgba(15, 23, 42, 0.28);
+}
 </style>
 
 <script>
@@ -133,7 +175,39 @@ const celulaAutocomplete = document.getElementById('celula_autocomplete');
 const personaNuevaLink = document.getElementById('persona_nueva_link');
 const noSeRealizoCheck = document.getElementById('no_se_realizo');
 const observacionesInput = document.getElementById('observaciones');
+const urlMarcarNoDisponible = '<?= PUBLIC_URL ?>?url=asistencias/marcarNoDisponible';
+const modalNoDisponible = document.getElementById('modalNoDisponible');
+const modalNoDisponiblePersona = document.getElementById('noDisponiblePersona');
+const modalNoDisponibleObservacion = document.getElementById('noDisponibleObservacion');
+const btnGuardarNoDisponible = document.getElementById('btnGuardarNoDisponible');
+const btnCancelarNoDisponible = document.getElementById('btnCancelarNoDisponible');
 let currentFocus = -1;
+let noDisponiblePendiente = null;
+
+function abrirModalNoDisponible(persona, boton) {
+    noDisponiblePendiente = { persona, boton };
+    if (modalNoDisponiblePersona) {
+        modalNoDisponiblePersona.textContent = 'Persona: ' + persona.nombre;
+    }
+    if (modalNoDisponibleObservacion) {
+        modalNoDisponibleObservacion.value = '';
+    }
+    if (modalNoDisponible) {
+        modalNoDisponible.classList.add('is-open');
+        modalNoDisponible.setAttribute('aria-hidden', 'false');
+    }
+    if (modalNoDisponibleObservacion) {
+        setTimeout(() => modalNoDisponibleObservacion.focus(), 10);
+    }
+}
+
+function cerrarModalNoDisponible() {
+    noDisponiblePendiente = null;
+    if (modalNoDisponible) {
+        modalNoDisponible.classList.remove('is-open');
+        modalNoDisponible.setAttribute('aria-hidden', 'true');
+    }
+}
 
 function syncNoSeRealizoState() {
     const checksAsistencia = document.querySelectorAll('#lista-miembros input[type="checkbox"][name^="asistencias["]');
@@ -312,7 +386,7 @@ function cargarMiembrosCelula(celulaId) {
         }
 
         bloque += '<table style="width: 100%;">';
-        bloque += '<thead><tr><th style="text-align: left; padding: 8px;">Nombre</th><th style="text-align: left; padding: 8px;">Estado</th><th style="text-align: center; padding: 8px;">Asistió</th></tr></thead>';
+        bloque += '<thead><tr><th style="text-align: left; padding: 8px;">Nombre</th><th style="text-align: left; padding: 8px;">Estado</th><th style="text-align: center; padding: 8px;">Asistió</th><th style="text-align: center; padding: 8px;">Acción</th></tr></thead>';
         bloque += '<tbody>';
 
         miembros.forEach(miembro => {
@@ -327,6 +401,9 @@ function cargarMiembrosCelula(celulaId) {
             bloque += '<td style="text-align: center; padding: 8px;">';
             bloque += '<input type="hidden" name="asistencias[' + miembro.Id_Persona + ']" value="0">';
             bloque += '<input type="checkbox" name="asistencias[' + miembro.Id_Persona + ']" value="1" style="width: 20px; height: 20px; cursor: pointer;">';
+            bloque += '</td>';
+            bloque += '<td style="text-align: center; padding: 8px;">';
+            bloque += '<button type="button" class="btn btn-sm btn-danger js-no-disponible" data-id-persona="' + miembro.Id_Persona + '" data-nombre="' + escapeHtml(nombreCompleto.trim()) + '">No se dispuso</button>';
             bloque += '</td>';
             bloque += '</tr>';
         });
@@ -349,6 +426,99 @@ function cargarMiembrosCelula(celulaId) {
     botonesAccion.style.display = 'flex';
     syncNoSeRealizoState();
 }
+
+document.addEventListener('click', async function(e) {
+    const btn = e.target.closest('.js-no-disponible');
+    if (!btn) {
+        const closeTrigger = e.target.closest('[data-close-no-disponible="1"]');
+        if (closeTrigger) {
+            cerrarModalNoDisponible();
+        }
+        return;
+    }
+
+    const idPersona = parseInt(btn.getAttribute('data-id-persona') || '0', 10);
+    const nombre = String(btn.getAttribute('data-nombre') || '');
+    if (!idPersona) {
+        return;
+    }
+
+    abrirModalNoDisponible({ idPersona, nombre }, btn);
+});
+
+if (btnCancelarNoDisponible) {
+    btnCancelarNoDisponible.addEventListener('click', cerrarModalNoDisponible);
+}
+
+if (btnGuardarNoDisponible) {
+    btnGuardarNoDisponible.addEventListener('click', async function() {
+        if (!noDisponiblePendiente) {
+            return;
+        }
+
+        const { persona, boton } = noDisponiblePendiente;
+        const observacionLimpia = String((modalNoDisponibleObservacion && modalNoDisponibleObservacion.value) || '').trim();
+
+        if (!observacionLimpia) {
+            window.alert('Debes escribir una observación.');
+            if (modalNoDisponibleObservacion) {
+                modalNoDisponibleObservacion.focus();
+            }
+            return;
+        }
+
+        boton.disabled = true;
+        const textoOriginal = boton.textContent;
+        boton.textContent = 'Guardando...';
+        btnGuardarNoDisponible.disabled = true;
+
+        try {
+            const body = new URLSearchParams();
+            body.append('id_persona', String(persona.idPersona));
+            body.append('observacion', observacionLimpia);
+
+            const resp = await fetch(urlMarcarNoDisponible, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                },
+                body: body.toString()
+            });
+
+            const data = await resp.json();
+            if (!resp.ok || !data || !data.success) {
+                throw new Error((data && data.message) ? data.message : 'No fue posible marcar No se dispuso.');
+            }
+
+            const fila = boton.closest('tr');
+            if (fila) {
+                fila.style.opacity = '0.55';
+                fila.style.backgroundColor = '#fff1f2';
+                setTimeout(() => {
+                    fila.remove();
+                }, 180);
+            }
+
+            boton.textContent = 'Marcado';
+            boton.classList.remove('btn-danger');
+            boton.classList.add('btn-secondary');
+            cerrarModalNoDisponible();
+            window.alert('Persona marcada en No se dispone.');
+        } catch (err) {
+            boton.disabled = false;
+            boton.textContent = textoOriginal;
+            window.alert(err.message || 'Error al marcar No se dispuso.');
+        } finally {
+            btnGuardarNoDisponible.disabled = false;
+        }
+    });
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && modalNoDisponible && modalNoDisponible.classList.contains('is-open')) {
+        cerrarModalNoDisponible();
+    }
+});
 
 function escapeHtml(text) {
     const div = document.createElement('div');

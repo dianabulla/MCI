@@ -457,6 +457,30 @@ $returnUrlGanar = $buildPendientesUrl();
                                 </select>
                             </form>
                             <?php endif; ?>
+                            <?php if (AuthController::tienePermiso('personas', 'editar') && (int)($persona['Id_Ministerio'] ?? 0) > 0): ?>
+                            <form method="POST" action="<?= PUBLIC_URL ?>?url=personas/reasignarMinisterioGanar" class="ganar-assign-form ganar-reasignar-form">
+                                <input type="hidden" name="id_persona" value="<?= (int)($persona['Id_Persona'] ?? 0) ?>">
+                                <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrlGanar, ENT_QUOTES, 'UTF-8') ?>">
+                                <button type="button" class="action-icon-btn ganar-reasignar-trigger js-reasignar-trigger" title="Reasignar ministerio" aria-expanded="false" aria-label="Reasignar">
+                                    <i class="bi bi-arrow-repeat"></i>
+                                </button>
+                                <select
+                                    name="id_ministerio_reasignar"
+                                    class="form-control ganar-assign-select js-auto-reasignar-ministerio js-reasignar-select"
+                                    data-current="<?= (int)($persona['Id_Ministerio'] ?? 0) ?>"
+                                    hidden
+                                    required
+                                >
+                                    <option value="">Selecciona ministerio...</option>
+                                    <?php foreach (($ministerios ?? []) as $ministerioOpt): ?>
+                                        <?php $idMinisterioOpt = (int)($ministerioOpt['Id_Ministerio'] ?? 0); ?>
+                                        <option value="<?= $idMinisterioOpt ?>" <?= ((int)($persona['Id_Ministerio'] ?? 0) === $idMinisterioOpt) ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars((string)($ministerioOpt['Nombre_Ministerio'] ?? 'Ministerio')) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </form>
+                            <?php endif; ?>
                         </td>
                         <?php endif; ?>
                     </tr>
@@ -600,6 +624,16 @@ $returnUrlGanar = $buildPendientesUrl();
 
 .ganar-assign-trigger:hover {
     background: #e8f1ff;
+}
+
+.ganar-reasignar-trigger {
+    background: #f0eaff;
+    color: #6930c3;
+    border-color: #c9aef5;
+}
+
+.ganar-reasignar-trigger:hover {
+    background: #e3d4ff;
 }
 
 .ganar-assign-select {
@@ -1188,6 +1222,60 @@ $returnUrlGanar = $buildPendientesUrl();
     const selectsAsignarMinisterio = document.querySelectorAll('.js-auto-asignar-ministerio');
     if (selectsAsignarMinisterio.length) {
         selectsAsignarMinisterio.forEach(function(selectEl) {
+            selectEl.addEventListener('change', function() {
+                const form = selectEl.closest('form');
+                if (!form) {
+                    return;
+                }
+
+                if (form.dataset.submitting === '1') {
+                    return;
+                }
+
+                const nuevoValor = String(selectEl.value || '').trim();
+                const valorActual = String(selectEl.getAttribute('data-current') || '').trim();
+                if (nuevoValor === '' || nuevoValor === valorActual) {
+                    return;
+                }
+
+                form.dataset.submitting = '1';
+                form.submit();
+            });
+        });
+    }
+
+    const botonesReasignar = document.querySelectorAll('.js-reasignar-trigger');
+    if (botonesReasignar.length) {
+        botonesReasignar.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const form = btn.closest('form');
+                if (!form) {
+                    return;
+                }
+
+                const selectEl = form.querySelector('.js-reasignar-select');
+                if (!selectEl) {
+                    return;
+                }
+
+                selectEl.hidden = false;
+                btn.setAttribute('aria-expanded', 'true');
+                selectEl.focus();
+
+                if (typeof selectEl.showPicker === 'function') {
+                    try {
+                        selectEl.showPicker();
+                    } catch (e) {
+                        // Algunos navegadores bloquean showPicker.
+                    }
+                }
+            });
+        });
+    }
+
+    const selectsReasignarMinisterio = document.querySelectorAll('.js-auto-reasignar-ministerio');
+    if (selectsReasignarMinisterio.length) {
+        selectsReasignarMinisterio.forEach(function(selectEl) {
             selectEl.addEventListener('change', function() {
                 const form = selectEl.closest('form');
                 if (!form) {

@@ -9,7 +9,7 @@ $mensaje = (string)($mensaje ?? '');
 $tipo = (string)($tipo ?? '');
 $titulo = (string)($modulo['titulo'] ?? 'Material');
 $ruta = (string)($modulo['ruta'] ?? 'home/material');
-$color = (string)($modulo['color'] ?? '#1e4a89');
+$color = (string)($modulo['color'] ?? '#2f73b7');
 $icono = (string)($modulo['icono'] ?? 'bi bi-journal-bookmark-fill');
 $clave = (string)($modulo['clave'] ?? '');
 $tieneSubmodulos = !empty($tiene_submodulos);
@@ -17,6 +17,7 @@ $esCapacitacionDestino = $clave === 'capacitacion_destino';
 $esUniversidadVida = $clave === 'universidad_vida';
 $usaTarjetasTipoMaterial = $esCapacitacionDestino || $esUniversidadVida;
 $configCapacitacionDestino = (array)($config_capacitacion_destino ?? []);
+$profesoresModulos = (array)($profesores_modulos ?? []);
 $rutaDetalleVistas = PUBLIC_URL . '?url=home/material/detalle-vistas&modulo=' . rawurlencode($clave);
 
 $temasClase = [];
@@ -100,10 +101,10 @@ if ($tieneSubmodulos) {
     }
 
     .submodulo-tab.is-active {
-        background: #1f5ea8;
+        background: #3c82c8;
         color: #fff;
-        border-color: #1f5ea8;
-        box-shadow: 0 1px 3px rgba(20, 58, 101, 0.28);
+        border-color: #3c82c8;
+        box-shadow: 0 1px 3px rgba(45, 94, 146, 0.22);
     }
 
     .is-hidden {
@@ -164,7 +165,7 @@ if ($tieneSubmodulos) {
     .btn-link-compact {
         border: 0;
         background: transparent;
-        color: #1f5ea8;
+        color: #3c82c8;
         font-weight: 700;
         font-size: 12px;
         cursor: pointer;
@@ -174,7 +175,7 @@ if ($tieneSubmodulos) {
     }
 
     .btn-link-compact:hover {
-        color: #143a65;
+        color: #2a5f99;
     }
 
     .submodulo-body .data-table th.col-acciones,
@@ -190,6 +191,73 @@ if ($tieneSubmodulos) {
 
     .cap-destino-grid .submodulo-wrap {
         margin-bottom: 0;
+    }
+
+    .cap-nivel-section {
+        margin-bottom: 18px;
+    }
+
+    .cap-nivel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 14px;
+        border-radius: 10px 10px 0 0;
+        background: linear-gradient(90deg, #2f73b7 0%, #4f8fd0 100%);
+        color: #fff;
+        margin-bottom: 0;
+    }
+
+    .cap-nivel-label {
+        font-size: 15px;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .cap-nivel-section .cap-destino-grid {
+        border: 1px solid #c8d9ef;
+        border-top: none;
+        border-radius: 0 0 10px 10px;
+        padding: 10px;
+        background: #f8fbff;
+    }
+
+    .cap-modulo-profesor-wrap {
+        border-left: 1px solid #c8d9ef;
+        border-right: 1px solid #c8d9ef;
+        background: #f6f9ff;
+        padding: 8px 10px;
+    }
+
+    .cap-modulo-profesor-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 0 2px 0;
+        font-size: 12px;
+        color: #4a6080;
+    }
+
+    .cap-modulo-profesor-nombre {
+        font-weight: 600;
+        color: #2f73b7;
+    }
+
+    .cap-modulo-profesor-form {
+        display: none;
+        margin-top: 6px;
+        padding: 8px;
+        background: #f0f5ff;
+        border-radius: 8px;
+        border: 1px solid #ccdcf5;
+    }
+
+    .cap-modulo-profesor-form.is-open {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
     }
 
     .cap-destino-main-switch {
@@ -224,10 +292,10 @@ if ($tieneSubmodulos) {
     }
 
     .cap-main-tab.is-active {
-        border-color: #1f5ea8;
-        background: linear-gradient(180deg, #1f5ea8 0%, #1a518f 100%);
+        border-color: #3c82c8;
+        background: linear-gradient(180deg, #3c82c8 0%, #2f73b7 100%);
         color: #fff;
-        box-shadow: 0 6px 18px rgba(23, 62, 110, 0.25);
+        box-shadow: 0 6px 18px rgba(45, 94, 146, 0.22);
     }
 
     .cap-main-tab.is-active small {
@@ -240,7 +308,7 @@ if ($tieneSubmodulos) {
 
     .cap-entry-grid {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 12px;
         margin-top: 14px;
         margin-bottom: 16px;
@@ -261,9 +329,9 @@ if ($tieneSubmodulos) {
     }
 
     .cap-entry-card.is-active {
-        border-color: #1f5ea8;
-        background: linear-gradient(180deg, #1f5ea8 0%, #1a518f 100%);
-        box-shadow: 0 8px 20px rgba(23, 62, 110, 0.28);
+        border-color: #3c82c8;
+        background: linear-gradient(180deg, #3c82c8 0%, #2f73b7 100%);
+        box-shadow: 0 8px 20px rgba(45, 94, 146, 0.24);
     }
 
     .cap-entry-card.is-active h4,
@@ -291,6 +359,69 @@ if ($tieneSubmodulos) {
         display: block;
     }
 
+    .folder-tree-explorer {
+        margin-bottom: 14px;
+        border: 1px solid #d6e3f4;
+        border-radius: 14px;
+        background: #f8fbff;
+        padding: 12px;
+    }
+
+    .folder-tree-row {
+        margin-bottom: 10px;
+    }
+
+    .folder-tree-row:last-child {
+        margin-bottom: 0;
+    }
+
+    .folder-tree-label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        color: #5e7290;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .folder-tree-items {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .folder-node {
+        border: 1px solid #cdddf1;
+        border-radius: 10px;
+        background: #fff;
+        color: #32577f;
+        font-size: 13px;
+        font-weight: 700;
+        padding: 8px 12px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+    }
+
+    .folder-node:hover {
+        border-color: #adc8e6;
+        background: #f2f8ff;
+    }
+
+    .folder-node.is-active {
+        border-color: #3c82c8;
+        background: linear-gradient(180deg, #3c82c8 0%, #2f73b7 100%);
+        color: #fff;
+    }
+
+    .folder-node .folder-meta {
+        font-size: 11px;
+        opacity: 0.82;
+        font-weight: 600;
+    }
+
     .cap-destino-grid .submodulo-wrap {
         margin-bottom: 10px;
     }
@@ -304,12 +435,85 @@ if ($tieneSubmodulos) {
     }
 
     .cap-destino-grid .submodulo-wrap.is-selected {
-        border-color: #1f5ea8;
-        box-shadow: 0 6px 14px rgba(23, 62, 110, 0.16);
+        border-color: #3c82c8;
+        box-shadow: 0 6px 14px rgba(45, 94, 146, 0.16);
+    }
+
+    .cap-nivel-section.is-focus-mode .cap-destino-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cap-nivel-section.is-focus-mode .cap-destino-grid .submodulo-wrap {
+        display: none;
+    }
+
+    .cap-nivel-section.is-focus-mode .cap-destino-grid .submodulo-wrap.is-focused {
+        display: block;
+        grid-column: 1 / -1;
     }
 
     .cap-destino-grid .submodulo-wrap.is-selected .submodulo-head {
         background: linear-gradient(180deg, #eef5ff 0%, #f8fbff 100%);
+    }
+
+    .cap-nivel-section .submodulo-body {
+        padding: 14px;
+    }
+
+    .cap-nivel-section .data-table {
+        width: 100%;
+        min-width: 0;
+        table-layout: fixed;
+    }
+
+    .cap-nivel-section .data-table th.col-titulo,
+    .cap-nivel-section .data-table td.col-titulo {
+        width: 42%;
+        max-width: 42%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .cap-nivel-section .data-table th.col-descripcion,
+    .cap-nivel-section .data-table td.col-descripcion {
+        width: 10%;
+        max-width: 10%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .cap-nivel-section .data-table th.col-acciones,
+    .cap-nivel-section .data-table td.col-acciones {
+        width: 48%;
+        max-width: 48%;
+    }
+
+    .tema-acciones {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        align-items: flex-start;
+    }
+
+    .tema-acciones-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+    }
+
+    .tema-acciones-row.is-danger {
+        padding-top: 2px;
+    }
+
+    .cap-nivel-section .descripcion-cell,
+    .cap-nivel-section .descripcion-preview {
+        display: inline-block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .cap-detail-view {
@@ -336,7 +540,7 @@ if ($tieneSubmodulos) {
 
     .cap-detail-header h4 {
         margin: 0;
-        color: #274f81;
+        color: #356ea8;
         font-size: 15px;
     }
 
@@ -368,7 +572,7 @@ if ($tieneSubmodulos) {
     .material-gallery-shell {
         width: min(1200px, 100%);
         max-height: calc(100vh - 40px);
-        background: linear-gradient(180deg, #0f1b30 0%, #132645 100%);
+        background: linear-gradient(180deg, #1b2f4d 0%, #234062 100%);
         border: 1px solid rgba(190, 210, 240, 0.16);
         border-radius: 20px;
         box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
@@ -521,6 +725,38 @@ if ($tieneSubmodulos) {
         display: block;
     }
 
+    .material-item-preview-btn {
+        border: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+        background: transparent;
+        position: relative;
+        display: block;
+    }
+
+    .material-item-preview-btn img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .material-item-preview-btn::after {
+        content: '‹  ›';
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 1px;
+    }
+
     @media (max-width: 768px) {
         .material-gallery-modal.is-open {
             padding: 10px;
@@ -613,6 +849,11 @@ if ($tieneSubmodulos) {
                     <option value="2">Módulo 2</option>
                 </select>
             </div>
+
+            <div class="form-group" style="margin-bottom: 12px;">
+                <label for="leccion">Lección <span class="req">*</span></label>
+                <input type="text" id="leccion" name="leccion" class="form-control" maxlength="120" required placeholder="Ej: Lección 1">
+            </div>
         <?php endif; ?>
         <div class="form-group" style="margin-bottom: 12px;">
             <label for="material_pdf">Archivo(s)</label>
@@ -625,16 +866,37 @@ if ($tieneSubmodulos) {
 <?php endif; ?>
 
 <?php if ($usaTarjetasTipoMaterial): ?>
+<?php if ($esCapacitacionDestino): ?>
+<div id="cap-folder-explorer" class="folder-tree-explorer">
+    <div class="folder-tree-row">
+        <span class="folder-tree-label">Carpeta principal</span>
+        <div class="folder-tree-items" id="cap-folder-niveles"></div>
+    </div>
+    <div class="folder-tree-row">
+        <span class="folder-tree-label">Subcarpetas por módulo</span>
+        <div class="folder-tree-items" id="cap-folder-modulos"></div>
+    </div>
+    <div class="folder-tree-row">
+        <span class="folder-tree-label">Lecciones creadas</span>
+        <div class="folder-tree-items" id="cap-folder-lecciones"></div>
+    </div>
+    <div class="folder-tree-row">
+        <span class="folder-tree-label">Carpeta de material</span>
+        <div class="folder-tree-items" id="cap-folder-categorias"></div>
+    </div>
+</div>
+<?php else: ?>
 <div class="cap-entry-grid">
-    <article class="cap-entry-card js-open-cap-modal" data-target="clase" role="button" tabindex="0" aria-label="Abrir Material clase">
-        <h4>Material clase</h4>
-        <p>Haz clic para ver en esta misma pantalla el contenido de clase.</p>
-    </article>
     <article class="cap-entry-card js-open-cap-modal" data-target="profesor" role="button" tabindex="0" aria-label="Abrir Material profesor">
         <h4>Material profesor</h4>
-        <p>Haz clic para ver en esta misma pantalla el contenido para profesor.</p>
+        <p>Ver por niveles y subtarjetas por módulo el contenido exclusivo para profesor.</p>
+    </article>
+    <article class="cap-entry-card js-open-cap-modal" data-target="clase" role="button" tabindex="0" aria-label="Abrir Material clase">
+        <h4>Material clase</h4>
+        <p>Ver por niveles y subtarjetas por módulo todo el contenido de clase en pantalla grande.</p>
     </article>
 </div>
+<?php endif; ?>
 
 <div id="cap-inline-panel" class="cap-panel" aria-hidden="true">
 <?php endif; ?>
@@ -653,25 +915,26 @@ if ($tieneSubmodulos) {
         <?php
             if ($tieneSubmodulos && $esCapacitacionDestino) {
                 $bloques = [];
-                $colecciones = [
-                    ['categoria' => 'clase', 'titulo' => 'Material clase', 'temas' => $temasClase],
-                    ['categoria' => 'profesor', 'titulo' => 'Material profesor', 'temas' => $temasProfesor],
-                ];
+                foreach ($configCapacitacionDestino as $nivelTmp => $modulosTmp) {
+                    foreach ((array)$modulosTmp as $moduloTmp) {
+                        foreach (['profesor', 'clase'] as $categoriaTmp) {
+                            $temasBloqueTmp = array_values(array_filter($temas, static function($temaTmp) use ($nivelTmp, $moduloTmp, $categoriaTmp) {
+                                $categoriaTemaTmp = strtolower(trim((string)($temaTmp['categoria'] ?? 'clase')));
+                                if ($categoriaTemaTmp !== 'profesor') {
+                                    $categoriaTemaTmp = 'clase';
+                                }
 
-                foreach ($colecciones as $coleccionTmp) {
-                    foreach ($configCapacitacionDestino as $nivelTmp => $modulosTmp) {
-                        foreach ((array)$modulosTmp as $moduloTmp) {
-                            $temasBloqueTmp = array_values(array_filter((array)$coleccionTmp['temas'], static function($temaTmp) use ($nivelTmp, $moduloTmp) {
                                 return (int)($temaTmp['nivel'] ?? 0) === (int)$nivelTmp
-                                    && (int)($temaTmp['modulo_numero'] ?? 0) === (int)$moduloTmp;
+                                    && (int)($temaTmp['modulo_numero'] ?? 0) === (int)$moduloTmp
+                                    && $categoriaTemaTmp === $categoriaTmp;
                             }));
 
                             $bloques[] = [
-                                'titulo' => 'Nivel ' . (int)$nivelTmp . ' / Módulo ' . (int)$moduloTmp,
+                                'titulo' => 'Módulo ' . (int)$moduloTmp,
                                 'temas' => $temasBloqueTmp,
                                 'nivel' => (int)$nivelTmp,
                                 'modulo_numero' => (int)$moduloTmp,
-                                'categoria' => (string)$coleccionTmp['categoria'],
+                                'categoria' => $categoriaTmp,
                             ];
                         }
                     }
@@ -693,26 +956,70 @@ if ($tieneSubmodulos) {
             }
         ?>
 
-        <?php if ($usaTarjetasTipoMaterial): ?><div class="cap-destino-grid"><?php endif; ?>
+        <?php if ($usaTarjetasTipoMaterial && !$esCapacitacionDestino): ?><div class="cap-destino-grid"><?php endif; ?>
 
-        <?php foreach ($bloques as $bloqueIndex => $bloque): ?>
+        <?php
+        $bloqueIndex = 0;
+        $lastNivelRender = null;
+        foreach ($bloques as $bloque):
+            if ($esCapacitacionDestino) {
+                $nivelActualRender = (int)($bloque['nivel'] ?? 0);
+                if ($nivelActualRender !== $lastNivelRender) {
+                    // Cerrar sección anterior
+                    if ($lastNivelRender !== null) {
+                        echo '</div></div>'; // .cap-destino-grid y .cap-nivel-section
+                    }
+                    // Abrir nueva sección de nivel
+                    echo '<div class="cap-nivel-section" data-modulo-grupo="' . (int)$nivelActualRender . '">';
+                    echo '<div class="cap-nivel-header"><h4 class="cap-nivel-label">Nivel ' . (int)$nivelActualRender . '</h4></div>';
+
+                    echo '<div class="cap-destino-grid">';
+                    $lastNivelRender = $nivelActualRender;
+                }
+            }
+        ?>
             <?php
                 $tituloBloque = (string)($bloque['titulo'] ?? 'Temas');
+                $categoriaBloque = strtolower(trim((string)($bloque['categoria'] ?? 'general')));
+                if ($categoriaBloque === '') {
+                    $categoriaBloque = 'general';
+                }
+
+                if ($esCapacitacionDestino) {
+                    $tituloBloque = 'Módulo ' . (int)($bloque['modulo_numero'] ?? 0)
+                        . ' - Material ' . ($categoriaBloque === 'profesor' ? 'profesor' : 'clase');
+                }
+
                 $claseCssBloque = 'submodulo-wrap';
                 $panelIdBloque = 'submodulo-panel-' . $bloqueIndex;
 
-                if (stripos($tituloBloque, 'profesor') !== false) {
-                    $claseCssBloque .= ' submodulo-profesor';
-                    if (!$usaTarjetasTipoMaterial) {
-                        $panelIdBloque = 'submodulo-panel-profesor';
+                // Para cap destino usamos la categoría directamente; para otros módulos miramos el título
+                if ($esCapacitacionDestino) {
+                    if ($categoriaBloque === 'profesor') {
+                        $claseCssBloque .= ' submodulo-profesor';
+                    } else {
+                        $claseCssBloque .= ' submodulo-clase';
                     }
-                } elseif (stripos($tituloBloque, 'clase') !== false) {
-                    $claseCssBloque .= ' submodulo-clase';
-                    if (!$usaTarjetasTipoMaterial) {
-                        $panelIdBloque = 'submodulo-panel-clase';
+                } else {
+                    if (stripos($tituloBloque, 'profesor') !== false) {
+                        $claseCssBloque .= ' submodulo-profesor';
+                        if (!$usaTarjetasTipoMaterial) {
+                            $panelIdBloque = 'submodulo-panel-profesor';
+                        }
+                    } elseif (stripos($tituloBloque, 'clase') !== false) {
+                        $claseCssBloque .= ' submodulo-clase';
+                        if (!$usaTarjetasTipoMaterial) {
+                            $panelIdBloque = 'submodulo-panel-clase';
+                        }
                     }
                 }
                 $totalTemasBloque = count((array)($bloque['temas'] ?? []));
+
+                $nivelBloqueProf = (int)($bloque['nivel'] ?? 0);
+                $moduloBloqueProf = (int)($bloque['modulo_numero'] ?? 0);
+                $keyProfesorBloque = $nivelBloqueProf . '_' . $moduloBloqueProf;
+                $nombreProfesorBloque = trim((string)($profesoresModulos[$keyProfesorBloque] ?? ''));
+                $formIdProfesorBloque = 'form-prof-bloque-' . $bloqueIndex;
 
                 if ($tieneSubmodulos && !$usaTarjetasTipoMaterial && $panelIdBloque === 'submodulo-panel-profesor') {
                     $claseCssBloque .= ' is-hidden';
@@ -720,10 +1027,6 @@ if ($tieneSubmodulos) {
             ?>
 
             <?php
-                $categoriaBloque = strtolower(trim((string)($bloque['categoria'] ?? 'general')));
-                if ($categoriaBloque === '') {
-                    $categoriaBloque = 'general';
-                }
                 if ($usaTarjetasTipoMaterial) {
                     $claseCssBloque .= ' is-hidden';
                 }
@@ -733,6 +1036,8 @@ if ($tieneSubmodulos) {
                 id="<?= htmlspecialchars($panelIdBloque, ENT_QUOTES, 'UTF-8') ?>"
                 class="<?= htmlspecialchars($claseCssBloque, ENT_QUOTES, 'UTF-8') ?> js-cap-block"
                 data-cap-categoria="<?= htmlspecialchars($categoriaBloque, ENT_QUOTES, 'UTF-8') ?>"
+                data-cap-nivel="<?= (int)$nivelBloqueProf ?>"
+                data-cap-modulo="<?= (int)$moduloBloqueProf ?>"
                 data-cap-titulo="<?= htmlspecialchars($tituloBloque, ENT_QUOTES, 'UTF-8') ?>"
                 data-cap-total="<?= (int)$totalTemasBloque ?>"
                 role="tabpanel">
@@ -741,22 +1046,87 @@ if ($tieneSubmodulos) {
                     <span class="submodulo-meta"><?= (int)$totalTemasBloque ?> tema(s)</span>
                 </div>
 
+                <?php if ($esCapacitacionDestino): ?>
+                    <div class="cap-modulo-profesor-row" style="padding:8px 10px; border-bottom:1px solid #e6eef9; background:#f8fbff;">
+                        <i class="bi bi-person-badge" style="font-size:13px;"></i>
+                        <span>Profesor de este módulo:</span>
+                        <span class="cap-modulo-profesor-nombre">
+                            <?= $nombreProfesorBloque !== '' ? htmlspecialchars($nombreProfesorBloque) : '<em style="color:#9aabbd;">Sin asignar</em>' ?>
+                        </span>
+                        <?php if ($puedeGestionar): ?>
+                            <button type="button" class="btn btn-sm btn-secondary js-toggle-profesor-form"
+                                data-target="<?= htmlspecialchars($formIdProfesorBloque, ENT_QUOTES, 'UTF-8') ?>"
+                                style="font-size:11px; padding:2px 8px;">Editar</button>
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($puedeGestionar): ?>
+                        <form id="<?= htmlspecialchars($formIdProfesorBloque, ENT_QUOTES, 'UTF-8') ?>" method="POST"
+                            action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>"
+                            class="cap-modulo-profesor-form" style="margin:8px 10px 0 10px;">
+                            <input type="hidden" name="accion" value="guardar_profesor_modulo">
+                            <input type="hidden" name="modulo" value="<?= htmlspecialchars($clave) ?>">
+                            <input type="hidden" name="nivel" value="<?= (int)$nivelBloqueProf ?>">
+                            <input type="hidden" name="modulo_numero" value="<?= (int)$moduloBloqueProf ?>">
+                            <input type="hidden" name="contexto_nivel" value="<?= (int)$nivelBloqueProf ?>">
+                            <input type="hidden" name="contexto_modulo" value="<?= (int)$moduloBloqueProf ?>">
+                            <input type="hidden" name="contexto_categoria" value="<?= htmlspecialchars($categoriaBloque, ENT_QUOTES, 'UTF-8') ?>">
+                            <input type="text" name="profesor_nombre" class="form-control" style="font-size:12px; padding:4px 8px; flex:1; min-width:170px;"
+                                placeholder="Nombre del profesor" maxlength="255"
+                                value="<?= htmlspecialchars($nombreProfesorBloque, ENT_QUOTES, 'UTF-8') ?>">
+                            <button type="submit" class="btn btn-sm btn-primary" style="font-size:12px; padding:4px 10px;">Guardar</button>
+                        </form>
+                    <?php endif; ?>
+                <?php endif; ?>
+
                 <div class="submodulo-body">
                     <div class="table-container" style="margin-bottom:0;">
                         <table class="data-table">
                     <thead>
                         <tr>
                             <th class="col-titulo">Título</th>
-                            <th class="col-descripcion">Descripción</th>
-                            <th style="width:120px;">Archivos</th>
-                            <th style="width:150px;">Vistas</th>
-                            <th style="width:190px;">Creado</th>
+                            <th class="col-descripcion">Lección</th>
                             <th class="col-acciones">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php if (!empty($bloque['temas'])): ?>
-                            <?php foreach ((array)$bloque['temas'] as $index => $tema): ?>
+                        <?php
+                        $temasBloqueRender = (array)($bloque['temas'] ?? []);
+                        if ($esCapacitacionDestino && !empty($temasBloqueRender)) {
+                            usort($temasBloqueRender, static function(array $a, array $b) {
+                                $leccionA = trim((string)($a['leccion'] ?? ''));
+                                $leccionB = trim((string)($b['leccion'] ?? ''));
+
+                                $numA = null;
+                                $numB = null;
+                                if (preg_match('/\d+/', $leccionA, $mA) === 1) {
+                                    $numA = (int)$mA[0];
+                                }
+                                if (preg_match('/\d+/', $leccionB, $mB) === 1) {
+                                    $numB = (int)$mB[0];
+                                }
+
+                                // Lecciones con número primero (1,2,3...), sin número al final.
+                                if ($numA === null && $numB !== null) {
+                                    return 1;
+                                }
+                                if ($numA !== null && $numB === null) {
+                                    return -1;
+                                }
+                                if ($numA !== null && $numB !== null) {
+                                    $cmpNum = $numA <=> $numB;
+                                    if ($cmpNum !== 0) {
+                                        return $cmpNum;
+                                    }
+                                }
+
+                                $tsA = (int)($a['creado_ts'] ?? 0);
+                                $tsB = (int)($b['creado_ts'] ?? 0);
+                                return $tsB <=> $tsA;
+                            });
+                        }
+                        ?>
+                        <?php if (!empty($temasBloqueRender)): ?>
+                            <?php foreach ($temasBloqueRender as $index => $tema): ?>
                                 <?php
                                 $temaId = 'tema-' . $bloqueIndex . '-' . $index;
                                 $temaEditId = 'tema-edit-' . $bloqueIndex . '-' . $index;
@@ -781,48 +1151,80 @@ if ($tieneSubmodulos) {
                                 if ($imagenesTemaJson === false) {
                                     $imagenesTemaJson = '[]';
                                 }
+                                $leccionTemaData = trim((string)($tema['leccion'] ?? ''));
+                                if ($leccionTemaData === '') {
+                                    $leccionTemaData = 'Sin lección';
+                                }
                                 ?>
-                                <tr>
-                                    <td class="col-titulo" title="<?= htmlspecialchars((string)($tema['titulo'] ?? 'Tema de material'), ENT_QUOTES, 'UTF-8') ?>"><strong><?= htmlspecialchars((string)($tema['titulo'] ?? 'Tema de material')) ?></strong></td>
-                                    <?php $descripcionTema = (string)($tema['descripcion'] ?? 'Sin descripción'); ?>
-                                    <td class="col-descripcion" title="<?= htmlspecialchars($descripcionTema, ENT_QUOTES, 'UTF-8') ?>">
+                                <tr class="js-tema-row"
+                                    data-tema-key="<?= htmlspecialchars($temaId, ENT_QUOTES, 'UTF-8') ?>"
+                                    data-lote-id="<?= htmlspecialchars((string)($tema['lote_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                    data-cap-nivel="<?= (int)$nivelBloqueProf ?>"
+                                    data-cap-modulo="<?= (int)$moduloBloqueProf ?>"
+                                    data-cap-categoria="<?= htmlspecialchars($categoriaBloque, ENT_QUOTES, 'UTF-8') ?>"
+                                    data-cap-leccion="<?= htmlspecialchars($leccionTemaData, ENT_QUOTES, 'UTF-8') ?>">
+                                    <td class="col-titulo" title="<?= htmlspecialchars((string)($tema['titulo'] ?? 'Tema de material'), ENT_QUOTES, 'UTF-8') ?>">
+                                        <strong><?= htmlspecialchars((string)($tema['titulo'] ?? 'Tema de material')) ?></strong>
+                                        <?php if ($esCapacitacionDestino && trim((string)($tema['leccion'] ?? '')) !== ''): ?>
+                                            <div style="margin-top:4px;"><small style="color:#5b6f8d; font-weight:600;"><?= htmlspecialchars((string)$tema['leccion']) ?></small></div>
+                                        <?php endif; ?>
+                                    </td>
+                                    <?php $leccionTema = trim((string)($tema['leccion'] ?? '')); ?>
+                                    <?php
+                                    $leccionNumero = '';
+                                    if ($leccionTema !== '' && preg_match('/\d+/', $leccionTema, $mLeccion) === 1) {
+                                        $leccionNumero = (string)$mLeccion[0];
+                                    }
+                                    if ($leccionNumero === '') {
+                                        $leccionNumero = '—';
+                                    }
+                                    ?>
+                                    <td class="col-descripcion" title="<?= htmlspecialchars($leccionTema !== '' ? $leccionTema : 'Sin lección', ENT_QUOTES, 'UTF-8') ?>">
                                         <span class="descripcion-cell">
-                                            <span class="descripcion-preview"><?= htmlspecialchars($descripcionTema) ?></span>
+                                            <span class="descripcion-preview"><?= htmlspecialchars($leccionNumero) ?></span>
                                         </span>
                                     </td>
-                                    <td><?= (int)($tema['total_archivos'] ?? 0) ?></td>
-                                    <td><?= (int)($tema['personas_vieron'] ?? 0) ?></td>
-                                    <td>
-                                        <?php
-                                        $ts = (int)($tema['creado_ts'] ?? 0);
-                                        echo $ts > 0 ? date('Y-m-d H:i', $ts) : '—';
-                                        ?>
-                                    </td>
-                                    <td class="col-acciones" style="display:flex; gap:8px; flex-wrap:wrap;">
-                                        <button type="button" class="btn btn-sm btn-secondary js-toggle-tema" data-target="<?= htmlspecialchars($temaId, ENT_QUOTES, 'UTF-8') ?>">Ver archivos</button>
-                                        <?php if (!empty($imagenesTema)): ?>
-                                            <button type="button" class="btn btn-sm btn-warning js-abrir-galeria-tema"
-                                                data-tema="<?= htmlspecialchars((string)($tema['titulo'] ?? 'Tema de material'), ENT_QUOTES, 'UTF-8') ?>"
-                                                data-images='<?= htmlspecialchars($imagenesTemaJson, ENT_QUOTES, 'UTF-8') ?>'>Presentar</button>
-                                        <?php endif; ?>
-                                        <button type="button" class="btn btn-sm btn-info js-ver-vistas" data-lote="<?= htmlspecialchars((string)($tema['lote_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">Ver quién vio</button>
-                                        <?php if ($puedeGestionar): ?>
-                                            <button type="button" class="btn btn-sm btn-success js-toggle-agregar-archivos" data-target="<?= htmlspecialchars($temaAgregarArchivosId, ENT_QUOTES, 'UTF-8') ?>">Agregar archivos</button>
-                                            <button type="button" class="btn btn-sm btn-primary js-toggle-editar-tema" data-target="<?= htmlspecialchars($temaEditId, ENT_QUOTES, 'UTF-8') ?>">Editar</button>
-                                            <button type="button" class="btn btn-sm btn-danger js-eliminar-tema"
-                                                data-lote="<?= htmlspecialchars((string)($tema['lote_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                                data-titulo="<?= htmlspecialchars((string)($tema['titulo'] ?? 'este tema'), ENT_QUOTES, 'UTF-8') ?>">Eliminar clase</button>
-                                        <?php endif; ?>
+                                    <td class="col-acciones">
+                                        <div class="tema-acciones">
+                                            <div class="tema-acciones-row">
+                                                <button type="button" class="btn btn-sm btn-secondary js-toggle-tema" data-target="<?= htmlspecialchars($temaId, ENT_QUOTES, 'UTF-8') ?>">Ver archivos</button>
+                                                <button type="button" class="btn btn-sm btn-info js-ver-vistas" data-lote="<?= htmlspecialchars((string)($tema['lote_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">Ver quién vio</button>
+                                                <?php if (!empty($imagenesTema)): ?>
+                                                    <button type="button" class="btn btn-sm btn-warning js-abrir-galeria-tema"
+                                                        data-tema="<?= htmlspecialchars((string)($tema['titulo'] ?? 'Tema de material'), ENT_QUOTES, 'UTF-8') ?>"
+                                                        data-images='<?= htmlspecialchars($imagenesTemaJson, ENT_QUOTES, 'UTF-8') ?>'>Presentar</button>
+                                                <?php endif; ?>
+                                            </div>
+
+                                            <?php if ($puedeGestionar): ?>
+                                                <div class="tema-acciones-row">
+                                                    <button type="button" class="btn btn-sm btn-success js-toggle-agregar-archivos" data-target="<?= htmlspecialchars($temaAgregarArchivosId, ENT_QUOTES, 'UTF-8') ?>">Agregar archivos</button>
+                                                    <button type="button" class="btn btn-sm btn-primary js-toggle-editar-tema" data-target="<?= htmlspecialchars($temaEditId, ENT_QUOTES, 'UTF-8') ?>">Editar</button>
+                                                </div>
+                                                <div class="tema-acciones-row is-danger">
+                                                    <button type="button" class="btn btn-sm btn-danger js-eliminar-tema"
+                                                        data-lote="<?= htmlspecialchars((string)($tema['lote_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                                        data-titulo="<?= htmlspecialchars((string)($tema['titulo'] ?? 'este tema'), ENT_QUOTES, 'UTF-8') ?>"
+                                                        data-contexto-nivel="<?= (int)($tema['nivel'] ?? 0) ?>"
+                                                        data-contexto-modulo="<?= (int)($tema['modulo_numero'] ?? 0) ?>"
+                                                        data-contexto-categoria="<?= htmlspecialchars($categoriaTema, ENT_QUOTES, 'UTF-8') ?>"
+                                                        data-contexto-leccion="<?= htmlspecialchars((string)($tema['leccion'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">Eliminar clase</button>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
                                     </td>
                                 </tr>
 
                                 <?php if ($puedeGestionar): ?>
-                                    <tr id="<?= htmlspecialchars($temaEditId, ENT_QUOTES, 'UTF-8') ?>" style="display:none; background:#fff9f0;">
-                                        <td colspan="6">
+                                    <tr id="<?= htmlspecialchars($temaEditId, ENT_QUOTES, 'UTF-8') ?>" data-tema-key="<?= htmlspecialchars($temaId, ENT_QUOTES, 'UTF-8') ?>" style="display:none; background:#fff9f0;">
+                                        <td colspan="3">
                                             <form method="POST" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; align-items:end;">
                                                 <input type="hidden" name="accion" value="editar_tema">
                                                 <input type="hidden" name="modulo" value="<?= htmlspecialchars($clave) ?>">
                                                 <input type="hidden" name="lote_id" value="<?= htmlspecialchars((string)($tema['lote_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                                <input type="hidden" name="contexto_categoria" value="<?= htmlspecialchars($categoriaTema, ENT_QUOTES, 'UTF-8') ?>">
+                                                <input type="hidden" name="contexto_open_lote" value="<?= htmlspecialchars((string)($tema['lote_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                                <input type="hidden" name="contexto_open_panel" value="editar">
 
                                                 <div>
                                                     <label style="font-size:12px; color:#576b86;">Título</label>
@@ -851,6 +1253,7 @@ if ($tieneSubmodulos) {
                                                         $nivelTemaEdit = (int)($tema['nivel'] ?? 0);
                                                         $nivelTemaEdit = in_array($nivelTemaEdit, [1, 2, 3], true) ? $nivelTemaEdit : 1;
                                                         $moduloTemaEdit = (int)($tema['modulo_numero'] ?? 0);
+                                                        $leccionTemaEdit = trim((string)($tema['leccion'] ?? ''));
                                                     ?>
                                                     <div>
                                                         <label style="font-size:12px; color:#576b86;">Nivel</label>
@@ -864,9 +1267,14 @@ if ($tieneSubmodulos) {
                                                         <label style="font-size:12px; color:#576b86;">Módulo</label>
                                                         <select name="modulo_numero" class="form-control js-cap-destino-modulo" data-selected="<?= (int)$moduloTemaEdit ?>"></select>
                                                     </div>
+                                                    <div>
+                                                        <label style="font-size:12px; color:#576b86;">Lección</label>
+                                                        <input type="text" name="leccion" class="form-control" maxlength="120" required value="<?= htmlspecialchars($leccionTemaEdit, ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej: Lección 1">
+                                                    </div>
                                                 <?php else: ?>
                                                     <input type="hidden" name="nivel" value="0">
                                                     <input type="hidden" name="modulo_numero" value="0">
+                                                    <input type="hidden" name="leccion" value="">
                                                 <?php endif; ?>
 
                                                 <div>
@@ -878,12 +1286,18 @@ if ($tieneSubmodulos) {
                                 <?php endif; ?>
 
                                 <?php if ($puedeGestionar): ?>
-                                    <tr id="<?= htmlspecialchars($temaAgregarArchivosId, ENT_QUOTES, 'UTF-8') ?>" style="display:none; background:#eefaf4;">
-                                        <td colspan="6">
+                                    <tr id="<?= htmlspecialchars($temaAgregarArchivosId, ENT_QUOTES, 'UTF-8') ?>" data-tema-key="<?= htmlspecialchars($temaId, ENT_QUOTES, 'UTF-8') ?>" style="display:none; background:#eefaf4;">
+                                        <td colspan="3">
                                             <form method="POST" enctype="multipart/form-data" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; align-items:end;">
                                                 <input type="hidden" name="accion" value="agregar_archivos_tema">
                                                 <input type="hidden" name="modulo" value="<?= htmlspecialchars($clave) ?>">
                                                 <input type="hidden" name="lote_id" value="<?= htmlspecialchars((string)($tema['lote_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                                <input type="hidden" name="contexto_nivel" value="<?= (int)($tema['nivel'] ?? 0) ?>">
+                                                <input type="hidden" name="contexto_modulo" value="<?= (int)($tema['modulo_numero'] ?? 0) ?>">
+                                                <input type="hidden" name="contexto_categoria" value="<?= htmlspecialchars($categoriaTema, ENT_QUOTES, 'UTF-8') ?>">
+                                                <input type="hidden" name="contexto_leccion" value="<?= htmlspecialchars((string)($tema['leccion'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                                <input type="hidden" name="contexto_open_lote" value="<?= htmlspecialchars((string)($tema['lote_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                                <input type="hidden" name="contexto_open_panel" value="agregar">
 
                                                 <div>
                                                     <label style="font-size:12px; color:#576b86;">Agregar más archivos a este tema</label>
@@ -899,8 +1313,8 @@ if ($tieneSubmodulos) {
                                     </tr>
                                 <?php endif; ?>
 
-                                <tr id="<?= htmlspecialchars($temaId, ENT_QUOTES, 'UTF-8') ?>" style="display:none; background:#f9fbff;">
-                                    <td colspan="6">
+                                <tr id="<?= htmlspecialchars($temaId, ENT_QUOTES, 'UTF-8') ?>" data-tema-key="<?= htmlspecialchars($temaId, ENT_QUOTES, 'UTF-8') ?>" style="display:none; background:#f9fbff;">
+                                    <td colspan="3">
                                         <?php if (!empty($archivosTema)): ?>
                                             <div style="display:flex; flex-wrap:wrap; gap:12px;">
                                                 <?php foreach ($archivosTema as $indexArchivoActual => $archivo): ?>
@@ -912,6 +1326,22 @@ if ($tieneSubmodulos) {
                                                     $esImagen = in_array($extArchivo, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
                                                     $esVideo  = in_array($extArchivo, ['mp4', 'webm', 'mov']);
                                                     $esPdf    = $extArchivo === 'pdf';
+                                                    $esOffice = in_array($extArchivo, ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'], true);
+                                                    $urlPreviewOffice = '';
+                                                    if ($esOffice) {
+                                                        $urlAbsolutaPreview = $urlDirectaArchivo;
+                                                        if (stripos($urlAbsolutaPreview, 'http://') !== 0 && stripos($urlAbsolutaPreview, 'https://') !== 0) {
+                                                            $hostActual = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://') . (string)($_SERVER['HTTP_HOST'] ?? '');
+                                                            $pathPreview = (string)(parse_url($urlAbsolutaPreview, PHP_URL_PATH) ?? $urlAbsolutaPreview);
+                                                            $urlAbsolutaPreview = rtrim($hostActual, '/') . '/' . ltrim($pathPreview, '/');
+                                                        }
+
+                                                        $hostPreview = strtolower((string)parse_url($urlAbsolutaPreview, PHP_URL_HOST));
+                                                        $esHostLocal = in_array($hostPreview, ['localhost', '127.0.0.1', '::1'], true);
+                                                        if (!$esHostLocal && preg_match('/^https?:\/\//i', $urlAbsolutaPreview)) {
+                                                            $urlPreviewOffice = 'https://view.officeapps.live.com/op/embed.aspx?src=' . rawurlencode($urlAbsolutaPreview);
+                                                        }
+                                                    }
                                                     $indexImagenEnTema = 0;
                                                     if ($esImagen) {
                                                         foreach ($archivosTema as $i => $arch) {
@@ -928,11 +1358,17 @@ if ($tieneSubmodulos) {
                                                     ?>
                                                     <div style="width:160px; border:1px solid #dce6f5; border-radius:10px; overflow:hidden; background:#fff; display:flex; flex-direction:column; box-shadow:0 1px 4px rgba(30,74,137,0.08);">
                                                         <!-- Zona de preview -->
-                                                        <div style="height:140px; background:#1a1a2e; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative;">
+                                                        <div style="height:140px; background:#f2f7ff; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; border-bottom:1px solid #e1eaf8;">
                                                             <?php if ($esImagen): ?>
-                                                                <img src="<?= htmlspecialchars($urlDirectaArchivo, ENT_QUOTES, 'UTF-8') ?>"
-                                                                     alt="<?= htmlspecialchars($nombreArchivo, ENT_QUOTES, 'UTF-8') ?>"
-                                                                     style="width:100%; height:100%; object-fit:cover; display:block;">
+                                                                <button type="button"
+                                                                    class="material-item-preview-btn js-abrir-galeria-desde-archivo"
+                                                                    data-tema="<?= htmlspecialchars((string)($tema['titulo'] ?? 'Tema de material'), ENT_QUOTES, 'UTF-8') ?>"
+                                                                    data-images='<?= htmlspecialchars($imagenesTemaJson, ENT_QUOTES, 'UTF-8') ?>'
+                                                                    data-index="<?= (int)$indexImagenEnTema ?>"
+                                                                    aria-label="Abrir galería de imágenes">
+                                                                    <img src="<?= htmlspecialchars($urlDirectaArchivo, ENT_QUOTES, 'UTF-8') ?>"
+                                                                         alt="<?= htmlspecialchars($nombreArchivo, ENT_QUOTES, 'UTF-8') ?>">
+                                                                </button>
                                                             <?php elseif ($esVideo): ?>
                                                                 <video style="width:100%; height:100%; object-fit:cover; display:block;" muted preload="metadata">
                                                                     <source src="<?= htmlspecialchars($urlDirectaArchivo, ENT_QUOTES, 'UTF-8') ?>#t=0.5">
@@ -941,14 +1377,39 @@ if ($tieneSubmodulos) {
                                                                     <i class="bi bi-play-fill" style="color:#fff; font-size:14px;"></i>
                                                                 </div>
                                                             <?php elseif ($esPdf): ?>
-                                                                <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
-                                                                    <i class="bi bi-file-earmark-pdf" style="font-size:48px; color:#e44d26;"></i>
-                                                                    <span style="color:#aec1d8; font-size:11px; text-transform:uppercase; letter-spacing:1px;">PDF</span>
+                                                                <div style="width:100%; height:100%; position:relative; background:#ffffff;">
+                                                                    <iframe
+                                                                        src="<?= htmlspecialchars($urlDirectaArchivo, ENT_QUOTES, 'UTF-8') ?>#page=1&view=FitH&toolbar=0&navpanes=0&scrollbar=0"
+                                                                        title="Vista previa PDF"
+                                                                        loading="lazy"
+                                                                        style="width:100%; height:100%; border:0; pointer-events:none; background:#fff;">
+                                                                    </iframe>
+                                                                    <div style="position:absolute; top:6px; right:6px; background:rgba(0,0,0,0.55); border-radius:4px; padding:2px 6px; color:#fff; font-size:10px; text-transform:uppercase; letter-spacing:.5px;">
+                                                                        PDF
+                                                                    </div>
+                                                                </div>
+                                                            <?php elseif ($esOffice && $urlPreviewOffice !== ''): ?>
+                                                                <div style="width:100%; height:100%; position:relative; background:#ffffff;">
+                                                                    <iframe
+                                                                        src="<?= htmlspecialchars($urlPreviewOffice, ENT_QUOTES, 'UTF-8') ?>"
+                                                                        title="Vista previa Office"
+                                                                        loading="lazy"
+                                                                        style="width:100%; height:100%; border:0; pointer-events:none; background:#fff;">
+                                                                    </iframe>
+                                                                    <div style="position:absolute; top:6px; right:6px; background:rgba(0,0,0,0.55); border-radius:4px; padding:2px 6px; color:#fff; font-size:10px; text-transform:uppercase; letter-spacing:.5px;">
+                                                                        <?= htmlspecialchars(strtoupper($extArchivo)) ?>
+                                                                    </div>
+                                                                </div>
+                                                            <?php elseif ($esOffice): ?>
+                                                                <div style="display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center; padding:10px;">
+                                                                    <i class="bi <?= htmlspecialchars($iconoCls) ?>" style="font-size:48px; color:#5f86b7;"></i>
+                                                                    <span style="color:#5f7ea3; font-size:11px; text-transform:uppercase; letter-spacing:1px;"><?= htmlspecialchars(strtoupper($extArchivo)) ?></span>
+                                                                    <small style="color:#7c90ac; line-height:1.25;">Vista previa disponible al abrir el archivo.</small>
                                                                 </div>
                                                             <?php else: ?>
                                                                 <div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
-                                                                    <i class="bi <?= htmlspecialchars($iconoCls) ?>" style="font-size:48px; color:#7fa8d8;"></i>
-                                                                    <span style="color:#aec1d8; font-size:11px; text-transform:uppercase; letter-spacing:1px;"><?= htmlspecialchars(strtoupper($extArchivo)) ?></span>
+                                                                    <i class="bi <?= htmlspecialchars($iconoCls) ?>" style="font-size:48px; color:#5f86b7;"></i>
+                                                                    <span style="color:#5f7ea3; font-size:11px; text-transform:uppercase; letter-spacing:1px;"><?= htmlspecialchars(strtoupper($extArchivo)) ?></span>
                                                                 </div>
                                                             <?php endif; ?>
                                                         </div>
@@ -973,6 +1434,12 @@ if ($tieneSubmodulos) {
                                                                         <input type="hidden" name="accion" value="eliminar">
                                                                         <input type="hidden" name="modulo" value="<?= htmlspecialchars($clave) ?>">
                                                                         <input type="hidden" name="archivo" value="<?= htmlspecialchars($nombreArchivo, ENT_QUOTES, 'UTF-8') ?>">
+                                                                        <input type="hidden" name="contexto_nivel" value="<?= (int)($tema['nivel'] ?? 0) ?>">
+                                                                        <input type="hidden" name="contexto_modulo" value="<?= (int)($tema['modulo_numero'] ?? 0) ?>">
+                                                                        <input type="hidden" name="contexto_categoria" value="<?= htmlspecialchars($categoriaTema, ENT_QUOTES, 'UTF-8') ?>">
+                                                                        <input type="hidden" name="contexto_leccion" value="<?= htmlspecialchars((string)($tema['leccion'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                                                        <input type="hidden" name="contexto_open_lote" value="<?= htmlspecialchars((string)($tema['lote_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                                                        <input type="hidden" name="contexto_open_panel" value="archivos">
                                                                         <button type="submit" class="btn btn-sm btn-danger" style="font-size:11px; padding:3px 8px;">Eliminar</button>
                                                                     </form>
                                                                 <?php endif; ?>
@@ -989,7 +1456,7 @@ if ($tieneSubmodulos) {
                             <?php endforeach; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="6" style="text-align:center; color:#6b7d95;">No hay temas cargados en este submódulo.</td>
+                                <td colspan="3" style="text-align:center; color:#6b7d95;">No hay temas cargados en este submódulo.</td>
                             </tr>
                         <?php endif; ?>
                         </tbody>
@@ -997,17 +1464,12 @@ if ($tieneSubmodulos) {
                     </div>
                 </div>
             </div>
-        <?php endforeach; ?>
-
-        <?php if ($usaTarjetasTipoMaterial): ?></div>
-            <div id="cap-detail-view" class="cap-detail-view is-hidden" aria-live="polite">
-                <div class="cap-detail-header">
-                    <h4 id="cap-detail-title">Selecciona una categoría de material</h4>
-                    <small id="cap-detail-meta"></small>
-                </div>
-                <div id="cap-detail-body" class="cap-detail-body"></div>
-            </div>
+        <?php $bloqueIndex++; endforeach; ?>
+        <?php if ($esCapacitacionDestino && $lastNivelRender !== null): ?>
+            </div></div><?php // cierre .cap-destino-grid y .cap-nivel-section de la última sección ?>
         <?php endif; ?>
+
+        <?php if ($usaTarjetasTipoMaterial && !$esCapacitacionDestino): ?></div><?php endif; ?>
     <?php else: ?>
         <p style="margin:0; color:#666;">No hay temas cargados en este módulo.</p>
     <?php endif; ?>
@@ -1021,6 +1483,10 @@ if ($tieneSubmodulos) {
     <input type="hidden" name="accion" value="eliminar_tema">
     <input type="hidden" name="modulo" value="<?= htmlspecialchars($clave) ?>">
     <input type="hidden" id="form-eliminar-tema-lote" name="lote_id" value="">
+    <input type="hidden" id="form-eliminar-tema-contexto-nivel" name="contexto_nivel" value="0">
+    <input type="hidden" id="form-eliminar-tema-contexto-modulo" name="contexto_modulo" value="0">
+    <input type="hidden" id="form-eliminar-tema-contexto-categoria" name="contexto_categoria" value="">
+    <input type="hidden" id="form-eliminar-tema-contexto-leccion" name="contexto_leccion" value="">
 </form>
 
 <div id="modal-vistas-material" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; overflow:auto;">
@@ -1092,6 +1558,7 @@ if ($tieneSubmodulos) {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var configCapDestino = <?= json_encode($configCapacitacionDestino, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var rutaEvaluacionesCap = <?= json_encode(PUBLIC_URL . '?url=home/discipular/evaluaciones&from_material=1', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
     function poblarModulosCapDestino(selectNivel, selectModulo) {
         if (!selectNivel || !selectModulo) {
@@ -1349,8 +1816,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    var tabsMainCapDestino = document.querySelectorAll('.js-cap-main-tab');
     var capEntryCards = document.querySelectorAll('.js-open-cap-modal');
+    var esCapacitacionDestinoVista = <?= $esCapacitacionDestino ? 'true' : 'false' ?>;
+    var capInlinePanel = document.getElementById('cap-inline-panel');
 
     function marcarTarjetaPrincipalActiva(categoriaObjetivo) {
         var categoria = (categoriaObjetivo || '').toLowerCase();
@@ -1368,109 +1836,376 @@ document.addEventListener('DOMContentLoaded', function() {
 
         marcarTarjetaPrincipalActiva(categoria);
 
-        tabsMainCapDestino.forEach(function(tabBtn) {
-            var target = (tabBtn.getAttribute('data-target') || '').toLowerCase();
-            var activo = target === categoria;
-            tabBtn.classList.toggle('is-active', activo);
-            tabBtn.setAttribute('aria-selected', activo ? 'true' : 'false');
-        });
-
         document.querySelectorAll('.js-cap-block').forEach(function(panel) {
             var categoriaPanel = (panel.getAttribute('data-cap-categoria') || '').toLowerCase();
             var mostrar = categoriaPanel === categoria;
             panel.classList.toggle('is-hidden', !mostrar);
             panel.classList.remove('is-selected');
+            var body = panel.querySelector('.submodulo-body');
+            if (body) {
+                body.style.display = 'none';
+            }
         });
 
-        if (capDetailView && capDetailBody) {
-            restaurarDetalleCapacitacion();
-            capDetailView.classList.add('is-hidden');
-            capDetailBody.innerHTML = '';
-            if (capDetailTitle) {
-                capDetailTitle.textContent = 'Selecciona un nivel y módulo';
-            }
-            if (capDetailMeta) {
-                capDetailMeta.textContent = '';
-            }
-        }
+        // Oculta secciones de modulo vacias segun la categoria activa
+        document.querySelectorAll('.cap-nivel-section').forEach(function(section) {
+            var visibles = section.querySelectorAll('.js-cap-block:not(.is-hidden)').length;
+            section.style.display = visibles > 0 ? '' : 'none';
+        });
+
     }
 
-    var capInlinePanel = document.getElementById('cap-inline-panel');
+    function normalizarLeccion(texto) {
+        return String(texto || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[^\w\s-]/g, '')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
 
-    document.querySelectorAll('.js-open-cap-modal').forEach(function(card) {
-        var abrirPanel = function() {
-            if (!capInlinePanel) {
+    function abrirPanelCapInline() {
+        if (!capInlinePanel) {
+            return;
+        }
+        capInlinePanel.classList.add('is-open');
+        capInlinePanel.setAttribute('aria-hidden', 'false');
+    }
+
+    function aplicarFiltroCapacitacion(state) {
+        var nivelObjetivo = String(state.nivel || '');
+        var moduloObjetivo = String(state.modulo || '');
+        var categoriaObjetivo = String(state.categoria || 'clase').toLowerCase();
+        var leccionObjetivo = normalizarLeccion(state.leccion || '');
+
+        abrirPanelCapInline();
+
+        document.querySelectorAll('.cap-nivel-section').forEach(function(section) {
+            var nivelSeccion = String(section.getAttribute('data-modulo-grupo') || '');
+            section.style.display = nivelSeccion === nivelObjetivo ? '' : 'none';
+            section.classList.remove('is-focus-mode');
+        });
+
+        document.querySelectorAll('.js-cap-block').forEach(function(panel) {
+            var nivelPanel = String(panel.getAttribute('data-cap-nivel') || '');
+            var moduloPanel = String(panel.getAttribute('data-cap-modulo') || '');
+            var categoriaPanel = String(panel.getAttribute('data-cap-categoria') || '').toLowerCase();
+
+            var mostrar = nivelPanel === nivelObjetivo
+                && moduloPanel === moduloObjetivo
+                && categoriaPanel === categoriaObjetivo;
+
+            panel.classList.toggle('is-hidden', !mostrar);
+            panel.classList.toggle('is-selected', mostrar);
+            panel.classList.toggle('is-focused', mostrar);
+
+            var body = panel.querySelector('.submodulo-body');
+            if (body) {
+                body.style.display = mostrar ? 'block' : 'none';
+            }
+
+            if (!mostrar) {
                 return;
             }
-            var target = card.getAttribute('data-target') || 'clase';
-            activarCategoriaPrincipal(target);
-            capInlinePanel.classList.add('is-open');
-            capInlinePanel.setAttribute('aria-hidden', 'false');
-            capInlinePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            // Si solo hay un bloque visible (ej. UV sin niveles/módulos), lo seleccionamos automáticamente
-            var bloquesVisibles = Array.from(document.querySelectorAll('.js-cap-block')).filter(function(b) {
-                return !b.classList.contains('is-hidden');
+
+            panel.querySelectorAll('.js-tema-row').forEach(function(mainRow) {
+                var key = String(mainRow.getAttribute('data-tema-key') || '');
+                var leccionRow = normalizarLeccion(mainRow.getAttribute('data-cap-leccion') || '');
+                var coincideLeccion = (leccionObjetivo === '' || leccionRow === leccionObjetivo);
+
+                mainRow.style.display = coincideLeccion ? '' : 'none';
+
+                if (!coincideLeccion && key !== '') {
+                    panel.querySelectorAll('tr[data-tema-key="' + key.replace(/"/g, '\\"') + '"]').forEach(function(relatedRow) {
+                        relatedRow.style.display = 'none';
+                    });
+                }
             });
-            if (bloquesVisibles.length === 1) {
-                mostrarDetalleCapacitacion(bloquesVisibles[0]);
-            }
-        };
-
-        card.addEventListener('click', abrirPanel);
-        card.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                abrirPanel();
-            }
         });
-    });
-
-    var capDetailView = document.getElementById('cap-detail-view');
-    var capDetailTitle = document.getElementById('cap-detail-title');
-    var capDetailMeta = document.getElementById('cap-detail-meta');
-    var capDetailBody = document.getElementById('cap-detail-body');
-    var capDetalleActualBloque = null;
-    var capDetalleActualBody = null;
-
-    function restaurarDetalleCapacitacion() {
-        if (!capDetalleActualBloque || !capDetalleActualBody) {
-            return;
-        }
-        capDetalleActualBloque.appendChild(capDetalleActualBody);
-        capDetalleActualBody.style.display = 'none';
-        capDetalleActualBloque = null;
-        capDetalleActualBody = null;
     }
 
-    function mostrarDetalleCapacitacion(bloque) {
-        if (!bloque || !capDetailView || !capDetailBody) {
-            return;
+    var folderExplorer = document.getElementById('cap-folder-explorer');
+    if (esCapacitacionDestinoVista && folderExplorer) {
+        var contNiveles = document.getElementById('cap-folder-niveles');
+        var contModulos = document.getElementById('cap-folder-modulos');
+        var contLecciones = document.getElementById('cap-folder-lecciones');
+        var contCategorias = document.getElementById('cap-folder-categorias');
+
+        var carpetaState = {
+            nivel: '1',
+            modulo: '',
+            leccion: '',
+            categoria: 'clase'
+        };
+
+        var queryParams = new URLSearchParams(window.location.search || '');
+        var nivelQuery = String(queryParams.get('cap_nivel') || '').trim();
+        var moduloQuery = String(queryParams.get('cap_modulo') || '').trim();
+        var categoriaQuery = String(queryParams.get('cap_categoria') || '').trim().toLowerCase();
+        var leccionQuery = String(queryParams.get('cap_leccion') || '').trim();
+        var openLoteQuery = String(queryParams.get('cap_open_lote') || '').trim();
+        var openPanelQuery = String(queryParams.get('cap_open_panel') || '').trim().toLowerCase();
+        var aperturaRestaurada = false;
+
+        if (nivelQuery !== '' && Object.prototype.hasOwnProperty.call(configCapDestino, nivelQuery)) {
+            carpetaState.nivel = nivelQuery;
+        }
+        if (moduloQuery !== '') {
+            carpetaState.modulo = moduloQuery;
+        }
+        if (categoriaQuery === 'clase' || categoriaQuery === 'profesor') {
+            carpetaState.categoria = categoriaQuery;
+        }
+        if (leccionQuery !== '') {
+            carpetaState.leccion = leccionQuery;
         }
 
-        document.querySelectorAll('.js-cap-block').forEach(function(item) {
-            item.classList.remove('is-selected');
+        function temasCapDestino() {
+            return Array.prototype.slice.call(document.querySelectorAll('.js-tema-row'));
+        }
+
+        function renderNiveles() {
+            if (!contNiveles) return;
+            contNiveles.innerHTML = '';
+
+            Object.keys(configCapDestino).forEach(function(nivel) {
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'folder-node' + (String(carpetaState.nivel) === String(nivel) ? ' is-active' : '');
+                btn.innerHTML = '<i class="bi bi-folder2-open"></i> Nivel ' + nivel;
+                btn.addEventListener('click', function() {
+                    carpetaState.nivel = String(nivel);
+                    carpetaState.modulo = '';
+                    carpetaState.leccion = '';
+                    renderNiveles();
+                    renderModulos();
+                    renderLecciones();
+                    renderCategorias();
+                });
+                contNiveles.appendChild(btn);
+            });
+        }
+
+        function renderModulos() {
+            if (!contModulos) return;
+            contModulos.innerHTML = '';
+
+            var modulos = configCapDestino[String(carpetaState.nivel)] || [];
+            if (!carpetaState.modulo && modulos.length > 0) {
+                carpetaState.modulo = String(modulos[0]);
+            }
+
+            modulos.forEach(function(moduloNum) {
+                var modulo = String(moduloNum);
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'folder-node' + (carpetaState.modulo === modulo ? ' is-active' : '');
+                btn.innerHTML = '<i class="bi bi-folder"></i> Módulo ' + modulo;
+                btn.addEventListener('click', function() {
+                    carpetaState.modulo = modulo;
+                    carpetaState.leccion = '';
+                    renderModulos();
+                    renderLecciones();
+                    renderCategorias();
+                });
+                contModulos.appendChild(btn);
+            });
+        }
+
+        function renderLecciones() {
+            if (!contLecciones) return;
+            contLecciones.innerHTML = '';
+
+            var accesos = document.createElement('div');
+            accesos.style.display = 'flex';
+            accesos.style.gap = '8px';
+            accesos.style.flexWrap = 'wrap';
+            accesos.style.marginBottom = '8px';
+
+            var btnLecciones = document.createElement('button');
+            btnLecciones.type = 'button';
+            btnLecciones.className = 'folder-node' + (carpetaState.categoria === 'clase' ? ' is-active' : '');
+            btnLecciones.innerHTML = '<i class="bi bi-book"></i> Lecciones';
+            btnLecciones.addEventListener('click', function() {
+                carpetaState.categoria = 'clase';
+                carpetaState.leccion = '';
+                renderCategorias();
+                renderLecciones();
+                aplicarFiltroCapacitacion(carpetaState);
+            });
+            accesos.appendChild(btnLecciones);
+
+            var btnEvaluaciones = document.createElement('button');
+            btnEvaluaciones.type = 'button';
+            btnEvaluaciones.className = 'folder-node' + (carpetaState.categoria === 'evaluaciones' ? ' is-active' : '');
+            btnEvaluaciones.innerHTML = '<i class="bi bi-journal-check"></i> Evaluaciones';
+            btnEvaluaciones.addEventListener('click', function() {
+                carpetaState.categoria = 'evaluaciones';
+                renderLecciones();
+                var url = rutaEvaluacionesCap
+                    + '&nivel=' + encodeURIComponent(String(carpetaState.nivel || ''))
+                    + '&modulo=' + encodeURIComponent(String(carpetaState.modulo || ''))
+                    + '&leccion=' + encodeURIComponent(String(carpetaState.leccion || 'Sin lección'));
+                window.location.href = url;
+            });
+            accesos.appendChild(btnEvaluaciones);
+
+            contLecciones.appendChild(accesos);
+
+            var mapa = {};
+            temasCapDestino().forEach(function(row) {
+                if (String(row.getAttribute('data-cap-nivel') || '') !== String(carpetaState.nivel)) return;
+                if (String(row.getAttribute('data-cap-modulo') || '') !== String(carpetaState.modulo)) return;
+
+                var leccionRaw = String(row.getAttribute('data-cap-leccion') || 'Sin lección');
+                var leccionKey = normalizarLeccion(leccionRaw);
+                if (!mapa[leccionKey]) {
+                    mapa[leccionKey] = { label: leccionRaw, total: 0 };
+                }
+                mapa[leccionKey].total += 1;
+            });
+
+            var keys = Object.keys(mapa);
+            var totalTemas = 0;
+            keys.forEach(function(leccionKey) {
+                totalTemas += (mapa[leccionKey] && mapa[leccionKey].total) ? mapa[leccionKey].total : 0;
+            });
+
+            var resumenTexto = document.createElement('small');
+            resumenTexto.style.color = '#637087';
+            resumenTexto.style.display = 'block';
+            resumenTexto.style.marginTop = '2px';
+            if (keys.length === 0) {
+                resumenTexto.textContent = 'Sin lecciones registradas en este módulo.';
+            } else {
+                resumenTexto.textContent = 'Lecciones registradas: ' + totalTemas + ' items';
+            }
+            contLecciones.appendChild(resumenTexto);
+
+            // Sin subcarpetas por lección: mostrar todo lo del nivel/módulo actual.
+            carpetaState.leccion = '';
+
+            aplicarFiltroCapacitacion(carpetaState);
+        }
+
+        function renderCategorias() {
+            if (!contCategorias) return;
+            contCategorias.innerHTML = '';
+
+            ['profesor', 'clase'].forEach(function(cat) {
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'folder-node' + (carpetaState.categoria === cat ? ' is-active' : '');
+                if (cat === 'clase') {
+                    btn.innerHTML = '<i class="bi bi-folder2"></i> Material clase';
+                } else {
+                    btn.innerHTML = '<i class="bi bi-folder2"></i> Material ' + cat;
+                }
+                btn.addEventListener('click', function() {
+                    carpetaState.categoria = cat;
+                    renderCategorias();
+                    aplicarFiltroCapacitacion(carpetaState);
+                });
+                contCategorias.appendChild(btn);
+            });
+        }
+
+        function restaurarFilaAbierta() {
+            if (aperturaRestaurada || openLoteQuery === '') {
+                return;
+            }
+
+            var mainRow = null;
+            document.querySelectorAll('.js-tema-row').forEach(function(row) {
+                if (mainRow) {
+                    return;
+                }
+                if (String(row.getAttribute('data-lote-id') || '') === openLoteQuery) {
+                    mainRow = row;
+                }
+            });
+
+            if (!mainRow || mainRow.style.display === 'none') {
+                return;
+            }
+
+            var temaKey = String(mainRow.getAttribute('data-tema-key') || '');
+            var bloque = mainRow.closest('.js-cap-block');
+            if (bloque) {
+                var body = bloque.querySelector('.submodulo-body');
+                if (body) {
+                    body.style.display = 'block';
+                }
+                bloque.classList.add('is-selected');
+                bloque.classList.add('is-focused');
+                var seccion = bloque.closest('.cap-nivel-section');
+                if (seccion) {
+                    seccion.classList.add('is-focus-mode');
+                }
+            }
+
+            var filaObjetivo = null;
+            if (openPanelQuery === 'editar') {
+                document.querySelectorAll('tr[data-tema-key="' + temaKey.replace(/"/g, '\\"') + '"]').forEach(function(row) {
+                    if (filaObjetivo) {
+                        return;
+                    }
+                    var rowId = String(row.id || '');
+                    if (rowId.indexOf('tema-edit-') === 0) {
+                        filaObjetivo = row;
+                    }
+                });
+            } else if (openPanelQuery === 'agregar') {
+                document.querySelectorAll('tr[data-tema-key="' + temaKey.replace(/"/g, '\\"') + '"]').forEach(function(row) {
+                    if (filaObjetivo) {
+                        return;
+                    }
+                    var rowId = String(row.id || '');
+                    if (rowId.indexOf('tema-add-files-') === 0) {
+                        filaObjetivo = row;
+                    }
+                });
+            } else {
+                filaObjetivo = document.getElementById(temaKey);
+            }
+
+            if (filaObjetivo) {
+                filaObjetivo.style.display = 'table-row';
+                filaObjetivo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+                mainRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            aperturaRestaurada = true;
+        }
+
+        renderNiveles();
+        renderModulos();
+        renderCategorias();
+        renderLecciones();
+        restaurarFilaAbierta();
+    } else {
+        document.querySelectorAll('.js-open-cap-modal').forEach(function(card) {
+            var abrirPanel = function() {
+                if (!capInlinePanel) {
+                    return;
+                }
+                var target = card.getAttribute('data-target') || 'clase';
+                activarCategoriaPrincipal(target);
+                capInlinePanel.classList.add('is-open');
+                capInlinePanel.setAttribute('aria-hidden', 'false');
+                capInlinePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            };
+
+            card.addEventListener('click', abrirPanel);
+            card.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    abrirPanel();
+                }
+            });
         });
-        bloque.classList.add('is-selected');
-
-        var body = bloque.querySelector('.submodulo-body');
-        if (!body) {
-            return;
-        }
-
-        restaurarDetalleCapacitacion();
-        capDetailBody.appendChild(body);
-        body.style.display = 'block';
-        capDetalleActualBloque = bloque;
-        capDetalleActualBody = body;
-
-        if (capDetailTitle) {
-            capDetailTitle.textContent = bloque.getAttribute('data-cap-titulo') || 'Detalle';
-        }
-        if (capDetailMeta) {
-            capDetailMeta.textContent = (bloque.getAttribute('data-cap-total') || '0') + ' tema(s)';
-        }
-
-        capDetailView.classList.remove('is-hidden');
     }
 
     document.querySelectorAll('.cap-destino-grid .submodulo-head').forEach(function(head) {
@@ -1479,7 +2214,54 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!bloque || bloque.classList.contains('is-hidden')) {
                 return;
             }
-            mostrarDetalleCapacitacion(bloque);
+
+            var body = bloque.querySelector('.submodulo-body');
+            if (!body) {
+                return;
+            }
+
+            if (esCapacitacionDestinoVista) {
+                var seccion = bloque.closest('.cap-nivel-section');
+                if (!seccion) {
+                    return;
+                }
+
+                var yaAbierto = body.style.display !== 'none' && body.style.display !== '';
+
+                seccion.querySelectorAll('.js-cap-block').forEach(function(item) {
+                    var itemBody = item.querySelector('.submodulo-body');
+                    if (itemBody) {
+                        itemBody.style.display = 'none';
+                    }
+                    item.classList.remove('is-selected');
+                    item.classList.remove('is-focused');
+                });
+
+                if (yaAbierto) {
+                    seccion.classList.remove('is-focus-mode');
+                    return;
+                }
+
+                seccion.classList.add('is-focus-mode');
+                body.style.display = 'block';
+                bloque.classList.add('is-selected');
+                bloque.classList.add('is-focused');
+                return;
+            }
+
+            var abrir = body.style.display === 'none' || body.style.display === '';
+            document.querySelectorAll('.js-cap-block').forEach(function(item) {
+                var itemBody = item.querySelector('.submodulo-body');
+                if (itemBody) {
+                    itemBody.style.display = 'none';
+                }
+                item.classList.remove('is-selected');
+            });
+
+            if (abrir) {
+                body.style.display = 'block';
+                bloque.classList.add('is-selected');
+            }
         });
     });
 
@@ -1492,6 +2274,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             row.style.display = (row.style.display === 'none' || row.style.display === '') ? 'table-row' : 'none';
+        });
+    });
+
+    document.querySelectorAll('.js-toggle-profesor-form').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var targetId = this.getAttribute('data-target');
+            var form = document.getElementById(targetId);
+            if (!form) {
+                return;
+            }
+            form.classList.toggle('is-open');
         });
     });
 
@@ -1611,6 +2404,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // === Eliminar clase ===
     var formEliminarTema = document.getElementById('form-eliminar-tema');
     var formEliminarTemaLote = document.getElementById('form-eliminar-tema-lote');
+    var formEliminarTemaContextoNivel = document.getElementById('form-eliminar-tema-contexto-nivel');
+    var formEliminarTemaContextoModulo = document.getElementById('form-eliminar-tema-contexto-modulo');
+    var formEliminarTemaContextoCategoria = document.getElementById('form-eliminar-tema-contexto-categoria');
+    var formEliminarTemaContextoLeccion = document.getElementById('form-eliminar-tema-contexto-leccion');
 
     document.querySelectorAll('.js-eliminar-tema').forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -1620,6 +2417,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             formEliminarTemaLote.value = lote;
+            if (formEliminarTemaContextoNivel) {
+                formEliminarTemaContextoNivel.value = String(this.getAttribute('data-contexto-nivel') || '0');
+            }
+            if (formEliminarTemaContextoModulo) {
+                formEliminarTemaContextoModulo.value = String(this.getAttribute('data-contexto-modulo') || '0');
+            }
+            if (formEliminarTemaContextoCategoria) {
+                formEliminarTemaContextoCategoria.value = String(this.getAttribute('data-contexto-categoria') || '');
+            }
+            if (formEliminarTemaContextoLeccion) {
+                formEliminarTemaContextoLeccion.value = String(this.getAttribute('data-contexto-leccion') || '');
+            }
             formEliminarTema.submit();
         });
     });

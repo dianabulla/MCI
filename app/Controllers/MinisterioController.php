@@ -325,6 +325,166 @@ class MinisterioController extends BaseController {
         return $metricas;
     }
 
+    private function calcularEstadoMetaPorPorcentaje($porcentaje) {
+        $porcentaje = (float)$porcentaje;
+        if ($porcentaje >= 85) {
+            return [
+                'key' => 'verde',
+                'label' => 'Va bien',
+                'color' => '#1f9d55'
+            ];
+        }
+
+        if ($porcentaje >= 60) {
+            return [
+                'key' => 'amarillo',
+                'label' => 'En riesgo',
+                'color' => '#d9a600'
+            ];
+        }
+
+        return [
+            'key' => 'rojo',
+            'label' => 'Crítico',
+            'color' => '#d64545'
+        ];
+    }
+
+    private function calcularAvanceMetasTiempoPorMinisterio(array $ministerioIds, array $personas, array $metasDetalle, $fechaReferencia) {
+        $timestampRef = strtotime((string)$fechaReferencia);
+        if ($timestampRef === false) {
+            $timestampRef = time();
+        }
+
+        [$semanaInicio, $semanaFin] = $this->calcularRangoSemanaDomingoADomingo(date('Y-m-d', $timestampRef));
+        $mesInicio = date('Y-m-01', $timestampRef);
+        $mesFin = date('Y-m-t', $timestampRef);
+
+        $conteo = [];
+        foreach ($ministerioIds as $idMinisterioTmp) {
+            $conteo[(int)$idMinisterioTmp] = [
+                'semana' => 0,
+                'mes' => 0,
+                'anio' => 0,
+            ];
+        }
+
+        foreach ($personas as $persona) {
+            $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
+            if (!isset($conteo[$idMinisterio])) {
+                continue;
+            }
+
+            $fechaRegistro = substr((string)($persona['Fecha_Registro'] ?? ''), 0, 10);
+            if ($fechaRegistro === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaRegistro)) {
+                continue;
+            }
+
+            if ($fechaRegistro >= $semanaInicio && $fechaRegistro <= $semanaFin) {
+                $conteo[$idMinisterio]['semana']++;
+            }
+
+            if ($fechaRegistro >= $mesInicio && $fechaRegistro <= $mesFin) {
+                $conteo[$idMinisterio]['mes']++;
+            }
+
+            $anioMetaMinisterio = (int)($metasDetalle[$idMinisterio]['anio_meta'] ?? date('Y', $timestampRef));
+            if ($anioMetaMinisterio < 2000 || $anioMetaMinisterio > 2100) {
+                $anioMetaMinisterio = (int)date('Y', $timestampRef);
+            }
+            $anioRegistro = (int)substr($fechaRegistro, 0, 4);
+            if ($anioRegistro === $anioMetaMinisterio) {
+                $conteo[$idMinisterio]['anio']++;
+            }
+        }
+
+        $resultado = [];
+        foreach ($ministerioIds as $idMinisterioTmp) {
+            $idMinisterio = (int)$idMinisterioTmp;
+            $meta = $metasDetalle[$idMinisterio] ?? [];
+
+            $metaAnual = max(0, (int)($meta['meta_anual'] ?? 0));
+            $metaMensual = max(0, (int)($meta['meta_mensual'] ?? 0));
+            $metaSemanal = max(0, (int)($meta['meta_semanal'] ?? 0));
+            $anioMeta = (int)($meta['anio_meta'] ?? date('Y', $timestampRef));
+            if ($anioMeta < 2000 || $anioMeta > 2100) {
+                $anioMeta = (int)date('Y', $timestampRef);
+            }
+
+            if ($metaAnual <= 0) {
+                $metaAnual = max(0, (int)(($meta['meta_ganados_s1'] ?? 0) + ($meta['meta_ganados_s2'] ?? 0)));
+            }
+            if ($metaMensual <= 0 && $metaAnual > 0) {
+                $metaMensual = (int)round($metaAnual / 12);
+            }
+            if ($metaSemanal <= 0 && $metaAnual > 0) {
+                $metaSemanal = (int)ceil($metaAnual / 52);
+            }
+
+            $logradoSemana = (int)($conteo[$idMinisterio]['semana'] ?? 0);
+            $logradoMes = (int)($conteo[$idMinisterio]['mes'] ?? 0);
+            $logradoAnio = (int)($conteo[$idMinisterio]['anio'] ?? 0);
+
+            $porcentajeSemana = $metaSemanal > 0 ? min(200, round(($logradoSemana / $metaSemanal) * 100, 1)) : 0;
+            $porcentajeMes = $metaMensual > 0 ? min(200, round(($logradoMes / $metaMensual) * 100, 1)) : 0;
+            $porcentajeAnio = $metaAnual > 0 ? min(200, round(($logradoAnio / $metaAnual) * 100, 1)) : 0;
+
+            $diasSemanaTranscurridos = (int)floor((strtotime(date('Y-m-d', $timestampRef)) - strtotime($semanaInicio)) / 86400) + 1;
+            $diasSemanaTranscurridos = max(1, min(7, $diasSemanaTranscurridos));
+            $esperadoSemana = $metaSemanal > 0 ? (int)round($metaSemanal * ($diasSemanaTranscurridos / 7)) : 0;
+
+            $diasMesTotal = (int)date('t', $timestampRef);
+            $diasMesTranscurridos = (int)date('j', $timestampRef);
+            $esperadoMes = $metaMensual > 0 ? (int)round($metaMensual * ($diasMesTranscurridos / max(1, $diasMesTotal))) : 0;
+
+            $inicioAnioMeta = strtotime($anioMeta . '-01-01');
+            $finAnioMeta = strtotime($anioMeta . '-12-31');
+            $diasAnioTotal = (int)floor(($finAnioMeta - $inicioAnioMeta) / 86400) + 1;
+            $fechaRefDia = strtotime(date('Y-m-d', $timestampRef));
+            if ((int)date('Y', $timestampRef) < $anioMeta) {
+                $diasAnioTranscurridos = 0;
+            } elseif ((int)date('Y', $timestampRef) > $anioMeta) {
+                $diasAnioTranscurridos = $diasAnioTotal;
+            } else {
+                $diasAnioTranscurridos = (int)floor(($fechaRefDia - $inicioAnioMeta) / 86400) + 1;
+                $diasAnioTranscurridos = max(1, min($diasAnioTotal, $diasAnioTranscurridos));
+            }
+            $esperadoAnio = $metaAnual > 0 ? (int)round($metaAnual * ($diasAnioTranscurridos / max(1, $diasAnioTotal))) : 0;
+
+            $resultado[$idMinisterio] = [
+                'semana' => [
+                    'meta' => $metaSemanal,
+                    'logrado' => $logradoSemana,
+                    'porcentaje' => $porcentajeSemana,
+                    'esperado' => $esperadoSemana,
+                    'justo_a_tiempo' => $logradoSemana >= $esperadoSemana,
+                    'estado' => $this->calcularEstadoMetaPorPorcentaje($porcentajeSemana),
+                    'rango' => ['inicio' => $semanaInicio, 'fin' => $semanaFin]
+                ],
+                'mes' => [
+                    'meta' => $metaMensual,
+                    'logrado' => $logradoMes,
+                    'porcentaje' => $porcentajeMes,
+                    'esperado' => $esperadoMes,
+                    'justo_a_tiempo' => $logradoMes >= $esperadoMes,
+                    'estado' => $this->calcularEstadoMetaPorPorcentaje($porcentajeMes),
+                    'periodo' => ['inicio' => $mesInicio, 'fin' => $mesFin]
+                ],
+                'anio' => [
+                    'meta' => $metaAnual,
+                    'logrado' => $logradoAnio,
+                    'porcentaje' => $porcentajeAnio,
+                    'esperado' => $esperadoAnio,
+                    'justo_a_tiempo' => $logradoAnio >= $esperadoAnio,
+                    'estado' => $this->calcularEstadoMetaPorPorcentaje($porcentajeAnio),
+                    'anio_meta' => $anioMeta
+                ]
+            ];
+        }
+
+        return $resultado;
+    }
+
     public function index() {
         if (!AuthController::tienePermiso('ministerios', 'ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
@@ -349,6 +509,8 @@ class MinisterioController extends BaseController {
         $miembros = $this->personaModel->getActivosByMinisterioIds($ministerioIds);
         $personasVisibles = $this->personaModel->getAllWithRole($filtroPersonas, null, 'Activo');
         $metricasMinisterio = $this->calcularMetricasMinisterio($ministerioIds, $personasVisibles, $fechaInicio, $fechaFin);
+        $metasDetalle = $this->ministerioModel->getMetasDetalleByMinisterioIds($ministerioIds);
+        $avanceMetasTiempo = $this->calcularAvanceMetasTiempoPorMinisterio($ministerioIds, $personasVisibles, $metasDetalle, $fechaReferencia);
 
         $filtroCelulas = DataIsolation::generarFiltroCelulas();
         $celulasVisibles = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
@@ -445,7 +607,9 @@ class MinisterioController extends BaseController {
                 'descripcion' => (string)($ministerio['Descripcion'] ?? ''),
                 'rows' => $rows,
                 'total_personas' => count($rows),
-                'metricas' => $metricasMinisterio[$idMinisterio] ?? null
+                'metricas' => $metricasMinisterio[$idMinisterio] ?? null,
+                'metas_detalle' => $metasDetalle[$idMinisterio] ?? null,
+                'avance_metas_tiempo' => $avanceMetasTiempo[$idMinisterio] ?? null
             ];
         }
 
@@ -656,6 +820,48 @@ class MinisterioController extends BaseController {
         return $idMinisterioUsuario > 0 && $idMinisterioUsuario === $idMinisterio;
     }
 
+    private function calcularMetasAutomaticasPorAnio($metaAnual, $anioMeta) {
+        $metaAnual = max(0, (int)$metaAnual);
+        $anioMeta = (int)$anioMeta;
+        if ($anioMeta < 2000 || $anioMeta > 2100) {
+            $anioMeta = (int)date('Y');
+        }
+
+        $inicio = new DateTime($anioMeta . '-01-01');
+        $fin = new DateTime($anioMeta . '-12-31');
+        $dias = (int)$inicio->diff($fin)->days + 1;
+        $semanas = (int)ceil($dias / 7);
+
+        if ($metaAnual <= 0) {
+            return [
+                'meta_anual' => 0,
+                'meta_mensual' => 0,
+                'meta_semanal' => 0,
+                'anio_meta' => $anioMeta,
+                'meta_ganados_s1' => 0,
+                'meta_ganados_s2' => 0,
+            ];
+        }
+
+        $metaMensual = (int)round($metaAnual / 12);
+        $metaSemanal = (int)ceil($metaAnual / max(1, $semanas));
+
+        // Distribución anual en semestres usando días reales del año.
+        $diasS1 = (int)(new DateTime($anioMeta . '-01-01'))->diff(new DateTime($anioMeta . '-06-30'))->days + 1;
+        $diasS2 = max(1, $dias - $diasS1);
+        $metaS1 = (int)round($metaAnual * ($diasS1 / $dias));
+        $metaS2 = max(0, $metaAnual - $metaS1);
+
+        return [
+            'meta_anual' => $metaAnual,
+            'meta_mensual' => $metaMensual,
+            'meta_semanal' => $metaSemanal,
+            'anio_meta' => $anioMeta,
+            'meta_ganados_s1' => $metaS1,
+            'meta_ganados_s2' => $metaS2,
+        ];
+    }
+
     public function actualizarMeta() {
         $esAdmin = AuthController::esAdministrador();
         $puedeEditar = AuthController::tienePermiso('ministerios', 'editar');
@@ -709,6 +915,14 @@ class MinisterioController extends BaseController {
         $returnUrl = $_POST['return_url'] ?? ($_GET['return_url'] ?? null);
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $fechaMeta = trim((string)($_POST['meta_anio_fecha'] ?? ''));
+            $anioMeta = (int)($_POST['anio_meta'] ?? 0);
+            if ($fechaMeta !== '' && preg_match('/^(\d{4})-\d{2}-\d{2}$/', $fechaMeta, $mFechaMeta) === 1) {
+                $anioMeta = (int)$mFechaMeta[1];
+            }
+
+            $metaAuto = $this->calcularMetasAutomaticasPorAnio((int)($_POST['meta_anual'] ?? 0), $anioMeta);
+
             $data = [
                 'Nombre_Ministerio' => $_POST['nombre_ministerio'],
                 'Descripcion' => $_POST['descripcion']
@@ -768,6 +982,14 @@ class MinisterioController extends BaseController {
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $fechaMeta = trim((string)($_POST['meta_anio_fecha'] ?? ''));
+            $anioMeta = (int)($_POST['anio_meta'] ?? 0);
+            if ($fechaMeta !== '' && preg_match('/^(\d{4})-\d{2}-\d{2}$/', $fechaMeta, $mFechaMeta) === 1) {
+                $anioMeta = (int)$mFechaMeta[1];
+            }
+
+            $metaAuto = $this->calcularMetasAutomaticasPorAnio((int)($_POST['meta_anual'] ?? 0), $anioMeta);
+
             $data = [
                 'Nombre_Ministerio' => $_POST['nombre_ministerio'],
                 'Descripcion' => $_POST['descripcion']
@@ -775,8 +997,12 @@ class MinisterioController extends BaseController {
             
             $this->ministerioModel->update($id, $data);
             $this->ministerioModel->setMetasDetalle($id, [
-                'meta_ganados_s1' => $_POST['meta_ganados_s1'] ?? 0,
-                'meta_ganados_s2' => $_POST['meta_ganados_s2'] ?? 0,
+                'meta_anual' => $metaAuto['meta_anual'],
+                'meta_mensual' => $metaAuto['meta_mensual'],
+                'meta_semanal' => $metaAuto['meta_semanal'],
+                'anio_meta' => $metaAuto['anio_meta'],
+                'meta_ganados_s1' => $metaAuto['meta_ganados_s1'],
+                'meta_ganados_s2' => $metaAuto['meta_ganados_s2'],
                 'meta_uv_s1' => $_POST['meta_uv_s1'] ?? 0,
                 'meta_uv_s2' => $_POST['meta_uv_s2'] ?? 0,
                 'meta_encuentro_s1' => $_POST['meta_encuentro_s1'] ?? 0,

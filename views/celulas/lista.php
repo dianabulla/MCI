@@ -103,6 +103,7 @@ $slugMinisterio = static function ($texto) {
                 <thead>
                     <tr>
                         <th>Célula</th>
+                        <th style="width:120px;">Asistentes</th>
                         <th>Acción</th>
                     </tr>
                 </thead>
@@ -110,6 +111,11 @@ $slugMinisterio = static function ($texto) {
                     <?php foreach ($celulasMinisterio as $section): ?>
                         <tr>
                             <td><strong><?= htmlspecialchars((string)$section['label']) ?></strong></td>
+                            <td>
+                                <span class="celulas-count-badge" title="Personas activas en esta célula">
+                                    <?= (int)($section['total_personas'] ?? 0) ?>
+                                </span>
+                            </td>
                             <td>
                                 <div class="celulas-actions-row">
                                     <a href="<?= PUBLIC_URL ?>?url=celulas/detalle&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon" title="Ver personas" aria-label="Ver personas">
@@ -176,6 +182,20 @@ $slugMinisterio = static function ($texto) {
     font-size: 12px;
     line-height: 1.25;
     vertical-align: middle;
+}
+
+.celulas-count-badge {
+    display: inline-flex;
+    min-width: 34px;
+    height: 24px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: #e8f1ff;
+    border: 1px solid #c9dcfb;
+    color: #1f4f8a;
+    font-weight: 700;
 }
 
 .celulas-data-table th:nth-child(2),
