@@ -1018,7 +1018,14 @@ if ($tieneSubmodulos) {
                 $nivelBloqueProf = (int)($bloque['nivel'] ?? 0);
                 $moduloBloqueProf = (int)($bloque['modulo_numero'] ?? 0);
                 $keyProfesorBloque = $nivelBloqueProf . '_' . $moduloBloqueProf;
-                $nombreProfesorBloque = trim((string)($profesoresModulos[$keyProfesorBloque] ?? ''));
+                $configProfesorBloque = $profesoresModulos[$keyProfesorBloque] ?? [];
+                if (is_array($configProfesorBloque)) {
+                    $nombreProfesorBloque = trim((string)($configProfesorBloque['profesor_nombre'] ?? ''));
+                    $conexionZoomBloque = trim((string)($configProfesorBloque['conexion_zoom_url'] ?? ''));
+                } else {
+                    $nombreProfesorBloque = trim((string)$configProfesorBloque);
+                    $conexionZoomBloque = '';
+                }
                 $formIdProfesorBloque = 'form-prof-bloque-' . $bloqueIndex;
 
                 if ($tieneSubmodulos && !$usaTarjetasTipoMaterial && $panelIdBloque === 'submodulo-panel-profesor') {
@@ -1059,6 +1066,17 @@ if ($tieneSubmodulos) {
                                 style="font-size:11px; padding:2px 8px;">Editar</button>
                         <?php endif; ?>
                     </div>
+                    <div class="cap-modulo-profesor-row" style="padding:8px 10px; border-bottom:1px solid #e6eef9; background:#f8fbff;">
+                        <i class="bi bi-link-45deg" style="font-size:13px;"></i>
+                        <span><strong>Conexiones:</strong></span>
+                        <span class="cap-modulo-profesor-nombre">
+                            <?php if ($conexionZoomBloque !== ''): ?>
+                                <a href="<?= htmlspecialchars($conexionZoomBloque, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">Link de Zoom</a>
+                            <?php else: ?>
+                                <em style="color:#9aabbd;">Sin enlace de Zoom</em>
+                            <?php endif; ?>
+                        </span>
+                    </div>
                     <?php if ($puedeGestionar): ?>
                         <form id="<?= htmlspecialchars($formIdProfesorBloque, ENT_QUOTES, 'UTF-8') ?>" method="POST"
                             action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>"
@@ -1073,6 +1091,10 @@ if ($tieneSubmodulos) {
                             <input type="text" name="profesor_nombre" class="form-control" style="font-size:12px; padding:4px 8px; flex:1; min-width:170px;"
                                 placeholder="Nombre del profesor" maxlength="255"
                                 value="<?= htmlspecialchars($nombreProfesorBloque, ENT_QUOTES, 'UTF-8') ?>">
+                            <input type="url" name="conexion_zoom_url" class="form-control" style="font-size:12px; padding:4px 8px; flex:1; min-width:220px;"
+                                placeholder="https://zoom.us/j/..."
+                                maxlength="1024"
+                                value="<?= htmlspecialchars($conexionZoomBloque, ENT_QUOTES, 'UTF-8') ?>">
                             <button type="submit" class="btn btn-sm btn-primary" style="font-size:12px; padding:4px 10px;">Guardar</button>
                         </form>
                     <?php endif; ?>

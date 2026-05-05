@@ -1937,10 +1937,19 @@ class PersonaController extends BaseController {
             $filtroCelula = '0';
         }
 
-        // No aplicar filtro semanal por defecto en pendientes:
-        // debe listar todas las personas nuevas salvo que el usuario filtre explícitamente.
+        // Aplicar semana pasada por defecto (lunes a domingo) para que
+        // tarjetas y listado trabajen sobre el mismo periodo semanal.
         if ($filtroSemanaRef === '' && $filtroFechaInicio === '' && $filtroFechaFin === '') {
-            $filtroSemanaRefEsDefault = false;
+            $hoy = time();
+            $diaSemanaHoy = (int)date('N', $hoy); // 1 lunes, 7 domingo
+            $inicioSemanaActual = strtotime('-' . ($diaSemanaHoy - 1) . ' days', $hoy);
+            $inicioSemanaPasada = strtotime('-7 days', $inicioSemanaActual);
+            $finSemanaPasada = strtotime('+6 days', $inicioSemanaPasada);
+
+            $filtroFechaInicio = date('Y-m-d', $inicioSemanaPasada);
+            $filtroFechaFin = date('Y-m-d', $finSemanaPasada);
+            $filtroSemanaRef = $filtroFechaInicio;
+            $filtroSemanaRefEsDefault = true;
         }
 
         if ($filtroSemanaRef !== '') {
@@ -1968,9 +1977,9 @@ class PersonaController extends BaseController {
         // de ganados (incluyendo quienes ya tienen ubicacion completa).
         $mostrarGanadosHistoricosPorFecha = ($filtroFechaInicio !== '' && $filtroFechaFin !== '');
 
-        // Al filtrar por origen 'celula' o 'domingo' también se muestra el historial
-        // completo (incluyendo personas ya asignadas), igual que con rango de fechas.
-        $esVistaHistoricaPorOrigen = in_array($filtroOrigen, ['celula', 'domingo'], true);
+        // El historial completo se activa por semana/rango de fechas, no por
+        // hacer clic en el origen, para evitar descuadres entre tarjeta y lista.
+        $esVistaHistoricaPorOrigen = false;
 
         $usarVistaHistoricaGanados = $esVistaHistoricaPorOrigen || $mostrarGanadosHistoricosPorFecha;
 

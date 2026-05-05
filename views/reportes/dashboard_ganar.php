@@ -717,7 +717,7 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
         if (slides.length > 0) {
             let current = 0;
             let timer = null;
-            const AUTOPLAY_MS = 10000;
+            const AUTOPLAY_MS = 60000;
 
             const activar = (index) => {
                 current = index;

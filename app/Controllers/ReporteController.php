@@ -37,9 +37,9 @@ class ReporteController extends BaseController {
             $timestamp = time();
         }
 
+        // Semana calendario de lunes a domingo.
         $diaSemana = (int)date('N', $timestamp); // 1 lunes, 7 domingo
-        $diasDesdeLunes = $diaSemana - 1;
-        $inicio = strtotime('-' . $diasDesdeLunes . ' days', $timestamp);
+        $inicio = strtotime('-' . ($diaSemana - 1) . ' days', $timestamp);
         $fin = strtotime('+6 days', $inicio);
 
         return [date('Y-m-d', $inicio), date('Y-m-d', $fin)];
@@ -75,6 +75,11 @@ class ReporteController extends BaseController {
         }
 
         foreach ($personas as $persona) {
+            // Solo contar personas nuevas para Ganar.
+            if (!$this->esPersonaNueva($persona)) {
+                continue;
+            }
+
             $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
             if ($idMinisterio <= 0) {
                 continue;
@@ -2037,6 +2042,25 @@ class ReporteController extends BaseController {
             $fechaFinAnioMinisterial
         );
 
+        // KPI anual por género basado en el mismo conjunto de datos de tablas anuales.
+        $ganadosAnioHombres = 0;
+        $ganadosAnioMujeres = 0;
+        $ganadosAnioSinGenero = 0;
+        foreach ($personasAnioMinisterial as $personaAnual) {
+            if (!$this->esPersonaNueva($personaAnual)) {
+                continue;
+            }
+
+            $generoNormalizado = strtolower(trim((string)($personaAnual['Genero'] ?? '')));
+            if (strpos($generoNormalizado, 'mujer') !== false) {
+                $ganadosAnioMujeres++;
+            } elseif (strpos($generoNormalizado, 'hombre') !== false) {
+                $ganadosAnioHombres++;
+            } else {
+                $ganadosAnioSinGenero++;
+            }
+        }
+
         $tablaGanarMensualMinisterial = $this->construirTablaGanarMensual($personasAnioMinisterial, $anioMinisterial);
         $tablaConsolidarMensualMinisterial = $this->construirTablaPeldanosMensual(
             $personasAnioMinisterial,
@@ -2245,6 +2269,7 @@ class ReporteController extends BaseController {
             'ganar_anio_referencia' => $anioGanar,
             'ganar_anio_hombres' => $ganadosAnioHombres,
             'ganar_anio_mujeres' => $ganadosAnioMujeres,
+            'ganar_anio_sin_genero' => $ganadosAnioSinGenero,
             'resumen_origen_ganados' => $resumenOrigenGanados,
             'detalle_origen_ganados' => $detalleOrigenGanados,
             'almas_por_edades' => $almasPorEdades,

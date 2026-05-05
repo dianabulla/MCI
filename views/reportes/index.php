@@ -538,6 +538,12 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </button>
 </div>
 
+<?php if ((int)($ganar_anio_sin_genero ?? 0) > 0): ?>
+<div style="margin:-6px 0 14px 0; font-size:.82rem; color:#9a6700; background:#fff8e1; border:1px solid #f5d58c; border-radius:8px; padding:8px 10px;">
+    Nota: hay <?= (int)($ganar_anio_sin_genero ?? 0) ?> ganados del año sin género clasificado. Por eso Hombres + Mujeres puede no coincidir con el total anual de tablas.
+</div>
+<?php endif; ?>
+
 <div class="card report-card report-chart-only" style="margin-bottom: 22px;">
     <h3>Resumen de Ganar</h3>
     <div id="chartResumenGanar"></div>

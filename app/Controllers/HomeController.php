@@ -1675,12 +1675,23 @@ class HomeController extends BaseController {
                     Nivel TINYINT UNSIGNED NOT NULL,
                     Modulo_Numero TINYINT UNSIGNED NOT NULL,
                     Profesor_Nombre VARCHAR(255) NOT NULL DEFAULT '',
+                    Conexion_Zoom_URL VARCHAR(1024) NOT NULL DEFAULT '',
                     UNIQUE KEY uq_modulo_nivel_numero (Modulo, Nivel, Modulo_Numero)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
         $pdo->exec($sql);
+
+        try {
+            $columnaZoom = $pdo->query("SHOW COLUMNS FROM material_hub_modulo_config LIKE 'Conexion_Zoom_URL'");
+            $existeZoom = $columnaZoom ? $columnaZoom->fetch(PDO::FETCH_ASSOC) : false;
+            if (!$existeZoom) {
+                $pdo->exec("ALTER TABLE material_hub_modulo_config ADD COLUMN Conexion_Zoom_URL VARCHAR(1024) NOT NULL DEFAULT '' AFTER Profesor_Nombre");
+            }
+        } catch (Throwable $e) {
+            // Compatibilidad hacia atras.
+        }
     }
 
-    private function guardarProfesorNombreModulo(string $modulo, int $nivel, int $moduloNumero, string $profesorNombre): void {
+    private function guardarProfesorNombreModulo(string $modulo, int $nivel, int $moduloNumero, string $profesorNombre, ?string $conexionZoomUrl = null): void {
         $modulo = trim($modulo);
         if ($modulo === '' || $nivel <= 0 || $moduloNumero <= 0) {
             return;
@@ -1693,11 +1704,25 @@ class HomeController extends BaseController {
             return;
         }
 
-        $sql = "INSERT INTO material_hub_modulo_config (Modulo, Nivel, Modulo_Numero, Profesor_Nombre)
+        $profesorNombre = trim($profesorNombre);
+
+        if ($conexionZoomUrl === null) {
+            $sql = "INSERT INTO material_hub_modulo_config (Modulo, Nivel, Modulo_Numero, Profesor_Nombre)
                 VALUES (?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE Profesor_Nombre = VALUES(Profesor_Nombre)";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$modulo, $nivel, $moduloNumero, $profesorNombre]);
+            return;
+        }
+
+        $conexionZoomUrl = trim($conexionZoomUrl);
+        $sql = "INSERT INTO material_hub_modulo_config (Modulo, Nivel, Modulo_Numero, Profesor_Nombre, Conexion_Zoom_URL)
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                Profesor_Nombre = VALUES(Profesor_Nombre),
+                Conexion_Zoom_URL = VALUES(Conexion_Zoom_URL)";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$modulo, $nivel, $moduloNumero, trim($profesorNombre)]);
+        $stmt->execute([$modulo, $nivel, $moduloNumero, $profesorNombre, $conexionZoomUrl]);
     }
 
     private function obtenerProfesoresModulos(string $modulo): array {
@@ -1713,14 +1738,17 @@ class HomeController extends BaseController {
             return [];
         }
 
-        $stmt = $pdo->prepare("SELECT Nivel, Modulo_Numero, Profesor_Nombre FROM material_hub_modulo_config WHERE Modulo = ?");
+        $stmt = $pdo->prepare("SELECT Nivel, Modulo_Numero, Profesor_Nombre, Conexion_Zoom_URL FROM material_hub_modulo_config WHERE Modulo = ?");
         $stmt->execute([$modulo]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         $map = [];
         foreach ($rows as $row) {
             $key = (int)($row['Nivel'] ?? 0) . '_' . (int)($row['Modulo_Numero'] ?? 0);
-            $map[$key] = (string)($row['Profesor_Nombre'] ?? '');
+            $map[$key] = [
+                'profesor_nombre' => (string)($row['Profesor_Nombre'] ?? ''),
+                'conexion_zoom_url' => (string)($row['Conexion_Zoom_URL'] ?? ''),
+            ];
         }
 
         return $map;
@@ -2241,15 +2269,16 @@ class HomeController extends BaseController {
                     $nivelProf = (int)($_POST['nivel'] ?? 0);
                     $moduloNumProf = (int)($_POST['modulo_numero'] ?? 0);
                     $profesorNombrePost = trim((string)($_POST['profesor_nombre'] ?? ''));
+                    $conexionZoomUrlPost = trim((string)($_POST['conexion_zoom_url'] ?? ''));
 
                     if ($nivelProf <= 0 || $moduloNumProf <= 0) {
                         throw new Exception('Nivel o módulo inválido.');
                     }
 
-                    $this->guardarProfesorNombreModulo((string)($moduloSeleccionado['clave'] ?? ''), $nivelProf, $moduloNumProf, $profesorNombrePost);
+                    $this->guardarProfesorNombreModulo((string)($moduloSeleccionado['clave'] ?? ''), $nivelProf, $moduloNumProf, $profesorNombrePost, $conexionZoomUrlPost);
                     $contextoRetorno['nivel'] = $nivelProf;
                     $contextoRetorno['modulo'] = $moduloNumProf;
-                    $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Profesor guardado correctamente.', 'success'));
+                    $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Conexiones del módulo guardadas correctamente.', 'success'));
                 }
 
                 if ($accion === 'guardar_profesor_modulo_grupo') {

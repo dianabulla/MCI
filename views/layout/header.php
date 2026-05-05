@@ -61,6 +61,7 @@ if ($puedeVerPendientesGanar) {
     try {
         $personaCampanaModel = new Persona();
         $filtroRolPendientes = DataIsolation::generarFiltroPersonasPendienteConsolidar();
+        $filtroRolDiscipulos = DataIsolation::generarFiltroPersonas();
 
         // Usar la misma lógica de la bandeja de notificaciones para evitar desfases.
         $personasCampana = $personaCampanaModel->getAllWithRole($filtroRolPendientes, true);
@@ -100,6 +101,34 @@ if ($puedeVerPendientesGanar) {
         $idsNuevasAlmasGanadas = [];
         $idsUniversidadVida = [];
 
+        // Pendientes por conectar (campana) debe reflejar la misma regla
+        // de la tarjeta "Por conectar a celula" en Discipulos.
+        $personasPendientesConectarCampana = $personaCampanaModel->getAllWithRole($filtroRolDiscipulos, true);
+        foreach ((array)$personasPendientesConectarCampana as $personaTmpPendiente) {
+            $esAntiguoPendiente = ((int)($personaTmpPendiente['Es_Antiguo'] ?? 1) === 1);
+            if (!$esAntiguoPendiente) {
+                continue;
+            }
+
+            $rolPendiente = (string)($personaTmpPendiente['Nombre_Rol'] ?? '');
+            if ($esRolLiderazgo($rolPendiente) || !$esRolDiscipular($rolPendiente)) {
+                continue;
+            }
+
+            $idMinisterioPendiente = (int)($personaTmpPendiente['Id_Ministerio'] ?? 0);
+            $idLiderPendiente = (int)($personaTmpPendiente['Id_Lider'] ?? 0);
+            $idCelulaPendiente = (int)($personaTmpPendiente['Id_Celula'] ?? 0);
+            if (!($idMinisterioPendiente <= 0 || $idLiderPendiente <= 0 || $idCelulaPendiente <= 0)) {
+                continue;
+            }
+
+            $totalPendientesPorConectar++;
+            $idPersonaPendiente = (int)($personaTmpPendiente['Id_Persona'] ?? 0);
+            if ($idPersonaPendiente > 0) {
+                $idsPendientesPorConectar[$idPersonaPendiente] = true;
+            }
+        }
+
         foreach ((array)$personasCampana as $personaTmp) {
             $esNuevo = ((int)($personaTmp['Es_Antiguo'] ?? 0) !== 1);
             $esAntiguo = !$esNuevo;
@@ -133,18 +162,8 @@ if ($puedeVerPendientesGanar) {
                 }
             }
 
-            if (
-                $esAntiguo
-                && ($idMinisterio <= 0 || $idLider <= 0 || $idCelula <= 0)
-                && !$esRolLiderazgo((string)($personaTmp['Nombre_Rol'] ?? ''))
-                && $esRolDiscipular((string)($personaTmp['Nombre_Rol'] ?? ''))
-            ) {
-                $totalPendientesPorConectar++;
-                $idPersonaTmp = (int)($personaTmp['Id_Persona'] ?? 0);
-                if ($idPersonaTmp > 0) {
-                    $idsPendientesPorConectar[$idPersonaTmp] = true;
-                }
-            }
+            // Nota: Pendientes por conectar se calcula arriba con la misma
+            // regla de la tarjeta de Discipulos.
         }
 
         // Notificación para Universidad de la Vida: mismas reglas de la vista
