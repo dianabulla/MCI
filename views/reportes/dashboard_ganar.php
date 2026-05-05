@@ -167,9 +167,26 @@ $semaforoInfo = [
 
 /* Dashboard de metas (semana/mes/año rotativo) */
 .dash-metas-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+.dash-metas-controls { display:flex; align-items:center; gap:8px; }
 .dash-metas-dots { display:flex; gap:6px; }
 .dash-metas-dot { width:9px; height:9px; border-radius:50%; border:0; background:#b9c9df; padding:0; }
 .dash-metas-dot.is-active { background:#1d4ed8; transform:scale(1.15); }
+.dash-metas-arrow {
+    width:26px;
+    height:26px;
+    border-radius:999px;
+    border:1px solid #cddbf0;
+    background:#ffffff;
+    color:#1f3f70;
+    font-size:14px;
+    font-weight:700;
+    line-height:1;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+.dash-metas-arrow:hover { background:#eef4ff; }
 .dash-metas-slide { display:none; }
 .dash-metas-slide.is-active { display:block; animation:dashMetasFade .3s ease; }
 .dash-metas-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
@@ -254,7 +271,11 @@ $semaforoInfo = [
             <h4 style="margin:0 0 4px 0; font-size:1rem; color:#1f3f70;">Metas por Ministerio</h4>
             <small style="color:#60708a;">Velocímetro automático: semana, mes y año (justo a tiempo).</small>
         </div>
-        <div class="dash-metas-dots" id="dashMetasDots"></div>
+        <div class="dash-metas-controls">
+            <button type="button" class="dash-metas-arrow" id="dashMetasPrev" aria-label="Vista anterior">&#8592;</button>
+            <div class="dash-metas-dots" id="dashMetasDots"></div>
+            <button type="button" class="dash-metas-arrow" id="dashMetasNext" aria-label="Vista siguiente">&#8594;</button>
+        </div>
     </div>
 
     <div id="dashMetasSlidesWrap">
@@ -689,11 +710,14 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
     // ── Rotación automática de metas (semana/mes/año) ────────────────────
     const slidesWrap = document.getElementById('dashMetasSlidesWrap');
     const dotsWrap = document.getElementById('dashMetasDots');
+    const prevBtn = document.getElementById('dashMetasPrev');
+    const nextBtn = document.getElementById('dashMetasNext');
     if (slidesWrap && dotsWrap) {
         const slides = Array.from(slidesWrap.querySelectorAll('.dash-metas-slide'));
         if (slides.length > 0) {
             let current = 0;
             let timer = null;
+            const AUTOPLAY_MS = 10000;
 
             const activar = (index) => {
                 current = index;
@@ -705,6 +729,13 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
                 });
             };
 
+            const reiniciarAuto = () => {
+                if (timer) {
+                    clearInterval(timer);
+                }
+                timer = setInterval(() => activar((current + 1) % slides.length), AUTOPLAY_MS);
+            };
+
             slides.forEach((_, idx) => {
                 const dot = document.createElement('button');
                 dot.type = 'button';
@@ -712,16 +743,27 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
                 dot.setAttribute('aria-label', 'Ir a vista ' + (idx + 1));
                 dot.addEventListener('click', () => {
                     activar(idx);
-                    if (timer) {
-                        clearInterval(timer);
-                    }
-                    timer = setInterval(() => activar((current + 1) % slides.length), 7000);
+                    reiniciarAuto();
                 });
                 dotsWrap.appendChild(dot);
             });
 
+            if (prevBtn) {
+                prevBtn.addEventListener('click', () => {
+                    activar((current - 1 + slides.length) % slides.length);
+                    reiniciarAuto();
+                });
+            }
+
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => {
+                    activar((current + 1) % slides.length);
+                    reiniciarAuto();
+                });
+            }
+
             activar(0);
-            timer = setInterval(() => activar((current + 1) % slides.length), 7000);
+            reiniciarAuto();
         }
     }
 })();

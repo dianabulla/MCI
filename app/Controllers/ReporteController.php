@@ -55,11 +55,14 @@ class ReporteController extends BaseController {
 
     private function calcularEstadoDashboardMeta($porcentaje) {
         $porcentaje = (float)$porcentaje;
-        if ($porcentaje >= 85) {
-            return ['key' => 'verde', 'label' => 'Va bien', 'color' => '#1f9d55'];
+        if ($porcentaje >= 100) {
+            return ['key' => 'verde', 'label' => 'Cumplida', 'color' => '#1f9d55'];
         }
-        if ($porcentaje >= 60) {
-            return ['key' => 'amarillo', 'label' => 'En riesgo', 'color' => '#d9a600'];
+        if ($porcentaje >= 85) {
+            return ['key' => 'amarillo', 'label' => 'Muy cerca', 'color' => '#d9a600'];
+        }
+        if ($porcentaje >= 40) {
+            return ['key' => 'naranja', 'label' => 'En avance', 'color' => '#f08c00'];
         }
         return ['key' => 'rojo', 'label' => 'Crítico', 'color' => '#d64545'];
     }
@@ -159,6 +162,25 @@ class ReporteController extends BaseController {
             }
             $esperadoAnio = $metaAnual > 0 ? (int)round($metaAnual * ($diasAnioTranscurridos / max(1, $diasAnioTotal))) : 0;
 
+            $justoATiempoSemana = $logradoSemana >= $esperadoSemana;
+            $justoATiempoMes = $logradoMes >= $esperadoMes;
+            $justoATiempoAnio = $logradoAnio >= $esperadoAnio;
+
+            $estadoSemana = $this->calcularEstadoDashboardMeta($porcentajeSemana);
+            $estadoMes = $this->calcularEstadoDashboardMeta($porcentajeMes);
+            $estadoAnio = $this->calcularEstadoDashboardMeta($porcentajeAnio);
+
+            // Si va justo a tiempo, no mostrar estado rojo aunque el % global todavía sea bajo.
+            if ($justoATiempoSemana && (($estadoSemana['key'] ?? '') === 'rojo')) {
+                $estadoSemana = ['key' => 'naranja', 'label' => 'En ritmo', 'color' => '#f08c00'];
+            }
+            if ($justoATiempoMes && (($estadoMes['key'] ?? '') === 'rojo')) {
+                $estadoMes = ['key' => 'naranja', 'label' => 'En ritmo', 'color' => '#f08c00'];
+            }
+            if ($justoATiempoAnio && (($estadoAnio['key'] ?? '') === 'rojo')) {
+                $estadoAnio = ['key' => 'naranja', 'label' => 'En ritmo', 'color' => '#f08c00'];
+            }
+
             $items[] = [
                 'id_ministerio' => $idMinisterio,
                 'ministerio' => (string)($ministerio['Nombre_Ministerio'] ?? 'Sin ministerio'),
@@ -167,24 +189,24 @@ class ReporteController extends BaseController {
                     'logrado' => $logradoSemana,
                     'porcentaje' => $porcentajeSemana,
                     'esperado' => $esperadoSemana,
-                    'justo_a_tiempo' => $logradoSemana >= $esperadoSemana,
-                    'estado' => $this->calcularEstadoDashboardMeta($porcentajeSemana),
+                    'justo_a_tiempo' => $justoATiempoSemana,
+                    'estado' => $estadoSemana,
                 ],
                 'mes' => [
                     'meta' => $metaMensual,
                     'logrado' => $logradoMes,
                     'porcentaje' => $porcentajeMes,
                     'esperado' => $esperadoMes,
-                    'justo_a_tiempo' => $logradoMes >= $esperadoMes,
-                    'estado' => $this->calcularEstadoDashboardMeta($porcentajeMes),
+                    'justo_a_tiempo' => $justoATiempoMes,
+                    'estado' => $estadoMes,
                 ],
                 'anio' => [
                     'meta' => $metaAnual,
                     'logrado' => $logradoAnio,
                     'porcentaje' => $porcentajeAnio,
                     'esperado' => $esperadoAnio,
-                    'justo_a_tiempo' => $logradoAnio >= $esperadoAnio,
-                    'estado' => $this->calcularEstadoDashboardMeta($porcentajeAnio),
+                    'justo_a_tiempo' => $justoATiempoAnio,
+                    'estado' => $estadoAnio,
                     'anio_meta' => $anioMeta,
                 ],
             ];
