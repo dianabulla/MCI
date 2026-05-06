@@ -261,6 +261,18 @@
                     </div>
 
                     <div class="field">
+                        <label for="tipo_documento">Tipo de documento <span class="req">*</span></label>
+                        <?php $tipoDocumento = (string)($old['tipo_documento'] ?? ''); ?>
+                        <select id="tipo_documento" name="tipo_documento" required>
+                            <option value="">Seleccione...</option>
+                            <option value="Cedula de Ciudadania" <?= $tipoDocumento === 'Cedula de Ciudadania' ? 'selected' : '' ?>>Cédula de Ciudadanía</option>
+                            <option value="Cedula Extranjera" <?= $tipoDocumento === 'Cedula Extranjera' ? 'selected' : '' ?>>Cédula Extranjera</option>
+                            <option value="Tarjeta de Identidad" <?= $tipoDocumento === 'Tarjeta de Identidad' ? 'selected' : '' ?>>Tarjeta de Identidad</option>
+                            <option value="Registro Civil" <?= $tipoDocumento === 'Registro Civil' ? 'selected' : '' ?>>Registro Civil</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
                         <label for="id_ministerio">Ministerio</label>
                         <select id="id_ministerio" name="id_ministerio">
                             <option value="">Seleccione...</option>
@@ -274,8 +286,8 @@
                     </div>
 
                     <div class="field">
-                        <label for="cedula">Cédula</label>
-                        <input type="text" id="cedula" name="cedula" value="<?= htmlspecialchars((string)($old['cedula'] ?? '')) ?>" placeholder="Número de cédula (opcional)">
+                        <label for="cedula">Número de documento <span class="req">*</span></label>
+                        <input type="text" id="cedula" name="cedula" required value="<?= htmlspecialchars((string)($old['cedula'] ?? '')) ?>" placeholder="Número de documento">
                     </div>
 
                     <div class="field">
@@ -317,7 +329,7 @@
                     </div>
                 </div>
 
-                <p class="hint">Obligatorio: nombre, apellidos y ganado en. Si eliges Otros, escribe también la observación.</p>
+                <p class="hint">Obligatorio: nombre, apellidos, tipo de documento, número de documento y ganado en. Si eliges Otros, escribe también la observación.</p>
 
                 <div class="actions">
                     <button type="submit" class="btn">Guardar registro</button>

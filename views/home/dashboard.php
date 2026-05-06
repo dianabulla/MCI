@@ -3,12 +3,11 @@
 <?php
 $cardsDashboard = [];
 $esDiscipuloSoloDiscipular = AuthController::esRolDiscipuloUsuario()
-    && AuthController::tienePermiso('discipular_evaluaciones', 'ver')
     && !AuthController::esAdministrador();
 
 if ($esDiscipuloSoloDiscipular) {
     $cardsDashboard[] = [
-        'titulo' => 'Discipular',
+        'titulo' => 'Evaluaciones y Clases',
         'subtitulo' => 'Formacion y crecimiento',
         'valor' => (int)($totalDiscipular ?? 0),
         'accion' => 'Ver evaluaciones',
@@ -55,7 +54,7 @@ if (!$esDiscipuloSoloDiscipular
     && !AuthController::tienePermiso('personas', 'ver')
     && AuthController::tienePermiso('discipular_evaluaciones', 'ver')) {
     $cardsDashboard[] = [
-        'titulo' => 'Discipular',
+        'titulo' => 'Evaluaciones y Clases',
         'subtitulo' => 'Formacion y crecimiento',
         'valor' => (int)($totalDiscipular ?? 0),
         'accion' => 'Ver evaluaciones',
@@ -77,7 +76,13 @@ if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthCon
     ];
 }
 
-if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::tienePermiso('materiales_celulas', 'ver') || AuthController::tienePermiso('teen', 'ver') || AuthController::tienePermiso('eventos', 'ver'))) {
+if (!$esDiscipuloSoloDiscipular && (
+    AuthController::esAdministrador()
+    || AuthController::tienePermiso('materiales_celulas', 'ver')
+    || AuthController::tienePermiso('teen', 'ver')
+    || AuthController::tienePermiso('material_universidad_vida', 'ver')
+    || AuthController::tienePermiso('material_capacitacion_destino', 'ver')
+)) {
     $cardsDashboard[] = [
         'titulo' => 'Material',
         'subtitulo' => 'Recursos para servir mejor',

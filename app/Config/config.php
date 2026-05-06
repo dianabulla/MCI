@@ -18,8 +18,10 @@ define('DB_CHARSET', 'utf8mb4');
 $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/public/index.php'));
 $publicPath = rtrim(dirname($scriptName), '/');
 
-if ($publicPath === '') {
+if ($publicPath === '' || $publicPath === '.') {
 	$publicPath = '/';
+} elseif ($publicPath[0] !== '/') {
+	$publicPath = '/' . $publicPath;
 }
 
 $basePath = preg_replace('#/public$#', '', $publicPath);

@@ -168,6 +168,7 @@ return [
     // Permisos
     'permisos' => 'PermisosController@index',
     'permisos/actualizar' => 'PermisosController@actualizar',
+    'permisos/limpiar-obsoletos' => 'PermisosController@limpiarObsoletos',
     'permisos/exportarExcel' => 'PermisosController@exportarExcel',
     
     // Entrega de Obsequios (Requiere autenticación)

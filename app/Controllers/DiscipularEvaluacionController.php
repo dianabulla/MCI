@@ -26,7 +26,7 @@ class DiscipularEvaluacionController extends BaseController {
 
         $esAdmin = AuthController::esAdministrador();
         $esDiscipulo = AuthController::esRolDiscipuloUsuario();
-        $puedeVer = $esAdmin || AuthController::tienePermiso('discipular_evaluaciones', 'ver');
+        $puedeVer = $esAdmin || $esDiscipulo || AuthController::tienePermiso('discipular_evaluaciones', 'ver');
         $puedeCrear = !$esDiscipulo && ($esAdmin || AuthController::tienePermiso('discipular_evaluaciones', 'crear'));
         $puedeEditar = !$esDiscipulo && ($esAdmin || AuthController::tienePermiso('discipular_evaluaciones', 'editar'));
         $puedeEliminar = !$esDiscipulo && ($esAdmin || AuthController::tienePermiso('discipular_evaluaciones', 'eliminar'));
@@ -34,12 +34,12 @@ class DiscipularEvaluacionController extends BaseController {
         $puedeGestionar = $puedeCrear || $puedeEditar || $puedeEliminar;
 
         if (!$puedeVer) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . rtrim(BASE_URL, '/') . '/public/?url=auth/acceso-denegado');
             exit;
         }
 
         $contextoMaterial = $this->obtenerContextoMaterialDesdeRequest();
-        if (empty($contextoMaterial)) {
+        if (empty($contextoMaterial) && !$esDiscipulo) {
             $this->redirect('home/material/capacitacion-destino');
         }
 
@@ -69,7 +69,7 @@ class DiscipularEvaluacionController extends BaseController {
 
         $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
         $idEvaluacionSeleccionada = (int)($_GET['evaluacion'] ?? 0);
-        $contextoDesdeMaterial = true;
+        $contextoDesdeMaterial = !empty($contextoMaterial);
         $filtroNivelContexto = (int)($contextoMaterial['nivel'] ?? 0);
         $filtroModuloContexto = (int)($contextoMaterial['modulo'] ?? 0);
         $mapaLecciones = $this->obtenerMapaLeccionesMaterial();
@@ -195,6 +195,9 @@ class DiscipularEvaluacionController extends BaseController {
             'estado_intento' => $estadoIntento,
             'niveles_permitidos' => $nivelesPermitidos,
             'clases_links' => $this->construirLinksClases($nivelesPermitidos),
+            'accesos_directos_discipulo' => $esDiscipulo
+                ? $this->construirAccesosDirectosDiscipulo($nivelesPermitidos, $evaluaciones)
+                : [],
             'intentos_por_evaluacion' => $intentosPorEvaluacion,
             'max_intentos' => self::MAX_INTENTOS,
             'puede_configurar_fechas' => $puedeConfigurarFechas,
@@ -240,6 +243,18 @@ class DiscipularEvaluacionController extends BaseController {
             if ($fechaHabilitacionInicio !== '' && $fechaHabilitacionFin !== '' && strcmp($fechaHabilitacionInicio, $fechaHabilitacionFin) > 0) {
                 $this->redirigirConMensaje('La fecha inicial no puede ser mayor que la final.', 'error');
             }
+        }
+
+        // Asegura una ventana de publicación válida para que el discípulo
+        // no quede sin ver la evaluación por fechas vacías.
+        if ($fechaHabilitacionInicio === '' && $fechaHabilitacionFin === '') {
+            $hoy = date('Y-m-d');
+            $fechaHabilitacionInicio = $hoy;
+            $fechaHabilitacionFin = $hoy;
+        } elseif ($fechaHabilitacionInicio === '' && $fechaHabilitacionFin !== '') {
+            $fechaHabilitacionInicio = $fechaHabilitacionFin;
+        } elseif ($fechaHabilitacionFin === '' && $fechaHabilitacionInicio !== '') {
+            $fechaHabilitacionFin = $fechaHabilitacionInicio;
         }
 
         if ($titulo === '' || $nivel <= 0 || $moduloNumero <= 0) {
@@ -500,7 +515,9 @@ class DiscipularEvaluacionController extends BaseController {
             ? 'Evaluación enviada. Correctas: ' . $correctas . ' de ' . $total . '. Puntaje: ' . $puntaje . '%. ¡Aprobaste!'
             : 'Evaluación enviada. Correctas: ' . $correctas . ' de ' . $total . '. Puntaje: ' . $puntaje . '%. No alcanzaste el mínimo.';
 
-        $this->redirigirConMensaje($mensaje, $aprobado ? 'success' : 'error', $idEvaluacion);
+        // Tras enviar, cerramos el cuestionario y volvemos al listado.
+        // Si aún tiene intentos, podrá abrirlo de nuevo desde el botón "Volver a presentar".
+        $this->redirigirConMensaje($mensaje, $aprobado ? 'success' : 'error');
     }
 
     private function procesarConfigurarFechas(): void {
@@ -544,7 +561,12 @@ class DiscipularEvaluacionController extends BaseController {
         $inicio = $this->normalizarFechaYmd($evaluacion['Fecha_Habilitacion_Inicio'] ?? '');
         $fin = $this->normalizarFechaYmd($evaluacion['Fecha_Habilitacion_Fin'] ?? '');
 
-        // Reglas de publicación: si no tiene ventana completa, no debe ser visible.
+        // Compatibilidad: evaluaciones históricas sin fechas quedan visibles.
+        if ($inicio === '' && $fin === '') {
+            return true;
+        }
+
+        // Si tiene solo una fecha, se considera configuración incompleta.
         if ($inicio === '' || $fin === '') {
             return false;
         }
@@ -633,6 +655,24 @@ class DiscipularEvaluacionController extends BaseController {
         return substr($texto, 0, 120);
     }
 
+    private function normalizarUrlClase($valor): string {
+        $url = trim((string)$valor);
+        if ($url === '') {
+            return '';
+        }
+
+        // Si no trae esquema, asumir https para enlaces de Zoom/Meet.
+        if (!preg_match('#^[a-z][a-z0-9+\-.]*://#i', $url)) {
+            $url = 'https://' . ltrim($url, '/');
+        }
+
+        if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return '';
+        }
+
+        return $url;
+    }
+
     private function obtenerMapaLeccionesMaterial(): array {
         $filas = $this->model->listarLeccionesMaterialCapacitacionDestino();
         $mapa = [];
@@ -698,15 +738,168 @@ class DiscipularEvaluacionController extends BaseController {
     }
 
     private function construirLinksClases(array $nivelesPermitidos): array {
+        $nivelesPermitidos = array_values(array_unique(array_map('intval', $nivelesPermitidos)));
+        $nivelesSet = array_fill_keys($nivelesPermitidos, true);
+
         $links = [];
-        foreach ($nivelesPermitidos as $nivel) {
+
+        $filas = $this->model->listarConexionesClaseCapacitacionDestino();
+        foreach ((array)$filas as $fila) {
+            $nivel = (int)($fila['Nivel'] ?? 0);
+            $modulo = (int)($fila['Modulo_Numero'] ?? 0);
+            $url = trim((string)($fila['Conexion_Zoom_URL'] ?? ''));
+            if ($nivel <= 0 || $modulo <= 0 || $url === '') {
+                continue;
+            }
+
+            if (!isset($nivelesSet[$nivel])) {
+                continue;
+            }
+
             $links[] = [
-                'nivel' => (int)$nivel,
-                'label' => 'Conectarme a clase Nivel ' . (int)$nivel,
-                'url' => PUBLIC_URL . '?url=escuelas_formacion/registro-publico&programa=capacitacion_destino',
+                'nivel' => $nivel,
+                'label' => 'Clase Nivel ' . $nivel . ' - Modulo ' . $modulo,
+                'url' => $url,
             ];
         }
+
         return $links;
+    }
+
+    private function construirAccesosDirectosDiscipulo(array $nivelesPermitidos, array $evaluaciones): array {
+        $nivelesPermitidos = array_values(array_unique(array_map('intval', $nivelesPermitidos)));
+        if (empty($nivelesPermitidos)) {
+            return [];
+        }
+
+        $nivelesSet = array_fill_keys($nivelesPermitidos, true);
+        $accesos = [];
+        $primerLinkPorNivel = [];
+        $primerEvalPorNivel = [];
+        $primerEvalPorNivelModulo = [];
+
+        $conexiones = (array)$this->model->listarConexionesClaseCapacitacionDestino();
+        foreach ($conexiones as $fila) {
+            $nivel = (int)($fila['Nivel'] ?? 0);
+            $modulo = (int)($fila['Modulo_Numero'] ?? 0);
+            $urlClase = $this->normalizarUrlClase($fila['Conexion_Zoom_URL'] ?? '');
+            if ($nivel <= 0 || $modulo <= 0 || !isset($nivelesSet[$nivel])) {
+                continue;
+            }
+
+            if ($urlClase !== '' && !isset($primerLinkPorNivel[$nivel])) {
+                $primerLinkPorNivel[$nivel] = $urlClase;
+            }
+
+            $key = $nivel . '_' . $modulo;
+            if (!isset($accesos[$key])) {
+                $accesos[$key] = [
+                    'nivel' => $nivel,
+                    'modulo' => $modulo,
+                    'leccion' => 'Sin lección activa',
+                    'url_clase' => $urlClase,
+                    'url_evaluacion' => '',
+                ];
+            } elseif ($urlClase !== '') {
+                $accesos[$key]['url_clase'] = $urlClase;
+            }
+        }
+
+        foreach ((array)$evaluaciones as $evaluacion) {
+            $nivel = (int)($evaluacion['Nivel'] ?? 0);
+            $modulo = (int)($evaluacion['Modulo_Numero'] ?? 0);
+            $idEvaluacion = (int)($evaluacion['Id_Evaluacion'] ?? 0);
+            if ($nivel <= 0 || $modulo <= 0 || $idEvaluacion <= 0 || !isset($nivelesSet[$nivel])) {
+                continue;
+            }
+
+            if (!isset($primerEvalPorNivel[$nivel])) {
+                $primerEvalPorNivel[$nivel] = $idEvaluacion;
+            }
+
+            $keyNivelModulo = $nivel . '_' . $modulo;
+            if (!isset($primerEvalPorNivelModulo[$keyNivelModulo])) {
+                $primerEvalPorNivelModulo[$keyNivelModulo] = $idEvaluacion;
+            }
+
+            $key = $nivel . '_' . $modulo;
+            if (!isset($accesos[$key])) {
+                $accesos[$key] = [
+                    'nivel' => $nivel,
+                    'modulo' => $modulo,
+                    'leccion' => 'Sin lección activa',
+                    'url_clase' => '',
+                    'url_evaluacion' => '',
+                ];
+            }
+
+            $leccion = $this->normalizarLeccionTexto($evaluacion['Leccion'] ?? '');
+            if ($leccion !== '') {
+                $accesos[$key]['leccion'] = $leccion;
+            }
+
+            if ((string)$accesos[$key]['url_evaluacion'] === '') {
+                $accesos[$key]['url_evaluacion'] = PUBLIC_URL . '?url=home/discipular/evaluaciones&evaluacion=' . $idEvaluacion;
+            }
+        }
+
+        $configCap = self::CONFIG_CAP_DESTINO;
+        foreach ($nivelesPermitidos as $nivelPermitido) {
+            $modulosNivel = array_values(array_map('intval', (array)($configCap[(int)$nivelPermitido] ?? [])));
+            if (empty($modulosNivel)) {
+                continue;
+            }
+
+            $moduloBase = (int)$modulosNivel[0];
+            $keyBase = (int)$nivelPermitido . '_' . $moduloBase;
+            if (!isset($accesos[$keyBase])) {
+                $accesos[$keyBase] = [
+                    'nivel' => (int)$nivelPermitido,
+                    'modulo' => $moduloBase,
+                    'leccion' => 'Sin lección activa',
+                    'url_clase' => '',
+                    'url_evaluacion' => '',
+                ];
+            }
+        }
+
+        foreach ($accesos as $key => $acceso) {
+            $nivelAcceso = (int)($acceso['nivel'] ?? 0);
+            if (trim((string)($acceso['url_clase'] ?? '')) === '' && isset($primerLinkPorNivel[$nivelAcceso])) {
+                $accesos[$key]['url_clase'] = (string)$primerLinkPorNivel[$nivelAcceso];
+            }
+
+            if (trim((string)($acceso['url_evaluacion'] ?? '')) !== '') {
+                continue;
+            }
+
+            $nivel = (int)($acceso['nivel'] ?? 0);
+            $modulo = (int)($acceso['modulo'] ?? 0);
+
+            $keyNivelModulo = $nivel . '_' . $modulo;
+            $idEvaluacionDestino = (int)($primerEvalPorNivelModulo[$keyNivelModulo] ?? 0);
+            if ($idEvaluacionDestino <= 0) {
+                $idEvaluacionDestino = (int)($primerEvalPorNivel[$nivel] ?? 0);
+            }
+
+            if ($idEvaluacionDestino > 0) {
+                $accesos[$key]['url_evaluacion'] = PUBLIC_URL . '?url=home/discipular/evaluaciones&evaluacion=' . $idEvaluacionDestino;
+            }
+        }
+
+        if (empty($accesos)) {
+            return [];
+        }
+
+        usort($accesos, static function($a, $b) {
+            $cmpNivel = ((int)($a['nivel'] ?? 0)) <=> ((int)($b['nivel'] ?? 0));
+            if ($cmpNivel !== 0) {
+                return $cmpNivel;
+            }
+            return ((int)($a['modulo'] ?? 0)) <=> ((int)($b['modulo'] ?? 0));
+        });
+
+        return array_values($accesos);
     }
 
     private function construirEstadoIntento(int $idEvaluacion, int $idPersona): array {

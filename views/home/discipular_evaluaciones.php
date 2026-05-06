@@ -12,6 +12,7 @@ $puedeConfigurarFechasEval = !empty($puede_configurar_fechas);
 $esDiscipuloRol = !empty($es_discipulo);
 $estadoIntento = (array)($estado_intento ?? []);
 $clasesLinks = (array)($clases_links ?? []);
+$accesosDirectosDiscipulo = (array)($accesos_directos_discipulo ?? []);
 $intentosPorEvaluacion = (array)($intentos_por_evaluacion ?? []);
 $maxIntentos = (int)($max_intentos ?? 2);
 $resumenCapacitacionPorNivel = (array)($resumen_capacitacion_por_nivel ?? []);
@@ -117,7 +118,32 @@ if ($puedeGestionarEval) {
     </div>
 <?php endif; ?>
 
-<?php if (!$puedeGestionarEval && !empty($clasesLinks)): ?>
+<?php if ($esDiscipuloRol && !empty($accesosDirectosDiscipulo)): ?>
+<div class="card report-card" style="padding:14px; margin-bottom:14px;">
+    <h3 style="margin:0 0 4px 0;">Módulos de material</h3>
+    <small style="color:#637087;">Modo discípulo: aquí solo ves tus accesos activos de hoy.</small>
+    <div class="dashboard-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));margin-top:10px;">
+        <?php foreach ($accesosDirectosDiscipulo as $accesoDirecto): ?>
+            <div style="border:1px solid #dbe3f0;border-radius:10px;padding:10px;">
+                <div style="font-weight:700;color:#1f4f93;">Nivel <?= (int)($accesoDirecto['nivel'] ?? 0) ?> · Módulo <?= (int)($accesoDirecto['modulo'] ?? 0) ?></div>
+                <div><small style="color:#637087;">Lección: <?= htmlspecialchars((string)($accesoDirecto['leccion'] ?? 'Sin lección activa')) ?></small></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                    <?php if (!empty($accesoDirecto['url_evaluacion'])): ?>
+                        <a class="btn btn-sm btn-primary" href="<?= htmlspecialchars((string)$accesoDirecto['url_evaluacion'], ENT_QUOTES, 'UTF-8') ?>">Ir a evaluación</a>
+                    <?php else: ?>
+                        <button type="button" class="btn btn-sm" style="background:#94a3b8;color:#fff;" disabled title="No hay evaluación activa para este nivel/módulo">Ir a evaluación</button>
+                    <?php endif; ?>
+                    <?php if (!empty($accesoDirecto['url_clase'])): ?>
+                        <a class="btn btn-sm" style="background:#10b981;color:#fff;" href="<?= htmlspecialchars((string)$accesoDirecto['url_clase'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">Entrar a clase</a>
+                    <?php else: ?>
+                        <button type="button" class="btn btn-sm" style="background:#94a3b8;color:#fff;" disabled title="Este módulo aún no tiene link de clase configurado">Entrar a clase</button>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php elseif (!$esDiscipuloRol && !$puedeGestionarEval && !empty($clasesLinks)): ?>
 <div class="card report-card" style="padding:14px; margin-bottom:14px;">
     <h3 style="margin:0 0 8px 0;">Mis clases</h3>
     <small style="color:#637087;">Accesos directos de clases para tus niveles inscritos.</small>
@@ -222,6 +248,7 @@ if ($puedeGestionarEval) {
 </div>
 <?php endif; ?>
 
+<?php if (!$esDiscipuloRol): ?>
 <div class="dashboard-grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin-bottom:14px;">
     <?php foreach ($grupos as $grupo): ?>
         <div class="card report-card" style="padding:12px;">
@@ -232,6 +259,10 @@ if ($puedeGestionarEval) {
                 $intentosUsados = (int)($intentosPorEvaluacion[$idEv] ?? 0);
                 $intentosRestantes = max(0, $maxIntentos - $intentosUsados);
                 $intentosAgotados = !$puedeGestionarEval && $intentosRestantes <= 0;
+                $yaPresentada = !$puedeGestionarEval && $intentosUsados > 0;
+                $textoAccionResponder = $puedeGestionarEval
+                    ? 'Abrir'
+                    : ($intentosUsados > 0 ? 'Volver a presentar' : 'Responder');
 
                 $preguntasEvalTmp = json_decode((string)($ev['Preguntas_JSON'] ?? '[]'), true);
                 if (!is_array($preguntasEvalTmp)) {
@@ -269,6 +300,9 @@ if ($puedeGestionarEval) {
                             <div><small style="color:#637087;">Ventana: <?= $fechaIniEv !== '' ? htmlspecialchars($fechaIniEv) : 'sin inicio' ?> a <?= $fechaFinEv !== '' ? htmlspecialchars($fechaFinEv) : 'sin fin' ?></small></div>
                             <?php if (!$puedeGestionarEval): ?>
                                 <div><small style="color:#637087;">Intentos: <?= $intentosUsados ?>/<?= $maxIntentos ?></small></div>
+                                <?php if ($yaPresentada): ?>
+                                    <div><small style="color:#065f46;">Ya presentada. Puedes reintentar si aún tienes cupo.</small></div>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </div>
                         <?php if ((int)($ev['Activa'] ?? 0) === 1): ?>
@@ -279,7 +313,7 @@ if ($puedeGestionarEval) {
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
                         <?php if (!$intentosAgotados): ?>
-                            <a class="btn btn-info btn-sm" href="<?= PUBLIC_URL ?>?url=home/discipular/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEv ?>"><?= $puedeGestionarEval ? 'Abrir' : 'Responder' ?></a>
+                            <a class="btn btn-info btn-sm" href="<?= PUBLIC_URL ?>?url=home/discipular/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEv ?>"><?= htmlspecialchars($textoAccionResponder) ?></a>
                         <?php else: ?>
                             <span class="badge" style="background:#fee2e2;color:#7f1d1d;padding:8px 10px;">Intentos agotados</span>
                         <?php endif; ?>
@@ -322,6 +356,7 @@ if ($puedeGestionarEval) {
         </div>
     <?php endif; ?>
 </div>
+<?php endif; ?>
 
 <?php if ($puedeGestionarEval): ?>
 <div class="card report-card" style="padding:14px;margin-bottom:14px;">
@@ -482,6 +517,7 @@ if ($puedeGestionarEval) {
     </div>
 <?php endif; ?>
 
+<?php if (!$esDiscipuloRol): ?>
 <div class="card report-card" style="padding:14px;margin-bottom:16px;">
     <h3 style="margin:0 0 10px 0;"><?= $puedeGestionarEval ? 'Historial personal de intentos' : 'Mis notas' ?></h3>
     <div class="table-container">
@@ -525,6 +561,7 @@ if ($puedeGestionarEval) {
         </table>
     </div>
 </div>
+<?php endif; ?>
 
 <?php if ($puedeGestionarEval && !empty($historialEvaluacion) && !empty($evaluacionActiva)): ?>
 <div class="card report-card" style="padding:14px;margin-bottom:16px;">

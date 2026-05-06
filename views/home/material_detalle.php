@@ -18,6 +18,14 @@ $esUniversidadVida = $clave === 'universidad_vida';
 $usaTarjetasTipoMaterial = $esCapacitacionDestino || $esUniversidadVida;
 $configCapacitacionDestino = (array)($config_capacitacion_destino ?? []);
 $profesoresModulos = (array)($profesores_modulos ?? []);
+$restriccionDiscipuloMaterial = (array)($restriccion_discipulo_material ?? []);
+$aplicarRestriccionDiscipuloMaterial = !empty($restriccionDiscipuloMaterial['aplicar']) && $esCapacitacionDestino;
+$mensajeRestriccionDiscipuloMaterial = trim((string)($restriccionDiscipuloMaterial['mensaje'] ?? ''));
+$fechaRestriccionDiscipuloMaterial = trim((string)($restriccionDiscipuloMaterial['fecha'] ?? ''));
+$clasesActivasRestriccionDiscipulo = (array)($restriccionDiscipuloMaterial['clases_activas_por_nivel'] ?? []);
+$modulosActivosRestriccionDiscipulo = (array)($restriccionDiscipuloMaterial['modulos_activos_por_nivel'] ?? []);
+$esDiscipuloCapDestino = !empty($es_discipulo_cap_destino) && $esCapacitacionDestino;
+$accesosDiscipuloCapDestino = (array)($accesos_discipulo_cap_destino ?? []);
 $rutaDetalleVistas = PUBLIC_URL . '?url=home/material/detalle-vistas&modulo=' . rawurlencode($clave);
 
 $temasClase = [];
@@ -865,7 +873,7 @@ if ($tieneSubmodulos) {
 </div>
 <?php endif; ?>
 
-<?php if ($usaTarjetasTipoMaterial): ?>
+<?php if ($usaTarjetasTipoMaterial && !$esDiscipuloCapDestino): ?>
 <?php if ($esCapacitacionDestino): ?>
 <div id="cap-folder-explorer" class="folder-tree-explorer">
     <div class="folder-tree-row">
@@ -904,6 +912,47 @@ if ($tieneSubmodulos) {
 <div class="card" style="padding:14px;">
     <h3 style="margin-top:0;">Módulos de material</h3>
 
+    <?php if ($esDiscipuloCapDestino): ?>
+        <div class="alert alert-info" style="margin-bottom:12px;">
+            Modo discípulo: aquí solo ves tus accesos activos de hoy.
+        </div>
+
+        <?php if (!empty($accesosDiscipuloCapDestino)): ?>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:10px;">
+                <?php foreach ($accesosDiscipuloCapDestino as $acceso): ?>
+                    <div style="border:1px solid #dbe6f5;border-radius:10px;padding:12px;background:#fff;">
+                        <div style="font-weight:700;color:#2f73b7;">Nivel <?= (int)($acceso['nivel'] ?? 0) ?> · Módulo <?= (int)($acceso['modulo'] ?? 0) ?></div>
+                        <div style="font-size:13px;color:#445b78;margin:4px 0 10px 0;">Lección: <?= htmlspecialchars((string)($acceso['leccion'] ?? 'Sin lección')) ?></div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <a class="btn btn-sm btn-primary" href="<?= htmlspecialchars((string)($acceso['url_evaluacion'] ?? '#'), ENT_QUOTES, 'UTF-8') ?>">Ir a evaluación</a>
+                            <?php if (trim((string)($acceso['url_clase'] ?? '')) !== ''): ?>
+                                <a class="btn btn-sm btn-success" href="<?= htmlspecialchars((string)$acceso['url_clase'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">Entrar a clase</a>
+                            <?php else: ?>
+                                <button type="button" class="btn btn-sm btn-secondary" disabled>Sin link de clase</button>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php else: ?>
+            <p style="margin:0; color:#666;">No hay accesos para mostrar. Si ya estás inscrito, valida fechas activas y que el líder haya configurado el link de clase en Conexiones.</p>
+        <?php endif; ?>
+
+    <?php else: ?>
+
+    <?php if ($aplicarRestriccionDiscipuloMaterial): ?>
+        <?php if ($mensajeRestriccionDiscipuloMaterial !== ''): ?>
+            <div class="alert alert-warning" style="margin-bottom:10px;">
+                <?= htmlspecialchars($mensajeRestriccionDiscipuloMaterial) ?>
+            </div>
+        <?php else: ?>
+            <div class="alert alert-info" style="margin-bottom:10px;">
+                Vista discípulo activa para la fecha <?= htmlspecialchars($fechaRestriccionDiscipuloMaterial) ?>:
+                solo se muestra tu lección activa y su enlace de acceso.
+            </div>
+        <?php endif; ?>
+    <?php endif; ?>
+
     <?php if ($tieneSubmodulos && !$usaTarjetasTipoMaterial): ?>
         <div class="submodulo-tabs" role="tablist" aria-label="Submódulos de material">
             <button type="button" class="submodulo-tab is-active js-submodulo-tab" data-target="submodulo-panel-clase" role="tab" aria-selected="true">Material clase</button>
@@ -916,8 +965,20 @@ if ($tieneSubmodulos) {
             if ($tieneSubmodulos && $esCapacitacionDestino) {
                 $bloques = [];
                 foreach ($configCapacitacionDestino as $nivelTmp => $modulosTmp) {
+                    if ($aplicarRestriccionDiscipuloMaterial && !isset($clasesActivasRestriccionDiscipulo[(int)$nivelTmp])) {
+                        continue;
+                    }
+
                     foreach ((array)$modulosTmp as $moduloTmp) {
-                        foreach (['profesor', 'clase'] as $categoriaTmp) {
+                        if ($aplicarRestriccionDiscipuloMaterial) {
+                            $modulosPermitidosNivel = array_map('intval', (array)($modulosActivosRestriccionDiscipulo[(int)$nivelTmp] ?? []));
+                            if (!in_array((int)$moduloTmp, $modulosPermitidosNivel, true)) {
+                                continue;
+                            }
+                        }
+
+                        $categoriasIteracion = $aplicarRestriccionDiscipuloMaterial ? ['clase'] : ['profesor', 'clase'];
+                        foreach ($categoriasIteracion as $categoriaTmp) {
                             $temasBloqueTmp = array_values(array_filter($temas, static function($temaTmp) use ($nivelTmp, $moduloTmp, $categoriaTmp) {
                                 $categoriaTemaTmp = strtolower(trim((string)($temaTmp['categoria'] ?? 'clase')));
                                 if ($categoriaTemaTmp !== 'profesor') {
@@ -1493,11 +1554,17 @@ if ($tieneSubmodulos) {
 
         <?php if ($usaTarjetasTipoMaterial && !$esCapacitacionDestino): ?></div><?php endif; ?>
     <?php else: ?>
-        <p style="margin:0; color:#666;">No hay temas cargados en este módulo.</p>
+        <?php if ($aplicarRestriccionDiscipuloMaterial && $mensajeRestriccionDiscipuloMaterial !== ''): ?>
+            <p style="margin:0; color:#666;"><?= htmlspecialchars($mensajeRestriccionDiscipuloMaterial) ?></p>
+        <?php else: ?>
+            <p style="margin:0; color:#666;">No hay temas cargados en este módulo.</p>
+        <?php endif; ?>
+    <?php endif; ?>
+
     <?php endif; ?>
 </div>
 
-<?php if ($usaTarjetasTipoMaterial): ?>
+<?php if ($usaTarjetasTipoMaterial && !$esDiscipuloCapDestino): ?>
 </div>
 <?php endif; ?>
 

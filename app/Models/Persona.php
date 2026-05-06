@@ -75,10 +75,16 @@ class Persona extends BaseModel {
         return preg_replace('/\D+/', '', $telefono);
     }
 
-    public function findDuplicateByCedulaOrTelefono($numeroDocumento, $telefono, $excludeId = null) {
+    private function permiteTelefonoDuplicadoPorTipoDocumento($tipoDocumento) {
+        $tipoDocumento = strtoupper(trim((string)$tipoDocumento));
+        return in_array($tipoDocumento, ['TARJETA DE IDENTIDAD', 'REGISTRO CIVIL'], true);
+    }
+
+    public function findDuplicateByCedulaOrTelefono($numeroDocumento, $telefono, $excludeId = null, $tipoDocumento = null) {
         $documentoNormalizado = $this->normalizarDocumentoParaComparacion($numeroDocumento);
         $telefonoNormalizado = $this->normalizarTelefonoParaComparacion($telefono);
         $excludeId = $excludeId !== null ? (int)$excludeId : 0;
+        $permiteTelefonoDuplicado = $this->permiteTelefonoDuplicadoPorTipoDocumento($tipoDocumento);
 
         $condiciones = [];
         $params = [];
@@ -88,7 +94,7 @@ class Persona extends BaseModel {
             $params[] = $documentoNormalizado;
         }
 
-        if ($telefonoNormalizado !== '') {
+        if ($telefonoNormalizado !== '' && !$permiteTelefonoDuplicado) {
             $condiciones[] = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(Telefono, '')), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '') = ?";
             $params[] = $telefonoNormalizado;
         }
@@ -131,22 +137,21 @@ class Persona extends BaseModel {
                     LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
                     LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona";
 
-        $params = [];
-        $condiciones = [];
-
         if ($documentoNormalizado !== '') {
-            $condiciones[] = "REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(p.Numero_Documento, ''))), ' ', ''), '.', ''), '-', '') = ?";
-            $params[] = $documentoNormalizado;
-        }
-
-        if ($telefonoNormalizado !== '') {
-            $condiciones[] = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(p.Telefono, '')), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '') = ?";
-            $params[] = $telefonoNormalizado;
-        }
-
-        if (!empty($condiciones)) {
-            $sql = $sqlBase . " WHERE (" . implode(' OR ', $condiciones) . ") ORDER BY p.Id_Persona DESC LIMIT 1";
-            $rows = $this->query($sql, $params);
+            $sql = $sqlBase . "
+                    WHERE REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(p.Numero_Documento, ''))), ' ', ''), '.', ''), '-', '') = ?
+                    ORDER BY p.Id_Persona DESC
+                    LIMIT 1";
+            $rows = $this->query($sql, [$documentoNormalizado]);
+            if (!empty($rows)) {
+                return $rows[0];
+            }
+        } elseif ($telefonoNormalizado !== '') {
+            $sql = $sqlBase . "
+                    WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(p.Telefono, '')), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '') = ?
+                    ORDER BY p.Id_Persona DESC
+                    LIMIT 1";
+            $rows = $this->query($sql, [$telefonoNormalizado]);
             if (!empty($rows)) {
                 return $rows[0];
             }

@@ -474,8 +474,16 @@ class AuthController extends BaseController {
             return false;
         }
 
+        $rolId = isset($_SESSION['usuario_rol']) ? (int) $_SESSION['usuario_rol'] : 0;
+        if ($rolId === 2) {
+            return true;
+        }
+
         $rolNombre = self::normalizarTexto((string)($_SESSION['usuario_rol_nombre'] ?? ''));
-        return strpos($rolNombre, 'discipul') !== false || strpos($rolNombre, 'disipul') !== false;
+        return strpos($rolNombre, 'discipul') !== false
+            || strpos($rolNombre, 'disipul') !== false
+            || strpos($rolNombre, 'discipl') !== false
+            || strpos($rolNombre, 'disipl') !== false;
     }
 
     private static function normalizarTexto($texto) {

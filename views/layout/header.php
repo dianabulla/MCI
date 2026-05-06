@@ -23,14 +23,19 @@ $puedeVer = function(string $modulo) {
     return AuthController::esAdministrador() || AuthController::tienePermiso($modulo, 'ver');
 };
 
+$esDiscipuloMenuDirecto = AuthController::esRolDiscipuloUsuario() && !AuthController::esAdministrador();
+
 $puedeVerGanar = $puedeVer('personas');
 $puedeVerConsolidar = $puedeVer('personas');
-$puedeVerDiscipular = $puedeVer('personas') || $puedeVer('discipular_evaluaciones');
+$puedeVerDiscipular = $esDiscipuloMenuDirecto || $puedeVer('personas') || $puedeVer('discipular_evaluaciones');
 $puedeVerEnviar = $puedeVer('celulas');
-$puedeVerMaterial = AuthController::esAdministrador()
+$puedeVerMaterial = !$esDiscipuloMenuDirecto && (
+    AuthController::esAdministrador()
     || AuthController::tienePermiso('materiales_celulas', 'ver')
     || AuthController::tienePermiso('teen', 'ver')
-    || AuthController::tienePermiso('eventos', 'ver');
+    || AuthController::tienePermiso('material_universidad_vida', 'ver')
+    || AuthController::tienePermiso('material_capacitacion_destino', 'ver')
+);
 $puedeVerMinisterios = $puedeVer('ministerios');
 $puedeVerRegistroTeensKids = $puedeVer('teen');
 $puedeVerEventosMenu = AuthController::esAdministrador() || AuthController::tienePermiso('eventos', 'ver');
@@ -230,8 +235,8 @@ if ($puedeVerPendientesGanar) {
             <?php endif; ?>
 
             <?php if ($puedeVerDiscipular): ?>
-            <a class="sidebar-link <?= $isActive(['home/discipular']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home/discipular">
-                <span class="sidebar-link-icon"><i class="bi bi-journal-richtext"></i></span><span class="sidebar-link-text">Discipular</span>
+            <a class="sidebar-link <?= $isActive($esDiscipuloMenuDirecto ? ['home/discipular/evaluaciones', 'home/discipular'] : ['home/discipular']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=<?= $esDiscipuloMenuDirecto ? 'home/discipular/evaluaciones' : 'home/discipular' ?>">
+                <span class="sidebar-link-icon"><i class="bi bi-journal-richtext"></i></span><span class="sidebar-link-text"><?= $esDiscipuloMenuDirecto ? 'Evaluaciones y Clases' : 'Discipular' ?></span>
             </a>
             <?php endif; ?>
 

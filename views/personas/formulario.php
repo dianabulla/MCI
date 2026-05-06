@@ -69,7 +69,7 @@ $urlVolver = $returnUrl !== ''
                 <div class="form-group">
                     <label for="tipo_documento">Tipo de Documento</label>
                     <?php $tipoDocumentoSeleccionado = $post_data['tipo_documento'] ?? ($persona['Tipo_Documento'] ?? ''); ?>
-                    <select id="tipo_documento" name="tipo_documento" class="form-control">
+                    <select id="tipo_documento" name="tipo_documento" class="form-control" required>
                         <option value="">Seleccionar...</option>
                         <option value="Registro Civil" <?= $tipoDocumentoSeleccionado === 'Registro Civil' ? 'selected' : '' ?>>Registro Civil</option>
                         <option value="Cedula de Ciudadania" <?= $tipoDocumentoSeleccionado === 'Cedula de Ciudadania' ? 'selected' : '' ?>>Cédula de Ciudadanía</option>
@@ -81,7 +81,7 @@ $urlVolver = $returnUrl !== ''
                 <div class="form-group">
                     <label for="numero_documento">Número de Documento</label>
                     <input type="text" id="numero_documento" name="numero_documento" class="form-control" 
-                           value="<?= htmlspecialchars($post_data['numero_documento'] ?? $persona['Numero_Documento'] ?? '') ?>">
+                           value="<?= htmlspecialchars($post_data['numero_documento'] ?? $persona['Numero_Documento'] ?? '') ?>" required>
                 </div>
             </div>
 

@@ -406,6 +406,30 @@ class EscuelaFormacionRegistroController extends BaseController {
         return function_exists('mb_strtoupper') ? mb_strtoupper($valor, 'UTF-8') : strtoupper($valor);
     }
 
+    private function normalizarTipoDocumento($valor) {
+        $valor = trim((string)$valor);
+        if ($valor === '') {
+            return '';
+        }
+
+        $valorNormalizado = strtoupper($valor);
+        $valorNormalizado = str_replace(['Á', 'É', 'Í', 'Ó', 'Ú'], ['A', 'E', 'I', 'O', 'U'], $valorNormalizado);
+
+        $mapa = [
+            'CC' => 'Cedula de Ciudadania',
+            'CEDULA DE CIUDADANIA' => 'Cedula de Ciudadania',
+            'CEDULA CIUDADANIA' => 'Cedula de Ciudadania',
+            'CE' => 'Cedula Extranjera',
+            'CEDULA EXTRANJERA' => 'Cedula Extranjera',
+            'TI' => 'Tarjeta de Identidad',
+            'TARJETA DE IDENTIDAD' => 'Tarjeta de Identidad',
+            'RC' => 'Registro Civil',
+            'REGISTRO CIVIL' => 'Registro Civil'
+        ];
+
+        return $mapa[$valorNormalizado] ?? '';
+    }
+
     private function normalizarEmail($valor) {
         $valor = trim((string)$valor);
         if ($valor === '') {
@@ -778,18 +802,19 @@ class EscuelaFormacionRegistroController extends BaseController {
         return $rows[0] ?? null;
     }
 
-    private function crearPersonaNueva($nombreCompleto, $telefono, $cedula, $idMinisterio, $idLider = 0, $genero = '', $nombreLider = '', $email = '', $direccion = '', $fechaNacimiento = '') {
+    private function crearPersonaNueva($nombreCompleto, $telefono, $cedula, $tipoDocumento, $idMinisterio, $idLider = 0, $genero = '', $nombreLider = '', $email = '', $direccion = '', $fechaNacimiento = '') {
         $partesNombre = $this->separarNombreApellido($nombreCompleto);
         $genero = trim((string)$genero);
         $nombreLider = trim((string)$nombreLider);
         $email = $this->normalizarEmail($email);
         $direccion = trim((string)$direccion);
         $fechaNacimiento = trim((string)$fechaNacimiento);
+        $tipoDocumento = $this->normalizarTipoDocumento($tipoDocumento);
 
         $data = [
             'Nombre' => $partesNombre['nombre'],
             'Apellido' => $partesNombre['apellido'],
-            'Tipo_Documento' => $cedula !== '' ? 'Cedula de Ciudadania' : null,
+            'Tipo_Documento' => $tipoDocumento !== '' ? $tipoDocumento : 'Cedula de Ciudadania',
             'Numero_Documento' => $cedula !== '' ? $cedula : null,
             'Genero' => $genero !== '' ? $genero : null,
             'Telefono' => $telefono !== '' ? $telefono : null,
@@ -865,6 +890,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'edad' => (string)($_GET['edad'] ?? ''),
                 'telefono' => (string)($_GET['telefono'] ?? ''),
                 'cedula' => (string)($_GET['cedula'] ?? ''),
+                'tipo_documento' => (string)($_GET['tipo_documento'] ?? ''),
                 'email' => (string)($_GET['email'] ?? ''),
                 'direccion' => (string)($_GET['direccion'] ?? ''),
                 'fecha_nacimiento' => (string)($_GET['fecha_nacimiento'] ?? ''),
@@ -1468,13 +1494,28 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         $cedulaFormulario = $this->normalizarDocumento($_POST['cedula'] ?? '');
+        $tipoDocumentoFormulario = $this->normalizarTipoDocumento($_POST['tipo_documento'] ?? '');
         if ($cedulaFormulario === '') {
             $query = http_build_query([
                 'url' => 'escuelas_formacion/registro-publico',
                 'mensaje' => 'La cedula es obligatoria en este formulario.',
                 'tipo' => 'error',
                 'telefono' => $this->normalizarTelefono($_POST['telefono'] ?? ''),
-                'cedula' => ''
+                'cedula' => '',
+                'tipo_documento' => $tipoDocumentoFormulario
+            ]);
+            header('Location: ' . PUBLIC_URL . '?' . $query);
+            exit;
+        }
+
+        if ($tipoDocumentoFormulario === '') {
+            $query = http_build_query([
+                'url' => 'escuelas_formacion/registro-publico',
+                'mensaje' => 'Debes seleccionar el tipo de documento.',
+                'tipo' => 'error',
+                'telefono' => $this->normalizarTelefono($_POST['telefono'] ?? ''),
+                'cedula' => $cedulaFormulario,
+                'tipo_documento' => ''
             ]);
             header('Location: ' . PUBLIC_URL . '?' . $query);
             exit;
@@ -1720,6 +1761,7 @@ class EscuelaFormacionRegistroController extends BaseController {
         $edad = $this->normalizarEdad($_POST['edad'] ?? '');
         $telefono = $this->normalizarTelefono($_POST['telefono'] ?? '');
         $cedula = $this->normalizarDocumento($_POST['cedula'] ?? '');
+        $tipoDocumento = $this->normalizarTipoDocumento($_POST['tipo_documento'] ?? '');
         $email = $this->normalizarEmail($_POST['email'] ?? '');
         $direccion = trim((string)($_POST['direccion'] ?? ''));
         $fechaNacimiento = trim((string)($_POST['fecha_nacimiento'] ?? ''));
@@ -1745,6 +1787,10 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         if ($cedula === '') {
             $errores[] = 'La cedula es obligatoria.';
+        }
+
+        if ($tipoDocumento === '') {
+            $errores[] = 'Debes seleccionar el tipo de documento.';
         }
 
         if ($telefono !== '' && !preg_match('/^\d+$/', $telefono)) {
@@ -1871,7 +1917,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 $actualizarPersona['Genero'] = $genero;
             }
             if (trim((string)($persona['Numero_Documento'] ?? '')) === '' && $cedula !== '') {
-                $actualizarPersona['Tipo_Documento'] = 'Cedula de Ciudadania';
+                $actualizarPersona['Tipo_Documento'] = $tipoDocumento;
                 $actualizarPersona['Numero_Documento'] = $cedula;
             }
             if ($this->soportaEmail && trim((string)($persona['Email'] ?? '')) === '' && $email !== '') {
@@ -1901,7 +1947,7 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         if ($idPersona <= 0 && empty($errores)) {
-            $idPersona = $this->crearPersonaNueva($nombre, $telefono, $cedula, $idMinisterio, $idLider, $genero, $lider, $email, $direccion, $fechaNacimiento);
+            $idPersona = $this->crearPersonaNueva($nombre, $telefono, $cedula, $tipoDocumento, $idMinisterio, $idLider, $genero, $lider, $email, $direccion, $fechaNacimiento);
             if ($idPersona <= 0) {
                 $errores[] = 'No se pudo crear la persona nueva en la lista de Personas.';
             }
@@ -1917,6 +1963,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'edad' => (string)$edad,
                 'telefono' => $telefono,
                 'cedula' => $cedula,
+                'tipo_documento' => $tipoDocumento,
                 'email' => $email,
                 'direccion' => $direccion,
                 'fecha_nacimiento' => $fechaNacimiento,
@@ -1941,7 +1988,8 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'mensaje' => 'La persona ya está inscrita en formación. No se crea un registro nuevo; solo se permite marcar asistencia y/o registrar abonos.',
                 'tipo' => 'error',
                 'telefono' => $telefono,
-                'cedula' => $cedula
+                'cedula' => $cedula,
+                'tipo_documento' => $tipoDocumento
             ]);
             header('Location: ' . PUBLIC_URL . '?' . $query);
             exit;

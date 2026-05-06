@@ -467,6 +467,18 @@
                     <h3 class="section-title">1. Identificación</h3>
                     <div class="grid">
                         <div class="field">
+                            <label for="tipo_documento">Tipo de documento <span class="req">*</span></label>
+                            <?php $tipoDocumento = (string)($old['tipo_documento'] ?? ''); ?>
+                            <select id="tipo_documento" name="tipo_documento" required>
+                                <option value="">Seleccione...</option>
+                                <option value="Cedula de Ciudadania" <?= $tipoDocumento === 'Cedula de Ciudadania' ? 'selected' : '' ?>>Cédula de Ciudadanía</option>
+                                <option value="Cedula Extranjera" <?= $tipoDocumento === 'Cedula Extranjera' ? 'selected' : '' ?>>Cédula Extranjera</option>
+                                <option value="Tarjeta de Identidad" <?= $tipoDocumento === 'Tarjeta de Identidad' ? 'selected' : '' ?>>Tarjeta de Identidad</option>
+                                <option value="Registro Civil" <?= $tipoDocumento === 'Registro Civil' ? 'selected' : '' ?>>Registro Civil</option>
+                            </select>
+                        </div>
+
+                        <div class="field">
                             <label for="cedula">Cédula <span class="req">*</span></label>
                             <input type="text" id="cedula" name="cedula" required inputmode="numeric" pattern="[0-9]{4,}" minlength="4" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="<?= htmlspecialchars((string)($old['cedula'] ?? '')) ?>" placeholder="Ej: 12345678">
                         </div>

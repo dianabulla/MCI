@@ -276,4 +276,42 @@ class DiscipularEvaluacion extends BaseModel {
             return [];
         }
     }
+
+    public function listarConexionesClaseCapacitacionDestino(): array {
+        try {
+                        $sql = "SELECT
+                                                CAST(Nivel AS UNSIGNED) AS Nivel,
+                                                CAST(Modulo_Numero AS UNSIGNED) AS Modulo_Numero,
+                                                TRIM(COALESCE(Profesor_Nombre, '')) AS Profesor_Nombre,
+                                                TRIM(COALESCE(Conexion_Zoom_URL, '')) AS Conexion_Zoom_URL
+                                        FROM material_hub_modulo_config
+                                        WHERE Modulo = 'capacitacion_destino'
+                                            AND Nivel IS NOT NULL
+                                            AND Modulo_Numero IS NOT NULL
+                                        ORDER BY Nivel ASC, Modulo_Numero ASC";
+
+                        $stmt = $this->db->query($sql);
+                        return (array)$stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+                        try {
+                                // Compatibilidad hacia atrás por si alguna instalación antigua
+                                // usa la columna Modulo_Clave en lugar de Modulo.
+                                $sqlLegacy = "SELECT
+                                                                CAST(Nivel AS UNSIGNED) AS Nivel,
+                                                                CAST(Modulo_Numero AS UNSIGNED) AS Modulo_Numero,
+                                                                TRIM(COALESCE(Profesor_Nombre, '')) AS Profesor_Nombre,
+                                                                TRIM(COALESCE(Conexion_Zoom_URL, '')) AS Conexion_Zoom_URL
+                                                            FROM material_hub_modulo_config
+                                                            WHERE Modulo_Clave = 'capacitacion_destino'
+                                                                AND Nivel IS NOT NULL
+                                                                AND Modulo_Numero IS NOT NULL
+                                                            ORDER BY Nivel ASC, Modulo_Numero ASC";
+
+                                $stmtLegacy = $this->db->query($sqlLegacy);
+                                return (array)$stmtLegacy->fetchAll(PDO::FETCH_ASSOC);
+                        } catch (Throwable $e2) {
+                                return [];
+                        }
+        }
+    }
 }

@@ -45,6 +45,7 @@ class PermisosController extends BaseController {
     public function index() {
         $roles = $this->rolModel->getAll();
         $modulos = $this->getModulos();
+        $modulosObsoletos = $this->getModulosObsoletosEnBase();
         
         // Obtener permisos de todos los roles
         $permisos = [];
@@ -56,7 +57,8 @@ class PermisosController extends BaseController {
             'pageTitle' => 'Administración de Permisos',
             'roles' => $roles,
             'modulos' => $modulos,
-            'permisos' => $permisos
+            'permisos' => $permisos,
+            'modulos_obsoletos' => $modulosObsoletos
         ];
         
         $this->view('permisos/index', $data);
@@ -93,6 +95,37 @@ class PermisosController extends BaseController {
             ['Modulo', 'Rol', 'Puede Ver', 'Puede Crear', 'Puede Editar', 'Puede Eliminar'],
             $rows
         );
+    }
+
+    public function limpiarObsoletos() {
+        header('Content-Type: application/json; charset=UTF-8');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Método no permitido']);
+            return;
+        }
+
+        try {
+            $modulosObsoletos = $this->getModulosObsoletosEnBase();
+            if (empty($modulosObsoletos)) {
+                echo json_encode(['success' => true, 'deleted_rows' => 0, 'modules' => []]);
+                return;
+            }
+
+            $placeholders = implode(',', array_fill(0, count($modulosObsoletos), '?'));
+            $sql = "DELETE FROM permisos WHERE Modulo IN ({$placeholders})";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($modulosObsoletos);
+
+            echo json_encode([
+                'success' => true,
+                'deleted_rows' => (int)$stmt->rowCount(),
+                'modules' => array_values($modulosObsoletos)
+            ]);
+        } catch (Throwable $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
     }
 
     /**
@@ -211,15 +244,17 @@ class PermisosController extends BaseController {
     /**
      * Obtener módulos disponibles
      */
-    private function getModulos() {
-        $modulosBase = [
+    private function getModulosBaseCatalogo(): array {
+        return [
             'personas' => 'Personas',
             'personas_formulario_publico' => 'Personas: Ver formulario publico',
             'personas_plantillas_whatsapp' => 'Personas: Ver plantillas WhatsApp',
             'personas_ganar_asignados' => 'Personas: Ver atajo Asignados (Pendiente)',
             'personas_ganar_reasignados' => 'Personas: Ver atajo Reasignados (Pendiente)',
             'celulas' => 'Células',
-            'materiales_celulas' => 'Materiales Células (PDF)',
+            'materiales_celulas' => 'Material: Células',
+            'material_universidad_vida' => 'Material: Universidad de la Vida',
+            'material_capacitacion_destino' => 'Material: Capacitación Destino',
             'ministerios' => 'Ministerios',
             'roles' => 'Roles',
             'eventos' => 'Eventos',
@@ -234,7 +269,7 @@ class PermisosController extends BaseController {
             'discipular_evaluaciones_fechas' => 'Discipular: Configurar fechas evaluaciones',
             'entrega_obsequio' => 'Entrega de Obsequios',
             'registro_obsequio' => 'Registro de Obsequios',
-            'teen' => 'Material Teens',
+            'teen' => 'Material: Teens',
             'nehemias' => 'Nehemias',
             'nehemias_cols_cedula' => 'Nehemias: Ver Cédula',
             'nehemias_cols_telefono' => 'Nehemias: Ver Teléfono',
@@ -247,6 +282,10 @@ class PermisosController extends BaseController {
             'nehemias_acciones_eliminar' => 'Nehemias: Botón eliminar',
             'permisos' => 'Permisos'
         ];
+    }
+
+    private function getModulos() {
+        $modulosBase = $this->getModulosBaseCatalogo();
 
         $modulosDetectados = array_unique(array_merge(
             $this->getModulosDesdeBaseDatos(),
@@ -264,6 +303,38 @@ class PermisosController extends BaseController {
         }
 
         return $modulosBase;
+    }
+
+    private function getModulosActivosReferencia(): array {
+        $base = array_keys($this->getModulosBaseCatalogo());
+        $desdeCodigo = $this->getModulosDesdeCodigo();
+        $activos = array_values(array_unique(array_merge($base, $desdeCodigo)));
+        sort($activos, SORT_NATURAL | SORT_FLAG_CASE);
+        return $activos;
+    }
+
+    private function getModulosObsoletosEnBase(): array {
+        $modulosBd = $this->getModulosDesdeBaseDatos();
+        if (empty($modulosBd)) {
+            return [];
+        }
+
+        $activos = array_fill_keys($this->getModulosActivosReferencia(), true);
+        $obsoletos = [];
+
+        foreach ($modulosBd as $moduloBd) {
+            $moduloBd = trim((string)$moduloBd);
+            if ($moduloBd === '') {
+                continue;
+            }
+
+            if (!isset($activos[$moduloBd])) {
+                $obsoletos[] = $moduloBd;
+            }
+        }
+
+        sort($obsoletos, SORT_NATURAL | SORT_FLAG_CASE);
+        return array_values(array_unique($obsoletos));
     }
 
     private function getModulosDesdeBaseDatos(): array {

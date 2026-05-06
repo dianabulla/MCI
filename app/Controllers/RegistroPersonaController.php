@@ -246,7 +246,8 @@ class RegistroPersonaController extends BaseController {
                 'fecha_nacimiento' => (string)($_GET['fecha_nacimiento'] ?? ''),
                 'barrio' => (string)($_GET['barrio'] ?? ''),
                 'peticion' => (string)($_GET['peticion'] ?? ''),
-                'cedula' => (string)($_GET['cedula'] ?? '')
+                'cedula' => (string)($_GET['cedula'] ?? ''),
+                'tipo_documento' => (string)($_GET['tipo_documento'] ?? '')
             ]
         ];
 
@@ -270,6 +271,7 @@ class RegistroPersonaController extends BaseController {
         $fechaNacimiento = trim((string)($_POST['fecha_nacimiento'] ?? ''));
         $barrio = $this->normalizarTextoMayusculas($_POST['barrio'] ?? '');
         $peticion = $this->normalizarTextoMayusculas($_POST['peticion'] ?? '');
+        $tipoDocumento = $this->normalizarTipoDocumentoInput($_POST['tipo_documento'] ?? '');
         $cedula = $this->normalizarDocumentoInput($_POST['cedula'] ?? '');
         $tipoPersonaInput = 'nueva';
 
@@ -281,6 +283,14 @@ class RegistroPersonaController extends BaseController {
 
         if ($apellido === '') {
             $errores[] = 'Los apellidos son requeridos';
+        }
+
+        if ($tipoDocumento === '') {
+            $errores[] = 'Debe seleccionar el tipo de documento';
+        }
+
+        if ($cedula === '') {
+            $errores[] = 'La cédula es obligatoria';
         }
 
         if ($telefono !== '' && strlen(preg_replace('/\D+/', '', $telefono)) < 7) {
@@ -295,7 +305,7 @@ class RegistroPersonaController extends BaseController {
             $errores[] = 'Debes escribir una observación cuando seleccionas Otros';
         }
 
-        $duplicado = $this->personaModel->findDuplicateByCedulaOrTelefono($cedula, $telefono);
+        $duplicado = $this->personaModel->findDuplicateByCedulaOrTelefono($cedula, $telefono, null, $tipoDocumento);
         if (!empty($duplicado)) {
             $errores[] = $this->construirMensajeDuplicadoPersona($duplicado, $cedula, $telefono);
         }
@@ -312,7 +322,8 @@ class RegistroPersonaController extends BaseController {
                 'fecha_nacimiento' => $fechaNacimiento,
                 'barrio' => $barrio,
                 'peticion' => $peticion,
-                'cedula' => $cedula
+                'cedula' => $cedula,
+                'tipo_documento' => $tipoDocumento
             ]);
         }
 
@@ -327,8 +338,8 @@ class RegistroPersonaController extends BaseController {
         $data = [
             'Nombre' => $nombre,
             'Apellido' => $apellido,
-            'Tipo_Documento' => $cedula !== '' ? 'Cedula de Ciudadania' : null,
-            'Numero_Documento' => $cedula !== '' ? $cedula : null,
+            'Tipo_Documento' => $tipoDocumento,
+            'Numero_Documento' => $cedula,
             'Fecha_Nacimiento' => $fechaNacimiento !== '' ? $fechaNacimiento : null,
             'Telefono' => $telefono !== '' ? $telefono : null,
             'Barrio' => $barrio !== '' ? $barrio : null,
@@ -441,6 +452,30 @@ class RegistroPersonaController extends BaseController {
         }
 
         return $telefono;
+    }
+
+    private function normalizarTipoDocumentoInput($valor) {
+        $valor = trim((string)$valor);
+        if ($valor === '') {
+            return '';
+        }
+
+        $valorNormalizado = strtoupper($valor);
+        $valorNormalizado = str_replace(['Á', 'É', 'Í', 'Ó', 'Ú'], ['A', 'E', 'I', 'O', 'U'], $valorNormalizado);
+
+        $mapa = [
+            'CC' => 'Cedula de Ciudadania',
+            'CEDULA DE CIUDADANIA' => 'Cedula de Ciudadania',
+            'CEDULA CIUDADANIA' => 'Cedula de Ciudadania',
+            'CE' => 'Cedula Extranjera',
+            'CEDULA EXTRANJERA' => 'Cedula Extranjera',
+            'TI' => 'Tarjeta de Identidad',
+            'TARJETA DE IDENTIDAD' => 'Tarjeta de Identidad',
+            'RC' => 'Registro Civil',
+            'REGISTRO CIVIL' => 'Registro Civil'
+        ];
+
+        return $mapa[$valorNormalizado] ?? '';
     }
 
     private function redirigirConError(array $errores, array $old = []) {

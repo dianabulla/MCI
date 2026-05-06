@@ -1157,7 +1157,7 @@ class HomeController extends BaseController {
             'universidad_vida' => [
                 'clave' => 'universidad_vida',
                 'titulo' => 'Material Universidad de la Vida',
-                'permiso' => 'eventos',
+                'permiso' => 'material_universidad_vida',
                 'prefijo_archivo' => 'material_universidad_vida',
                 'ruta' => 'home/material/universidad-vida',
                 'icono' => 'bi bi-mortarboard-fill',
@@ -1166,7 +1166,7 @@ class HomeController extends BaseController {
             'capacitacion_destino' => [
                 'clave' => 'capacitacion_destino',
                 'titulo' => 'Material Capacitacion Destino',
-                'permiso' => 'eventos',
+                'permiso' => 'material_capacitacion_destino',
                 'prefijo_archivo' => 'material_capacitacion_destino',
                 'ruta' => 'home/material/capacitacion-destino',
                 'icono' => 'bi bi-signpost-split-fill',
@@ -1525,6 +1525,253 @@ class HomeController extends BaseController {
         }
 
         return $moduloNumero;
+    }
+
+    private function extraerNumeroLeccionMaterialTema(string $leccion): int {
+        $leccion = trim($leccion);
+        if ($leccion === '') {
+            return 0;
+        }
+
+        if (preg_match('/\d+/', $leccion, $match) !== 1) {
+            return 0;
+        }
+
+        return (int)($match[0] ?? 0);
+    }
+
+    private function obtenerProgramaCapacitacionDestinoPorNivel(int $nivel): string {
+        if ($nivel === 1) {
+            return 'capacitacion_destino_nivel_1';
+        }
+        if ($nivel === 2) {
+            return 'capacitacion_destino_nivel_2';
+        }
+        if ($nivel === 3) {
+            return 'capacitacion_destino_nivel_3';
+        }
+        return '';
+    }
+
+    private function obtenerNivelesCapacitacionDestinoPermitidosPorInscripcion(int $idPersona): array {
+        if ($idPersona <= 0) {
+            return [];
+        }
+
+        require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+        $inscripcionModel = new EscuelaFormacionInscripcion();
+        $programas = (array)$inscripcionModel->getProgramasInscritosPersona($idPersona);
+
+        $niveles = [];
+        foreach ($programas as $programa) {
+            $programa = trim((string)$programa);
+            if ($programa === 'capacitacion_destino' || $programa === 'capacitacion_destino_nivel_1') {
+                $niveles[1] = true;
+            }
+            if ($programa === 'capacitacion_destino_nivel_2') {
+                $niveles[2] = true;
+            }
+            if ($programa === 'capacitacion_destino_nivel_3') {
+                $niveles[3] = true;
+            }
+        }
+
+        $resultado = array_map('intval', array_keys($niveles));
+        sort($resultado);
+        return $resultado;
+    }
+
+    private function obtenerClasesActivasCapDestinoPorNivel(array $niveles, ?string $fecha = null): array {
+        $fecha = trim((string)($fecha ?? date('Y-m-d')));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+            $fecha = date('Y-m-d');
+        }
+
+        require_once APP . '/Models/EscuelaFormacionAsistenciaClase.php';
+        $asistenciaModel = new EscuelaFormacionAsistenciaClase();
+
+        $clasesPorNivel = [];
+        foreach ($niveles as $nivel) {
+            $nivel = (int)$nivel;
+            $programa = $this->obtenerProgramaCapacitacionDestinoPorNivel($nivel);
+            if ($programa === '') {
+                continue;
+            }
+
+            $numeroClase = (int)$asistenciaModel->getNumeroClasePorFecha('discipular', $programa, $fecha);
+            if ($numeroClase > 0) {
+                $clasesPorNivel[$nivel] = $numeroClase;
+            }
+        }
+
+        ksort($clasesPorNivel);
+        return $clasesPorNivel;
+    }
+
+    private function filtrarTemasMaterialParaDiscipulo(string $moduloClave, array $temas): array {
+        $restriccion = [
+            'aplicar' => false,
+            'fecha' => date('Y-m-d'),
+            'niveles_permitidos' => [],
+            'clases_activas_por_nivel' => [],
+            'modulos_activos_por_nivel' => [],
+            'mensaje' => '',
+        ];
+
+        if (!AuthController::esRolDiscipuloUsuario() || trim($moduloClave) !== 'capacitacion_destino') {
+            return ['temas' => $temas, 'restriccion' => $restriccion];
+        }
+
+        $restriccion['aplicar'] = true;
+        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+        $nivelesPermitidos = $this->obtenerNivelesCapacitacionDestinoPermitidosPorInscripcion($idPersona);
+        $restriccion['niveles_permitidos'] = $nivelesPermitidos;
+
+        if (empty($nivelesPermitidos)) {
+            $restriccion['mensaje'] = 'No tienes inscripción activa en Capacitación Destino.';
+            return ['temas' => [], 'restriccion' => $restriccion];
+        }
+
+        $clasesActivasPorNivel = $this->obtenerClasesActivasCapDestinoPorNivel($nivelesPermitidos, $restriccion['fecha']);
+        $restriccion['clases_activas_por_nivel'] = $clasesActivasPorNivel;
+
+        if (empty($clasesActivasPorNivel)) {
+            $restriccion['mensaje'] = 'Hoy no hay lecciones activas programadas para tu nivel inscrito.';
+            return ['temas' => [], 'restriccion' => $restriccion];
+        }
+
+        $filtrados = [];
+        $modulosActivosPorNivel = [];
+
+        foreach ($temas as $tema) {
+            $nivelTema = (int)($tema['nivel'] ?? 0);
+            if (!in_array($nivelTema, $nivelesPermitidos, true)) {
+                continue;
+            }
+
+            $claseActiva = (int)($clasesActivasPorNivel[$nivelTema] ?? 0);
+            if ($claseActiva <= 0) {
+                continue;
+            }
+
+            $categoriaTema = strtolower(trim((string)($tema['categoria'] ?? 'clase')));
+            if ($categoriaTema === 'profesor') {
+                continue;
+            }
+
+            $leccionTema = $this->extraerNumeroLeccionMaterialTema((string)($tema['leccion'] ?? ''));
+            if ($leccionTema <= 0 || $leccionTema !== $claseActiva) {
+                continue;
+            }
+
+            $moduloTema = (int)($tema['modulo_numero'] ?? 0);
+            if ($moduloTema > 0) {
+                if (!isset($modulosActivosPorNivel[$nivelTema])) {
+                    $modulosActivosPorNivel[$nivelTema] = [];
+                }
+                $modulosActivosPorNivel[$nivelTema][$moduloTema] = true;
+            }
+
+            $filtrados[] = $tema;
+        }
+
+        $mapModulos = [];
+        foreach ($modulosActivosPorNivel as $nivel => $modsMap) {
+            $mods = array_map('intval', array_keys($modsMap));
+            sort($mods);
+            $mapModulos[(int)$nivel] = $mods;
+        }
+
+        $restriccion['modulos_activos_por_nivel'] = $mapModulos;
+
+        if (empty($filtrados) && $restriccion['mensaje'] === '') {
+            $restriccion['mensaje'] = 'No hay material activo para tu lección de hoy.';
+        }
+
+        return ['temas' => array_values($filtrados), 'restriccion' => $restriccion];
+    }
+
+    private function archivoMaterialPermitidoParaUsuario(string $moduloClave, string $archivo): bool {
+        $archivo = basename(trim($archivo));
+        if ($archivo === '') {
+            return false;
+        }
+
+        if (!AuthController::esRolDiscipuloUsuario() || trim($moduloClave) !== 'capacitacion_destino') {
+            return true;
+        }
+
+        $modulos = $this->obtenerModulosMaterial();
+        if (!isset($modulos[$moduloClave])) {
+            return false;
+        }
+
+        $temas = $this->listarTemasModuloMaterial($modulos[$moduloClave]);
+        $filtrado = $this->filtrarTemasMaterialParaDiscipulo($moduloClave, $temas);
+        $temasPermitidos = (array)($filtrado['temas'] ?? []);
+
+        foreach ($temasPermitidos as $tema) {
+            foreach ((array)($tema['archivos'] ?? []) as $archivoTema) {
+                $nombreArchivo = basename((string)($archivoTema['nombre'] ?? ''));
+                if ($nombreArchivo !== '' && $nombreArchivo === $archivo) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function construirAccesosDiscipuloCapDestino(array $restriccion, array $profesoresModulos): array {
+        $accesos = [];
+
+        $nivelesPermitidos = array_map('intval', (array)($restriccion['niveles_permitidos'] ?? []));
+        $clasesActivasPorNivel = (array)($restriccion['clases_activas_por_nivel'] ?? []);
+        $configNiveles = $this->obtenerConfiguracionNivelesCapacitacionDestino();
+
+        foreach ($nivelesPermitidos as $nivel) {
+            $nivel = (int)$nivel;
+            $modulosNivel = array_map('intval', (array)($configNiveles[$nivel] ?? []));
+            if (empty($modulosNivel)) {
+                continue;
+            }
+
+            $numeroLeccionActiva = (int)($clasesActivasPorNivel[$nivel] ?? 0);
+            $leccion = $numeroLeccionActiva > 0 ? ('Lección ' . $numeroLeccionActiva) : 'Sin lección activa';
+
+            foreach ($modulosNivel as $modulo) {
+                $key = $nivel . '_' . $modulo;
+                $linkClase = trim((string)($profesoresModulos[$key]['conexion_zoom_url'] ?? ''));
+
+                $accesos[] = [
+                    'nivel' => $nivel,
+                    'modulo' => $modulo,
+                    'leccion' => $leccion,
+                    'url_evaluacion' => PUBLIC_URL
+                        . '?url=home/discipular/evaluaciones&from_material=1'
+                        . '&nivel=' . $nivel
+                        . '&modulo=' . $modulo
+                        . '&leccion=' . urlencode($leccion),
+                    'url_clase' => $linkClase,
+                ];
+            }
+        }
+
+        usort($accesos, static function($a, $b) {
+            $cmpNivel = ((int)($a['nivel'] ?? 0)) <=> ((int)($b['nivel'] ?? 0));
+            if ($cmpNivel !== 0) {
+                return $cmpNivel;
+            }
+
+            $cmpModulo = ((int)($a['modulo'] ?? 0)) <=> ((int)($b['modulo'] ?? 0));
+            if ($cmpModulo !== 0) {
+                return $cmpModulo;
+            }
+
+            return strcasecmp((string)($a['leccion'] ?? ''), (string)($b['leccion'] ?? ''));
+        });
+
+        return $accesos;
     }
 
     private function normalizarCategoriaMaterialTema(string $modulo, string $categoria): string {
@@ -2169,6 +2416,10 @@ class HomeController extends BaseController {
             $this->redirect('home/material');
         }
 
+        $moduloVista = $modulosVisibles[$moduloActual];
+        $esDiscipuloCapDestino = AuthController::esRolDiscipuloUsuario()
+            && (string)($moduloVista['clave'] ?? '') === 'capacitacion_destino';
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $accion = trim((string)($_POST['accion'] ?? ''));
             $moduloPost = trim((string)($_POST['modulo'] ?? ''));
@@ -2178,6 +2429,8 @@ class HomeController extends BaseController {
             }
 
             $moduloSeleccionado = $modulosVisibles[$moduloPost];
+            $esDiscipuloCapDestinoPost = AuthController::esRolDiscipuloUsuario()
+                && (string)($moduloSeleccionado['clave'] ?? '') === 'capacitacion_destino';
             $contextoRetorno = [
                 'nivel' => (int)($_POST['contexto_nivel'] ?? $_POST['nivel'] ?? 0),
                 'modulo' => (int)($_POST['contexto_modulo'] ?? $_POST['modulo_numero'] ?? 0),
@@ -2186,6 +2439,10 @@ class HomeController extends BaseController {
                 'open_lote' => trim((string)($_POST['contexto_open_lote'] ?? '')),
                 'open_panel' => trim((string)($_POST['contexto_open_panel'] ?? '')),
             ];
+
+            if ($esDiscipuloCapDestinoPost) {
+                $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Tu rol discípulo solo puede ver el acceso a clase y evaluaciones activas.', 'error'));
+            }
 
             if (!$this->puedeGestionarModuloMaterial($moduloSeleccionado)) {
                 $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'No tienes permiso para gestionar este material.', 'error'));
@@ -2344,8 +2601,17 @@ class HomeController extends BaseController {
             }
         }
 
-        $modulo = $modulosVisibles[$moduloActual];
+        $modulo = $moduloVista;
         $temas = $this->listarTemasModuloMaterial($modulo);
+        $resultadoFiltroDiscipulo = $this->filtrarTemasMaterialParaDiscipulo((string)($modulo['clave'] ?? ''), $temas);
+        $temas = (array)($resultadoFiltroDiscipulo['temas'] ?? []);
+        $restriccionDiscipuloMaterial = (array)($resultadoFiltroDiscipulo['restriccion'] ?? []);
+        $profesoresModulos = (string)($modulo['clave'] ?? '') === 'capacitacion_destino'
+            ? $this->obtenerProfesoresModulos('capacitacion_destino')
+            : [];
+        $accesosDiscipuloCapDestino = $esDiscipuloCapDestino
+            ? $this->construirAccesosDiscipuloCapDestino($restriccionDiscipuloMaterial, $profesoresModulos)
+            : [];
         $totalArchivos = 0;
         foreach ($temas as $tema) {
             $totalArchivos += (int)($tema['total_archivos'] ?? 0);
@@ -2357,10 +2623,11 @@ class HomeController extends BaseController {
             'total_archivos' => $totalArchivos,
             'tiene_submodulos' => $this->moduloMaterialTieneSubmodulos((string)($modulo['clave'] ?? '')),
             'config_capacitacion_destino' => $this->obtenerConfiguracionNivelesCapacitacionDestino(),
-            'profesores_modulos' => (string)($modulo['clave'] ?? '') === 'capacitacion_destino'
-                ? $this->obtenerProfesoresModulos('capacitacion_destino')
-                : [],
-            'puede_gestionar' => $this->puedeGestionarModuloMaterial($modulo),
+            'profesores_modulos' => $profesoresModulos,
+            'restriccion_discipulo_material' => $restriccionDiscipuloMaterial,
+            'es_discipulo_cap_destino' => $esDiscipuloCapDestino,
+            'accesos_discipulo_cap_destino' => $accesosDiscipuloCapDestino,
+            'puede_gestionar' => !$esDiscipuloCapDestino && $this->puedeGestionarModuloMaterial($modulo),
             'mensaje' => (string)($_GET['mensaje'] ?? ''),
             'tipo' => (string)($_GET['tipo'] ?? ''),
         ]);
@@ -2429,6 +2696,10 @@ class HomeController extends BaseController {
 
         if ($archivo === '') {
             $this->redirect((string)($modulos[$moduloClave]['ruta'] ?? 'home/material') . '&mensaje=' . urlencode('Archivo invalido.') . '&tipo=error');
+        }
+
+        if (!$this->archivoMaterialPermitidoParaUsuario($moduloClave, $archivo)) {
+            $this->redirect((string)($modulos[$moduloClave]['ruta'] ?? 'home/material') . '&mensaje=' . urlencode('No tienes acceso a este archivo en la sesión activa.') . '&tipo=error');
         }
 
         $rutaFisica = $this->obtenerDirectorioModuloMaterial($modulos[$moduloClave]) . '/' . $archivo;
@@ -2507,6 +2778,8 @@ class HomeController extends BaseController {
         try {
             if ($loteId !== '') {
                 $temas = $this->listarTemasModuloMaterial($modulos[$moduloClave]);
+                $resultadoFiltroDiscipulo = $this->filtrarTemasMaterialParaDiscipulo($moduloClave, $temas);
+                $temas = (array)($resultadoFiltroDiscipulo['temas'] ?? []);
                 $temaActual = null;
                 foreach ($temas as $tema) {
                     if ((string)($tema['lote_id'] ?? '') === $loteId) {
@@ -2538,6 +2811,11 @@ class HomeController extends BaseController {
 
             if ($archivo === '') {
                 echo json_encode(['success' => false, 'message' => 'Archivo invalido']);
+                exit;
+            }
+
+            if (!$this->archivoMaterialPermitidoParaUsuario($moduloClave, $archivo)) {
+                echo json_encode(['success' => false, 'message' => 'No tienes acceso a este archivo en la sesión activa']);
                 exit;
             }
 

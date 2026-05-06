@@ -541,6 +541,30 @@ class PersonaController extends BaseController {
         return function_exists('mb_strtoupper') ? mb_strtoupper($valor, 'UTF-8') : strtoupper($valor);
     }
 
+    private function normalizarTipoDocumentoInput($valor) {
+        $valor = trim((string)$valor);
+        if ($valor === '') {
+            return '';
+        }
+
+        $valorNormalizado = strtoupper($valor);
+        $valorNormalizado = str_replace(['Á', 'É', 'Í', 'Ó', 'Ú'], ['A', 'E', 'I', 'O', 'U'], $valorNormalizado);
+
+        $mapa = [
+            'CC' => 'Cedula de Ciudadania',
+            'CEDULA DE CIUDADANIA' => 'Cedula de Ciudadania',
+            'CEDULA CIUDADANIA' => 'Cedula de Ciudadania',
+            'CE' => 'Cedula Extranjera',
+            'CEDULA EXTRANJERA' => 'Cedula Extranjera',
+            'TI' => 'Tarjeta de Identidad',
+            'TARJETA DE IDENTIDAD' => 'Tarjeta de Identidad',
+            'RC' => 'Registro Civil',
+            'REGISTRO CIVIL' => 'Registro Civil'
+        ];
+
+        return $mapa[$valorNormalizado] ?? '';
+    }
+
     private function construirMensajeDuplicadoPersona(array $duplicado, $numeroDocumento, $telefono) {
         $numeroDocumento = preg_replace('/[^A-Z0-9]/', '', strtoupper(trim((string)$numeroDocumento)));
         $telefono = preg_replace('/\D+/', '', (string)$telefono);
@@ -1937,17 +1961,16 @@ class PersonaController extends BaseController {
             $filtroCelula = '0';
         }
 
-        // Aplicar semana pasada por defecto (lunes a domingo) para que
-        // tarjetas y listado trabajen sobre el mismo periodo semanal.
+        // Aplicar semana actual por defecto (lunes a domingo) para que
+        // los ganados nuevos de hoy aparezcan inmediatamente en el listado.
         if ($filtroSemanaRef === '' && $filtroFechaInicio === '' && $filtroFechaFin === '') {
             $hoy = time();
             $diaSemanaHoy = (int)date('N', $hoy); // 1 lunes, 7 domingo
             $inicioSemanaActual = strtotime('-' . ($diaSemanaHoy - 1) . ' days', $hoy);
-            $inicioSemanaPasada = strtotime('-7 days', $inicioSemanaActual);
-            $finSemanaPasada = strtotime('+6 days', $inicioSemanaPasada);
+            $finSemanaActual = strtotime('+6 days', $inicioSemanaActual);
 
-            $filtroFechaInicio = date('Y-m-d', $inicioSemanaPasada);
-            $filtroFechaFin = date('Y-m-d', $finSemanaPasada);
+            $filtroFechaInicio = date('Y-m-d', $inicioSemanaActual);
+            $filtroFechaFin = date('Y-m-d', $finSemanaActual);
             $filtroSemanaRef = $filtroFechaInicio;
             $filtroSemanaRefEsDefault = true;
         }
@@ -2880,6 +2903,86 @@ class PersonaController extends BaseController {
             $_POST['telefono'] = trim((string)($_POST['telefono'] ?? ''));
             $_POST['email'] = trim((string)($_POST['email'] ?? ''));
             $_POST['usuario'] = trim((string)($_POST['usuario'] ?? ''));
+            $_POST['tipo_documento'] = $this->normalizarTipoDocumentoInput($_POST['tipo_documento'] ?? null);
+
+            if ($_POST['tipo_documento'] === '') {
+                $persona = $this->personaModel->getById($id);
+                $viewData = [
+                    'persona' => $persona,
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => 'Debe seleccionar el tipo de documento.',
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'return_to' => $returnTo,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $viewData);
+                return;
+            }
+
+            if (trim((string)($_POST['numero_documento'] ?? '')) === '') {
+                $persona = $this->personaModel->getById($id);
+                $viewData = [
+                    'persona' => $persona,
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => 'El número de documento es obligatorio.',
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'return_to' => $returnTo,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $viewData);
+                return;
+            }
+            $_POST['tipo_documento'] = $this->normalizarTipoDocumentoInput($_POST['tipo_documento'] ?? null);
+
+            if ($_POST['tipo_documento'] === '') {
+                $viewData = [
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => 'Debe seleccionar el tipo de documento.',
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'return_to' => $returnTo,
+                    'return_url' => $returnUrl,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $viewData);
+                return;
+            }
+
+            if (trim((string)($_POST['numero_documento'] ?? '')) === '') {
+                $viewData = [
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => 'El número de documento es obligatorio.',
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'return_to' => $returnTo,
+                    'return_url' => $returnUrl,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $viewData);
+                return;
+            }
 
             $idRolAsistente = $this->obtenerIdRolAsistenteDefault();
             $idRolDiscipulo = $this->obtenerIdRolDiscipuloDefault();
@@ -2930,7 +3033,12 @@ class PersonaController extends BaseController {
                 return;
             }
 
-            $duplicadoPersona = $this->personaModel->findDuplicateByCedulaOrTelefono($_POST['numero_documento'] ?? '', $_POST['telefono'] ?? '');
+            $duplicadoPersona = $this->personaModel->findDuplicateByCedulaOrTelefono(
+                $_POST['numero_documento'] ?? '',
+                $_POST['telefono'] ?? '',
+                null,
+                $_POST['tipo_documento'] ?? ''
+            );
             if (!empty($duplicadoPersona)) {
                 $viewData = [
                     'celulas' => $this->celulaModel->getAll(),
@@ -3482,7 +3590,7 @@ class PersonaController extends BaseController {
 
                 // Detectar error de duplicado
                 if ($esErrorDuplicado) {
-                    $error = 'Ya existe una persona registrada con esa cédula o teléfono.';
+                    $error = 'Ya existe una persona registrada con ese número de documento.';
                 } else {
                     $error = 'Error al actualizar la persona: ' . $e->getMessage();
                 }
