@@ -9,7 +9,7 @@ $tipo = (string)($tipo ?? '');
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
     <div>
         <h2 style="margin:0;">Material</h2>
-        <small style="color:#637087;">Aqui gestionas los 4 modulos de material con todo tipo de archivos sin salir de esta pantalla.</small>
+        <small style="color:#637087;">Aqui gestionas los modulos de material disponibles para tu perfil.</small>
     </div>
     <a href="<?= PUBLIC_URL ?>?url=home" class="btn btn-secondary">Volver al panel</a>
 </div>

@@ -214,7 +214,6 @@ $semaforoInfo = [
         <small style="color:#64748b;">Indicadores y gráficas con semáforo · <?= $anio ?></small>
     </div>
     <div class="dash-header-actions">
-        <a href="<?= PUBLIC_URL ?>index.php?url=reportes" class="btn btn-secondary" style="font-size:.84rem;">← Volver a reportes</a>
         <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="dash-anio-form">
             <input type="hidden" name="url" value="reportes/dashboard-ganar">
             <?php if ($filtroMinisterio !== ''): ?>

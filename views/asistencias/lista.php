@@ -1,4 +1,9 @@
+
 <?php include VIEWS . '/layout/header.php'; ?>
+
+<!-- html2canvas CDN para exportar tabla como imagen -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="<?= ASSETS_URL ?>/js/descargar_tabla_asistencia.js?v=20260515"></script>
 
 <div class="page-header" id="top-asistencias">
     <h2>Reporte Semanal de Asistencias</h2>
@@ -127,17 +132,21 @@ try {
     </button>
 </div>
 
-<div id="tabla-reportaron" class="card asistencia-detalle-card" style="margin-bottom: 18px;">
-    <div class="asistencia-detalle-header">
+
+<div id="tabla-reportaron" class="card asistencia-detalle-card" style="margin-bottom: 18px; position: relative;">
+    <div class="asistencia-detalle-header asistencia-detalle-header-flex">
         <div>
             <h3 style="margin-bottom:4px;">Células que reportaron</h3>
             <small style="color:#60708a;">Vista completa de células con reporte para la semana seleccionada</small>
         </div>
+        <?php if (!empty($seccionesReportaron)): ?>
+        <button type="button" class="btn-descargar-imagen-tabla btn-icono" data-tabla-id="tabla-reportaron" title="Descargar tabla como imagen">
+            <i class="bi bi-image"></i>
+        </button>
+        <?php endif; ?>
     </div>
 
-    <div class="table-container asistencia-table-wrap asistencia-table-wrap--full">
-        <table class="data-table asistencia-data-table">
-            <thead>
+    <div class="table-container asistencia-table-wrap asistencia-table-wrap--full">        <table class="data-table asistencia-data-table">            <thead>
                 <tr>
                     <th>Célula</th>
                     <th>Ministerio</th>
@@ -198,6 +207,11 @@ try {
             <h3 style="margin-bottom:4px;">Células que no reportaron</h3>
             <small style="color:#60708a;">Vista completa de células pendientes por reportar en la semana seleccionada</small>
         </div>
+        <?php if (!empty($seccionesNoReportaron)): ?>
+        <button type="button" class="btn-descargar-imagen-tabla btn-icono" data-tabla-id="tabla-no-reportaron" title="Descargar tabla como imagen">
+            <i class="bi bi-image"></i>
+        </button>
+        <?php endif; ?>
     </div>
 
     <div class="table-container asistencia-table-wrap asistencia-table-wrap--full">
@@ -404,6 +418,35 @@ try {
     .asistencia-summary-grid {
         grid-template-columns: 1fr !important;
     }
+}
+
+.asistencia-detalle-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.btn-icono {
+    background: none;
+    border: none;
+    padding: 6px;
+    cursor: pointer;
+    color: #2563eb;
+    font-size: 20px;
+    border-radius: 50%;
+    transition: background 0.15s, color 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icono:hover,
+.btn-icono:focus {
+    background: #e6f0fa;
+    color: #174e8a;
+    outline: none;
 }
 </style>
 

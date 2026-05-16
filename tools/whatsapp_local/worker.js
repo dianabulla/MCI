@@ -34,6 +34,15 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
+// Alinear NOW()/CURDATE() del servidor MySQL con Colombia (sin DST).
+// Si tu BD ya tiene time_zone global correcto, puedes desactivar con WA_DB_SET_TIMEZONE=0
+const dbTzSql = String(process.env.WA_DB_TIME_ZONE_SQL || "SET time_zone = '-05:00'").trim();
+if (dbTzSql && parseBoolean(process.env.WA_DB_SET_TIMEZONE, true)) {
+  pool.on('connection', (conn) => {
+    conn.query(dbTzSql, () => {});
+  });
+}
+
 const BATCH_LIMIT = Math.max(1, parseInt(process.env.WA_BATCH_LIMIT || '20', 10));
 const delayMinRaw = parseInt(process.env.WA_DELAY_MIN_MS || process.env.WA_DELAY_MS || '60000', 10);
 const delayMaxRaw = parseInt(process.env.WA_DELAY_MAX_MS || process.env.WA_DELAY_MS || '180000', 10);
@@ -213,7 +222,7 @@ async function encolarCumpleanosDelDiaSiAplica() {
          media_url = VALUES(media_url),
          media_tipo = VALUES(media_tipo),
          estado = IF(estado = 'enviado', 'enviado', 'pendiente'),
-         ultimo_error = NULL`,
+         ultimo_error = IF(estado = 'enviado', ultimo_error, NULL)`,
       [telefonoNormalizado, mensaje, template.media_url, template.media_tipo, referencia]
     );
 
@@ -229,14 +238,25 @@ async function encolarCumpleanosDelDiaSiAplica() {
 }
 
 async function obtenerPendientes(limit) {
+  // Sin programado_en: enviar cuanto antes (no limitar a "creado hoy" — eso dejaba mensajes huérfanos).
+  // Con programado_en: enviar cuando ya pasó la hora (aunque el worker estuvo apagado días).
+  const maxAgeDays = Math.max(1, parseInt(process.env.WA_QUEUE_MAX_AGE_DAYS || '45', 10));
   const [rows] = await pool.query(
     `SELECT id, telefono, mensaje, media_url, media_tipo, intentos
      FROM whatsapp_local_queue
      WHERE estado = 'pendiente' AND intentos < ?
-       AND (programado_en IS NULL OR programado_en <= NOW())
-     ORDER BY CASE WHEN tipo_evento = 'felicitacion_cumpleanos' THEN 0 ELSE 1 END ASC, id ASC
+       AND creado_en >= DATE_SUB(NOW(), INTERVAL ? DAY)
+       AND (
+            programado_en IS NULL
+            OR programado_en <= NOW()
+       )
+     ORDER BY CASE
+       WHEN tipo_evento IN ('mensaje_capacitacion_destino', 'programacion_mensaje_capacitacion_destino') THEN 0
+       WHEN tipo_evento = 'felicitacion_cumpleanos' THEN 1
+       ELSE 2
+     END ASC, id ASC
      LIMIT ?`,
-    [MAX_ATTEMPTS, limit]
+    [MAX_ATTEMPTS, maxAgeDays, limit]
   );
   return rows;
 }

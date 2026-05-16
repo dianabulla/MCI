@@ -2,7 +2,7 @@
 
 <?php
 $volverUrl = !empty($filtro_ministerio)
-    ? (PUBLIC_URL . '?url=ministerios')
+    ? (PUBLIC_URL . '?url=discipular/ministerios')
     : (PUBLIC_URL . '?url=home');
 
 $esVistaDoceMinisterio = !empty($filtro_ministerio) && (($filtro_tipo_liderazgo ?? 'todos') === 'doce');

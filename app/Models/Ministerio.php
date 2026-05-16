@@ -335,4 +335,76 @@ class Ministerio extends BaseModel {
 
         return $this->execute($sql, [$idMinisterio, $metaGanados]);
     }
+
+    private function asegurarTablaLideresPrincipales() {
+        $sql = "CREATE TABLE IF NOT EXISTS ministerio_lider_principal (
+                    Id_Ministerio INT NOT NULL,
+                    Id_Lider_Principal_1 INT NULL,
+                    Id_Lider_Principal_2 INT NULL,
+                    Fecha_Actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (Id_Ministerio),
+                    KEY idx_lider_principal_1 (Id_Lider_Principal_1),
+                    KEY idx_lider_principal_2 (Id_Lider_Principal_2)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
+        $this->execute($sql);
+    }
+
+    public function getLideresPrincipalesByMinisterioIds(array $ministerioIds) {
+        $ministerioIds = array_values(array_unique(array_filter(array_map('intval', $ministerioIds), static function($id) {
+            return $id >= 0;
+        })));
+
+        if (empty($ministerioIds)) {
+            return [];
+        }
+
+        $this->asegurarTablaLideresPrincipales();
+
+        $placeholders = implode(',', array_fill(0, count($ministerioIds), '?'));
+        $sql = "SELECT Id_Ministerio, Id_Lider_Principal_1, Id_Lider_Principal_2
+                FROM ministerio_lider_principal
+                WHERE Id_Ministerio IN ({$placeholders})";
+
+        $rows = $this->query($sql, $ministerioIds);
+        $resultado = [];
+        foreach ($rows as $row) {
+            $idMinisterio = (int)($row['Id_Ministerio'] ?? 0);
+            if ($idMinisterio < 0) {
+                continue;
+            }
+
+            $resultado[$idMinisterio] = [
+                'id_lider_principal_1' => (int)($row['Id_Lider_Principal_1'] ?? 0),
+                'id_lider_principal_2' => (int)($row['Id_Lider_Principal_2'] ?? 0),
+            ];
+        }
+
+        return $resultado;
+    }
+
+    public function setLideresPrincipales($idMinisterio, $idLider1, $idLider2) {
+        $idMinisterio = (int)$idMinisterio;
+        $idLider1 = (int)$idLider1;
+        $idLider2 = (int)$idLider2;
+
+        if ($idMinisterio < 0) {
+            return false;
+        }
+
+        $this->asegurarTablaLideresPrincipales();
+
+        $sql = "INSERT INTO ministerio_lider_principal (Id_Ministerio, Id_Lider_Principal_1, Id_Lider_Principal_2)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    Id_Lider_Principal_1 = VALUES(Id_Lider_Principal_1),
+                    Id_Lider_Principal_2 = VALUES(Id_Lider_Principal_2),
+                    Fecha_Actualizacion = NOW()";
+
+        return $this->execute($sql, [
+            $idMinisterio,
+            $idLider1 > 0 ? $idLider1 : null,
+            $idLider2 > 0 ? $idLider2 : null,
+        ]);
+    }
 }

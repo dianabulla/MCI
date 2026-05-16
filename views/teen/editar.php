@@ -1,7 +1,7 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
 <div class="page-header">
-    <h2>Editar Material Teens</h2>
+    <h2>Editar Material</h2>
     <div>
         <a href="<?= PUBLIC_URL ?>index.php?url=teen" class="btn btn-sm btn-secondary">
             ← Volver

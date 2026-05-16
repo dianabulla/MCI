@@ -153,6 +153,11 @@ class PersonaController extends BaseController {
             return;
         }
 
+        // Bienvenida solo para personas marcadas como nuevas.
+        if ($this->esPersonaAntigua($personaNueva)) {
+            return;
+        }
+
         $idPersona = (int)($personaNueva['Id_Persona'] ?? 0);
         $nombrePersona = trim((string)($personaNueva['Nombre'] ?? '') . ' ' . (string)($personaNueva['Apellido'] ?? ''));
         $telefonoPersona = (string)($personaNueva['Telefono'] ?? '');
@@ -185,6 +190,83 @@ class PersonaController extends BaseController {
                 $payloadBienvenida['media_tipo'] ?? null
             );
         }
+    }
+
+    private function obtenerDestinatariosCampanaWhatsapp($templateKey) {
+        $templateKey = trim((string)$templateKey);
+        if ($templateKey === '') {
+            return [];
+        }
+
+        $baseWhereTelefono = "(p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                              AND p.Telefono IS NOT NULL
+                              AND TRIM(p.Telefono) <> ''";
+
+        if ($templateKey === 'bienvenida_persona') {
+            return $this->personaModel->query(
+                "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono
+                 FROM persona p
+                 WHERE {$baseWhereTelefono}
+                   AND COALESCE(p.Es_Antiguo, 1) = 0
+                 ORDER BY p.Id_Persona DESC"
+            );
+        }
+
+        if ($templateKey === 'felicitacion_cumpleanos') {
+            return $this->personaModel->query(
+                "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono
+                 FROM persona p
+                 WHERE {$baseWhereTelefono}
+                 ORDER BY p.Id_Persona DESC"
+            );
+        }
+
+        if ($templateKey === 'asignacion_celula_universidad') {
+            return $this->personaModel->query(
+                "SELECT DISTINCT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono
+                 FROM persona p
+                 INNER JOIN escuela_formacion_inscripcion s ON s.Id_Persona = p.Id_Persona
+                 WHERE {$baseWhereTelefono}
+                   AND s.Programa = 'universidad_vida'
+                 ORDER BY p.Id_Persona DESC"
+            );
+        }
+
+        if ($templateKey === 'mensaje_capacitacion_destino') {
+            return $this->personaModel->query(
+                "SELECT DISTINCT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono
+                 FROM persona p
+                 INNER JOIN escuela_formacion_inscripcion s ON s.Id_Persona = p.Id_Persona
+                 WHERE {$baseWhereTelefono}
+                   AND s.Programa IN ('capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3')
+                 ORDER BY p.Id_Persona DESC"
+            );
+        }
+
+        return [];
+    }
+
+    /**
+     * Días ISO 1-7 desde checkboxes POST; cadena vacía si ninguno (cualquier día permitido).
+     */
+    private function csvDiasCampanaDesdePost($campo) {
+        $raw = $_POST[$campo] ?? [];
+        if (!is_array($raw)) {
+            return '';
+        }
+        $dias = [];
+        foreach ($raw as $d) {
+            $n = (int)$d;
+            if ($n >= 1 && $n <= 7) {
+                $dias[$n] = true;
+            }
+        }
+        if (empty($dias)) {
+            return '';
+        }
+        ksort($dias);
+
+        return implode(',', array_keys($dias));
     }
 
     private function encolarMensajeUniversidadALosLideres(array $personaNueva) {
@@ -885,6 +967,43 @@ class PersonaController extends BaseController {
         return strpos($nombreRol, 'discipul') !== false || strpos($nombreRol, 'disipul') !== false;
     }
 
+    private function debeAutoCrearAccesoDiscipuloPorIdRol($idRol) {
+        $idRol = (int)$idRol;
+        if ($idRol <= 0) {
+            return false;
+        }
+
+        if ($idRol === 2) {
+            return true;
+        }
+
+        $rol = $this->rolModel->getById($idRol);
+        if (empty($rol['Nombre_Rol'])) {
+            return false;
+        }
+
+        $nombreRol = $this->textoSinAcentos((string)$rol['Nombre_Rol']);
+        return strpos($nombreRol, 'discipul') !== false
+            || strpos($nombreRol, 'disipul') !== false
+            || strpos($nombreRol, 'miembro') !== false;
+    }
+
+    private function aplicarAccesoAutomaticoDiscipulo(array &$data) {
+        $idRol = (int)($data['Id_Rol'] ?? 0);
+        if (!$this->debeAutoCrearAccesoDiscipuloPorIdRol($idRol)) {
+            return;
+        }
+
+        $documento = trim((string)($data['Numero_Documento'] ?? ''));
+        if ($documento === '') {
+            return;
+        }
+
+        $data['Usuario'] = $documento;
+        $data['Contrasena'] = password_hash($documento, PASSWORD_BCRYPT);
+        $data['Estado_Cuenta'] = 'Activo';
+    }
+
     private function unirPersonasSinDuplicados(array $base, array $adicionales) {
         $resultado = $base;
         $ids = [];
@@ -914,7 +1033,7 @@ class PersonaController extends BaseController {
 
     private function normalizarPerfilListado($perfil) {
         $perfil = strtolower(trim((string)$perfil));
-        return in_array($perfil, ['', 'lideres_12', 'lideres_celula', 'asistentes', 'otros', 'pastores', 'sin_rol'], true) ? $perfil : '';
+        return in_array($perfil, ['', 'lideres_12', 'lideres_celula', 'asistentes', 'otros', 'pastores', 'sin_rol', 'pendientes_conectar'], true) ? $perfil : '';
     }
 
     private function textoSinAcentos($texto) {
@@ -981,6 +1100,34 @@ class PersonaController extends BaseController {
         }));
     }
 
+    /**
+     * Coincidencia por cédula o teléfono en el listado de discípulos (texto tal cual o solo dígitos, mín. 3 para búsqueda numérica).
+     */
+    private function personaListadoCoincideDocumentoTelefono(array $persona, string $termino): bool {
+        $termino = trim($termino);
+        if ($termino === '') {
+            return false;
+        }
+        $cedula = trim((string)($persona['Cedula'] ?? ''));
+        $telefono = trim((string)($persona['Telefono'] ?? ''));
+        if ($cedula !== '' && stripos($cedula, $termino) !== false) {
+            return true;
+        }
+        if ($telefono !== '' && stripos($telefono, $termino) !== false) {
+            return true;
+        }
+        $termDig = preg_replace('/\D+/u', '', $termino);
+        if ($termDig !== '' && strlen($termDig) >= 3) {
+            $cedDig = preg_replace('/\D+/u', '', $cedula);
+            $telDig = preg_replace('/\D+/u', '', $telefono);
+            if (($cedDig !== '' && strpos($cedDig, $termDig) !== false)
+                || ($telDig !== '' && strpos($telDig, $termDig) !== false)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private function filtrarPersonasPorNombreListado(array $personas, $termino) {
         $termino = preg_replace('/\s+/u', ' ', trim((string)$termino));
         if ($termino === '') {
@@ -992,9 +1139,13 @@ class PersonaController extends BaseController {
             return $token !== '';
         }));
 
-        return array_values(array_filter($personas, function($persona) use ($terminoNormalizado, $tokens) {
-            $nombre = trim((string)($persona['Nombre'] ?? ''));
-            $apellido = trim((string)($persona['Apellido'] ?? ''));
+        return array_values(array_filter($personas, function($persona) use ($termino, $terminoNormalizado, $tokens) {
+            if ($this->personaListadoCoincideDocumentoTelefono($persona, $termino)) {
+                return true;
+            }
+
+            $nombre = trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? ''));
+            $apellido = trim((string)($persona['Apellido'] ?? '') . ' ' . (string)($persona['Nombre'] ?? ''));
             $nombreCompleto = trim($nombre . ' ' . $apellido);
 
             $nombreNormalizado = $this->textoSinAcentos($nombre);
@@ -1089,6 +1240,18 @@ class PersonaController extends BaseController {
         }));
     }
 
+    /**
+     * Misma regla que la antigua vista Universidad de la Vida: inscripciones del
+     * formulario público de Escuelas de Formación aún sin ubicación completa.
+     */
+    private function filtrarUniversidadVidaSinAsignacionCompleta(array $personasUniversidadVida): array {
+        return array_values(array_filter($personasUniversidadVida, function($persona) {
+            $tieneAsignacionCompleta = $this->personaTieneAsignacionLiderYMinisterio((array)$persona)
+                && $this->personaTieneCelulaAsignada((array)$persona);
+            return !$tieneAsignacionCompleta;
+        }));
+    }
+
     private function obtenerSugerenciasNombreListado(array $personas, $limite = 200) {
         $sugerencias = [];
         $vistos = [];
@@ -1169,11 +1332,11 @@ class PersonaController extends BaseController {
             return 'celula';
         }
 
-        // Mantener la misma regla del listado SQL para evitar desfases en tarjetas:
+        // Reglas de origen para tarjetas/listado:
         // - Célula: Tipo_Reunion contiene "celula".
-        // - Iglesia/Domingo: cualquier no-célula (incluye "Otros", "Somos Uno", etc.).
-        // - Asignados: no-célula + sin invitador + con líder/ministerio asignado.
-        $esIglesia = (strpos($tipoReunion, 'celula') === false);
+        // - Iglesia/Domingo: Tipo_Reunion contiene "domingo" o "iglesia".
+        // - Asignados: iglesia/domingo + sin invitador + con líder/ministerio asignado.
+        $esIglesia = (strpos($tipoReunion, 'domingo') !== false || strpos($tipoReunion, 'iglesia') !== false);
         $tieneInvitador = ($invitadoPor !== '');
 
         if ($esIglesia && !$tieneInvitador && $tieneAsignacion) {
@@ -1619,12 +1782,16 @@ class PersonaController extends BaseController {
     }
 
     public function index() {
-        if (!AuthController::tienePermiso('personas', 'ver')) {
+        if (AuthController::debeUsarSoloVistaProgramasPersonas() && !AuthController::puedeVerModuloPersonasGanar()) {
+            header('Location: ' . BASE_URL . '/public/?url=' . AuthController::urlProgramasPreferidaRelativa());
+            exit;
+        }
+
+        if (!AuthController::puedeVerPersonasConsulta()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
 
-        $filtroPerfil = $this->normalizarPerfilListado($_GET['perfil'] ?? '');
         $filtroMinisterio = isset($_GET['ministerio']) ? preg_replace('/\s+/u', '', trim((string)$_GET['ministerio'])) : '';
         $filtroLider = isset($_GET['lider']) ? preg_replace('/\s+/u', '', trim((string)$_GET['lider'])) : '';
         $filtroNombre = preg_replace('/\s+/u', ' ', trim((string)($_GET['buscar'] ?? '')));
@@ -1642,57 +1809,30 @@ class PersonaController extends BaseController {
         $lideres = $contextoFiltros['lideres'] ?? [];
         [$filtroMinisterio, $filtroLider] = $this->limpiarFiltrosNoPermitidos($filtroMinisterio, $filtroLider, $contextoFiltros);
 
-        // Base general: solo personas con asignación completa, según la regla de negocio.
-        $personasBase = $this->personaModel->getAllWithRole($filtroRol, false);
-        $personasBaseFiltradasPorMinisterio = $this->filtrarPersonasPorMinisterioListado($personasBase, $filtroMinisterio);
-        $personasBaseFiltradasPorLider = $this->filtrarPersonasPorLiderListado($personasBaseFiltradasPorMinisterio, $filtroLider);
-
-        // Apartado "Otros": incluir antiguas sin asignación completa.
-        $personasAntiguasIncompletas = $this->personaModel->getAllWithRole($filtroRol, true);
-        $personasAntiguasIncompletas = $this->filtrarSoloPersonasAntiguas($personasAntiguasIncompletas);
-        $personasAntiguasIncompletas = $this->filtrarPersonasPorMinisterioListado($personasAntiguasIncompletas, $filtroMinisterio);
-        $personasAntiguasIncompletas = $this->filtrarPersonasPorLiderListado($personasAntiguasIncompletas, $filtroLider);
-
-        // Pendientes por conectar a célula/líder en la vista de Discipulos.
+        // Discípulos: solo pendientes por conectar (asignación ministerial incompleta).
         $personasPendientesConectar = $this->personaModel->getAllWithRole($filtroRol, true);
         $personasPendientesConectar = $this->filtrarPersonasPorMinisterioListado($personasPendientesConectar, $filtroMinisterio);
         $personasPendientesConectar = $this->filtrarPersonasPorLiderListado($personasPendientesConectar, $filtroLider);
         $personasPendientesConectar = $this->filtrarPendientesPorConectarListado($personasPendientesConectar);
 
-        // El resumen por rol respeta la búsqueda por nombre actual.
-        $personasBaseFiltradasPorNombre = $this->filtrarPersonasPorNombreListado($personasBaseFiltradasPorLider, $filtroNombre);
-        $personasAntiguasIncompletas = $this->filtrarPersonasPorNombreListado($personasAntiguasIncompletas, $filtroNombre);
-        $personasPendientesConectar = $this->filtrarPersonasPorNombreListado($personasPendientesConectar, $filtroNombre);
-        $totalesPerfil = $this->contarPerfilesListado($personasBaseFiltradasPorNombre);
-        $totalesPerfil['otros'] = (int)($totalesPerfil['otros'] ?? 0) + count($personasAntiguasIncompletas);
-        $ignorarPerfilPorBusqueda = ($filtroNombre !== '');
-        if ($ignorarPerfilPorBusqueda) {
-            // Si hay búsqueda por nombre, mostrar coincidencias globales sin limitar por el rol activo.
-            $personas = $this->unirPersonasSinDuplicados($personasBaseFiltradasPorNombre, $personasAntiguasIncompletas);
-            $personas = $this->unirPersonasSinDuplicados($personas, $personasPendientesConectar);
-        } else {
-            $personas = $this->filtrarPersonasPorPerfilListado($personasBaseFiltradasPorNombre, $filtroPerfil);
-            // Sin filtro explícito de perfil, mostrar también antiguas incompletas
-            // para evitar personas en limbo fuera de Discipulos/Pendientes.
-            if ($filtroPerfil === '' || $filtroPerfil === 'otros') {
-                $personas = $this->unirPersonasSinDuplicados($personas, $personasAntiguasIncompletas);
-            }
+        $personasUniversidadVida = $this->personaModel->getPersonasUniversidadVida($filtroRol);
+        $personasUniversidadVida = $this->filtrarUniversidadVidaSinAsignacionCompleta($personasUniversidadVida);
+        $personasUniversidadVida = $this->filtrarPersonasPorMinisterioListado($personasUniversidadVida, $filtroMinisterio);
+        $personasUniversidadVida = $this->filtrarPersonasPorLiderListado($personasUniversidadVida, $filtroLider);
 
-            if ($filtroPerfil === '' || $filtroPerfil === 'discipulos') {
-                $personas = $this->unirPersonasSinDuplicados($personas, $personasPendientesConectar);
-            }
-        }
-        $sugerenciasNombre = $this->obtenerSugerenciasNombreListado($personasBaseFiltradasPorLider);
+        $personasFusionDiscipulos = $this->unirPersonasSinDuplicados($personasPendientesConectar, $personasUniversidadVida);
+        $totalPendientesConectarContexto = count($personasFusionDiscipulos);
+        $sugerenciasNombre = $this->obtenerSugerenciasNombreListado($personasFusionDiscipulos);
+        $personas = $this->filtrarPersonasPorNombreListado($personasFusionDiscipulos, $filtroNombre);
 
         $this->view('personas/lista', [
             'personas' => $personas,
             'ministerios' => $ministerios,
             'lideres' => $lideres,
-            'filtroPerfilActual' => $ignorarPerfilPorBusqueda ? '' : $filtroPerfil,
             'filtroMinisterioActual' => $filtroMinisterio,
             'filtroLiderActual' => $filtroLider,
             'filtroNombreActual' => $filtroNombre,
-            'totalesPerfil' => $totalesPerfil,
+            'totalPendientesConectarContexto' => $totalPendientesConectarContexto,
             'sugerenciasNombre' => $sugerenciasNombre
         ]);
     }
@@ -1708,6 +1848,15 @@ class PersonaController extends BaseController {
             'variablesPlantillasWhatsapp' => $this->whatsappMensajeTemplateModel->getVariablesDisponibles(),
             'plantillasGuardadas' => (($_GET['tpl_msg'] ?? '') === 'ok')
         ]);
+    }
+
+    public function bandejaWhatsapp() {
+        if (!$this->puedeVerPlantillasWhatsapp()) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $this->redirect('personas/plantillas-whatsapp&schedule_error=bandeja_en_construccion');
     }
 
     public function programarPlantillaWhatsapp() {
@@ -1732,17 +1881,32 @@ class PersonaController extends BaseController {
             $this->redirect('personas/plantillas-whatsapp&schedule_error=missing_datetime');
         }
 
-        $scheduledAt = DateTime::createFromFormat('Y-m-d\TH:i', $scheduledAtRaw);
+        $tzBogota = new DateTimeZone('America/Bogota');
+        $scheduledAt = DateTime::createFromFormat('Y-m-d\TH:i', $scheduledAtRaw, $tzBogota);
         if ($scheduledAt === false) {
-            $scheduledAt = DateTime::createFromFormat('Y-m-d H:i', $scheduledAtRaw);
+            $scheduledAt = DateTime::createFromFormat('Y-m-d H:i', $scheduledAtRaw, $tzBogota);
         }
         if ($scheduledAt === false || $scheduledAt === null) {
             $this->redirect('personas/plantillas-whatsapp&schedule_error=invalid_datetime');
         }
 
-        $now = new DateTime();
+        $now = new DateTime('now', $tzBogota);
         if ($scheduledAt < $now) {
             $this->redirect('personas/plantillas-whatsapp&schedule_error=past_datetime');
+        }
+
+        // Universidad / CD: opcionalmente restringir a ciertos días de la semana (ISO 1=lun … 7=dom).
+        if (in_array($templateKey, ['asignacion_celula_universidad', 'mensaje_capacitacion_destino'], true)) {
+            $csvDias = trim((string)($plantillas[$templateKey]['dias_envio_campana'] ?? ''));
+            if ($csvDias !== '') {
+                $permitidos = array_unique(array_filter(array_map('intval', explode(',', $csvDias)), static function ($n) {
+                    return $n >= 1 && $n <= 7;
+                }));
+                $diaProg = (int)$scheduledAt->format('N');
+                if (!in_array($diaProg, $permitidos, true)) {
+                    $this->redirect('personas/plantillas-whatsapp&schedule_error=wrong_weekday');
+                }
+            }
         }
 
         $varsBase = [
@@ -1754,7 +1918,8 @@ class PersonaController extends BaseController {
             'destinatario_nombre' => 'líder',
             'ministerio_nombre' => '',
             'url_peticiones' => $this->buildAbsolutePublicUrl('peticiones/crear'),
-            'url_universidad_vida' => $this->buildAbsolutePublicUrl('eventos/universidad-vida/publico')
+            'url_universidad_vida' => $this->buildAbsolutePublicUrl('eventos/universidad-vida/publico'),
+            'url_capacitacion_destino' => $this->buildAbsolutePublicUrl('eventos/capacitacion-destino/publico')
         ];
 
         require_once APP . '/Models/EventoModulo.php';
@@ -1774,31 +1939,42 @@ class PersonaController extends BaseController {
         }
         $varsBase['universidad_vida_info'] = $infoUniversidad;
 
-        $payload = $this->whatsappMensajeTemplateModel->getTemplatePayload($templateKey, $varsBase);
-        $mensaje = trim((string)($payload['mensaje'] ?? ''));
-        if ($mensaje === '') {
-            $this->redirect('personas/plantillas-whatsapp&schedule_error=empty_message');
-        }
-
-        $lideres = $this->personaModel->getLideresYPastores();
-        if (empty($lideres)) {
-            $this->redirect('personas/plantillas-whatsapp&schedule_error=no_leaders');
+        $destinatarios = $this->obtenerDestinatariosCampanaWhatsapp($templateKey);
+        if (empty($destinatarios)) {
+            $this->redirect('personas/plantillas-whatsapp&schedule_error=no_recipients');
         }
 
         $scheduledAtFormatted = $scheduledAt->format('Y-m-d H:i:s');
         $enqueued = 0;
-        foreach ($lideres as $lider) {
-            $telefonoLider = trim((string)($lider['Telefono'] ?? ''));
-            $idLider = (int)($lider['Id_Persona'] ?? 0);
-            if ($telefonoLider === '' || $idLider <= 0) {
+        foreach ($destinatarios as $destinatario) {
+            $idPersonaDest = (int)($destinatario['Id_Persona'] ?? 0);
+            $telefonoDest = trim((string)($destinatario['Telefono'] ?? ''));
+            if ($idPersonaDest <= 0 || $telefonoDest === '') {
+                continue;
+            }
+
+            $nombreDestinatario = trim((string)($destinatario['Nombre'] ?? '') . ' ' . (string)($destinatario['Apellido'] ?? ''));
+            if ($nombreDestinatario === '') {
+                $nombreDestinatario = 'hermano(a)';
+            }
+
+            $varsDestinatario = $varsBase;
+            $varsDestinatario['persona_nombre'] = $nombreDestinatario;
+            $varsDestinatario['destinatario_nombre'] = $nombreDestinatario;
+            $varsDestinatario['lider_nombre'] = $nombreDestinatario;
+            $varsDestinatario['persona_id'] = $idPersonaDest;
+
+            $payload = $this->whatsappMensajeTemplateModel->getTemplatePayload($templateKey, $varsDestinatario);
+            $mensaje = trim((string)($payload['mensaje'] ?? ''));
+            if ($mensaje === '') {
                 continue;
             }
 
             $this->whatsappLocalQueueModel->encolar(
-                $telefonoLider,
+                $telefonoDest,
                 $mensaje,
                 'programacion_' . $templateKey,
-                'programacion:' . $templateKey . ':lider:' . $idLider,
+                'programacion:' . $templateKey . ':persona:' . $idPersonaDest,
                 $payload['media_url'] ?? null,
                 $payload['media_tipo'] ?? null,
                 $scheduledAtFormatted
@@ -1807,7 +1983,7 @@ class PersonaController extends BaseController {
         }
 
         if ($enqueued === 0) {
-            $this->redirect('personas/plantillas-whatsapp&schedule_error=no_leaders_found');
+            $this->redirect('personas/plantillas-whatsapp&schedule_error=no_recipients_found');
         }
 
         $this->redirect('personas/plantillas-whatsapp&schedule_msg=ok&schedule_count=' . $enqueued);
@@ -1889,21 +2065,33 @@ class PersonaController extends BaseController {
         $this->whatsappMensajeTemplateModel->actualizarPlantilla('bienvenida_persona', $_POST['tpl_bienvenida_persona'] ?? '');
         $this->whatsappMensajeTemplateModel->actualizarPlantilla('felicitacion_cumpleanos', $_POST['tpl_felicitacion_cumpleanos'] ?? '');
         $this->whatsappMensajeTemplateModel->actualizarPlantilla('asignacion_celula_universidad', $_POST['tpl_asignacion_celula_universidad'] ?? '');
+        $this->whatsappMensajeTemplateModel->actualizarPlantilla('mensaje_capacitacion_destino', $_POST['tpl_mensaje_capacitacion_destino'] ?? '');
 
         $plantillas = $this->whatsappMensajeTemplateModel->getPlantillas();
         $bienvenidaMedia = $this->subirMediaPlantilla('bienvenida_persona', 'media_bienvenida_persona', $plantillas['bienvenida_persona']['media_url'] ?? null);
         $cumpleanosMedia = $this->subirMediaPlantilla('felicitacion_cumpleanos', 'media_felicitacion_cumpleanos', $plantillas['felicitacion_cumpleanos']['media_url'] ?? null);
         $celulaUniversidadMedia = $this->subirMediaPlantilla('asignacion_celula_universidad', 'media_asignacion_celula_universidad', $plantillas['asignacion_celula_universidad']['media_url'] ?? null);
+        $capacitacionDestinoMedia = $this->subirMediaPlantilla('mensaje_capacitacion_destino', 'media_mensaje_capacitacion_destino', $plantillas['mensaje_capacitacion_destino']['media_url'] ?? null);
 
         $this->whatsappMensajeTemplateModel->actualizarMedia('bienvenida_persona', $bienvenidaMedia['media_url'], $bienvenidaMedia['media_tipo']);
         $this->whatsappMensajeTemplateModel->actualizarMedia('felicitacion_cumpleanos', $cumpleanosMedia['media_url'], $cumpleanosMedia['media_tipo']);
         $this->whatsappMensajeTemplateModel->actualizarMedia('asignacion_celula_universidad', $celulaUniversidadMedia['media_url'], $celulaUniversidadMedia['media_tipo']);
+        $this->whatsappMensajeTemplateModel->actualizarMedia('mensaje_capacitacion_destino', $capacitacionDestinoMedia['media_url'], $capacitacionDestinoMedia['media_tipo']);
+
+        $this->whatsappMensajeTemplateModel->actualizarDiasEnvioCampana(
+            'asignacion_celula_universidad',
+            $this->csvDiasCampanaDesdePost('dias_campana_uv')
+        );
+        $this->whatsappMensajeTemplateModel->actualizarDiasEnvioCampana(
+            'mensaje_capacitacion_destino',
+            $this->csvDiasCampanaDesdePost('dias_campana_cd')
+        );
 
         $this->redirect('personas/plantillas-whatsapp&tpl_msg=ok');
     }
 
     public function ganar() {
-        if (!AuthController::tienePermiso('personas', 'ver')) {
+        if (!AuthController::puedeVerModuloPersonasGanar()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -1918,9 +2106,14 @@ class PersonaController extends BaseController {
         $filtroSinCelula = (string)($_GET['sin_celula'] ?? '') === '1';
         $filtroNombre = preg_replace('/\s+/u', ' ', trim((string)($_GET['buscar'] ?? '')));
         $filtroSemanaRef = trim((string)($_GET['semana_ref'] ?? ''));
-        $filtroFechaInicio = trim((string)($_GET['fecha_inicio'] ?? ''));
-        $filtroFechaFin = trim((string)($_GET['fecha_fin'] ?? ''));
+        $filtroFechaInicio = '';
+        $filtroFechaFin = '';
         $filtroSemanaRefEsDefault = false;
+        $verHistorial = (string)($_GET['historial'] ?? '') === '1';
+        $filtroAnioHistorial = (int)($_GET['anio'] ?? date('Y'));
+        if ($filtroAnioHistorial < 2020 || $filtroAnioHistorial > ((int)date('Y') + 1)) {
+            $filtroAnioHistorial = (int)date('Y');
+        }
         $filtroEtapa = $this->normalizarEtapaFiltro($_GET['etapa'] ?? null);
         $filtroOrigen = $this->normalizarOrigenFiltro($_GET['origen'] ?? null);
         $puedeVerAtajoAsignados = $this->puedeVerAtajoAsignados();
@@ -1961,9 +2154,23 @@ class PersonaController extends BaseController {
             $filtroCelula = '0';
         }
 
-        // Aplicar semana actual por defecto (lunes a domingo) para que
-        // los ganados nuevos de hoy aparezcan inmediatamente en el listado.
-        if ($filtroSemanaRef === '' && $filtroFechaInicio === '' && $filtroFechaFin === '') {
+        if ($verHistorial) {
+            $filtroSemanaRef = '';
+            $filtroSemanaRefEsDefault = false;
+            $filtroFechaInicio = sprintf('%04d-01-01', $filtroAnioHistorial);
+            $filtroFechaFin = sprintf('%04d-12-31', $filtroAnioHistorial);
+        } elseif ($filtroSemanaRef !== '') {
+            [$inicioSemana, $finSemana, $fechaSemanaRefNormalizada] = $this->resolverRangoSemanaLunesDomingo($filtroSemanaRef);
+            if ($inicioSemana !== '' && $finSemana !== '') {
+                $filtroFechaInicio = $inicioSemana;
+                $filtroFechaFin = $finSemana;
+                $filtroSemanaRef = $fechaSemanaRefNormalizada;
+            } else {
+                $filtroSemanaRef = '';
+            }
+        }
+
+        if (!$verHistorial && $filtroSemanaRef === '') {
             $hoy = time();
             $diaSemanaHoy = (int)date('N', $hoy); // 1 lunes, 7 domingo
             $inicioSemanaActual = strtotime('-' . ($diaSemanaHoy - 1) . ' days', $hoy);
@@ -1973,17 +2180,6 @@ class PersonaController extends BaseController {
             $filtroFechaFin = date('Y-m-d', $finSemanaActual);
             $filtroSemanaRef = $filtroFechaInicio;
             $filtroSemanaRefEsDefault = true;
-        }
-
-        if ($filtroSemanaRef !== '') {
-            [$inicioSemana, $finSemana, $fechaSemanaRefNormalizada] = $this->resolverRangoSemanaLunesDomingo($filtroSemanaRef);
-            if ($inicioSemana !== '' && $finSemana !== '') {
-                $filtroFechaInicio = $inicioSemana;
-                $filtroFechaFin = $finSemana;
-                $filtroSemanaRef = $fechaSemanaRefNormalizada;
-            } else {
-                $filtroSemanaRef = '';
-            }
         }
 
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $filtroFechaInicio)) {
@@ -1996,15 +2192,10 @@ class PersonaController extends BaseController {
             [$filtroFechaInicio, $filtroFechaFin] = [$filtroFechaFin, $filtroFechaInicio];
         }
 
-        // Si el usuario consulta por semana/rango, mostrar historico completo
-        // de ganados (incluyendo quienes ya tienen ubicacion completa).
-        $mostrarGanadosHistoricosPorFecha = ($filtroFechaInicio !== '' && $filtroFechaFin !== '');
+        $mostrarGanadosHistoricosPorFecha = $verHistorial;
 
-        // El historial completo se activa por semana/rango de fechas, no por
-        // hacer clic en el origen, para evitar descuadres entre tarjeta y lista.
-        $esVistaHistoricaPorOrigen = false;
-
-        $usarVistaHistoricaGanados = $esVistaHistoricaPorOrigen || $mostrarGanadosHistoricosPorFecha;
+        // El historial se activa únicamente con su botón explícito.
+        $usarVistaHistoricaGanados = $verHistorial;
 
         // Si se consulta por rango + origen de ganar, mostrar registros históricos
         // aunque ya estén asignados o en etapas posteriores.
@@ -2035,6 +2226,58 @@ class PersonaController extends BaseController {
             $filtroCelula = '';
         }
 
+        if ($filtroNombre !== '') {
+            $filtroRolBusqueda = DataIsolation::generarFiltroPersonasPendienteConsolidar();
+            $personas = $this->personaModel->buscarPersonasTextoListadoConRole($filtroRolBusqueda, $filtroNombre, 250);
+            $personas = $this->enriquecerChecklistPersonas($personas);
+            $personas = $this->filtrarSoloPersonasNuevas($personas);
+            $personas = $this->filtrarPersonasPorMinisterioListado($personas, (string)$filtroMinisterio);
+            $personas = $this->filtrarPersonasPorLiderListado($personas, (string)$filtroLider);
+            if ($filtroCelula !== '') {
+                if ($filtroCelula === '0') {
+                    $personas = array_values(array_filter($personas, static function($persona) {
+                        return empty($persona['Id_Celula']) || (int)($persona['Id_Celula'] ?? 0) <= 0;
+                    }));
+                } else {
+                    $idCelFiltro = (int)$filtroCelula;
+                    $personas = array_values(array_filter($personas, static function($persona) use ($idCelFiltro) {
+                        return (int)($persona['Id_Celula'] ?? 0) === $idCelFiltro;
+                    }));
+                }
+            }
+            $totalesOrigenPendiente = $this->contarOrigenesPendientes($personas);
+            $ministerios = $contextoFiltros['ministerios'];
+            $lideres = $contextoFiltros['lideres'];
+
+            $this->view('personas/ganar', [
+                'personas' => $personas,
+                'ministerios' => $ministerios,
+                'lideres' => $lideres,
+                'celulas' => $celulas,
+                'filtroRestringido' => $contextoFiltros['restringido'],
+                'filtroMinisterioActual' => (string)$filtroMinisterio,
+                'filtroLiderActual' => (string)$filtroLider,
+                'filtroEstadoActual' => (string)$filtroEstado,
+                'filtroCelulaActual' => (string)$filtroCelula,
+                'filtroProcesoActual' => $filtroProceso,
+                'filtroSinLiderActual' => $filtroSinLider,
+                'filtroSinCelulaActual' => $filtroSinCelula,
+                'filtroNombreActual' => $filtroNombre,
+                'filtroSemanaRefActual' => $filtroSemanaRef,
+                'filtroSemanaRefEsDefault' => $filtroSemanaRefEsDefault,
+                'filtroFechaInicioActual' => $filtroFechaInicio,
+                'filtroFechaFinActual' => $filtroFechaFin,
+                'filtroAnioHistorialActual' => $filtroAnioHistorial,
+                'filtroEtapaActual' => (string)($filtroEtapa ?? ''),
+                'filtroOrigenActual' => (string)$filtroOrigen,
+                'mostrarGanadosHistoricosPorFecha' => $mostrarGanadosHistoricosPorFecha,
+                'verHistorialGanar' => $verHistorial,
+                'totalesOrigenPendiente' => $totalesOrigenPendiente,
+                'puedeMarcarPrimerContactoGanar' => $this->puedeGestionarPrimerContactoGanar(),
+            ]);
+            return;
+        }
+
         $filtroRol = $soloGanar
             ? DataIsolation::generarFiltroPersonasPendienteConsolidar()
             : DataIsolation::generarFiltroPersonas();
@@ -2057,7 +2300,7 @@ class PersonaController extends BaseController {
         $personasBaseConteo = $this->enriquecerChecklistPersonas($personasBaseConteo);
         $personasBaseConteo = $this->filtrarPersonasPorNombreListado($personasBaseConteo, $filtroNombre);
 
-        if (!$mostrarGanadosHistoricosPorFecha) {
+        if (!$usarVistaHistoricaGanados) {
             $personasBaseConteo = array_values(array_filter($personasBaseConteo, static function($persona) {
                 $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
                 $idLider = (int)($persona['Id_Lider'] ?? 0);
@@ -2066,6 +2309,9 @@ class PersonaController extends BaseController {
             }));
         }
 
+        // Pendientes e historial de almas ganadas: solo personas marcadas como nuevas (Es_Antiguo = 0), no antiguas.
+        $personasBaseConteo = $this->filtrarSoloPersonasNuevas($personasBaseConteo);
+
         // Excluir personas de Escuelas de Formación (tienen su propia sección "Universidad de la Vida")
         if ($this->soportaCanalCreacion) {
             $personasBaseConteo = array_values(array_filter($personasBaseConteo, static function($p) {
@@ -2073,11 +2319,8 @@ class PersonaController extends BaseController {
             }));
         }
 
-        // No se dispone debe reflejar exactamente lo mismo que su pestaña/listado:
-        // no limitar a solo nuevas para no ocultar casos ya marcados.
+        // No se dispone debe reflejar exactamente lo mismo que su pestaña/listado.
         $personasBaseConteoNoDisponible = $personasBaseConteo;
-
-        $personasBaseConteo = $this->filtrarSoloPersonasNuevas($personasBaseConteo);
 
         $totalesOrigenPendiente = $this->contarOrigenesPendientes($personasBaseConteo);
         $totalesOrigenPendiente['no_disponible'] = count(array_filter($personasBaseConteoNoDisponible, static function($persona) {
@@ -2094,15 +2337,12 @@ class PersonaController extends BaseController {
             $personas = $this->personaModel->getAllWithRole($filtroRol, $soloGanarListado, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         }
 
-        // En la pestaña "No se dispone" no limitar a solo nuevas para evitar
-        // que desaparezcan registros previamente marcados.
-        if ($filtroOrigen !== 'no_disponible') {
-            $personas = $this->filtrarSoloPersonasNuevas($personas);
-        }
+        $personas = $this->filtrarSoloPersonasNuevas($personas);
+
         $personas = $this->enriquecerChecklistPersonas($personas);
         $personas = $this->filtrarPersonasPorNombreListado($personas, $filtroNombre);
 
-        if (!$mostrarGanadosHistoricosPorFecha && !$esVistaHistoricaPorOrigen) {
+        if (!$usarVistaHistoricaGanados) {
             $personas = array_values(array_filter($personas, static function($persona) {
                 $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
                 $idLider = (int)($persona['Id_Lider'] ?? 0);
@@ -2161,48 +2401,33 @@ class PersonaController extends BaseController {
             'filtroSemanaRefEsDefault' => $filtroSemanaRefEsDefault,
             'filtroFechaInicioActual' => $filtroFechaInicio,
             'filtroFechaFinActual' => $filtroFechaFin,
+            'filtroAnioHistorialActual' => $filtroAnioHistorial,
             'filtroEtapaActual' => (string)($filtroEtapa ?? ''),
             'filtroOrigenActual' => (string)$filtroOrigen,
             'mostrarGanadosHistoricosPorFecha' => $mostrarGanadosHistoricosPorFecha,
+            'verHistorialGanar' => $verHistorial,
             'totalesOrigenPendiente' => $totalesOrigenPendiente,
             'puedeMarcarPrimerContactoGanar' => $this->puedeGestionarPrimerContactoGanar()
         ]);
     }
 
     public function universidadVida() {
-        if (!AuthController::tienePermiso('personas', 'ver')) {
+        if (AuthController::debeUsarSoloVistaProgramasPersonas() && !AuthController::puedeVerModuloPersonasGanar()) {
+            header('Location: ' . BASE_URL . '/public/?url=' . AuthController::urlProgramasPreferidaRelativa());
+            exit;
+        }
+
+        if (!AuthController::puedeVerPersonasConsulta()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
 
-        if (!$this->soportaCanalCreacion) {
-            header('Location: ' . BASE_URL . '/public/?url=personas');
-            exit;
-        }
-
-        $filtroNombre = preg_replace('/\s+/u', ' ', trim((string)($_GET['buscar'] ?? '')));
-        $filtroRol = DataIsolation::generarFiltroPersonas();
-
-        $personas = $this->personaModel->getPersonasUniversidadVida($filtroRol);
-        $personas = array_values(array_filter($personas, function($persona) {
-            // Regla de negocio: cuando ya tiene célula + líder + ministerio,
-            // deja Universidad de la Vida y pasa a la gestión de Discípulos.
-            $tieneAsignacionCompleta = $this->personaTieneAsignacionLiderYMinisterio((array)$persona)
-                && $this->personaTieneCelulaAsignada((array)$persona);
-
-            return !$tieneAsignacionCompleta;
-        }));
-        $personas = $this->filtrarPersonasPorNombreListado($personas, $filtroNombre);
-
-        $this->view('personas/universidad_vida', [
-            'personas' => $personas,
-            'filtroNombreActual' => $filtroNombre,
-            'totalPersonas' => count($personas),
-        ]);
+        header('Location: ' . BASE_URL . '/public/?url=personas');
+        exit;
     }
 
     public function notificaciones() {
-        if (!AuthController::tienePermiso('personas', 'ver')) {
+        if (!AuthController::puedeVerModuloPersonasGanar()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -2263,11 +2488,16 @@ class PersonaController extends BaseController {
             }
         }
 
+        $filtroRolConsulta = DataIsolation::generarFiltroPersonas();
+        $personasUvNotif = $this->personaModel->getPersonasUniversidadVida($filtroRolConsulta);
+        $personasUvNotif = $this->filtrarUniversidadVidaSinAsignacionCompleta($personasUvNotif);
+        $pendientesConectar = $this->unirPersonasSinDuplicados($pendientesConectar, $personasUvNotif);
+
         $listaActiva = [];
         $tituloListaActiva = '';
         if ($tipo === 'conectar') {
             $listaActiva = $pendientesConectar;
-            $tituloListaActiva = 'Personas pendientes por conectar';
+            $tituloListaActiva = 'Personas pendientes por ubicar (Discípulos)';
         } elseif ($tipo === 'nuevas') {
             $listaActiva = $nuevasAlmasGanadas;
             $tituloListaActiva = 'Personas nuevas en Almas ganadas';
@@ -2279,14 +2509,14 @@ class PersonaController extends BaseController {
             'nuevasAlmasGanadas' => $nuevasAlmasGanadas,
             'listaActiva' => $listaActiva,
             'tituloListaActiva' => $tituloListaActiva,
-            'linkGestionPendientes' => PUBLIC_URL . '?url=personas&panel=pendientes_ubicacion',
+            'linkGestionPendientes' => PUBLIC_URL . '?url=personas',
             'linkGestionNuevos' => PUBLIC_URL . '?url=personas/ganar'
         ]);
     }
 
         public function escalera()
     {
-        if (!AuthController::tienePermiso('personas', 'ver')) {
+        if (!AuthController::puedeVerModuloPersonasGanar()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -2437,6 +2667,20 @@ class PersonaController extends BaseController {
         return $etapas[$completadasSeguidas];
     }
 
+    private function resolverProgramaCapacitacionDestinoPorIndiceChecklist(int $indice): string {
+        if ($indice === 0) {
+            return 'capacitacion_destino_nivel_1';
+        }
+        if ($indice === 1) {
+            return 'capacitacion_destino_nivel_2';
+        }
+        if ($indice === 2) {
+            return 'capacitacion_destino_nivel_3';
+        }
+
+        return '';
+    }
+
     public function actualizarChecklistEscalera() {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->json(['success' => false, 'message' => 'Metodo no permitido'], 405);
@@ -2446,7 +2690,7 @@ class PersonaController extends BaseController {
             $this->json(['success' => false, 'message' => 'Checklist de escalera no disponible en esta base de datos'], 400);
         }
 
-        if (!AuthController::tienePermiso('personas', 'ver')) {
+        if (!AuthController::puedeVerModuloPersonasGanar()) {
             $this->json(['success' => false, 'message' => 'No autorizado'], 403);
         }
 
@@ -2497,7 +2741,7 @@ class PersonaController extends BaseController {
             );
             $this->json([
                 'success' => false,
-                'message' => 'La Escalera del Exito aplica solo para discipulos. En roles de liderazgo se completa automaticamente.',
+                'message' => 'La Escalera del Exito aplica solo para discipulos. En roles de liderazgo se completa automáticamente.',
                 'proceso' => (string)($personaActualizada['Proceso'] ?? 'Enviar'),
                 'checklist' => $checklistLiderazgo
             ], 422);
@@ -2546,6 +2790,12 @@ class PersonaController extends BaseController {
             $this->json(['success' => false, 'message' => 'Primero debes asignar líder y ministerio'], 422);
         }
 
+        if ($etapa === 'Discipular' && $marcado && in_array($indice, [0, 1, 2], true)) {
+            $checklistNormalizado['Discipular'][0] = false;
+            $checklistNormalizado['Discipular'][1] = false;
+            $checklistNormalizado['Discipular'][2] = false;
+        }
+
         $checklistNormalizado[$etapa][$indice] = $marcado;
 
         if ($etapa === 'Ganar' && $indice === 5) {
@@ -2572,6 +2822,18 @@ class PersonaController extends BaseController {
             $this->json(['success' => false, 'message' => 'No se pudo guardar el checklist'], 500);
         }
 
+        if ($etapa === 'Discipular' && $marcado && in_array($indice, [0, 1, 2], true)) {
+            $programaDestino = $this->resolverProgramaCapacitacionDestinoPorIndiceChecklist($indice);
+            if ($programaDestino !== '') {
+                try {
+                    $inscripcionModel = new EscuelaFormacionInscripcion();
+                    $inscripcionModel->sincronizarProgramaCapacitacionDestinoPorPersona($idPersona, $programaDestino);
+                } catch (Throwable $e) {
+                    error_log('No se pudo sincronizar nivel real de Capacitacion Destino para persona ' . $idPersona . ': ' . $e->getMessage());
+                }
+            }
+        }
+
         $this->json([
             'success' => true,
             'message' => 'Checklist actualizado',
@@ -2582,7 +2844,7 @@ class PersonaController extends BaseController {
 
     public function asignarMinisterioGanar() {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->redirect('personas/ganar');
+            $this->redirect('reportes&tipo=personas');
             return;
         }
 
@@ -2596,7 +2858,7 @@ class PersonaController extends BaseController {
         $returnUrl = (string)($_POST['return_url'] ?? '');
 
         if ($idPersona <= 0 || $idMinisterio <= 0) {
-            $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+            $this->redirigirConRetorno($returnUrl, 'reportes&tipo=personas');
             return;
         }
 
@@ -2617,13 +2879,13 @@ class PersonaController extends BaseController {
 
         $ministerio = $this->ministerioModel->getById($idMinisterio);
         if (empty($ministerio)) {
-            $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+            $this->redirigirConRetorno($returnUrl, 'reportes&tipo=personas');
             return;
         }
 
         $personaAntes = $this->personaModel->getById($idPersona);
         if (empty($personaAntes)) {
-            $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+            $this->redirigirConRetorno($returnUrl, 'reportes&tipo=personas');
             return;
         }
 
@@ -2646,12 +2908,12 @@ class PersonaController extends BaseController {
             $this->encolarNotificacionCambiosAsignacion((array)$personaAntes, (array)$personaDespues);
         }
 
-        $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+        $this->redirigirConRetorno($returnUrl, 'reportes&tipo=personas');
     }
 
     public function reasignarMinisterioGanar() {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->redirect('personas/ganar');
+            $this->redirect('reportes&tipo=personas');
             return;
         }
 
@@ -2665,7 +2927,7 @@ class PersonaController extends BaseController {
         $returnUrl = (string)($_POST['return_url'] ?? '');
 
         if ($idPersona <= 0 || $idMinisterio <= 0) {
-            $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+            $this->redirigirConRetorno($returnUrl, 'reportes&tipo=personas');
             return;
         }
 
@@ -2686,13 +2948,13 @@ class PersonaController extends BaseController {
 
         $ministerio = $this->ministerioModel->getById($idMinisterio);
         if (empty($ministerio)) {
-            $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+            $this->redirigirConRetorno($returnUrl, 'reportes&tipo=personas');
             return;
         }
 
         $personaAntes = $this->personaModel->getById($idPersona);
         if (empty($personaAntes)) {
-            $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+            $this->redirigirConRetorno($returnUrl, 'reportes&tipo=personas');
             return;
         }
 
@@ -2735,11 +2997,14 @@ class PersonaController extends BaseController {
             $this->encolarNotificacionCambiosAsignacion((array)$personaAntes, (array)$personaDespues);
         }
 
-        $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+        $this->redirigirConRetorno($returnUrl, 'reportes&tipo=personas');
     }
 
     public function exportarExcel() {
-        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('personas', 'editar')) {
+        $puedeExportar = AuthController::esAdministrador()
+            || AuthController::tienePermiso('personas', 'exportar_excel')
+            || AuthController::tienePermiso('personas', 'editar');
+        if (!$puedeExportar) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -2831,7 +3096,27 @@ class PersonaController extends BaseController {
 
         $filtroRol = DataIsolation::generarFiltroPersonas();
 
-        if (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '') || ($filtroEstado !== null && $filtroEstado !== '') || ($filtroCelula !== null && $filtroCelula !== '') || ($filtroEtapa !== null && $filtroEtapa !== '') || ($filtroOrigen !== '') || ($filtroFechaInicio !== '' && $filtroFechaFin !== '')) {
+        $exportListaPendientesConectar = !$esModoGanar && $filtroPerfil === 'pendientes_conectar';
+
+        if ($exportListaPendientesConectar) {
+            $personas = $this->personaModel->getAllWithRole($filtroRol, true);
+            $fMinList = $filtroMinisterio !== null && $filtroMinisterio !== '' ? preg_replace('/\s+/u', '', trim((string)$filtroMinisterio)) : '';
+            $fLidList = $filtroLider !== null && $filtroLider !== '' ? preg_replace('/\s+/u', '', trim((string)$filtroLider)) : '';
+            if ($fMinList !== '' && $fMinList !== '0' && !ctype_digit($fMinList)) {
+                $fMinList = '';
+            }
+            if ($fLidList !== '' && $fLidList !== '0' && !ctype_digit($fLidList)) {
+                $fLidList = '';
+            }
+            $personas = $this->filtrarPersonasPorMinisterioListado($personas, $fMinList);
+            $personas = $this->filtrarPersonasPorLiderListado($personas, $fLidList);
+            $personas = $this->filtrarPendientesPorConectarListado($personas);
+            $personasUv = $this->personaModel->getPersonasUniversidadVida($filtroRol);
+            $personasUv = $this->filtrarUniversidadVidaSinAsignacionCompleta($personasUv);
+            $personasUv = $this->filtrarPersonasPorMinisterioListado($personasUv, $fMinList);
+            $personasUv = $this->filtrarPersonasPorLiderListado($personasUv, $fLidList);
+            $personas = $this->unirPersonasSinDuplicados($personas, $personasUv);
+        } elseif (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '') || ($filtroEstado !== null && $filtroEstado !== '') || ($filtroCelula !== null && $filtroCelula !== '') || ($filtroEtapa !== null && $filtroEtapa !== '') || ($filtroOrigen !== '') || ($filtroFechaInicio !== '' && $filtroFechaFin !== '')) {
             $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, $soloGanar, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         } else {
             $personas = $this->personaModel->getAllWithRole($filtroRol, $soloGanar, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
@@ -2843,7 +3128,7 @@ class PersonaController extends BaseController {
             $personas = $this->filtrarSoloPersonasNuevas($personas);
         }
 
-        if ($filtroPerfil !== '') {
+        if ($filtroPerfil !== '' && !$exportListaPendientesConectar) {
             $personas = $this->filtrarPersonasPorPerfilListado($personas, $filtroPerfil);
 
             if (!$esModoGanar && $filtroPerfil === 'otros') {
@@ -3026,7 +3311,6 @@ class PersonaController extends BaseController {
                     'soportaConvencion' => $this->soportaConvencion,
                     'soportaProceso' => $this->soportaProceso,
                     'return_to' => $returnTo,
-                    'return_url' => $returnUrl,
                     'celula_retorno' => $celulaRetorno
                 ];
                 $this->view('personas/formulario', $viewData);
@@ -3106,9 +3390,7 @@ class PersonaController extends BaseController {
                     'post_data' => $_POST,
                     'soportaConvencion' => $this->soportaConvencion,
                     'soportaProceso' => $this->soportaProceso,
-                    'soportaChecklistEscalera' => $this->soportaChecklistEscalera,
                     'return_to' => $returnTo,
-                    'return_url' => $returnUrl,
                     'celula_retorno' => $celulaRetorno
                 ];
                 $this->view('personas/formulario', $viewData);
@@ -3158,7 +3440,6 @@ class PersonaController extends BaseController {
                     'soportaConvencion' => $this->soportaConvencion,
                     'soportaProceso' => $this->soportaProceso,
                     'return_to' => $returnTo,
-                    'return_url' => $returnUrl,
                     'celula_retorno' => $celulaRetorno
                 ];
                 $this->view('personas/formulario', $viewData);
@@ -3175,7 +3456,9 @@ class PersonaController extends BaseController {
             );
 
             if (!$validacionJerarquia['ok']) {
+                $persona = $this->personaModel->getById($id);
                 $viewData = [
+                    'persona' => $persona,
                     'celulas' => $this->celulaModel->getAll(),
                     'ministerios' => $this->ministerioModel->getAll(),
                     'roles' => $this->rolModel->getAll(),
@@ -3186,7 +3469,6 @@ class PersonaController extends BaseController {
                     'soportaConvencion' => $this->soportaConvencion,
                     'soportaProceso' => $this->soportaProceso,
                     'return_to' => $returnTo,
-                    'return_url' => $returnUrl,
                     'celula_retorno' => $celulaRetorno
                 ];
                 $this->view('personas/formulario', $viewData);
@@ -3212,6 +3494,8 @@ class PersonaController extends BaseController {
                     }
                 }
             }
+
+            $this->aplicarAccesoAutomaticoDiscipulo($data);
             
             try {
                 $idPersonaNueva = (int)$this->personaModel->create($data);
@@ -3234,7 +3518,7 @@ class PersonaController extends BaseController {
                     $this->redirect($urlRetorno);
                 }
 
-                $this->redirigirConRetorno($returnUrl, 'personas/ganar');
+                $this->redirigirConRetorno($returnUrl, 'reportes&tipo=personas');
             } catch (PDOException $e) {
                 // Detectar error de duplicado
                 if ($e->getCode() == 23000 || strpos($e->getMessage(), '1062') !== false) {
@@ -3243,7 +3527,9 @@ class PersonaController extends BaseController {
                     $error = 'Error al guardar la persona: ' . $e->getMessage();
                 }
                 
+                $persona = $this->personaModel->getById($id);
                 $viewData = [
+                    'persona' => $persona,
                     'celulas' => $this->celulaModel->getAll(),
                     'ministerios' => $this->ministerioModel->getAll(),
                     'roles' => $this->rolModel->getAll(),
@@ -3254,7 +3540,6 @@ class PersonaController extends BaseController {
                     'soportaConvencion' => $this->soportaConvencion,
                     'soportaProceso' => $this->soportaProceso,
                     'return_to' => $returnTo,
-                    'return_url' => $returnUrl,
                     'celula_retorno' => $celulaRetorno
                 ];
                 $this->view('personas/formulario', $viewData);
@@ -3393,7 +3678,6 @@ class PersonaController extends BaseController {
                     'post_data' => $_POST,
                     'soportaConvencion' => $this->soportaConvencion,
                     'soportaProceso' => $this->soportaProceso,
-                    'soportaChecklistEscalera' => $this->soportaChecklistEscalera,
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
                 ];
@@ -3443,9 +3727,7 @@ class PersonaController extends BaseController {
                     'post_data' => $_POST,
                     'soportaConvencion' => $this->soportaConvencion,
                     'soportaProceso' => $this->soportaProceso,
-                    'soportaChecklistEscalera' => $this->soportaChecklistEscalera,
                     'return_to' => $returnTo,
-                    'return_url' => $returnUrl,
                     'celula_retorno' => $celulaRetorno
                 ];
                 $this->view('personas/formulario', $viewData);
@@ -3475,6 +3757,8 @@ class PersonaController extends BaseController {
                 $data['Estado_Cuenta'] = $_POST['estado_cuenta'];
             }
 
+            $this->aplicarAccesoAutomaticoDiscipulo($data);
+
             $validacionJerarquia = $this->personaModel->validarAsignacionJerarquica(
                 (int)($data['Id_Lider'] ?? 0),
                 (int)($data['Id_Rol'] ?? 0),
@@ -3496,7 +3780,6 @@ class PersonaController extends BaseController {
                     'soportaProceso' => $this->soportaProceso,
                     'soportaChecklistEscalera' => $this->soportaChecklistEscalera,
                     'return_to' => $returnTo,
-                    'return_url' => $returnUrl,
                     'celula_retorno' => $celulaRetorno
                 ];
                 $this->view('personas/formulario', $viewData);
@@ -3631,6 +3914,11 @@ class PersonaController extends BaseController {
     }
 
     public function detalle() {
+        if (!AuthController::puedeVerPersonasConsulta()) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
         $id = $_GET['id'] ?? null;
         $returnTo = $_GET['return_to'] ?? null;
         $returnUrl = $_GET['return_url'] ?? null;

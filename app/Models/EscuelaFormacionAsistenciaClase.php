@@ -211,4 +211,24 @@ class EscuelaFormacionAsistenciaClase extends BaseModel {
 
         return max(0, (int)($rows[0]['Numero_Clase'] ?? 0));
     }
+
+    public function getProximoNumeroClase(string $modulo, string $programa, ?string $grupo = 'general'): int {
+        $modulo = trim($modulo);
+        $programa = trim($programa);
+        $grupo = $this->normalizeGrupo($grupo);
+
+        if ($modulo === '' || $programa === '') {
+            return 1;
+        }
+
+        $rows = $this->query(
+            "SELECT MAX(Numero_Clase) as max_clase
+             FROM {$this->tablaFechas}
+             WHERE Modulo = ? AND Programa = ? AND Grupo IN (?, 'general')",
+            [$modulo, $programa, $grupo]
+        );
+
+        $maxClase = (int)($rows[0]['max_clase'] ?? 0);
+        return $maxClase + 1;
+    }
 }

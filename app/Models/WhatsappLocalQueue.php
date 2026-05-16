@@ -107,8 +107,8 @@ class WhatsappLocalQueue extends BaseModel {
                     media_url = VALUES(media_url),
                     media_tipo = VALUES(media_tipo),
                     programado_en = VALUES(programado_en),
-                    estado = 'pendiente',
-                    ultimo_error = NULL";
+                    estado = IF(estado = 'enviado', 'enviado', 'pendiente'),
+                    ultimo_error = IF(estado = 'enviado', ultimo_error, NULL)";
 
         return $this->execute($sql, [$telefono, $mensaje, $mediaUrl, $mediaTipo, $tipoEvento, $referencia, $programadoEn]);
     }

@@ -6,6 +6,9 @@ $tituloModulo = (string)($configModulo['titulo'] ?? 'Modulo');
 $rutaBase = (string)($configModulo['ruta_base'] ?? 'home');
 $rutaAsistencias = (string)($configModulo['ruta_asistencias'] ?? $rutaBase);
 $rutaExportar = (string)($configModulo['ruta_exportar'] ?? 'home');
+$esFlujoProgramas = strpos($rutaBase, 'programas') === 0;
+$urlVolverContextual = PUBLIC_URL . '?url=' . ($esFlujoProgramas ? 'programas' : 'home');
+$etiquetaVolverContextual = $esFlujoProgramas ? 'Volver a Programas' : 'Volver al panel';
 
 $reportePendientes = $reporte_pendientes ?? ['total' => 0, 'rows' => []];
 $filtroMinisterio = (string)($filtro_ministerio ?? '');
@@ -21,11 +24,17 @@ if ($detalleLideresMinisterioUvJson === false) {
 }
 $programaReporte = (string)($programa_reporte ?? '');
 $programaReporteLabel = (string)($programa_reporte_label ?? 'Programa');
+$programaRutaActual = $programaReporte;
+if (in_array($programaRutaActual, ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+    $programaRutaActual = 'capacitacion_destino';
+}
 $programasOpciones = $programas_opciones ?? [];
+$programasTabs = $programas_tabs ?? [];
 $tarjetasResumen = $tarjetas_resumen ?? [];
 $vistaActual = (string)($vista_actual ?? 'registro');
 $registroActivo = $vistaActual !== 'asistencias';
 $asistenciasActivo = $vistaActual === 'asistencias';
+$mostrarAccesoAsistencias = $programaRutaActual !== 'capacitacion_destino';
 $puedeEditarPersonaFormacion = class_exists('AuthController') && AuthController::tienePermiso('personas', 'editar');
 $moduloFormacionActual = strtolower(trim((string)($configModulo['modulo'] ?? '')));
 $puedeEditarRegistroFormacion = class_exists('AuthController')
@@ -42,6 +51,7 @@ $mostrarTablaProgramaMinisterio = in_array($moduloFormacionActual, ['consolidar'
 $tituloTablaProgramaMinisterio = trim($programaReporteLabel) !== ''
     ? $programaReporteLabel . ' por ministerio'
     : 'Reporte por ministerio';
+$mensajeSinInscripcionesPrograma = 'No hay inscripciones de ' . $programaReporteLabel . ' para mostrar.';
 $esModuloEnviar = in_array($moduloFormacionActual, ['discipular', 'enviar'], true);
 $inscProgramaSolicitado = trim((string)($_GET['insc_programa'] ?? ''));
 $mostrarDetalleDiscipular = !($moduloFormacionActual === 'discipular' && $inscProgramaSolicitado === '');
@@ -55,34 +65,58 @@ $returnUrlFormacion = '?' . http_build_query($parametrosRetornoFormacion);
 $renderAccionesRegistroFormacion = static function(array $ins, int $idPersonaIns, string $segmentoActual) use ($puedeEditarPersonaFormacion, $puedeEditarRegistroFormacion, $puedeEliminarInscripcionFormacion, $returnUrlFormacion, $moduloFormacionActual) {
     $idInscripcion = (int)($ins['Id_Inscripcion'] ?? 0);
     $nombreInscripcion = (string)($ins['Nombre'] ?? '');
+    $programaInscripcion = trim((string)($ins['Programa'] ?? ''));
+    $esCapacitacionDestinoInscripcion = in_array($programaInscripcion, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true);
+    $textoCambio = $esCapacitacionDestinoInscripcion ? 'Cambiar nivel' : 'Cambiar a';
+
+    $puedeMoverPrograma = in_array($programaInscripcion, ['universidad_vida', 'encuentro', 'bautismo', 'capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true);
+
     ob_start();
     ?>
-    <div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">
+    <div class="insc-acciones" role="group" aria-label="Acciones del registro">
         <?php if ($puedeEditarRegistroFormacion): ?>
             <?php if ($idPersonaIns > 0): ?>
-                <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $idPersonaIns ?>&return_to=formacion&return_url=<?= urlencode($returnUrlFormacion) ?>" class="btn btn-secondary btn-sm">Editar</a>
+                <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $idPersonaIns ?>&return_to=formacion&return_url=<?= urlencode($returnUrlFormacion) ?>" class="btn btn-secondary btn-sm btn-insc-icon" title="Editar" aria-label="Editar"><i class="bi bi-pencil-square" aria-hidden="true"></i></a>
             <?php else: ?>
-                <button type="button" class="btn btn-secondary btn-sm" disabled title="Sin persona vinculada">Editar</button>
+                <button type="button" class="btn btn-secondary btn-sm btn-insc-icon" disabled title="Sin persona vinculada" aria-label="Editar (sin persona vinculada)"><i class="bi bi-pencil-square" aria-hidden="true"></i></button>
             <?php endif; ?>
-            <button type="button" class="btn btn-info btn-sm js-cambio-segmento" data-id-inscripcion="<?= $idInscripcion ?>" data-nombre="<?= htmlspecialchars($nombreInscripcion) ?>" data-segmento-actual="<?= htmlspecialchars($segmentoActual) ?>" <?= $idInscripcion > 0 ? '' : 'disabled' ?> <?= $idInscripcion > 0 ? '' : 'title="Inscripción inválida"' ?>>Cambiar a</button>
+            <button type="button" class="btn btn-info btn-sm btn-insc-icon js-cambio-segmento" data-id-inscripcion="<?= $idInscripcion ?>" data-nombre="<?= htmlspecialchars($nombreInscripcion) ?>" data-segmento-actual="<?= htmlspecialchars($segmentoActual) ?>" data-programa-actual="<?= htmlspecialchars($programaInscripcion) ?>" <?= $idInscripcion > 0 ? '' : 'disabled' ?> title="<?= $idInscripcion > 0 ? htmlspecialchars($textoCambio, ENT_QUOTES, 'UTF-8') : 'Inscripción inválida' ?>" aria-label="<?= htmlspecialchars($textoCambio, ENT_QUOTES, 'UTF-8') ?>"><i class="bi bi-arrow-left-right" aria-hidden="true"></i></button>
+            <?php if ($puedeMoverPrograma): ?>
+                <?php if ($idInscripcion > 0 && $idPersonaIns > 0): ?>
+                    <button
+                        type="button"
+                        class="btn btn-info btn-sm btn-insc-icon js-cambio-programa"
+                        data-id-inscripcion="<?= $idInscripcion ?>"
+                        data-nombre="<?= htmlspecialchars($nombreInscripcion) ?>"
+                        data-programa-actual="<?= htmlspecialchars($programaInscripcion) ?>"
+                        title="Mover a otro programa"
+                        aria-label="Mover a otro programa"
+                    ><i class="bi bi-box-arrow-right" aria-hidden="true"></i></button>
+                <?php else: ?>
+                    <button type="button" class="btn btn-info btn-sm btn-insc-icon" disabled title="Inscripción inválida" aria-label="Mover a otro programa"><i class="bi bi-box-arrow-right" aria-hidden="true"></i></button>
+                <?php endif; ?>
+            <?php endif; ?>
         <?php else: ?>
-            <button type="button" class="btn btn-secondary btn-sm" disabled title="Solo lectura">Editar</button>
-            <button type="button" class="btn btn-info btn-sm" disabled title="Sin permiso para cambiar segmento">Cambiar a</button>
+            <button type="button" class="btn btn-secondary btn-sm btn-insc-icon" disabled title="Solo lectura" aria-label="Editar"><i class="bi bi-pencil-square" aria-hidden="true"></i></button>
+            <button type="button" class="btn btn-info btn-sm btn-insc-icon" disabled title="Sin permiso para cambiar segmento" aria-label="<?= htmlspecialchars($textoCambio, ENT_QUOTES, 'UTF-8') ?>"><i class="bi bi-arrow-left-right" aria-hidden="true"></i></button>
+            <?php if ($puedeMoverPrograma): ?>
+                <button type="button" class="btn btn-info btn-sm btn-insc-icon" disabled title="Sin permiso para mover de programa" aria-label="Mover a otro programa"><i class="bi bi-box-arrow-right" aria-hidden="true"></i></button>
+            <?php endif; ?>
         <?php endif; ?>
 
         <?php if ($puedeEliminarInscripcionFormacion): ?>
             <?php if ($idInscripcion > 0): ?>
-                <form method="POST" action="<?= PUBLIC_URL ?>?url=home/cambiar-segmento-inscripcion" onsubmit="return confirm('¿Eliminar la inscripción de <?= htmlspecialchars($nombreInscripcion, ENT_QUOTES, 'UTF-8') ?>?');" style="margin:0;">
+                <form method="POST" action="<?= PUBLIC_URL ?>?url=home/cambiar-segmento-inscripcion" class="insc-acciones-form" onsubmit="return confirm('¿Eliminar la inscripción de <?= htmlspecialchars($nombreInscripcion, ENT_QUOTES, 'UTF-8') ?>?');">
                     <input type="hidden" name="accion" value="eliminar_inscripcion">
                     <input type="hidden" name="id_inscripcion" value="<?= $idInscripcion ?>">
                     <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrlFormacion, ENT_QUOTES, 'UTF-8') ?>">
-                    <button type="submit" class="btn btn-danger btn-sm">Eliminar</button>
+                    <button type="submit" class="btn btn-danger btn-sm btn-insc-icon" title="Eliminar inscripción" aria-label="Eliminar inscripción"><i class="bi bi-trash" aria-hidden="true"></i></button>
                 </form>
             <?php else: ?>
-                <button type="button" class="btn btn-danger btn-sm" disabled title="Inscripción inválida">Eliminar</button>
+                <button type="button" class="btn btn-danger btn-sm btn-insc-icon" disabled title="Inscripción inválida" aria-label="Eliminar"><i class="bi bi-trash" aria-hidden="true"></i></button>
             <?php endif; ?>
         <?php elseif ($moduloFormacionActual === 'consolidar'): ?>
-            <button type="button" class="btn btn-danger btn-sm" disabled title="Sin permiso para eliminar">Eliminar</button>
+            <button type="button" class="btn btn-danger btn-sm btn-insc-icon" disabled title="Sin permiso para eliminar" aria-label="Eliminar"><i class="bi bi-trash" aria-hidden="true"></i></button>
         <?php endif; ?>
     </div>
     <?php
@@ -123,6 +157,20 @@ if ($moduloFormacionActual === 'discipular') {
 }
 ?>
 
+<?php if (!empty($programasTabs)): ?>
+<div class="card report-card" style="margin-bottom:12px; padding:10px 12px;">
+    <div class="action-group action-group-nav" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <?php foreach ($programasTabs as $tabPrograma): ?>
+            <a href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars((string)($tabPrograma['url'] ?? 'programas')) ?>"
+               class="action-pill <?= !empty($tabPrograma['active']) ? 'is-active' : '' ?>"
+               <?= !empty($tabPrograma['active']) ? 'aria-current="page"' : '' ?>>
+                <?= htmlspecialchars((string)($tabPrograma['label'] ?? 'Sección')) ?>
+            </a>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>
+
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
     <div>
         <h2 style="margin:0;"><?= htmlspecialchars($tituloModulo) ?></h2>
@@ -131,17 +179,37 @@ if ($moduloFormacionActual === 'discipular') {
     <div class="header-actions">
         <div class="action-group action-group-nav">
             <a href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($rutaBase) ?>" class="action-pill <?= $registroActivo ? 'is-active' : '' ?>" <?= $registroActivo ? 'aria-current="page"' : '' ?>>Registro</a>
-            <a href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($rutaAsistencias) ?>" class="action-pill <?= $asistenciasActivo ? 'is-active' : '' ?>" <?= $asistenciasActivo ? 'aria-current="page"' : '' ?>>Asistencias</a>
+            <?php if ($mostrarAccesoAsistencias): ?>
+                <a href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($rutaAsistencias) ?>" class="action-pill <?= $asistenciasActivo ? 'is-active' : '' ?>" <?= $asistenciasActivo ? 'aria-current="page"' : '' ?>>Asistencias</a>
+            <?php endif; ?>
         </div>
         <div class="action-group">
-            <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/codigos" class="action-pill" target="_blank" rel="noopener">Codigos QR</a>
-            <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico" class="action-pill" target="_blank" rel="noopener">Registro / Asistencia</a>
-            <?php if ($esModuloConsolidar): ?>
-                <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/pagos/consolidar" class="action-pill">Pagos U. de la Vida</a>
-            <?php elseif ($esModuloEnviar): ?>
-                <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/pagos/enviar" class="action-pill">Pagos Capacitación Destino</a>
+            <?php if ($programaRutaActual === 'universidad_vida'): ?>
+                <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/universidad-vida" class="action-pill" target="_blank" rel="noopener">Formulario</a>
+                <?php if (class_exists('AuthController') && (AuthController::esAdministrador() || AuthController::tienePermiso('material_universidad_vida', 'ver'))): ?>
+                    <a href="<?= PUBLIC_URL ?>?url=home/material/universidad-vida" class="action-pill">Material U.V</a>
+                <?php endif; ?>
+                <?php if ($esModuloConsolidar): ?>
+                    <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/pagos/consolidar" class="action-pill">Pagos U. de la Vida</a>
+                <?php endif; ?>
+                <?php if (class_exists('AuthController') && (AuthController::esAdministrador() || AuthController::tienePermiso('reportes', 'ver'))): ?>
+                    <a href="<?= PUBLIC_URL ?>?url=reportes/dashboard-escuelas-uv" class="action-pill">Dashboard U.V</a>
+                <?php endif; ?>
+            <?php else: ?>
+                <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/capacitacion-destino" class="action-pill" target="_blank" rel="noopener">Formulario</a>
+                <?php if (class_exists('AuthController') && (AuthController::esAdministrador() || AuthController::tienePermiso('material_capacitacion_destino', 'ver'))): ?>
+                    <a href="<?= PUBLIC_URL ?>?url=home/material/capacitacion-destino" class="action-pill">Material C. Destino</a>
+                <?php endif; ?>
+                <?php if ($esModuloConsolidar): ?>
+                    <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/pagos/enviar" class="action-pill">Pagos Capacitación Destino</a>
+                    <?php if (class_exists('AuthController') && (AuthController::esAdministrador() || AuthController::tienePermiso('reportes', 'ver'))): ?>
+                    <a href="<?= PUBLIC_URL ?>?url=reportes/dashboard-escuelas-capacitacion" class="action-pill">Dashboard C. Destino</a>
+                    <?php endif; ?>
+                <?php elseif ($esModuloEnviar): ?>
+                    <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/pagos/enviar" class="action-pill">Pagos Capacitación Destino</a>
+                <?php endif; ?>
             <?php endif; ?>
-            <a href="<?= PUBLIC_URL ?>?url=home" class="action-pill">Volver al panel</a>
+            <a href="<?= htmlspecialchars($urlVolverContextual, ENT_QUOTES, 'UTF-8') ?>" class="action-pill"><?= htmlspecialchars($etiquetaVolverContextual, ENT_QUOTES, 'UTF-8') ?></a>
         </div>
     </div>
 </div>
@@ -192,8 +260,8 @@ if ($moduloFormacionActual === 'discipular') {
             <?php endif; ?>
 
             <div class="form-group" style="margin:0; min-width:280px;">
-                <label for="filtro_buscar">Buscar por nombre</label>
-                <input type="text" id="filtro_buscar" name="buscar" class="form-control" placeholder="Nombre o apellido" value="<?= htmlspecialchars($filtroBuscar) ?>">
+                <label for="filtro_buscar">Buscar por nombre, cédula o teléfono</label>
+                <input type="text" id="filtro_buscar" name="buscar" class="form-control" placeholder="Nombre, cédula o teléfono" value="<?= htmlspecialchars($filtroBuscar) ?>">
             </div>
 
             <div class="form-group" style="margin:0; min-width:220px;">
@@ -303,7 +371,7 @@ if ($moduloFormacionActual === 'discipular') {
                     </tr>
                 <?php else: ?>
                     <tr>
-                        <td colspan="6" class="text-center">No hay inscripciones de Universidad de la Vida para mostrar.</td>
+                        <td colspan="6" class="text-center"><?= htmlspecialchars($mensajeSinInscripcionesPrograma) ?></td>
                     </tr>
                 <?php endif; ?>
             </tbody>
@@ -338,26 +406,103 @@ if ($moduloFormacionActual === 'discipular') {
 
 <div class="card report-card" style="padding:14px;">
     <?php
+    $esReporteCapDestino = $programaRutaActual === 'capacitacion_destino';
+
+    $inscripcionesNivel1 = [];
+    $inscripcionesNivel2 = [];
+    $inscripcionesNivel3 = [];
     $inscripcionesJovenes = [];
     $inscripcionesTeens = [];
     $inscripcionesHombresAdultos = [];
     $inscripcionesMujeresAdultas = [];
     $inscripcionesOtros = [];
 
-    foreach ($inscripcionesPublicas as $ins) {
-        $edadIns = (int)($ins['Edad'] ?? 0);
-        $generoRegistro = strtolower(trim((string)($ins['Genero'] ?? '')));
-        $esMujer = strpos($generoRegistro, 'mujer') !== false
-            || strpos($generoRegistro, 'femen') !== false
-            || in_array($generoRegistro, ['f', 'fem', 'female'], true);
-        $esHombre = strpos($generoRegistro, 'hombre') !== false
-            || strpos($generoRegistro, 'mascul') !== false
-            || in_array($generoRegistro, ['m', 'masc', 'male', 'h'], true);
+    if ($esReporteCapDestino) {
+        foreach ($inscripcionesPublicas as $ins) {
+            $programaInscripcion = strtolower(trim((string)($ins['Programa'] ?? '')));
+            $segmentoPreferido = strtolower(trim((string)($ins['Segmento_Preferido'] ?? '')));
+            $nivelPreferido = in_array($segmentoPreferido, ['nivel_1', 'nivel_2', 'nivel_3'], true)
+                ? $segmentoPreferido
+                : '';
+
+            if ($nivelPreferido !== '') {
+                if ($nivelPreferido === 'nivel_1') {
+                    $inscripcionesNivel1[] = $ins;
+                } elseif ($nivelPreferido === 'nivel_2') {
+                    $inscripcionesNivel2[] = $ins;
+                } else {
+                    $inscripcionesNivel3[] = $ins;
+                }
+                continue;
+            }
+
+            if ($programaInscripcion === 'capacitacion_destino' || $programaInscripcion === 'capacitacion_destino_nivel_1') {
+                $inscripcionesNivel1[] = $ins;
+            } elseif ($programaInscripcion === 'capacitacion_destino_nivel_2') {
+                $inscripcionesNivel2[] = $ins;
+            } elseif ($programaInscripcion === 'capacitacion_destino_nivel_3') {
+                $inscripcionesNivel3[] = $ins;
+            } else {
+                $inscripcionesOtros[] = $ins;
+            }
+        }
+
+        $registroVistaInicial = !empty($inscripcionesNivel1)
+            ? 'nivel_1'
+            : (!empty($inscripcionesNivel2)
+                ? 'nivel_2'
+                : 'nivel_3');
+
+        $registroNivel1Activo = $registroVistaInicial === 'nivel_1';
+        $registroNivel2Activo = $registroVistaInicial === 'nivel_2';
+        $registroNivel3Activo = $registroVistaInicial === 'nivel_3';
+
+        $nivel1Registrados = (int)count($inscripcionesNivel1);
+        $nivel2Registrados = (int)count($inscripcionesNivel2);
+        $nivel3Registrados = (int)count($inscripcionesNivel3);
+        $otrosRegistrados = (int)count($inscripcionesOtros);
+        $totalRegistrosVisibles = $nivel1Registrados + $nivel2Registrados + $nivel3Registrados + $otrosRegistrados;
+    } else {
+        $inscripcionesHombresUnificadas = [];
+        $inscripcionesMujeresUnificadas = [];
+        $clasificarGeneroRegistro = static function($valorGenero): string {
+            $genero = trim((string)$valorGenero);
+            if ($genero === '') {
+                return 'otro';
+            }
+
+            $genero = function_exists('mb_strtolower')
+                ? mb_strtolower($genero, 'UTF-8')
+                : strtolower($genero);
+
+            $esMujer = strpos($genero, 'mujer') !== false
+                || strpos($genero, 'femen') !== false
+                || preg_match('/(^|[^a-z])(f|fem|female)([^a-z]|$)/', $genero);
+            $esHombre = strpos($genero, 'hombre') !== false
+                || strpos($genero, 'mascul') !== false
+                || preg_match('/(^|[^a-z])(m|masc|male|h)([^a-z]|$)/', $genero);
+
+            if ($esHombre && !$esMujer) {
+                return 'hombre';
+            }
+
+            if ($esMujer && !$esHombre) {
+                return 'mujer';
+            }
+
+            return 'otro';
+        };
+
+        foreach ($inscripcionesPublicas as $ins) {
+            $edadIns = (int)($ins['Edad'] ?? 0);
+            $generoClasificado = $clasificarGeneroRegistro((string)($ins['Genero'] ?? ''));
+            $esMujer = $generoClasificado === 'mujer';
+            $esHombre = $generoClasificado === 'hombre';
 
             // Usar segmento preferido si está guardado
             $segmentoPreferido = trim((string)($ins['Segmento_Preferido'] ?? ''));
             $segmentoDeterminado = '';
-        
+
             if ($segmentoPreferido !== '') {
                 // Usar el segmento preferido
                 $segmentoDeterminado = $segmentoPreferido;
@@ -373,7 +518,17 @@ if ($moduloFormacionActual === 'discipular') {
                     $segmentoDeterminado = 'mujeres_adultas';
                 }
             }
-        
+
+            $ins['_segmento_actual'] = $segmentoDeterminado;
+
+            if ($esHombre) {
+                $inscripcionesHombresUnificadas[] = $ins;
+            }
+
+            if ($esMujer) {
+                $inscripcionesMujeresUnificadas[] = $ins;
+            }
+
             // Clasificar en el array correspondiente
             if ($segmentoDeterminado === 'jovenes') {
                 $inscripcionesJovenes[] = $ins;
@@ -382,29 +537,34 @@ if ($moduloFormacionActual === 'discipular') {
             } elseif ($segmentoDeterminado === 'hombres_adultos') {
                 $inscripcionesHombresAdultos[] = $ins;
             } elseif ($segmentoDeterminado === 'mujeres_adultas') {
-            $inscripcionesMujeresAdultas[] = $ins;
-        } else {
-            $inscripcionesOtros[] = $ins;
+                $inscripcionesMujeresAdultas[] = $ins;
+            } else {
+                $inscripcionesOtros[] = $ins;
+            }
         }
-    }
 
-    $registroVistaInicial = !empty($inscripcionesJovenes)
-        ? 'jovenes'
-        : (!empty($inscripcionesTeens)
-            ? 'teens'
-            : (!empty($inscripcionesHombresAdultos)
-                ? 'hombres_adultos'
-                : 'mujeres_adultas'));
-    $registroJovenesActivo = $registroVistaInicial === 'jovenes';
-    $registroTeensActivo = $registroVistaInicial === 'teens';
-    $registroHombresAdultosActivo = $registroVistaInicial === 'hombres_adultos';
-    $registroMujeresAdultasActivo = $registroVistaInicial === 'mujeres_adultas';
-    $jovenesRegistrados = (int)count($inscripcionesJovenes);
-    $teensRegistrados = (int)count($inscripcionesTeens);
-    $hombresAdultosRegistrados = (int)count($inscripcionesHombresAdultos);
-    $mujeresAdultasRegistradas = (int)count($inscripcionesMujeresAdultas);
-    $otrosRegistrados = (int)count($inscripcionesOtros);
-    $totalRegistrosVisibles = $jovenesRegistrados + $teensRegistrados + $hombresAdultosRegistrados + $mujeresAdultasRegistradas + $otrosRegistrados;
+        $registroVistaInicial = !empty($inscripcionesJovenes)
+            ? 'jovenes'
+            : (!empty($inscripcionesTeens)
+                ? 'teens'
+                : (!empty($inscripcionesHombresAdultos)
+                    ? 'hombres_adultos'
+                    : 'mujeres_adultas'));
+        $registroJovenesActivo = $registroVistaInicial === 'jovenes';
+        $registroTeensActivo = $registroVistaInicial === 'teens';
+        $registroHombresAdultosActivo = $registroVistaInicial === 'hombres_adultos';
+        $registroMujeresAdultasActivo = $registroVistaInicial === 'mujeres_adultas';
+        $registroHombresUnificadosActivo = false;
+        $registroMujeresUnificadasActivo = false;
+        $jovenesRegistrados = (int)count($inscripcionesJovenes);
+        $teensRegistrados = (int)count($inscripcionesTeens);
+        $hombresAdultosRegistrados = (int)count($inscripcionesHombresAdultos);
+        $mujeresAdultasRegistradas = (int)count($inscripcionesMujeresAdultas);
+        $hombresUnificadosRegistrados = (int)count($inscripcionesHombresUnificadas);
+        $mujeresUnificadasRegistradas = (int)count($inscripcionesMujeresUnificadas);
+        $otrosRegistrados = (int)count($inscripcionesOtros);
+        $totalRegistrosVisibles = $jovenesRegistrados + $teensRegistrados + $hombresAdultosRegistrados + $mujeresAdultasRegistradas + $otrosRegistrados;
+    }
     ?>
 
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
@@ -412,73 +572,91 @@ if ($moduloFormacionActual === 'discipular') {
         <small style="color:#637087;">Mostrando <?= $totalRegistrosVisibles ?> registros recientes (max. 300)</small>
     </div>
 
-    <div class="dashboard-grid" style="margin-bottom:12px;">
-        <div class="gender-card dashboard-card <?= $registroJovenesActivo ? 'is-active' : '' ?>" style="border-left-color:#1e6b3c;">
-            <button type="button" class="gender-card-toggle js-gender-view-btn" data-view-target="registro_view_jovenes">
-                <span class="gender-card-title-wrap">
-                    <span class="gender-avatar" aria-hidden="true">🧑</span>
-                    <span>Jóvenes <small style="font-weight:400;color:#637087;">(14-28 años)</small></span>
-                </span>
-                <span class="gender-card-icon">Ver</span>
-            </button>
-            <div class="gender-card-metric">
-                <div class="gender-kpi-single">
-                    <span class="kpi-label">Registrados</span>
-                    <strong class="kpi-value" style="color:#1e6b3c;"><?= $jovenesRegistrados ?></strong>
-                </div>
-            </div>
-        </div>
-
-        <div class="gender-card dashboard-card <?= $registroTeensActivo ? 'is-active' : '' ?>" style="border-left-color:#7b3fa0;">
-            <button type="button" class="gender-card-toggle js-gender-view-btn" data-view-target="registro_view_teens">
-                <span class="gender-card-title-wrap">
-                    <span class="gender-avatar" aria-hidden="true">🧒</span>
-                    <span>Teens <small style="font-weight:400;color:#637087;">(9-13 años)</small></span>
-                </span>
-                <span class="gender-card-icon">Ver</span>
-            </button>
-            <div class="gender-card-metric">
-                <div class="gender-kpi-single">
-                    <span class="kpi-label">Registrados</span>
-                    <strong class="kpi-value" style="color:#7b3fa0;"><?= $teensRegistrados ?></strong>
-                </div>
-            </div>
-        </div>
-
-        <div class="gender-card dashboard-card <?= $registroHombresAdultosActivo ? 'is-active' : '' ?>" style="border-left-color:#1e4a89;">
-            <button type="button" class="gender-card-toggle js-gender-view-btn" data-view-target="registro_view_hombres_adultos">
-                <span class="gender-card-title-wrap">
-                    <span class="gender-avatar gender-avatar-male" aria-hidden="true">👨</span>
-                    <span>Hombres <small style="font-weight:400;color:#637087;">(29+ años)</small></span>
-                </span>
-                <span class="gender-card-icon">Ver</span>
-            </button>
-            <div class="gender-card-metric">
-                <div class="gender-kpi-single">
-                    <span class="kpi-label">Registrados</span>
-                    <strong class="kpi-value" style="color:#1e4a89;"><?= $hombresAdultosRegistrados ?></strong>
-                </div>
-            </div>
-        </div>
-
-        <div class="gender-card dashboard-card <?= $registroMujeresAdultasActivo ? 'is-active' : '' ?>" style="border-left-color:#8b1c62;">
-            <button type="button" class="gender-card-toggle js-gender-view-btn" data-view-target="registro_view_mujeres_adultas">
-                <span class="gender-card-title-wrap">
-                    <span class="gender-avatar gender-avatar-female" aria-hidden="true">👩</span>
-                    <span>Mujeres <small style="font-weight:400;color:#637087;">(29+ años)</small></span>
-                </span>
-                <span class="gender-card-icon">Ver</span>
-            </button>
-            <div class="gender-card-metric">
-                <div class="gender-kpi-single">
-                    <span class="kpi-label">Registradas</span>
-                    <strong class="kpi-value" style="color:#8b1c62;"><?= $mujeresAdultasRegistradas ?></strong>
-                </div>
-            </div>
+    <div class="card report-card" style="margin-bottom:12px; padding:0; overflow:hidden;">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th><?= $esReporteCapDestino ? 'Nivel' : 'Segmento' ?></th>
+                        <th><?= $esReporteCapDestino ? 'Descripción' : 'Rango de edad' ?></th>
+                        <th>Registrados</th>
+                        <th style="width:120px;">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if ($esReporteCapDestino): ?>
+                    <tr class="registro-resumen-row <?= $registroNivel1Activo ? 'is-active' : '' ?>" data-view-target="registro_view_nivel_1">
+                        <td>Nivel 1</td>
+                        <td>Introducción</td>
+                        <td><strong style="color:#1e6b3c;"><?= $nivel1Registrados ?></strong></td>
+                        <td>
+                            <button type="button" class="btn btn-sm js-gender-view-btn js-registro-selector <?= $registroNivel1Activo ? 'btn-primary' : 'btn-secondary' ?>" data-view-target="registro_view_nivel_1" aria-controls="registro_view_nivel_1" aria-expanded="<?= $registroNivel1Activo ? 'true' : 'false' ?>">Ver</button>
+                        </td>
+                    </tr>
+                    <tr class="registro-resumen-row <?= $registroNivel2Activo ? 'is-active' : '' ?>" data-view-target="registro_view_nivel_2">
+                        <td>Nivel 2</td>
+                        <td>Intermedio</td>
+                        <td><strong style="color:#7b3fa0;"><?= $nivel2Registrados ?></strong></td>
+                        <td>
+                            <button type="button" class="btn btn-sm js-gender-view-btn js-registro-selector <?= $registroNivel2Activo ? 'btn-primary' : 'btn-secondary' ?>" data-view-target="registro_view_nivel_2" aria-controls="registro_view_nivel_2" aria-expanded="<?= $registroNivel2Activo ? 'true' : 'false' ?>">Ver</button>
+                        </td>
+                    </tr>
+                    <tr class="registro-resumen-row <?= $registroNivel3Activo ? 'is-active' : '' ?>" data-view-target="registro_view_nivel_3">
+                        <td>Nivel 3</td>
+                        <td>Avanzado</td>
+                        <td><strong style="color:#1e4a89;"><?= $nivel3Registrados ?></strong></td>
+                        <td>
+                            <button type="button" class="btn btn-sm js-gender-view-btn js-registro-selector <?= $registroNivel3Activo ? 'btn-primary' : 'btn-secondary' ?>" data-view-target="registro_view_nivel_3" aria-controls="registro_view_nivel_3" aria-expanded="<?= $registroNivel3Activo ? 'true' : 'false' ?>">Ver</button>
+                        </td>
+                    </tr>
+                    <?php else: ?>
+                    <tr class="registro-resumen-row <?= $registroJovenesActivo ? 'is-active' : '' ?>" data-view-target="registro_view_jovenes">
+                        <td>Jóvenes</td>
+                        <td>14-28 años</td>
+                        <td><strong style="color:#1e6b3c;"><?= $jovenesRegistrados ?></strong></td>
+                        <td>
+                            <button type="button" class="btn btn-sm js-gender-view-btn js-registro-selector <?= $registroJovenesActivo ? 'btn-primary' : 'btn-secondary' ?>" data-view-target="registro_view_jovenes" aria-controls="registro_view_jovenes" aria-expanded="<?= $registroJovenesActivo ? 'true' : 'false' ?>">Ver</button>
+                        </td>
+                    </tr>
+                    <tr class="registro-resumen-row <?= $registroTeensActivo ? 'is-active' : '' ?>" data-view-target="registro_view_teens">
+                        <td>Teens</td>
+                        <td>9-13 años</td>
+                        <td><strong style="color:#7b3fa0;"><?= $teensRegistrados ?></strong></td>
+                        <td>
+                            <button type="button" class="btn btn-sm js-gender-view-btn js-registro-selector <?= $registroTeensActivo ? 'btn-primary' : 'btn-secondary' ?>" data-view-target="registro_view_teens" aria-controls="registro_view_teens" aria-expanded="<?= $registroTeensActivo ? 'true' : 'false' ?>">Ver</button>
+                        </td>
+                    </tr>
+                    <tr class="registro-resumen-row <?= $registroHombresAdultosActivo ? 'is-active' : '' ?>" data-view-target="registro_view_hombres_adultos">
+                        <td>Hombres</td>
+                        <td>29+ años</td>
+                        <td><strong style="color:#1e4a89;"><?= $hombresAdultosRegistrados ?></strong></td>
+                        <td>
+                            <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
+                                <button type="button" class="btn btn-sm js-gender-view-btn js-registro-selector <?= $registroHombresAdultosActivo ? 'btn-primary' : 'btn-secondary' ?>" data-view-target="registro_view_hombres_adultos" aria-controls="registro_view_hombres_adultos" aria-expanded="<?= $registroHombresAdultosActivo ? 'true' : 'false' ?>">Ver</button>
+                                <button type="button" class="btn btn-sm js-gender-view-btn js-registro-selector <?= $registroHombresUnificadosActivo ? 'btn-primary' : 'btn-info' ?>" data-view-target="registro_view_hombres_unificados" aria-controls="registro_view_hombres_unificados" aria-expanded="<?= $registroHombresUnificadosActivo ? 'true' : 'false' ?>">Unificar</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr class="registro-resumen-row <?= $registroMujeresAdultasActivo ? 'is-active' : '' ?>" data-view-target="registro_view_mujeres_adultas">
+                        <td>Mujeres</td>
+                        <td>29+ años</td>
+                        <td><strong style="color:#8b1c62;"><?= $mujeresAdultasRegistradas ?></strong></td>
+                        <td>
+                            <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
+                                <button type="button" class="btn btn-sm js-gender-view-btn js-registro-selector <?= $registroMujeresAdultasActivo ? 'btn-primary' : 'btn-secondary' ?>" data-view-target="registro_view_mujeres_adultas" aria-controls="registro_view_mujeres_adultas" aria-expanded="<?= $registroMujeresAdultasActivo ? 'true' : 'false' ?>">Ver</button>
+                                <button type="button" class="btn btn-sm js-gender-view-btn js-registro-selector <?= $registroMujeresUnificadasActivo ? 'btn-primary' : 'btn-info' ?>" data-view-target="registro_view_mujeres_unificadas" aria-controls="registro_view_mujeres_unificadas" aria-expanded="<?= $registroMujeresUnificadasActivo ? 'true' : 'false' ?>">Unificar</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
         </div>
     </div>
 
-    <div id="registro_view_jovenes" class="gender-full-view" <?= $registroJovenesActivo ? '' : 'hidden' ?>>
+    <?php if ($esReporteCapDestino): ?>
+    <div id="registro_view_nivel_1" class="gender-full-view" <?= $registroNivel1Activo ? '' : 'hidden' ?>>
+        <div class="registro-view-head">Listado completo · Nivel 1</div>
         <div class="table-container">
             <table class="data-table insc-table-ordenada">
                 <thead>
@@ -490,7 +668,137 @@ if ($moduloFormacionActual === 'discipular') {
                         <th>Cedula</th>
                         <th>Telefono</th>
                         <th>Lider</th>
-                        <th style="width:120px;">Accion</th>
+                        <th class="col-acciones-insc">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($inscripcionesNivel1)): ?>
+                        <?php foreach ($inscripcionesNivel1 as $ins): ?>
+                            <?php $idPersonaIns = (int)($ins['Id_Persona'] ?? 0); ?>
+                            <tr>
+                                <td data-label="Fecha"><?= htmlspecialchars((string)($ins['Fecha_Registro'] ?? '')) ?></td>
+                                <td data-label="Nombre" class="col-nowrap col-nombre"><?= htmlspecialchars((string)($ins['Nombre'] ?? '')) ?></td>
+                                <td data-label="Edad"><?= (int)($ins['Edad'] ?? 0) ?></td>
+                                <td data-label="Genero"><?= htmlspecialchars((string)($ins['Genero'] ?? '')) ?></td>
+                                <td data-label="Cedula"><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
+                                <td data-label="Telefono"><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
+                                <td data-label="Lider" class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
+                                <td data-label="Acción" class="text-center">
+                                    <?= $renderAccionesRegistroFormacion($ins, $idPersonaIns, 'nivel_1') ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="8" class="text-center">No hay registros en Nivel 1 con estos filtros.</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="registro_view_nivel_2" class="gender-full-view" <?= $registroNivel2Activo ? '' : 'hidden' ?>>
+        <div class="registro-view-head">Listado completo · Nivel 2</div>
+        <div class="table-container">
+            <table class="data-table insc-table-ordenada">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Nombre</th>
+                        <th>Edad</th>
+                        <th>Genero</th>
+                        <th>Cedula</th>
+                        <th>Telefono</th>
+                        <th>Lider</th>
+                        <th class="col-acciones-insc">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($inscripcionesNivel2)): ?>
+                        <?php foreach ($inscripcionesNivel2 as $ins): ?>
+                            <?php $idPersonaIns = (int)($ins['Id_Persona'] ?? 0); ?>
+                            <tr>
+                                <td data-label="Fecha"><?= htmlspecialchars((string)($ins['Fecha_Registro'] ?? '')) ?></td>
+                                <td data-label="Nombre" class="col-nowrap col-nombre"><?= htmlspecialchars((string)($ins['Nombre'] ?? '')) ?></td>
+                                <td data-label="Edad"><?= (int)($ins['Edad'] ?? 0) ?></td>
+                                <td data-label="Genero"><?= htmlspecialchars((string)($ins['Genero'] ?? '')) ?></td>
+                                <td data-label="Cedula"><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
+                                <td data-label="Telefono"><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
+                                <td data-label="Lider" class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
+                                <td data-label="Acción" class="text-center">
+                                    <?= $renderAccionesRegistroFormacion($ins, $idPersonaIns, 'nivel_2') ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="8" class="text-center">No hay registros en Nivel 2 con estos filtros.</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="registro_view_nivel_3" class="gender-full-view" <?= $registroNivel3Activo ? '' : 'hidden' ?>>
+        <div class="registro-view-head">Listado completo · Nivel 3</div>
+        <div class="table-container">
+            <table class="data-table insc-table-ordenada">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Nombre</th>
+                        <th>Edad</th>
+                        <th>Genero</th>
+                        <th>Cedula</th>
+                        <th>Telefono</th>
+                        <th>Lider</th>
+                        <th class="col-acciones-insc">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($inscripcionesNivel3)): ?>
+                        <?php foreach ($inscripcionesNivel3 as $ins): ?>
+                            <?php $idPersonaIns = (int)($ins['Id_Persona'] ?? 0); ?>
+                            <tr>
+                                <td data-label="Fecha"><?= htmlspecialchars((string)($ins['Fecha_Registro'] ?? '')) ?></td>
+                                <td data-label="Nombre" class="col-nowrap col-nombre"><?= htmlspecialchars((string)($ins['Nombre'] ?? '')) ?></td>
+                                <td data-label="Edad"><?= (int)($ins['Edad'] ?? 0) ?></td>
+                                <td data-label="Genero"><?= htmlspecialchars((string)($ins['Genero'] ?? '')) ?></td>
+                                <td data-label="Cedula"><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
+                                <td data-label="Telefono"><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
+                                <td data-label="Lider" class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
+                                <td data-label="Acción" class="text-center">
+                                    <?= $renderAccionesRegistroFormacion($ins, $idPersonaIns, 'nivel_3') ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="8" class="text-center">No hay registros en Nivel 3 con estos filtros.</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <?php else: ?>
+    <div id="registro_view_jovenes" class="gender-full-view" <?= $registroJovenesActivo ? '' : 'hidden' ?>>
+        <div class="registro-view-head">Listado completo · Jóvenes (14-28 años)</div>
+        <div class="table-container">
+            <table class="data-table insc-table-ordenada">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Nombre</th>
+                        <th>Edad</th>
+                        <th>Genero</th>
+                        <th>Cedula</th>
+                        <th>Telefono</th>
+                        <th>Lider</th>
+                        <th class="col-acciones-insc">Acción</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -505,7 +813,7 @@ if ($moduloFormacionActual === 'discipular') {
                                 <td data-label="Cedula"><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
                                 <td data-label="Telefono"><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
                                 <td data-label="Lider" class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
-                                <td data-label="Accion" class="text-center">
+                                <td data-label="Acción" class="text-center">
                                     <?= $renderAccionesRegistroFormacion($ins, $idPersonaIns, 'jovenes') ?>
                                 </td>
                             </tr>
@@ -521,6 +829,7 @@ if ($moduloFormacionActual === 'discipular') {
     </div>
 
     <div id="registro_view_teens" class="gender-full-view" <?= $registroTeensActivo ? '' : 'hidden' ?>>
+        <div class="registro-view-head">Listado completo · Teens (9-13 años)</div>
         <div class="table-container">
             <table class="data-table insc-table-ordenada">
                 <thead>
@@ -532,7 +841,7 @@ if ($moduloFormacionActual === 'discipular') {
                         <th>Cedula</th>
                         <th>Telefono</th>
                         <th>Lider</th>
-                        <th style="width:120px;">Accion</th>
+                        <th class="col-acciones-insc">Acción</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -547,7 +856,7 @@ if ($moduloFormacionActual === 'discipular') {
                                 <td data-label="Cedula"><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
                                 <td data-label="Telefono"><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
                                 <td data-label="Lider" class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
-                                <td data-label="Accion" class="text-center">
+                                <td data-label="Acción" class="text-center">
                                     <?= $renderAccionesRegistroFormacion($ins, $idPersonaIns, 'jovenes') ?>
                                 </td>
                             </tr>
@@ -563,6 +872,7 @@ if ($moduloFormacionActual === 'discipular') {
     </div>
 
     <div id="registro_view_hombres_adultos" class="gender-full-view" <?= $registroHombresAdultosActivo ? '' : 'hidden' ?>>
+        <div class="registro-view-head">Listado completo · Hombres (29+ años)</div>
         <div class="table-container">
             <table class="data-table insc-table-ordenada">
                 <thead>
@@ -573,7 +883,7 @@ if ($moduloFormacionActual === 'discipular') {
                         <th>Cedula</th>
                         <th>Telefono</th>
                         <th>Lider</th>
-                        <th style="width:120px;">Accion</th>
+                        <th class="col-acciones-insc">Acción</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -587,7 +897,7 @@ if ($moduloFormacionActual === 'discipular') {
                                 <td data-label="Cedula"><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
                                 <td data-label="Telefono"><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
                                 <td data-label="Lider" class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
-                                    <td data-label="Accion" class="text-center">
+                                    <td data-label="Acción" class="text-center">
                                         <?= $renderAccionesRegistroFormacion($ins, $idPersonaIns, 'hombres_adultos') ?>
                                     </td>
                             </tr>
@@ -603,6 +913,7 @@ if ($moduloFormacionActual === 'discipular') {
     </div>
 
     <div id="registro_view_mujeres_adultas" class="gender-full-view" <?= $registroMujeresAdultasActivo ? '' : 'hidden' ?>>
+        <div class="registro-view-head">Listado completo · Mujeres (29+ años)</div>
         <div class="table-container">
             <table class="data-table insc-table-ordenada">
                 <thead>
@@ -613,7 +924,7 @@ if ($moduloFormacionActual === 'discipular') {
                         <th>Cedula</th>
                         <th>Telefono</th>
                         <th>Lider</th>
-                        <th style="width:120px;">Accion</th>
+                        <th class="col-acciones-insc">Acción</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -627,7 +938,7 @@ if ($moduloFormacionActual === 'discipular') {
                                 <td data-label="Cedula"><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
                                 <td data-label="Telefono"><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
                                 <td data-label="Lider" class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
-                                <td data-label="Accion" class="text-center">
+                                <td data-label="Acción" class="text-center">
                                     <?= $renderAccionesRegistroFormacion($ins, $idPersonaIns, 'mujeres_adultas') ?>
                                 </td>
                             </tr>
@@ -642,9 +953,104 @@ if ($moduloFormacionActual === 'discipular') {
         </div>
     </div>
 
+    <div id="registro_view_hombres_unificados" class="gender-full-view" <?= $registroHombresUnificadosActivo ? '' : 'hidden' ?> >
+        <div class="registro-view-head">Listado unificado · Hombres (jóvenes + adultos)</div>
+        <div class="table-container">
+            <table class="data-table insc-table-ordenada">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Nombre</th>
+                        <th>Edad</th>
+                        <th>Genero</th>
+                        <th>Cedula</th>
+                        <th>Telefono</th>
+                        <th>Lider</th>
+                        <th class="col-acciones-insc">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($inscripcionesHombresUnificadas)): ?>
+                        <?php foreach ($inscripcionesHombresUnificadas as $ins): ?>
+                            <?php $idPersonaIns = (int)($ins['Id_Persona'] ?? 0); ?>
+                            <?php $segmentoAccion = (string)($ins['_segmento_actual'] ?? 'hombres_adultos'); ?>
+                            <tr>
+                                <td data-label="Fecha"><?= htmlspecialchars((string)($ins['Fecha_Registro'] ?? '')) ?></td>
+                                <td data-label="Nombre" class="col-nowrap col-nombre"><?= htmlspecialchars((string)($ins['Nombre'] ?? '')) ?></td>
+                                <td data-label="Edad"><?= (int)($ins['Edad'] ?? 0) ?></td>
+                                <td data-label="Genero"><?= htmlspecialchars((string)($ins['Genero'] ?? '')) ?></td>
+                                <td data-label="Cedula"><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
+                                <td data-label="Telefono"><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
+                                <td data-label="Lider" class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
+                                <td data-label="Acción" class="text-center">
+                                    <?= $renderAccionesRegistroFormacion($ins, $idPersonaIns, $segmentoAccion) ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="8" class="text-center">No hay hombres para unificar con estos filtros.</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+        <small style="display:block;margin-top:8px;color:#637087;">Total unificado hombres: <?= $hombresUnificadosRegistrados ?></small>
+    </div>
+
+    <div id="registro_view_mujeres_unificadas" class="gender-full-view" <?= $registroMujeresUnificadasActivo ? '' : 'hidden' ?> >
+        <div class="registro-view-head">Listado unificado · Mujeres (jóvenes + adultas)</div>
+        <div class="table-container">
+            <table class="data-table insc-table-ordenada">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Nombre</th>
+                        <th>Edad</th>
+                        <th>Genero</th>
+                        <th>Cedula</th>
+                        <th>Telefono</th>
+                        <th>Lider</th>
+                        <th class="col-acciones-insc">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($inscripcionesMujeresUnificadas)): ?>
+                        <?php foreach ($inscripcionesMujeresUnificadas as $ins): ?>
+                            <?php $idPersonaIns = (int)($ins['Id_Persona'] ?? 0); ?>
+                            <?php $segmentoAccion = (string)($ins['_segmento_actual'] ?? 'mujeres_adultas'); ?>
+                            <tr>
+                                <td data-label="Fecha"><?= htmlspecialchars((string)($ins['Fecha_Registro'] ?? '')) ?></td>
+                                <td data-label="Nombre" class="col-nowrap col-nombre"><?= htmlspecialchars((string)($ins['Nombre'] ?? '')) ?></td>
+                                <td data-label="Edad"><?= (int)($ins['Edad'] ?? 0) ?></td>
+                                <td data-label="Genero"><?= htmlspecialchars((string)($ins['Genero'] ?? '')) ?></td>
+                                <td data-label="Cedula"><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
+                                <td data-label="Telefono"><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
+                                <td data-label="Lider" class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
+                                <td data-label="Acción" class="text-center">
+                                    <?= $renderAccionesRegistroFormacion($ins, $idPersonaIns, $segmentoAccion) ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="8" class="text-center">No hay mujeres para unificar con estos filtros.</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+        <small style="display:block;margin-top:8px;color:#637087;">Total unificado mujeres: <?= $mujeresUnificadasRegistradas ?></small>
+    </div>
+    <?php endif; ?>
+
     <?php if (!empty($inscripcionesOtros)): ?>
         <small style="display:block; margin-top:10px; color:#637087;">
-            Hay <?= $otrosRegistrados ?> registro(s) sin edad válida, menores de 9 años o mayores de 29 sin género reconocible.
+            <?php if ($esReporteCapDestino): ?>
+                Hay <?= $otrosRegistrados ?> registro(s) sin nivel reconocido en Capacitación Destino.
+            <?php else: ?>
+                Hay <?= $otrosRegistrados ?> registro(s) sin edad válida, menores de 9 años o mayores de 29 sin género reconocible.
+            <?php endif; ?>
         </small>
     <?php endif; ?>
 </div>
@@ -687,13 +1093,13 @@ if ($moduloFormacionActual === 'discipular') {
     <div class="modal-backdrop"></div>
     <div class="modal-content" style="width:90%;max-width:420px;margin:80px auto;padding:20px;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:9999;position:relative;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid #eee;padding-bottom:12px;">
-            <h3 style="margin:0;">Cambio de Segmento</h3>
+            <h3 id="modal-cambio-segmento-titulo" style="margin:0;">Cambio de Segmento</h3>
             <button type="button" class="js-cerrar-modal-segmento" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;">×</button>
         </div>
         <div style="margin-bottom:16px;">
             <p><strong>Persona:</strong> <span id="modal-persona-nombre" style="color:#0a6e6a;">-</span></p>
             <div style="margin-top:12px;">
-                <label for="modal-segmento-nuevo" style="display:block;margin-bottom:6px;font-weight:500;color:#333;">Nuevo Segmento:</label>
+                <label id="modal-segmento-label" for="modal-segmento-nuevo" style="display:block;margin-bottom:6px;font-weight:500;color:#333;">Nuevo Segmento:</label>
                 <select id="modal-segmento-nuevo" class="form-control" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;" <?= $puedeEditarRegistroFormacion ? '' : 'disabled' ?>>
                     <option value="">-- Sin cambio (por edad/género) --</option>
                     <option value="jovenes">Jóvenes</option>
@@ -709,6 +1115,28 @@ if ($moduloFormacionActual === 'discipular') {
     </div>
 </div>
 
+<!-- Modal de Cambio de Programa -->
+<div id="modal-cambio-programa" class="segmento-modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" style="width:90%;max-width:420px;margin:80px auto;padding:20px;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:9999;position:relative;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid #eee;padding-bottom:12px;">
+            <h3 style="margin:0;">Cambio de Programa</h3>
+            <button type="button" class="js-cerrar-modal-programa" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;">×</button>
+        </div>
+        <div style="margin-bottom:16px;">
+            <p><strong>Persona:</strong> <span id="modal-programa-persona-nombre" style="color:#0a6e6a;">-</span></p>
+            <div style="margin-top:12px;">
+                <label for="modal-programa-nuevo" style="display:block;margin-bottom:6px;font-weight:500;color:#333;">Nuevo Programa:</label>
+                <select id="modal-programa-nuevo" class="form-control" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;" <?= $puedeEditarRegistroFormacion ? '' : 'disabled' ?>></select>
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:12px;border-top:1px solid #eee;">
+            <button type="button" class="btn btn-secondary js-cerrar-modal-programa">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="btn-guardar-cambio-programa" <?= $puedeEditarRegistroFormacion ? '' : 'disabled' ?>>Guardar</button>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     const endpointCambioSegmento = <?= json_encode(PUBLIC_URL . '?url=home/cambiar-segmento-inscripcion') ?>;
@@ -719,10 +1147,17 @@ if ($moduloFormacionActual === 'discipular') {
     const modalMinisterioUvNombre = document.getElementById('modal-ministerio-uv-nombre');
     const modalMinisterioUvBody = document.getElementById('modal-ministerio-uv-body');
     const modalCambioSegmento = document.getElementById('modal-cambio-segmento');
+    const modalCambioSegmentoTitulo = document.getElementById('modal-cambio-segmento-titulo');
+    const modalSegmentoLabel = document.getElementById('modal-segmento-label');
     const modalPersonaNombre = document.getElementById('modal-persona-nombre');
     const modalSegmentoNuevo = document.getElementById('modal-segmento-nuevo');
     const btnGuardarCambioSegmento = document.getElementById('btn-guardar-cambio-segmento');
+    const modalCambioPrograma = document.getElementById('modal-cambio-programa');
+    const modalProgramaPersonaNombre = document.getElementById('modal-programa-persona-nombre');
+    const modalProgramaNuevo = document.getElementById('modal-programa-nuevo');
+    const btnGuardarCambioPrograma = document.getElementById('btn-guardar-cambio-programa');
     let idInscripcionModal = 0;
+    let idInscripcionProgramaModal = 0;
 
     const escaparHtml = (valor) => String(valor || '')
         .replace(/&/g, '&amp;')
@@ -730,6 +1165,80 @@ if ($moduloFormacionActual === 'discipular') {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+
+    const esProgramaCapDestino = (programa) => {
+        const p = String(programa || '').trim();
+        return ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'].includes(p);
+    };
+
+    const normalizarSegmentoPorPrograma = (segmentoRaw, programaActual) => {
+        const segmento = String(segmentoRaw || '').trim();
+        const programa = String(programaActual || '').trim();
+
+        if (esProgramaCapDestino(programa)) {
+            if (['nivel_1', 'nivel_2', 'nivel_3'].includes(segmento)) {
+                return segmento;
+            }
+            if (programa === 'capacitacion_destino_nivel_2') {
+                return 'nivel_2';
+            }
+            if (programa === 'capacitacion_destino_nivel_3') {
+                return 'nivel_3';
+            }
+            return 'nivel_1';
+        }
+
+        return segmento === 'teens' ? 'jovenes' : segmento;
+    };
+
+    const renderOpcionesCambioSegmento = (programaActual) => {
+        if (!modalSegmentoNuevo) {
+            return;
+        }
+
+        if (esProgramaCapDestino(programaActual)) {
+            if (modalCambioSegmentoTitulo) {
+                modalCambioSegmentoTitulo.textContent = 'Cambio de Nivel';
+            }
+            if (modalSegmentoLabel) {
+                modalSegmentoLabel.textContent = 'Nuevo Nivel:';
+            }
+
+            modalSegmentoNuevo.innerHTML = '';
+            [
+                { value: '', label: '-- Sin cambio (según programa) --' },
+                { value: 'nivel_1', label: 'Nivel 1' },
+                { value: 'nivel_2', label: 'Nivel 2' },
+                { value: 'nivel_3', label: 'Nivel 3' }
+            ].forEach((op) => {
+                const option = document.createElement('option');
+                option.value = op.value;
+                option.textContent = op.label;
+                modalSegmentoNuevo.appendChild(option);
+            });
+            return;
+        }
+
+        if (modalCambioSegmentoTitulo) {
+            modalCambioSegmentoTitulo.textContent = 'Cambio de Segmento';
+        }
+        if (modalSegmentoLabel) {
+            modalSegmentoLabel.textContent = 'Nuevo Segmento:';
+        }
+
+        modalSegmentoNuevo.innerHTML = '';
+        [
+            { value: '', label: '-- Sin cambio (por edad/género) --' },
+            { value: 'jovenes', label: 'Jóvenes' },
+            { value: 'hombres_adultos', label: 'Hombres' },
+            { value: 'mujeres_adultas', label: 'Mujeres' }
+        ].forEach((op) => {
+            const option = document.createElement('option');
+            option.value = op.value;
+            option.textContent = op.label;
+            modalSegmentoNuevo.appendChild(option);
+        });
+    };
 
     const cerrarModalCambioSegmento = () => {
         if (modalCambioSegmento) {
@@ -747,7 +1256,11 @@ if ($moduloFormacionActual === 'discipular') {
                 idInscripcionModal = parseInt(btn.dataset.idInscripcion || '0', 10);
                 const nombre = String(btn.dataset.nombre || '');
                 const segmentoActualRaw = String(btn.dataset.segmentoActual || '');
-                const segmentoActual = segmentoActualRaw === 'teens' ? 'jovenes' : segmentoActualRaw;
+                const programaActual = String(btn.dataset.programaActual || '');
+
+                renderOpcionesCambioSegmento(programaActual);
+
+                const segmentoActual = normalizarSegmentoPorPrograma(segmentoActualRaw, programaActual);
 
                 if (modalPersonaNombre) {
                     modalPersonaNombre.textContent = nombre;
@@ -789,10 +1302,117 @@ if ($moduloFormacionActual === 'discipular') {
                     }
 
                     cerrarModalCambioSegmento();
-                    alert('Segmento actualizado correctamente. Recargando página...');
+                    alert('Cambio guardado correctamente. Recargando página...');
                     window.location.reload();
                 } catch (error) {
-                    alert(error.message || 'Error al guardar el cambio de segmento');
+                    alert(error.message || 'Error al guardar el cambio');
+                }
+            });
+        }
+    }
+
+    const opcionesDestinoPorPrograma = (programaActual) => {
+        const p = String(programaActual || '').trim();
+        if (['universidad_vida', 'encuentro', 'bautismo'].includes(p)) {
+            return [
+                { value: 'capacitacion_destino_nivel_1', label: 'Capacitación Destino - Nivel 1' },
+                { value: 'capacitacion_destino_nivel_2', label: 'Capacitación Destino - Nivel 2' },
+                { value: 'capacitacion_destino_nivel_3', label: 'Capacitación Destino - Nivel 3' }
+            ];
+        }
+
+        if (['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'].includes(p)) {
+            return [];
+        }
+
+        return [];
+    };
+
+    const cerrarModalCambioPrograma = () => {
+        if (modalCambioPrograma) {
+            modalCambioPrograma.setAttribute('hidden', 'hidden');
+        }
+    };
+
+    if (modalCambioPrograma) {
+        modalCambioPrograma.querySelectorAll('.js-cerrar-modal-programa, .modal-backdrop').forEach((el) => {
+            el.addEventListener('click', cerrarModalCambioPrograma);
+        });
+
+        document.querySelectorAll('.js-cambio-programa').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                idInscripcionProgramaModal = parseInt(btn.dataset.idInscripcion || '0', 10);
+                const nombre = String(btn.dataset.nombre || '');
+                const programaActual = String(btn.dataset.programaActual || '');
+                const opciones = opcionesDestinoPorPrograma(programaActual);
+
+                if (modalProgramaPersonaNombre) {
+                    modalProgramaPersonaNombre.textContent = nombre;
+                }
+
+                if (modalProgramaNuevo) {
+                    modalProgramaNuevo.innerHTML = '';
+                    if (opciones.length === 0) {
+                        const opt = document.createElement('option');
+                        opt.value = '';
+                        opt.textContent = 'Sin destinos disponibles';
+                        modalProgramaNuevo.appendChild(opt);
+                    } else {
+                        opciones.forEach((item) => {
+                            const opt = document.createElement('option');
+                            opt.value = item.value;
+                            opt.textContent = item.label;
+                            modalProgramaNuevo.appendChild(opt);
+                        });
+                    }
+                }
+
+                modalCambioPrograma.removeAttribute('hidden');
+            });
+        });
+
+        if (btnGuardarCambioPrograma) {
+            btnGuardarCambioPrograma.addEventListener('click', async () => {
+                if (idInscripcionProgramaModal <= 0) {
+                    alert('Error: ID de inscripción inválido');
+                    return;
+                }
+
+                const programaDestino = modalProgramaNuevo ? String(modalProgramaNuevo.value || '') : '';
+                if (programaDestino === '') {
+                    alert('Selecciona un programa de destino');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('accion', 'mover_programa');
+                formData.append('id_inscripcion', String(idInscripcionProgramaModal));
+                formData.append('programa_destino', programaDestino);
+                formData.append('return_url', <?= json_encode($returnUrlFormacion) ?>);
+
+                try {
+                    const response = await fetch(endpointCambioSegmento, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    const raw = await response.text();
+                    let data = null;
+                    try {
+                        data = JSON.parse(raw);
+                    } catch (e) {
+                        throw new Error('No se pudo completar el cambio. Recarga la página e intenta de nuevo.');
+                    }
+
+                    if (!response.ok || !data.ok) {
+                        throw new Error((data && data.error) || 'No se pudo mover de programa');
+                    }
+
+                    cerrarModalCambioPrograma();
+                    alert('Programa actualizado correctamente. Recargando página...');
+                    window.location.reload();
+                } catch (error) {
+                    alert(error.message || 'Error al guardar el cambio de programa');
                 }
             });
         }
@@ -888,6 +1508,24 @@ if ($moduloFormacionActual === 'discipular') {
         });
     }
 
+    const isMobileRegistroView = () => window.matchMedia('(max-width: 768px)').matches;
+
+    const resetRegistroSelection = () => {
+        document.querySelectorAll('.gender-full-view').forEach((view) => {
+            view.hidden = true;
+        });
+
+        document.querySelectorAll('.registro-resumen-row').forEach((row) => {
+            row.classList.remove('is-active');
+        });
+
+        document.querySelectorAll('.js-registro-selector').forEach((selectorBtn) => {
+            selectorBtn.classList.remove('btn-primary');
+            selectorBtn.classList.add('btn-secondary');
+            selectorBtn.setAttribute('aria-expanded', 'false');
+        });
+    };
+
     document.querySelectorAll('.js-gender-view-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
             const targetId = String(btn.dataset.viewTarget || '');
@@ -900,18 +1538,27 @@ if ($moduloFormacionActual === 'discipular') {
                 return;
             }
 
-            document.querySelectorAll('.gender-full-view').forEach((view) => {
-                view.hidden = true;
-            });
+            const wasOpen = !targetView.hidden;
+            const isMobile = isMobileRegistroView();
+
+            resetRegistroSelection();
+
+            if (isMobile && wasOpen) {
+                return;
+            }
+
             targetView.hidden = false;
 
-            document.querySelectorAll('.gender-card').forEach((card) => {
-                card.classList.remove('is-active');
-            });
-            const currentCard = btn.closest('.gender-card');
-            if (currentCard) {
-                currentCard.classList.add('is-active');
+            const resumenRow = document.querySelector('.registro-resumen-row[data-view-target="' + targetId + '"]');
+            if (resumenRow) {
+                resumenRow.classList.add('is-active');
             }
+
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-primary');
+            btn.setAttribute('aria-expanded', 'true');
+
+            targetView.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
     });
 
@@ -1049,8 +1696,8 @@ if ($moduloFormacionActual === 'discipular') {
 .insc-table-ordenada th,
 .insc-table-ordenada td {
     vertical-align: middle;
-    padding-top: 9px !important;
-    padding-bottom: 9px !important;
+    padding: 5px 8px !important;
+    line-height: 1.35;
 }
 
 .col-nowrap {
@@ -1064,6 +1711,44 @@ if ($moduloFormacionActual === 'discipular') {
 
 .insc-table-ordenada .col-nombre { min-width: 240px; }
 .insc-table-ordenada .col-lider { min-width: 190px; }
+
+.col-acciones-insc {
+    width: 1%;
+    min-width: 132px;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.insc-acciones {
+    display: inline-flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.insc-acciones-form {
+    display: inline-flex;
+    margin: 0;
+    align-items: center;
+}
+
+.insc-acciones .btn-insc-icon {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.insc-acciones .btn-insc-icon i {
+    font-size: 14px;
+    line-height: 1;
+}
 
 .gender-card {
     padding:0;
@@ -1166,9 +1851,75 @@ if ($moduloFormacionActual === 'discipular') {
 
 .gender-full-view {
     border-top:1px solid #e3ebf7;
-    padding:10px;
+    padding:14px;
     background:#fff;
-    border-radius:8px;
+    border-radius:10px;
+    margin-top:8px;
+}
+
+.registro-view-head {
+    font-weight:700;
+    color:#1f3f69;
+    margin-bottom:10px;
+}
+
+.registro-resumen-row.is-active {
+    background:#edf4ff;
+}
+
+.gender-full-view .table-container {
+    width:100%;
+    overflow-x:auto;
+}
+
+.gender-full-view .data-table th,
+.gender-full-view .data-table td {
+    font-size: 13px;
+}
+
+@keyframes registroAccordionOpen {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 768px) {
+    .formacion-resumen-table th,
+    .formacion-resumen-table td {
+        padding: 10px 8px;
+    }
+
+    .insc-acciones {
+        flex-wrap: wrap;
+        justify-content: center;
+        row-gap: 6px;
+    }
+
+    .gender-full-view {
+        border: 1px solid #d5e2f4;
+        border-top: 3px solid #3b6ea8;
+        padding: 10px;
+    }
+
+    .gender-full-view:not([hidden]) {
+        animation: registroAccordionOpen .22s ease-out;
+    }
+
+    .registro-view-head {
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+
+    .gender-full-view .data-table th,
+    .gender-full-view .data-table td {
+        font-size: 14px;
+        white-space: nowrap;
+    }
 }
 </style>
 

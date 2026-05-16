@@ -134,6 +134,23 @@ class RegistroPersonaController extends BaseController {
         return (int)$this->obtenerIdRolAsistenteDefault();
     }
 
+    private function aplicarAccesoAutomaticoDiscipulo(array &$data) {
+        $idRol = (int)($data['Id_Rol'] ?? 0);
+        $idRolDiscipulo = (int)$this->obtenerIdRolDiscipuloDefault();
+        if ($idRol <= 0 || $idRolDiscipulo <= 0 || $idRol !== $idRolDiscipulo) {
+            return;
+        }
+
+        $documento = trim((string)($data['Numero_Documento'] ?? ''));
+        if ($documento === '') {
+            return;
+        }
+
+        $data['Usuario'] = $documento;
+        $data['Contrasena'] = password_hash($documento, PASSWORD_BCRYPT);
+        $data['Estado_Cuenta'] = 'Activo';
+    }
+
     private function normalizarDocumentoInput($valor) {
         $valor = trim((string)$valor);
         if ($valor === '') {
@@ -393,6 +410,8 @@ class RegistroPersonaController extends BaseController {
                 $data['Origen_Ganar'] = null;
             }
         }
+
+        $this->aplicarAccesoAutomaticoDiscipulo($data);
 
         try {
             $idNuevaPersona = (int)$this->personaModel->create($data);

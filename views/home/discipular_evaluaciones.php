@@ -13,14 +13,24 @@ $esDiscipuloRol = !empty($es_discipulo);
 $estadoIntento = (array)($estado_intento ?? []);
 $clasesLinks = (array)($clases_links ?? []);
 $accesosDirectosDiscipulo = (array)($accesos_directos_discipulo ?? []);
+$tareasPorModuloDiscipulo = (array)($tareas_por_modulo_discipulo ?? []);
 $intentosPorEvaluacion = (array)($intentos_por_evaluacion ?? []);
 $maxIntentos = (int)($max_intentos ?? 2);
+$resultadoDetalle = $resultado_detalle ?? null;
 $resumenCapacitacionPorNivel = (array)($resumen_capacitacion_por_nivel ?? []);
 $filtroNivelContexto = (int)($filtro_nivel_contexto ?? 0);
 $filtroModuloContexto = (int)($filtro_modulo_contexto ?? 0);
 $filtroLeccionContexto = (string)($filtro_leccion_contexto ?? 'Sin lección');
 $contextoDesdeMaterial = !empty($contexto_desde_material);
 $leccionesPorNivelModulo = (array)($lecciones_por_nivel_modulo ?? []);
+$urlClaseUnicaDiscipulo = '';
+foreach ($accesosDirectosDiscipulo as $accesoTmpClase) {
+    $urlTmpClase = trim((string)($accesoTmpClase['url_clase'] ?? ''));
+    if ($urlTmpClase !== '') {
+        $urlClaseUnicaDiscipulo = $urlTmpClase;
+        break;
+    }
+}
 $contextoQuery = '';
 $contextoHiddenHtml = '';
 if ($contextoDesdeMaterial && $filtroNivelContexto > 0 && $filtroModuloContexto > 0) {
@@ -73,10 +83,63 @@ if ($puedeGestionarEval) {
 }
 ?>
 
+<style>
+    .disc-eval-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .disc-eval-card {
+        border: 1px solid #dbe3f0;
+        border-radius: 10px;
+        padding: 10px;
+        background: #fff;
+    }
+
+    .disc-card-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+    }
+
+    .disc-tareas-wrap {
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px dashed #dbe3f0;
+    }
+
+    .disc-tareas-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .disc-tarea-item {
+        border: 1px solid #e5ebf7;
+        border-radius: 8px;
+        padding: 8px;
+        background: #fff;
+    }
+
+    .disc-tarea-item.is-hidden {
+        display: none;
+    }
+
+    @media (max-width: 900px) {
+        .disc-eval-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
     <div>
         <h2 style="margin:0;">Discipular - Evaluaciones</h2>
-        <small style="color:#637087;">Preguntas abiertas y cerradas. Se aprueba con 80% (mínimo 4 respuestas de 5).</small>
+        <small style="color:#637087;">Solo preguntas cerradas. Se aprueba con 80%.</small>
     </div>
     <div class="header-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
         <?php if ($contextoDesdeMaterial): ?>
@@ -84,7 +147,7 @@ if ($puedeGestionarEval) {
                 <i class="bi bi-folder"></i> Volver a Material Capacitacion Destino
             </a>
         <?php endif; ?>
-        <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=home/discipular">
+        <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas">
             <i class="bi bi-arrow-left-short"></i> Volver a Discipular
         </a>
     </div>
@@ -100,6 +163,58 @@ if ($puedeGestionarEval) {
 <?php if ($mensajeFlash !== ''): ?>
     <div class="alert alert-<?= $tipoFlash === 'success' ? 'success' : 'danger' ?>" style="margin:12px 0;">
         <?= htmlspecialchars($mensajeFlash) ?>
+    </div>
+<?php endif; ?>
+
+<?php if (!empty($resultadoDetalle)): ?>
+    <?php
+    $detalleRespuestas = json_decode((string)($resultadoDetalle['Respuestas_JSON'] ?? '[]'), true);
+    if (!is_array($detalleRespuestas)) {
+        $detalleRespuestas = [];
+    }
+    ?>
+    <div class="card report-card" style="padding:14px;margin-bottom:14px;border:1px solid #dbeafe;background:#f8fbff;">
+        <h3 style="margin:0 0 8px 0;">Detalle del intento</h3>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <small><strong>Evaluación:</strong> <?= htmlspecialchars((string)($resultadoDetalle['Titulo'] ?? '')) ?></small>
+            <small><strong>Nivel:</strong> <?= (int)($resultadoDetalle['Nivel'] ?? 0) ?></small>
+            <small><strong>Módulo:</strong> <?= (int)($resultadoDetalle['Modulo_Numero'] ?? 0) ?></small>
+            <small><strong>Intento:</strong> <?= (int)($resultadoDetalle['Intento_Numero'] ?? 0) ?></small>
+            <small><strong>Puntaje:</strong> <?= (float)($resultadoDetalle['Puntaje'] ?? 0) ?>%</small>
+            <small><strong>Resultado:</strong> <?= !empty($resultadoDetalle['Aprobado']) ? 'Aprobado' : 'Reprobado' ?></small>
+        </div>
+
+        <?php if (!empty($detalleRespuestas)): ?>
+            <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
+                <?php foreach ($detalleRespuestas as $idxDetalle => $respuestaDetalle): ?>
+                    <?php
+                    $esCorrectaDetalle = !empty($respuestaDetalle['es_correcta']);
+                    $respondidaDetalle = !empty($respuestaDetalle['respondida']);
+                    $textoRespuestaDetalle = trim((string)($respuestaDetalle['texto_respuesta'] ?? ''));
+                    $claveRespuestaDetalle = trim((string)($respuestaDetalle['respuesta'] ?? ''));
+                    $claveCorrectaDetalle = trim((string)($respuestaDetalle['correcta_esperada'] ?? ''));
+                    ?>
+                    <div style="border:1px solid #e6e8ee;border-radius:10px;padding:10px;background:#fff;">
+                        <div><strong><?= ($idxDetalle + 1) ?>. <?= htmlspecialchars((string)($respuestaDetalle['pregunta'] ?? 'Pregunta')) ?></strong></div>
+                        <div style="margin-top:4px;"><small><strong>Tu respuesta:</strong>
+                            <?php if ($respondidaDetalle): ?>
+                                <?= htmlspecialchars(($claveRespuestaDetalle !== '' ? strtoupper($claveRespuestaDetalle) . '. ' : '') . $textoRespuestaDetalle) ?>
+                            <?php else: ?>
+                                Sin responder
+                            <?php endif; ?>
+                        </small></div>
+                        <div><small><strong>Respuesta correcta:</strong> <?= htmlspecialchars($claveCorrectaDetalle !== '' ? strtoupper($claveCorrectaDetalle) : 'No definida') ?></small></div>
+                        <div>
+                            <small style="font-weight:700;color:<?= $esCorrectaDetalle ? '#166534' : '#b91c1c' ?>;">
+                                <?= $esCorrectaDetalle ? 'Correcta' : 'Incorrecta' ?>
+                            </small>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php else: ?>
+            <div style="margin-top:10px;"><small style="color:#637087;">Este intento no tiene respuestas registradas.</small></div>
+        <?php endif; ?>
     </div>
 <?php endif; ?>
 
@@ -120,24 +235,41 @@ if ($puedeGestionarEval) {
 
 <?php if ($esDiscipuloRol && !empty($accesosDirectosDiscipulo)): ?>
 <div class="card report-card" style="padding:14px; margin-bottom:14px;">
-    <h3 style="margin:0 0 4px 0;">Módulos de material</h3>
-    <small style="color:#637087;">Modo discípulo: aquí solo ves tus accesos activos de hoy.</small>
-    <div class="dashboard-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));margin-top:10px;">
+    <h3 style="margin:0 0 4px 0;">Acceso a clase</h3>
+    <small style="color:#637087;">Link único de clase para hoy.</small>
+    <div style="margin-top:10px;">
+        <?php if ($urlClaseUnicaDiscipulo !== ''): ?>
+            <a class="btn btn-sm" style="background:#10b981;color:#fff;" href="<?= htmlspecialchars($urlClaseUnicaDiscipulo, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">Ir a clase</a>
+        <?php else: ?>
+            <button type="button" class="btn btn-sm" style="background:#94a3b8;color:#fff;" disabled title="Aún no hay link de clase configurado">Ir a clase</button>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="card report-card" style="padding:14px; margin-bottom:14px;">
+    <h3 style="margin:0 0 4px 0;">Módulos de evaluaciones</h3>
+    <small style="color:#637087;">Modo discípulo: aquí solo ves tus evaluaciones activas de hoy.</small>
+    <div class="disc-eval-grid">
         <?php foreach ($accesosDirectosDiscipulo as $accesoDirecto): ?>
-            <div style="border:1px solid #dbe3f0;border-radius:10px;padding:10px;">
-                <div style="font-weight:700;color:#1f4f93;">Nivel <?= (int)($accesoDirecto['nivel'] ?? 0) ?> · Módulo <?= (int)($accesoDirecto['modulo'] ?? 0) ?></div>
+            <?php
+                $nivelAcceso = (int)($accesoDirecto['nivel'] ?? 0);
+                $moduloAcceso = (int)($accesoDirecto['modulo'] ?? 0);
+                $keyTareaAcceso = $nivelAcceso . '_' . $moduloAcceso;
+                $tareasModulo = (array)($tareasPorModuloDiscipulo[$keyTareaAcceso] ?? []);
+                $tareasPanelId = 'disc-tareas-' . $nivelAcceso . '-' . $moduloAcceso;
+            ?>
+            <div class="disc-eval-card">
+                <div style="font-weight:700;color:#1f4f93;">Nivel <?= $nivelAcceso ?> · Módulo <?= $moduloAcceso ?></div>
                 <div><small style="color:#637087;">Lección: <?= htmlspecialchars((string)($accesoDirecto['leccion'] ?? 'Sin lección activa')) ?></small></div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                <div class="disc-card-actions">
                     <?php if (!empty($accesoDirecto['url_evaluacion'])): ?>
                         <a class="btn btn-sm btn-primary" href="<?= htmlspecialchars((string)$accesoDirecto['url_evaluacion'], ENT_QUOTES, 'UTF-8') ?>">Ir a evaluación</a>
                     <?php else: ?>
                         <button type="button" class="btn btn-sm" style="background:#94a3b8;color:#fff;" disabled title="No hay evaluación activa para este nivel/módulo">Ir a evaluación</button>
                     <?php endif; ?>
-                    <?php if (!empty($accesoDirecto['url_clase'])): ?>
-                        <a class="btn btn-sm" style="background:#10b981;color:#fff;" href="<?= htmlspecialchars((string)$accesoDirecto['url_clase'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">Entrar a clase</a>
-                    <?php else: ?>
-                        <button type="button" class="btn btn-sm" style="background:#94a3b8;color:#fff;" disabled title="Este módulo aún no tiene link de clase configurado">Entrar a clase</button>
-                    <?php endif; ?>
+                    <a class="btn btn-sm btn-secondary" href="<?= PUBLIC_URL ?>?url=programas/tareas&nivel=<?= $nivelAcceso ?>&modulo=<?= $moduloAcceso ?>">
+                        Ver tareas (<?= count($tareasModulo) ?>)
+                    </a>
                 </div>
             </div>
         <?php endforeach; ?>
@@ -160,13 +292,9 @@ if ($puedeGestionarEval) {
 <?php if ($puedeGestionarEval): ?>
 <div class="card report-card" style="padding:14px; margin-bottom:14px;">
     <h3 style="margin:0 0 12px 0;">Crear evaluación</h3>
-    <form method="POST" action="<?= PUBLIC_URL ?>?url=home/discipular/evaluaciones<?= $contextoQuery ?>">
+    <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>">
         <input type="hidden" name="accion" value="crear_evaluacion">
         <?= $contextoHiddenHtml ?>
-        <?php if ($filtroNivelContexto > 0 && $filtroModuloContexto > 0): ?>
-            <input type="hidden" name="nivel" value="<?= $filtroNivelContexto ?>">
-            <input type="hidden" name="modulo_numero" value="<?= $filtroModuloContexto ?>">
-        <?php endif; ?>
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
             <div>
@@ -175,7 +303,7 @@ if ($puedeGestionarEval) {
             </div>
             <div>
                 <label>Nivel</label>
-                <select class="form-control" name="nivel" required <?= $filtroNivelContexto > 0 ? 'disabled' : '' ?>>
+                <select class="form-control" name="nivel" required>
                     <option value="1" <?= $filtroNivelContexto === 1 ? 'selected' : '' ?>>Nivel 1</option>
                     <option value="2" <?= $filtroNivelContexto === 2 ? 'selected' : '' ?>>Nivel 2</option>
                     <option value="3" <?= $filtroNivelContexto === 3 ? 'selected' : '' ?>>Nivel 3</option>
@@ -183,7 +311,7 @@ if ($puedeGestionarEval) {
             </div>
             <div>
                 <label>Módulo</label>
-                <select class="form-control" name="modulo_numero" required <?= $filtroModuloContexto > 0 ? 'disabled' : '' ?>>
+                <select class="form-control" name="modulo_numero" required>
                     <option value="1" <?= $filtroModuloContexto === 1 ? 'selected' : '' ?>>Módulo 1</option>
                     <option value="2" <?= $filtroModuloContexto === 2 ? 'selected' : '' ?>>Módulo 2</option>
                     <option value="3" <?= $filtroModuloContexto === 3 ? 'selected' : '' ?>>Módulo 3</option>
@@ -207,12 +335,9 @@ if ($puedeGestionarEval) {
             </div>
             <div>
                 <label>Tipo de respuestas</label>
-                <select class="form-control" name="modo_respuestas" id="modoRespuestasEval" required>
-                    Módulo <?= (int)($evaluacionOculta['Modulo_Numero'] ?? 0) ?>,
-                    Lección <?= htmlspecialchars((string)($evaluacionOculta['Leccion'] ?? 'Sin lección')) ?>)
-                    <option value="cerrada">Solo cerradas</option>
-                    <option value="abierta">Solo abiertas</option>
-                </select>
+                <input type="hidden" name="modo_respuestas" value="cerrada">
+                <span class="form-control" style="background:#f3f4f6;">Solo cerradas</span>
+                <small style="color:#637087;">Solo se permiten preguntas cerradas en Capacitación Destino.</small>
             </div>
         </div>
 
@@ -313,12 +438,12 @@ if ($puedeGestionarEval) {
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
                         <?php if (!$intentosAgotados): ?>
-                            <a class="btn btn-info btn-sm" href="<?= PUBLIC_URL ?>?url=home/discipular/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEv ?>"><?= htmlspecialchars($textoAccionResponder) ?></a>
+                            <a class="btn btn-info btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEv ?>"><?= htmlspecialchars($textoAccionResponder) ?></a>
                         <?php else: ?>
                             <span class="badge" style="background:#fee2e2;color:#7f1d1d;padding:8px 10px;">Intentos agotados</span>
                         <?php endif; ?>
                         <?php if ($puedeGestionarEval && (int)($ev['Activa'] ?? 0) === 1): ?>
-                            <form method="POST" action="<?= PUBLIC_URL ?>?url=home/discipular/evaluaciones<?= $contextoQuery ?>" style="margin:0;">
+                            <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>" style="margin:0;">
                                 <input type="hidden" name="accion" value="desactivar_evaluacion">
                                 <input type="hidden" name="id_evaluacion" value="<?= $idEv ?>">
                                 <?= $contextoHiddenHtml ?>
@@ -328,7 +453,7 @@ if ($puedeGestionarEval) {
                     </div>
 
                     <?php if ($puedeConfigurarFechasEval): ?>
-                        <form method="POST" action="<?= PUBLIC_URL ?>?url=home/discipular/evaluaciones<?= $contextoQuery ?>" style="margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;align-items:end;">
+                        <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>" style="margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;align-items:end;">
                             <input type="hidden" name="accion" value="configurar_fechas">
                             <input type="hidden" name="id_evaluacion" value="<?= $idEv ?>">
                             <?= $contextoHiddenHtml ?>
@@ -478,34 +603,30 @@ if ($puedeGestionarEval) {
         <?php elseif (!$puedeGestionarEval && empty($estadoIntento['puede_responder'])): ?>
             <div class="alert alert-danger" style="margin-top:10px;">Ya agotaste el máximo de 2 intentos para esta evaluación.</div>
         <?php else: ?>
-            <form method="POST" action="<?= PUBLIC_URL ?>?url=home/discipular/evaluaciones<?= $contextoQuery ?>" style="margin-top:12px;display:flex;flex-direction:column;gap:12px;">
+            <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>" style="margin-top:12px;display:flex;flex-direction:column;gap:12px;">
                 <input type="hidden" name="accion" value="presentar_evaluacion">
                 <input type="hidden" name="id_evaluacion" value="<?= (int)($evaluacionActiva['Id_Evaluacion'] ?? 0) ?>">
                 <input type="hidden" name="tiempo_inicio" value="<?= (int)($estadoIntento['tiempo_inicio'] ?? 0) ?>">
                 <?= $contextoHiddenHtml ?>
 
                 <div class="alert alert-info" style="margin:0;">
-                    Debes responder mínimo 4 preguntas para enviar. En preguntas cerradas se evalúa opción correcta; en abiertas cuenta como respondida.
+                    La evaluación es solo de preguntas cerradas. Puedes enviar aunque dejes preguntas sin responder.
                 </div>
 
                 <?php foreach ($preguntasEvaluacion as $idx => $pregunta): ?>
-                    <?php $tipoPregunta = strtolower(trim((string)($pregunta['tipo'] ?? 'cerrada'))); ?>
                     <div style="border:1px solid #e6e8ee;border-radius:10px;padding:10px;">
                         <strong><?= ($idx + 1) ?>. <?= htmlspecialchars((string)($pregunta['enunciado'] ?? '')) ?></strong>
-                        <?php if ($tipoPregunta === 'abierta'): ?>
-                            <div style="margin-top:8px;">
-                                <textarea class="form-control" name="respuesta_abierta[<?= (int)$idx ?>]" rows="3" placeholder="Escribe tu respuesta"></textarea>
-                            </div>
-                        <?php else: ?>
-                            <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
-                                <?php foreach ((array)($pregunta['opciones'] ?? []) as $claveOpcion => $textoOpcion): ?>
-                                    <label style="display:flex;gap:8px;align-items:flex-start;">
-                                        <input type="radio" name="respuesta[<?= (int)$idx ?>]" value="<?= htmlspecialchars((string)$claveOpcion) ?>">
-                                        <span><strong><?= strtoupper((string)$claveOpcion) ?>.</strong> <?= htmlspecialchars((string)$textoOpcion) ?></span>
-                                    </label>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
+                        <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+                            <?php foreach ((array)($pregunta['opciones'] ?? []) as $claveOpcion => $textoOpcion): ?>
+                                <label style="display:flex;gap:8px;align-items:flex-start;">
+                                    <input type="radio" name="respuesta[<?= (int)$idx ?>]" value="<?= htmlspecialchars((string)$claveOpcion) ?>">
+                                    <span><strong><?= strtoupper((string)$claveOpcion) ?>.</strong> <?= htmlspecialchars((string)$textoOpcion) ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                            <?php if (empty((array)($pregunta['opciones'] ?? []))): ?>
+                                <small style="color:#b91c1c;">Esta pregunta no tiene opciones válidas.</small>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 <?php endforeach; ?>
 
@@ -517,9 +638,8 @@ if ($puedeGestionarEval) {
     </div>
 <?php endif; ?>
 
-<?php if (!$esDiscipuloRol): ?>
 <div class="card report-card" style="padding:14px;margin-bottom:16px;">
-    <h3 style="margin:0 0 10px 0;"><?= $puedeGestionarEval ? 'Historial personal de intentos' : 'Mis notas' ?></h3>
+    <h3 style="margin:0 0 10px 0;"><?= $esDiscipuloRol ? 'Mi historial de intentos' : ($puedeGestionarEval ? 'Historial personal de intentos' : 'Mis notas') ?></h3>
     <div class="table-container">
         <table class="data-table">
             <thead>
@@ -531,11 +651,16 @@ if ($puedeGestionarEval) {
                     <th>Intento</th>
                     <th>Puntaje</th>
                     <th>Resultado</th>
+                    <th>Detalle</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (!empty($historialUsuario)): ?>
                     <?php foreach ($historialUsuario as $resultado): ?>
+                        <?php
+                        $idEvalHist = (int)($resultado['Id_Evaluacion'] ?? 0);
+                        $idResultadoHist = (int)($resultado['Id_Resultado'] ?? 0);
+                        ?>
                         <tr>
                             <td><?= htmlspecialchars((string)($resultado['Fecha_Presentacion'] ?? '')) ?></td>
                             <td><?= htmlspecialchars((string)($resultado['Titulo'] ?? '')) ?></td>
@@ -550,18 +675,20 @@ if ($puedeGestionarEval) {
                                     <span style="color:#b91c1c;font-weight:600;">Reprobado</span>
                                 <?php endif; ?>
                             </td>
+                            <td>
+                                <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEvalHist ?>&resultado=<?= $idResultadoHist ?>">Ver detalle</a>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr>
-                        <td colspan="7" class="text-center">Sin intentos registrados todavía.</td>
+                        <td colspan="8" class="text-center">Sin intentos registrados todavía.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>
         </table>
     </div>
 </div>
-<?php endif; ?>
 
 <?php if ($puedeGestionarEval && !empty($historialEvaluacion) && !empty($evaluacionActiva)): ?>
 <div class="card report-card" style="padding:14px;margin-bottom:16px;">
@@ -577,10 +704,15 @@ if ($puedeGestionarEval) {
                     <th>Total</th>
                     <th>Puntaje</th>
                     <th>Resultado</th>
+                    <th>Detalle</th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ($historialEvaluacion as $resultadoAdmin): ?>
+                    <?php
+                    $idResultadoAdmin = (int)($resultadoAdmin['Id_Resultado'] ?? 0);
+                    $idEvalAdmin = (int)($resultadoAdmin['Id_Evaluacion'] ?? 0);
+                    ?>
                     <tr>
                         <td><?= htmlspecialchars((string)($resultadoAdmin['Fecha_Presentacion'] ?? '')) ?></td>
                         <td><?= htmlspecialchars(trim((string)($resultadoAdmin['Nombre'] ?? '') . ' ' . (string)($resultadoAdmin['Apellido'] ?? ''))) ?></td>
@@ -589,6 +721,9 @@ if ($puedeGestionarEval) {
                         <td><?= (int)($resultadoAdmin['Total_Preguntas'] ?? 0) ?></td>
                         <td><?= (float)($resultadoAdmin['Puntaje'] ?? 0) ?>%</td>
                         <td><?= !empty($resultadoAdmin['Aprobado']) ? 'Aprobado' : 'Reprobado' ?></td>
+                        <td>
+                            <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEvalAdmin ?>&resultado=<?= $idResultadoAdmin ?>">Ver detalle</a>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -599,14 +734,33 @@ if ($puedeGestionarEval) {
 
 <script>
 (function() {
+    document.querySelectorAll('.js-disc-toggle-tareas').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var targetId = btn.getAttribute('data-target');
+            var baseLabel = btn.getAttribute('data-label') || 'tareas';
+            if (!targetId) {
+                return;
+            }
+
+            var panel = document.getElementById(targetId);
+            if (!panel) {
+                return;
+            }
+
+            var visible = !panel.classList.contains('is-hidden');
+            panel.classList.toggle('is-hidden', visible);
+            btn.textContent = visible ? ('Ver ' + baseLabel) : ('Ocultar ' + baseLabel);
+        });
+    });
+
     const contenedor = document.getElementById('contenedorPreguntas');
     const btnAgregar = document.getElementById('btnAgregarPregunta');
-    const selectorModo = document.getElementById('modoRespuestasEval');
     const selectorNivel = document.querySelector('select[name="nivel"]');
     const selectorModulo = document.querySelector('select[name="modulo_numero"]');
     const selectorLeccion = document.getElementById('leccionEvaluacionSelect');
     const leccionesMap = <?= json_encode($leccionesPorNivelModulo, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const leccionContextoFija = <?= json_encode($filtroLeccionContexto, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    let primeraCargaLecciones = true;
     if (!contenedor || !btnAgregar) {
         return;
     }
@@ -629,9 +783,11 @@ if ($puedeGestionarEval) {
             selectorLeccion.appendChild(option);
         });
 
-        if (leccionContextoFija && lista.indexOf(leccionContextoFija) >= 0) {
+        if (primeraCargaLecciones && leccionContextoFija && lista.indexOf(leccionContextoFija) >= 0) {
             selectorLeccion.value = leccionContextoFija;
         }
+
+        primeraCargaLecciones = false;
     }
 
     if (selectorNivel && selectorModulo && selectorLeccion) {
@@ -654,10 +810,8 @@ if ($puedeGestionarEval) {
                 <button type="button" class="btn btn-danger btn-sm js-eliminar-pregunta">Eliminar</button>
             </div>
             <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px;">
-                <select class="form-control js-tipo-pregunta" name="preguntas[${idx}][tipo]">
-                    <option value="cerrada">Cerrada (selección múltiple)</option>
-                    <option value="abierta">Abierta (texto libre)</option>
-                </select>
+                <input type="hidden" name="preguntas[${idx}][tipo]" value="cerrada">
+                <small style="color:#637087;">Tipo: cerrada</small>
                 <input type="text" class="form-control" name="preguntas[${idx}][enunciado]" placeholder="Enunciado de la pregunta" required>
                 <div class="js-opciones-cerradas" style="display:flex;flex-direction:column;gap:8px;">
                     <input type="text" class="form-control" name="preguntas[${idx}][opcion_a]" placeholder="Opción A">
@@ -676,46 +830,14 @@ if ($puedeGestionarEval) {
         `;
 
         const btnEliminar = wrapper.querySelector('.js-eliminar-pregunta');
-        const selectorTipo = wrapper.querySelector('.js-tipo-pregunta');
         const contenedorOpciones = wrapper.querySelector('.js-opciones-cerradas');
-
-        const aplicarTipo = function() {
-            const esAbierta = selectorTipo && selectorTipo.value === 'abierta';
-            if (contenedorOpciones) {
-                contenedorOpciones.style.display = esAbierta ? 'none' : 'flex';
-            }
-        };
-
-        const aplicarModoGlobal = function() {
-            if (!selectorTipo || !selectorModo) {
-                aplicarTipo();
-                return;
-            }
-
-            const modo = selectorModo.value;
-            if (modo === 'abierta') {
-                selectorTipo.value = 'abierta';
-                selectorTipo.disabled = true;
-            } else if (modo === 'cerrada') {
-                selectorTipo.value = 'cerrada';
-                selectorTipo.disabled = true;
-            } else {
-                selectorTipo.disabled = false;
-            }
-
-            aplicarTipo();
-        };
-
-        if (selectorTipo) {
-            selectorTipo.addEventListener('change', aplicarTipo);
+        if (contenedorOpciones) {
+            contenedorOpciones.style.display = 'flex';
         }
-        aplicarModoGlobal();
 
         btnEliminar.addEventListener('click', function() {
             wrapper.remove();
         });
-
-        wrapper.aplicarModoGlobal = aplicarModoGlobal;
 
         return wrapper;
     }
@@ -724,16 +846,6 @@ if ($puedeGestionarEval) {
         contenedor.appendChild(crearBloquePregunta(indice));
         indice += 1;
     });
-
-    if (selectorModo) {
-        selectorModo.addEventListener('change', function() {
-            contenedor.querySelectorAll('div').forEach(function(bloque) {
-                if (typeof bloque.aplicarModoGlobal === 'function') {
-                    bloque.aplicarModoGlobal();
-                }
-            });
-        });
-    }
 
     contenedor.appendChild(crearBloquePregunta(indice));
     indice += 1;

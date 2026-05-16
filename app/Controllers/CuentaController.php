@@ -6,17 +6,20 @@
 require_once APP . '/Models/Persona.php';
 require_once APP . '/Models/UsuarioAcceso.php';
 require_once APP . '/Models/Rol.php';
+require_once APP . '/Models/UserRole.php';
 require_once APP . '/Controllers/AuthController.php';
 
 class CuentaController extends BaseController {
     private $personaModel;
     private $usuarioAccesoModel;
     private $rolModel;
+    private $userRoleModel;
 
     public function __construct() {
         $this->personaModel = new Persona();
         $this->usuarioAccesoModel = new UsuarioAcceso();
         $this->rolModel = new Rol();
+        $this->userRoleModel = new UserRole();
     }
 
     public function index() {
@@ -38,12 +41,83 @@ class CuentaController extends BaseController {
             }
         }
 
+        $idsPersona = [];
+        foreach ($cuentasPersona as $cuentaPersona) {
+            $idPersona = (int)($cuentaPersona['Id_Persona'] ?? 0);
+            if ($idPersona > 0) {
+                $idsPersona[] = $idPersona;
+            }
+        }
+        foreach ($cuentasAccesoVinculadas as $cuentaAccesoVinculada) {
+            $idPersona = (int)($cuentaAccesoVinculada['Id_Persona'] ?? 0);
+            if ($idPersona > 0) {
+                $idsPersona[] = $idPersona;
+            }
+        }
+
+        $rolesPorPersona = $this->userRoleModel->listarRolesPorPersonas($idsPersona);
+        $idRolMaestro = $this->userRoleModel->buscarRolPorAlias('maestro');
+
         $this->view('cuentas/lista', [
             'cuentas_persona' => $cuentasPersona,
             'cuentas_acceso_vinculadas' => $cuentasAccesoVinculadas,
             'cuentas_administrativas' => $cuentasAdministrativas,
             'tabla_usuario_acceso_disponible' => $this->usuarioAccesoModel->existeTabla(),
+            'roles_por_persona' => $rolesPorPersona,
+            'id_rol_maestro' => $idRolMaestro,
+            'mensaje' => (string)($_GET['mensaje'] ?? ''),
+            'tipo' => (string)($_GET['tipo'] ?? ''),
         ]);
+    }
+
+    public function asignarSegundoRol() {
+        if (!AuthController::esAdministrador()) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('cuentas');
+            return;
+        }
+
+        $idPersona = (int)($_POST['id_persona'] ?? 0);
+        $accion = trim((string)($_POST['accion_segundo_rol'] ?? ''));
+        if ($idPersona <= 0 || !in_array($accion, ['asignar_maestro', 'quitar_maestro'], true)) {
+            $this->redirect('cuentas&tipo=error&mensaje=' . urlencode('Solicitud inválida para segundo rol.'));
+            return;
+        }
+
+        $persona = $this->personaModel->getById($idPersona);
+        if (empty($persona)) {
+            $this->redirect('cuentas&tipo=error&mensaje=' . urlencode('No se encontró la persona seleccionada.'));
+            return;
+        }
+
+        $idRolPrincipal = (int)($persona['Id_Rol'] ?? 0);
+        if ($idRolPrincipal > 0) {
+            $this->userRoleModel->sincronizarRolPrincipal($idPersona, $idRolPrincipal);
+        }
+
+        $idRolMaestro = $this->userRoleModel->buscarRolPorAlias('maestro');
+        if ($idRolMaestro <= 0) {
+            $this->redirect('cuentas&tipo=error&mensaje=' . urlencode('No se encontró el rol Maestro en la tabla de roles.'));
+            return;
+        }
+
+        if ($accion === 'asignar_maestro') {
+            $this->userRoleModel->asignarRol($idPersona, $idRolMaestro);
+            $this->redirect('cuentas&tipo=success&mensaje=' . urlencode('Segundo rol Maestro asignado correctamente.'));
+            return;
+        }
+
+        if ($idRolPrincipal === $idRolMaestro) {
+            $this->redirect('cuentas&tipo=error&mensaje=' . urlencode('No se puede quitar Maestro porque es el rol principal de esta cuenta.'));
+            return;
+        }
+
+        $this->userRoleModel->quitarRol($idPersona, $idRolMaestro);
+        $this->redirect('cuentas&tipo=success&mensaje=' . urlencode('Segundo rol Maestro removido correctamente.'));
     }
 
     public function crear() {

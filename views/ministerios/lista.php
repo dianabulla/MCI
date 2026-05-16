@@ -16,8 +16,8 @@ $slugMinisterio = static function ($texto) {
 $puedeCrearMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'crear');
 $puedeEditarMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'editar');
 $puedeEliminarMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'eliminar');
-$urlEquipoPrincipal = PUBLIC_URL . '?url=ministerios/equipo-principal';
-$urlLideresCelula = PUBLIC_URL . '?url=ministerios/lideres-celula';
+$urlEquipoPrincipal = PUBLIC_URL . '?url=discipular/ministerios/equipo-principal';
+$urlLideresCelula = PUBLIC_URL . '?url=discipular/ministerios/lideres-celula';
 $fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));
 ?>
 
@@ -30,7 +30,7 @@ $fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));
         <a href="<?= $urlEquipoPrincipal ?>" class="btn btn-secondary">Equipo Principal</a>
         <a href="<?= $urlLideresCelula ?>" class="btn btn-secondary">Líderes de Célula</a>
         <?php if ($puedeCrearMinisterio): ?>
-        <a href="<?= PUBLIC_URL ?>index.php?url=ministerios/crear<?= $returnUrlParam ?>" class="btn btn-primary">+ Nuevo Ministerio</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=discipular/ministerios/crear<?= $returnUrlParam ?>" class="btn btn-primary">+ Nuevo Ministerio</a>
         <?php endif; ?>
     </div>
 </div>
@@ -68,13 +68,13 @@ $fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));
                 <?php if ($puedeEditarMinisterio || $puedeEliminarMinisterio): ?>
                 <div class="ministerios-actions-row">
                     <?php if ($puedeEditarMinisterio): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=ministerios/editar&id=<?= $idMinisterio ?><?= $returnUrlParam ?>#metas" class="btn btn-sm ministerios-action-btn ministerios-action-btn--text ministerios-action-btn--metas" title="Metas" aria-label="Metas">Metas</a>
-                    <a href="<?= PUBLIC_URL ?>?url=ministerios/editar&id=<?= $idMinisterio ?><?= $returnUrlParam ?>" class="btn btn-sm ministerios-action-btn ministerios-action-btn--icon ministerios-action-btn--edit" title="Editar" aria-label="Editar">
+                    <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios/editar&id=<?= $idMinisterio ?><?= $returnUrlParam ?>#metas" class="btn btn-sm ministerios-action-btn ministerios-action-btn--text ministerios-action-btn--metas" title="Metas" aria-label="Metas">Metas</a>
+                    <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios/editar&id=<?= $idMinisterio ?><?= $returnUrlParam ?>" class="btn btn-sm ministerios-action-btn ministerios-action-btn--icon ministerios-action-btn--edit" title="Editar" aria-label="Editar">
                         <i class="bi bi-pencil-fill" aria-hidden="true"></i>
                     </a>
                     <?php endif; ?>
                     <?php if ($puedeEliminarMinisterio): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=ministerios/eliminar&id=<?= $idMinisterio ?><?= $returnUrlParam ?>" class="btn btn-sm ministerios-action-btn ministerios-action-btn--icon ministerios-action-btn--delete" title="Eliminar" aria-label="Eliminar" onclick="return confirm('¿Eliminar este ministerio?')">
+                    <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios/eliminar&id=<?= $idMinisterio ?><?= $returnUrlParam ?>" class="btn btn-sm ministerios-action-btn ministerios-action-btn--icon ministerios-action-btn--delete" title="Eliminar" aria-label="Eliminar" onclick="return confirm('¿Eliminar este ministerio?')">
                         <i class="bi bi-trash-fill" aria-hidden="true"></i>
                     </a>
                     <?php endif; ?>

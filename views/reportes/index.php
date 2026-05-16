@@ -89,8 +89,32 @@ $tablaGanarMinisterio = $tabla_ganar_ministerio ?? [
 ];
 $tablaSeguimientoLideresCelula = $tabla_seguimiento_lideres_celula ?? [];
 $tablaEstadoSemanalCelulas = $tabla_estado_semanal_celulas ?? [];
+$tablaLideresPorRedTipo = $tabla_lideres_por_red_tipo ?? [];
+$tablaResumenLideresPorRed = $tabla_resumen_lideres_por_red ?? [];
+
+$normalizarNombreRed = static function($valor) {
+    $texto = trim((string)$valor);
+    if ($texto === '') {
+        return 'Sin red';
+    }
+
+    $reemplazos = [
+        'j??venes' => 'Jóvenes',
+        'j?venes' => 'Jóvenes',
+        'jÃ³venes' => 'Jóvenes',
+    ];
+
+    $textoLower = strtolower($texto);
+    if (isset($reemplazos[$textoLower])) {
+        return $reemplazos[$textoLower];
+    }
+
+    return $texto;
+};
 
 $ministeriosTablasCelulas = [];
+$redesTablasCelulas = [];
+$lideresResumenPorRed = [];
 $agregarMinisterioTablaCelula = static function($valor) use (&$ministeriosTablasCelulas) {
     $nombre = trim((string)$valor);
     if ($nombre === '') {
@@ -99,16 +123,42 @@ $agregarMinisterioTablaCelula = static function($valor) use (&$ministeriosTablas
     $ministeriosTablasCelulas[$nombre] = $nombre;
 };
 
+$agregarRedTablaCelula = static function($valor) use (&$redesTablasCelulas) {
+    $nombre = trim((string)$valor);
+    if ($nombre === '') {
+        $nombre = 'Sin red';
+    }
+    $redesTablasCelulas[$nombre] = $nombre;
+};
+
 foreach ($tablaSeguimientoLideresCelula as $filaSeguimiento) {
     $agregarMinisterioTablaCelula($filaSeguimiento['ministerio'] ?? '');
+    $agregarRedTablaCelula($filaSeguimiento['red'] ?? '');
 }
 
 foreach ($tablaEstadoSemanalCelulas as $filaEstado) {
     $agregarMinisterioTablaCelula($filaEstado['ministerio'] ?? '');
+    $agregarRedTablaCelula($filaEstado['red'] ?? '');
+}
+
+foreach ($tablaLideresPorRedTipo as $filaRedTipo) {
+    $agregarMinisterioTablaCelula($filaRedTipo['ministerio'] ?? '');
+    $agregarRedTablaCelula($filaRedTipo['red'] ?? '');
+    $nombreLiderResumen = trim((string)($filaRedTipo['lider'] ?? ''));
+    if ($nombreLiderResumen === '') {
+        $nombreLiderResumen = 'Sin líder';
+    }
+    $lideresResumenPorRed[$nombreLiderResumen] = $nombreLiderResumen;
 }
 
 natcasesort($ministeriosTablasCelulas);
 $ministeriosTablasCelulas = array_values($ministeriosTablasCelulas);
+
+natcasesort($redesTablasCelulas);
+$redesTablasCelulas = array_values($redesTablasCelulas);
+
+natcasesort($lideresResumenPorRed);
+$lideresResumenPorRed = array_values($lideresResumenPorRed);
 
 $reporteGanadosFinSemanaAnterior = $reporte_ganados_fin_semana_anterior ?? [
     'inicio' => '',
@@ -191,12 +241,7 @@ $esReportePersonas = $tipoReporte === 'personas';
 $esReporteCelulas = $tipoReporte === 'celulas';
 $esReporteEscuelas = $tipoReporte === 'escuelas';
 
-$tituloReporte = 'Reporte de Ganar';
-if ($esReporteCelulas) {
-    $tituloReporte = 'Reporte de Célula';
-} elseif ($esReporteEscuelas) {
-    $tituloReporte = 'Reporte de Escuelas de Formación';
-}
+$tituloReporte = 'Dasboart';
 $escalaGanar = (string)($escala_ganar ?? 'semanal');
 $ganarLabel = (string)($ganar_label ?? 'Semanal');
 $ganarInicio = (string)($ganar_inicio ?? $fecha_inicio ?? '');
@@ -431,14 +476,6 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 </div>
 
 <div class="card report-card report-toolbar-card" style="margin-bottom: 18px; padding: 14px;">
-    <div class="form-group" style="margin:0; max-width: 340px;">
-        <label for="selector_reporte" style="margin-bottom:6px;">Reporte a visualizar</label>
-        <select id="selector_reporte" class="form-control" onchange="if(this.value){ window.location.href = this.value; }">
-            <option value="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'personas'])) ?>" <?= $esReportePersonas ? 'selected' : '' ?>>Reporte de Ganar</option>
-            <option value="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'celulas'])) ?>" <?= $esReporteCelulas ? 'selected' : '' ?>>Reporte de Célula</option>
-            <option value="<?= htmlspecialchars($buildReporteUrl(['tipo' => 'escuelas'])) ?>" <?= $esReporteEscuelas ? 'selected' : '' ?>>Escuelas de Formación</option>
-        </select>
-    </div>
     <div class="report-toolbar-actions">
         <a href="<?= PUBLIC_URL ?>index.php?url=reportes/dashboard-ganar" class="btn btn-primary" title="Abrir dashboard de Ganar">Dashboard Ganar</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=reportes&tipo=<?= urlencode($tipoReporte) ?>" class="report-icon-btn" title="Refrescar">☁</a>
@@ -874,10 +911,10 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
         <?php if (!empty($indicadoresCelulas['por_red'])): ?>
             <div class="report-list-items">
                 <?php foreach (($indicadoresCelulas['por_red'] ?? []) as $redNombre => $totalRed): ?>
-                    <div class="report-list-item">
-                        <span><?= htmlspecialchars((string)$redNombre) ?></span>
+                    <button type="button" class="report-list-item report-list-item--button js-red-celulas" data-red="<?= htmlspecialchars((string)$redNombre, ENT_QUOTES, 'UTF-8') ?>" data-total="<?= (int)$totalRed ?>">
+                        <span><?= htmlspecialchars($normalizarNombreRed($redNombre)) ?></span>
                         <strong><?= (int)$totalRed ?></strong>
-                    </div>
+                    </button>
                 <?php endforeach; ?>
             </div>
         <?php else: ?>
@@ -900,6 +937,13 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
                     <option value="<?= htmlspecialchars((string)$ministerioFiltro, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$ministerioFiltro) ?></option>
                 <?php endforeach; ?>
             </select>
+            <label for="reporteCelulasFiltroRedSeguimiento">Red</label>
+            <select id="reporteCelulasFiltroRedSeguimiento" class="report-select-ministerio">
+                <option value="">Todas</option>
+                <?php foreach ($redesTablasCelulas as $redFiltro): ?>
+                    <option value="<?= htmlspecialchars((string)$redFiltro, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$redFiltro) ?></option>
+                <?php endforeach; ?>
+            </select>
         </div>
     </div>
 
@@ -916,7 +960,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
             <tbody id="tablaSeguimientoCelulasBody">
                 <?php if (!empty($tablaSeguimientoLideresCelula)): ?>
                     <?php foreach ($tablaSeguimientoLideresCelula as $filaSeguimiento): ?>
-                        <tr data-row-type="dato" data-ministerio="<?= htmlspecialchars((string)($filaSeguimiento['ministerio'] ?? 'Sin ministerio'), ENT_QUOTES, 'UTF-8') ?>">
+                        <tr data-row-type="dato" data-ministerio="<?= htmlspecialchars((string)($filaSeguimiento['ministerio'] ?? 'Sin ministerio'), ENT_QUOTES, 'UTF-8') ?>" data-red="<?= htmlspecialchars((string)($filaSeguimiento['red'] ?? 'Sin red'), ENT_QUOTES, 'UTF-8') ?>">
                             <td><?= htmlspecialchars((string)($filaSeguimiento['ministerio'] ?? 'Sin ministerio')) ?></td>
                             <td><?= htmlspecialchars((string)($filaSeguimiento['celula'] ?? 'Sin nombre')) ?></td>
                             <td><?= htmlspecialchars((string)($filaSeguimiento['ultima_fecha_reporte'] ?? '') ?: 'Nunca') ?></td>
@@ -926,6 +970,116 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
                 <?php else: ?>
                     <tr>
                         <td colspan="4" class="text-center">Sin datos para seguimiento de líderes.</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card report-card report-table-only report-celulas-tabla-compacta" style="margin-bottom: 12px;">
+    <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:6px;">
+        <div>
+            <h3 style="margin-bottom:4px;">Resumen por red: líderes y cantidad de células</h3>
+            <small style="color:#60708a;">Vista compacta por red con líderes agrupados por tipo.</small>
+        </div>
+        <div class="report-table-filters report-table-filters--estado">
+            <div>
+                <label for="reporteCelulasFiltroMinisterioResumenRed">Ministerio</label>
+                <select id="reporteCelulasFiltroMinisterioResumenRed" class="report-select-ministerio">
+                    <option value="">Todos</option>
+                    <?php foreach ($ministeriosTablasCelulas as $ministerioFiltro): ?>
+                        <option value="<?= htmlspecialchars((string)$ministerioFiltro, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$ministerioFiltro) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label for="reporteCelulasFiltroLiderResumenRed">Líder</label>
+                <select id="reporteCelulasFiltroLiderResumenRed" class="report-select-ministerio">
+                    <option value="">Todos</option>
+                    <?php foreach ($lideresResumenPorRed as $liderResumen): ?>
+                        <option value="<?= htmlspecialchars((string)$liderResumen, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$liderResumen) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label for="reporteCelulasFiltroRedResumenRed">Red</label>
+                <select id="reporteCelulasFiltroRedResumenRed" class="report-select-ministerio">
+                    <option value="">Todas</option>
+                    <?php foreach ($redesTablasCelulas as $redFiltro): ?>
+                        <option value="<?= htmlspecialchars((string)$redFiltro, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$redFiltro) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container" style="margin-top:0;">
+        <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas" id="tablaResumenLideresPorRed">
+            <thead>
+                <tr>
+                    <th style="width:130px;">Red</th>
+                    <th>Líderes (agrupado por tipo)</th>
+                    <th style="width:130px;">Total células</th>
+                </tr>
+            </thead>
+            <tbody id="tablaResumenLideresPorRedBody">
+                <?php if (!empty($tablaResumenLideresPorRed)): ?>
+                    <?php foreach ($tablaResumenLideresPorRed as $filaResumenRed): ?>
+                        <?php
+                        $listaJovenes = (array)($filaResumenRed['jovenes'] ?? []);
+                        $listaKids = (array)($filaResumenRed['kids'] ?? []);
+                        $listaSinClasificar = (array)($filaResumenRed['sin_clasificar'] ?? []);
+                        $totalRedResumen = (int)($filaResumenRed['total_celulas'] ?? 0);
+                        ?>
+                        <tr>
+                            <td><strong><?= htmlspecialchars($normalizarNombreRed($filaResumenRed['red'] ?? 'Sin red')) ?></strong></td>
+                            <td>
+                                <?php if (!empty($listaJovenes) || !empty($listaKids) || !empty($listaSinClasificar)): ?>
+                                    <div class="report-red-groups">
+                                        <?php if (!empty($listaJovenes)): ?>
+                                            <div class="report-red-group">
+                                                <span class="report-red-group__title">Jóvenes (incluye rocas)</span>
+                                                <ul class="report-inline-list">
+                                                    <?php foreach ($listaJovenes as $itemLider): ?>
+                                                        <li><?= htmlspecialchars((string)($itemLider['lider'] ?? 'Sin líder')) ?> <strong>(<?= (int)($itemLider['cantidad'] ?? 0) ?>)</strong></li>
+                                                    <?php endforeach; ?>
+                                                </ul>
+                                            </div>
+                                        <?php endif; ?>
+
+                                        <?php if (!empty($listaKids)): ?>
+                                            <div class="report-red-group">
+                                                <span class="report-red-group__title">Kids</span>
+                                                <ul class="report-inline-list">
+                                                    <?php foreach ($listaKids as $itemLider): ?>
+                                                        <li><?= htmlspecialchars((string)($itemLider['lider'] ?? 'Sin líder')) ?> <strong>(<?= (int)($itemLider['cantidad'] ?? 0) ?>)</strong></li>
+                                                    <?php endforeach; ?>
+                                                </ul>
+                                            </div>
+                                        <?php endif; ?>
+
+                                        <?php if (!empty($listaSinClasificar)): ?>
+                                            <div class="report-red-group">
+                                                <span class="report-red-group__title">Sin clasificar</span>
+                                                <ul class="report-inline-list">
+                                                    <?php foreach ($listaSinClasificar as $itemLider): ?>
+                                                        <li><?= htmlspecialchars((string)($itemLider['lider'] ?? 'Sin líder')) ?> <strong>(<?= (int)($itemLider['cantidad'] ?? 0) ?>)</strong></li>
+                                                    <?php endforeach; ?>
+                                                </ul>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php else: ?>
+                                    <span style="color:#6b7280;">Sin líderes</span>
+                                <?php endif; ?>
+                            </td>
+                            <td><strong><?= $totalRedResumen ?></strong></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="3" class="text-center">Sin datos en el resumen por red.</td>
                     </tr>
                 <?php endif; ?>
             </tbody>
@@ -946,6 +1100,15 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
                     <option value="">Todos</option>
                     <?php foreach ($ministeriosTablasCelulas as $ministerioFiltro): ?>
                         <option value="<?= htmlspecialchars((string)$ministerioFiltro, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$ministerioFiltro) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label for="reporteCelulasFiltroRedEstado">Red</label>
+                <select id="reporteCelulasFiltroRedEstado" class="report-select-ministerio">
+                    <option value="">Todas</option>
+                    <?php foreach ($redesTablasCelulas as $redFiltro): ?>
+                        <option value="<?= htmlspecialchars((string)$redFiltro, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$redFiltro) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -991,7 +1154,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
                         <td colspan="5">Sí reportaron (<?= count($estadoSemanalSi) ?>)</td>
                     </tr>
                     <?php foreach ($estadoSemanalSi as $filaEstado): ?>
-                        <tr data-row-type="dato" data-reporto="si" data-ministerio="<?= htmlspecialchars((string)($filaEstado['ministerio'] ?? 'Sin ministerio'), ENT_QUOTES, 'UTF-8') ?>">
+                        <tr data-row-type="dato" data-reporto="si" data-ministerio="<?= htmlspecialchars((string)($filaEstado['ministerio'] ?? 'Sin ministerio'), ENT_QUOTES, 'UTF-8') ?>" data-red="<?= htmlspecialchars((string)($filaEstado['red'] ?? 'Sin red'), ENT_QUOTES, 'UTF-8') ?>">
                             <td><?= htmlspecialchars((string)($filaEstado['ministerio'] ?? 'Sin ministerio')) ?></td>
                             <td><?= htmlspecialchars((string)($filaEstado['celula'] ?? 'Sin nombre')) ?></td>
                             <td><span class="estado-pill estado-pill--si">Sí</span></td>
@@ -1004,7 +1167,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
                         <td colspan="5">No reportaron (<?= count($estadoSemanalNo) ?>)</td>
                     </tr>
                     <?php foreach ($estadoSemanalNo as $filaEstado): ?>
-                        <tr data-row-type="dato" data-reporto="no" data-ministerio="<?= htmlspecialchars((string)($filaEstado['ministerio'] ?? 'Sin ministerio'), ENT_QUOTES, 'UTF-8') ?>">
+                        <tr data-row-type="dato" data-reporto="no" data-ministerio="<?= htmlspecialchars((string)($filaEstado['ministerio'] ?? 'Sin ministerio'), ENT_QUOTES, 'UTF-8') ?>" data-red="<?= htmlspecialchars((string)($filaEstado['red'] ?? 'Sin red'), ENT_QUOTES, 'UTF-8') ?>">
                             <td><?= htmlspecialchars((string)($filaEstado['ministerio'] ?? 'Sin ministerio')) ?></td>
                             <td><?= htmlspecialchars((string)($filaEstado['celula'] ?? 'Sin nombre')) ?></td>
                             <td><span class="estado-pill estado-pill--no">No</span></td>
@@ -1189,6 +1352,7 @@ const detalleEscaleraEtapa = <?= json_encode($reporteEscaleraMesActual['detalles
 const detalleEscaleraPeldanos = <?= json_encode($reporteEscaleraMesActual['detalles_peldanos'] ?? []) ?>;
 const asistencia = <?= json_encode($asistencia_celulas ?? []) ?>;
 const indicadoresCelulas = <?= json_encode($indicadoresCelulas ?? []) ?>;
+const tablaLideresPorRedTipoData = <?= json_encode($tablaLideresPorRedTipo ?? [], JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR) ?>;
 const detalleLideresAperturas = <?= json_encode($tablaAperturasCelulas['detalle_lideres'] ?? []) ?>;
 const detalleLideresGanar = <?= json_encode($tablaGanarMinisterio['detalle_lideres'] ?? []) ?>;
 const detallesTablasMinisterial = <?= json_encode($detallesTablasMinisterial ?? [], JSON_UNESCAPED_UNICODE) ?>;
@@ -2298,8 +2462,54 @@ if (tipoReporte === 'personas') {
         });
     }
 
+    const botonesRedCelulas = document.querySelectorAll('.js-red-celulas');
+    const normalizarRed = (valor) => String(valor || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+
+    const abrirDetalleRedCelulas = (redNombre, totalRed) => {
+        const redNorm = normalizarRed(redNombre);
+        const filas = (Array.isArray(tablaLideresPorRedTipoData) ? tablaLideresPorRedTipoData : [])
+            .filter((item) => normalizarRed(item.red || '') === redNorm)
+            .map((item) => ({
+                lider: String(item.lider || 'Sin líder'),
+                total: parseInt(item.total_celulas || 0, 10),
+                jovenes: parseInt(item.celulas_jovenes || 0, 10) + parseInt(item.celulas_rocas || 0, 10),
+                kids: parseInt(item.celulas_kids || 0, 10),
+                sinClasificar: parseInt(item.celulas_sin_clasificar || 0, 10)
+            }))
+            .sort((a, b) => {
+                const cmpTotal = b.total - a.total;
+                if (cmpTotal !== 0) {
+                    return cmpTotal;
+                }
+                return a.lider.localeCompare(b.lider);
+            })
+            .map((item) => [item.lider, item.total, item.jovenes, item.kids, item.sinClasificar]);
+
+        abrirModalTarjeta(
+            `Células por red · ${redNombre} (Total: ${parseInt(totalRed || 0, 10)})`,
+            ['Líder', 'Total células', 'Jóvenes (incluye rocas)', 'Kids', 'Sin clasificar'],
+            filas
+        );
+    };
+
+    botonesRedCelulas.forEach((boton) => {
+        boton.addEventListener('click', () => {
+            abrirDetalleRedCelulas(String(boton.dataset.red || 'Sin red'), parseInt(boton.dataset.total || '0', 10));
+        });
+    });
+
     const filtroMinisterioSeguimiento = document.getElementById('reporteCelulasFiltroMinisterioSeguimiento');
+    const filtroRedSeguimiento = document.getElementById('reporteCelulasFiltroRedSeguimiento');
+    const filtroMinisterioResumenRed = document.getElementById('reporteCelulasFiltroMinisterioResumenRed');
+    const filtroLiderResumenRed = document.getElementById('reporteCelulasFiltroLiderResumenRed');
+    const filtroRedResumenRed = document.getElementById('reporteCelulasFiltroRedResumenRed');
+    const bodyResumenRed = document.getElementById('tablaResumenLideresPorRedBody');
     const filtroMinisterioEstado = document.getElementById('reporteCelulasFiltroMinisterioEstado');
+    const filtroRedEstado = document.getElementById('reporteCelulasFiltroRedEstado');
     const filtroEstadoReporte = document.getElementById('reporteCelulasFiltroEstadoReporte');
     const bodySeguimiento = document.getElementById('tablaSeguimientoCelulasBody');
     const bodyEstado = document.getElementById('tablaEstadoSemanalCelulasBody');
@@ -2311,10 +2521,13 @@ if (tipoReporte === 'personas') {
             return;
         }
         const ministerioSeleccionado = String((filtroMinisterioSeguimiento && filtroMinisterioSeguimiento.value) || '').trim();
+        const redSeleccionada = String((filtroRedSeguimiento && filtroRedSeguimiento.value) || '').trim();
         const filas = bodySeguimiento.querySelectorAll('tr[data-row-type="dato"]');
         filas.forEach((fila) => {
             const ministerioFila = String(fila.dataset.ministerio || '').trim();
-            const visible = ministerioSeleccionado === '' || ministerioFila === ministerioSeleccionado;
+            const redFila = String(fila.dataset.red || '').trim();
+            const visible = (ministerioSeleccionado === '' || ministerioFila === ministerioSeleccionado)
+                && (redSeleccionada === '' || redFila === redSeleccionada);
             fila.style.display = visible ? '' : 'none';
         });
     };
@@ -2324,6 +2537,7 @@ if (tipoReporte === 'personas') {
             return;
         }
         const ministerioSeleccionado = String((filtroMinisterioEstado && filtroMinisterioEstado.value) || '').trim();
+        const redSeleccionada = String((filtroRedEstado && filtroRedEstado.value) || '').trim();
         const estadoSeleccionado = String((filtroEstadoReporte && filtroEstadoReporte.value) || 'todos');
         const filas = bodyEstado.querySelectorAll('tr[data-row-type="dato"]');
 
@@ -2332,10 +2546,12 @@ if (tipoReporte === 'personas') {
 
         filas.forEach((fila) => {
             const ministerioFila = String(fila.dataset.ministerio || '').trim();
+            const redFila = String(fila.dataset.red || '').trim();
             const reportoFila = String(fila.dataset.reporto || '').trim();
             const pasaMinisterio = ministerioSeleccionado === '' || ministerioFila === ministerioSeleccionado;
+            const pasaRed = redSeleccionada === '' || redFila === redSeleccionada;
             const pasaEstado = estadoSeleccionado === 'todos' || reportoFila === estadoSeleccionado;
-            const visible = pasaMinisterio && pasaEstado;
+            const visible = pasaMinisterio && pasaRed && pasaEstado;
             fila.style.display = visible ? '' : 'none';
 
             if (visible) {
@@ -2364,18 +2580,154 @@ if (tipoReporte === 'personas') {
         }
     };
 
+    const escaparHtml = (valor) => String(valor || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const normalizarNombreRedUi = (valor) => {
+        const txt = String(valor || '').trim();
+        if (txt === '') {
+            return 'Sin red';
+        }
+        const lower = txt.toLowerCase();
+        if (lower === 'j??venes' || lower === 'j?venes' || lower === 'jã³venes') {
+            return 'Jóvenes';
+        }
+        return txt;
+    };
+
+    const aplicarFiltrosResumenRed = () => {
+        if (!bodyResumenRed) {
+            return;
+        }
+
+        const ministerioSeleccionado = String((filtroMinisterioResumenRed && filtroMinisterioResumenRed.value) || '').trim();
+        const liderSeleccionado = String((filtroLiderResumenRed && filtroLiderResumenRed.value) || '').trim();
+        const redSeleccionada = String((filtroRedResumenRed && filtroRedResumenRed.value) || '').trim();
+
+        const baseRows = Array.isArray(tablaLideresPorRedTipoData) ? tablaLideresPorRedTipoData : [];
+        const rowsFiltradas = baseRows.filter((item) => {
+            const ministerio = String(item.ministerio || 'Sin ministerio').trim() || 'Sin ministerio';
+            const lider = String(item.lider || 'Sin líder').trim() || 'Sin líder';
+            const red = String(item.red || 'Sin red').trim() || 'Sin red';
+
+            const pasaMinisterio = ministerioSeleccionado === '' || ministerio === ministerioSeleccionado;
+            const pasaLider = liderSeleccionado === '' || lider === liderSeleccionado;
+            const pasaRed = redSeleccionada === '' || red === redSeleccionada;
+
+            return pasaMinisterio && pasaLider && pasaRed;
+        });
+
+        const resumenPorRed = {};
+        rowsFiltradas.forEach((item) => {
+            const red = String(item.red || 'Sin red').trim() || 'Sin red';
+            const lider = String(item.lider || 'Sin líder').trim() || 'Sin líder';
+            const keyRed = red;
+
+            if (!resumenPorRed[keyRed]) {
+                resumenPorRed[keyRed] = {
+                    red,
+                    total_celulas: 0,
+                    jovenes: {},
+                    kids: {},
+                    sin_clasificar: {}
+                };
+            }
+
+            const cantJovenes = (parseInt(item.celulas_jovenes || 0, 10) || 0) + (parseInt(item.celulas_rocas || 0, 10) || 0);
+            const cantKids = parseInt(item.celulas_kids || 0, 10) || 0;
+            const cantSinClasificar = parseInt(item.celulas_sin_clasificar || 0, 10) || 0;
+            const total = parseInt(item.total_celulas || 0, 10) || 0;
+
+            resumenPorRed[keyRed].total_celulas += total;
+
+            if (cantJovenes > 0) {
+                resumenPorRed[keyRed].jovenes[lider] = (resumenPorRed[keyRed].jovenes[lider] || 0) + cantJovenes;
+            }
+            if (cantKids > 0) {
+                resumenPorRed[keyRed].kids[lider] = (resumenPorRed[keyRed].kids[lider] || 0) + cantKids;
+            }
+            if (cantSinClasificar > 0) {
+                resumenPorRed[keyRed].sin_clasificar[lider] = (resumenPorRed[keyRed].sin_clasificar[lider] || 0) + cantSinClasificar;
+            }
+        });
+
+        const redKeys = Object.keys(resumenPorRed).sort((a, b) => normalizarNombreRedUi(a).localeCompare(normalizarNombreRedUi(b)));
+
+        if (!redKeys.length) {
+            bodyResumenRed.innerHTML = '<tr><td colspan="3" class="text-center">Sin datos en el resumen por red para estos filtros.</td></tr>';
+            return;
+        }
+
+        const ordenarLista = (obj) => Object.keys(obj)
+            .map((lider) => ({ lider, cantidad: parseInt(obj[lider] || 0, 10) || 0 }))
+            .sort((a, b) => {
+                const cmp = b.cantidad - a.cantidad;
+                if (cmp !== 0) {
+                    return cmp;
+                }
+                return a.lider.localeCompare(b.lider);
+            });
+
+        bodyResumenRed.innerHTML = redKeys.map((redKey) => {
+            const fila = resumenPorRed[redKey];
+            const listaJovenes = ordenarLista(fila.jovenes);
+            const listaKids = ordenarLista(fila.kids);
+            const listaSinClasificar = ordenarLista(fila.sin_clasificar);
+
+            const renderGrupo = (titulo, items) => {
+                if (!items.length) {
+                    return '';
+                }
+                const lis = items.map((it) => `<li>${escaparHtml(it.lider)} <strong>(${it.cantidad})</strong></li>`).join('');
+                return `<div class="report-red-group"><span class="report-red-group__title">${escaparHtml(titulo)}</span><ul class="report-inline-list">${lis}</ul></div>`;
+            };
+
+            const gruposHtml = [
+                renderGrupo('Jóvenes (incluye rocas)', listaJovenes),
+                renderGrupo('Kids', listaKids),
+                renderGrupo('Sin clasificar', listaSinClasificar)
+            ].join('');
+
+            return `<tr>
+                <td><strong>${escaparHtml(normalizarNombreRedUi(fila.red))}</strong></td>
+                <td>${gruposHtml !== '' ? `<div class="report-red-groups">${gruposHtml}</div>` : '<span style="color:#6b7280;">Sin líderes</span>'}</td>
+                <td><strong>${parseInt(fila.total_celulas || 0, 10)}</strong></td>
+            </tr>`;
+        }).join('');
+    };
+
     if (filtroMinisterioSeguimiento) {
         filtroMinisterioSeguimiento.addEventListener('change', aplicarFiltrosSeguimiento);
+    }
+    if (filtroRedSeguimiento) {
+        filtroRedSeguimiento.addEventListener('change', aplicarFiltrosSeguimiento);
     }
     if (filtroMinisterioEstado) {
         filtroMinisterioEstado.addEventListener('change', aplicarFiltrosEstado);
     }
+    if (filtroRedEstado) {
+        filtroRedEstado.addEventListener('change', aplicarFiltrosEstado);
+    }
     if (filtroEstadoReporte) {
         filtroEstadoReporte.addEventListener('change', aplicarFiltrosEstado);
+    }
+    if (filtroMinisterioResumenRed) {
+        filtroMinisterioResumenRed.addEventListener('change', aplicarFiltrosResumenRed);
+    }
+    if (filtroLiderResumenRed) {
+        filtroLiderResumenRed.addEventListener('change', aplicarFiltrosResumenRed);
+    }
+    if (filtroRedResumenRed) {
+        filtroRedResumenRed.addEventListener('change', aplicarFiltrosResumenRed);
     }
 
     aplicarFiltrosSeguimiento();
     aplicarFiltrosEstado();
+    aplicarFiltrosResumenRed();
 }
 </script>
 
@@ -2430,6 +2782,35 @@ if (tipoReporte === 'personas') {
     padding: 6px 10px;
     color: #17324d;
     background: #fff;
+}
+
+.report-inline-list {
+    margin: 0;
+    padding-left: 16px;
+}
+
+.report-inline-list li {
+    margin: 0 0 4px 0;
+}
+
+.report-red-groups {
+    display: grid;
+    gap: 8px;
+}
+
+.report-red-group {
+    padding: 6px 8px;
+    border: 1px dashed #d8e2ef;
+    border-radius: 8px;
+    background: #f9fcff;
+}
+
+.report-red-group__title {
+    display: inline-block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #355070;
 }
 
 .report-estado-kpis {
@@ -3113,6 +3494,20 @@ html.show-report-tables #reportesVisualContainer .ganar-extra-section {
     border: 1px solid #e3ebf5;
     border-radius: 8px;
     background: #f8fbff;
+}
+
+.report-list-item--button {
+    width: 100%;
+    border: 1px solid #e3ebf5;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+
+.report-list-item--button:hover {
+    background: #eef5ff;
+    border-color: #cfdff5;
 }
 
 .report-link-button {

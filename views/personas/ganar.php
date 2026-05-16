@@ -3,30 +3,35 @@
 $puedeVerPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver');
 $puedeEditarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
 $puedeEliminarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'eliminar');
-$puedeExportarPersonas = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
 $puedeVerAtajoAsignados = AuthController::esAdministrador()
     || AuthController::tienePermiso('personas_ganar_asignados', 'ver');
 $puedeVerAtajoReasignados = AuthController::esAdministrador()
     || AuthController::tienePermiso('personas_ganar_reasignados', 'ver');
 $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPersona;
+$puedeVerPersonasConsulta = AuthController::puedeVerPersonasConsulta();
+$puedeModuloGanarCompleto = AuthController::puedeVerModuloPersonasGanar();
+$puedeVerReportes = AuthController::esAdministrador() || AuthController::tienePermiso('reportes', 'ver');
+$verHistorialGanar = !empty($verHistorialGanar);
 ?>
 
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
     <h2 style="margin:0;">Almas ganadas</h2>
     <div class="personas-header-actions">
         <div class="personas-action-group personas-action-group-nav">
+            <?php if ($puedeVerPersonasConsulta): ?>
             <a href="<?= PUBLIC_URL ?>?url=personas" class="personas-action-pill">Discipulos</a>
+            <?php endif; ?>
+            <?php if ($puedeModuloGanarCompleto): ?>
             <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="personas-action-pill is-active" aria-current="page">Almas ganadas</a>
-            <a href="<?= PUBLIC_URL ?>?url=personas/universidad-vida" class="personas-action-pill">Universidad de la Vida</a>
+            <?php endif; ?>
+            <?php if ($puedeVerPersonasConsulta): ?>
+            <?php endif; ?>
         </div>
         <div class="personas-action-group">
-            <?php if ($puedeExportarPersonas): ?>
-            <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel&modo=ganar<?= ($filtroMinisterioActual ?? '') !== '' ? '&ministerio=' . urlencode((string)$filtroMinisterioActual) : '' ?><?= ($filtroLiderActual ?? '') !== '' ? '&lider=' . urlencode((string)$filtroLiderActual) : '' ?><?= !empty($filtroSinLiderActual) ? '&sin_lider=1' : '' ?><?= !empty($filtroSinCelulaActual) ? '&sin_celula=1' : '' ?><?= ($filtroNombreActual ?? '') !== '' ? '&buscar=' . urlencode((string)$filtroNombreActual) : '' ?><?= ($filtroSemanaRefActual ?? '') !== '' ? '&semana_ref=' . urlencode((string)$filtroSemanaRefActual) : '' ?><?= ($filtroFechaInicioActual ?? '') !== '' ? '&fecha_inicio=' . urlencode((string)$filtroFechaInicioActual) : '' ?><?= ($filtroFechaFinActual ?? '') !== '' ? '&fecha_fin=' . urlencode((string)$filtroFechaFinActual) : '' ?><?= ($filtroOrigenActual ?? '') !== '' ? '&origen=' . urlencode((string)$filtroOrigenActual) : '' ?>" class="personas-action-pill">
-                <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
+            <?php if ($puedeVerReportes): ?>
+            <a href="<?= PUBLIC_URL ?>?url=reportes&amp;tipo=personas" class="personas-action-pill">
+                <i class="bi bi-clipboard-data"></i> Reporte almas ganadas
             </a>
-            <?php endif; ?>
-            <?php if (AuthController::tienePermiso('personas', 'crear')): ?>
-            <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="personas-action-pill">+ Nuevo Discipulo</a>
             <?php endif; ?>
         </div>
     </div>
@@ -35,7 +40,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 <?php if (!empty($mostrarGanadosHistoricosPorFecha)): ?>
 <div class="alert alert-info" style="margin-bottom: 14px;">
     <i class="bi bi-clock-history"></i>
-    Vista histórica activa por semana/rango: se muestran también las almas ya ubicadas con asignación completa (líder, célula y ministerio).
+    Vista histórica del año <strong><?= (int)($filtroAnioHistorialActual ?? (int)date('Y')) ?></strong>: solo <strong>personas nuevas</strong> (no marcadas como antiguas en el padrón) ganadas en ese año; incluye las que ya quedaron ubicadas o consolidadas. Agrupadas por origen. <strong>Célula, líder y ministerio</strong> se muestran según el <strong>estado actual</strong> de la ficha, no como estaban el día del registro.
 </div>
 <?php endif; ?>
 
@@ -47,10 +52,12 @@ $filtroSinCelulaPendiente = !empty($filtroSinCelulaActual);
 $filtroNombrePendiente = (string)($filtroNombreActual ?? '');
 $filtroSemanaRefPendiente = (string)($filtroSemanaRefActual ?? '');
 $filtroSemanaRefEsDefaultPendiente = !empty($filtroSemanaRefEsDefault);
-$filtroFechaInicioPendiente = (string)($filtroFechaInicioActual ?? '');
-$filtroFechaFinPendiente = (string)($filtroFechaFinActual ?? '');
+$filtroAnioHistorialPendiente = (int)($filtroAnioHistorialActual ?? (int)date('Y'));
+$anioActualCalendario = (int)date('Y');
+$historialAnioDistintoDelActual = $verHistorialGanar && ($filtroAnioHistorialPendiente !== $anioActualCalendario);
+$historialPendiente = $verHistorialGanar ? '1' : '';
 $hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || ($filtroLiderPendiente !== '') || $filtroSinLiderPendiente || $filtroSinCelulaPendiente || ($filtroNombrePendiente !== '') || (!$filtroSemanaRefEsDefaultPendiente && $filtroSemanaRefPendiente !== '');
-$hayFiltrosPendiente = $hayFiltrosPendiente || (!$filtroSemanaRefEsDefaultPendiente && $filtroFechaInicioPendiente !== '' && $filtroFechaFinPendiente !== '');
+$hayFiltrosPendiente = $hayFiltrosPendiente || $verHistorialGanar || $historialAnioDistintoDelActual;
 
 $queryBasePendientes = [
     'url' => 'personas/ganar',
@@ -59,10 +66,12 @@ $queryBasePendientes = [
     'sin_lider' => $filtroSinLiderPendiente ? '1' : '',
     'sin_celula' => $filtroSinCelulaPendiente ? '1' : '',
     'buscar' => $filtroNombrePendiente,
-    'semana_ref' => $filtroSemanaRefPendiente,
-    'fecha_inicio' => $filtroFechaInicioPendiente,
-    'fecha_fin' => $filtroFechaFinPendiente,
+    'semana_ref' => $verHistorialGanar ? '' : $filtroSemanaRefPendiente,
+    'historial' => $historialPendiente,
 ];
+if ($verHistorialGanar) {
+    $queryBasePendientes['anio'] = (string)$filtroAnioHistorialPendiente;
+}
 if (($filtroOrigenActual ?? '') !== '') {
     $queryBasePendientes['origen'] = (string)$filtroOrigenActual;
 }
@@ -75,6 +84,9 @@ $buildPendientesUrl = static function(array $extra = []) use ($queryBasePendient
     return PUBLIC_URL . '?' . http_build_query($params);
 };
 $returnUrlGanar = $buildPendientesUrl();
+$historialToggleUrl = $verHistorialGanar
+    ? $buildPendientesUrl(['historial' => '', 'anio' => '', 'semana_ref' => '', 'buscar' => '', 'origen' => ''])
+    : $buildPendientesUrl(['historial' => '1', 'semana_ref' => '', 'buscar' => '', 'anio' => (string)$anioActualCalendario, 'origen' => ($filtroOrigenActual ?? '')]);
 ?>
 
 <div class="card" style="margin-bottom: 16px;">
@@ -83,6 +95,9 @@ $returnUrlGanar = $buildPendientesUrl();
             <input type="hidden" name="url" value="personas/ganar">
             <?php if (($filtroOrigenActual ?? '') !== ''): ?>
             <input type="hidden" name="origen" value="<?= htmlspecialchars((string)$filtroOrigenActual) ?>">
+            <?php endif; ?>
+            <?php if ($verHistorialGanar): ?>
+            <input type="hidden" name="historial" value="1">
             <?php endif; ?>
 
             <?php
@@ -124,9 +139,10 @@ $returnUrlGanar = $buildPendientesUrl();
                 </select>
             </div>
 
-            <div class="form-group" style="min-width: 260px;">
-                <label for="filtro_buscar" style="font-size: 14px; margin-bottom: 5px;">Buscar por nombre</label>
-                <input type="text" id="filtro_buscar" name="buscar" class="form-control" placeholder="Ej: Juan Perez" value="<?= htmlspecialchars($filtroNombrePendiente) ?>">
+            <div class="form-group" style="min-width: 280px;">
+                <label for="filtro_buscar" style="font-size: 14px; margin-bottom: 5px;">Buscar persona</label>
+                <input type="text" id="filtro_buscar" name="buscar" class="form-control" placeholder="Nombre, cédula o teléfono" value="<?= htmlspecialchars($filtroNombrePendiente) ?>">
+                <small style="display:block;margin-top:4px;color:#637087;">Coincidencias en la base visible por tu rol (no filtra por semana). Solo personas <strong>nuevas</strong> (Almas ganadas).</small>
             </div>
 
             <div class="form-group" style="align-self:flex-end; margin-bottom: 8px; min-width: 250px;">
@@ -139,18 +155,32 @@ $returnUrlGanar = $buildPendientesUrl();
                 </label>
             </div>
 
-            <div class="form-group" style="min-width: 220px;">
-                <label for="filtro_semana_ref" style="font-size: 14px; margin-bottom: 5px;">Semana (lunes a domingo)</label>
+            <?php if ($verHistorialGanar): ?>
+            <div class="form-group" style="min-width: 140px;">
+                <label for="filtro_anio_historial" style="font-size: 14px; margin-bottom: 5px;">Año</label>
+                <select id="filtro_anio_historial" name="anio" class="form-control">
+                    <?php for ($y = $anioActualCalendario + 1; $y >= 2020; $y--): ?>
+                    <option value="<?= $y ?>" <?= $filtroAnioHistorialPendiente === $y ? 'selected' : '' ?>><?= $y ?></option>
+                    <?php endfor; ?>
+                </select>
+            </div>
+            <?php else: ?>
+            <div class="form-group" style="min-width: 240px;">
+                <label for="filtro_semana_ref" style="font-size: 14px; margin-bottom: 5px;">Semana (por fecha de registro)</label>
                 <input type="date" id="filtro_semana_ref" name="semana_ref" class="form-control" value="<?= htmlspecialchars($filtroSemanaRefPendiente) ?>">
-                <?php if ($filtroFechaInicioPendiente !== '' && $filtroFechaFinPendiente !== ''): ?>
-                <small style="display:block; margin-top:4px; color:#637087;">Rango aplicado: <?= htmlspecialchars($filtroFechaInicioPendiente) ?> a <?= htmlspecialchars($filtroFechaFinPendiente) ?></small>
+                <?php if (($filtroFechaInicioActual ?? '') !== '' && ($filtroFechaFinActual ?? '') !== ''): ?>
+                <small style="display:block; margin-top:4px; color:#637087;">Del <?= htmlspecialchars((string)$filtroFechaInicioActual) ?> al <?= htmlspecialchars((string)$filtroFechaFinActual) ?> · Lun–Dom</small>
                 <?php endif; ?>
             </div>
+            <?php endif; ?>
 
             <div class="filters-actions" style="align-self:flex-end;">
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-funnel"></i> Filtrar
                 </button>
+                <a href="<?= htmlspecialchars($historialToggleUrl) ?>" class="btn <?= $verHistorialGanar ? 'btn-secondary' : 'btn-info' ?>">
+                    <i class="bi bi-clock-history"></i> Historial
+                </a>
                 <?php if ($hayFiltrosPendiente): ?>
                 <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-secondary">
                     <i class="bi bi-x-circle"></i> Limpiar
@@ -163,9 +193,16 @@ $returnUrlGanar = $buildPendientesUrl();
 
 <div class="alert alert-info" style="margin-bottom: 20px;">
     <i class="bi bi-info-circle"></i>
-    Este apartado muestra personas nuevas en seguimiento de consolidación, separa <strong>Reasignados</strong> (sin primer contacto en 48 horas) y una lista de <strong>No se dispone</strong> para casos no concretados.
+    <?php if ($verHistorialGanar): ?>
+    <strong>Historial</strong>: personas <strong>nuevas</strong> registradas en el año elegido (excluye antiguas del padrón); incluye las que ya están consolidadas o ubicadas. Usa las pestañas para filtrar por origen. Los datos de ubicación (célula, líder, ministerio) son el <strong>estado actual</strong>.
+    <?php elseif ($filtroNombrePendiente !== ''): ?>
+    Resultados de búsqueda (nombre, documento o teléfono). Las pestañas por origen no aplican mientras haya texto en el buscador.
+    <?php else: ?>
+    <strong>Semana actual</strong> por defecto: solo aparecen <strong>personas nuevas</strong> cuya <strong>fecha de registro</strong> cae en esa semana (lun–dom) y siguen pendientes de ubicación. Cambia «Semana» para otra semana. <strong>Historial</strong> muestra solo nuevas de todo el año (incluye ya ubicadas).
+    <?php endif; ?>
 </div>
 
+<?php if ($filtroNombrePendiente === ''): ?>
 <div class="card" style="margin-bottom: 20px;">
     <div class="card-body">
         <div class="ganar-shortcuts">
@@ -182,7 +219,7 @@ $returnUrlGanar = $buildPendientesUrl();
                     <span class="ganar-shortcut-title"><i class="bi bi-building"></i> Ganados en iglesia</span>
                     <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['domingo'] ?? 0) ?></span>
                 </a>
-                <small class="ganar-shortcut-help">No célula y aún no clasificados como asignados</small>
+                <small class="ganar-shortcut-help">Solo registros con origen Domingo/Iglesia</small>
             </div>
 
             <?php if ($puedeVerAtajoAsignados): ?>
@@ -215,10 +252,15 @@ $returnUrlGanar = $buildPendientesUrl();
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <div class="alert alert-success" style="margin-bottom: 20px;">
     <i class="bi bi-check-circle"></i>
-    Total almas ganadas: <strong><?= count($personas) ?></strong> persona(s)
+    <?php if ($filtroNombrePendiente !== ''): ?>
+    Coincidencias de búsqueda: <strong><?= count($personas) ?></strong> persona(s)
+    <?php else: ?>
+    Total <?= $verHistorialGanar ? 'en historial' : 'pendientes' ?>: <strong><?= count($personas) ?></strong> persona(s)
+    <?php endif; ?>
 </div>
 
 <div class="table-container">

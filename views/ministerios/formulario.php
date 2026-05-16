@@ -2,7 +2,7 @@
 
 <?php
 $returnUrl = $return_url ?? null;
-$volverUrl = $returnUrl ?: (PUBLIC_URL . 'index.php?url=ministerios');
+$volverUrl = $returnUrl ?: (PUBLIC_URL . 'index.php?url=discipular/ministerios');
 $metas = $metas ?? [];
 $metaAnual = (int)($metas['meta_anual'] ?? 0);
 $metaMensual = (int)($metas['meta_mensual'] ?? 0);
@@ -200,7 +200,7 @@ $metaN3S2 = (int)($metas['meta_n3_s2'] ?? 0);
 
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Guardar</button>
-            <a href="<?= PUBLIC_URL ?>index.php?url=ministerios" class="btn btn-secondary">Cancelar</a>
+            <a href="<?= PUBLIC_URL ?>index.php?url=discipular/ministerios" class="btn btn-secondary">Cancelar</a>
         </div>
     </form>
 </div>

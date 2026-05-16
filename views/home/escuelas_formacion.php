@@ -35,8 +35,8 @@ if ($filtroGenero !== '' && $filtroGenero !== 'todos') { $filtrosActivos++; }
             <a href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($rutaAsistencias) ?>" class="action-pill <?= $asistenciasActivo ? 'is-active' : '' ?>" <?= $asistenciasActivo ? 'aria-current="page"' : '' ?>>Asistencias</a>
         </div>
         <div class="action-group">
-            <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/codigos" class="action-pill" target="_blank" rel="noopener">Códigos QR</a>
-            <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico" class="action-pill" target="_blank" rel="noopener">Registro / Asistencia</a>
+            <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/universidad-vida" class="action-pill" target="_blank" rel="noopener">Formulario</a>
+            <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/capacitacion-destino" class="action-pill" target="_blank" rel="noopener">Formulario</a>
             <a href="<?= PUBLIC_URL ?>?url=home" class="action-pill">Volver al panel</a>
         </div>
     </div>

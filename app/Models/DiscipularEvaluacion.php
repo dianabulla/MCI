@@ -212,6 +212,89 @@ class DiscipularEvaluacion extends BaseModel {
         return (array)$stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Por persona, solo el último intento de esta evaluación (mayor Intento_Numero; desempate Id_Resultado).
+     */
+    public function listarUltimosResultadosPorEvaluacion(int $idEvaluacion): array {
+        $idEvaluacion = (int)$idEvaluacion;
+        if ($idEvaluacion <= 0) {
+            return [];
+        }
+
+        $sql = "SELECT r.*, p.Nombre, p.Apellido
+                FROM discipular_evaluacion_resultados r
+                LEFT JOIN persona p ON p.Id_Persona = r.Id_Persona
+                WHERE r.Id_Evaluacion = ?
+                  AND r.Id_Resultado = (
+                      SELECT r2.Id_Resultado
+                      FROM discipular_evaluacion_resultados r2
+                      WHERE r2.Id_Evaluacion = r.Id_Evaluacion
+                        AND r2.Id_Persona = r.Id_Persona
+                      ORDER BY r2.Intento_Numero DESC, r2.Id_Resultado DESC
+                      LIMIT 1
+                  )
+                ORDER BY r.Fecha_Presentacion DESC, p.Nombre ASC, p.Apellido ASC";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$idEvaluacion]);
+        return (array)$stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Resumen para profesor: último intento por (evaluación, persona), filtrado por nivel y módulo del material.
+     */
+    public function listarPresentacionesResumenUltimoIntento(int $nivelFiltro, int $moduloFiltro): array {
+        if ($nivelFiltro <= 0 || $moduloFiltro <= 0) {
+            return [];
+        }
+
+        $sql = "SELECT
+                    r.Id_Resultado,
+                    r.Id_Evaluacion,
+                    r.Id_Persona,
+                    r.Intento_Numero,
+                    r.Puntaje,
+                    r.Total_Preguntas,
+                    r.Correctas,
+                    r.Aprobado,
+                    r.Fecha_Presentacion,
+                    e.Titulo,
+                    e.Nivel,
+                    e.Modulo_Numero,
+                    e.Leccion,
+                    p.Nombre,
+                    p.Apellido
+                FROM discipular_evaluacion_resultados r
+                INNER JOIN discipular_evaluaciones e ON e.Id_Evaluacion = r.Id_Evaluacion
+                LEFT JOIN persona p ON p.Id_Persona = r.Id_Persona
+                WHERE e.Nivel = ? AND e.Modulo_Numero = ?
+                  AND r.Id_Resultado = (
+                      SELECT r2.Id_Resultado
+                      FROM discipular_evaluacion_resultados r2
+                      WHERE r2.Id_Evaluacion = r.Id_Evaluacion
+                        AND r2.Id_Persona = r.Id_Persona
+                      ORDER BY r2.Intento_Numero DESC, r2.Id_Resultado DESC
+                      LIMIT 1
+                  )
+                ORDER BY r.Fecha_Presentacion DESC, e.Titulo ASC, p.Nombre ASC, p.Apellido ASC";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$nivelFiltro, $moduloFiltro]);
+        return (array)$stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function obtenerResultadoPorId(int $idResultado): ?array {
+        $stmt = $this->db->prepare("SELECT r.*, e.Titulo, e.Nivel, e.Modulo_Numero, e.Leccion, p.Nombre, p.Apellido
+            FROM discipular_evaluacion_resultados r
+            INNER JOIN discipular_evaluaciones e ON e.Id_Evaluacion = r.Id_Evaluacion
+            LEFT JOIN persona p ON p.Id_Persona = r.Id_Persona
+            WHERE r.Id_Resultado = ?
+            LIMIT 1");
+        $stmt->execute([(int)$idResultado]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
     public function listarResumenPorNivelCapacitacionDestino(): array {
         $sql = "SELECT
                     e.Nivel,

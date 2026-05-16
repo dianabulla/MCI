@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Modelo Persona
  */
@@ -127,6 +127,7 @@ class Persona extends BaseModel {
                         p.Apellido,
                         p.Id_Rol,
                         p.Genero,
+                        p.Edad,
                         p.Telefono,
                         p.Numero_Documento,
                         p.Id_Ministerio,
@@ -503,7 +504,7 @@ class Persona extends BaseModel {
     }
 
     /**
-     * NUEVO: reporte mensual de escalera del éxito por peldaño
+     * NUEVO: reporte mensual de escalera del Ã©xito por peldaÃ±o
      */
     public function getReporteEscaleraMesActual($filtroRol = '', $fechaInicio = null, $fechaFin = null, $idMinisterio = '', $idLider = '', $idCelula = '') {
         $inicioMes = is_string($fechaInicio) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaInicio)
@@ -583,7 +584,7 @@ class Persona extends BaseModel {
                 'Enviar' => 0,
                 'sin_etapa' => 0,
             ],
-            'peldaños' => [
+            'peldaÃ±os' => [
                 'Ganar' => [
                     'Primer contacto' => 0,
                     'Asignacion a lideres y ministerio' => 0,
@@ -640,7 +641,7 @@ class Persona extends BaseModel {
 
         $ordenEtapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
 
-        $mapaPeldaños = [
+        $mapaPeldaÃ±os = [
             'Ganar' => ['Primer contacto', 'Asignacion a lideres y ministerio', 'Fonovisita', 'Visita', 'Asignacion a una celula', 'No se dispone'],
             'Consolidar' => ['Universidad de la vida', 'Encuentro', 'Bautismo'],
             'Discipular' => ['Capacitacion destino nivel 1', 'Capacitacion destino nivel 2', 'Capacitacion destino nivel 3'],
@@ -679,19 +680,19 @@ class Persona extends BaseModel {
                 }
             }
 
-            foreach ($mapaPeldaños as $etapa => $peldaños) {
+            foreach ($mapaPeldaÃ±os as $etapa => $peldaÃ±os) {
                 $checksEtapa = $checklist[$etapa] ?? [];
 
-                foreach ($peldaños as $indice => $nombrePeldaño) {
+                foreach ($peldaÃ±os as $indice => $nombrePeldaÃ±o) {
                     $marcado = array_key_exists($indice, $checksEtapa) ? !empty($checksEtapa[$indice]) : false;
 
-                    // Si no hay checklist persistido, la etapa activa arranca con el primer peldaño visible
+                    // Si no hay checklist persistido, la etapa activa arranca con el primer peldaÃ±o visible
                     if (!$marcado && $etapa === $proceso && $indice === 0) {
                         $marcado = true;
                     }
 
-                    // Si la persona ya avanzó a una etapa posterior, se consideran completos
-                    // los peldaños visibles de las etapas anteriores
+                    // Si la persona ya avanzÃ³ a una etapa posterior, se consideran completos
+                    // los peldaÃ±os visibles de las etapas anteriores
                     $indiceEtapaActual = array_search($proceso, $ordenEtapas, true);
                     $indiceEtapaIterada = array_search($etapa, $ordenEtapas, true);
 
@@ -705,8 +706,8 @@ class Persona extends BaseModel {
                     }
 
                     if ($marcado) {
-                        $reporte['peldaños'][$etapa][$nombrePeldaño]++;
-                        $reporte['detalles_peldanos'][$etapa][$nombrePeldaño][] = $detallePersona;
+                        $reporte['peldaÃ±os'][$etapa][$nombrePeldaÃ±o]++;
+                        $reporte['detalles_peldanos'][$etapa][$nombrePeldaÃ±o][] = $detallePersona;
                     }
                 }
             }
@@ -716,14 +717,14 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Obtener personas con líder y ministerio asignados que superaron el límite
+     * Obtener personas con lÃ­der y ministerio asignados que superaron el lÃ­mite
      * de horas para registrar el primer contacto.
      */
     public function getCandidatosReasignacionPrimerContacto($horasLimite = 48) {
         $horasLimite = max(1, (int)$horasLimite);
 
         // Regla de seguridad: sin Fecha_Asignacion_Lider no se ejecuta
-        // la reasignación automática para evitar efectos retroactivos.
+        // la reasignaciÃ³n automÃ¡tica para evitar efectos retroactivos.
         if (!$this->tieneColumna('Fecha_Asignacion_Lider')) {
             return [];
         }
@@ -744,7 +745,7 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Quitar asignación de líder/ministerio y marcar persona como reasignada.
+     * Quitar asignaciÃ³n de lÃ­der/ministerio y marcar persona como reasignada.
      */
     public function aplicarReasignacionAutomatica($idPersona, $checklistJson, $proceso = 'Ganar') {
         $idPersona = (int)$idPersona;
@@ -898,7 +899,7 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Obtener personas por célula
+     * Obtener personas por cÃ©lula
      */
     public function getByCelula($idCelula) {
         $sql = "SELECT * FROM {$this->table} WHERE Id_Celula = ? ORDER BY Apellido, Nombre";
@@ -906,7 +907,7 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Obtener solo personas activas (para reportes/gráficos/células)
+     * Obtener solo personas activas (para reportes/grÃ¡ficos/cÃ©lulas)
      */
     public function getAllActivos() {
         $sql = "SELECT * FROM {$this->table} 
@@ -954,19 +955,99 @@ class Persona extends BaseModel {
             OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%lider de 12%'
             OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%lider 12%'
             OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%lideres de 12%'
+            OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%lider de 144%'
+            OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%lider 144%'
+            OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%lideres de 144%'
         )";
+    }
+
+    /**
+     * Condición SQL: persona activa es líder para registro en Escuelas (rol de liderazgo o líder asignado en célula).
+     * Requiere alias p y LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol.
+     */
+    public function condicionSqlPersonaEsLiderEscuela(string $aliasPersona = 'p', string $aliasRol = 'r'): string {
+        $aliasPersona = trim((string)$aliasPersona) ?: 'p';
+        $aliasRol = trim((string)$aliasRol) ?: 'r';
+        $rolesLider = $this->getCondicionRolesLiderazgoSql($aliasPersona, $aliasRol);
+
+        if ($this->tieneTabla('celula')) {
+            return "(
+                EXISTS (SELECT 1 FROM celula c WHERE c.Id_Lider = {$aliasPersona}.Id_Persona AND c.Id_Lider IS NOT NULL)
+                OR ({$rolesLider})
+            )";
+        }
+
+        return "({$rolesLider})";
+    }
+
+    /**
+     * Autocomplete de líderes para el formulario público de escuelas (todos los roles de liderazgo + líderes de célula).
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function buscarLideresParaRegistroEscuela(string $term, int $limit = 60): array {
+        $term = trim((string)$term);
+        if (strlen($term) < 2) {
+            return [];
+        }
+
+        $like = '%' . $term . '%';
+        $lim = max(1, min(100, (int)$limit));
+        $condLider = $this->condicionSqlPersonaEsLiderEscuela('p', 'r');
+
+        $sql = "SELECT DISTINCT p.Id_Persona, p.Nombre, p.Apellido, p.Id_Rol,
+                       COALESCE(r.Nombre_Rol, '') AS Rol
+                FROM persona p
+                LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
+                WHERE (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                  AND ({$condLider})
+                  AND (
+                      p.Nombre LIKE ?
+                      OR p.Apellido LIKE ?
+                      OR CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, '')) LIKE ?
+                  )
+                ORDER BY p.Nombre ASC, p.Apellido ASC
+                LIMIT {$lim}";
+
+        return $this->query($sql, [$like, $like, $like]);
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function obtenerPersonaLiderValidaEscuela(int $idPersona): ?array {
+        $idPersona = (int)$idPersona;
+        if ($idPersona <= 0) {
+            return null;
+        }
+
+        $condLider = $this->condicionSqlPersonaEsLiderEscuela('p', 'r');
+        $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Id_Rol, p.Estado_Cuenta
+                FROM persona p
+                LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
+                WHERE p.Id_Persona = ?
+                  AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                  AND ({$condLider})
+                LIMIT 1";
+
+        $rows = $this->query($sql, [$idPersona]);
+        if (empty($rows[0])) {
+            return null;
+        }
+
+        return $rows[0];
     }
 
     private function normalizarNombreRol($nombreRol) {
         $nombreRol = strtolower(trim((string)$nombreRol));
         return strtr($nombreRol, [
-            'á' => 'a',
-            'é' => 'e',
-            'í' => 'i',
-            'ó' => 'o',
-            'ú' => 'u',
-            'ü' => 'u',
-            'ñ' => 'n'
+            'Ã¡' => 'a',
+            'Ã©' => 'e',
+            'Ã­' => 'i',
+            'Ã³' => 'o',
+            'Ãº' => 'u',
+            'Ã¼' => 'u',
+            'Ã±' => 'n'
         ]);
     }
 
@@ -998,6 +1079,14 @@ class Persona extends BaseModel {
         }
 
         if (
+            strpos($nombreRol, 'lider de 144') !== false
+            || strpos($nombreRol, 'lider 144') !== false
+            || strpos($nombreRol, 'lideres de 144') !== false
+        ) {
+            return 'lider_144';
+        }
+
+        if (
             $idRol === 3
             || strpos($nombreRol, 'lider de celula') !== false
             || strpos($nombreRol, 'lider celula') !== false
@@ -1006,6 +1095,101 @@ class Persona extends BaseModel {
         }
 
         return 'miembro';
+    }
+
+    private function buscarIdRolPorPatrones(array $patrones) {
+        $rows = $this->query("SELECT Id_Rol, Nombre_Rol FROM rol");
+        if (empty($rows)) {
+            return 0;
+        }
+
+        $patronesNorm = [];
+        foreach ($patrones as $patron) {
+            $patronNorm = $this->normalizarNombreRol($patron);
+            if ($patronNorm !== '') {
+                $patronesNorm[] = $patronNorm;
+            }
+        }
+
+        if (empty($patronesNorm)) {
+            return 0;
+        }
+
+        foreach ($rows as $row) {
+            $idRol = (int)($row['Id_Rol'] ?? 0);
+            if ($idRol <= 0) {
+                continue;
+            }
+
+            $nombreNorm = $this->normalizarNombreRol($row['Nombre_Rol'] ?? '');
+            if ($nombreNorm === '') {
+                continue;
+            }
+
+            foreach ($patronesNorm as $patron) {
+                if (strpos($nombreNorm, $patron) !== false) {
+                    return $idRol;
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    public function resolverRolAscensoPorLider($idRolLider, $idRolActualPersona) {
+        $jerarquiaLider = $this->getJerarquiaByRol((int)$idRolLider);
+        $jerarquiaActual = $this->getJerarquiaByRol((int)$idRolActualPersona);
+
+        $objetivo = '';
+        if ($jerarquiaLider === 'pastor') {
+            $objetivo = 'lider_12';
+        } elseif ($jerarquiaLider === 'lider_12') {
+            $objetivo = 'lider_144';
+        } elseif ($jerarquiaLider === 'lider_144') {
+            $objetivo = 'lider_celula';
+        }
+
+        if ($objetivo === '' || $objetivo === $jerarquiaActual) {
+            return [
+                'ok' => true,
+                'id_rol' => 0,
+                'jerarquia_objetivo' => $objetivo,
+                'message' => ''
+            ];
+        }
+
+        $idRolObjetivo = 0;
+        if ($objetivo === 'lider_12') {
+            $idRolObjetivo = $this->buscarIdRolPorPatrones(['lider de 12', 'lider 12', 'lideres de 12']);
+        } elseif ($objetivo === 'lider_144') {
+            $idRolObjetivo = $this->buscarIdRolPorPatrones(['lider de 144', 'lider 144', 'lideres de 144']);
+        } elseif ($objetivo === 'lider_celula') {
+            $idRolObjetivo = $this->buscarIdRolPorPatrones(['lider de celula', 'lider celula']);
+        }
+
+        if ($idRolObjetivo <= 0) {
+            return [
+                'ok' => false,
+                'id_rol' => 0,
+                'jerarquia_objetivo' => $objetivo,
+                'message' => 'No existe un rol configurado para ' . $objetivo . '.'
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'id_rol' => $idRolObjetivo,
+            'jerarquia_objetivo' => $objetivo,
+            'message' => ''
+        ];
+    }
+
+    public function resolverIdRolPastor() {
+        return (int)$this->buscarIdRolPorPatrones(['pastor']);
+    }
+
+    public function resolverIdRolLider12() {
+        return (int)$this->buscarIdRolPorPatrones(['lider de 12', 'lider 12', 'lideres de 12']);
     }
 
     public function contarCoberturaDirectaLiderazgo($idLider, $excludePersonaId = null) {
@@ -1029,6 +1213,9 @@ class Persona extends BaseModel {
                         OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lider de 12%'
                         OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lider 12%'
                         OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lideres de 12%'
+                        OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lider de 144%'
+                        OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lider 144%'
+                        OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lideres de 144%'
                   )";
 
         $params = [$idLider];
@@ -1059,7 +1246,7 @@ class Persona extends BaseModel {
         if (empty($lider)) {
             return [
                 'ok' => false,
-                'message' => 'El líder asignado no existe.'
+                'message' => 'El lÃ­der asignado no existe.'
             ];
         }
 
@@ -1069,47 +1256,54 @@ class Persona extends BaseModel {
         if (in_array($jerarquiaPersona, ['pastor', 'administrativo'], true)) {
             return [
                 'ok' => $idLider <= 0,
-                'message' => 'Un pastor o usuario administrativo no debe quedar bajo cobertura de un líder.'
+                'message' => 'Un pastor o usuario administrativo no debe quedar bajo cobertura de un lÃ­der.'
             ];
         }
 
         if ($jerarquiaLider === 'miembro' || $jerarquiaLider === 'administrativo') {
             return [
                 'ok' => false,
-                'message' => 'Solo un pastor, líder de 12 o líder de célula puede recibir cobertura.'
+                'message' => 'Solo un pastor, lÃ­der de 12 o lÃ­der de cÃ©lula puede recibir cobertura.'
             ];
         }
 
         if ($jerarquiaLider === 'lider_celula' && $jerarquiaPersona !== 'miembro') {
             return [
                 'ok' => false,
-                'message' => 'Un líder de célula solo puede cubrir personas de su célula, no otros líderes.'
+                'message' => 'Un lÃ­der de cÃ©lula solo puede cubrir personas de su cÃ©lula, no otros lÃ­deres.'
             ];
         }
 
-        if ($jerarquiaLider === 'lider_12' && !in_array($jerarquiaPersona, ['lider_celula', 'miembro'], true)) {
+        if ($jerarquiaLider === 'lider_12' && !in_array($jerarquiaPersona, ['lider_144', 'lider_celula', 'miembro'], true)) {
             return [
                 'ok' => false,
-                'message' => 'Un líder de 12 solo puede cubrir líderes de célula o miembros.'
+                'message' => 'Un lÃ­der de 12 solo puede cubrir lÃ­deres de cÃ©lula o miembros.'
             ];
         }
 
-        if ($jerarquiaLider === 'pastor' && !in_array($jerarquiaPersona, ['lider_12', 'lider_celula', 'miembro'], true)) {
+        if ($jerarquiaLider === 'lider_144' && !in_array($jerarquiaPersona, ['lider_celula', 'miembro'], true)) {
+            return [
+                'ok' => false,
+                'message' => 'Un lÃ­der de 144 solo puede cubrir lÃ­deres de cÃ©lula o miembros.'
+            ];
+        }
+
+        if ($jerarquiaLider === 'pastor' && !in_array($jerarquiaPersona, ['lider_12', 'lider_144', 'lider_celula', 'miembro'], true)) {
             return [
                 'ok' => false,
                 'message' => 'La cobertura pastoral solo aplica a la red ministerial.'
             ];
         }
 
-        $aplicaCupoLiderazgo = in_array($jerarquiaLider, ['pastor', 'lider_12'], true)
-            && in_array($jerarquiaPersona, ['lider_12', 'lider_celula'], true);
+        $aplicaCupoLiderazgo = in_array($jerarquiaLider, ['pastor', 'lider_12', 'lider_144'], true)
+            && in_array($jerarquiaPersona, ['lider_12', 'lider_144', 'lider_celula'], true);
 
         if ($aplicaCupoLiderazgo) {
             $totalDirectos = $this->contarCoberturaDirectaLiderazgo($idLider, $excludePersonaId);
             if ($totalDirectos >= 12) {
                 return [
                     'ok' => false,
-                    'message' => 'Ese líder ya completó su cobertura directa de 12 líderes.'
+                    'message' => 'Ese lÃ­der ya completÃ³ su cobertura directa de 12 lÃ­deres.'
                 ];
             }
         }
@@ -1195,7 +1389,7 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Obtener líderes/pastores por ministerio.
+     * Obtener lÃ­deres/pastores por ministerio.
      */
     public function getLideresByMinisterio($idMinisterio) {
         $condicionRoles = $this->getCondicionRolesLiderazgoSql('p', 'r');
@@ -1209,7 +1403,7 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Obtener personas con rol Líder de 12
+     * Obtener personas con rol LÃ­der de 12
      */
     public function getLideres12() {
         $sql = "SELECT * FROM {$this->table} WHERE Id_Rol = 8 ORDER BY Apellido, Nombre";
@@ -1217,8 +1411,47 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Obtener estadísticas de almas ganadas por ministerio
-     * Agrupa por ministerio y género en un rango de fechas
+     * Obtener datos bÃ¡sicos de lÃ­deres por IDs.
+     *
+     * @param int[] $idsLideres
+     * @return array<int, array<string,mixed>> indexado por Id_Persona
+     */
+    public function getResumenLideresByIds(array $idsLideres) {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $idsLideres), static function($id) {
+            return $id > 0;
+        })));
+
+        if (empty($ids)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $sql = "SELECT
+                    p.Id_Persona,
+                    p.Id_Rol,
+                    p.Genero,
+                    p.Id_Ministerio,
+                    TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, ''))) AS Nombre_Completo,
+                    m.Nombre_Ministerio
+                FROM {$this->table} p
+                LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
+                WHERE p.Id_Persona IN ({$placeholders})";
+
+        $rows = $this->query($sql, $ids);
+        $resultado = [];
+        foreach ((array)$rows as $row) {
+            $id = (int)($row['Id_Persona'] ?? 0);
+            if ($id > 0) {
+                $resultado[$id] = $row;
+            }
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * Obtener estadÃ­sticas de almas ganadas por ministerio
+     * Agrupa por ministerio y gÃ©nero en un rango de fechas
      */
     public function getAlmasGanadasPorMinisterio($fechaInicio, $fechaFin) {
         $sql = "SELECT 
@@ -1271,7 +1504,7 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Actualizar último acceso
+     * Actualizar Ãºltimo acceso
      */
     public function actualizarUltimoAcceso($idPersona) {
         try {
@@ -1279,7 +1512,7 @@ class Persona extends BaseModel {
             $stmt = $this->db->prepare($sql);
             return $stmt->execute([$idPersona]);
         } catch (Exception $e) {
-            error_log("Error actualizando último acceso: " . $e->getMessage());
+            error_log("Error actualizando Ãºltimo acceso: " . $e->getMessage());
             return false;
         }
     }
@@ -1488,8 +1721,8 @@ class Persona extends BaseModel {
         if ($origen !== null && $origen !== '') {
             $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
             $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
-            $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%célula%')";
-            $esIglesiaExpr = "(NOT {$esCelulaExpr})";
+            $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%cÃ©lula%')";
+            $esIglesiaExpr = "({$tipoReunionExpr} LIKE '%domingo%' OR {$tipoReunionExpr} LIKE '%iglesia%')";
             $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
             $esAsignadoExpr = "({$esIglesiaExpr} AND {$invitadoExpr} = '' AND {$tieneAsignacionExpr})";
 
@@ -1514,7 +1747,7 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Obtener personas registradas desde el formulario público de Escuelas de Formación (Universidad de la Vida)
+     * Obtener personas registradas desde el formulario pÃºblico de Escuelas de FormaciÃ³n (Universidad de la Vida)
      */
     public function getPersonasUniversidadVida($filtroRol = '') {
         $canalFormacion = 'Escuelas Formacion (Formulario publico)';
@@ -1615,8 +1848,8 @@ class Persona extends BaseModel {
         if ($origen !== null && $origen !== '') {
             $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
             $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
-            $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%célula%')";
-            $esIglesiaExpr = "(NOT {$esCelulaExpr})";
+            $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%cÃ©lula%')";
+            $esIglesiaExpr = "({$tipoReunionExpr} LIKE '%domingo%' OR {$tipoReunionExpr} LIKE '%iglesia%')";
             $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
             $esAsignadoExpr = "({$esIglesiaExpr} AND {$invitadoExpr} = '' AND {$tieneAsignacionExpr})";
 
@@ -1637,6 +1870,71 @@ class Persona extends BaseModel {
 
         $sql .= " ORDER BY p.Fecha_Registro DESC, p.Id_Persona DESC";
         
+        return $this->query($sql, $params);
+    }
+
+    /**
+     * Búsqueda por texto para listados: nombre/apellidos, documento y teléfono.
+     * Respeta el aislamiento de rol en $filtroRol.
+     */
+    public function buscarPersonasTextoListadoConRole($filtroRol, $termino, $limite = 200) {
+        $termino = preg_replace('/\s+/u', ' ', trim((string)$termino));
+        $filtroRol = trim((string)$filtroRol);
+        if ($termino === '' || $filtroRol === '') {
+            return [];
+        }
+
+        $limite = (int)$limite;
+        if ($limite < 1) {
+            $limite = 1;
+        }
+        if ($limite > 500) {
+            $limite = 500;
+        }
+
+        $params = [];
+        $partesOr = [];
+
+        $nombreCompleto = "TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, '')))";
+        $nombreInvertido = "TRIM(CONCAT(COALESCE(p.Apellido, ''), ' ', COALESCE(p.Nombre, '')))";
+        $partesOr[] = "(LOWER($nombreCompleto) LIKE LOWER(?) OR LOWER($nombreInvertido) LIKE LOWER(?))";
+        $likeNombre = '%' . $termino . '%';
+        $params[] = $likeNombre;
+        $params[] = $likeNombre;
+
+        $docNorm = $this->normalizarDocumentoParaComparacion($termino);
+        if ($docNorm !== '') {
+            $partesOr[] = "REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(p.Numero_Documento, ''))), ' ', ''), '.', ''), '-', '') LIKE ?";
+            $params[] = '%' . $docNorm . '%';
+        }
+
+        $soloDigitos = preg_replace('/\D+/', '', $termino);
+        if ($soloDigitos !== '') {
+            $telExpr = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(p.Telefono, '')), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '')";
+            $partesOr[] = "$telExpr LIKE ?";
+            $params[] = '%' . $soloDigitos . '%';
+        }
+
+        $whereBuscar = '(' . implode(' OR ', $partesOr) . ')';
+
+        $sql = "SELECT p.*,
+                c.Nombre_Celula,
+                r.Nombre_Rol,
+                m.Nombre_Ministerio,
+                TRIM(CONCAT(COALESCE(lid.Nombre, ''), ' ', COALESCE(lid.Apellido, ''))) AS Nombre_Lider,
+                COALESCE(creador.Usuario, '') AS Usuario_Creador,
+                TRIM(CONCAT(COALESCE(creador.Nombre, ''), ' ', COALESCE(creador.Apellido, ''))) AS Nombre_Creador
+                FROM persona p
+                LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
+                LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
+                LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
+                LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
+                LEFT JOIN persona creador ON p.Creado_Por = creador.Id_Persona
+                WHERE ($filtroRol)
+                AND $whereBuscar
+                ORDER BY p.Fecha_Registro DESC, p.Id_Persona DESC
+                LIMIT " . $limite;
+
         return $this->query($sql, $params);
     }
 
@@ -1678,7 +1976,7 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Resumen de etapas del proceso de ganar por período.
+     * Resumen de etapas del proceso de ganar por perÃ­odo.
      */
     public function getResumenProcesoGanarWithRole($fechaInicio, $fechaFin, $filtroRol, $idCelula = '', $idMinisterio = '', $idLider = '') {
         if (!$this->tieneColumna('Proceso')) {
@@ -1743,7 +2041,7 @@ class Persona extends BaseModel {
         $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
         $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
 
-        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%célula%')";
+        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%cÃ©lula%')";
         $esIglesiaExpr = "(NOT {$esCelulaExpr})";
         $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
 
@@ -1785,21 +2083,26 @@ class Persona extends BaseModel {
         $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
         $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
 
+        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%cÃ©lula%')";
+        $esIglesiaExpr = "(NOT {$esCelulaExpr})";
+        $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
+
         $sql = "SELECT
                     p.Id_Persona,
                     p.Nombre,
                     p.Apellido,
                     p.Fecha_Registro,
                     p.Tipo_Reunion,
-                    COALESCE(c.Nombre_Celula, 'Sin célula') AS Nombre_Celula,
+                    COALESCE(c.Nombre_Celula, 'Sin cÃ©lula') AS Nombre_Celula,
                     COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
-                    COALESCE(CONCAT(lid.Nombre, ' ', lid.Apellido), 'Sin líder') AS Nombre_Lider
+                    COALESCE(CONCAT(l.Nombre, ' ', l.Apellido), 'Sin lÃ­der') AS Nombre_Lider
                 FROM persona p
                 LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
-                LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
+                LEFT JOIN persona l ON p.Id_Lider = l.Id_Persona
                 WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
-                AND $filtroRol" . $filtroNuevas;
+                  AND {$esIglesiaExpr}
+                  AND $filtroRol" . $filtroNuevas;
 
         $params = [$fechaInicio, $fechaFin];
 
@@ -1812,10 +2115,6 @@ class Persona extends BaseModel {
             $sql .= " AND p.Id_Lider = ?";
             $params[] = (int)$idLider;
         }
-
-        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%célula%')";
-        $esIglesiaExpr = "(NOT {$esCelulaExpr})";
-        $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
 
         if ($origen === 'celula') {
             $sql .= " AND {$esCelulaExpr}";
@@ -1851,13 +2150,13 @@ class Persona extends BaseModel {
                     p.Fecha_Registro,
                     p.Genero,
                     p.Proceso,
-                    COALESCE(c.Nombre_Celula, 'Sin célula') AS Nombre_Celula,
+                    COALESCE(c.Nombre_Celula, 'Sin cÃ©lula') AS Nombre_Celula,
                     COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
-                    COALESCE(CONCAT(lid.Nombre, ' ', lid.Apellido), 'Sin líder') AS Nombre_Lider
+                    COALESCE(CONCAT(l.Nombre, ' ', l.Apellido), 'Sin lÃ­der') AS Nombre_Lider
                 FROM persona p
                 LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
-                LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
+                LEFT JOIN persona l ON p.Id_Lider = l.Id_Persona
                 WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
                 AND $filtroRol" . $filtroNuevas . $filtroGenero;
 
@@ -1881,14 +2180,14 @@ class Persona extends BaseModel {
      * Resumen por ministerio para el reporte de fin de semana anterior.
      * Ganados: domingo con invitador.
      * Asignados: domingo sin invitador.
-     * Por verificar: domingo sin líder asignado.
+     * Por verificar: domingo sin lÃ­der asignado.
      */
     public function getResumenGanadosFinSemanaAnteriorPorMinisterioWithRole($fechaInicio, $fechaFin, $filtroRol, $idMinisterio = '', $idLider = '') {
         $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
         $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
         $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
 
-        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%célula%')";
+        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%cÃ©lula%')";
         $esIglesiaExpr = "(NOT {$esCelulaExpr})";
         $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
 
@@ -1959,7 +2258,7 @@ class Persona extends BaseModel {
         $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
         $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
 
-        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%célula%')";
+        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%cÃ©lula%')";
         $esIglesiaExpr = "(NOT {$esCelulaExpr})";
 
         $sql = "SELECT
@@ -1969,7 +2268,7 @@ class Persona extends BaseModel {
                     p.Fecha_Registro,
                     p.Proceso,
                     COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
-                    COALESCE(c.Nombre_Celula, 'Sin célula') AS Nombre_Celula,
+                    COALESCE(c.Nombre_Celula, 'Sin cÃ©lula') AS Nombre_Celula,
                     TRIM(CONCAT(COALESCE(l.Nombre, ''), ' ', COALESCE(l.Apellido, ''))) AS Nombre_Lider
                 FROM persona p
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
@@ -2039,7 +2338,7 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Obtener miembros activos agrupables por múltiples células
+     * Obtener miembros activos agrupables por mÃºltiples cÃ©lulas
      */
     public function getActivosByCelulaIds(array $celulaIds) {
         $celulaIds = array_values(array_filter(array_map('intval', $celulaIds), function ($id) {
@@ -2062,7 +2361,7 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Obtener miembros activos agrupables por múltiples ministerios
+     * Obtener miembros activos agrupables por mÃºltiples ministerios
      */
     public function getActivosByMinisterioIds(array $ministerioIds, $idRol = null) {
         $ministerioIds = array_values(array_filter(array_map('intval', $ministerioIds), function ($id) {
@@ -2077,13 +2376,13 @@ class Persona extends BaseModel {
 
         $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Numero_Documento, p.Telefono, p.Direccion, p.Genero, p.Id_Ministerio,
                p.Id_Rol, p.Id_Lider, p.Tipo_Reunion, p.Fecha_Registro, p.Proceso, p.Escalera_Checklist, p.Convencion,
-                   c.Nombre_Celula,
-               r.Nombre_Rol,
+               c.Nombre_Celula,
+               r.Nombre_Rol AS Nombre_Rol,
                CONCAT(COALESCE(lid.Nombre, ''), ' ', COALESCE(lid.Apellido, '')) AS Nombre_Lider
                 FROM persona p
                 LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
                 LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
-            LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
+                LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
                 WHERE p.Id_Ministerio IN ($placeholders)
                 AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)";
 
@@ -2094,14 +2393,13 @@ class Persona extends BaseModel {
             $params[] = $idRol;
         }
 
-        $sql .= "
-                ORDER BY p.Id_Ministerio, p.Apellido, p.Nombre";
+        $sql .= " ORDER BY p.Id_Ministerio, p.Apellido, p.Nombre";
 
         return $this->query($sql, $params);
     }
 
     /**
-     * Total de líderes de célula visibles según aislamiento.
+     * Total de lÃ­deres de cÃ©lula visibles segÃºn aislamiento.
      */
     public function getTotalLideresCelulaWithRole($filtroRol) {
         $sql = "SELECT COUNT(*) AS Total
@@ -2125,13 +2423,15 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Resumen de líderes de célula con actividad y cantidad de personas.
+     * Resumen de lÃ­deres de cÃ©lula con actividad y cantidad de personas.
      */
     public function getResumenLideresCelulaWithRole($filtroRol) {
         $sql = "SELECT
                     p.Id_Persona,
+                    p.Numero_Documento,
                     p.Nombre,
                     p.Apellido,
+                    p.Email,
                     p.Genero,
                     p.Telefono,
                     p.Direccion,
@@ -2144,9 +2444,9 @@ class Persona extends BaseModel {
                     CASE WHEN l12r.Id_Persona IS NULL THEN 0 ELSE 1 END AS Es_Lider_12,
                     CASE
                         WHEN cel.Id_Persona IS NOT NULL AND l12r.Id_Persona IS NOT NULL THEN 'Ambos'
-                        WHEN cel.Id_Persona IS NOT NULL THEN 'Líder de célula'
-                        WHEN l12r.Id_Persona IS NOT NULL THEN 'Líder de 12'
-                        ELSE 'Sin clasificación'
+                        WHEN cel.Id_Persona IS NOT NULL THEN 'LÃ­der de cÃ©lula'
+                        WHEN l12r.Id_Persona IS NOT NULL THEN 'LÃ­der de 12'
+                        ELSE 'Sin clasificaciÃ³n'
                     END AS Tipo_Liderazgo,
                     COALESCE(per.Total_Personas, 0) AS Total_Personas,
                     rep.Ultimo_Reporte_Celula
@@ -2188,5 +2488,111 @@ class Persona extends BaseModel {
 
         return $this->query($sql);
     }
+
+    private function construirMapaJerarquiaVisible($filtroRol, $idMinisterio = 0) {
+        $sql = "SELECT p.Id_Persona, p.Id_Lider
+            FROM persona p
+            WHERE (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+            AND $filtroRol";
+
+        $params = [];
+        $idMinisterio = (int)$idMinisterio;
+        if ($idMinisterio > 0) {
+            $sql .= " AND p.Id_Ministerio = ?";
+            $params[] = $idMinisterio;
+        }
+
+        $rows = $this->query($sql, $params);
+
+        $hijosPorLider = [];
+        foreach ($rows as $row) {
+            $idPersona = (int)($row['Id_Persona'] ?? 0);
+            $idLider = (int)($row['Id_Lider'] ?? 0);
+            if ($idPersona <= 0 || $idLider <= 0) {
+                continue;
+            }
+
+            if (!isset($hijosPorLider[$idLider])) {
+                $hijosPorLider[$idLider] = [];
+            }
+            $hijosPorLider[$idLider][] = $idPersona;
+        }
+
+        return $hijosPorLider;
+    }
+
+    private function contarDescendenciaDesdeMapa($idLider, array $hijosPorLider) {
+        $idLider = (int)$idLider;
+        if ($idLider <= 0 || empty($hijosPorLider[$idLider])) {
+            return 0;
+        }
+
+        $visitados = [];
+        $stack = array_values(array_unique(array_map('intval', (array)$hijosPorLider[$idLider])));
+
+        while (!empty($stack)) {
+            $actual = array_pop($stack);
+            if ($actual <= 0 || isset($visitados[$actual])) {
+                continue;
+            }
+
+            $visitados[$actual] = true;
+            if (!empty($hijosPorLider[$actual])) {
+                foreach ((array)$hijosPorLider[$actual] as $hijo) {
+                    $hijo = (int)$hijo;
+                    if ($hijo > 0 && !isset($visitados[$hijo])) {
+                        $stack[] = $hijo;
+                    }
+                }
+            }
+        }
+
+        return count($visitados);
+    }
+
+    public function getResumenRedLideresWithRole(array $idsLideres, $filtroRol, $idMinisterio = 0, $limiteEquipo = 12) {
+        $idsLideres = array_values(array_unique(array_filter(array_map('intval', $idsLideres), static function($id) {
+            return $id > 0;
+        })));
+
+        if (empty($idsLideres)) {
+            return [];
+        }
+
+        $limiteEquipo = max(1, (int)$limiteEquipo);
+        $hijosPorLider = $this->construirMapaJerarquiaVisible($filtroRol, $idMinisterio);
+
+        $resultado = [];
+        foreach ($idsLideres as $idLider) {
+            $equipoDirecto = isset($hijosPorLider[$idLider])
+                ? count(array_unique(array_map('intval', (array)$hijosPorLider[$idLider])))
+                : 0;
+            $redCompleta = $this->contarDescendenciaDesdeMapa($idLider, $hijosPorLider);
+
+            $resultado[$idLider] = [
+                'equipo_directo' => $equipoDirecto,
+                'red_total' => $redCompleta,
+                'limite_equipo' => $limiteEquipo,
+                'cupos_disponibles' => max(0, $limiteEquipo - $equipoDirecto),
+                'cupo_lleno' => $equipoDirecto >= $limiteEquipo,
+            ];
+        }
+
+        return $resultado;
+    }
+
+    public function getConsolidados() {
+        $sql = "SELECT * FROM persona WHERE Id_Lider IS NOT NULL AND Id_Ministerio IS NOT NULL AND Id_Celula IS NOT NULL AND Rol = 'ganar'";
+        return $this->db->query($sql)->fetchAll();
+    }
+
+    public function actualizarRol($idPersona, $nuevoRol) {
+        $sql = "UPDATE persona SET Rol = :nuevoRol WHERE Id_Persona = :idPersona";
+        $stmt = $this->db->prepare($sql);
+        $stmt->bindParam(':nuevoRol', $nuevoRol);
+        $stmt->bindParam(':idPersona', $idPersona);
+        $stmt->execute();
+    }
 }
+
 

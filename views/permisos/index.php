@@ -1,4 +1,25 @@
-﻿<?php require_once VIEWS . '/layout/header.php'; ?>
+﻿<?php require_once APP . '/Helpers/PermisosCatalogo.php'; ?>
+<?php require_once VIEWS . '/layout/header.php'; ?>
+
+<?php
+$catalogo_acciones_modulo = isset($catalogo_acciones_modulo) && is_array($catalogo_acciones_modulo)
+    ? $catalogo_acciones_modulo
+    : [];
+?>
+
+<div class="page-header" style="margin-bottom: 20px;">
+    <h2 style="margin: 0;">Administración</h2>
+</div>
+
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-body">
+        <div class="page-actions personas-mobile-stack" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="<?= PUBLIC_URL ?>index.php?url=cuentas" class="btn btn-nav-pill">Cuentas</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=roles" class="btn btn-nav-pill">Roles</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=permisos" class="btn btn-nav-pill active">Permisos</a>
+        </div>
+    </div>
+</div>
 
 <style>
 /* Pagina de permisos */
@@ -292,6 +313,47 @@
     transition: opacity .3s;
 }
 #perm-toast.error { background: #dc2626; }
+
+.perm-adv-inline {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed #cbd5e1;
+}
+.perm-adv-inline-title {
+    display: block;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+.perm-adv-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    align-items: flex-start;
+}
+.perm-adv-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 8px;
+    align-items: start;
+    max-width: 320px;
+    font-size: 12px;
+    color: #334155;
+}
+.perm-adv-item input {
+    margin-top: 3px;
+}
+.perm-adv-item small {
+    grid-column: 2;
+    display: block;
+    color: #94a3b8;
+    font-size: 10px;
+    line-height: 1.35;
+    margin-top: 1px;
+}
 </style>
 
 <div class="page-header">
@@ -301,6 +363,15 @@
 <div class="perm-page">
 
     <?php $modulosObsoletos = is_array($modulos_obsoletos ?? null) ? $modulos_obsoletos : []; ?>
+    <div class="alert alert-info" style="margin-bottom:16px;font-size:13px;">
+        <strong>Permisos en dos niveles.</strong>
+        Ver / Crear / Editar / Eliminar definen el CRUD habitual del módulo.
+        Las <strong>acciones avanzadas</strong> (bajo el nombre del módulo) permiten afinar funciones concretas
+        (exportar, vistas de un solo programa, etc.). Para guardarlas en base de datos debe existir la columna
+        <code>Acciones_Extra</code>: ejecute una vez el script
+        <code>docs/sql/2026-05-15_permisos_acciones_extra.sql</code>.
+        En código, use <code>AuthController::tienePermiso('modulo', 'clave_accion')</code> con la clave indicada en cada casilla.
+    </div>
     <div class="alert alert-secondary" style="margin-bottom:16px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
             <div>
@@ -331,8 +402,8 @@
     <!-- Aviso roles con acceso total -->
     <div class="alert alert-warning" style="margin-bottom:18px; font-size:13px;">
         <i class="bi bi-shield-fill-exclamation"></i>
-        El rol <strong>Administrador</strong> se mantiene protegido por el sistema.<br>
-        En los demas roles, los checks de esta pantalla definen la visibilidad real de cada modulo.
+        El rol con ID fijo <strong>6</strong> o cuyo nombre es explícitamente <strong>Administrador</strong> (palabra completa) queda protegido y no se puede editar aquí.<br>
+        El resto de roles —incluidos coordinadores de Universidad de la Vida u otros— se configuran con los checks de esta pantalla.
     </div>
 
     <div class="perm-view-switch" role="tablist" aria-label="Vista de permisos">
@@ -370,8 +441,7 @@
     <?php
     $rolesProtegidos = [];
     foreach ($roles as $r) {
-        $rn = strtolower(trim(strtr($r['Nombre_Rol'], ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ñ'=>'n'])));
-        if ((int)$r['Id_Rol'] === 6 || strpos($rn, 'admin') !== false) {
+        if (PermisosCatalogo::esRolProtegidoPermisos((int)$r['Id_Rol'], (string)($r['Nombre_Rol'] ?? ''))) {
             $rolesProtegidos[] = (int)$r['Id_Rol'];
         }
     }
@@ -380,6 +450,7 @@
     $gruposModulos = [
         'Principal' => [
             'personas'         => ['Personas',         'Permisos generales del modulo (listado y CRUD principal).'],
+            'personas_consulta' => ['Personas: solo consulta', 'Ver Discipulos, Universidad de la Vida y fichas; sin menu lateral Ganar-Consolidar ni pestaña Almas ganadas. Si el rol tiene Programas (UV o Cap. Destino) pero no el modulo Personas completo, el panel Personas del inicio se oculta y se entra por Programas.'],
             'personas_formulario_publico' => ['Personas: Formulario publico', 'Controla la visibilidad del boton Formulario publico en Personas.'],
             'personas_plantillas_whatsapp' => ['Personas: Plantillas WhatsApp', 'Controla acceso a Plantillas WhatsApp de Personas.'],
             'personas_ganar_asignados' => ['Pendiente: Atajo Asignados', 'Controla la visibilidad del atajo Asignados en Pendiente por consolidar.'],
@@ -396,12 +467,15 @@
             'escuelas_formacion_editar_fechas' => ['Escuelas: Editar fechas de clases', 'Permite editar fechas de clases en la matriz de Escuelas'],
             'discipular_evaluaciones' => ['Discipular: Evaluaciones', 'Controla acceso para ver y resolver evaluaciones, y CRUD segun permiso por rol.'],
             'discipular_evaluaciones_fechas' => ['Discipular: Configurar fechas de evaluaciones', 'Permite definir las fechas en las que cada evaluacion estara habilitada para alumnos.'],
+            'programas' => ['Programas (consolidado)', 'Menu Programas y registro consolidado. El CRUD limita acciones globales; use acciones avanzadas para UV vs Capacitacion Destino.'],
         ],
         'Material' => [
+            'material' => ['Material (panel inicio)', 'Tarjeta del inicio y acceso a home/material. Si desmarcas solo esto, quien tenga solo «Material: Universidad de la Vida» podrá seguir abriendo documentos desde Programas (enlace Material U.V), pero no verá el centro general. Para ocultar todo el material UV, desactiva también ese submódulo.'],
             'materiales_celulas' => ['Material: Celulas', 'Submodulo de material para celulas (permiso dedicado).'],
             'teen' => ['Material: Teens', 'Submodulo de material Teens (permiso dedicado).'],
             'material_universidad_vida' => ['Material: Universidad de la Vida', 'Submodulo independiente de material para Universidad de la Vida.'],
             'material_capacitacion_destino' => ['Material: Capacitacion Destino', 'Submodulo independiente de material para Capacitacion Destino.'],
+            'material_capacitacion_destino_subir' => ['Material: Capacitacion Destino (Subir archivos)', 'Define quien puede subir archivos en Capacitacion Destino sin abrir todo el CRUD del modulo.'],
         ],
         'Obsequios' => [
             'entrega_obsequio'   => ['Entrega de Obsequios',  'Registrar entrega de obsequios'],
@@ -487,11 +561,37 @@
                     $pCre  = $permiso ? (int)$permiso['Puede_Crear']  : 0;
                     $pEdi  = $permiso ? (int)$permiso['Puede_Editar'] : 0;
                     $pEli  = $permiso ? (int)$permiso['Puede_Eliminar']:0;
+                    $advActions = $catalogo_acciones_modulo[$mk] ?? [];
+                    $extrasMap = $permiso ? PermisosCatalogo::mapaDesdeFila((array)$permiso) : [];
                 ?>
                 <tr>
                     <td class="perm-name">
                         <?= htmlspecialchars($mnombre) ?>
                         <small><?= htmlspecialchars($mdesc) ?></small>
+                        <?php if (!empty($advActions)): ?>
+                        <div class="perm-adv-inline">
+                            <span class="perm-adv-inline-title">Acciones avanzadas</span>
+                            <div class="perm-adv-wrap">
+                                <?php foreach ($advActions as $ak => $meta):
+                                    $pAdv = !empty($extrasMap[$ak]);
+                                    $ml = (string)($meta['label'] ?? $ak);
+                                    $md = (string)($meta['descripcion'] ?? '');
+                                ?>
+                                <label class="perm-adv-item">
+                                    <input type="checkbox"
+                                        class="perm-cb permiso-check"
+                                        data-rol="<?= $idRol ?>"
+                                        data-modulo="<?= htmlspecialchars((string)$mk, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-campo="<?= htmlspecialchars('extra:' . $ak, ENT_QUOTES, 'UTF-8') ?>"
+                                        title="<?= htmlspecialchars($ml . ' — ' . $md, ENT_QUOTES, 'UTF-8') ?>"
+                                        <?= $pAdv ? 'checked' : '' ?>
+                                        <?= $esRolProtegido ? 'disabled' : '' ?>>
+                                    <span><strong><?= htmlspecialchars($ml) ?></strong><small><?= htmlspecialchars($md) ?></small></span>
+                                </label>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     </td>
                     <?php foreach ([
                         ['puede_ver',      $pVer, 'Ver'],
@@ -527,11 +627,37 @@
                     $pCre  = $permiso ? (int)$permiso['Puede_Crear']  : 0;
                     $pEdi  = $permiso ? (int)$permiso['Puede_Editar'] : 0;
                     $pEli  = $permiso ? (int)$permiso['Puede_Eliminar']:0;
+                    $advActions = $catalogo_acciones_modulo[$mk] ?? [];
+                    $extrasMap = $permiso ? PermisosCatalogo::mapaDesdeFila((array)$permiso) : [];
                 ?>
                 <tr>
                     <td class="perm-name">
                         <?= htmlspecialchars((string)$mnombre) ?>
                         <small>Modulo detectado automaticamente en BD o codigo.</small>
+                        <?php if (!empty($advActions)): ?>
+                        <div class="perm-adv-inline">
+                            <span class="perm-adv-inline-title">Acciones avanzadas</span>
+                            <div class="perm-adv-wrap">
+                                <?php foreach ($advActions as $ak => $meta):
+                                    $pAdv = !empty($extrasMap[$ak]);
+                                    $ml = (string)($meta['label'] ?? $ak);
+                                    $md = (string)($meta['descripcion'] ?? '');
+                                ?>
+                                <label class="perm-adv-item">
+                                    <input type="checkbox"
+                                        class="perm-cb permiso-check"
+                                        data-rol="<?= $idRol ?>"
+                                        data-modulo="<?= htmlspecialchars((string)$mk, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-campo="<?= htmlspecialchars('extra:' . $ak, ENT_QUOTES, 'UTF-8') ?>"
+                                        title="<?= htmlspecialchars($ml . ' — ' . $md, ENT_QUOTES, 'UTF-8') ?>"
+                                        <?= $pAdv ? 'checked' : '' ?>
+                                        <?= $esRolProtegido ? 'disabled' : '' ?>>
+                                    <span><strong><?= htmlspecialchars($ml) ?></strong><small><?= htmlspecialchars($md) ?></small></span>
+                                </label>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     </td>
                     <?php foreach ([
                         ['puede_ver',      $pVer, 'Ver'],
@@ -598,6 +724,9 @@
                             <td>
                                 <strong><?= htmlspecialchars((string)$mnombre) ?></strong>
                                 <div class="perm-role-total"><?= htmlspecialchars((string)$mdesc) ?></div>
+                                <div class="perm-role-total" style="margin-top:8px;font-style:italic;color:#64748b;">
+                                    Las acciones avanzadas (exportar, sub-módulos, etc.) se gestionan en la vista <strong>Por rol</strong>.
+                                </div>
                             </td>
                             <?php foreach ($roles as $rolCol):
                                 $idRolCol = (int)($rolCol['Id_Rol'] ?? 0);
@@ -675,6 +804,9 @@
                             <td>
                                 <strong><?= htmlspecialchars((string)$mnombre) ?></strong>
                                 <div class="perm-role-total">Módulo detectado automáticamente.</div>
+                                <div class="perm-role-total" style="margin-top:8px;font-style:italic;color:#64748b;">
+                                    Acciones avanzadas: vista <strong>Por rol</strong>.
+                                </div>
                             </td>
                             <?php foreach ($roles as $rolCol):
                                 $idRolCol = (int)($rolCol['Id_Rol'] ?? 0);

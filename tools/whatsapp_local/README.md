@@ -89,6 +89,14 @@ powershell -ExecutionPolicy Bypass -File .\uninstall_autostart_task.ps1
 - enviado: entrega confirmada por cliente WhatsApp.
 - fallido: envío falló, revisar ultimo_error.
 
+### Prioridad entre pendientes listos para enviar
+
+Si hay varios registros pendientes (hora `programado_en` ya vencida o sin programar), el worker los ordena así antes del FIFO (`id`):
+
+1. **Capacitación Destino** — `mensaje_capacitacion_destino` (al registrarse en el formulario público CD) y `programacion_mensaje_capacitacion_destino` (campaña programada desde Plantillas WhatsApp). En PHP, los destinatarios de esa plantilla solo son personas con inscripción en programas CD (`PersonaController::obtenerDestinatariosCampanaWhatsapp`).
+2. **Cumpleaños** — `felicitacion_cumpleanos`.
+3. **Resto** — bienvenidas, asignaciones, Universidad de la Vida, etc.
+
 ## 6) Origen de mensajes automáticos
 
 Los mensajes se encolan desde PersonaController en estos eventos:
@@ -117,3 +125,30 @@ Para evitar que salgan todos los mensajes de una vez, el worker aplica una pausa
 	- `WA_DELAY_MIN_MS=60000`
 	- `WA_DELAY_MAX_MS=180000`
 - Si prefieres tiempo fijo, puedes usar `WA_DELAY_MS` (compatibilidad), por ejemplo `WA_DELAY_MS=120000`.
+
+## 9) Zona horaria y antigüedad de la cola
+
+- Al abrir cada conexión MySQL el worker ejecuta `SET time_zone = '-05:00'` (Colombia) para que `NOW()` coincida con la hora usada al programar campañas. Desactivar: `WA_DB_SET_TIMEZONE=0`. Otro offset SQL: `WA_DB_TIME_ZONE_SQL=SET time_zone = '+00:00'`.
+- Los pendientes **sin** `programado_en` se envían en cuanto el worker pueda (no solo si fueron creados "hoy"), para evitar mensajes huérfanos si la PC estuvo apagada.
+- Los pendientes **con** `programado_en` se envían cuando `programado_en <= NOW()`, aunque el worker fallara el día anterior.
+- Mensajes muy antiguos se ignoran tras `WA_QUEUE_MAX_AGE_DAYS` (por defecto **45** días) para no vaciar colas abandonadas sin revisión.
+
+## 10) Después de actualizar `worker.js`: reinicio y revisión
+
+1. **Reinicio rápido (PowerShell)** desde esta carpeta:
+
+```powershell
+cd C:\xampp\htdocs\mcimadrid\tools\whatsapp_local
+powershell -ExecutionPolicy Bypass -File .\restart_worker.ps1
+```
+
+Si no usaste la tarea programada, el script corta los `node.exe` que ejecuten `worker.js` en `whatsapp_local` y te indica que abras `01_INICIAR_WHATSAPP.cmd` o `npm start`.
+
+2. **Cola en MySQL**: abre `consultas_cola_whatsapp.sql` en phpMyAdmin (u otro cliente) contra la misma base que usa el `.env` del worker. Ahí tienes resumen por estado, pendientes, fallidos y futuros programados.
+
+3. **Logs locales**:
+
+```powershell
+Get-Content .\logs\worker.log -Tail 50
+Get-Content .\logs\autostart.log -Tail 30
+```

@@ -16,7 +16,8 @@ class WhatsappMensajeTemplate extends BaseModel {
 
 {universidad_vida_info}
 
-📚 Accede aquí: {url_universidad_vida}'
+📚 Accede aquí: {url_universidad_vida}',
+        'mensaje_capacitacion_destino' => 'Hola {persona_nombre}, te compartimos la información de Capacitación Destino.\n\n🎯 Revisa módulos, lecciones y materiales aquí:\n{url_capacitacion_destino}'
     ];
 
     public function __construct() {
@@ -37,6 +38,7 @@ class WhatsappMensajeTemplate extends BaseModel {
         $this->execute($sql);
         $this->asegurarColumna('media_url', "ALTER TABLE {$this->table} ADD COLUMN media_url VARCHAR(500) NULL AFTER plantilla");
         $this->asegurarColumna('media_tipo', "ALTER TABLE {$this->table} ADD COLUMN media_tipo VARCHAR(20) NULL AFTER media_url");
+        $this->asegurarColumna('dias_envio_campana', "ALTER TABLE {$this->table} ADD COLUMN dias_envio_campana VARCHAR(64) NULL COMMENT 'Días 1-7 ISO (lun-dom) para programar masivos UV/CD, vacío=cualquier día' AFTER media_tipo");
     }
 
     private function asegurarColumna($columna, $sqlAlter) {
@@ -64,14 +66,15 @@ class WhatsappMensajeTemplate extends BaseModel {
     }
 
     public function getPlantillas() {
-        $rows = $this->query("SELECT clave, plantilla, media_url, media_tipo FROM {$this->table}");
+        $rows = $this->query("SELECT clave, plantilla, media_url, media_tipo, dias_envio_campana FROM {$this->table}");
         $resultado = [];
 
         foreach ($this->defaults as $clave => $plantillaDefault) {
             $resultado[$clave] = [
                 'plantilla' => $plantillaDefault,
                 'media_url' => null,
-                'media_tipo' => null
+                'media_tipo' => null,
+                'dias_envio_campana' => '',
             ];
         }
 
@@ -82,13 +85,15 @@ class WhatsappMensajeTemplate extends BaseModel {
                     $resultado[$clave] = [
                         'plantilla' => '',
                         'media_url' => null,
-                        'media_tipo' => null
+                        'media_tipo' => null,
+                        'dias_envio_campana' => '',
                     ];
                 }
 
                 $resultado[$clave]['plantilla'] = (string)($row['plantilla'] ?? '');
                 $resultado[$clave]['media_url'] = !empty($row['media_url']) ? (string)$row['media_url'] : null;
                 $resultado[$clave]['media_tipo'] = !empty($row['media_tipo']) ? (string)$row['media_tipo'] : null;
+                $resultado[$clave]['dias_envio_campana'] = trim((string)($row['dias_envio_campana'] ?? ''));
             }
         }
 
@@ -134,6 +139,40 @@ class WhatsappMensajeTemplate extends BaseModel {
         );
     }
 
+    /**
+     * Días ISO 1=lunes … 7=domingo, separados por coma. Solo aplica a campañas programadas UV/CD.
+     * Cadena vacía = permitir cualquier día.
+     */
+    public function actualizarDiasEnvioCampana($clave, $csvDias) {
+        if (!isset($this->defaults[$clave])) {
+            return false;
+        }
+        $csvDias = trim((string)$csvDias);
+        if ($csvDias === '') {
+            return $this->execute(
+                "UPDATE {$this->table} SET dias_envio_campana = NULL WHERE clave = ?",
+                [$clave]
+            );
+        }
+
+        $partes = array_filter(array_map('intval', explode(',', $csvDias)));
+        $partes = array_values(array_unique(array_filter($partes, static function ($n) {
+            return $n >= 1 && $n <= 7;
+        })));
+        sort($partes);
+        if (empty($partes)) {
+            return $this->execute(
+                "UPDATE {$this->table} SET dias_envio_campana = NULL WHERE clave = ?",
+                [$clave]
+            );
+        }
+
+        return $this->execute(
+            "UPDATE {$this->table} SET dias_envio_campana = ? WHERE clave = ?",
+            [implode(',', $partes), $clave]
+        );
+    }
+
     public function render($clave, array $vars = []) {
         $plantillas = $this->getPlantillas();
         $template = (string)($plantillas[$clave]['plantilla'] ?? ($this->defaults[$clave] ?? ''));
@@ -175,7 +214,8 @@ class WhatsappMensajeTemplate extends BaseModel {
             '{fecha_hoy}',
             '{universidad_vida_info}',
             '{url_peticiones}',
-            '{url_universidad_vida}'
+            '{url_universidad_vida}',
+            '{url_capacitacion_destino}'
         ];
     }
 }

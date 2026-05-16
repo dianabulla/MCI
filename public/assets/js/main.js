@@ -8,9 +8,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const appShell = document.querySelector('.app-shell');
     const sidebarToggle = document.getElementById('sidebarToggle');
     const sidebarArrowToggle = document.getElementById('sidebarArrowToggle');
+    const quickAccessToggle = document.getElementById('quickAccessToggle');
+    const quickAccessModules = document.getElementById('quickAccessModules');
     const accountMenuToggle = document.getElementById('accountMenuToggle');
     const accountSwitchMenu = document.getElementById('accountSwitchMenu');
     const sidebarStateKey = 'mci.sidebarCollapsed';
+    const quickAccessStateKey = 'mci.quickAccessCollapsed';
 
     function syncSidebarToggleUi(collapsed) {
         if (!sidebarArrowToggle) {
@@ -60,6 +63,36 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function setQuickAccessCollapsed(collapsed) {
+        if (!quickAccessToggle || !quickAccessModules) {
+            return;
+        }
+
+        quickAccessModules.hidden = collapsed;
+        quickAccessToggle.classList.toggle('is-open', !collapsed);
+        quickAccessToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    }
+
+    function getStoredQuickAccessState() {
+        try {
+            const value = localStorage.getItem(quickAccessStateKey);
+            if (value === null) {
+                return true;
+            }
+            return value === '1';
+        } catch (error) {
+            return true;
+        }
+    }
+
+    function saveQuickAccessState(collapsed) {
+        try {
+            localStorage.setItem(quickAccessStateKey, collapsed ? '1' : '0');
+        } catch (error) {
+            // Ignorar fallos de almacenamiento
+        }
+    }
+
     function isMobileTopMenu() {
         return window.matchMedia('(max-width: 980px)').matches;
     }
@@ -70,6 +103,17 @@ document.addEventListener('DOMContentLoaded', function() {
         saveSidebarState(true);
     } else {
         setSidebarCollapsed(initialCollapsed);
+    }
+
+    if (quickAccessToggle && quickAccessModules) {
+        const quickAccessCollapsed = getStoredQuickAccessState();
+        setQuickAccessCollapsed(quickAccessCollapsed);
+
+        quickAccessToggle.addEventListener('click', function() {
+            const collapsed = !quickAccessModules.hidden;
+            setQuickAccessCollapsed(collapsed);
+            saveQuickAccessState(collapsed);
+        });
     }
 
     window.addEventListener('resize', function() {

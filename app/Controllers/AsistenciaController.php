@@ -266,7 +266,7 @@ class AsistenciaController extends BaseController {
             'filtro_lider_actual' => (string)$filtroLider,
             'filtro_celula_actual' => (string)$filtroCelula,
             'filtro_reporte_actual' => (string)$filtroReporte,
-            'puede_marcar_entrego_sobre' => AuthController::esAdministrador()
+            'puede_marcar_entrego_sobre' => DataIsolation::tieneAccesoTotal()
         ]);
     }
 
@@ -275,7 +275,7 @@ class AsistenciaController extends BaseController {
             $this->json(['success' => false, 'error' => 'Metodo no permitido'], 405);
         }
 
-        if (!AuthController::esAdministrador()) {
+        if (!DataIsolation::tieneAccesoTotal()) {
             $this->json(['success' => false, 'error' => 'No autorizado'], 403);
         }
 

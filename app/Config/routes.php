@@ -12,6 +12,8 @@ return [
     'auth/cambiar-usuario' => 'AuthController@cambiarUsuario',
     'auth/siguiente-cuenta' => 'AuthController@siguienteCuenta',
     'auth/mi-cuenta' => 'AuthController@miCuenta',
+    'auth/selector-contexto' => 'AuthController@selectorContexto',
+    'auth/seleccionar-contexto' => 'AuthController@seleccionarContexto',
     'auth/acceso-denegado' => 'AuthController@accesoDenegado',
     
     // Home
@@ -27,10 +29,17 @@ return [
     'home/consolidar' => 'HomeController@consolidar',
     'home/consolidar/asistencias' => 'HomeController@consolidarAsistencias',
     'home/consolidar/exportar' => 'HomeController@exportarConsolidar',
-    'home/discipular' => 'HomeController@discipular',
-    'home/discipular/asistencias' => 'HomeController@discipularAsistencias',
-    'home/discipular/exportar' => 'HomeController@exportarDiscipular',
-    'home/discipular/evaluaciones' => 'DiscipularEvaluacionController@index',
+    'home/guardar-asistencia-clase' => 'HomeController@guardarAsistenciaClase',
+    'programas' => 'HomeController@programas',
+    'programas/consolidar' => 'HomeController@programasConsolidar',
+    'programas/asistencias' => 'HomeController@programasAsistencias',
+    'programas/consolidar/asistencias' => 'HomeController@programasConsolidarAsistencias',
+    'programas/exportar' => 'HomeController@programasExportar',
+    'programas/consolidar/exportar' => 'HomeController@programasConsolidarExportar',
+    'programas/evaluaciones' => 'DiscipularEvaluacionController@index',
+    'programas/tareas' => 'DiscipularEvaluacionController@tareas',
+
+    'programas/ir-clase' => 'DiscipularEvaluacionController@irClase',
     'home/escuelas-formacion' => 'HomeController@escuelasFormacion',
     'home/escuelas-formacion/exportar' => 'HomeController@exportarEscuelasFormacion',
     'home/escuelas-formacion/actualizar-estado' => 'HomeController@actualizarEstadoEscuelaFormacion',
@@ -51,6 +60,7 @@ return [
     'personas/reasignarMinisterioGanar' => 'PersonaController@reasignarMinisterioGanar',
     'personas/plantillas-whatsapp' => 'PersonaController@plantillasWhatsapp',
     'personas/plantillas-whatsapp/programar' => 'PersonaController@programarPlantillaWhatsapp',
+    'personas/whatsapp/bandeja' => 'PersonaController@bandejaWhatsapp',
     'personas/crear' => 'PersonaController@crear',
     'personas/editar' => 'PersonaController@editar',
     'personas/detalle' => 'PersonaController@detalle',
@@ -89,27 +99,27 @@ return [
     'teen/eliminar' => 'TeenController@eliminar',
     'teen/detalleVistas' => 'TeenController@detalleVistas',
     
-    // Ministerios
-    'ministerios' => 'MinisterioController@index',
-    'ministerios/crear' => 'MinisterioController@crear',
-    'ministerios/editar' => 'MinisterioController@editar',
-    'ministerios/actualizarMeta' => 'MinisterioController@actualizarMeta',
-    'ministerios/lideres' => 'MinisterioController@lideres',
-    'ministerios/equipo-principal' => 'MinisterioController@equipoPrincipal',
-    'ministerios/equipo-12' => 'MinisterioController@equipo12',
-    'ministerios/lideres-celula' => 'MinisterioController@lideresCelula',
-    'ministerios/eliminar' => 'MinisterioController@eliminar',
-    'ministerios/exportarExcel' => 'MinisterioController@exportarExcel',
+    // Ministerios (Dentro de Discipular)
+    'discipular/ministerios' => 'MinisterioController@index',
+    'discipular/ministerios/crear' => 'MinisterioController@crear',
+    'discipular/ministerios/editar' => 'MinisterioController@editar',
+    'discipular/ministerios/actualizarMeta' => 'MinisterioController@actualizarMeta',
+    'discipular/ministerios/actualizar-lideres-principales' => 'MinisterioController@actualizarLideresPrincipales',
+    'discipular/ministerios/lideres' => 'MinisterioController@lideres',
+    'discipular/ministerios/equipo-principal' => 'MinisterioController@equipoPrincipal',
+    'discipular/ministerios/equipo-12' => 'MinisterioController@equipo12',
+    'discipular/ministerios/lideres-celula' => 'MinisterioController@lideresCelula',
+    'discipular/ministerios/validar-cupo-lider' => 'MinisterioController@validarCupoLider',
+    'discipular/ministerios/asignar-cupo' => 'MinisterioController@asignarCupo',
+    'discipular/ministerios/reasignar-cupo' => 'MinisterioController@reasignarCupo',
+    'discipular/ministerios/eliminar' => 'MinisterioController@eliminar',
+    'discipular/ministerios/exportarExcel' => 'MinisterioController@exportarExcel',
 
     // Cuentas
     'cuentas' => 'CuentaController@index',
     'cuentas/crear' => 'CuentaController@crear',
     'cuentas/editar' => 'CuentaController@editar',
-    'cuentas/editar' => 'CuentaController@editar',
-    'cuentas/crear' => 'CuentaController@crear',
-
-    // Cuentas
-    'cuentas' => 'CuentaController@index',
+    'cuentas/asignar-segundo-rol' => 'CuentaController@asignarSegundoRol',
     
     // Roles
     'roles' => 'RolController@index',
@@ -161,6 +171,8 @@ return [
     'reportes' => 'ReporteController@index',
     'reportes/ministerial' => 'ReporteController@ministerial',
     'reportes/dashboard-ganar' => 'ReporteController@dashboardGanar',
+    'reportes/dashboard-escuelas-uv' => 'ReporteController@dashboardEscuelasUniversidadVida',
+    'reportes/dashboard-escuelas-capacitacion' => 'ReporteController@dashboardEscuelasCapacitacionDestino',
     'reportes/almasGanadas' => 'ReporteController@almasGanadas',
     'reportes/asistenciaCelulas' => 'ReporteController@asistenciaCelulas',
     'reportes/exportarExcel' => 'ReporteController@exportarExcel',
@@ -186,7 +198,8 @@ return [
     'registro_personas/guardar' => 'RegistroPersonaController@guardar',
 
     // Escuelas de Formación (Público - No requiere autenticación)
-    'escuelas_formacion/registro-publico' => 'EscuelaFormacionRegistroController@index',
+    'escuelas_formacion/registro-publico/universidad-vida' => 'EscuelaFormacionRegistroController@registroPublicoUniversidadVida',
+    'escuelas_formacion/registro-publico/capacitacion-destino' => 'EscuelaFormacionRegistroController@registroPublicoCapacitacionDestino',
     'escuelas_formacion/codigos' => 'EscuelaFormacionRegistroController@codigos',
     'escuelas_formacion/registro-publico/buscar-persona' => 'EscuelaFormacionRegistroController@buscarPersona',
     'escuelas_formacion/registro-publico/buscar-lideres' => 'EscuelaFormacionRegistroController@buscarLideres',
@@ -196,6 +209,11 @@ return [
     'escuelas_formacion/pagos' => 'EscuelaFormacionRegistroController@pagos',
     'escuelas_formacion/pagos/consolidar' => 'EscuelaFormacionRegistroController@pagosConsolidar',
     'escuelas_formacion/pagos/enviar' => 'EscuelaFormacionRegistroController@pagosEnviar',
+    'escuelas_formacion/abonos/universidad-vida' => 'EscuelaFormacionRegistroController@abonosUniversidadVida',
+    'escuelas_formacion/abonos/universidad-vida/guardar' => 'EscuelaFormacionRegistroController@guardarAbonosUniversidadVida',
+    'escuelas_formacion/inscritos' => 'EscuelaFormacionRegistroController@listadoInscritos',
+    'escuelas_formacion/inscritos/guardar-asistencia' => 'EscuelaFormacionRegistroController@guardarAsistenciaClase',
+    'escuelas_formacion/inscritos/abono-admin' => 'EscuelaFormacionRegistroController@abonoAdminPreauth',
     'escuelas_formacion/asistencia-publica' => 'EscuelaFormacionRegistroController@asistenciaPublica',
     'escuelas_formacion/asistencia-publica/buscar' => 'EscuelaFormacionRegistroController@buscarAsistenciaPublica',
     'escuelas_formacion/asistencia-publica/guardar' => 'EscuelaFormacionRegistroController@guardarAsistenciaPublica',
@@ -249,4 +267,5 @@ return [
     
     // Transmisiones YouTube (Público - No requiere autenticación)
     'transmisiones-publico' => 'TransmisionController@verPublico',
+    'discipular/migrar-consolidados' => 'EscuelaFormacionRegistroController@migrarConsolidadosADiscipular',
 ];

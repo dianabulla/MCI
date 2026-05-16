@@ -4,22 +4,23 @@
 $cardsDashboard = [];
 $esDiscipuloSoloDiscipular = AuthController::esRolDiscipuloUsuario()
     && !AuthController::esAdministrador();
+$esContextoMaestro = AuthController::getActiveContext() === 'maestro';
 
 if ($esDiscipuloSoloDiscipular) {
     $cardsDashboard[] = [
-        'titulo' => 'Evaluaciones y Clases',
+        'titulo' => 'Discipular',
         'subtitulo' => 'Formacion y crecimiento',
         'valor' => (int)($totalDiscipular ?? 0),
-        'accion' => 'Ver evaluaciones',
-        'href' => PUBLIC_URL . '?url=home/discipular/evaluaciones',
+        'accion' => 'Ver modulo',
+        'href' => PUBLIC_URL . '?url=programas/evaluaciones',
         'icono' => 'bi-journal-richtext',
         'clase' => 'discipular',
     ];
 }
 
-if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver'))) {
+if (!$esDiscipuloSoloDiscipular && AuthController::puedeVerModuloPersonasGanar()) {
     $cardsDashboard[] = [
-        'titulo' => 'Ganar',
+        'titulo' => 'Ganar-Consolidar',
         'subtitulo' => 'Almas nuevas y primer contacto',
         'valor' => (int)($totalPersonas ?? 0),
         'accion' => 'Ver todas',
@@ -29,36 +30,42 @@ if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthCon
     ];
 
     $cardsDashboard[] = [
-        'titulo' => 'Consolidar',
-        'subtitulo' => 'Seguimiento y afirmacion',
-        'valor' => (int)($totalConsolidar ?? 0),
-        'accion' => 'Ver modulo',
-        'href' => PUBLIC_URL . '?url=home/consolidar',
-        'icono' => 'bi-people-fill',
-        'clase' => 'consolidar',
-    ];
-
-    $cardsDashboard[] = [
         'titulo' => 'Discipular',
         'subtitulo' => 'Formacion y crecimiento',
         'valor' => (int)($totalDiscipular ?? 0),
         'accion' => 'Ver modulo',
-        'href' => PUBLIC_URL . '?url=home/discipular',
+        'href' => PUBLIC_URL . '?url=discipular/ministerios/equipo-principal',
         'icono' => 'bi-journal-richtext',
         'clase' => 'discipular',
     ];
 }
 
 if (!$esDiscipuloSoloDiscipular
+    && AuthController::puedeVerPersonasConsulta()
+    && !AuthController::puedeVerModuloPersonasGanar()
+    && !AuthController::debeUsarSoloVistaProgramasPersonas()) {
+    $cardsDashboard[] = [
+        'titulo' => 'Personas',
+        'subtitulo' => 'Consulta de discipulos y listados',
+        'valor' => (int)($totalPersonas ?? 0),
+        'accion' => 'Abrir listado',
+        'href' => PUBLIC_URL . '?url=personas',
+        'icono' => 'bi-people',
+        'clase' => 'personas-consulta',
+    ];
+}
+
+if (!$esDiscipuloSoloDiscipular
+    && !$esContextoMaestro
     && !AuthController::esAdministrador()
     && !AuthController::tienePermiso('personas', 'ver')
     && AuthController::tienePermiso('discipular_evaluaciones', 'ver')) {
     $cardsDashboard[] = [
-        'titulo' => 'Evaluaciones y Clases',
+        'titulo' => 'Discipular',
         'subtitulo' => 'Formacion y crecimiento',
         'valor' => (int)($totalDiscipular ?? 0),
-        'accion' => 'Ver evaluaciones',
-        'href' => PUBLIC_URL . '?url=home/discipular/evaluaciones',
+        'accion' => 'Ver modulo',
+        'href' => PUBLIC_URL . '?url=programas/evaluaciones',
         'icono' => 'bi-journal-richtext',
         'clase' => 'discipular',
     ];
@@ -76,45 +83,35 @@ if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthCon
     ];
 }
 
-if (!$esDiscipuloSoloDiscipular && (
-    AuthController::esAdministrador()
-    || AuthController::tienePermiso('materiales_celulas', 'ver')
-    || AuthController::tienePermiso('teen', 'ver')
-    || AuthController::tienePermiso('material_universidad_vida', 'ver')
-    || AuthController::tienePermiso('material_capacitacion_destino', 'ver')
-)) {
-    $cardsDashboard[] = [
-        'titulo' => 'Material',
-        'subtitulo' => 'Recursos para servir mejor',
-        'valor_html' => '<i class="bi bi-book-half"></i>',
-        'accion' => 'Abrir materiales',
-        'href' => PUBLIC_URL . '?url=home/material',
-        'icono' => 'bi-book-half',
-        'clase' => 'material',
-    ];
-}
-
-if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'ver'))) {
-    $cardsDashboard[] = [
-        'titulo' => 'Ministerios',
-        'subtitulo' => 'Areas activas de servicio',
-        'valor' => (int)($totalMinisterios ?? 0),
-        'accion' => 'Ver todos',
-        'href' => PUBLIC_URL . '?url=ministerios',
-        'icono' => 'bi-bank2',
-        'clase' => 'ministerios',
-    ];
-}
-
 if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::tienePermiso('teen', 'ver'))) {
     $cardsDashboard[] = [
-        'titulo' => 'Registro Teens y Kids',
+        'titulo' => 'Teens',
         'subtitulo' => 'Acompanamiento de nuevas generaciones',
         'valor_html' => '<i class="bi bi-balloon-heart"></i>',
         'accion' => 'Abrir registro',
         'href' => PUBLIC_URL . '?url=teen/registro-menores',
         'icono' => 'bi-balloon-heart',
         'clase' => 'teens',
+    ];
+}
+
+if (!$esDiscipuloSoloDiscipular
+    && !$esContextoMaestro
+    && (
+        AuthController::esAdministrador()
+        || AuthController::tienePermiso('programas', 'ver')
+        || AuthController::tienePermiso('personas_consulta', 'ver')
+        || AuthController::tienePermiso('programas', 'ver_universidad_vida')
+        || AuthController::tienePermiso('programas', 'ver_capacitacion_destino')
+    )) {
+    $cardsDashboard[] = [
+        'titulo' => 'Programas',
+        'subtitulo' => 'Universidad de la Vida y Capacitación Destino',
+        'valor_html' => '<i class="bi bi-mortarboard"></i>',
+        'accion' => 'Ver programas',
+        'href' => PUBLIC_URL . '?url=programas',
+        'icono' => 'bi-mortarboard',
+        'clase' => 'programas',
     ];
 }
 ?>
@@ -125,7 +122,7 @@ if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthCon
 
 <div class="dashboard-grid home-dashboard-grid">
     <?php foreach ($cardsDashboard as $card): ?>
-    <div class="dashboard-card home-dashboard-card home-dashboard-card--<?= htmlspecialchars((string)$card['clase']) ?>">
+    <a href="<?= htmlspecialchars((string)$card['href']) ?>" class="dashboard-card home-dashboard-card home-dashboard-card-link home-dashboard-card--<?= htmlspecialchars((string)$card['clase']) ?>">
         <div class="home-dashboard-head">
             <span class="home-dashboard-avatar">
                 <i class="bi <?= htmlspecialchars((string)$card['icono']) ?>"></i>
@@ -142,8 +139,8 @@ if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthCon
                 <?= (int)($card['valor'] ?? 0) ?>
             <?php endif; ?>
         </div>
-        <a href="<?= htmlspecialchars((string)$card['href']) ?>" class="btn btn-primary btn-sm"><?= htmlspecialchars((string)$card['accion']) ?></a>
-    </div>
+        <span class="home-dashboard-cta"><?= htmlspecialchars((string)$card['accion']) ?></span>
+    </a>
     <?php endforeach; ?>
 </div>
 
@@ -174,15 +171,7 @@ if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthCon
 <?php endif; ?>
 
 <style>
-.home-dashboard-grid {
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 18px;
-}
-
 .home-dashboard-card {
-    position: relative;
-    overflow: hidden;
-    border-left-width: 1px;
     border-top: 1px solid #d7e4f4;
     min-height: 210px;
     display: flex;
@@ -246,11 +235,24 @@ if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthCon
     margin: 20px 0 16px;
 }
 
-.home-dashboard-card .btn {
+.home-dashboard-card-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.home-dashboard-cta {
     position: relative;
     z-index: 1;
     align-self: flex-start;
     border-radius: 999px;
+    border: 1px solid #c7d7ee;
+    background: #f3f8ff;
+    color: #2f4f79;
+    font-weight: 600;
+    font-size: .82rem;
+    line-height: 1;
+    padding-top: 8px;
+    padding-bottom: 8px;
     padding-left: 14px;
     padding-right: 14px;
 }
@@ -264,14 +266,6 @@ if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthCon
     color: #5b5ce1;
 }
 
-.home-dashboard-card--consolidar {
-    border-top-color: #cfe0ff;
-}
-
-.home-dashboard-card--consolidar .value,
-.home-dashboard-card--consolidar .home-dashboard-avatar {
-    color: #1e4a89;
-}
 
 .home-dashboard-card--discipular {
     border-top-color: #ead6b4;
@@ -289,24 +283,6 @@ if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthCon
 .home-dashboard-card--enviar .value,
 .home-dashboard-card--enviar .home-dashboard-avatar {
     color: #28a745;
-}
-
-.home-dashboard-card--material {
-    border-top-color: #ffd7b8;
-}
-
-.home-dashboard-card--material .value,
-.home-dashboard-card--material .home-dashboard-avatar {
-    color: #fd7e14;
-}
-
-.home-dashboard-card--ministerios {
-    border-top-color: #c9eef5;
-}
-
-.home-dashboard-card--ministerios .value,
-.home-dashboard-card--ministerios .home-dashboard-avatar {
-    color: #17a2b8;
 }
 
 .home-dashboard-card--teens {

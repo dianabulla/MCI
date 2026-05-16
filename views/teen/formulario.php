@@ -18,14 +18,16 @@ foreach (($registros ?? []) as $registroTmp) {
 ?>
 
 <div class="page-header">
-    <h2>Registro teens-kids</h2>
+    <h2>Teens</h2>
 </div>
 
 <div class="card teen-topbar-card" style="margin-bottom:20px;">
     <div class="card-body">
         <div class="page-actions personas-mobile-stack teen-topbar-actions">
-        <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-nav-pill active">Registro teens-kids</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-nav-pill active">Registro</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=teen/codigos" class="btn btn-nav-pill">Códigos</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=teen" class="btn btn-nav-pill">Material</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=entrega_obsequio" class="btn btn-nav-pill">Obsequios</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-publico" target="_blank" class="btn btn-primary">Nuevo registro</a>
         </div>
     </div>

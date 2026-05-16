@@ -1,9 +1,9 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
 <div class="page-header">
-    <h2>QR Registro Teens</h2>
+    <h2>QR Teens</h2>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-secondary">Volver a Teens</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-secondary">← Volver a Registro</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=teen/consulta-codigo" target="_blank" class="btn btn-outline-secondary">Abrir consulta publica</a>
     </div>
 </div>

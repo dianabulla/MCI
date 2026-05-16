@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inscripción Escuelas de Formación - MCI Madrid</title>
+    <?php $documentTitle = htmlspecialchars((string)($programa_label ?? 'Inscripción Escuelas de Formación')) ?>
+    <title><?= $documentTitle ?> - MCI Madrid</title>
     <style>
         :root {
             --primary: #0a6e6a;
@@ -411,17 +412,43 @@
 </head>
 <body>
 <div class="container">
+    <?php
+    $programaActualFormulario = trim((string)($programa_actual ?? ''));
+    $subtituloPrograma = 'Registra personas para Universidad de la Vida o Capacitación Destino.';
+    if ($programaActualFormulario === 'universidad_vida') {
+        $subtituloPrograma = 'Registra personas para Universidad de la Vida.';
+    } elseif ($programaActualFormulario === 'capacitacion_destino') {
+        $subtituloPrograma = 'Registra personas para Capacitación Destino.';
+    }
+    ?>
     <div class="header">
         <p class="eyebrow">Escuelas de Formación</p>
-        <h1>Inscripción pública</h1>
-        <p class="sub">Registra personas para Universidad de la Vida o Capacitación Destino.</p>
+        <h1><?= htmlspecialchars((string)($programa_label ?? 'Inscripción pública')) ?></h1>
+        <p class="sub"><?= htmlspecialchars($subtituloPrograma) ?></p>
+        <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
+            <a class="btn btn-secondary" href="<?= PUBLIC_URL ?>?url=escuelas_formacion/codigos&programa=<?= urlencode($programaActualFormulario) ?>" target="_blank" rel="noopener">Descarga QR registro</a>
+        </div>
     </div>
 
     <div class="body">
         <?php
         $abonoAuth = is_array($abono_auth ?? null) ? $abono_auth : ['autorizado' => false, 'nombre' => ''];
+        $modoAbono = !empty($modo_abono);
+        $modoPagosUrl = isset($_GET['modo']) && (string)$_GET['modo'] === 'pagos';
+        $relajarValidacionTipoDocumento = $modoAbono || $modoPagosUrl;
         $abonoAutorizado = !empty($abonoAuth['autorizado']);
         $abonoNombreAuth = (string)($abonoAuth['nombre'] ?? '');
+        $tipoPagoOld = (string)($old['tipo_pago'] ?? 'abono');
+        if (!in_array($tipoPagoOld, ['abono', 'completo'], true)) {
+            $tipoPagoOld = 'abono';
+        }
+        $rutaRegistroNuevo = 'escuelas_formacion/registro-publico/universidad-vida';
+        $programaActualFormulario = trim((string)($programa_actual ?? ''));
+        if ($programaActualFormulario === 'universidad_vida') {
+            $rutaRegistroNuevo = 'escuelas_formacion/registro-publico/universidad-vida';
+        } elseif ($programaActualFormulario === 'capacitacion_destino') {
+            $rutaRegistroNuevo = 'escuelas_formacion/registro-publico/capacitacion-destino';
+        }
         ?>
 
         <?php if (!empty($mensaje)): ?>
@@ -443,38 +470,61 @@
                     <a class="btn" href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/ticket" style="display:inline-block; text-decoration:none;">Ver / imprimir ticket</a>
                 </div>
                 <div class="success-actions">
-                    <a class="btn" href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico" style="display:inline-block; text-decoration:none;">Registrar otra persona</a>
+                    <a class="btn" href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($rutaRegistroNuevo) ?>" style="display:inline-block; text-decoration:none;">Registrar otra persona</a>
                 </div>
             </div>
         <?php else: ?>
             <?php
+            $programaActualFormulario = trim((string)($programa_actual ?? ''));
             $programaAnterior = (string)($old['programa'] ?? '');
-            $programaBaseSeleccionado = 'universidad_vida';
+            $programaBaseSeleccionado = $programaActualFormulario !== '' ? $programaActualFormulario : 'universidad_vida';
             $programaNivelSeleccionado = 'capacitacion_destino_nivel_1';
-            if (in_array($programaAnterior, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
-                $programaBaseSeleccionado = 'capacitacion_destino';
-                if (in_array($programaAnterior, ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
-                    $programaNivelSeleccionado = $programaAnterior;
+            if ($programaActualFormulario === '') {
+                if (in_array($programaAnterior, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+                    $programaBaseSeleccionado = 'capacitacion_destino';
+                    if (in_array($programaAnterior, ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+                        $programaNivelSeleccionado = $programaAnterior;
+                    }
+                }
+            } else {
+                if ($programaActualFormulario === 'capacitacion_destino') {
+                    $programaNivelSeleccionado = (string)($old['programa_nivel'] ?? 'capacitacion_destino_nivel_1');
                 }
             }
+            $ocultarSelectorPrograma = $programaActualFormulario !== '';
             ?>
-            <p class="help">Paso 1: busca por cédula. Si la persona ya está inscrita, solo podrás marcar asistencia. Si no existe, se habilitan los datos para crearla y quedará inscrita automáticamente en Universidad de la Vida.</p>
+            <p class="help">Paso 1: busca por cédula. Si la persona ya existe, se cargarán todos sus datos y solo podrás editar los campos faltantes. Si no existe, se habilitan los datos para crearla y quedará inscrita automáticamente en <?= $programaBaseSeleccionado === 'capacitacion_destino' ? 'Capacitación Destino' : 'Universidad de la Vida' ?>.</p>
 
             <form method="POST" action="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/guardar" id="form-escuelas" autocomplete="off">
+                <?php if ($ocultarSelectorPrograma): ?>
+                    <input type="hidden" id="programa" name="programa" value="<?= htmlspecialchars($programaBaseSeleccionado) ?>">
+                <?php endif; ?>
                 <input type="hidden" id="input-accion" name="accion" value="registro">
+                <input type="hidden" id="input-id-persona" name="id_persona" value="">
+                <input type="hidden" id="input-id-inscripcion" name="id_inscripcion" value="">
                 <input type="hidden" id="input-id-inscripcion-asistencia" name="id_inscripcion_asistencia" value="">
                 <div class="section">
                     <h3 class="section-title">1. Identificación</h3>
                     <div class="grid">
                         <div class="field">
-                            <label for="tipo_documento">Tipo de documento <span class="req">*</span></label>
-                            <?php $tipoDocumento = (string)($old['tipo_documento'] ?? ''); ?>
-                            <select id="tipo_documento" name="tipo_documento" required>
-                                <option value="">Seleccione...</option>
-                                <option value="Cedula de Ciudadania" <?= $tipoDocumento === 'Cedula de Ciudadania' ? 'selected' : '' ?>>Cédula de Ciudadanía</option>
-                                <option value="Cedula Extranjera" <?= $tipoDocumento === 'Cedula Extranjera' ? 'selected' : '' ?>>Cédula Extranjera</option>
-                                <option value="Tarjeta de Identidad" <?= $tipoDocumento === 'Tarjeta de Identidad' ? 'selected' : '' ?>>Tarjeta de Identidad</option>
-                                <option value="Registro Civil" <?= $tipoDocumento === 'Registro Civil' ? 'selected' : '' ?>>Registro Civil</option>
+                            <label for="tipo_documento">Tipo de documento <span class="req" id="req-tipo-doc"<?= $relajarValidacionTipoDocumento ? ' style="display:none;"' : '' ?>>*</span></label>
+                            <?php
+                                $tipoDocumento = trim((string)($old['tipo_documento'] ?? ''));
+                                $opcionesTipoDocumento = [
+                                    'Cedula de Ciudadania' => 'Cédula de Ciudadanía',
+                                    'Cedula Extranjera' => 'Cédula Extranjera',
+                                    'Tarjeta de Identidad' => 'Tarjeta de Identidad',
+                                    'Registro Civil' => 'Registro Civil',
+                                ];
+                                if ($tipoDocumento === '' || !isset($opcionesTipoDocumento[$tipoDocumento])) {
+                                    $tipoDocumento = 'Cedula de Ciudadania';
+                                }
+                                $requiredAttrTipoDocumento = $relajarValidacionTipoDocumento ? '' : 'required';
+                            ?>
+                            <select id="tipo_documento" name="tipo_documento" <?= $requiredAttrTipoDocumento ?>>
+                                <?php foreach ($opcionesTipoDocumento as $valorTipoDoc => $etiquetaTipoDoc): ?>
+                                    <option value="<?= htmlspecialchars($valorTipoDoc) ?>" <?= $tipoDocumento === $valorTipoDoc ? 'selected' : '' ?>><?= htmlspecialchars($etiquetaTipoDoc) ?></option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
 
@@ -557,13 +607,22 @@
                 <div class="section" id="section-programa-nuevo">
                     <h3 class="section-title">4. Programa (nuevo registro)</h3>
                     <div class="grid">
-                        <div class="field">
-                            <label for="programa">Programa <span class="req">*</span></label>
-                            <select id="programa" name="programa" required>
-                                <option value="universidad_vida" <?= $programaBaseSeleccionado === 'universidad_vida' ? 'selected' : '' ?>>Universidad de la Vida (Un encuentro con Jesús)</option>
-                                <option value="capacitacion_destino" <?= $programaBaseSeleccionado === 'capacitacion_destino' ? 'selected' : '' ?>>Capacitación Destino por niveles</option>
-                            </select>
-                        </div>
+                        <?php if ($ocultarSelectorPrograma): ?>
+                            <div class="field full">
+                                <label>Programa seleccionado</label>
+                                <div style="padding:12px 14px; border:1px solid #d2e4e1; border-radius:10px; background:#f9fefc; color:#1f3d3a;">
+                                    <?= $programaBaseSeleccionado === 'capacitacion_destino' ? 'Capacitación Destino' : 'Universidad de la Vida (Un encuentro con Jesús)' ?>
+                                </div>
+                            </div>
+                        <?php else: ?>
+                            <div class="field">
+                                <label for="programa">Programa <span class="req">*</span></label>
+                                <select id="programa" name="programa" required>
+                                    <option value="universidad_vida" <?= $programaBaseSeleccionado === 'universidad_vida' ? 'selected' : '' ?>>Universidad de la Vida (Un encuentro con Jesús)</option>
+                                    <option value="capacitacion_destino" <?= $programaBaseSeleccionado === 'capacitacion_destino' ? 'selected' : '' ?>>Capacitación Destino por niveles</option>
+                                </select>
+                            </div>
+                        <?php endif; ?>
 
                         <div class="field" id="wrap-programa-nivel" <?= $programaBaseSeleccionado === 'capacitacion_destino' ? '' : 'style="display:none;"' ?>>
                             <label for="programa_nivel">Nivel de Capacitación Destino <span class="req">*</span></label>
@@ -577,16 +636,10 @@
                 </div>
 
                 <div class="section" id="section-inscripciones-existentes" style="display:none;">
-                    <h3 class="section-title">4. Asistencia por programa inscrito</h3>
-                    <p style="margin:0 0 10px; font-size:13px; color:#55706d;">Selecciona la inscripción y la asistencia se marcará automáticamente para la clase de hoy.</p>
+                    <h3 class="section-title">4. Persona ya registrada</h3>
+                    <p style="margin:0 0 10px; font-size:13px; color:#55706d;">Selecciona la inscripción existente para registrar el abono.</p>
                     <div id="lista-inscripciones-existentes"></div>
-                    <div style="margin-top:10px;">
-                        <label style="display:flex; align-items:center; gap:8px; font-size:14px;">
-                            <input type="checkbox" id="marcar_asistencia" name="marcar_asistencia" value="1" style="width:16px;height:16px;">
-                            Asistencia a clase (se marca automáticamente al elegir inscripción)
-                        </label>
-                    </div>
-                    <p id="msg-solo-asistencia" style="display:none; margin:12px 0 0; font-size:13px; color:#7a4b00; border-top:1px solid #f0dfb8; padding-top:10px;">Esta persona ya pertenece a formación. No se crea una nueva inscripción; solo se permite registrar asistencia y/o abonos.</p>
+                    <p id="msg-solo-asistencia" style="display:none; margin:12px 0 0; font-size:13px; color:#7a4b00; border-top:1px solid #f0dfb8; padding-top:10px;">Persona encontrada. Usa esta inscripción para registrar pagos/abonos sin crear una inscripción nueva.</p>
                 </div>
 
                 <div class="section" id="section-pago-material">
@@ -594,10 +647,14 @@
 
                     <div style="margin-bottom:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
                         <button type="button" class="btn btn-secondary" id="btn-mostrar-acceso-abono" <?= $abonoAutorizado ? 'style="display:none;"' : '' ?>>Habilitar abonos</button>
-                        <span style="font-size:12px; color:#5c6f6d;">Los campos de pago permanecen ocultos hasta validar un usuario autorizado.</span>
+                        <span style="font-size:12px; color:#5c6f6d;">
+                            <?= $abonoAutorizado
+                                ? 'Abonos habilitados por sesión activa. Puedes inscribir y registrar abono en el mismo envío.'
+                                : 'Opcional: habilita abonos para registrar el pago junto con la inscripción (requiere usuario autorizado).' ?>
+                        </span>
                     </div>
 
-                    <div class="abono-lock-box" id="abono-lock-box" style="display:<?= $abonoAutorizado ? '' : 'none' ?>;">
+                    <div class="abono-lock-box" id="abono-lock-box" style="display:<?= $abonoAutorizado ? 'none' : '' ?>;">
                         <div style="font-size:13px; margin-bottom:8px; color:#45615e;"><strong>Acceso restringido:</strong> para registrar abonos debes autenticar un usuario autorizado.</div>
                         <div class="grid" style="gap:10px;">
                             <div class="field">
@@ -627,16 +684,31 @@
                             </select>
                         </div>
 
-                        <input type="hidden" id="tipo_pago" name="tipo_pago" value="abono">
+                        <div class="field" id="wrap-tipo-pago" style="display:none;">
+                            <label for="tipo_pago">Tipo de pago <span class="req">*</span></label>
+                            <select id="tipo_pago" name="tipo_pago" required <?= $abonoAutorizado ? '' : 'disabled' ?>>
+                                <option value="">-- Selecciona tipo de pago --</option>
+                                <option value="abono" <?= $tipoPagoOld === 'abono' ? 'selected' : '' ?>>Abono (pago parcial)</option>
+                                <option value="completo" <?= $tipoPagoOld === 'completo' ? 'selected' : '' ?>>Pago total (ya completó)</option>
+                            </select>
+                        </div>
 
                         <div class="field" id="wrap-valor-pago" style="display:none;">
                             <label for="valor_pago">Valor pagado <span class="req">*</span></label>
-                            <input type="number" id="valor_pago" name="valor_pago" min="0" step="100" placeholder="Ej: 25000" value="<?= htmlspecialchars((string)($old['valor_pago'] ?? '')) ?>">
+                            <input type="text" id="valor_pago" name="valor_pago" inputmode="numeric" pattern="[0-9.,]{1,}" autocomplete="off" placeholder="Ej: 180000" value="<?= htmlspecialchars((string)($old['valor_pago'] ?? '')) ?>">
                         </div>
 
                         <div class="field" id="wrap-recibido-por" style="display:none;">
                             <label for="recibido_por">Quién recibió el pago <span class="req">*</span></label>
                             <input type="text" id="recibido_por" name="recibido_por" maxlength="160" placeholder="Nombre de quien recibe" value="<?= htmlspecialchars($abonoNombreAuth !== '' ? $abonoNombreAuth : (string)($old['recibido_por'] ?? '')) ?>" readonly>
+                        </div>
+
+                        <div class="field" id="wrap-entrego-libro">
+                            <label for="entrego_libro">Entregó libro</label>
+                            <select id="entrego_libro" name="entrego_libro" <?= $abonoAutorizado ? '' : 'disabled' ?>>
+                                <option value="0" <?= (string)($old['entrego_libro'] ?? '0') !== '1' ? 'selected' : '' ?>>No</option>
+                                <option value="1" <?= (string)($old['entrego_libro'] ?? '') === '1' ? 'selected' : '' ?>>Sí</option>
+                            </select>
                         </div>
                     </div>
                     <div style="margin-top:10px;">
@@ -669,6 +741,7 @@
     const endpointValidarAbono = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/registro-publico/validar-abono') ?>;
     const form = document.getElementById('form-escuelas');
     const sectionDatosPersonales = document.getElementById('section-datos-personales');
+    const tipoDocumento = document.getElementById('tipo_documento');
     const nombre = document.getElementById('nombre');
     const genero = document.getElementById('genero');
     const edad = document.getElementById('edad');
@@ -681,18 +754,21 @@
     const listaLideres = document.getElementById('lista-lideres');
     const ministerio = document.getElementById('id_ministerio');
     const programa = document.getElementById('programa');
+    const programaFijo = <?= json_encode($ocultarSelectorPrograma ? $programaBaseSeleccionado : '') ?>;
     const sectionProgramaNuevo = document.getElementById('section-programa-nuevo');
     const wrapProgramaNivel = document.getElementById('wrap-programa-nivel');
     const programaNivel = document.getElementById('programa_nivel');
     const metodoPago = document.getElementById('metodo_pago');
+    const tipoPago = document.getElementById('tipo_pago');
+    const wrapTipoPago = document.getElementById('wrap-tipo-pago');
     const wrapValorPago = document.getElementById('wrap-valor-pago');
     const valorPago = document.getElementById('valor_pago');
     const wrapRecibidoPor = document.getElementById('wrap-recibido-por');
     const recibidoPor = document.getElementById('recibido_por');
+    const entregoLibro = document.getElementById('entrego_libro');
     const inputAccion = document.getElementById('input-accion');
     const inputIdInscripcionAsistencia = document.getElementById('input-id-inscripcion-asistencia');
     const sectionInscripcionesExistentes = document.getElementById('section-inscripciones-existentes');
-    const chkMarcarAsistencia = document.getElementById('marcar_asistencia');
     const listaInscripcionesExistentes = document.getElementById('lista-inscripciones-existentes');
     const sectionInscripcion = document.getElementById('section-inscripcion');
     const sectionPagoMaterial = document.getElementById('section-pago-material');
@@ -715,8 +791,15 @@
     const personaResumenEdad = document.getElementById('persona-resumen-edad');
     const personaResumenCedula = document.getElementById('persona-resumen-cedula');
     const personaResumenTelefono = document.getElementById('persona-resumen-telefono');
+    const inputIdPersona = document.getElementById('input-id-persona');
+    const inputIdInscripcion = document.getElementById('input-id-inscripcion');
     let personaExistente = false;
     let modoSoloAsistencia = false;
+    const modoAbono = <?= !empty($modo_abono) ? 'true' : 'false' ?>;
+    const relajarValidacionTipoDocumento = <?= !empty($relajarValidacionTipoDocumento) ? 'true' : 'false' ?>;
+    const usuarioInternoLogueado = <?= !empty($usuario_interno_logueado) ? 'true' : 'false' ?>;
+    const puedeRecibirPagosEscuelas = <?= !empty($puede_recibir_pagos_escuelas) ? 'true' : 'false' ?>;
+    const prefillInicial = <?= json_encode($prefill_inicial ?? null, JSON_UNESCAPED_UNICODE) ?>;
     let abonoAutorizado = <?= !empty($abonoAutorizado) ? 'true' : 'false' ?>;
     let abonoNombreAutorizado = <?= json_encode((string)$abonoNombreAuth, JSON_UNESCAPED_UNICODE) ?>;
 
@@ -726,15 +809,32 @@
         return;
     }
 
+    if (relajarValidacionTipoDocumento && tipoDocumento) {
+        tipoDocumento.removeAttribute('required');
+    }
+
     let timer = null;
+    const MIN_CEDULA_BUSQUEDA = 4;
+    let buscarPersonaSeq = 0;
 
     if (abonoLockBox) {
         abonoLockBox.dataset.visible = abonoAutorizado ? '1' : '0';
     }
 
+    // Solo cuentas que pueden recibir pagos (administrativo puro o admin de sistema, con permisos)
+    // deben tener abonos automáticos; un líder u otro usuario interno sigue igual que un visitante anónimo.
+    if (usuarioInternoLogueado && puedeRecibirPagosEscuelas) {
+        abonoAutorizado = true;
+    }
+
     function actualizarAccesoAbono() {
         if (abonoLockBox) {
-            abonoLockBox.style.display = abonoAutorizado || abonoLockBox.dataset.visible === '1' ? '' : 'none';
+            // Si ya está autorizado (por sesión o login), no mostrar panel de usuario/contraseña.
+            if (abonoAutorizado) {
+                abonoLockBox.style.display = 'none';
+            } else {
+                abonoLockBox.style.display = abonoLockBox.dataset.visible === '1' ? '' : 'none';
+            }
         }
         if (btnMostrarAccesoAbono) {
             btnMostrarAccesoAbono.style.display = abonoAutorizado ? 'none' : '';
@@ -763,6 +863,15 @@
                 metodoPago.value = '';
                 metodoPago.disabled = true;
             }
+            if (tipoPago) {
+                tipoPago.value = '';
+                tipoPago.disabled = true;
+            }
+            if (entregoLibro) {
+                entregoLibro.value = '0';
+                entregoLibro.disabled = true;
+            }
+            if (wrapTipoPago) wrapTipoPago.style.display = 'none';
             if (wrapValorPago) wrapValorPago.style.display = 'none';
             if (wrapRecibidoPor) wrapRecibidoPor.style.display = 'none';
             if (valorPago) valorPago.value = '';
@@ -778,18 +887,113 @@
         if (metodoPago) {
             metodoPago.disabled = false;
         }
+        if (tipoPago) {
+            tipoPago.disabled = false;
+        }
+        if (entregoLibro) {
+            entregoLibro.disabled = false;
+        }
+
+        // En página de abonos o al cargar pago sobre inscripción ya existente, mostrar siempre método/tipo/valor (igual que modoAbono).
+        if (modoAbono || modoSoloAsistencia) {
+            if (metodoPago && !String(metodoPago.value || '').trim()) {
+                metodoPago.value = 'efectivo';
+            }
+            if (tipoPago && !String(tipoPago.value || '').trim()) {
+                tipoPago.value = 'abono';
+            }
+            if (wrapTipoPago) wrapTipoPago.style.display = '';
+            if (wrapValorPago) wrapValorPago.style.display = '';
+            if (wrapRecibidoPor) wrapRecibidoPor.style.display = '';
+            if (recibidoPor) recibidoPor.value = abonoNombreAutorizado || '';
+            return;
+        }
+
+        // Persona nueva (aún no en BD): mismo paso para inscripción + abono tras desbloquear
+        if (personaExistente === false && abonoAutorizado) {
+            if (metodoPago && !String(metodoPago.value || '').trim()) {
+                metodoPago.value = 'efectivo';
+            }
+            if (tipoPago && !String(tipoPago.value || '').trim()) {
+                tipoPago.value = 'abono';
+            }
+            if (wrapTipoPago) wrapTipoPago.style.display = '';
+            if (wrapValorPago) wrapValorPago.style.display = '';
+            if (wrapRecibidoPor) wrapRecibidoPor.style.display = '';
+            if (recibidoPor) recibidoPor.value = abonoNombreAutorizado || '';
+            return;
+        }
 
         const tienePago = !!String(metodoPago ? metodoPago.value : '').trim();
         if (!tienePago) {
+            if (wrapTipoPago) wrapTipoPago.style.display = 'none';
             if (wrapValorPago) wrapValorPago.style.display = 'none';
             if (wrapRecibidoPor) wrapRecibidoPor.style.display = 'none';
+            // NO limpiar tipo_pago aquí - preservar lo que el usuario seleccionó
             if (valorPago) valorPago.value = '';
             if (recibidoPor) recibidoPor.value = abonoNombreAutorizado || '';
             return;
         }
+        if (wrapTipoPago) wrapTipoPago.style.display = '';
         if (wrapValorPago) wrapValorPago.style.display = '';
         if (wrapRecibidoPor) wrapRecibidoPor.style.display = '';
         if (recibidoPor) recibidoPor.value = abonoNombreAutorizado || '';
+    }
+
+    /** Datos mínimos del formulario listos (inscripción + opción de abono). */
+    function registroDatosMinimosListos() {
+        const c = String(cedula.value || '').trim();
+        if (c.length < 4) {
+            return false;
+        }
+
+        const minMinisterio = String(ministerio.value || '').trim() !== '' && String(ministerio.value) !== '0';
+        const idL = parseInt(String(idLider.value || '0').trim(), 10);
+
+        if (personaExistente) {
+            return minMinisterio && idL > 0;
+        }
+
+        const nom = String(nombre.value || '').trim();
+        const gen = String(genero.value || '').trim();
+        const ed = parseInt(String(edad.value || '').trim(), 10);
+        const tel = String(telefono.value || '').trim();
+
+        if (!nom || !gen || !Number.isFinite(ed) || ed < 7 || ed > 120) {
+            return false;
+        }
+        if (!tel || tel.length < 4) {
+            return false;
+        }
+        if (idL <= 0 || !minMinisterio) {
+            return false;
+        }
+        if (String(programa.value || '') === 'capacitacion_destino') {
+            if (!String(programaNivel.value || '').trim()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function sincronizarAbonoTrasDatosRegistro() {
+        if (modoSoloAsistencia || modoAbono) {
+            return;
+        }
+        if (!registroDatosMinimosListos()) {
+            return;
+        }
+        if (usuarioInternoLogueado && puedeRecibirPagosEscuelas) {
+            abonoAutorizado = true;
+        }
+        if (abonoAutorizado) {
+            actualizarCamposPago();
+            return;
+        }
+        if (abonoLockBox) {
+            abonoLockBox.dataset.visible = '1';
+        }
+        actualizarAccesoAbono();
     }
 
     function actualizarEstadoBloqueoAbono(mensaje, tipo) {
@@ -815,20 +1019,18 @@
 
         if (btnGuardarInscripcion) {
             btnGuardarInscripcion.style.display = '';
-            btnGuardarInscripcion.textContent = bloquear ? 'Guardar asistencia / abono' : 'Guardar inscripción';
+            btnGuardarInscripcion.textContent = bloquear ? 'Guardar abono' : 'Guardar inscripción';
         }
 
-        const seccionesBloquear = [sectionDatosPersonales, sectionProgramaNuevo];
-        seccionesBloquear.forEach(function(section) {
-            if (!section) return;
-            section.querySelectorAll('input, select, textarea, button').forEach(function(el) {
+        if (sectionProgramaNuevo) {
+            sectionProgramaNuevo.querySelectorAll('input, select, textarea, button').forEach(function(el) {
                 if (el.id === 'btn-limpiar-form') {
                     return;
                 }
                 el.disabled = bloquear;
             });
-            section.style.opacity = bloquear ? '0.55' : '1';
-        });
+            sectionProgramaNuevo.style.opacity = bloquear ? '0.55' : '1';
+        }
 
         if (sectionProgramaNuevo) {
             sectionProgramaNuevo.style.display = bloquear ? 'none' : '';
@@ -838,14 +1040,14 @@
         }
 
         if (inputAccion) {
-            inputAccion.value = bloquear ? 'asistencia_abono' : 'registro';
+            inputAccion.value = bloquear ? 'abono' : 'registro';
         }
         if (inputIdInscripcionAsistencia && !bloquear) {
             inputIdInscripcionAsistencia.value = '';
         }
-        if (chkMarcarAsistencia && !bloquear) {
-            chkMarcarAsistencia.checked = false;
-        }
+
+        // Refrescar bloque de pago: en modo “solo abono / inscripción existente” deben verse tipo y valor como en la vista dedicada de abonos.
+        actualizarCamposPago();
     }
 
     function renderInscripciones(inscripciones) {
@@ -853,27 +1055,33 @@
         if (!inscripciones || inscripciones.length === 0) {
             sectionInscripcionesExistentes.style.display = 'none';
             listaInscripcionesExistentes.innerHTML = '';
+            setModoSoloAsistencia(false);
             return;
         }
         listaInscripcionesExistentes.innerHTML = inscripciones.map(function(ins) {
-            const yaAsistio = ins.asistio_clase === true || ins.asistio_clase == '1';
             return '<div class="insc-card">' +
                 '<div class="insc-info">' +
                     '<label style="display:flex;align-items:center;gap:8px;font-weight:600;">' +
-                        '<input type="checkbox" class="chk-inscripcion" data-id="' + String(ins.id_inscripcion || '') + '" style="width:16px;height:16px;"> Seleccionar' +
+                        '<input type="checkbox" class="chk-inscripcion" data-id="' + String(ins.id_inscripcion || '') + '" style="width:16px;height:16px;" ' + (inscripciones.length === 1 ? 'checked' : '') + '> Seleccionar' +
                     '</label>' +
                     '<strong>' + String(ins.programa_label || ins.programa || '') + '</strong>' +
-                    '<span class="insc-badge ' + (yaAsistio ? 'asistio' : 'pendiente') + '">' + (yaAsistio ? 'Asistencia marcada' : 'Sin asistencia') + '</span>' +
+                    '<span class="insc-badge asistio">Inscripción existente</span>' +
                 '</div>' +
-                '<div style="font-size:12px;color:#667775;">' + (yaAsistio ? 'Ya tenía asistencia.' : 'Pendiente de asistencia.') + '</div>' +
+                '<div style="font-size:12px;color:#667775;">Programa registrado previamente.</div>' +
             '</div>';
         }).join('');
         if (inputIdInscripcionAsistencia) {
-            inputIdInscripcionAsistencia.value = '';
-        }
-
-        if (chkMarcarAsistencia) {
-            chkMarcarAsistencia.checked = false;
+            if (inscripciones.length === 1) {
+                inputIdInscripcionAsistencia.value = String(inscripciones[0].id_inscripcion || '');
+                if (inputIdInscripcion) {
+                    inputIdInscripcion.value = String(inscripciones[0].id_inscripcion || '');
+                }
+            } else {
+                inputIdInscripcionAsistencia.value = '';
+                if (inputIdInscripcion) {
+                    inputIdInscripcion.value = '';
+                }
+            }
         }
 
         listaInscripcionesExistentes.querySelectorAll('.chk-inscripcion').forEach(function(chk) {
@@ -892,10 +1100,6 @@
 
                 if (inputIdInscripcionAsistencia) {
                     inputIdInscripcionAsistencia.value = chk.checked ? idIns : '';
-                }
-
-                if (chkMarcarAsistencia) {
-                    chkMarcarAsistencia.checked = chk.checked;
                 }
             });
         });
@@ -971,15 +1175,80 @@
         edad.required = !!mostrar;
     }
 
-    function actualizarModoCamposPersonaExistente(existe) {
-        const bloqueado = !!existe;
-
-        if (telefono) {
-            telefono.readOnly = bloqueado;
-            telefono.setAttribute('aria-readonly', bloqueado ? 'true' : 'false');
-            telefono.style.backgroundColor = bloqueado ? '#f4f6f8' : '';
-            telefono.style.cursor = bloqueado ? 'not-allowed' : '';
+    function setInputBloqueado(input, bloqueado) {
+        if (!input) {
+            return;
         }
+
+        input.readOnly = !!bloqueado;
+        input.setAttribute('aria-readonly', bloqueado ? 'true' : 'false');
+        input.style.backgroundColor = bloqueado ? '#f4f6f8' : '';
+        input.style.cursor = bloqueado ? 'not-allowed' : '';
+    }
+
+    function setSelectBloqueado(input, bloqueado) {
+        if (!input) {
+            return;
+        }
+
+        input.disabled = !!bloqueado;
+        input.setAttribute('aria-disabled', bloqueado ? 'true' : 'false');
+        input.style.backgroundColor = bloqueado ? '#f4f6f8' : '';
+        input.style.cursor = bloqueado ? 'not-allowed' : '';
+    }
+
+    function actualizarModoCamposPersonaExistente(existe, persona) {
+        const esExistente = !!existe;
+        const data = persona && typeof persona === 'object' ? persona : {};
+
+        if (!esExistente) {
+            setSelectBloqueado(tipoDocumento, false);
+            setInputBloqueado(cedula, false);
+            setInputBloqueado(nombre, false);
+            setSelectBloqueado(genero, false);
+            setInputBloqueado(edad, false);
+            setInputBloqueado(fechaNacimiento, false);
+            setInputBloqueado(direccion, false);
+            setInputBloqueado(telefono, false);
+            setInputBloqueado(lider, false);
+            setSelectBloqueado(ministerio, false);
+            if (sectionPagoMaterial) sectionPagoMaterial.style.display = '';
+            actualizarCamposPago();
+            return;
+        }
+
+        // Persona EXISTE: Aplicar readonly solo a campos con valor, habilitar campos vacíos
+        const tieneNombre = String(data.nombre || nombre.value || '').trim() !== '';
+        const tieneGenero = String(data.genero || genero.value || '').trim() !== '';
+        const edadValor = parseInt(String(data.edad || edad.value || '').trim(), 10);
+        const tieneEdad = Number.isFinite(edadValor) && edadValor > 0;
+        const tieneFechaNacimiento = String(data.fecha_nacimiento || (fechaNacimiento ? fechaNacimiento.value : '') || '').trim() !== '';
+        const tieneDireccion = String(data.direccion || (direccion ? direccion.value : '') || '').trim() !== '';
+        const tieneTelefono = String(data.telefono || telefono.value || '').trim() !== '';
+        const tieneCedula = String(data.cedula || cedula.value || '').trim() !== '';
+        const tieneTipoDocumento = String(tipoDocumento ? tipoDocumento.value : '').trim() !== '';
+        const tieneLider = String(data.lider || lider.value || '').trim() !== '' || Number(data.id_lider || idLider.value || 0) > 0;
+        const ministerioActual = String((data.id_ministerio || '') || (ministerio ? ministerio.value : '') || '').trim();
+        const tieneMinisterio = ministerioActual !== '' && ministerioActual !== '0';
+
+        // Bloquear campos que YA TIENEN VALOR en la BD
+        // Solo el tipo de documento se bloquea si tiene valor (ya fue seleccionado)
+        setSelectBloqueado(tipoDocumento, tieneTipoDocumento);
+        setInputBloqueado(cedula, tieneCedula);
+
+        setInputBloqueado(nombre, tieneNombre);
+        setSelectBloqueado(genero, tieneGenero);
+        setInputBloqueado(edad, tieneEdad);
+        setInputBloqueado(fechaNacimiento, tieneFechaNacimiento);
+        setInputBloqueado(direccion, tieneDireccion);
+        setInputBloqueado(telefono, tieneTelefono);
+        // Bloquear líder solo si tiene ID válido
+        setInputBloqueado(lider, Number(data.id_lider || idLider.value || 0) > 0);
+        // Bloquear ministerio solo si tiene valor válido
+        setSelectBloqueado(ministerio, tieneMinisterio);
+
+        if (sectionPagoMaterial) sectionPagoMaterial.style.display = '';
+        actualizarCamposPago();
     }
 
     function calcularEdadDesdeFechaNacimiento(fechaTexto) {
@@ -1012,6 +1281,7 @@
         if (anios > 0) {
             edad.value = String(anios);
         }
+        sincronizarAbonoTrasDatosRegistro();
     }
 
     function actualizarResumenPersona(persona, mostrar) {
@@ -1044,10 +1314,12 @@
         }
     }
 
-    function aplicarPersona(persona) {
+    function aplicarPersona(persona, forzar) {
         if (!persona || typeof persona !== 'object') {
             return;
         }
+
+        const sobrescribir = !!forzar;
 
         const completarSiFalta = function(input, valor) {
             if (!input) {
@@ -1056,23 +1328,45 @@
 
             const actual = String(input.value || '').trim();
             const nuevo = String(valor || '').trim();
-            if (actual === '' && nuevo !== '') {
+            if ((sobrescribir || actual === '') && nuevo !== '') {
                 input.value = nuevo;
             }
         };
 
         completarSiFalta(nombre, persona.nombre || '');
         completarSiFalta(genero, persona.genero || '');
+        completarSiFalta(edad, persona.edad || '');
+        if (fechaNacimiento) {
+            completarSiFalta(fechaNacimiento, persona.fecha_nacimiento || '');
+        }
+        if (direccion) {
+            completarSiFalta(direccion, persona.direccion || '');
+        }
         completarSiFalta(telefono, persona.telefono || '');
         completarSiFalta(cedula, persona.cedula || '');
         completarSiFalta(lider, persona.lider || '');
 
-        if (!String(idLider.value || '').trim() && persona.id_lider) {
+        // Establecer tipo_documento si viene en persona
+        if ((sobrescribir || !String(tipoDocumento.value || '').trim()) && persona.tipo_documento) {
+            tipoDocumento.value = String(persona.tipo_documento);
+        } else if ((sobrescribir || !String(tipoDocumento.value || '').trim()) && String(persona.cedula || '').trim()) {
+            // Si hay cédula pero no tipo_documento, asumir CC por defecto
+            tipoDocumento.value = 'Cedula de Ciudadania';
+        }
+
+        if ((sobrescribir || !String(idLider.value || '').trim()) && persona.id_lider) {
             idLider.value = String(persona.id_lider);
         }
 
-        if (!String(ministerio.value || '').trim() && persona.id_ministerio) {
+        if ((sobrescribir || !String(ministerio.value || '').trim()) && persona.id_ministerio) {
             ministerio.value = String(persona.id_ministerio);
+        }
+
+        if (inputIdPersona && persona.id_persona) {
+            inputIdPersona.value = String(persona.id_persona);
+        }
+        if (inputIdInscripcion && persona.id_inscripcion) {
+            inputIdInscripcion.value = String(persona.id_inscripcion);
         }
 
         toUpperCaseInput(nombre);
@@ -1093,6 +1387,7 @@
         idLider.value = String(item.id_persona);
         toUpperCaseInput(lider);
         cerrarListaLideres();
+        sincronizarAbonoTrasDatosRegistro();
     }
 
     async function buscarLideresReales() {
@@ -1141,8 +1436,37 @@
     }
 
     async function buscarPersona() {
+        const docRaw = String(cedula.value || '').trim();
+
+        if (docRaw.length < MIN_CEDULA_BUSQUEDA) {
+            buscarPersonaSeq++;
+            const teniaPersonaCargada = personaExistente || (inputIdPersona && String(inputIdPersona.value || '').trim() !== '');
+            personaExistente = false;
+            actualizarModoCamposPersonaExistente(false, null);
+            mostrarSeccionDatosPersonales(true);
+            actualizarResumenPersona(null, false);
+            renderInscripciones([]);
+            setModoSoloAsistencia(false);
+            setEstadoBusqueda('', '');
+            if (inputIdPersona) {
+                inputIdPersona.value = '';
+            }
+            if (inputIdInscripcion) {
+                inputIdInscripcion.value = '';
+            }
+            if (inputIdInscripcionAsistencia) {
+                inputIdInscripcionAsistencia.value = '';
+            }
+            if (teniaPersonaCargada) {
+                limpiarDatosPersonaNueva();
+            }
+            return;
+        }
+
+        const seq = ++buscarPersonaSeq;
         const params = new URLSearchParams({
-            cedula: String(cedula.value || '').trim()
+            cedula: docRaw,
+            programa: String(programa ? programa.value : '').trim()
         });
 
         if (!params.get('cedula')) {
@@ -1157,14 +1481,23 @@
             });
             const data = await response.json();
 
+            if (seq !== buscarPersonaSeq) {
+                return;
+            }
+
             if (!response.ok || !data) {
-                setEstadoBusqueda('error', 'No se pudo consultar la información en este momento.');
+                if (seq === buscarPersonaSeq) {
+                    setEstadoBusqueda('error', 'No se pudo consultar la información en este momento.');
+                }
                 return;
             }
 
             if (!data.encontrado) {
+                if (seq !== buscarPersonaSeq) {
+                    return;
+                }
                 personaExistente = false;
-                actualizarModoCamposPersonaExistente(false);
+                actualizarModoCamposPersonaExistente(false, null);
                 mostrarSeccionDatosPersonales(true);
                 limpiarDatosPersonaNueva();
                 actualizarResumenPersona(null, false);
@@ -1174,10 +1507,14 @@
                 return;
             }
 
+            if (seq !== buscarPersonaSeq) {
+                return;
+            }
+
             personaExistente = true;
-            actualizarModoCamposPersonaExistente(true);
-            mostrarSeccionDatosPersonales(false);
-            aplicarPersona(data.persona || null);
+            mostrarSeccionDatosPersonales(true);
+            aplicarPersona(data.persona || null, true);
+            actualizarModoCamposPersonaExistente(true, data.persona || null);
             actualizarResumenPersona(data.persona || null, true);
             renderInscripciones(data.inscripciones || []);
             if (!Array.isArray(data.inscripciones) || data.inscripciones.length === 0) {
@@ -1191,16 +1528,15 @@
             } else {
                 setEstadoBusqueda('info', data.mensaje || 'Persona encontrada y campos completados.');
             }
-        } catch (error) {
-            personaExistente = false;
-            actualizarModoCamposPersonaExistente(false);
-            mostrarSeccionDatosPersonales(true);
-            actualizarResumenPersona(null, false);
-            renderInscripciones([]);
-            setModoSoloAsistencia(false);
-            setEstadoBusqueda('error', 'Error al buscar coincidencias. Puedes continuar el registro manualmente.');
+            sincronizarAbonoTrasDatosRegistro();
+        } catch (e) {
+            if (seq === buscarPersonaSeq) {
+                setEstadoBusqueda('error', 'Error al buscar coincidencias. Puedes continuar el registro manualmente.');
+            }
         } finally {
-            setLoading(false);
+            if (seq === buscarPersonaSeq) {
+                setLoading(false);
+            }
         }
     }
 
@@ -1215,6 +1551,7 @@
         input.addEventListener('input', function() {
             input.value = String(input.value || '').replace(/\D+/g, '');
             programarBusqueda();
+            sincronizarAbonoTrasDatosRegistro();
         });
 
         input.addEventListener('blur', buscarPersona);
@@ -1223,12 +1560,22 @@
     if (telefono) {
         telefono.addEventListener('input', function() {
             telefono.value = String(telefono.value || '').replace(/\D+/g, '');
+            sincronizarAbonoTrasDatosRegistro();
         });
     }
 
     nombre.addEventListener('input', function() {
         toUpperCaseInput(nombre);
+        sincronizarAbonoTrasDatosRegistro();
     });
+
+    if (genero) {
+        genero.addEventListener('change', sincronizarAbonoTrasDatosRegistro);
+    }
+    if (edad) {
+        edad.addEventListener('input', sincronizarAbonoTrasDatosRegistro);
+        edad.addEventListener('change', sincronizarAbonoTrasDatosRegistro);
+    }
 
     if (fechaNacimiento) {
         fechaNacimiento.addEventListener('change', sincronizarEdadConFechaNacimiento);
@@ -1239,6 +1586,7 @@
         toUpperCaseInput(lider);
         idLider.value = '';
         buscarLideresReales();
+        sincronizarAbonoTrasDatosRegistro();
     });
 
     lider.addEventListener('blur', function() {
@@ -1309,6 +1657,7 @@
 
                 actualizarEstadoBloqueoAbono('Abonos habilitados por: ' + abonoNombreAutorizado, 'ok');
                 actualizarCamposPago();
+                sincronizarAbonoTrasDatosRegistro();
                 mostrarToast('Abonos desbloqueados');
             } catch (error) {
                 actualizarEstadoBloqueoAbono(String(error.message || 'Credenciales inválidas.'), 'err');
@@ -1321,20 +1670,163 @@
 
     toUpperCaseInput(nombre);
     toUpperCaseInput(lider);
-    actualizarModoCamposPersonaExistente(false);
+    actualizarModoCamposPersonaExistente(false, null);
     mostrarSeccionDatosPersonales(false);
     setModoSoloAsistencia(false);
     actualizarProgramaNivel();
+
+    if (modoAbono) {
+        if (inputAccion) inputAccion.value = 'abono';
+        if (btnGuardarInscripcion) btnGuardarInscripcion.textContent = 'Guardar abono';
+    }
+
     actualizarCamposPago();
+
+    if (prefillInicial && prefillInicial.encontrado) {
+        personaExistente = true;
+        mostrarSeccionDatosPersonales(true);
+        aplicarPersona(prefillInicial.persona || null, true);
+        actualizarModoCamposPersonaExistente(true, prefillInicial.persona || null);
+        actualizarResumenPersona(prefillInicial.persona || null, true);
+        renderInscripciones(prefillInicial.inscripciones || []);
+        if (!Array.isArray(prefillInicial.inscripciones) || prefillInicial.inscripciones.length === 0) {
+            setModoSoloAsistencia(false);
+            if (modoAbono) {
+                // Fallback: intentar recuperar inscripciones por AJAX si no vinieron en prefill.
+                buscarPersona();
+            }
+        }
+        const insPref = Array.isArray(prefillInicial.inscripciones) ? prefillInicial.inscripciones : [];
+        if (insPref.length > 0) {
+            setEstadoBusqueda('info', 'Persona encontrada. Puedes registrar pagos o abonos desde la inscripción existente.');
+        } else {
+            setEstadoBusqueda('info', 'Persona encontrada. Completa el programa para registrar una nueva inscripción.');
+        }
+    }
+
+    sincronizarAbonoTrasDatosRegistro();
+
+    if (!prefillInicial && modoAbono && String(cedula.value || '').trim() !== '') {
+        // En modo abono se carga automáticamente la persona seleccionada desde el botón.
+        buscarPersona();
+    }
 
     programa.addEventListener('change', function() {
         actualizarProgramaNivel();
+        sincronizarAbonoTrasDatosRegistro();
     });
 
+    if (programaNivel) {
+        programaNivel.addEventListener('change', sincronizarAbonoTrasDatosRegistro);
+    }
+
+    if (ministerio) {
+        ministerio.addEventListener('change', sincronizarAbonoTrasDatosRegistro);
+    }
+
+    function normalizarValorPagoInput(valor) {
+        let raw = String(valor || '').trim();
+        if (!raw) {
+            return 0;
+        }
+        raw = raw.replace(/\s+/g, '');
+
+        const tieneComa = raw.indexOf(',') >= 0;
+        const tienePunto = raw.indexOf('.') >= 0;
+
+        if (tieneComa && tienePunto) {
+            if (raw.lastIndexOf(',') > raw.lastIndexOf('.')) {
+                raw = raw.replace(/\./g, '');
+                raw = raw.replace(',', '.');
+            } else {
+                raw = raw.replace(/,/g, '');
+            }
+        } else if (tieneComa && !tienePunto) {
+            if (/\,\d{1,2}$/.test(raw)) {
+                raw = raw.replace(/\./g, '');
+                raw = raw.replace(',', '.');
+            } else {
+                raw = raw.replace(/,/g, '');
+            }
+        } else if (tienePunto && !tieneComa) {
+            if (!/\.\d{1,2}$/.test(raw)) {
+                raw = raw.replace(/\./g, '');
+            }
+        }
+
+        raw = raw.replace(/[^0-9.\-]/g, '');
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : 0;
+    }
+
+    if (valorPago) {
+        valorPago.addEventListener('input', function() {
+            const limpio = String(valorPago.value || '').replace(/[^0-9.,]/g, '');
+            if (limpio !== valorPago.value) {
+                valorPago.value = limpio;
+            }
+        });
+    }
+
     form.addEventListener('submit', function(event) {
+        if (relajarValidacionTipoDocumento && tipoDocumento) {
+            tipoDocumento.removeAttribute('required');
+        }
+        // Los <select disabled> no se envían en el POST; al bloquear persona existente el tipo queda disabled y el servidor rechazaba el guardado.
+        if (tipoDocumento && tipoDocumento.disabled) {
+            tipoDocumento.disabled = false;
+        }
+
         const edadValor = parseInt(String(edad.value || '').trim(), 10);
         const telefonoValor = String(telefono.value || '').trim();
         const cedulaValor = String(cedula.value || '').trim();
+
+        if (modoAbono && !modoSoloAsistencia) {
+            const idInscripcion = String(inputIdInscripcionAsistencia ? inputIdInscripcionAsistencia.value : '').trim();
+            if (!idInscripcion) {
+                event.preventDefault();
+                alert('Debes seleccionar una inscripción existente para registrar el abono.');
+                return;
+            }
+
+            const metodo = String(metodoPago ? metodoPago.value : '').trim();
+            const valor = normalizarValorPagoInput(valorPago ? valorPago.value : '');
+            if (valorPago && Number.isFinite(valor) && valor > 0) {
+                valorPago.value = String(Math.round(valor * 100) / 100);
+            }
+
+            if (!abonoAutorizado) {
+                event.preventDefault();
+                alert('Debes tener sesión autorizada para registrar abonos.');
+                return;
+            }
+            if (!metodo) {
+                event.preventDefault();
+                alert('Selecciona método de pago.');
+                if (metodoPago) metodoPago.focus();
+                return;
+            }
+            if (!String(tipoPago ? tipoPago.value : '').trim()) {
+                event.preventDefault();
+                alert('Selecciona el tipo de pago.');
+                if (tipoPago) tipoPago.focus();
+                return;
+            }
+            if (!Number.isFinite(valor) || valor <= 0) {
+                event.preventDefault();
+                alert('Ingresa un valor de pago mayor a 0.');
+                if (valorPago) valorPago.focus();
+                return;
+            }
+            if (!String(recibidoPor ? recibidoPor.value : '').trim()) {
+                event.preventDefault();
+                alert('Debes indicar quién recibió el pago.');
+                return;
+            }
+
+            if (inputAccion) inputAccion.value = 'abono';
+            return;
+        }
 
         if (modoSoloAsistencia) {
             const idInscripcion = String(inputIdInscripcionAsistencia ? inputIdInscripcionAsistencia.value : '').trim();
@@ -1344,11 +1836,13 @@
                 return;
             }
 
-            const quiereAsistencia = !!(chkMarcarAsistencia && chkMarcarAsistencia.checked);
-
             const metodo = String(metodoPago ? metodoPago.value : '').trim();
-            const valor = parseFloat(String(valorPago ? valorPago.value : '').trim() || '0');
+            const valor = normalizarValorPagoInput(valorPago ? valorPago.value : '');
             const quiereAbono = !!metodo || (Number.isFinite(valor) && valor > 0);
+
+            if (valorPago && Number.isFinite(valor) && valor > 0) {
+                valorPago.value = String(Math.round(valor * 100) / 100);
+            }
 
             if (quiereAbono && !abonoAutorizado) {
                 event.preventDefault();
@@ -1357,9 +1851,9 @@
                 return;
             }
 
-            if (!quiereAsistencia && !quiereAbono) {
+            if (!quiereAbono) {
                 event.preventDefault();
-                alert('Debes marcar asistencia y/o registrar un abono.');
+                alert('Debes registrar un abono.');
                 return;
             }
 
@@ -1367,6 +1861,16 @@
                 event.preventDefault();
                 alert('Selecciona método de pago para registrar el abono.');
                 if (metodoPago) metodoPago.focus();
+                return;
+            }
+
+            if (quiereAbono && !String(tipoPago ? tipoPago.value : '').trim()) {
+                event.preventDefault();
+                alert('Debes seleccionar el tipo de pago: ¿Abono (parcial) o Pago Total (completó)?');
+                if (tipoPago) {
+                    tipoPago.focus();
+                    if (wrapTipoPago) wrapTipoPago.style.display = '';
+                }
                 return;
             }
 
@@ -1384,12 +1888,56 @@
                 return;
             }
 
+
             if (inputAccion) {
-                inputAccion.value = 'asistencia_abono';
+                inputAccion.value = 'abono';
             }
+            // Permitir que el formulario se envíe con acción='abono'
             return;
         }
 
+        const metodoReg = String(metodoPago ? metodoPago.value : '').trim();
+        const valorRegistro = normalizarValorPagoInput(valorPago ? valorPago.value : '');
+        const quierePagoRegistro = !!metodoReg || (Number.isFinite(valorRegistro) && valorRegistro > 0);
+        if (quierePagoRegistro) {
+            if (valorPago && Number.isFinite(valorRegistro) && valorRegistro > 0) {
+                valorPago.value = String(Math.round(valorRegistro * 100) / 100);
+            }
+            if (!abonoAutorizado) {
+                event.preventDefault();
+                alert('Para registrar pago junto con la inscripción, pulsa «Habilitar abonos» e inicia sesión con un usuario autorizado.');
+                if (btnMostrarAccesoAbono) {
+                    btnMostrarAccesoAbono.focus();
+                } else if (abonoUsuario) {
+                    abonoUsuario.focus();
+                }
+                return;
+            }
+            if (!metodoReg) {
+                event.preventDefault();
+                alert('Selecciona método de pago.');
+                if (metodoPago) metodoPago.focus();
+                return;
+            }
+            if (!String(tipoPago ? tipoPago.value : '').trim()) {
+                event.preventDefault();
+                alert('Selecciona el tipo de pago: Abono (parcial) o Pago total.');
+                if (tipoPago) tipoPago.focus();
+                return;
+            }
+            if (!Number.isFinite(valorRegistro) || valorRegistro <= 0) {
+                event.preventDefault();
+                alert('Ingresa un valor de pago mayor a 0.');
+                if (valorPago) valorPago.focus();
+                return;
+            }
+            if (!String(recibidoPor ? recibidoPor.value : '').trim()) {
+                event.preventDefault();
+                alert('Debes indicar quién recibió el pago.');
+                if (recibidoPor) recibidoPor.focus();
+                return;
+            }
+        }
         if (telefonoValor && !/^\d+$/.test(telefonoValor)) {
             event.preventDefault();
             alert('El telefono solo puede contener numeros.');
@@ -1474,13 +2022,16 @@
             }
             lider.value = '';
             if (form.elements.programa) {
-                form.elements.programa.value = 'universidad_vida';
+                form.elements.programa.value = programaFijo || 'universidad_vida';
             }
             if (form.elements.programa_nivel) {
-                form.elements.programa_nivel.value = 'capacitacion_destino_nivel_1';
+                form.elements.programa_nivel.value = programaFijo === 'capacitacion_destino' ? 'capacitacion_destino_nivel_1' : 'capacitacion_destino_nivel_1';
             }
             if (metodoPago) {
                 metodoPago.value = '';
+            }
+            if (tipoPago) {
+                tipoPago.value = '';
             }
             if (valorPago) {
                 valorPago.value = '';
@@ -1500,7 +2051,7 @@
             ministerio.value = '';
             idLider.value = '';
             personaExistente = false;
-            actualizarModoCamposPersonaExistente(false);
+            actualizarModoCamposPersonaExistente(false, null);
             mostrarSeccionDatosPersonales(false);
             actualizarResumenPersona(null, false);
             setModoSoloAsistencia(false);
@@ -1518,19 +2069,16 @@
 
     if (btnCompartirAbono) {
         btnCompartirAbono.addEventListener('click', async function() {
-            const shareData = {
-                title: 'Escuelas de Formación - Registro',
-                text: 'Te comparto el formulario de registro y abonos de Escuelas de Formación.',
-                url: window.location.href
-            };
-
             if (navigator.share) {
                 try {
-                    await navigator.share(shareData);
-                    mostrarToast('Formulario compartido');
+                    await navigator.share({
+                        title: 'Escuelas de Formación - Registro',
+                        text: 'Te comparto el formulario de registro y abonos de Escuelas de Formación.',
+                        url: window.location.href
+                    });
                     return;
                 } catch (error) {
-                    // Si el usuario cancela compartir, no hacemos nada.
+                    // Si el usuario cancela, continuar con fallback
                 }
             }
 
@@ -1546,15 +2094,6 @@
 
             window.prompt('Copia este enlace para compartir:', window.location.href);
         });
-    }
-
-    if (!abonoAutorizado) {
-        actualizarEstadoBloqueoAbono('Abonos bloqueados.', '');
-    } else if (abonoNombreAutorizado) {
-        actualizarEstadoBloqueoAbono('Abonos habilitados por: ' + abonoNombreAutorizado, 'ok');
-    }
-    actualizarAccesoAbono();
-    if (btnCompartirAbono) {
         btnCompartirAbono.disabled = !abonoAutorizado;
     }
 

@@ -1,10 +1,28 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
+<div class="page-header" style="margin-bottom: 20px;">
+    <h2 style="margin: 0;">Administración</h2>
+</div>
+
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-body">
+        <div class="page-actions personas-mobile-stack" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="<?= PUBLIC_URL ?>index.php?url=cuentas" class="btn btn-nav-pill active">Cuentas</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=roles" class="btn btn-nav-pill">Roles</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=permisos" class="btn btn-nav-pill">Permisos</a>
+        </div>
+    </div>
+</div>
+
 <?php
 $cuentasPersona = is_array($cuentas_persona ?? null) ? $cuentas_persona : [];
 $cuentasAccesoVinculadas = is_array($cuentas_acceso_vinculadas ?? null) ? $cuentas_acceso_vinculadas : [];
 $cuentasAdministrativas = is_array($cuentas_administrativas ?? null) ? $cuentas_administrativas : [];
 $tablaUsuarioAccesoDisponible = !empty($tabla_usuario_acceso_disponible);
+$rolesPorPersona = is_array($roles_por_persona ?? null) ? $roles_por_persona : [];
+$idRolMaestro = (int)($id_rol_maestro ?? 0);
+$mensajeFlash = (string)($mensaje ?? '');
+$tipoFlash = (string)($tipo ?? '');
 
 $cuentasMinisteriales = [];
 
@@ -16,6 +34,7 @@ foreach ($cuentasPersona as $cuenta) {
         'estado' => (string)($cuenta['Estado_Cuenta'] ?? 'Activo'),
         'tipo' => 'persona',
         'id' => (int)($cuenta['Id_Persona'] ?? 0),
+        'id_persona' => (int)($cuenta['Id_Persona'] ?? 0),
     ];
 }
 
@@ -27,6 +46,7 @@ foreach ($cuentasAccesoVinculadas as $cuenta) {
         'estado' => (string)($cuenta['Estado_Cuenta'] ?? 'Activo'),
         'tipo' => 'acceso',
         'id' => (int)($cuenta['Id_Usuario_Acceso'] ?? 0),
+        'id_persona' => (int)($cuenta['Id_Persona'] ?? 0),
     ];
 }
 
@@ -47,6 +67,12 @@ usort($cuentasMinisteriales, static function ($a, $b) {
         </div>
     </div>
 </div>
+
+<?php if ($mensajeFlash !== ''): ?>
+    <div class="alert alert-<?= $tipoFlash === 'success' ? 'success' : 'danger' ?>" style="margin:12px 0;">
+        <?= htmlspecialchars($mensajeFlash) ?>
+    </div>
+<?php endif; ?>
 
 <div class="dashboard-grid cuentas-summary-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 320px)); margin:16px 0;">
     <button
@@ -102,6 +128,7 @@ usort($cuentasMinisteriales, static function ($a, $b) {
                     <th>Usuario</th>
                     <th>Cédula</th>
                     <th>Estado</th>
+                    <th>Segundo Rol</th>
                     <th>Editar</th>
                 </tr>
             </thead>
@@ -110,12 +137,34 @@ usort($cuentasMinisteriales, static function ($a, $b) {
                     <?php foreach ($cuentasMinisteriales as $cuenta): ?>
                     <?php
                         $textoBusqueda = trim((string)($cuenta['nombre'] ?? '') . ' ' . (string)($cuenta['usuario'] ?? '') . ' ' . (string)($cuenta['numero_documento'] ?? ''));
+                        $idPersonaCuenta = (int)($cuenta['id_persona'] ?? 0);
+                        $rolesSecundariosPersona = (array)($rolesPorPersona[$idPersonaCuenta] ?? []);
+                        $tieneMaestro = false;
+                        foreach ($rolesSecundariosPersona as $rolTmp) {
+                            if ((int)($rolTmp['Id_Rol'] ?? 0) === $idRolMaestro && $idRolMaestro > 0) {
+                                $tieneMaestro = true;
+                                break;
+                            }
+                        }
                     ?>
                     <tr data-cuentas-row="1" data-search="<?= htmlspecialchars((string)$textoBusqueda, ENT_QUOTES, 'UTF-8') ?>">
                         <td><?= htmlspecialchars((string)($cuenta['nombre'] ?? '')) ?></td>
                         <td><?= htmlspecialchars((string)($cuenta['usuario'] ?? '')) ?></td>
                         <td><?= htmlspecialchars((string)($cuenta['numero_documento'] ?? '')) ?: '—' ?></td>
                         <td><?= htmlspecialchars((string)($cuenta['estado'] ?? 'Activo')) ?></td>
+                        <td>
+                            <?php if ($idPersonaCuenta > 0 && $idRolMaestro > 0): ?>
+                                <form method="POST" action="<?= PUBLIC_URL ?>?url=cuentas/asignar-segundo-rol" style="margin:0;display:flex;flex-direction:column;gap:6px;">
+                                    <input type="hidden" name="id_persona" value="<?= $idPersonaCuenta ?>">
+                                    <input type="hidden" name="accion_segundo_rol" value="<?= $tieneMaestro ? 'quitar_maestro' : 'asignar_maestro' ?>">
+                                    <button type="submit" class="btn btn-sm <?= $tieneMaestro ? 'btn-warning' : 'btn-info' ?>" style="white-space:nowrap;">
+                                        <?= $tieneMaestro ? 'Quitar Maestro' : 'Asignar Maestro' ?>
+                                    </button>
+                                </form>
+                            <?php else: ?>
+                                <small style="color:#637087;">No aplica</small>
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <a href="<?= PUBLIC_URL ?>?url=cuentas/editar&tipo=<?= htmlspecialchars((string)($cuenta['tipo'] ?? 'persona')) ?>&id=<?= (int)($cuenta['id'] ?? 0) ?>" class="btn btn-sm cuentas-action-btn cuentas-action-btn--icon cuentas-action-btn--edit" title="Editar" aria-label="Editar">
                                 <i class="bi bi-pencil-fill" aria-hidden="true"></i>
@@ -125,11 +174,11 @@ usort($cuentasMinisteriales, static function ($a, $b) {
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr data-cuentas-empty="ministeriales">
-                        <td colspan="5" class="text-center">No hay cuentas ministeriales registradas.</td>
+                        <td colspan="6" class="text-center">No hay cuentas ministeriales registradas.</td>
                     </tr>
                 <?php endif; ?>
                 <tr data-cuentas-empty-search="ministeriales" style="display:none;">
-                    <td colspan="5" class="text-center">No hay resultados para esa búsqueda.</td>
+                    <td colspan="6" class="text-center">No hay resultados para esa búsqueda.</td>
                 </tr>
             </tbody>
         </table>

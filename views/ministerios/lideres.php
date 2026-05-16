@@ -15,9 +15,9 @@ $hayFiltroMinisterio = $idMinisterioFiltro > 0;
     </div>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <?php if ($hayFiltroMinisterio): ?>
-        <a href="<?= PUBLIC_URL ?>?url=ministerios/equipo-principal" class="btn btn-secondary">Ver todos</a>
+        <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios/equipo-principal" class="btn btn-secondary">Ver todos</a>
         <?php endif; ?>
-        <a href="<?= PUBLIC_URL ?>?url=ministerios" class="btn btn-secondary">← Volver a Ministerios</a>
+        <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios" class="btn btn-secondary">← Volver a Ministerios</a>
     </div>
 </div>
 

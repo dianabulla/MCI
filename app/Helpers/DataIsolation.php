@@ -3,6 +3,8 @@
  * DataIsolation - Manejo centralizado del aislamiento de datos por rol
  */
 
+require_once __DIR__ . '/PermisosCatalogo.php';
+
 class DataIsolation {
     const ROL_ADMINISTRADOR = 6;
     const ROL_LIDER_CELULA = 3;
@@ -102,12 +104,9 @@ class DataIsolation {
      * Verificar si el usuario es administrador
      */
     public static function esAdmin() {
-        if (self::getUsuarioRol() === self::ROL_ADMINISTRADOR) {
-            return true;
-        }
-
-        $rolNombre = self::getUsuarioRolNombre();
-        return strpos($rolNombre, 'admin') !== false;
+        $id = (int)self::getUsuarioRol();
+        $nombre = trim((string)($_SESSION['usuario_rol_nombre'] ?? ''));
+        return PermisosCatalogo::esRolProtegidoPermisos($id, $nombre);
     }
 
     /**
@@ -319,6 +318,21 @@ class DataIsolation {
     }
 
     /**
+     * Coordinador de programas (acción coordinacion_total): datos globales en consultas SQL
+     * solo si el rol no está anclado como líder/pastor/asistente.
+     */
+    private static function tieneCoordinacionProgramasAmpliaNoJerarquica(): bool {
+        if (self::esAdmin()) {
+            return false;
+        }
+        if (self::esLiderCelula() || self::esLider12() || self::esPastor() || self::esAsistente()) {
+            return false;
+        }
+        $p = isset($_SESSION['permisos']['programas']) ? $_SESSION['permisos']['programas'] : null;
+        return is_array($p) && !empty($p['coordinacion_total']);
+    }
+
+    /**
      * Generar cláusula WHERE para personas según el rol
      * Si es administrador: sin restricciones
      * Si es líder de célula: ver solo personas de su célula
@@ -342,10 +356,31 @@ class DataIsolation {
             return "1=0";
         }
 
+        if (self::tieneCoordinacionProgramasAmpliaNoJerarquica()) {
+            return "1=1";
+        }
+
         // Fallback para roles personalizados:
         // si tiene permiso explícito de ver personas, permitir listado completo.
         if (isset($_SESSION['permisos']['personas'])
             && !empty($_SESSION['permisos']['personas']['ver'])) {
+            return "1=1";
+        }
+
+        // Solo consulta (sin modulo Ganar completo): mismo alcance de datos en filtros SQL.
+        if (isset($_SESSION['permisos']['personas_consulta'])
+            && !empty($_SESSION['permisos']['personas_consulta']['ver'])) {
+            return "1=1";
+        }
+
+        // Programas / escuelas de formacion (UV, Cap. Destino, etc.): sin esto el WHERE caía en 1=0
+        // y el consolidado mostraba 0 inscritos porque el mapa de personas permitidas quedaba vacío.
+        $prog = $_SESSION['permisos']['programas'] ?? [];
+        if (is_array($prog) && (
+            !empty($prog['ver'])
+            || !empty($prog['ver_universidad_vida'])
+            || !empty($prog['ver_capacitacion_destino'])
+        )) {
             return "1=1";
         }
 
@@ -390,8 +425,26 @@ class DataIsolation {
             return "1=0";
         }
 
+        if (self::tieneCoordinacionProgramasAmpliaNoJerarquica()) {
+            return "1=1";
+        }
+
         if (isset($_SESSION['permisos']['personas'])
             && !empty($_SESSION['permisos']['personas']['ver'])) {
+            return "1=1";
+        }
+
+        if (isset($_SESSION['permisos']['personas_consulta'])
+            && !empty($_SESSION['permisos']['personas_consulta']['ver'])) {
+            return "1=1";
+        }
+
+        $prog = $_SESSION['permisos']['programas'] ?? [];
+        if (is_array($prog) && (
+            !empty($prog['ver'])
+            || !empty($prog['ver_universidad_vida'])
+            || !empty($prog['ver_capacitacion_destino'])
+        )) {
             return "1=1";
         }
 
@@ -450,6 +503,10 @@ class DataIsolation {
                 return "c.Id_Lider IN (SELECT Id_Persona FROM persona WHERE Id_Ministerio = $idMinisterio)";
             }
             return "1=0";
+        }
+
+        if (self::tieneCoordinacionProgramasAmpliaNoJerarquica()) {
+            return "1=1";
         }
 
         // Fallback para roles personalizados:
@@ -532,6 +589,10 @@ class DataIsolation {
                     OR p.Id_Persona = $usuarioId
                 )
             )";
+        }
+
+        if (self::tieneCoordinacionProgramasAmpliaNoJerarquica()) {
+            return "1=1";
         }
 
         return "1=0";

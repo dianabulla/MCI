@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $pageTitle ?? 'MCI Madrid Colombia' ?></title>
-    <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/styles.css?v=20260422-home-refresh-1">
+    <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/styles.css?v=20260515-sidebar-quick-1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
 </head>
 <body>
@@ -25,17 +25,13 @@ $puedeVer = function(string $modulo) {
 
 $esDiscipuloMenuDirecto = AuthController::esRolDiscipuloUsuario() && !AuthController::esAdministrador();
 
-$puedeVerGanar = $puedeVer('personas');
-$puedeVerConsolidar = $puedeVer('personas');
+$puedeVerGanar = AuthController::puedeVerModuloPersonasGanar();
+$puedeVerPersonasConsultaSolo = AuthController::puedeVerPersonasConsulta()
+    && !AuthController::puedeVerModuloPersonasGanar()
+    && !AuthController::debeUsarSoloVistaProgramasPersonas();
 $puedeVerDiscipular = $esDiscipuloMenuDirecto || $puedeVer('personas') || $puedeVer('discipular_evaluaciones');
 $puedeVerEnviar = $puedeVer('celulas');
-$puedeVerMaterial = !$esDiscipuloMenuDirecto && (
-    AuthController::esAdministrador()
-    || AuthController::tienePermiso('materiales_celulas', 'ver')
-    || AuthController::tienePermiso('teen', 'ver')
-    || AuthController::tienePermiso('material_universidad_vida', 'ver')
-    || AuthController::tienePermiso('material_capacitacion_destino', 'ver')
-);
+$puedeVerMaterial = !$esDiscipuloMenuDirecto && AuthController::puedeVerCentroMaterial();
 $puedeVerMinisterios = $puedeVer('ministerios');
 $puedeVerRegistroTeensKids = $puedeVer('teen');
 $puedeVerEventosMenu = AuthController::esAdministrador() || AuthController::tienePermiso('eventos', 'ver');
@@ -46,6 +42,8 @@ $puedeVerObsequios = $puedeVer('entrega_obsequio');
 $puedeVerNehemias = $puedeVer('nehemias');
 $puedeVerReportes = $puedeVer('reportes');
 $puedeVerRoles = $puedeVer('roles');
+$puedeVerMaterialCelulasEnEnviar = $puedeVerEnviar && (AuthController::esAdministrador() || AuthController::tienePermiso('materiales_celulas', 'ver'));
+$puedeVerAsistenciasEnEnviar = $puedeVerEnviar && $puedeVerAsistencias;
 
 $puedeVerPendientesGanar = $puedeVerGanar;
 $totalPendientesGanar = 0;
@@ -127,7 +125,6 @@ if ($puedeVerPendientesGanar) {
                 continue;
             }
 
-            $totalPendientesPorConectar++;
             $idPersonaPendiente = (int)($personaTmpPendiente['Id_Persona'] ?? 0);
             if ($idPersonaPendiente > 0) {
                 $idsPendientesPorConectar[$idPersonaPendiente] = true;
@@ -184,15 +181,17 @@ if ($puedeVerPendientesGanar) {
                 continue;
             }
 
-            $totalUniversidadVida++;
             $idPersonaUv = (int)($personaUvTmp['Id_Persona'] ?? 0);
             if ($idPersonaUv > 0) {
                 $idsUniversidadVida[$idPersonaUv] = true;
             }
         }
 
+        $idsListaDiscipulos = $idsPendientesPorConectar + $idsUniversidadVida;
+        $totalPendientesPorConectar = count($idsListaDiscipulos);
+        $totalUniversidadVida = 0;
         $totalPendientesGanar = $totalNuevasAlmasGanadas;
-        $idsCampanaUnicos = $idsPendientesPorConectar + $idsNuevasAlmasGanadas + $idsUniversidadVida;
+        $idsCampanaUnicos = $idsListaDiscipulos + $idsNuevasAlmasGanadas;
         $totalCampanaGanar = count($idsCampanaUnicos);
     } catch (Exception $e) {
         error_log('No se pudo cargar contador de pendientes en Ganar: ' . $e->getMessage());
@@ -217,6 +216,67 @@ if ($puedeVerPendientesGanar) {
             </div>
         </div>
 
+        <?php if ($puedeVerGanar || $puedeVerPeticiones || $puedeVerTransmisiones || $puedeVerEventosMenu): ?>
+        <div class="sidebar-quick-access">
+            <?php if ($puedeVerGanar): ?>
+            <details class="sidebar-quick-details">
+                <summary class="sidebar-link sidebar-quick-summary">
+                    <span class="sidebar-link-icon"><i class="bi bi-lightning-charge"></i></span>
+                    <span class="sidebar-link-text">Accesos rápidos</span>
+                    <span class="sidebar-quick-caret"><i class="bi bi-chevron-down"></i></span>
+                </summary>
+                <div class="sidebar-quick-modules">
+                <a class="sidebar-quick-text-link" href="<?= PUBLIC_URL ?>?url=personas/crear">
+                    <i class="bi bi-person-plus"></i>
+                    <span>Nuevo Discípulo</span>
+                </a>
+                <a class="sidebar-quick-text-link" href="<?= PUBLIC_URL ?>?url=personas/plantillas-whatsapp">
+                    <i class="bi bi-whatsapp"></i>
+                    <span>Plantillas WhatsApp</span>
+                </a>
+                <a class="sidebar-quick-text-link" href="<?= PUBLIC_URL ?>?url=registro_personas">
+                    <i class="bi bi-ui-checks"></i>
+                    <span>Formulario público</span>
+                </a>
+                </div>
+            </details>
+            <?php endif; ?>
+            <?php
+            $puedeAlgunEnlaceComunidad = $puedeVerPeticiones || $puedeVerTransmisiones || $puedeVerEventosMenu;
+            $navComunidadActiva = $isActive(['peticiones']) || $isActive(['transmisiones']) || $isActive(['eventos']);
+            ?>
+            <?php if ($puedeAlgunEnlaceComunidad): ?>
+            <details class="sidebar-quick-details sidebar-quick-details--comunidad"<?= $navComunidadActiva ? ' open' : '' ?>>
+                <summary class="sidebar-link sidebar-quick-summary">
+                    <span class="sidebar-link-icon"><i class="bi bi-people"></i></span>
+                    <span class="sidebar-link-text">Comunidad</span>
+                    <span class="sidebar-quick-caret"><i class="bi bi-chevron-down"></i></span>
+                </summary>
+                <div class="sidebar-quick-modules">
+                    <?php if ($puedeVerPeticiones): ?>
+                    <a class="sidebar-quick-text-link<?= $isActive(['peticiones']) ? ' is-active' : '' ?>" href="<?= PUBLIC_URL ?>?url=peticiones">
+                        <i class="bi bi-chat-heart"></i>
+                        <span>Peticiones</span>
+                    </a>
+                    <?php endif; ?>
+                    <?php if ($puedeVerTransmisiones): ?>
+                    <a class="sidebar-quick-text-link<?= $isActive(['transmisiones']) ? ' is-active' : '' ?>" href="<?= PUBLIC_URL ?>?url=transmisiones">
+                        <i class="bi bi-broadcast"></i>
+                        <span>Transmisiones</span>
+                    </a>
+                    <?php endif; ?>
+                    <?php if ($puedeVerEventosMenu): ?>
+                    <a class="sidebar-quick-text-link<?= $isActive(['eventos']) ? ' is-active' : '' ?>" href="<?= PUBLIC_URL ?>?url=eventos">
+                        <i class="bi bi-calendar-event"></i>
+                        <span>Eventos</span>
+                    </a>
+                    <?php endif; ?>
+                </div>
+            </details>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
         <nav class="sidebar-nav">
             <a class="sidebar-link <?= $isActive(['home']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home">
                 <span class="sidebar-link-icon"><i class="bi bi-house-heart"></i></span><span class="sidebar-link-text">Inicio</span>
@@ -224,73 +284,49 @@ if ($puedeVerPendientesGanar) {
 
             <?php if ($puedeVerGanar): ?>
             <a class="sidebar-link <?= $isActive(['personas', 'personas/ganar']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=personas/ganar">
-                <span class="sidebar-link-icon"><i class="bi bi-person-heart"></i></span><span class="sidebar-link-text">Ganar</span>
+                <span class="sidebar-link-icon"><i class="bi bi-person-heart"></i></span><span class="sidebar-link-text">Ganar-Consolidar</span>
             </a>
             <?php endif; ?>
-
-            <?php if ($puedeVerConsolidar): ?>
-            <a class="sidebar-link <?= $isActive(['home/consolidar']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home/consolidar">
-                <span class="sidebar-link-icon"><i class="bi bi-people-fill"></i></span><span class="sidebar-link-text">Consolidar</span>
+            <?php if ($puedeVerPersonasConsultaSolo): ?>
+            <?php
+            $navPersonasConsultaActiva = ($currentUrl === 'personas'
+                || strpos((string)$currentUrl, 'personas/detalle') === 0
+            );
+            ?>
+            <a class="sidebar-link <?= $navPersonasConsultaActiva ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=personas">
+                <span class="sidebar-link-icon"><i class="bi bi-people"></i></span><span class="sidebar-link-text">Consultar personas</span>
             </a>
             <?php endif; ?>
-
-            <?php if ($puedeVerDiscipular): ?>
-            <a class="sidebar-link <?= $isActive($esDiscipuloMenuDirecto ? ['home/discipular/evaluaciones', 'home/discipular'] : ['home/discipular']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=<?= $esDiscipuloMenuDirecto ? 'home/discipular/evaluaciones' : 'home/discipular' ?>">
-                <span class="sidebar-link-icon"><i class="bi bi-journal-richtext"></i></span><span class="sidebar-link-text"><?= $esDiscipuloMenuDirecto ? 'Evaluaciones y Clases' : 'Discipular' ?></span>
-            </a>
-            <?php endif; ?>
+            <!-- Eliminado acceso directo y comentarios de Material para evitar restos visibles -->
 
             <?php if ($puedeVerEnviar): ?>
-            <a class="sidebar-link <?= $isActive(['celulas']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=celulas">
+            <a class="sidebar-link <?= $isActive(['celulas', 'asistencias']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=celulas">
                 <span class="sidebar-link-icon"><i class="bi bi-send-check"></i></span><span class="sidebar-link-text">Enviar</span>
             </a>
             <?php endif; ?>
 
-            <?php if ($puedeVerMaterial): ?>
-            <a class="sidebar-link <?= $isActive(['home/material']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home/material">
-                <span class="sidebar-link-icon"><i class="bi bi-book-half"></i></span><span class="sidebar-link-text">Material</span>
+            <?php if (
+                AuthController::esAdministrador()
+                || AuthController::tienePermiso('programas', 'ver')
+                || AuthController::tienePermiso('personas', 'ver')
+                || AuthController::tienePermiso('personas_consulta', 'ver')
+                || AuthController::tienePermiso('programas', 'ver_universidad_vida')
+                || AuthController::tienePermiso('programas', 'ver_capacitacion_destino')
+            ): ?>
+            <a class="sidebar-link <?= $isActive(['programas']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=programas">
+                <span class="sidebar-link-icon"><i class="bi bi-mortarboard"></i></span><span class="sidebar-link-text">Programas</span>
             </a>
             <?php endif; ?>
 
             <?php if ($puedeVerMinisterios): ?>
-            <a class="sidebar-link <?= $isActive(['ministerios']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=ministerios">
-                <span class="sidebar-link-icon"><i class="bi bi-bank2"></i></span><span class="sidebar-link-text">Ministerios</span>
+            <a class="sidebar-link <?= $isActive(['discipular/ministerios','discipular/ministerios/equipo-principal']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=discipular/ministerios/equipo-principal">
+                <span class="sidebar-link-icon"><i class="bi bi-bank2"></i></span><span class="sidebar-link-text">Discipular</span>
             </a>
             <?php endif; ?>
 
             <?php if ($puedeVerRegistroTeensKids): ?>
             <a class="sidebar-link <?= $isActive(['teen']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=teen/registro-menores">
-                <span class="sidebar-link-icon"><i class="bi bi-balloon-heart"></i></span><span class="sidebar-link-text">Registro Teens y Kids</span>
-            </a>
-            <?php endif; ?>
-
-            <?php if ($puedeVerAsistencias): ?>
-            <a class="sidebar-link <?= $isActive(['asistencias']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=asistencias">
-                <span class="sidebar-link-icon"><i class="bi bi-check2-square"></i></span><span class="sidebar-link-text">Asistencias</span>
-            </a>
-            <?php endif; ?>
-
-            <?php if ($puedeVerPeticiones): ?>
-            <a class="sidebar-link <?= $isActive(['peticiones']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=peticiones">
-                <span class="sidebar-link-icon"><i class="bi bi-chat-heart"></i></span><span class="sidebar-link-text">Peticiones</span>
-            </a>
-            <?php endif; ?>
-
-            <?php if ($puedeVerTransmisiones): ?>
-            <a class="sidebar-link <?= $isActive(['transmisiones']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=transmisiones">
-                <span class="sidebar-link-icon"><i class="bi bi-broadcast"></i></span><span class="sidebar-link-text">Transmisiones</span>
-            </a>
-            <?php endif; ?>
-
-            <?php if ($puedeVerEventosMenu): ?>
-            <a class="sidebar-link <?= $isActive(['eventos']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=eventos">
-                <span class="sidebar-link-icon"><i class="bi bi-calendar-event"></i></span><span class="sidebar-link-text">Eventos</span>
-            </a>
-            <?php endif; ?>
-
-            <?php if ($puedeVerObsequios): ?>
-            <a class="sidebar-link <?= $isActive(['entrega_obsequio', 'registro_obsequio']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=entrega_obsequio">
-                <span class="sidebar-link-icon"><i class="bi bi-gift-fill"></i></span><span class="sidebar-link-text">Obsequios</span>
+                <span class="sidebar-link-icon"><i class="bi bi-balloon-heart"></i></span><span class="sidebar-link-text">Teens</span>
             </a>
             <?php endif; ?>
 
@@ -301,23 +337,14 @@ if ($puedeVerPendientesGanar) {
             <?php endif; ?>
 
             <?php if ($puedeVerReportes): ?>
-            <a class="sidebar-link <?= $isActive(['reportes']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=reportes">
-                <span class="sidebar-link-icon"><i class="bi bi-bar-chart"></i></span><span class="sidebar-link-text">Reportes</span>
-            </a>
-            <?php endif; ?>
-
-            <?php if ($puedeVerRoles): ?>
-            <a class="sidebar-link <?= $isActive(['roles']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=roles">
-                <span class="sidebar-link-icon"><i class="bi bi-person-badge"></i></span><span class="sidebar-link-text">Roles</span>
+            <a class="sidebar-link <?= ($currentUrl === 'reportes/dashboard-ganar') ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=reportes/dashboard-ganar">
+                <span class="sidebar-link-icon"><i class="bi bi-speedometer2"></i></span><span class="sidebar-link-text">Dashboard Ganar</span>
             </a>
             <?php endif; ?>
 
             <?php if (AuthController::esAdministrador()): ?>
-            <a class="sidebar-link <?= $isActive(['cuentas']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=cuentas">
-                <span class="sidebar-link-icon"><i class="bi bi-people-fill"></i></span><span class="sidebar-link-text">Cuentas</span>
-            </a>
-            <a class="sidebar-link <?= $isActive(['permisos']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=permisos">
-                <span class="sidebar-link-icon"><i class="bi bi-shield-check"></i></span><span class="sidebar-link-text">Permisos</span>
+            <a class="sidebar-link <?= $isActive(['cuentas', 'roles', 'permisos']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=cuentas">
+                <span class="sidebar-link-icon"><i class="bi bi-people-fill"></i></span><span class="sidebar-link-text">Administración</span>
             </a>
             <?php endif; ?>
         </nav>
@@ -379,14 +406,13 @@ if ($puedeVerPendientesGanar) {
             type="button"
             class="ganar-alert-bell"
             id="ganarAlertBell"
-            title="Pendientes por conectar: <?= (int)$totalPendientesPorConectar ?> · Nuevas en Almas ganadas: <?= (int)$totalNuevasAlmasGanadas ?> · Universidad de la Vida: <?= (int)$totalUniversidadVida ?>"
+            title="Discípulos pendientes por ubicar: <?= (int)$totalPendientesPorConectar ?> · Nuevas en Almas ganadas: <?= (int)$totalNuevasAlmasGanadas ?>"
             aria-label="Abrir resumen de notificaciones"
             aria-expanded="false"
             aria-controls="ganarAlertPanel"
             data-pendientes="<?= (int)$totalCampanaGanar ?>"
             data-pendientes-conectar="<?= (int)$totalPendientesPorConectar ?>"
             data-nuevas-ganadas="<?= (int)$totalNuevasAlmasGanadas ?>"
-            data-universidad-vida="<?= (int)$totalUniversidadVida ?>"
         >
             <i class="bi bi-bell-fill"></i>
             <?php if ((int)$totalCampanaGanar > 0): ?>
@@ -402,11 +428,11 @@ if ($puedeVerPendientesGanar) {
                 </button>
             </div>
 
-            <a href="<?= PUBLIC_URL ?>?url=personas&panel=pendientes_ubicacion" class="ganar-alert-item">
+            <a href="<?= PUBLIC_URL ?>?url=personas" class="ganar-alert-item">
                 <span class="ganar-alert-item-icon icon-conectar"><i class="bi bi-diagram-3"></i></span>
                 <span class="ganar-alert-item-content">
-                    <span class="ganar-alert-item-title">Pendientes por conectar</span>
-                    <span class="ganar-alert-item-desc">Discipulos antiguos con asignacion incompleta</span>
+                    <span class="ganar-alert-item-title">Discípulos pendientes por ubicar</span>
+                    <span class="ganar-alert-item-desc">Padrón (asignación incompleta) e inscripciones Universidad de la Vida / Escuelas de Formación</span>
                 </span>
                 <span class="ganar-alert-item-count"><?= (int)$totalPendientesPorConectar ?></span>
             </a>
@@ -420,14 +446,6 @@ if ($puedeVerPendientesGanar) {
                 <span class="ganar-alert-item-count"><?= (int)$totalNuevasAlmasGanadas ?></span>
             </a>
 
-            <a href="<?= PUBLIC_URL ?>?url=personas/universidad-vida" class="ganar-alert-item">
-                <span class="ganar-alert-item-icon icon-nuevos"><i class="bi bi-mortarboard-fill"></i></span>
-                <span class="ganar-alert-item-content">
-                    <span class="ganar-alert-item-title">Universidad de la Vida</span>
-                    <span class="ganar-alert-item-desc">Inscritos pendientes de ubicación en U. de la Vida</span>
-                </span>
-                <span class="ganar-alert-item-count"><?= (int)$totalUniversidadVida ?></span>
-            </a>
         </div>
 
         <div
@@ -443,9 +461,8 @@ if ($puedeVerPendientesGanar) {
                 <div>
                     <strong>Resumen de seguimiento</strong>
                     <p>
-                        Pendientes por conectar: <strong><?= (int)$totalPendientesPorConectar ?></strong><br>
-                        Nuevas en Almas ganadas: <strong><?= (int)$totalNuevasAlmasGanadas ?></strong><br>
-                        Universidad de la Vida: <strong><?= (int)$totalUniversidadVida ?></strong>
+                        Discípulos pendientes por ubicar: <strong><?= (int)$totalPendientesPorConectar ?></strong><br>
+                        Nuevas en Almas ganadas: <strong><?= (int)$totalNuevasAlmasGanadas ?></strong>
                     </p>
                 </div>
             </div>

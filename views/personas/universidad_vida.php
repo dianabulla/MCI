@@ -1,6 +1,7 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 <?php
-$puedeVerPersona    = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver');
+$puedeVerPersona    = AuthController::puedeVerPersonasConsulta();
+$puedeModuloGanarCompleto = AuthController::puedeVerModuloPersonasGanar();
 $puedeEditarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
 $puedeEliminarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'eliminar');
 $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPersona;
@@ -32,7 +33,9 @@ foreach ($personas as $personaResumen) {
     <div class="personas-header-actions">
         <div class="personas-action-group personas-action-group-nav">
             <a href="<?= PUBLIC_URL ?>?url=personas" class="personas-action-pill">Discipulos</a>
+            <?php if ($puedeModuloGanarCompleto): ?>
             <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="personas-action-pill">Almas ganadas</a>
+            <?php endif; ?>
             <a href="<?= PUBLIC_URL ?>?url=personas/universidad-vida" class="personas-action-pill is-active" aria-current="page">Universidad de la Vida</a>
         </div>
         <div class="personas-action-group">

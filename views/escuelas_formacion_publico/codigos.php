@@ -163,38 +163,78 @@
     </style>
 </head>
 <body>
+<?php
+$programaFiltro = trim((string)($programa_filtro ?? ''));
+$tarjetasQr = [
+    'universidad_vida' => [
+        'titulo' => 'Universidad de la Vida',
+        'descripcion' => 'Acceso publico exclusivo para inscripciones de Universidad de la Vida.',
+        'url' => (string)($url_formulario_uv ?? ''),
+        'imagen_id' => 'qr-img-formulario-uv',
+        'alt' => 'QR formulario universidad de la vida',
+        'archivo' => 'qr_universidad_vida.png',
+        'boton_formulario' => 'Abrir formulario UV',
+        'boton_clase' => 'btn',
+    ],
+    'capacitacion_destino' => [
+        'titulo' => 'Capacitacion Destino',
+        'descripcion' => 'Acceso publico exclusivo para inscripciones de Capacitacion Destino.',
+        'url' => (string)($url_formulario_capacitacion ?? ''),
+        'imagen_id' => 'qr-img-formulario-capacitacion',
+        'alt' => 'QR formulario capacitacion destino',
+        'archivo' => 'qr_capacitacion_destino.png',
+        'boton_formulario' => 'Abrir formulario Capacitacion',
+        'boton_clase' => 'btn secondary',
+    ],
+];
+
+if ($programaFiltro !== '' && isset($tarjetasQr[$programaFiltro])) {
+    $tarjetasQr = [$programaFiltro => $tarjetasQr[$programaFiltro]];
+}
+
+$mostrarAccionesFormulario = count($tarjetasQr) > 1;
+?>
 <div class="container">
     <div class="header">
         <p class="eyebrow">Escuelas de Formacion</p>
-        <h1>Codigos QR Publicos</h1>
-        <p class="sub">Comparte este QR para abrir directamente el formulario unico de Registro / Asistencia desde el celular.</p>
+        <h1><?= $mostrarAccionesFormulario ? 'Codigos QR Publicos' : 'Codigo QR Publico' ?></h1>
+        <p class="sub">
+            <?= $mostrarAccionesFormulario
+                ? 'Comparte estos QR para abrir directamente el formulario de cada programa desde el celular.'
+                : 'Comparte este QR para abrir directamente el formulario correspondiente desde el celular.' ?>
+        </p>
     </div>
 
     <div class="body">
         <div class="grid">
-            <div class="card">
-                <h2>Formulario unico: Registro / Asistencia</h2>
-                <p>Acceso publico unificado para Escuelas de Formacion.</p>
-                <?php $qrFormularioUnico = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' . rawurlencode((string)$url_formulario_unico); ?>
-                <input class="url" type="text" readonly value="<?= htmlspecialchars((string)$url_formulario_unico, ENT_QUOTES, 'UTF-8') ?>" onclick="this.select()">
-                <div class="qr-wrap">
-                    <img id="qr-img-formulario-unico" src="<?= htmlspecialchars($qrFormularioUnico, ENT_QUOTES, 'UTF-8') ?>" alt="QR formulario unico escuelas">
+            <?php foreach ($tarjetasQr as $clavePrograma => $tarjeta): ?>
+                <?php $urlQr = 'https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' . rawurlencode((string)$tarjeta['url']); ?>
+                <div class="card">
+                    <h2><?= htmlspecialchars((string)$tarjeta['titulo']) ?></h2>
+                    <p><?= htmlspecialchars((string)$tarjeta['descripcion']) ?></p>
+                    <input class="url" type="text" readonly value="<?= htmlspecialchars((string)$tarjeta['url'], ENT_QUOTES, 'UTF-8') ?>" onclick="this.select()">
+                    <div class="qr-wrap">
+                        <img id="<?= htmlspecialchars((string)$tarjeta['imagen_id'], ENT_QUOTES, 'UTF-8') ?>" src="<?= htmlspecialchars($urlQr, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)$tarjeta['alt'], ENT_QUOTES, 'UTF-8') ?>">
+                    </div>
+                    <div style="text-align:center;">
+                        <a class="btn download js-descargar-qr"
+                           href="<?= htmlspecialchars($urlQr . '&format=png', ENT_QUOTES, 'UTF-8') ?>"
+                           download="<?= htmlspecialchars((string)$tarjeta['archivo'], ENT_QUOTES, 'UTF-8') ?>"
+                           data-filename="<?= htmlspecialchars((string)$tarjeta['archivo'], ENT_QUOTES, 'UTF-8') ?>">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
+                            Descarga QR registro
+                        </a>
+                    </div>
                 </div>
-                <div style="text-align:center;">
-                    <a class="btn download js-descargar-qr"
-                       href="<?= htmlspecialchars($qrFormularioUnico . '&format=png', ENT_QUOTES, 'UTF-8') ?>"
-                       download="qr_registro_asistencia_escuelas.png"
-                       data-filename="qr_registro_asistencia_escuelas.png">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
-                        Descargar QR
-                    </a>
-                </div>
-            </div>
+            <?php endforeach; ?>
         </div>
 
-        <div class="actions">
-            <a class="btn" href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico" target="_blank" rel="noopener">Abrir Registro / Asistencia</a>
-        </div>
+        <?php if ($mostrarAccionesFormulario): ?>
+            <div class="actions">
+                <a class="btn" href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/universidad-vida" target="_blank" rel="noopener">Abrir formulario UV</a>
+                <a class="btn secondary" href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/capacitacion-destino" target="_blank" rel="noopener">Abrir formulario Capacitacion</a>
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 

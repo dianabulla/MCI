@@ -1,5 +1,19 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
+<div class="page-header" style="margin-bottom: 20px;">
+    <h2 style="margin: 0;">Administración</h2>
+</div>
+
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-body">
+        <div class="page-actions personas-mobile-stack" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="<?= PUBLIC_URL ?>index.php?url=cuentas" class="btn btn-nav-pill active">Cuentas</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=roles" class="btn btn-nav-pill">Roles</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=permisos" class="btn btn-nav-pill">Permisos</a>
+        </div>
+    </div>
+</div>
+
 <?php
 $persona = is_array($persona ?? null) ? $persona : null;
 $cuentaAcceso = is_array($cuenta_acceso ?? null) ? $cuenta_acceso : null;

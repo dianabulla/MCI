@@ -6,6 +6,7 @@
 require_once APP . '/Models/Rol.php';
 require_once APP . '/Controllers/AuthController.php';
 require_once APP . '/Config/Database.php';
+require_once APP . '/Helpers/PermisosCatalogo.php';
 
 class PermisosController extends BaseController {
     private $rolModel;
@@ -58,7 +59,8 @@ class PermisosController extends BaseController {
             'roles' => $roles,
             'modulos' => $modulos,
             'permisos' => $permisos,
-            'modulos_obsoletos' => $modulosObsoletos
+            'modulos_obsoletos' => $modulosObsoletos,
+            'catalogo_acciones_modulo' => PermisosCatalogo::accionesPorModulo(),
         ];
         
         $this->view('permisos/index', $data);
@@ -165,6 +167,59 @@ class PermisosController extends BaseController {
             return;
         }
 
+        if (stripos($campo, 'extra:') === 0) {
+            $accionExtra = strtolower(trim(substr($campo, 6)));
+            if ($accionExtra === '' || !PermisosCatalogo::esAccionValida($modulo, $accionExtra)) {
+                echo json_encode(['success' => false, 'error' => 'Acción avanzada no válida']);
+                return;
+            }
+
+            try {
+                $sql = "SELECT Id_Permiso, Acciones_Extra FROM permisos WHERE Id_Rol = ? AND Modulo = ?";
+                $stmt = $this->db->prepare($sql);
+                $stmt->execute([$idRol, $modulo]);
+                $permiso = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$permiso) {
+                    $sqlIns = "INSERT INTO permisos (Id_Rol, Modulo, Puede_Ver, Puede_Crear, Puede_Editar, Puede_Eliminar)
+                               VALUES (?, ?, 0, 0, 0, 0)";
+                    $stmtIns = $this->db->prepare($sqlIns);
+                    $stmtIns->execute([$idRol, $modulo]);
+
+                    $stmt->execute([$idRol, $modulo]);
+                    $permiso = $stmt->fetch(PDO::FETCH_ASSOC);
+                }
+
+                if (!$permiso) {
+                    echo json_encode(['success' => false, 'error' => 'No se pudo crear el permiso']);
+                    return;
+                }
+
+                $mapa = PermisosCatalogo::mapaDesdeFila(['Acciones_Extra' => $permiso['Acciones_Extra'] ?? null]);
+                $mapa[$accionExtra] = $valor ? 1 : 0;
+                $json = PermisosCatalogo::jsonDesdeMapa($mapa);
+
+                $sqlUp = "UPDATE permisos SET Acciones_Extra = ? WHERE Id_Permiso = ?";
+                $stmtUp = $this->db->prepare($sqlUp);
+                $stmtUp->execute([$json, $permiso['Id_Permiso']]);
+
+                $this->actualizarSesionPermisoSiAplica($idRol, $modulo, 'extra:' . $accionExtra, $valor);
+
+                echo json_encode(['success' => true]);
+            } catch (Throwable $e) {
+                $msg = $e->getMessage();
+                if (stripos($msg, 'Unknown column') !== false && stripos($msg, 'Acciones_Extra') !== false) {
+                    echo json_encode([
+                        'success' => false,
+                        'error' => 'Falta la columna Acciones_Extra en la tabla permisos. Ejecute docs/sql/2026-05-15_permisos_acciones_extra.sql',
+                    ]);
+                    return;
+                }
+                echo json_encode(['success' => false, 'error' => $msg]);
+            }
+            return;
+        }
+
         // Validar campo para evitar inyección SQL (whitelist)
         $campoDb = $this->getCampoDb($campo);
         if ($campoDb === null) {
@@ -186,7 +241,7 @@ class PermisosController extends BaseController {
                 $stmt->execute([$valor, $permiso['Id_Permiso']]);
             } else {
                 // Crear nuevo permiso con todo en 0
-                $sql = "INSERT INTO permisos (Id_Rol, Modulo, Puede_Ver, Puede_Crear, Puede_Editar, Puede_Eliminar) 
+                $sql = "INSERT INTO permisos (Id_Rol, Modulo, Puede_Ver, Puede_Crear, Puede_Editar, Puede_Eliminar)
                         VALUES (?, ?, 0, 0, 0, 0)";
                 $stmt = $this->db->prepare($sql);
                 $stmt->execute([$idRol, $modulo]);
@@ -198,47 +253,71 @@ class PermisosController extends BaseController {
             }
 
             // Si se actualiza el rol del usuario actual, reflejar en sesión inmediatamente.
-            $rolSesion = (int)($_SESSION['usuario_rol'] ?? 0);
-            if ($rolSesion > 0 && $rolSesion === $idRol) {
-                $moduloSesion = trim((string)$modulo);
-                if ($moduloSesion !== '') {
-                    if (!isset($_SESSION['permisos'][$moduloSesion]) || !is_array($_SESSION['permisos'][$moduloSesion])) {
-                        $_SESSION['permisos'][$moduloSesion] = [
-                            'ver' => 0,
-                            'crear' => 0,
-                            'editar' => 0,
-                            'eliminar' => 0,
-                        ];
-                    }
-
-                    $accionSesion = str_replace('puede_', '', strtolower((string)$campo));
-                    if (in_array($accionSesion, ['ver', 'crear', 'editar', 'eliminar'], true)) {
-                        $_SESSION['permisos'][$moduloSesion][$accionSesion] = $valor ? 1 : 0;
-                    }
-
-                    $_SESSION['permisos_configurados'] = !empty($_SESSION['permisos']);
-                    $_SESSION['permisos_last_sync'] = time();
-                }
-            }
+            $this->actualizarSesionPermisoSiAplica($idRol, $modulo, $campo, $valor);
 
             echo json_encode(['success' => true]);
         } catch (Throwable $e) {
-            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+            $msg = $e->getMessage();
+            if (stripos($msg, 'Unknown column') !== false && stripos($msg, 'Acciones_Extra') !== false) {
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'Falta la columna Acciones_Extra en la tabla permisos. Ejecute docs/sql/2026-05-15_permisos_acciones_extra.sql',
+                ]);
+                return;
+            }
+            echo json_encode(['success' => false, 'error' => $msg]);
+        }
+    }
+
+    /**
+     * Refleja en la sesión activa un permiso recién guardado (CRUD o extra:clave).
+     */
+    private function actualizarSesionPermisoSiAplica(int $idRol, string $modulo, string $campo, int $valor): void {
+        $rolSesion = (int)($_SESSION['usuario_rol'] ?? 0);
+        if ($rolSesion <= 0 || $rolSesion !== $idRol) {
+            return;
+        }
+
+        $moduloSesion = trim((string)$modulo);
+        if ($moduloSesion === '') {
+            return;
+        }
+
+        if (!isset($_SESSION['permisos'][$moduloSesion]) || !is_array($_SESSION['permisos'][$moduloSesion])) {
+            $_SESSION['permisos'][$moduloSesion] = [
+                'ver' => 0,
+                'crear' => 0,
+                'editar' => 0,
+                'eliminar' => 0,
+            ];
+        }
+
+        if (stripos($campo, 'extra:') === 0) {
+            $clave = strtolower(trim(substr($campo, 6)));
+            if ($clave !== '') {
+                $_SESSION['permisos'][$moduloSesion][$clave] = $valor ? 1 : 0;
+            }
+        } else {
+            $accionSesion = str_replace('puede_', '', strtolower((string)$campo));
+            if (in_array($accionSesion, ['ver', 'crear', 'editar', 'eliminar'], true)) {
+                $_SESSION['permisos'][$moduloSesion][$accionSesion] = $valor ? 1 : 0;
+            }
+        }
+
+        $_SESSION['permisos_configurados'] = !empty($_SESSION['permisos']);
+        $_SESSION['permisos_last_sync'] = time();
+
+        $activeAccountId = (int)($_SESSION['active_account_id'] ?? 0);
+        if ($activeAccountId > 0 && isset($_SESSION['account_pool'][$activeAccountId])) {
+            $_SESSION['account_pool'][$activeAccountId]['permisos'] = $_SESSION['permisos'];
         }
     }
 
     private function esRolProtegido(int $idRol): bool {
-        if ($idRol === 6) {
-            return true;
-        }
-
         $rol = $this->rolModel->getById($idRol);
-        if (!$rol) {
-            return false;
-        }
+        $nombre = $rol ? (string)($rol['Nombre_Rol'] ?? '') : '';
 
-        $nombreRol = strtolower((string)($rol['Nombre_Rol'] ?? ''));
-        return strpos($nombreRol, 'admin') !== false;
+        return PermisosCatalogo::esRolProtegidoPermisos($idRol, $nombre);
     }
 
     /**
@@ -247,14 +326,17 @@ class PermisosController extends BaseController {
     private function getModulosBaseCatalogo(): array {
         return [
             'personas' => 'Personas',
+            'personas_consulta' => 'Personas: solo consulta (sin módulo Ganar)',
             'personas_formulario_publico' => 'Personas: Ver formulario publico',
             'personas_plantillas_whatsapp' => 'Personas: Ver plantillas WhatsApp',
             'personas_ganar_asignados' => 'Personas: Ver atajo Asignados (Pendiente)',
             'personas_ganar_reasignados' => 'Personas: Ver atajo Reasignados (Pendiente)',
             'celulas' => 'Células',
+            'material' => 'Material (centro de materiales / inicio)',
             'materiales_celulas' => 'Material: Células',
             'material_universidad_vida' => 'Material: Universidad de la Vida',
             'material_capacitacion_destino' => 'Material: Capacitación Destino',
+            'material_capacitacion_destino_subir' => 'Material: Capacitación Destino (Subir archivos)',
             'ministerios' => 'Ministerios',
             'roles' => 'Roles',
             'eventos' => 'Eventos',
@@ -262,6 +344,7 @@ class PermisosController extends BaseController {
             'asistencias' => 'Asistencias',
             'reportes' => 'Reportes',
             'transmisiones' => 'Transmisiones',
+            'programas' => 'Programas (formación / consolidado)',
             'escuelas_formacion' => 'Escuelas de Formación',
             'escuelas_formacion_marcar_asistencia' => 'Escuelas: Marcar asistencia',
             'escuelas_formacion_editar_fechas' => 'Escuelas: Editar fechas de clases',

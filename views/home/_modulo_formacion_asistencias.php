@@ -11,11 +11,18 @@ $filtroMinisterio = (string)($filtro_ministerio ?? '');
 $filtroFechaDesde = (string)($filtro_fecha_desde ?? '');
 $filtroFechaHasta = (string)($filtro_fecha_hasta ?? '');
 $programaReporte = (string)($programa_reporte ?? '');
+$esProgramaCapDestino = in_array(strtolower(trim($programaReporte)), ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true);
 $programaReporteLabel = (string)($programa_reporte_label ?? 'Programa');
+$programasTabs = $programas_tabs ?? [];
 $tarjetasResumen = $tarjetas_resumen ?? [];
 $rowsAsistencia = $rows_asistencia ?? [];
 $puedeMarcarAsistencia = !empty($puede_marcar_asistencia);
 $puedeEditarFechasAsistencia = !empty($puede_editar_fechas_asistencia);
+if ($esProgramaCapDestino) {
+    $puedeMarcarAsistencia = false;
+    $puedeEditarFechasAsistencia = false;
+}
+$modoLecturaAsistencia = !$puedeMarcarAsistencia;
 $fechasClases = $fechas_clases ?? [];
 $fechasClasesHombres = $fechas_clases_hombres ?? $fechasClases;
 $fechasClasesMujeres = $fechas_clases_mujeres ?? $fechasClases;
@@ -90,6 +97,20 @@ if ($moduloFormacionActual === 'discipular') {
 }
 ?>
 
+<?php if (!empty($programasTabs)): ?>
+<div class="card report-card" style="margin-bottom:12px; padding:10px 12px;">
+    <div class="action-group action-group-nav" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <?php foreach ($programasTabs as $tabPrograma): ?>
+            <a href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars((string)($tabPrograma['url'] ?? 'programas')) ?>"
+               class="action-pill <?= !empty($tabPrograma['active']) ? 'is-active' : '' ?>"
+               <?= !empty($tabPrograma['active']) ? 'aria-current="page"' : '' ?>>
+                <?= htmlspecialchars((string)($tabPrograma['label'] ?? 'Sección')) ?>
+            </a>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>
+
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
     <div>
         <h2 style="margin:0;"><?= htmlspecialchars($tituloModulo) ?></h2>
@@ -146,7 +167,9 @@ if ($moduloFormacionActual === 'discipular') {
     </div>
     <?php if (!$puedeMarcarAsistencia): ?>
         <div class="alert alert-warning" style="margin:10px 0 0 0; padding:8px 10px; font-size:12px;">
-            Tu rol no tiene permiso para marcar asistencias en esta matriz.
+            <?= $esProgramaCapDestino
+                ? 'Capacitacion Destino esta en modo lectura. No se permite marcar asistencias.'
+                : 'Tu rol no tiene permiso para marcar asistencias en esta matriz.' ?>
         </div>
     <?php endif; ?>
     <?php if (!$puedeEditarFechasAsistencia): ?>
@@ -200,7 +223,12 @@ if ($moduloFormacionActual === 'discipular') {
     </form>
 </div>
 
-<div class="card report-card" style="padding:14px;">
+<div class="card report-card asistencia-readonly-wrap <?= $modoLecturaAsistencia ? 'is-readonly' : '' ?>" style="padding:14px;">
+    <?php if ($modoLecturaAsistencia): ?>
+        <div class="asistencia-readonly-overlay" aria-hidden="true">
+            <div class="asistencia-readonly-label">Modo lectura</div>
+        </div>
+    <?php endif; ?>
     <?php
     $rowsAsistenciaJovenes = [];
     $rowsAsistenciaTeens = [];
@@ -1041,6 +1069,34 @@ if ($moduloFormacionActual === 'discipular') {
     padding:10px;
     background:#fff;
     border-radius:8px;
+}
+
+.asistencia-readonly-wrap {
+    position: relative;
+}
+
+.asistencia-readonly-wrap.is-readonly .asistencia-readonly-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(236, 243, 252, 0.62);
+    backdrop-filter: blur(1.5px);
+    z-index: 30;
+    border-radius: 12px;
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 10px;
+}
+
+.asistencia-readonly-label {
+    background: #ffffff;
+    border: 1px solid #cfdcf0;
+    color: #365983;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 4px 10px;
 }
 </style>
 

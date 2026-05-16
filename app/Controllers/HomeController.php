@@ -4,6 +4,7 @@
  */
 
 require_once APP . '/Models/EscuelaFormacionEstado.php';
+require_once APP . '/Models/EscuelaFormacionAsistenciaClase.php';
 
 class HomeController extends BaseController {
 
@@ -28,7 +29,29 @@ class HomeController extends BaseController {
 
     private function normalizarProgramaConsolidar($programa) {
         $programa = trim((string)$programa);
-        return $programa === 'encuentro' ? 'universidad_vida' : $programa;
+        if ($programa === 'encuentro') {
+            return 'universidad_vida';
+        }
+
+        if (in_array($programa, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+            return 'capacitacion_destino';
+        }
+
+        return $programa;
+    }
+
+    private function obtenerProgramaDestinoMovimientoFormacion(string $programaActual): string {
+        $programaActual = trim($programaActual);
+
+        if (in_array($programaActual, ['universidad_vida', 'encuentro', 'bautismo'], true)) {
+            return 'capacitacion_destino_nivel_1';
+        }
+
+        if (in_array($programaActual, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+            return 'universidad_vida';
+        }
+
+        return '';
     }
 
     private function construirOpcionesFiltroMinisterioLider($filtroCelulas) {
@@ -487,7 +510,13 @@ class HomeController extends BaseController {
 
         return array_values(array_filter($rows, function($row) use ($terminoNormalizado, $terminoCompacto, $tokens) {
             $nombre = (string)($row['Nombre'] ?? '');
-            return $this->coincideBusquedaFlexible($nombre, $terminoNormalizado, $terminoCompacto, $tokens);
+            $cedula = (string)($row['Cedula'] ?? '');
+            $telefono = (string)($row['Telefono'] ?? '');
+            return (
+                $this->coincideBusquedaFlexible($nombre, $terminoNormalizado, $terminoCompacto, $tokens)
+                || $this->coincideBusquedaFlexible($cedula, $terminoNormalizado, $terminoCompacto, $tokens)
+                || $this->coincideBusquedaFlexible($telefono, $terminoNormalizado, $terminoCompacto, $tokens)
+            );
         }));
     }
     
@@ -497,11 +526,11 @@ class HomeController extends BaseController {
         if ($modulo === 'discipular') {
             return [
                 'modulo' => 'discipular',
-                'titulo' => 'Discipular',
-                'ruta_base' => 'home/discipular',
-                'ruta_asistencias' => 'home/discipular/asistencias',
-                'ruta_exportar' => 'home/discipular/exportar',
-                'vista' => 'home/discipular',
+                'titulo' => 'Programas',
+                'ruta_base' => 'programas',
+                'ruta_asistencias' => 'programas/asistencias',
+                'ruta_exportar' => 'programas/exportar',
+                'vista' => 'programas',
                 'programa_default' => 'capacitacion_destino_nivel_1',
                 'programas_permitidos' => ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'],
                 'programas_opciones' => [
@@ -521,11 +550,12 @@ class HomeController extends BaseController {
             'ruta_exportar' => 'home/consolidar/exportar',
             'vista' => 'home/consolidar',
             'programa_default' => 'universidad_vida',
-            'programas_permitidos' => ['universidad_vida'],
+            'programas_permitidos' => ['universidad_vida', 'capacitacion_destino'],
             'programas_opciones' => [
                 'universidad_vida' => 'Universidad de la Vida',
+                'capacitacion_destino' => 'Capacitación Destino',
             ],
-            'resumen_programas' => ['universidad_vida'],
+            'resumen_programas' => ['universidad_vida', 'capacitacion_destino'],
         ];
     }
 
@@ -546,7 +576,7 @@ class HomeController extends BaseController {
         $filtroBuscar = preg_replace('/\s+/u', ' ', trim((string)($_GET['buscar'] ?? ($_GET['buscar_uv'] ?? ''))));
         $filtroGenero = $this->normalizarFiltroGeneroEscuela($_GET['genero'] ?? 'todos');
         $filtroProgramaInscripcion = trim((string)($_GET['insc_programa'] ?? ($_GET['programa'] ?? '')));
-        if ($filtroProgramaInscripcion === 'capacitacion_destino') {
+        if ((string)($config['modulo'] ?? '') === 'discipular' && $filtroProgramaInscripcion === 'capacitacion_destino') {
             $filtroProgramaInscripcion = 'capacitacion_destino_nivel_1';
         }
         if ((string)($config['modulo'] ?? '') === 'consolidar') {
@@ -563,9 +593,14 @@ class HomeController extends BaseController {
         $idMinisterioFiltro = ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null;
         $idLiderFiltro = ($filtroLider !== '' && (int)$filtroLider > 0) ? (int)$filtroLider : null;
 
-        $programasConsulta = ((string)($config['modulo'] ?? '') === 'consolidar' && $filtroProgramaInscripcion === 'universidad_vida')
-            ? ['universidad_vida', 'encuentro']
-            : [$filtroProgramaInscripcion];
+        $programasConsulta = [$filtroProgramaInscripcion];
+        if ((string)($config['modulo'] ?? '') === 'consolidar') {
+            if ($filtroProgramaInscripcion === 'universidad_vida') {
+                $programasConsulta = ['universidad_vida', 'encuentro'];
+            } elseif ($filtroProgramaInscripcion === 'capacitacion_destino') {
+                $programasConsulta = ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'];
+            }
+        }
 
         $inscripcionesPublicas = [];
         foreach ($programasConsulta as $programaConsulta) {
@@ -832,7 +867,7 @@ class HomeController extends BaseController {
         $filtroFechaDesde = trim((string)($_GET['fecha_desde'] ?? ''));
         $filtroFechaHasta = trim((string)($_GET['fecha_hasta'] ?? ''));
         $filtroProgramaInscripcion = trim((string)($_GET['insc_programa'] ?? ($_GET['programa'] ?? '')));
-        if ($filtroProgramaInscripcion === 'capacitacion_destino') {
+        if ((string)($config['modulo'] ?? '') === 'discipular' && $filtroProgramaInscripcion === 'capacitacion_destino') {
             $filtroProgramaInscripcion = 'capacitacion_destino_nivel_1';
         }
         if ((string)($config['modulo'] ?? '') === 'consolidar') {
@@ -854,9 +889,14 @@ class HomeController extends BaseController {
 
         $idMinisterioFiltro = ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null;
 
-        $programasConsulta = ((string)($config['modulo'] ?? '') === 'consolidar' && $filtroProgramaInscripcion === 'universidad_vida')
-            ? ['universidad_vida', 'encuentro']
-            : [$filtroProgramaInscripcion];
+        $programasConsulta = [$filtroProgramaInscripcion];
+        if ((string)($config['modulo'] ?? '') === 'consolidar') {
+            if ($filtroProgramaInscripcion === 'universidad_vida') {
+                $programasConsulta = ['universidad_vida', 'encuentro'];
+            } elseif ($filtroProgramaInscripcion === 'capacitacion_destino') {
+                $programasConsulta = ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'];
+            }
+        }
 
         $inscripcionesPublicas = [];
         foreach ($programasConsulta as $programaConsulta) {
@@ -1056,13 +1096,16 @@ class HomeController extends BaseController {
             'fechas_clases_mujeres' => $fechasClasesMujeres,
             'rows_asistencia' => $rowsAsistencia,
             'encuentro_doble_clase5' => $encuentroDobleClase5,
-            'puede_marcar_asistencia' => $this->puedeMarcarAsistenciaEscuelasFormacion(),
+            'puede_marcar_asistencia' => $this->puedeMarcarAsistenciaProgramaEscuelasFormacion($filtroProgramaInscripcion),
             'puede_editar_fechas_asistencia' => $this->puedeEditarFechasEscuelasFormacion(),
         ];
     }
 
     private function exportarModuloFormacion($modulo) {
-        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('personas', 'ver')) {
+        if (!AuthController::esAdministrador()
+            && !AuthController::tienePermiso('personas', 'ver')
+            && !AuthController::tieneCoordinacionTotalProgramas()
+            && !AuthController::tienePermiso('programas', 'exportar_consolidado')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -1083,20 +1126,17 @@ class HomeController extends BaseController {
     public function index() {
         require_once APP . '/Models/Persona.php';
         require_once APP . '/Models/Celula.php';
-        require_once APP . '/Models/Ministerio.php';
         require_once APP . '/Models/Evento.php';
         require_once APP . '/Models/EscuelaFormacionInscripcion.php';
         require_once APP . '/Helpers/DataIsolation.php';
 
         $personaModel = new Persona();
         $celulaModel = new Celula();
-        $ministerioModel = new Ministerio();
         $eventoModel = new Evento();
         $inscripcionModel = new EscuelaFormacionInscripcion();
 
         $filtroPersonas = DataIsolation::generarFiltroPersonas();
         $filtroCelulas = DataIsolation::generarFiltroCelulas();
-        $filtroMinisterios = DataIsolation::generarFiltroMinisterios();
         $filtroEventos = DataIsolation::generarFiltroEventos();
         $resumenInscripciones = $inscripcionModel->getResumenProgramas();
 
@@ -1121,7 +1161,6 @@ class HomeController extends BaseController {
         $data = [
             'totalPersonas' => count($personaModel->getAllActivosWithRole($filtroPersonas)),
             'totalCelulas' => count($celulaModel->getAllWithMemberCountAndRole($filtroCelulas)),
-            'totalMinisterios' => count($ministerioModel->getAllWithMemberCountAndRole($filtroMinisterios)),
             'totalLideresCelula' => $personaModel->getTotalLideresCelulaWithRole($filtroPersonas),
             'eventosProximos' => $eventoModel->getUpcomingWithRole($filtroEventos),
             'totalConsolidar' => (int)$totalConsolidarPanel,
@@ -1136,24 +1175,6 @@ class HomeController extends BaseController {
 
     private function obtenerModulosMaterial(): array {
         return [
-            'celulas' => [
-                'clave' => 'celulas',
-                'titulo' => 'Material de Celulas',
-                'permiso' => 'materiales_celulas',
-                'prefijo_archivo' => 'material_celulas',
-                'ruta' => 'celulas/materiales',
-                'icono' => 'bi bi-journal-bookmark-fill',
-                'color' => '#fd7e14',
-            ],
-            'teens' => [
-                'clave' => 'teens',
-                'titulo' => 'Material Teens',
-                'permiso' => 'teen',
-                'prefijo_archivo' => 'material_teens',
-                'ruta' => 'home/material/teens',
-                'icono' => 'bi bi-emoji-sunglasses-fill',
-                'color' => '#e83e8c',
-            ],
             'universidad_vida' => [
                 'clave' => 'universidad_vida',
                 'titulo' => 'Material Universidad de la Vida',
@@ -1165,12 +1186,30 @@ class HomeController extends BaseController {
             ],
             'capacitacion_destino' => [
                 'clave' => 'capacitacion_destino',
-                'titulo' => 'Material Capacitacion Destino',
+                'titulo' => 'Material Capacitación Destino',
                 'permiso' => 'material_capacitacion_destino',
                 'prefijo_archivo' => 'material_capacitacion_destino',
                 'ruta' => 'home/material/capacitacion-destino',
                 'icono' => 'bi bi-signpost-split-fill',
-                'color' => '#7a4e08',
+                'color' => '#5b3c88',
+            ],
+            'celulas' => [
+                'clave' => 'celulas',
+                'titulo' => 'Material de Celulas',
+                'permiso' => 'materiales_celulas',
+                'prefijo_archivo' => 'material_celulas',
+                'ruta' => 'celulas/materiales',
+                'icono' => 'bi bi-journal-bookmark-fill',
+                'color' => '#fd7e14',
+            ],
+            'teens' => [
+                'clave' => 'teens',
+                'titulo' => 'Material de Teens',
+                'permiso' => 'teen',
+                'prefijo_archivo' => 'material_teens',
+                'ruta' => 'home/material/teens',
+                'icono' => 'bi bi-balloon-heart-fill',
+                'color' => '#d1457b',
             ],
         ];
     }
@@ -1186,6 +1225,19 @@ class HomeController extends BaseController {
 
         $permiso = (string)$modulo['permiso'];
         return AuthController::tienePermiso($permiso, 'crear') || AuthController::tienePermiso($permiso, 'editar');
+    }
+
+    private function puedeSubirEnModuloMaterial(array $modulo): bool {
+        if (AuthController::esAdministrador()) {
+            return true;
+        }
+
+        // En Capacitación Destino la subida se controla con un permiso dedicado.
+        if ((string)($modulo['clave'] ?? '') === 'capacitacion_destino') {
+            return AuthController::tienePermiso('material_capacitacion_destino_subir', 'crear');
+        }
+
+        return $this->puedeGestionarModuloMaterial($modulo);
     }
 
     private function obtenerDirectorioModuloMaterial(array $modulo): string {
@@ -1748,11 +1800,13 @@ class HomeController extends BaseController {
                     'modulo' => $modulo,
                     'leccion' => $leccion,
                     'url_evaluacion' => PUBLIC_URL
-                        . '?url=home/discipular/evaluaciones&from_material=1'
+                        . '?url=programas/evaluaciones&from_material=1'
                         . '&nivel=' . $nivel
                         . '&modulo=' . $modulo
                         . '&leccion=' . urlencode($leccion),
-                    'url_clase' => $linkClase,
+                    'url_clase' => $linkClase !== ''
+                        ? (PUBLIC_URL . '?url=programas/ir-clase&nivel=' . $nivel . '&modulo=' . $modulo)
+                        : '',
                 ];
             }
         }
@@ -1935,6 +1989,537 @@ class HomeController extends BaseController {
             }
         } catch (Throwable $e) {
             // Compatibilidad hacia atras.
+        }
+    }
+
+    private function asegurarTablasTareasMaterialHub(): void {
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return;
+        }
+
+        $sqlTarea = "CREATE TABLE IF NOT EXISTS material_hub_tarea (
+                        Id_Tarea INT AUTO_INCREMENT PRIMARY KEY,
+                        Modulo VARCHAR(80) NOT NULL,
+                        Nivel TINYINT UNSIGNED NOT NULL,
+                        Modulo_Numero TINYINT UNSIGNED NULL,
+                        Titulo VARCHAR(255) NOT NULL,
+                        Descripcion TEXT NULL,
+                        Fecha_Limite DATE NULL,
+                        Estado VARCHAR(20) NOT NULL DEFAULT 'activa',
+                        Creado_Por INT NULL,
+                        Fecha_Creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        KEY idx_modulo_nivel (Modulo, Nivel),
+                        KEY idx_modulo_nivel_modulo (Modulo, Nivel, Modulo_Numero)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $pdo->exec($sqlTarea);
+
+        $sqlEntrega = "CREATE TABLE IF NOT EXISTS material_hub_tarea_entrega (
+                        Id_Entrega INT AUTO_INCREMENT PRIMARY KEY,
+                        Id_Tarea INT NOT NULL,
+                        Id_Persona INT NOT NULL,
+                        Nombre_Archivo VARCHAR(255) NOT NULL,
+                        Nombre_Original VARCHAR(255) NULL,
+                        Comentario TEXT NULL,
+                        Nota DECIMAL(5,2) NULL,
+                        Retroalimentacion TEXT NULL,
+                        Estado_Calificacion VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+                        Calificado_Por INT NULL,
+                        Fecha_Entrega DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        Fecha_Calificacion DATETIME NULL,
+                        KEY idx_tarea (Id_Tarea),
+                        KEY idx_persona (Id_Persona),
+                        KEY idx_tarea_persona (Id_Tarea, Id_Persona)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $pdo->exec($sqlEntrega);
+    }
+
+    private function obtenerProgramasCapacitacionDestinoPorNivel(int $nivel): array {
+        if ($nivel === 1) {
+            return ['capacitacion_destino', 'capacitacion_destino_nivel_1'];
+        }
+        if ($nivel === 2) {
+            return ['capacitacion_destino_nivel_2'];
+        }
+        if ($nivel === 3) {
+            return ['capacitacion_destino_nivel_3'];
+        }
+        return [];
+    }
+
+    private function obtenerInscritosCapacitacionDestinoPorNivel(int $nivel): array {
+        if ($nivel <= 0) {
+            return [];
+        }
+
+        require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+        $inscripcionModel = new EscuelaFormacionInscripcion();
+        $programas = $this->obtenerProgramasCapacitacionDestinoPorNivel($nivel);
+        if (empty($programas)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($programas), '?'));
+        $sql = "SELECT
+                    COALESCE(NULLIF(TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, ''))), ''), efi.Nombre) AS nombre,
+                    COALESCE(NULLIF(p.Numero_Documento, ''), efi.Cedula, '') AS cedula,
+                    COALESCE(NULLIF(p.Telefono, ''), efi.Telefono, '') AS telefono,
+                    MAX(efi.Fecha_Registro) AS fecha_registro,
+                    MAX(CASE WHEN efi.Asistio_Clase = 1 THEN 1 ELSE 0 END) AS asistio_clase,
+                    COALESCE(p.Id_Persona, efi.Id_Persona, 0) AS id_persona
+                FROM escuela_formacion_inscripcion efi
+                LEFT JOIN persona p ON p.Id_Persona = efi.Id_Persona
+                WHERE efi.Programa IN ({$placeholders})
+                GROUP BY id_persona, nombre, cedula, telefono
+                ORDER BY nombre ASC";
+
+        $rows = $inscripcionModel->query($sql, $programas);
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(static function($row) {
+            $nombre = trim((string)($row['nombre'] ?? ''));
+            if ($nombre === '') {
+                return null;
+            }
+
+            return [
+                'id_persona' => (int)($row['id_persona'] ?? 0),
+                'nombre' => $nombre,
+                'cedula' => trim((string)($row['cedula'] ?? '')),
+                'telefono' => trim((string)($row['telefono'] ?? '')),
+                'fecha_registro' => (string)($row['fecha_registro'] ?? ''),
+                'asistio_clase' => (int)($row['asistio_clase'] ?? 0) === 1,
+            ];
+        }, $rows)));
+    }
+
+    private function obtenerDirectorioTareasMaterialHub(string $modulo): string {
+        $modulo = trim($modulo);
+        return ROOT . '/public/uploads/material_hub_tareas/' . $modulo;
+    }
+
+    private function guardarArchivoTareaEntrega(string $modulo, int $idTarea, int $idPersona, array $archivo, int $indice = 1): array {
+        if (($archivo['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new Exception('Error al subir archivo de tarea.');
+        }
+
+        $tamano = (int)($archivo['size'] ?? 0);
+        if ($tamano <= 0) {
+            throw new Exception('Archivo de tarea vacío o inválido.');
+        }
+        if ($tamano > 20 * 1024 * 1024) {
+            throw new Exception('Cada archivo de tarea debe pesar máximo 20MB.');
+        }
+
+        $nombreOriginal = trim((string)($archivo['name'] ?? 'tarea.bin'));
+        $extension = strtolower((string)pathinfo($nombreOriginal, PATHINFO_EXTENSION));
+        $extension = preg_replace('/[^a-z0-9]/', '', $extension);
+        if ($extension === '') {
+            $extension = 'bin';
+        }
+        $extension = substr($extension, 0, 10);
+
+        $directorio = $this->obtenerDirectorioTareasMaterialHub($modulo);
+        if (!is_dir($directorio) && !@mkdir($directorio, 0775, true) && !is_dir($directorio)) {
+            throw new Exception('No se pudo crear el directorio de tareas.');
+        }
+
+        $base = 'tarea_' . max(1, $idTarea) . '_' . max(1, $idPersona) . '_' . date('Ymd_His') . '_' . max(1, $indice);
+        $nombreFinal = $base . '.' . $extension;
+        $iter = 1;
+        while (is_file($directorio . '/' . $nombreFinal)) {
+            $iter++;
+            $nombreFinal = $base . '_' . $iter . '.' . $extension;
+        }
+
+        $destino = $directorio . '/' . $nombreFinal;
+        if (!@move_uploaded_file((string)($archivo['tmp_name'] ?? ''), $destino)) {
+            throw new Exception('No se pudo guardar un archivo de tarea en el servidor.');
+        }
+
+        return [
+            'nombre' => $nombreFinal,
+            'original' => $nombreOriginal,
+            'peso_kb' => round($tamano / 1024, 1),
+        ];
+    }
+
+    private function crearTareaMaterialHub(string $modulo, int $nivel, int $moduloNumero, string $titulo, string $descripcion, string $fechaLimite, int $creadoPor): int {
+        $modulo = trim($modulo);
+        $titulo = trim($titulo);
+        $descripcion = trim($descripcion);
+        $fechaLimite = trim($fechaLimite);
+
+        if ($modulo === '' || $nivel <= 0 || $titulo === '') {
+            throw new Exception('Datos incompletos para crear la tarea.');
+        }
+
+        if ($modulo === 'capacitacion_destino') {
+            $moduloNumeroValido = $this->normalizarModuloMaterialTema('capacitacion_destino', $nivel, $moduloNumero);
+            if ($moduloNumeroValido <= 0) {
+                throw new Exception('Debes crear la tarea en un módulo específico del nivel seleccionado.');
+            }
+            $moduloNumero = $moduloNumeroValido;
+        }
+
+        if ($fechaLimite !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaLimite) !== 1) {
+            throw new Exception('La fecha límite no es válida.');
+        }
+
+        $this->asegurarTablasTareasMaterialHub();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            throw new Exception('No se pudo conectar para crear la tarea.');
+        }
+
+        $sql = "INSERT INTO material_hub_tarea
+                (Modulo, Nivel, Modulo_Numero, Titulo, Descripcion, Fecha_Limite, Estado, Creado_Por)
+                VALUES (?, ?, ?, ?, ?, ?, 'activa', ?)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            $modulo,
+            $nivel,
+            $moduloNumero > 0 ? $moduloNumero : null,
+            $titulo,
+            $descripcion !== '' ? $descripcion : null,
+            $fechaLimite !== '' ? $fechaLimite : null,
+            $creadoPor > 0 ? $creadoPor : null,
+        ]);
+
+        return (int)$pdo->lastInsertId();
+    }
+
+    private function eliminarTareaMaterialHub(string $modulo, int $idTarea, int $nivel = 0, int $moduloNumero = 0): void {
+        $modulo = trim($modulo);
+        if ($modulo === '' || $idTarea <= 0) {
+            throw new Exception('Tarea inválida para eliminar.');
+        }
+
+        $this->asegurarTablasTareasMaterialHub();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            throw new Exception('No se pudo conectar para eliminar la tarea.');
+        }
+
+        $sql = "UPDATE material_hub_tarea
+                SET Estado = 'inactiva'
+                WHERE Id_Tarea = ?
+                  AND Modulo = ?
+                  AND Estado = 'activa'";
+        $params = [$idTarea, $modulo];
+
+        if ($nivel > 0) {
+            $sql .= " AND Nivel = ?";
+            $params[] = $nivel;
+        }
+        if ($moduloNumero > 0) {
+            $sql .= " AND Modulo_Numero = ?";
+            $params[] = $moduloNumero;
+        }
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+
+        if ((int)$stmt->rowCount() <= 0) {
+            throw new Exception('No se pudo eliminar la tarea seleccionada.');
+        }
+    }
+
+    private function listarTareasMaterialHub(string $modulo, int $nivel, int $idPersona = 0, int $moduloNumero = 0): array {
+        $modulo = trim($modulo);
+        if ($modulo === '' || $nivel <= 0) {
+            return [];
+        }
+
+        if ($modulo === 'capacitacion_destino' && $moduloNumero <= 0) {
+            return [];
+        }
+
+        $this->asegurarTablasTareasMaterialHub();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return [];
+        }
+
+        $sql = "SELECT
+                    t.Id_Tarea,
+                    t.Modulo,
+                    t.Nivel,
+                    t.Modulo_Numero,
+                    t.Titulo,
+                    t.Descripcion,
+                    t.Fecha_Limite,
+                    t.Estado,
+                    t.Fecha_Creacion,
+                    (SELECT COUNT(*) FROM material_hub_tarea_entrega e WHERE e.Id_Tarea = t.Id_Tarea) AS total_entregas,
+                    (SELECT COUNT(DISTINCT e2.Id_Persona) FROM material_hub_tarea_entrega e2 WHERE e2.Id_Tarea = t.Id_Tarea) AS total_estudiantes,
+                    (SELECT COUNT(*) FROM material_hub_tarea_entrega eu WHERE eu.Id_Tarea = t.Id_Tarea AND eu.Id_Persona = ?) AS total_entregas_usuario
+                FROM material_hub_tarea t
+                WHERE t.Modulo = ?
+                  AND t.Nivel = ?
+                  AND t.Estado = 'activa'
+                ORDER BY t.Fecha_Creacion DESC, t.Id_Tarea DESC";
+
+                $params = [$idPersona > 0 ? $idPersona : 0, $modulo, $nivel];
+                if ($moduloNumero > 0) {
+                        $sql = "SELECT
+                                                t.Id_Tarea,
+                                                t.Modulo,
+                                                t.Nivel,
+                                                t.Modulo_Numero,
+                                                t.Titulo,
+                                                t.Descripcion,
+                                                t.Fecha_Limite,
+                                                t.Estado,
+                                                t.Fecha_Creacion,
+                                                (SELECT COUNT(*) FROM material_hub_tarea_entrega e WHERE e.Id_Tarea = t.Id_Tarea) AS total_entregas,
+                                                (SELECT COUNT(DISTINCT e2.Id_Persona) FROM material_hub_tarea_entrega e2 WHERE e2.Id_Tarea = t.Id_Tarea) AS total_estudiantes,
+                                                (SELECT COUNT(*) FROM material_hub_tarea_entrega eu WHERE eu.Id_Tarea = t.Id_Tarea AND eu.Id_Persona = ?) AS total_entregas_usuario
+                                        FROM material_hub_tarea t
+                                        WHERE t.Modulo = ?
+                                            AND t.Nivel = ?
+                                            AND t.Modulo_Numero = ?
+                                            AND t.Estado = 'activa'
+                                        ORDER BY t.Fecha_Creacion DESC, t.Id_Tarea DESC";
+                        $params[] = $moduloNumero;
+                }
+
+        $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+        private function listarEntregasTareasMaterialHub(string $modulo, int $nivel, int $moduloNumero = 0): array {
+        $modulo = trim($modulo);
+        if ($modulo === '' || $nivel <= 0) {
+            return [];
+        }
+
+            if ($modulo === 'capacitacion_destino' && $moduloNumero <= 0) {
+                return [];
+            }
+
+        $this->asegurarTablasTareasMaterialHub();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return [];
+        }
+
+        $sql = "SELECT
+                    e.Id_Entrega,
+                    e.Id_Tarea,
+                    e.Id_Persona,
+                    e.Nombre_Archivo,
+                    e.Nombre_Original,
+                    e.Comentario,
+                    e.Nota,
+                    e.Retroalimentacion,
+                    e.Estado_Calificacion,
+                    e.Fecha_Entrega,
+                    e.Fecha_Calificacion,
+                    COALESCE(NULLIF(TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, ''))), ''), CONCAT('Persona #', e.Id_Persona)) AS nombre_persona,
+                    COALESCE(NULLIF(p.Numero_Documento, ''), '') AS cedula_persona,
+                    COALESCE(NULLIF(p.Telefono, ''), '') AS telefono_persona
+                FROM material_hub_tarea_entrega e
+                INNER JOIN material_hub_tarea t ON t.Id_Tarea = e.Id_Tarea
+                LEFT JOIN persona p ON p.Id_Persona = e.Id_Persona
+                WHERE t.Modulo = ?
+                  AND t.Nivel = ?
+                ORDER BY e.Fecha_Entrega DESC, e.Id_Entrega DESC";
+
+                $params = [$modulo, $nivel];
+                if ($moduloNumero > 0) {
+                        $sql = "SELECT
+                                                e.Id_Entrega,
+                                                e.Id_Tarea,
+                                                e.Id_Persona,
+                                                e.Nombre_Archivo,
+                                                e.Nombre_Original,
+                                                e.Comentario,
+                                                e.Nota,
+                                                e.Retroalimentacion,
+                                                e.Estado_Calificacion,
+                                                e.Fecha_Entrega,
+                                                e.Fecha_Calificacion,
+                                                COALESCE(NULLIF(TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, ''))), ''), CONCAT('Persona #', e.Id_Persona)) AS nombre_persona,
+                                                COALESCE(NULLIF(p.Numero_Documento, ''), '') AS cedula_persona,
+                                                COALESCE(NULLIF(p.Telefono, ''), '') AS telefono_persona
+                                        FROM material_hub_tarea_entrega e
+                                        INNER JOIN material_hub_tarea t ON t.Id_Tarea = e.Id_Tarea
+                                        LEFT JOIN persona p ON p.Id_Persona = e.Id_Persona
+                                        WHERE t.Modulo = ?
+                                            AND t.Nivel = ?
+                                            AND t.Modulo_Numero = ?
+                                        ORDER BY e.Fecha_Entrega DESC, e.Id_Entrega DESC";
+                        $params[] = $moduloNumero;
+                }
+
+        $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $map = [];
+        foreach ($rows as $row) {
+            $idTarea = (int)($row['Id_Tarea'] ?? 0);
+            if ($idTarea <= 0) {
+                continue;
+            }
+            if (!isset($map[$idTarea])) {
+                $map[$idTarea] = [];
+            }
+            $map[$idTarea][] = $row;
+        }
+
+        return $map;
+    }
+
+    private function registrarEntregaTareaMaterialHub(string $modulo, int $idTarea, int $idPersona, array $archivos, string $comentario): int {
+        $modulo = trim($modulo);
+        $comentario = trim($comentario);
+
+        if ($modulo === '' || $idTarea <= 0 || $idPersona <= 0) {
+            throw new Exception('Datos inválidos para subir la tarea.');
+        }
+
+        if (!isset($archivos['name'])) {
+            throw new Exception('Debes seleccionar al menos un archivo para la tarea.');
+        }
+
+        $this->asegurarTablasTareasMaterialHub();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            throw new Exception('No se pudo conectar para guardar la entrega.');
+        }
+
+        $stmtTarea = $pdo->prepare("SELECT Id_Tarea FROM material_hub_tarea WHERE Id_Tarea = ? AND Modulo = ? AND Estado = 'activa' LIMIT 1");
+        $stmtTarea->execute([$idTarea, $modulo]);
+        $tarea = $stmtTarea->fetch(PDO::FETCH_ASSOC);
+        if (!$tarea) {
+            throw new Exception('La tarea seleccionada no está disponible.');
+        }
+
+        $cantidad = 0;
+        $indice = 1;
+
+        $insert = $pdo->prepare(
+            "INSERT INTO material_hub_tarea_entrega
+             (Id_Tarea, Id_Persona, Nombre_Archivo, Nombre_Original, Comentario, Estado_Calificacion)
+             VALUES (?, ?, ?, ?, ?, 'pendiente')"
+        );
+
+        if (is_array($archivos['name'])) {
+            $total = count($archivos['name']);
+            for ($i = 0; $i < $total; $i++) {
+                if ((int)($archivos['error'][$i] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                    continue;
+                }
+
+                $archivo = [
+                    'name' => $archivos['name'][$i] ?? '',
+                    'type' => $archivos['type'][$i] ?? '',
+                    'tmp_name' => $archivos['tmp_name'][$i] ?? '',
+                    'error' => $archivos['error'][$i] ?? UPLOAD_ERR_NO_FILE,
+                    'size' => $archivos['size'][$i] ?? 0,
+                ];
+
+                $guardado = $this->guardarArchivoTareaEntrega($modulo, $idTarea, $idPersona, $archivo, $indice);
+                $insert->execute([
+                    $idTarea,
+                    $idPersona,
+                    (string)($guardado['nombre'] ?? ''),
+                    (string)($guardado['original'] ?? ''),
+                    $comentario !== '' ? $comentario : null,
+                ]);
+
+                $indice++;
+                $cantidad++;
+            }
+        } else {
+            $guardado = $this->guardarArchivoTareaEntrega($modulo, $idTarea, $idPersona, $archivos, $indice);
+            $insert->execute([
+                $idTarea,
+                $idPersona,
+                (string)($guardado['nombre'] ?? ''),
+                (string)($guardado['original'] ?? ''),
+                $comentario !== '' ? $comentario : null,
+            ]);
+            $cantidad = 1;
+        }
+
+        if ($cantidad <= 0) {
+            throw new Exception('No se detectaron archivos válidos para entregar la tarea.');
+        }
+
+        return $cantidad;
+    }
+
+    private function calificarEntregaTareaMaterialHub(string $modulo, int $idEntrega, ?float $nota, string $retroalimentacion, int $calificadoPor, int $nivel = 0, int $moduloNumero = 0): void {
+        $modulo = trim($modulo);
+        $retroalimentacion = trim($retroalimentacion);
+
+        if ($modulo === '' || $idEntrega <= 0) {
+            throw new Exception('Entrega inválida para calificar.');
+        }
+
+        if ($nota !== null) {
+            if ($nota < 0 || $nota > 5) {
+                throw new Exception('La nota debe estar entre 0 y 5.');
+            }
+        }
+
+        $this->asegurarTablasTareasMaterialHub();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            throw new Exception('No se pudo conectar para calificar la tarea.');
+        }
+
+        $sql = "UPDATE material_hub_tarea_entrega e
+                INNER JOIN material_hub_tarea t ON t.Id_Tarea = e.Id_Tarea
+                SET e.Nota = ?,
+                    e.Retroalimentacion = ?,
+                    e.Estado_Calificacion = 'calificada',
+                    e.Calificado_Por = ?,
+                    e.Fecha_Calificacion = NOW()
+                WHERE e.Id_Entrega = ?
+                  AND t.Modulo = ?";
+
+        $params = [
+            $nota,
+            $retroalimentacion !== '' ? $retroalimentacion : null,
+            $calificadoPor > 0 ? $calificadoPor : null,
+            $idEntrega,
+            $modulo,
+        ];
+
+        if ($nivel > 0 && $moduloNumero > 0) {
+            $sql = "UPDATE material_hub_tarea_entrega e
+                    INNER JOIN material_hub_tarea t ON t.Id_Tarea = e.Id_Tarea
+                    SET e.Nota = ?,
+                        e.Retroalimentacion = ?,
+                        e.Estado_Calificacion = 'calificada',
+                        e.Calificado_Por = ?,
+                        e.Fecha_Calificacion = NOW()
+                    WHERE e.Id_Entrega = ?
+                      AND t.Modulo = ?
+                      AND t.Nivel = ?
+                      AND t.Modulo_Numero = ?";
+            $params[] = $nivel;
+            $params[] = $moduloNumero;
+        }
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+
+        if ((int)$stmt->rowCount() <= 0) {
+            throw new Exception('No se pudo calificar la entrega seleccionada.');
         }
     }
 
@@ -2370,6 +2955,7 @@ class HomeController extends BaseController {
             $leccion = trim((string)($contexto['leccion'] ?? ''));
             $openLote = trim((string)($contexto['open_lote'] ?? ''));
             $openPanel = strtolower(trim((string)($contexto['open_panel'] ?? '')));
+            $academico = strtolower(trim((string)($contexto['academico'] ?? '')));
 
             if ($nivel > 0) {
                 $rutaBase .= '&cap_nivel=' . $nivel;
@@ -2388,6 +2974,9 @@ class HomeController extends BaseController {
             }
             if (in_array($openPanel, ['editar', 'archivos', 'agregar'], true)) {
                 $rutaBase .= '&cap_open_panel=' . rawurlencode($openPanel);
+            }
+            if (in_array($academico, ['inscritos', 'tareas'], true)) {
+                $rutaBase .= '&cap_academico=' . rawurlencode($academico);
             }
         }
 
@@ -2438,18 +3027,37 @@ class HomeController extends BaseController {
                 'leccion' => trim((string)($_POST['contexto_leccion'] ?? $_POST['leccion'] ?? '')),
                 'open_lote' => trim((string)($_POST['contexto_open_lote'] ?? '')),
                 'open_panel' => trim((string)($_POST['contexto_open_panel'] ?? '')),
+                'academico' => trim((string)($_POST['contexto_academico'] ?? $_GET['cap_academico'] ?? '')),
             ];
 
-            if ($esDiscipuloCapDestinoPost) {
+            $accionesPermitidasDiscipulo = ['subir_tarea_entrega'];
+            $accionesGestionMaterial = [
+                'subir',
+                'editar_tema',
+                'guardar_profesor_modulo',
+                'guardar_profesor_modulo_grupo',
+                'agregar_archivos_tema',
+                'eliminar',
+                'eliminar_tema',
+                'crear_tarea',
+                'eliminar_tarea',
+                'calificar_tarea_entrega',
+            ];
+
+            if ($esDiscipuloCapDestinoPost && !in_array($accion, $accionesPermitidasDiscipulo, true)) {
                 $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Tu rol discípulo solo puede ver el acceso a clase y evaluaciones activas.', 'error'));
             }
 
-            if (!$this->puedeGestionarModuloMaterial($moduloSeleccionado)) {
+            if (in_array($accion, $accionesGestionMaterial, true) && !$this->puedeGestionarModuloMaterial($moduloSeleccionado)) {
                 $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'No tienes permiso para gestionar este material.', 'error'));
             }
 
             try {
                 if ($accion === 'subir') {
+                    if (!$this->puedeSubirEnModuloMaterial($moduloSeleccionado)) {
+                        throw new Exception('No tienes permiso para subir material en este módulo.');
+                    }
+
                     if (!isset($_FILES['material_pdf'])) {
                         throw new Exception('Debes seleccionar al menos un archivo.');
                     }
@@ -2566,6 +3174,10 @@ class HomeController extends BaseController {
                 }
 
                 if ($accion === 'agregar_archivos_tema') {
+                    if (!$this->puedeSubirEnModuloMaterial($moduloSeleccionado)) {
+                        throw new Exception('No tienes permiso para subir archivos en este módulo.');
+                    }
+
                     if (!isset($_FILES['material_pdf'])) {
                         throw new Exception('Debes seleccionar al menos un archivo.');
                     }
@@ -2595,6 +3207,129 @@ class HomeController extends BaseController {
                     $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Clase eliminada correctamente (' . $cant . ' archivo(s) borrados).', 'success'));
                 }
 
+                if ($accion === 'crear_tarea') {
+                    if ((string)($moduloSeleccionado['clave'] ?? '') !== 'capacitacion_destino') {
+                        throw new Exception('La creación de tareas está disponible solo en Capacitación Destino.');
+                    }
+
+                    $nivelTarea = (int)($_POST['nivel'] ?? 0);
+                    $moduloNumTarea = (int)($_POST['modulo_numero'] ?? 0);
+                    $tituloTarea = trim((string)($_POST['titulo_tarea'] ?? ''));
+                    $descripcionTarea = trim((string)($_POST['descripcion_tarea'] ?? ''));
+                    $fechaLimiteTarea = trim((string)($_POST['fecha_limite_tarea'] ?? ''));
+
+                    $nivelTarea = $this->normalizarNivelMaterialTema('capacitacion_destino', $nivelTarea);
+                    $moduloNumTarea = $this->normalizarModuloMaterialTema('capacitacion_destino', $nivelTarea, $moduloNumTarea);
+                    if ($nivelTarea <= 0 || $moduloNumTarea <= 0) {
+                        throw new Exception('Selecciona nivel y módulo válidos para crear la tarea.');
+                    }
+
+                    $contextoModuloSeleccionado = (int)($_POST['contexto_modulo'] ?? 0);
+                    if ($contextoModuloSeleccionado > 0 && $moduloNumTarea !== $contextoModuloSeleccionado) {
+                        throw new Exception('Solo puedes crear tareas para el módulo que tienes seleccionado.');
+                    }
+
+                    $this->crearTareaMaterialHub(
+                        (string)($moduloSeleccionado['clave'] ?? ''),
+                        $nivelTarea,
+                        $moduloNumTarea,
+                        $tituloTarea,
+                        $descripcionTarea,
+                        $fechaLimiteTarea,
+                        (int)($_SESSION['usuario_id'] ?? 0)
+                    );
+
+                    $contextoRetorno['nivel'] = $nivelTarea;
+                    if ($moduloNumTarea > 0) {
+                        $contextoRetorno['modulo'] = $moduloNumTarea;
+                    }
+                    $contextoRetorno['academico'] = 'tareas';
+                    $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Tarea creada correctamente.', 'success'));
+                }
+
+                if ($accion === 'eliminar_tarea') {
+                    if ((string)($moduloSeleccionado['clave'] ?? '') !== 'capacitacion_destino') {
+                        throw new Exception('La eliminación de tareas está disponible solo en Capacitación Destino.');
+                    }
+
+                    $idTarea = (int)($_POST['id_tarea'] ?? 0);
+                    $nivelTarea = $this->normalizarNivelMaterialTema('capacitacion_destino', (int)($_POST['nivel'] ?? 0));
+                    $moduloNumTarea = $this->normalizarModuloMaterialTema('capacitacion_destino', $nivelTarea, (int)($_POST['modulo_numero'] ?? 0));
+                    if ($idTarea <= 0 || $nivelTarea <= 0 || $moduloNumTarea <= 0) {
+                        throw new Exception('Datos inválidos para eliminar la tarea.');
+                    }
+
+                    $this->eliminarTareaMaterialHub(
+                        (string)($moduloSeleccionado['clave'] ?? ''),
+                        $idTarea,
+                        $nivelTarea,
+                        $moduloNumTarea
+                    );
+
+                    $contextoRetorno['nivel'] = $nivelTarea;
+                    $contextoRetorno['modulo'] = $moduloNumTarea;
+                    $contextoRetorno['academico'] = 'tareas';
+                    $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Tarea eliminada correctamente.', 'success'));
+                }
+
+                if ($accion === 'subir_tarea_entrega') {
+                    if ((string)($moduloSeleccionado['clave'] ?? '') !== 'capacitacion_destino') {
+                        throw new Exception('La entrega de tareas está disponible solo en Capacitación Destino.');
+                    }
+
+                    if (!AuthController::esRolDiscipuloUsuario()) {
+                        throw new Exception('Solo los discípulos pueden subir entregas de tareas.');
+                    }
+
+                    if (!isset($_FILES['tarea_archivos'])) {
+                        throw new Exception('Selecciona al menos un archivo para la tarea.');
+                    }
+
+                    $idTarea = (int)($_POST['id_tarea'] ?? 0);
+                    $comentarioEntrega = trim((string)($_POST['comentario_entrega'] ?? ''));
+                    $idPersonaEntrega = (int)($_SESSION['usuario_id'] ?? 0);
+                    if ($idPersonaEntrega <= 0) {
+                        throw new Exception('No se pudo identificar el usuario para registrar la entrega.');
+                    }
+
+                    $cantidadEntrega = $this->registrarEntregaTareaMaterialHub(
+                        (string)($moduloSeleccionado['clave'] ?? ''),
+                        $idTarea,
+                        $idPersonaEntrega,
+                        $_FILES['tarea_archivos'],
+                        $comentarioEntrega
+                    );
+
+                    $contextoRetorno['nivel'] = (int)($_POST['nivel'] ?? $contextoRetorno['nivel'] ?? 0);
+                    $contextoRetorno['modulo'] = (int)($_POST['modulo_numero'] ?? $contextoRetorno['modulo'] ?? 0);
+                    $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Entrega registrada con ' . $cantidadEntrega . ' archivo(s).', 'success'));
+                }
+
+                if ($accion === 'calificar_tarea_entrega') {
+                    if ((string)($moduloSeleccionado['clave'] ?? '') !== 'capacitacion_destino') {
+                        throw new Exception('La calificación de tareas está disponible solo en Capacitación Destino.');
+                    }
+
+                    $idEntrega = (int)($_POST['id_entrega'] ?? 0);
+                    $notaRaw = trim((string)($_POST['nota_entrega'] ?? ''));
+                    $retro = trim((string)($_POST['retroalimentacion_entrega'] ?? ''));
+                    $nota = $notaRaw === '' ? null : (float)$notaRaw;
+
+                    $this->calificarEntregaTareaMaterialHub(
+                        (string)($moduloSeleccionado['clave'] ?? ''),
+                        $idEntrega,
+                        $nota,
+                        $retro,
+                        (int)($_SESSION['usuario_id'] ?? 0),
+                        (int)($_POST['nivel'] ?? 0),
+                        (int)($_POST['modulo_numero'] ?? 0)
+                    );
+
+                    $contextoRetorno['nivel'] = (int)($_POST['nivel'] ?? $contextoRetorno['nivel'] ?? 0);
+                    $contextoRetorno['modulo'] = (int)($_POST['modulo_numero'] ?? $contextoRetorno['modulo'] ?? 0);
+                    $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Entrega calificada correctamente.', 'success'));
+                }
+
                 throw new Exception('Accion no valida.');
             } catch (Exception $e) {
                 $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, $e->getMessage(), 'error'));
@@ -2612,6 +3347,79 @@ class HomeController extends BaseController {
         $accesosDiscipuloCapDestino = $esDiscipuloCapDestino
             ? $this->construirAccesosDiscipuloCapDestino($restriccionDiscipuloMaterial, $profesoresModulos)
             : [];
+        $capNivelVista = (int)($_GET['cap_nivel'] ?? 0);
+        $configNivelesCap = $this->obtenerConfiguracionNivelesCapacitacionDestino();
+        if (!isset($configNivelesCap[$capNivelVista])) {
+            $capNivelVista = 0;
+        }
+        $capModuloVista = (int)($_GET['cap_modulo'] ?? 0);
+        if ($capNivelVista > 0) {
+            $modulosNivelVista = array_values(array_map('intval', (array)($configNivelesCap[$capNivelVista] ?? [])));
+            if (!in_array($capModuloVista, $modulosNivelVista, true)) {
+                $capModuloVista = (int)($modulosNivelVista[0] ?? 0);
+            }
+        } else {
+            $capModuloVista = 0;
+        }
+
+        $inscritosCapNivel = [];
+        $tareasCapNivel = [];
+        $entregasTareasCap = [];
+        $tareasDiscipuloCap = [];
+        $asistenciasPorPersona = [];
+
+        if ((string)($modulo['clave'] ?? '') === 'capacitacion_destino' && $capNivelVista > 0) {
+            $inscritosCapNivel = $this->obtenerInscritosCapacitacionDestinoPorNivel($capNivelVista);
+            
+            // Ordenar alfabéticamente por nombre
+            usort($inscritosCapNivel, function($a, $b) {
+                return strcasecmp(
+                    (string)($a['nombre'] ?? ''),
+                    (string)($b['nombre'] ?? '')
+                );
+            });
+            
+            $tareasCapNivel = $this->listarTareasMaterialHub((string)($modulo['clave'] ?? ''), $capNivelVista, (int)($_SESSION['usuario_id'] ?? 0), $capModuloVista);
+
+            if ($this->puedeGestionarModuloMaterial($modulo)) {
+                $entregasTareasCap = $this->listarEntregasTareasMaterialHub((string)($modulo['clave'] ?? ''), $capNivelVista, $capModuloVista);
+            }
+            
+            // Obtener asistencias de clases para los inscritos (siempre, no solo si puede gestionar)
+            $idsInscritos = array_column($inscritosCapNivel, 'id_persona');
+            if (!empty($idsInscritos)) {
+                $modeloAsistencia = new EscuelaFormacionAsistenciaClase();
+                $asistenciasMap = $modeloAsistencia->getAsistenciasPorPrograma($idsInscritos, 'modulo_' . $capNivelVista, 'capacitacion_destino');
+                
+                // Convertir el mapa a array de clases marcadas por persona
+                foreach ($asistenciasMap as $idPersona => $clasesMap) {
+                    $asistenciasPorPersona[$idPersona] = [];
+                    foreach ($clasesMap as $numeroClase => $asistio) {
+                        if ($asistio === true) {
+                            $asistenciasPorPersona[$idPersona][] = $numeroClase;
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($esDiscipuloCapDestino && !empty($accesosDiscipuloCapDestino)) {
+            foreach ($accesosDiscipuloCapDestino as $accesoTmp) {
+                $nivelTmp = (int)($accesoTmp['nivel'] ?? 0);
+                $moduloTmp = (int)($accesoTmp['modulo'] ?? 0);
+                if ($nivelTmp <= 0 || $moduloTmp <= 0) {
+                    continue;
+                }
+
+                $tareasDiscipuloCap[$nivelTmp . '_' . $moduloTmp] = $this->listarTareasMaterialHub(
+                    (string)($modulo['clave'] ?? ''),
+                    (int)$nivelTmp,
+                    (int)($_SESSION['usuario_id'] ?? 0),
+                    (int)$moduloTmp
+                );
+            }
+        }
+
         $totalArchivos = 0;
         foreach ($temas as $tema) {
             $totalArchivos += (int)($tema['total_archivos'] ?? 0);
@@ -2627,13 +3435,110 @@ class HomeController extends BaseController {
             'restriccion_discipulo_material' => $restriccionDiscipuloMaterial,
             'es_discipulo_cap_destino' => $esDiscipuloCapDestino,
             'accesos_discipulo_cap_destino' => $accesosDiscipuloCapDestino,
+            'inscritos_cap_nivel' => $inscritosCapNivel,
+            'asistencias_por_persona' => $asistenciasPorPersona,
+            'tareas_cap_nivel' => $tareasCapNivel,
+            'entregas_tareas_cap' => $entregasTareasCap,
+            'tareas_discipulo_cap' => $tareasDiscipuloCap,
+            'cap_modulo_vista' => $capModuloVista,
+            'id_persona_actual' => (int)($_SESSION['usuario_id'] ?? 0),
             'puede_gestionar' => !$esDiscipuloCapDestino && $this->puedeGestionarModuloMaterial($modulo),
+            'puede_subir_material' => !$esDiscipuloCapDestino && $this->puedeSubirEnModuloMaterial($modulo),
+            'puede_subir_tareas' => AuthController::esRolDiscipuloUsuario() && (string)($modulo['clave'] ?? '') === 'capacitacion_destino',
             'mensaje' => (string)($_GET['mensaje'] ?? ''),
             'tipo' => (string)($_GET['tipo'] ?? ''),
         ]);
     }
 
+    public function guardarAsistenciaClase(): void {
+        header('Content-Type: application/json; charset=utf-8');
+        
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'POST requerido']);
+            exit;
+        }
+
+        if (!AuthController::estaAutenticado()) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'No autenticado']);
+            exit;
+        }
+
+        // Capacitacion Destino queda en modo lectura: no se permite marcar asistencias.
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Capacitacion Destino esta en modo lectura.']);
+        exit;
+
+        try {
+            $idPersona = (int)($_POST['id_persona'] ?? 0);
+            $clase = (int)($_POST['clase'] ?? 0);
+            $nivel = (int)($_POST['nivel'] ?? 0);
+            $marcar = (int)($_POST['marcar'] ?? 0);
+
+            if ($idPersona <= 0 || $clase <= 0 || $nivel <= 0 || $clase > 10) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'error' => 'Parámetros inválidos']);
+                exit;
+            }
+
+            $modeloAsistencia = new EscuelaFormacionAsistenciaClase();
+            $modulo = 'modulo_' . $nivel;
+            $programa = 'capacitacion_destino';
+            $asistio = ($marcar === 1) ? 1 : 0;
+            
+            // Usar upsert (insert or update on duplicate key)
+            $exitoGuardado = $modeloAsistencia->upsertAsistencia(
+                $idPersona,
+                $modulo,
+                $programa,
+                $clase,
+                (bool)$asistio
+            );
+
+            if (!$exitoGuardado) {
+                http_response_code(500);
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'No se pudo guardar la asistencia en base de datos',
+                    'debug' => [
+                        'id_persona' => $idPersona,
+                        'clase' => $clase,
+                        'nivel' => $nivel,
+                        'asistio' => $asistio,
+                    ],
+                ]);
+                exit;
+            }
+
+            echo json_encode([
+                'success' => true,
+                'message' => 'Asistencia registrada',
+                'debug' => [
+                    'id_persona' => $idPersona,
+                    'clase' => $clase,
+                    'nivel' => $nivel,
+                    'asistio' => $asistio,
+                ],
+            ]);
+            exit;
+            
+        } catch (\Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false, 
+                'error' => 'Error: ' . $e->getMessage()
+            ]);
+            exit;
+        }
+    }
+
     public function material() {
+        if (!AuthController::puedeVerCentroMaterial()) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
         $modulos = $this->obtenerModulosMaterial();
         $modulosVisibles = array_filter($modulos, function($modulo) {
             return $this->puedeVerModuloMaterial($modulo);
@@ -2650,6 +3555,9 @@ class HomeController extends BaseController {
             if ($clave === 'celulas') {
                 // Este modulo reutiliza la vista legacy de celulas/materiales y su directorio propio.
                 $totalArchivos = $this->contarArchivosMaterialCelulasExistente();
+            } elseif ($clave === 'teens') {
+                // Teens mantiene su módulo de materiales en TeenController.
+                $totalArchivos = $this->contarArchivosMaterialTeensExistente();
             } else {
                 $archivos = $this->listarArchivosModuloMaterial($modulo);
                 $totalArchivos = count($archivos);
@@ -2673,7 +3581,7 @@ class HomeController extends BaseController {
     }
 
     public function materialTeens() {
-        $this->renderDetalleMaterial('teens');
+        $this->redirect('teen');
     }
 
     public function materialUniversidadVida() {
@@ -2835,42 +3743,264 @@ class HomeController extends BaseController {
     }
 
     public function consolidar() {
-        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('personas', 'ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
-            exit;
-        }
-
-        $this->view('home/consolidar', $this->obtenerDatosModuloFormacion('consolidar'));
+        $this->redirect('programas/consolidar');
     }
 
     public function consolidarAsistencias() {
-        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('personas', 'ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
-            exit;
-        }
-
-        $this->view('home/consolidar_asistencias', $this->obtenerDatosModuloFormacionAsistencias('consolidar'));
+        $this->redirect('programas/consolidar/asistencias');
     }
 
     public function discipular() {
-        $puedeVerDiscipular = AuthController::esAdministrador()
-            || AuthController::tienePermiso('personas', 'ver');
+        $this->redirect('discipular/ministerios/equipo-principal');
+    }
 
-        if (!$puedeVerDiscipular) {
+    private function puedeVerProgramas(): bool {
+        if (AuthController::esAdministrador()) {
+            return true;
+        }
+        if (AuthController::tieneCoordinacionTotalProgramas()) {
+            return true;
+        }
+        if (AuthController::tienePermiso('personas', 'ver')) {
+            return true;
+        }
+        if (AuthController::tienePermiso('personas_consulta', 'ver')) {
+            return true;
+        }
+        if (AuthController::tienePermiso('programas', 'ver')) {
+            return true;
+        }
+        return AuthController::tienePermiso('programas', 'ver_universidad_vida')
+            || AuthController::tienePermiso('programas', 'ver_capacitacion_destino');
+    }
+
+    /**
+     * Linea de programa en Programas (UV o Cap. Destino) para usuarios sin acceso global.
+     */
+    private function puedeVerLineaPrograma(string $clave): bool {
+        if (AuthController::esAdministrador()) {
+            return true;
+        }
+        if (AuthController::tieneCoordinacionTotalProgramas()) {
+            return true;
+        }
+        if (AuthController::tienePermiso('personas', 'ver')) {
+            return true;
+        }
+        if (AuthController::tienePermiso('programas', 'ver')) {
+            return true;
+        }
+        if ($clave === 'universidad_vida') {
+            return AuthController::tienePermiso('programas', 'ver_universidad_vida');
+        }
+        if ($clave === 'capacitacion_destino') {
+            return AuthController::tienePermiso('programas', 'ver_capacitacion_destino');
+        }
+        return false;
+    }
+
+    private function aplicarRestriccionProgramaConsolidarEnRequest(): void {
+        $allowUv = $this->puedeVerLineaPrograma('universidad_vida');
+        $allowCap = $this->puedeVerLineaPrograma('capacitacion_destino');
+        if ($allowUv && $allowCap) {
+            return;
+        }
+        if ($allowUv && !$allowCap) {
+            $_GET['insc_programa'] = 'universidad_vida';
+            return;
+        }
+        if (!$allowUv && $allowCap) {
+            $_GET['insc_programa'] = 'capacitacion_destino';
+        }
+    }
+
+    private function construirTabsProgramas(string $programaActivo = 'universidad_vida', bool $vistaAsistencias = false, ?string $programaUnico = null): array {
+        if (in_array($programaActivo, ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+            $programaActivo = 'capacitacion_destino';
+        }
+
+        $rutaBaseTab = $vistaAsistencias ? 'programas/consolidar/asistencias' : 'programas/consolidar';
+
+        $tabs = [
+            [
+                'label' => 'Universidad de la Vida',
+                'url' => $rutaBaseTab . '&insc_programa=universidad_vida',
+                'active' => $programaActivo === 'universidad_vida',
+            ],
+            [
+                'label' => 'Capacitación Destino',
+                'url' => $rutaBaseTab . '&insc_programa=capacitacion_destino',
+                'active' => $programaActivo === 'capacitacion_destino',
+            ],
+        ];
+
+        if ($programaUnico !== null && in_array($programaUnico, ['universidad_vida', 'capacitacion_destino'], true)) {
+            $tabs = array_values(array_filter($tabs, static function(array $tab) use ($programaUnico) {
+                return strpos((string)($tab['url'] ?? ''), 'insc_programa=' . $programaUnico) !== false;
+            }));
+        }
+
+        return $tabs;
+    }
+
+    private function obtenerSubmodulosProgramas(): array {
+        $puedeVerMaterialUv = AuthController::esAdministrador() || AuthController::tienePermiso('material_universidad_vida', 'ver');
+        $puedeVerMaterialDestino = AuthController::esAdministrador() || AuthController::tienePermiso('material_capacitacion_destino', 'ver');
+
+        $subs = [
+            [
+                'clave' => 'universidad_vida',
+                'titulo' => 'Universidad de la Vida',
+                'descripcion' => 'Inscripciones, seguimiento y asistencia del programa Universidad de la Vida.',
+                'icono' => 'bi bi-mortarboard-fill',
+                'href' => PUBLIC_URL . '?url=programas/consolidar&insc_programa=universidad_vida',
+                'asistencias_href' => PUBLIC_URL . '?url=programas/consolidar/asistencias&insc_programa=universidad_vida',
+                'material_href' => $puedeVerMaterialUv ? (PUBLIC_URL . '?url=home/material/universidad-vida') : '',
+                'gradiente' => 'linear-gradient(135deg, #1e4a89 0%, #3f73be 100%)',
+            ],
+            [
+                'clave' => 'capacitacion_destino',
+                'titulo' => 'Capacitación Destino',
+                'descripcion' => 'Gestión por niveles, asistencia y seguimiento del proceso de Capacitación Destino.',
+                'icono' => 'bi bi-signpost-split-fill',
+                'href' => PUBLIC_URL . '?url=programas/consolidar&insc_programa=capacitacion_destino',
+                'asistencias_href' => PUBLIC_URL . '?url=programas/consolidar/asistencias&insc_programa=capacitacion_destino',
+                'material_href' => $puedeVerMaterialDestino ? (PUBLIC_URL . '?url=home/material/capacitacion-destino') : '',
+                'gradiente' => 'linear-gradient(135deg, #7a4e08 0%, #c8881e 100%)',
+            ],
+        ];
+
+        $out = [];
+        foreach ($subs as $s) {
+            $clave = (string)($s['clave'] ?? '');
+            if ($clave === 'universidad_vida' && !$this->puedeVerLineaPrograma('universidad_vida')) {
+                continue;
+            }
+            if ($clave === 'capacitacion_destino' && !$this->puedeVerLineaPrograma('capacitacion_destino')) {
+                continue;
+            }
+            $out[] = $s;
+        }
+
+        return $out;
+    }
+
+    private function renderProgramasLanding(): void {
+        if (!$this->puedeVerProgramas()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
 
-        $this->view('home/discipular', $this->obtenerDatosModuloFormacion('discipular'));
+        $this->view('programas/landing', [
+            'submodulosProgramas' => $this->obtenerSubmodulosProgramas(),
+        ]);
+    }
+
+    private function renderProgramasRegistro(): void {
+        if (!$this->puedeVerProgramas()) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $this->aplicarRestriccionProgramaConsolidarEnRequest();
+
+        $data = $this->obtenerDatosModuloFormacion('consolidar');
+        $data['config_modulo']['titulo'] = 'Programas';
+        $data['config_modulo']['ruta_base'] = 'programas/consolidar';
+        $data['config_modulo']['ruta_asistencias'] = 'programas/consolidar/asistencias';
+        $data['config_modulo']['ruta_exportar'] = 'programas/consolidar/exportar';
+        $programaActivo = (string)($data['programa_reporte'] ?? 'universidad_vida');
+        if (in_array($programaActivo, ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+            $programaActivo = 'capacitacion_destino';
+        }
+        $programaUnico = in_array($programaActivo, ['universidad_vida', 'capacitacion_destino'], true) ? $programaActivo : null;
+        $data['programas_tabs'] = $this->construirTabsProgramas($programaActivo, false, $programaUnico);
+
+        $this->view('programas/index', $data);
+    }
+
+    private function renderProgramasAsistencias(): void {
+        if (!$this->puedeVerProgramas()) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $this->aplicarRestriccionProgramaConsolidarEnRequest();
+
+        $programaSolicitado = $this->normalizarProgramaConsolidar((string)($_GET['insc_programa'] ?? 'universidad_vida'));
+        if ($programaSolicitado === 'capacitacion_destino') {
+            $this->redirect('programas/consolidar&insc_programa=capacitacion_destino&tipo=info&mensaje=' . urlencode('La vista de asistencias no aplica para Capacitacion Destino.'));
+            return;
+        }
+
+        $data = $this->obtenerDatosModuloFormacionAsistencias('consolidar');
+        $data['config_modulo']['titulo'] = 'Programas';
+        $data['config_modulo']['ruta_base'] = 'programas/consolidar';
+        $data['config_modulo']['ruta_asistencias'] = 'programas/consolidar/asistencias';
+        $data['config_modulo']['ruta_exportar'] = 'programas/consolidar/exportar';
+        $programaActivo = (string)($data['programa_reporte'] ?? 'universidad_vida');
+        if (in_array($programaActivo, ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+            $programaActivo = 'capacitacion_destino';
+        }
+        $programaUnico = in_array($programaActivo, ['universidad_vida', 'capacitacion_destino'], true) ? $programaActivo : null;
+        $data['programas_tabs'] = $this->construirTabsProgramas($programaActivo, true, $programaUnico);
+
+        $this->view('programas/asistencias', $data);
+    }
+
+    private function exportarProgramasConsolidar(): void {
+        if (!$this->puedeVerProgramas()) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $this->aplicarRestriccionProgramaConsolidarEnRequest();
+
+        $this->exportarModuloFormacion('consolidar');
+    }
+
+    public function programas() {
+        $this->renderProgramasLanding();
+    }
+
+    public function programasConsolidar() {
+        $this->renderProgramasRegistro();
+    }
+
+    public function programasAsistencias() {
+        $this->renderProgramasAsistencias();
+    }
+
+    public function programasConsolidarAsistencias() {
+        $this->renderProgramasAsistencias();
+    }
+
+    public function programasExportar() {
+        $this->exportarProgramasConsolidar();
+    }
+
+    public function programasConsolidarExportar() {
+        $this->exportarProgramasConsolidar();
     }
 
     public function discipularAsistencias() {
-        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('personas', 'ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
-            exit;
-        }
+        $this->redirect('discipular/ministerios/equipo-principal');
+    }
 
-        $this->view('home/discipular_asistencias', $this->obtenerDatosModuloFormacionAsistencias('discipular'));
+    public function exportarConsolidar() {
+        $this->redirect('programas/consolidar/exportar');
+    }
+
+    public function exportarDiscipular() {
+        $this->redirect('discipular/ministerios/equipo-principal');
+    }
+
+    public function escuelasFormacion() {
+        $this->redirect('programas/consolidar');
+    }
+
+    public function exportarEscuelasFormacion() {
+        $this->redirect('programas/consolidar/exportar');
     }
 
     private function puedeVerEscuelasFormacion(): bool {
@@ -2890,25 +4020,27 @@ class HomeController extends BaseController {
             || AuthController::tienePermiso('escuelas_formacion_marcar_asistencia', 'editar');
     }
 
+    private function esProgramaCapacitacionDestino(string $programa): bool {
+        $programa = strtolower(trim($programa));
+        return in_array($programa, [
+            'capacitacion_destino',
+            'capacitacion_destino_nivel_1',
+            'capacitacion_destino_nivel_2',
+            'capacitacion_destino_nivel_3',
+        ], true);
+    }
+
+    private function puedeMarcarAsistenciaProgramaEscuelasFormacion(string $programa): bool {
+        if ($this->esProgramaCapacitacionDestino($programa)) {
+            return false;
+        }
+
+        return $this->puedeMarcarAsistenciaEscuelasFormacion();
+    }
+
     private function puedeEditarFechasEscuelasFormacion(): bool {
         return AuthController::esAdministrador()
             || AuthController::tienePermiso('escuelas_formacion_editar_fechas', 'editar');
-    }
-
-    public function escuelasFormacion() {
-        $this->redirect('home/consolidar');
-    }
-
-    public function exportarConsolidar() {
-        $this->exportarModuloFormacion('consolidar');
-    }
-
-    public function exportarDiscipular() {
-        $this->exportarModuloFormacion('discipular');
-    }
-
-    public function exportarEscuelasFormacion() {
-        $this->redirect('home/consolidar');
     }
 
     public function actualizarEstadoEscuelaFormacion() {
@@ -3033,6 +4165,102 @@ class HomeController extends BaseController {
 
         public function cambiarSegmentoInscripcion() {
                 $accion = trim((string)($_POST['accion'] ?? ''));
+                if ($accion === 'mover_programa') {
+                    if (!$this->puedeEditarEscuelasFormacion()) {
+                        $this->json(['ok' => false, 'error' => 'No autorizado'], 403);
+                    }
+
+                    $idInscripcion = (int)($_POST['id_inscripcion'] ?? 0);
+                    $returnUrl = trim((string)($_POST['return_url'] ?? ''));
+                    if ($returnUrl === '' || $returnUrl[0] !== '?') {
+                        $returnUrl = '?url=home/consolidar';
+                    }
+
+                    if ($idInscripcion <= 0) {
+                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('Inscripción inválida para mover.'));
+                        exit;
+                    }
+
+                    require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+                    $inscripcionModel = new EscuelaFormacionInscripcion();
+                    $inscripcion = $inscripcionModel->getByIdInscripcion($idInscripcion);
+
+                    if (empty($inscripcion)) {
+                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('La inscripción no existe o ya fue eliminada.'));
+                        exit;
+                    }
+
+                    $idPersonaInscripcion = (int)($inscripcion['Id_Persona'] ?? 0);
+                    if ($idPersonaInscripcion <= 0) {
+                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('La inscripción no tiene una persona vinculada para mover.'));
+                        exit;
+                    }
+
+                    if (!$this->puedeGestionarPersonaFormacion($idPersonaInscripcion)) {
+                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('Sin acceso para mover esta inscripción.'));
+                        exit;
+                    }
+
+                    $programaActual = trim((string)($inscripcion['Programa'] ?? ''));
+                    $programaDestinoSolicitado = trim((string)($_POST['programa_destino'] ?? ''));
+                    $programasDestinoPermitidos = [];
+
+                    if (in_array($programaActual, ['universidad_vida', 'encuentro', 'bautismo'], true)) {
+                        $programasDestinoPermitidos = ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'];
+                    } elseif (in_array($programaActual, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+                        $programasDestinoPermitidos = ['universidad_vida'];
+                    }
+
+                    if (!empty($programasDestinoPermitidos)) {
+                        $programaDestino = $programaDestinoSolicitado;
+                        if ($programaDestino === '') {
+                            $programaDestino = $programasDestinoPermitidos[0];
+                        }
+
+                        if (!in_array($programaDestino, $programasDestinoPermitidos, true)) {
+                            header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('El programa destino no es válido para esta inscripción.'));
+                            exit;
+                        }
+                    } else {
+                        $programaDestino = $this->obtenerProgramaDestinoMovimientoFormacion($programaActual);
+                    }
+
+                    if ($programaDestino === '') {
+                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('Este programa no se puede mover automáticamente.'));
+                        exit;
+                    }
+
+                    $okDestino = (bool)$inscripcionModel->crearDesdePersonaSiNoExiste(
+                        $idPersonaInscripcion,
+                        $programaDestino,
+                        'Escuelas de formacion (movido de programa)'
+                    );
+
+                    if (!$okDestino) {
+                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('No se pudo crear la inscripción de destino.'));
+                        exit;
+                    }
+
+                    $okEliminarOrigen = $inscripcionModel->delete($idInscripcion);
+                    if (!$okEliminarOrigen) {
+                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('Se creó el destino, pero no se pudo eliminar la inscripción origen.'));
+                        exit;
+                    }
+
+                    $mensaje = 'Persona movida a ' . $this->getProgramaEscuelaLabel($programaDestino) . ' correctamente.';
+                    if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+                        $this->json([
+                            'ok' => true,
+                            'id_inscripcion' => $idInscripcion,
+                            'programa_destino' => $programaDestino,
+                            'mensaje' => $mensaje,
+                        ]);
+                    }
+
+                    header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=success&mensaje=' . urlencode($mensaje));
+                    exit;
+                }
+
                 if ($accion === 'eliminar_inscripcion') {
                     if (!AuthController::tienePermiso('personas', 'eliminar')) {
                         $this->json(['ok' => false, 'error' => 'No autorizado'], 403);
@@ -3091,6 +4319,36 @@ class HomeController extends BaseController {
             $idPersonaInscripcion = (int)($inscripcion['Id_Persona'] ?? 0);
             if ($idPersonaInscripcion <= 0 || !$this->puedeGestionarPersonaFormacion($idPersonaInscripcion)) {
                 $this->json(['ok' => false, 'error' => 'Sin acceso a esta inscripción'], 403);
+            }
+
+            $programaInscripcion = trim((string)($inscripcion['Programa'] ?? ''));
+            $programasCapDestino = ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'];
+            $esCapDestino = in_array($programaInscripcion, $programasCapDestino, true);
+
+            $mapNivelAPrograma = [
+                'nivel_1' => 'capacitacion_destino_nivel_1',
+                'nivel_2' => 'capacitacion_destino_nivel_2',
+                'nivel_3' => 'capacitacion_destino_nivel_3',
+            ];
+
+            // Cambiar solo Segmento_Preferido deja pagos/asistencias/evaluaciones en el nivel anterior (usan Programa).
+            if ($esCapDestino && isset($mapNivelAPrograma[$segmentoNuevo])) {
+                $programaDestinoSync = $mapNivelAPrograma[$segmentoNuevo];
+                $syncOk = $inscripcionModel->sincronizarProgramaCapacitacionDestinoPorPersona($idPersonaInscripcion, $programaDestinoSync);
+                if (!$syncOk) {
+                    $this->json([
+                        'ok' => false,
+                        'error' => 'No se pudo actualizar el nivel en Capacitación Destino.',
+                    ], 500);
+                }
+                $inscripcionTrasSync = $inscripcionModel->getByIdInscripcion($idInscripcion);
+                $programaTrasSync = trim((string)($inscripcionTrasSync['Programa'] ?? ''));
+                if ($programaTrasSync !== $programaDestinoSync) {
+                    $this->json([
+                        'ok' => false,
+                        'error' => 'El cambio de nivel no pudo aplicarse a esta inscripción.',
+                    ], 422);
+                }
             }
 
             $ok = $inscripcionModel->actualizarSegmentoPreferido($idInscripcion, $segmentoNuevo);

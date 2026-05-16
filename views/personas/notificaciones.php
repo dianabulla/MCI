@@ -4,14 +4,14 @@
 $tipoActiva = (string)($tipoNotificacionActiva ?? '');
 $pendientesConectar = is_array($pendientesConectar ?? null) ? $pendientesConectar : [];
 $nuevasAlmasGanadas = is_array($nuevasAlmasGanadas ?? null) ? $nuevasAlmasGanadas : [];
-$linkGestionPendientes = (string)($linkGestionPendientes ?? (PUBLIC_URL . '?url=personas&panel=pendientes_ubicacion'));
+$linkGestionPendientes = (string)($linkGestionPendientes ?? (PUBLIC_URL . '?url=personas'));
 $linkGestionNuevos = (string)($linkGestionNuevos ?? (PUBLIC_URL . '?url=personas/ganar'));
 
 $resumenCategorias = [
     [
         'id' => 'conectar',
         'titulo' => 'Pendientes por conectar',
-        'descripcion' => 'Discipulos antiguos con asignacion incompleta',
+        'descripcion' => 'Pendientes por ubicar: padrón e inscripciones Universidad de la Vida (formulario Escuelas de Formación)',
         'total' => count($pendientesConectar),
         'icono' => 'bi-diagram-3',
         'color' => '#1877f2',

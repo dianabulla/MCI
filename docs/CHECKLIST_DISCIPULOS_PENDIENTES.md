@@ -55,3 +55,24 @@ Objetivo: validar que no se rompa la separacion de reglas entre tarjetas, campan
 - Validar primero si entraron personas nuevas en pendientes (no deberia).
 - Validar si se incluyeron roles no discipulo/disipulo por error.
 - Validar si se cambio la regla de incompleto (ministerio/lider/celula).
+
+# Migración de Consolidados a Discipular
+
+## Descripción
+Este proceso migra a las personas consolidadas del módulo "Ganar" al módulo "Discipular". Una persona consolidada debe cumplir con los siguientes criterios:
+
+1. Tener un líder asignado (`Id_Lider`).
+2. Pertenecer a un ministerio (`Id_Ministerio`).
+3. Estar asignada a una célula (`Id_Celula`).
+
+## Pasos para ejecutar la migración
+1. Asegúrate de tener permisos para realizar esta acción.
+2. Accede a la URL: `BASE_URL/discipular/migrar-consolidados`.
+3. Verifica que el proceso se complete correctamente.
+
+## Notas
+- Las personas migradas tendrán su rol actualizado a "discipular".
+- Se registrará un log de cada migración para auditoría.
+
+## Permisos requeridos
+El usuario debe tener el permiso `migrar_consolidados` asignado en la base de datos.

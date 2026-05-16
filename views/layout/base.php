@@ -43,6 +43,27 @@
                 <div class="position-sticky pt-3">
                     <ul class="nav flex-column">
                         <li class="nav-item">
+                            <div class="card mb-3">
+                                <div class="card-header bg-warning text-dark fw-bold">
+                                    <i class="fas fa-bolt"></i> Accesos rápidos
+                                </div>
+                                <div class="card-body d-flex flex-column gap-2">
+                                    <a href="<?php echo PUBLIC_URL; ?>?url=personas/crear" class="btn btn-outline-primary btn-sm w-100 mb-1">
+                                        <i class="bi bi-person-plus"></i> Nuevo Discípulo
+                                    </a>
+                                    <a href="<?php echo PUBLIC_URL; ?>?url=personas/exportarExcel&modo=ganar" class="btn btn-outline-success btn-sm w-100 mb-1">
+                                        <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
+                                    </a>
+                                    <a href="<?php echo PUBLIC_URL; ?>?url=personas/plantillas-whatsapp" class="btn btn-outline-info btn-sm w-100 mb-1">
+                                        <i class="bi bi-whatsapp"></i> Plantilla mensaje what
+                                    </a>
+                                    <a href="<?php echo PUBLIC_URL; ?>?url=registro_personas" class="btn btn-outline-secondary btn-sm w-100 mb-1">
+                                        <i class="bi bi-ui-checks"></i> Formulario público
+                                    </a>
+                                </div>
+                            </div>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="<?php echo APP_URL; ?>/personas">
                                 <i class="fas fa-users"></i> Personas
                             </a>

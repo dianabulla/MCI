@@ -129,10 +129,13 @@ $rutasPublicas = [
     'teen/guardar-menor-publico',
     'teen/consulta-codigo',
     'escuelas_formacion/codigos',
-    'escuelas_formacion/registro-publico',
+    'escuelas_formacion/registro-publico/universidad-vida',
+    'escuelas_formacion/registro-publico/capacitacion-destino',
     'escuelas_formacion/registro-publico/buscar-persona',
     'escuelas_formacion/registro-publico/buscar-lideres',
+    'escuelas_formacion/registro-publico/validar-abono',
     'escuelas_formacion/registro-publico/guardar',
+    'escuelas_formacion/registro-publico/ticket',
     'escuelas_formacion/asistencia-publica',
     'escuelas_formacion/asistencia-publica/buscar',
     'escuelas_formacion/asistencia-publica/guardar',
@@ -151,6 +154,12 @@ $rutasPublicas = [
     'nehemias/testigos-electorales/guardar',
     'nehemias/whatsapp/webhook'
 ];
+
+// Enlace temporal para probar la migración
+if (isset($_GET['accion']) && $_GET['accion'] === 'migrar_consolidados') {
+    header('Location: ' . BASE_URL . 'discipular/migrar-consolidados');
+    exit;
+}
 
 // Verificar autenticación (excepto para rutas públicas)
 if (!in_array($url, $rutasPublicas)) {
@@ -190,5 +199,6 @@ if (array_key_exists($url, $routes)) {
     http_response_code(404);
     echo "<h1>404 - Página no encontrada</h1>";
     echo "<p>La ruta solicitada no existe: $url</p>";
-    echo "<a href='index.php?url=home'>Volver al inicio</a>";
+    $homeHref = htmlspecialchars(rtrim(PUBLIC_URL, '/') . '/index.php?url=home', ENT_QUOTES, 'UTF-8');
+    echo "<a href='" . $homeHref . "'>Volver al inicio</a>";
 }

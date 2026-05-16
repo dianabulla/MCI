@@ -53,6 +53,22 @@ class MinisterioController extends BaseController {
         $this->redirect($rutaFallback);
     }
 
+    private function redirigirConRetornoConParametros($returnUrl, $rutaFallback, array $params = []) {
+        $urlNormalizada = $this->normalizarUrlRetorno($returnUrl);
+        if ($urlNormalizada !== null) {
+            $separator = strpos($urlNormalizada, '?') !== false ? '&' : '?';
+            $query = http_build_query($params);
+            header('Location: ' . $urlNormalizada . ($query !== '' ? ($separator . $query) : ''));
+            exit;
+        }
+
+        if (!empty($params)) {
+            $rutaFallback .= '&' . http_build_query($params);
+        }
+
+        $this->redirect($rutaFallback);
+    }
+
     private function calcularRangoSemanaDomingoADomingo($fechaReferencia) {
         $timestamp = strtotime((string)$fechaReferencia);
         if ($timestamp === false) {
@@ -613,7 +629,7 @@ class MinisterioController extends BaseController {
             ];
         }
 
-        $this->view('ministerios/lista', [
+        $this->view('discipular/ministerios/lista', [
             'ministerios' => $ministerios,
             'sections' => $sections,
             'fecha_referencia' => $fechaReferencia,
@@ -624,8 +640,104 @@ class MinisterioController extends BaseController {
         ]);
     }
 
+    private function obtenerCandidatosLideresPrincipales() {
+        $filtroPersonas = DataIsolation::generarFiltroPersonas();
+        $personas = $this->personaModel->getAllWithRole($filtroPersonas, null, 'Activo');
+        $candidatos = [];
+
+        foreach ($personas as $persona) {
+            $idPersona = (int)($persona['Id_Persona'] ?? 0);
+            if ($idPersona <= 0) {
+                continue;
+            }
+
+            $jerarquia = $this->personaModel->getJerarquiaByRol((int)($persona['Id_Rol'] ?? 0));
+            if (!in_array($jerarquia, ['pastor', 'lider_12', 'lider_144', 'lider_celula'], true)) {
+                continue;
+            }
+
+            $nombre = trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? ''));
+            $candidatos[] = [
+                'id_persona' => $idPersona,
+                'nombre' => $nombre !== '' ? $nombre : ('Persona ' . $idPersona),
+                'rol' => (string)($persona['Nombre_Rol'] ?? 'Sin rol'),
+                'genero' => (string)($persona['Genero'] ?? ''),
+                'id_ministerio' => (int)($persona['Id_Ministerio'] ?? 0),
+                'nombre_ministerio' => (string)($persona['Nombre_Ministerio'] ?? ''),
+            ];
+        }
+
+        usort($candidatos, static function($a, $b) {
+            return strcasecmp((string)($a['nombre'] ?? ''), (string)($b['nombre'] ?? ''));
+        });
+
+        return $candidatos;
+    }
+
+    private function guardarLideresPrincipalesDesdeFormulario($idMinisterio, $idLider1, $idLider2) {
+        $idMinisterio = (int)$idMinisterio;
+        $idLider1 = (int)$idLider1;
+        $idLider2 = (int)$idLider2;
+        $idRolLider12 = (int)$this->personaModel->resolverIdRolLider12();
+        if ($idRolLider12 <= 0) {
+            return ['ok' => false, 'message' => 'No existe un rol de Lider de 12 configurado en la tabla rol.'];
+        }
+
+        if ($idLider1 > 0 && $idLider2 > 0 && $idLider1 === $idLider2) {
+            return ['ok' => false, 'message' => 'No puedes seleccionar el mismo lider en ambos campos.'];
+        }
+
+        foreach ([$idLider1, $idLider2] as $idLider) {
+            if ($idLider <= 0) {
+                continue;
+            }
+
+            $persona = $this->personaModel->getById($idLider);
+            if (empty($persona)) {
+                return ['ok' => false, 'message' => 'Uno de los lideres seleccionados no existe.'];
+            }
+
+            $jerarquia = $this->personaModel->getJerarquiaByRol((int)($persona['Id_Rol'] ?? 0));
+            if (!in_array($jerarquia, ['pastor', 'lider_12', 'lider_144', 'lider_celula'], true)) {
+                return ['ok' => false, 'message' => 'Solo puedes seleccionar personas con rol de liderazgo.'];
+            }
+        }
+
+        $ok = $this->ministerioModel->setLideresPrincipales($idMinisterio, $idLider1, $idLider2);
+        if (!$ok) {
+            return ['ok' => false, 'message' => 'No se pudo guardar la configuracion de lideres principales.'];
+        }
+
+        // Al asignarse como lideres principales del ministerio, quedan en jerarquia de lider de 12.
+        // Si ya son pastores, conservan su rol pastoral.
+        foreach ([$idLider1, $idLider2] as $idLider) {
+            if ($idLider > 0) {
+                $persona = $this->personaModel->getById($idLider);
+                if (empty($persona)) {
+                    continue;
+                }
+
+                $updateData = [
+                    'Id_Ministerio' => $idMinisterio,
+                ];
+
+                $jerarquiaActual = $this->personaModel->getJerarquiaByRol((int)($persona['Id_Rol'] ?? 0));
+                if ($jerarquiaActual !== 'pastor') {
+                    $updateData['Id_Rol'] = $idRolLider12;
+                }
+
+                $this->personaModel->update($idLider, $updateData);
+                if (isset($updateData['Id_Rol'])) {
+                    $this->personaModel->ajustarEscaleraPorRol($idLider, (int)$updateData['Id_Rol']);
+                }
+            }
+        }
+
+        return ['ok' => true, 'message' => ''];
+    }
+
     public function lideres() {
-        $this->redirect('ministerios/equipo-principal');
+        $this->redirect('discipular/ministerios/equipo-principal');
     }
 
     public function equipo12() {
@@ -639,6 +751,9 @@ class MinisterioController extends BaseController {
         }
 
         $filtroPersonas = DataIsolation::generarFiltroPersonas();
+        $filtroMinisterios = DataIsolation::generarFiltroMinisterios();
+        $ministeriosNavegacion = $this->ministerioModel->getAllWithMemberCountAndRole($filtroMinisterios);
+        $numMinisterios = count($ministeriosNavegacion);
         $lideres = $this->personaModel->getResumenLideresCelulaWithRole($filtroPersonas);
 
         $idMinisterioFiltro = (int)($_GET['id_ministerio'] ?? 0);
@@ -653,19 +768,216 @@ class MinisterioController extends BaseController {
             $nombreMinisterioFiltro = trim((string)($ministerio['Nombre_Ministerio'] ?? ''));
         }
 
+        $lideres = $this->anexarResumenRedLideres($lideres, $idMinisterioFiltro);
+
         $esGeneroMujer = static function ($genero) {
             $g = strtolower(trim((string)$genero));
             return (strpos($g, 'mujer') !== false) || (strpos($g, 'femen') !== false);
         };
 
-        $redEquipo12 = $this->construirRedEquipo12($lideres, $esGeneroMujer);
+        $lideresEquipoPrincipal = array_values(array_filter($lideres, static function($lider) {
+            return (int)($lider['Es_Lider_12'] ?? 0) === 1;
+        }));
+        usort($lideresEquipoPrincipal, static function($a, $b) {
+            $na = trim((string)($a['Nombre'] ?? '') . ' ' . (string)($a['Apellido'] ?? ''));
+            $nb = trim((string)($b['Nombre'] ?? '') . ' ' . (string)($b['Apellido'] ?? ''));
+            return strcasecmp($na, $nb);
+        });
 
-        $this->view('ministerios/lideres', [
-            'equipos_12_hombres' => $redEquipo12['equipos_12_hombres'],
-            'equipos_12_mujeres' => $redEquipo12['equipos_12_mujeres'],
-            'resumen_equipo_12' => $redEquipo12['resumen'],
+        // Separar hombres y mujeres
+        $lideresHombres = array_filter($lideresEquipoPrincipal, function($l) {
+            $g = strtolower(trim((string)($l['Genero'] ?? '')));
+            return strpos($g, 'mujer') === false && strpos($g, 'femen') === false;
+        });
+        $lideresMujeres = array_filter($lideresEquipoPrincipal, function($l) {
+            $g = strtolower(trim((string)($l['Genero'] ?? '')));
+            return strpos($g, 'mujer') !== false || strpos($g, 'femen') !== false;
+        });
+
+        $idsLideres12 = array_values(array_map(static function($l) {
+            return (int)($l['Id_Persona'] ?? 0);
+        }, $lideresEquipoPrincipal));
+
+        $liderazgoRed = [];
+        $totalLideresCelula = 0;
+        $totalLideres144 = 0;
+
+        foreach ($lideres as $lider) {
+            $idPersona = (int)($lider['Id_Persona'] ?? 0);
+            if ($idPersona <= 0) {
+                continue;
+            }
+
+            $esLider12 = (int)($lider['Es_Lider_12'] ?? 0) === 1;
+            $esLiderCelula = (int)($lider['Es_Lider_Celula'] ?? 0) === 1;
+            $idLiderSuperior = (int)($lider['Id_Lider'] ?? 0);
+            $esLider144 = $esLiderCelula && in_array($idLiderSuperior, $idsLideres12, true);
+
+            if ($esLiderCelula) {
+                $totalLideresCelula++;
+            }
+            if ($esLider144) {
+                $totalLideres144++;
+            }
+
+            $lider['es_lider_144'] = $esLider144 ? 1 : 0;
+            $liderazgoRed[] = $lider;
+        }
+
+        $personasRed = $this->personaModel->getAllWithRole($filtroPersonas, false);
+        if ($idMinisterioFiltro > 0) {
+            $personasRed = array_values(array_filter($personasRed, static function($p) use ($idMinisterioFiltro) {
+                return (int)($p['Id_Ministerio'] ?? 0) === $idMinisterioFiltro;
+            }));
+        }
+
+        $esRolDiscipular = static function($nombreRol) {
+            $rol = strtolower(trim((string)$nombreRol));
+            $rol = strtr($rol, [
+                'á' => 'a',
+                'é' => 'e',
+                'í' => 'i',
+                'ó' => 'o',
+                'ú' => 'u',
+                'ü' => 'u',
+                'ñ' => 'n',
+            ]);
+            return (strpos($rol, 'discipul') !== false || strpos($rol, 'disipul') !== false);
+        };
+
+        $idsLiderazgo = [];
+        foreach ($liderazgoRed as $lider) {
+            $idsLiderazgo[(int)($lider['Id_Persona'] ?? 0)] = true;
+        }
+
+        $discipulos = [];
+        foreach ($personasRed as $persona) {
+            $idPersona = (int)($persona['Id_Persona'] ?? 0);
+            if ($idPersona <= 0 || isset($idsLiderazgo[$idPersona])) {
+                continue;
+            }
+
+            if ((int)($persona['Id_Lider'] ?? 0) <= 0) {
+                continue;
+            }
+
+            if (!$esRolDiscipular($persona['Nombre_Rol'] ?? '')) {
+                continue;
+            }
+
+            $discipulos[] = $persona;
+        }
+
+        usort($discipulos, static function($a, $b) {
+            $na = trim((string)($a['Nombre'] ?? '') . ' ' . (string)($a['Apellido'] ?? ''));
+            $nb = trim((string)($b['Nombre'] ?? '') . ' ' . (string)($b['Apellido'] ?? ''));
+            return strcasecmp($na, $nb);
+        });
+
+        $personasAsignablesRaw = $this->personaModel->getAllWithRole($filtroPersonas, null, 'Activo');
+        $personasAsignables = [];
+
+        $idLiderPrincipal1 = 0;
+        $idLiderPrincipal2 = 0;
+        $nombreLiderPrincipal1 = '';
+        $nombreLiderPrincipal2 = '';
+        $candidatosLideresPrincipales = $this->obtenerCandidatosLideresPrincipales();
+
+        $configLideresKey = $idMinisterioFiltro > 0 ? $idMinisterioFiltro : 0;
+        $lideresGuardados = $this->ministerioModel->getLideresPrincipalesByMinisterioIds([$configLideresKey]);
+        $configLideres = $lideresGuardados[$configLideresKey] ?? [
+                'id_lider_principal_1' => 0,
+                'id_lider_principal_2' => 0,
+        ];
+
+        $idLiderPrincipal1 = (int)($configLideres['id_lider_principal_1'] ?? 0);
+        $idLiderPrincipal2 = (int)($configLideres['id_lider_principal_2'] ?? 0);
+
+        if ($idLiderPrincipal1 > 0) {
+            $personaL1 = $this->personaModel->getById($idLiderPrincipal1);
+            if (!empty($personaL1)) {
+                $nombreLiderPrincipal1 = trim((string)($personaL1['Nombre'] ?? '') . ' ' . (string)($personaL1['Apellido'] ?? ''));
+            }
+        }
+
+        if ($idLiderPrincipal2 > 0) {
+            $personaL2 = $this->personaModel->getById($idLiderPrincipal2);
+            if (!empty($personaL2)) {
+                $nombreLiderPrincipal2 = trim((string)($personaL2['Nombre'] ?? '') . ' ' . (string)($personaL2['Apellido'] ?? ''));
+            }
+        }
+
+        $jerarquiaPorLiderId = [];
+        $registrarJerarquiaLider = function (int $idPersona) use (&$jerarquiaPorLiderId): void {
+            if ($idPersona <= 0 || array_key_exists($idPersona, $jerarquiaPorLiderId)) {
+                return;
+            }
+            $p = $this->personaModel->getById($idPersona);
+            if (empty($p)) {
+                return;
+            }
+            $jerarquiaPorLiderId[$idPersona] = $this->personaModel->getJerarquiaByRol((int)($p['Id_Rol'] ?? 0));
+        };
+
+        foreach ([$idLiderPrincipal1, $idLiderPrincipal2] as $idPrincipalTmp) {
+            $registrarJerarquiaLider((int)$idPrincipalTmp);
+        }
+        foreach ($liderazgoRed as $liderRowJer) {
+            $registrarJerarquiaLider((int)($liderRowJer['Id_Persona'] ?? 0));
+            $registrarJerarquiaLider((int)($liderRowJer['Id_Lider'] ?? 0));
+        }
+        foreach ($discipulos as $discRowJer) {
+            $registrarJerarquiaLider((int)($discRowJer['Id_Lider'] ?? 0));
+        }
+
+        foreach ($personasAsignablesRaw as $persona) {
+            $idPersona = (int)($persona['Id_Persona'] ?? 0);
+            if ($idPersona <= 0) {
+                continue;
+            }
+
+            if (isset($idsLiderazgo[$idPersona])) {
+                continue;
+            }
+
+            $persona['_jerarquia'] = $this->personaModel->getJerarquiaByRol((int)($persona['Id_Rol'] ?? 0));
+            $personasAsignables[] = $persona;
+        }
+
+        usort($personasAsignables, static function($a, $b) {
+            $na = trim((string)($a['Nombre'] ?? '') . ' ' . (string)($a['Apellido'] ?? ''));
+            $nb = trim((string)($b['Nombre'] ?? '') . ' ' . (string)($b['Apellido'] ?? ''));
+            return strcasecmp($na, $nb);
+        });
+
+        $encabezado = $this->construirEncabezadoEquipoPrincipal($lideresEquipoPrincipal, $idMinisterioFiltro, $nombreMinisterioFiltro);
+        $encabezado['ministerio_cantidad'] = $numMinisterios;
+        $encabezado['equipo_principal_hombres'] = count($lideresHombres);
+        $encabezado['equipo_principal_mujeres'] = count($lideresMujeres);
+
+        $this->view('discipular/ministerios/lideres', [
             'id_ministerio_filtro' => $idMinisterioFiltro,
             'nombre_ministerio_filtro' => $nombreMinisterioFiltro,
+            'encabezado_equipo_principal' => $encabezado,
+            'lideres_equipo_principal' => $lideresEquipoPrincipal,
+            'lideres_equipo_hombres' => $lideresHombres,
+            'lideres_equipo_mujeres' => $lideresMujeres,
+            'liderazgo_red' => $liderazgoRed,
+            'discipulos_red' => $discipulos,
+            'personas_asignables' => $personasAsignables,
+            'jerarquia_por_lider_id' => $jerarquiaPorLiderId,
+            'id_lider_principal_1' => $idLiderPrincipal1,
+            'id_lider_principal_2' => $idLiderPrincipal2,
+            'nombre_lider_principal_1' => $nombreLiderPrincipal1,
+            'nombre_lider_principal_2' => $nombreLiderPrincipal2,
+            'candidatos_lideres_principales' => $candidatosLideresPrincipales,
+            'totales_tabs' => [
+                'equipo_principal' => count($lideresEquipoPrincipal),
+                'lideres_144' => $totalLideres144,
+                'lideres_celula' => $totalLideresCelula,
+                'discipulos' => count($discipulos),
+            ],
+            'ministerios_navegacion' => $ministeriosNavegacion,
         ]);
     }
 
@@ -689,6 +1001,8 @@ class MinisterioController extends BaseController {
             $ministerio = $this->ministerioModel->getById($idMinisterioFiltro);
             $nombreMinisterioFiltro = trim((string)($ministerio['Nombre_Ministerio'] ?? ''));
         }
+
+        $lideres = $this->anexarResumenRedLideres($lideres, $idMinisterioFiltro);
 
         $esGeneroMujer = static function ($genero) {
             $g = strtolower(trim((string)$genero));
@@ -714,12 +1028,310 @@ class MinisterioController extends BaseController {
         usort($lideresCelulaHombres, [$this, 'compararNodosEquipo12']);
         usort($lideresCelulaMujeres, [$this, 'compararNodosEquipo12']);
 
-        $this->view('ministerios/lideres_celula', [
+        $this->view('discipular/ministerios/lideres_celula', [
             'lideres_celula_hombres' => $lideresCelulaHombres,
             'lideres_celula_mujeres' => $lideresCelulaMujeres,
             'id_ministerio_filtro' => $idMinisterioFiltro,
             'nombre_ministerio_filtro' => $nombreMinisterioFiltro,
         ]);
+    }
+
+    public function validarCupoLider() {
+        if (!AuthController::tienePermiso('ministerios', 'ver')) {
+            $this->json(['ok' => false, 'error' => 'No autorizado'], 403);
+        }
+
+        $idLider = (int)($_GET['id_lider'] ?? $_POST['id_lider'] ?? 0);
+        $idMinisterio = (int)($_GET['id_ministerio'] ?? $_POST['id_ministerio'] ?? 0);
+
+        if ($idLider <= 0) {
+            $this->json(['ok' => false, 'error' => 'id_lider es obligatorio'], 422);
+        }
+
+        $filtroPersonas = DataIsolation::generarFiltroPersonas();
+        $resumen = $this->personaModel->getResumenRedLideresWithRole([$idLider], $filtroPersonas, $idMinisterio, 12);
+        $data = $resumen[$idLider] ?? [
+            'equipo_directo' => 0,
+            'red_total' => 0,
+            'limite_equipo' => 12,
+            'cupos_disponibles' => 12,
+            'cupo_lleno' => false,
+        ];
+
+        $this->json([
+            'ok' => true,
+            'id_lider' => $idLider,
+            'equipo_directo' => (int)$data['equipo_directo'],
+            'red_total' => (int)$data['red_total'],
+            'limite_equipo' => (int)$data['limite_equipo'],
+            'cupos_disponibles' => (int)$data['cupos_disponibles'],
+            'cupo_lleno' => !empty($data['cupo_lleno']),
+        ]);
+    }
+
+    public function asignarCupo() {
+        if (!AuthController::tienePermiso('ministerios', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('discipular/ministerios/equipo-principal');
+            return;
+        }
+
+        $idLider = (int)($_POST['id_lider'] ?? 0);
+        $idPersona = (int)($_POST['id_persona'] ?? 0);
+        $idMinisterio = (int)($_POST['id_ministerio'] ?? 0);
+        $idPersonaActualSlot = (int)($_POST['id_persona_actual_slot'] ?? 0);
+        $numeroCupo = (int)($_POST['numero_cupo'] ?? 0);
+
+        $queryBase = 'discipular/ministerios/equipo-principal';
+        if ($idMinisterio > 0) {
+            $queryBase .= '&id_ministerio=' . $idMinisterio;
+        }
+
+        if ($idLider <= 0 || $idPersona <= 0) {
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('Selecciona líder y persona para asignar cupo.'));
+            return;
+        }
+
+        $persona = $this->personaModel->getById($idPersona);
+        $lider = $this->personaModel->getById($idLider);
+        $personaActualSlot = $idPersonaActualSlot > 0 ? $this->personaModel->getById($idPersonaActualSlot) : null;
+
+        if (empty($persona) || empty($lider)) {
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('No se encontró la persona o el líder seleccionado.'));
+            return;
+        }
+
+        if ($idPersonaActualSlot > 0) {
+            if (empty($personaActualSlot)) {
+                $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('La persona actual del cupo ya no existe.'));
+                return;
+            }
+
+            if ((int)($personaActualSlot['Id_Lider'] ?? 0) !== $idLider) {
+                $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('La persona actual ya no pertenece a ese cupo. Recarga la vista e inténtalo de nuevo.'));
+                return;
+            }
+
+            if ($idPersonaActualSlot === $idPersona) {
+                $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('Esa persona ya ocupa el cupo seleccionado.'));
+                return;
+            }
+        }
+
+        $validacionGenero = $this->validarGeneroCupoPastorPrincipal($idMinisterio, $idLider, $persona, $lider);
+        if (!$validacionGenero['ok']) {
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode((string)$validacionGenero['message']));
+            return;
+        }
+
+        $idLiderAnterior = (int)($persona['Id_Lider'] ?? 0);
+        if ($idLiderAnterior > 0 && $idLiderAnterior === $idLider) {
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('La persona ya está asignada a ese líder.'));
+            return;
+        }
+
+        $filtroPersonas = DataIsolation::generarFiltroPersonas();
+        $resumen = $this->personaModel->getResumenRedLideresWithRole([$idLider], $filtroPersonas, $idMinisterio, 12);
+        $dataCupo = $resumen[$idLider] ?? null;
+
+        if (!is_array($dataCupo) || (!empty($dataCupo['cupo_lleno']) && $idPersonaActualSlot <= 0)) {
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('Ese líder ya completó sus 12 cupos.'));
+            return;
+        }
+
+        $validacionJerarquia = $this->personaModel->validarAsignacionJerarquica(
+            $idLider,
+            (int)($persona['Id_Rol'] ?? 0),
+            $idPersona
+        );
+
+        if (!$validacionJerarquia['ok']) {
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode((string)($validacionJerarquia['message'] ?? 'No se pudo validar la asignación.')));
+            return;
+        }
+
+        $dataUpdate = [
+            'Id_Lider' => $idLider,
+        ];
+
+        $ascensoRol = $this->personaModel->resolverRolAscensoPorLider(
+            (int)($lider['Id_Rol'] ?? 0),
+            (int)($persona['Id_Rol'] ?? 0)
+        );
+
+        if (!$ascensoRol['ok']) {
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode((string)($ascensoRol['message'] ?? 'No se pudo resolver el ascenso de rol.')));
+            return;
+        }
+
+        if ((int)($ascensoRol['id_rol'] ?? 0) > 0) {
+            $dataUpdate['Id_Rol'] = (int)$ascensoRol['id_rol'];
+        }
+
+        if ((int)($persona['Id_Ministerio'] ?? 0) <= 0 && (int)($lider['Id_Ministerio'] ?? 0) > 0) {
+            $dataUpdate['Id_Ministerio'] = (int)$lider['Id_Ministerio'];
+        }
+
+        if ($idPersonaActualSlot > 0) {
+            $okLiberar = $this->personaModel->update($idPersonaActualSlot, [
+                'Id_Lider' => null,
+            ]);
+            if (!$okLiberar) {
+                $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('No se pudo liberar a la persona que ocupaba ese cupo.'));
+                return;
+            }
+        }
+
+        $ok = $this->personaModel->update($idPersona, $dataUpdate);
+        if (!$ok) {
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('No se pudo guardar la asignación del cupo.'));
+            return;
+        }
+
+        if (isset($dataUpdate['Id_Rol'])) {
+            $this->personaModel->ajustarEscaleraPorRol($idPersona, (int)$dataUpdate['Id_Rol']);
+        }
+
+        $mensajeExito = $idLiderAnterior > 0 ? 'Cupo reasignado correctamente.' : 'Cupo asignado correctamente.';
+        if ($idPersonaActualSlot > 0 && $numeroCupo > 0) {
+            $mensajeExito = 'Cupo ' . $numeroCupo . ' reemplazado correctamente.';
+        } elseif ($numeroCupo > 0) {
+            $mensajeExito = 'Cupo ' . $numeroCupo . ' asignado correctamente.';
+        }
+        if (isset($dataUpdate['Id_Rol'])) {
+            $jerarquiaObjetivo = (string)($ascensoRol['jerarquia_objetivo'] ?? '');
+            $etiquetaRol = [
+                'lider_12' => 'Lider de 12',
+                'lider_144' => 'Lider de 144',
+                'lider_celula' => 'Lider de celula',
+            ][$jerarquiaObjetivo] ?? 'nuevo rol';
+            $mensajeExito .= ' Promovido a ' . $etiquetaRol . '.';
+        }
+        if ($idPersonaActualSlot > 0) {
+            $mensajeExito .= ' La persona anterior quedó sin líder asignado.';
+        }
+
+        $this->redirect($queryBase . '&asignacion_ok=1&asignacion_msg=' . urlencode($mensajeExito));
+    }
+
+    public function reasignarCupo() {
+        if (!AuthController::tienePermiso('ministerios', 'ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('discipular/ministerios/equipo-principal');
+            return;
+        }
+
+        $idLiderNuevo = (int)($_POST['id_lider_nuevo'] ?? 0);
+        $idPersona = (int)($_POST['id_persona_reasignar'] ?? 0);
+        $idMinisterio = (int)($_POST['id_ministerio'] ?? 0);
+
+        $queryBase = 'discipular/ministerios/equipo-principal';
+        if ($idMinisterio > 0) {
+            $queryBase .= '&id_ministerio=' . $idMinisterio;
+        }
+
+        if ($idLiderNuevo <= 0 || $idPersona <= 0) {
+            $this->redirect($queryBase . '&reasignacion_error=1&reasignacion_msg=' . urlencode('Selecciona persona y nuevo líder para reasignar.'));
+            return;
+        }
+
+        $persona = $this->personaModel->getById($idPersona);
+        $liderNuevo = $this->personaModel->getById($idLiderNuevo);
+
+        if (empty($persona) || empty($liderNuevo)) {
+            $this->redirect($queryBase . '&reasignacion_error=1&reasignacion_msg=' . urlencode('No se encontró la persona o el líder seleccionado.'));
+            return;
+        }
+
+        $validacionGenero = $this->validarGeneroCupoPastorPrincipal($idMinisterio, $idLiderNuevo, $persona, $liderNuevo);
+        if (!$validacionGenero['ok']) {
+            $this->redirect($queryBase . '&reasignacion_error=1&reasignacion_msg=' . urlencode((string)$validacionGenero['message']));
+            return;
+        }
+
+        $idLiderActual = (int)($persona['Id_Lider'] ?? 0);
+        if ($idLiderActual <= 0) {
+            $this->redirect($queryBase . '&reasignacion_error=1&reasignacion_msg=' . urlencode('La persona no tiene líder actual para reasignar.'));
+            return;
+        }
+
+        if ($idLiderActual === $idLiderNuevo) {
+            $this->redirect($queryBase . '&reasignacion_error=1&reasignacion_msg=' . urlencode('La persona ya está asignada a ese líder.'));
+            return;
+        }
+
+        $filtroPersonas = DataIsolation::generarFiltroPersonas();
+        $resumen = $this->personaModel->getResumenRedLideresWithRole([$idLiderNuevo], $filtroPersonas, $idMinisterio, 12);
+        $dataCupo = $resumen[$idLiderNuevo] ?? null;
+
+        if (!is_array($dataCupo) || !empty($dataCupo['cupo_lleno'])) {
+            $this->redirect($queryBase . '&reasignacion_error=1&reasignacion_msg=' . urlencode('El nuevo líder no tiene cupos disponibles.'));
+            return;
+        }
+
+        $validacionJerarquia = $this->personaModel->validarAsignacionJerarquica(
+            $idLiderNuevo,
+            (int)($persona['Id_Rol'] ?? 0),
+            $idPersona
+        );
+
+        if (!$validacionJerarquia['ok']) {
+            $this->redirect($queryBase . '&reasignacion_error=1&reasignacion_msg=' . urlencode((string)($validacionJerarquia['message'] ?? 'No se pudo validar la reasignación.')));
+            return;
+        }
+
+        $dataUpdate = [
+            'Id_Lider' => $idLiderNuevo,
+        ];
+
+        $ascensoRol = $this->personaModel->resolverRolAscensoPorLider(
+            (int)($liderNuevo['Id_Rol'] ?? 0),
+            (int)($persona['Id_Rol'] ?? 0)
+        );
+
+        if (!$ascensoRol['ok']) {
+            $this->redirect($queryBase . '&reasignacion_error=1&reasignacion_msg=' . urlencode((string)($ascensoRol['message'] ?? 'No se pudo resolver el ascenso de rol.')));
+            return;
+        }
+
+        if ((int)($ascensoRol['id_rol'] ?? 0) > 0) {
+            $dataUpdate['Id_Rol'] = (int)$ascensoRol['id_rol'];
+        }
+
+        if ((int)($liderNuevo['Id_Ministerio'] ?? 0) > 0) {
+            $dataUpdate['Id_Ministerio'] = (int)$liderNuevo['Id_Ministerio'];
+        }
+
+        $ok = $this->personaModel->update($idPersona, $dataUpdate);
+        if (!$ok) {
+            $this->redirect($queryBase . '&reasignacion_error=1&reasignacion_msg=' . urlencode('No se pudo guardar la reasignación.'));
+            return;
+        }
+
+        if (isset($dataUpdate['Id_Rol'])) {
+            $this->personaModel->ajustarEscaleraPorRol($idPersona, (int)$dataUpdate['Id_Rol']);
+        }
+
+        $mensajeExito = 'Reasignacion realizada correctamente.';
+        if (isset($dataUpdate['Id_Rol'])) {
+            $jerarquiaObjetivo = (string)($ascensoRol['jerarquia_objetivo'] ?? '');
+            $etiquetaRol = [
+                'lider_12' => 'Lider de 12',
+                'lider_144' => 'Lider de 144',
+                'lider_celula' => 'Lider de celula',
+            ][$jerarquiaObjetivo] ?? 'nuevo rol';
+            $mensajeExito .= ' Reasignado y promovido a ' . $etiquetaRol . '.';
+        }
+
+        $this->redirect($queryBase . '&reasignacion_ok=1&reasignacion_msg=' . urlencode($mensajeExito));
     }
 
     private function construirRedEquipo12(array $lideres, callable $esGeneroMujer) {
@@ -765,6 +1377,47 @@ class MinisterioController extends BaseController {
         ];
     }
 
+    private function normalizarGeneroPersona($generoRaw) {
+        $genero = strtolower(trim((string)$generoRaw));
+        if ($genero === '') {
+            return 'sin_genero';
+        }
+        return (strpos($genero, 'mujer') !== false || strpos($genero, 'femen') !== false) ? 'mujer' : 'hombre';
+    }
+
+    private function validarGeneroCupoPastorPrincipal($idMinisterio, $idLider, array $persona, array $lider) {
+        $idMinisterio = (int)$idMinisterio;
+        $idLider = (int)$idLider;
+        if ($idMinisterio <= 0 || $idLider <= 0) {
+            return ['ok' => true, 'message' => ''];
+        }
+
+        $config = $this->ministerioModel->getLideresPrincipalesByMinisterioIds([$idMinisterio]);
+        $cfgMinisterio = $config[$idMinisterio] ?? null;
+        if (!is_array($cfgMinisterio)) {
+            return ['ok' => true, 'message' => ''];
+        }
+
+        $idPrincipal1 = (int)($cfgMinisterio['id_lider_principal_1'] ?? 0);
+        $idPrincipal2 = (int)($cfgMinisterio['id_lider_principal_2'] ?? 0);
+        $esPastorPrincipal = ($idLider === $idPrincipal1 || $idLider === $idPrincipal2);
+        if (!$esPastorPrincipal) {
+            return ['ok' => true, 'message' => ''];
+        }
+
+        $generoPersona = $this->normalizarGeneroPersona($persona['Genero'] ?? '');
+        $generoLider = $this->normalizarGeneroPersona($lider['Genero'] ?? '');
+        if ($generoPersona === 'sin_genero' || $generoLider === 'sin_genero') {
+            return ['ok' => false, 'message' => 'No se puede asignar por cupo pastoral sin género definido en líder y persona.'];
+        }
+
+        if ($generoPersona !== $generoLider) {
+            return ['ok' => false, 'message' => 'El cupo pastoral solo permite asignar personas del mismo género del pastor principal.'];
+        }
+
+        return ['ok' => true, 'message' => ''];
+    }
+
     private function normalizarNodoEquipo12(array $lider, callable $esGeneroMujer) {
         $nombre = trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? ''));
 
@@ -778,6 +1431,10 @@ class MinisterioController extends BaseController {
             'nombre_lider' => trim((string)($lider['Nombre_Lider'] ?? '')),
             'tipo_liderazgo' => trim((string)($lider['Tipo_Liderazgo'] ?? '')),
             'total_personas' => (int)($lider['Total_Personas'] ?? 0),
+            'equipo_directo' => (int)($lider['Equipo_Directo'] ?? 0),
+            'red_total' => (int)($lider['Red_Total'] ?? 0),
+            'cupos_disponibles' => (int)($lider['Cupos_Disponibles'] ?? 0),
+            'cupo_lleno' => !empty($lider['Cupo_Lleno']),
             'ultimo_reporte_celula' => (string)($lider['Ultimo_Reporte_Celula'] ?? ''),
             'es_mujer' => $esGeneroMujer($lider['Genero'] ?? ''),
         ];
@@ -789,6 +1446,124 @@ class MinisterioController extends BaseController {
 
     private function compararEquipos12(array $a, array $b) {
         return $this->compararNodosEquipo12($a['lider'] ?? [], $b['lider'] ?? []);
+    }
+
+    private function construirNombreUsuarioActual() {
+        $nombreSesion = trim((string)($_SESSION['usuario_nombre'] ?? ''));
+        if ($nombreSesion !== '') {
+            return $nombreSesion;
+        }
+
+        $idUsuario = (int)($_SESSION['usuario_id'] ?? 0);
+        if ($idUsuario > 0) {
+            $persona = $this->personaModel->getById($idUsuario);
+            if (!empty($persona)) {
+                $nombre = trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? ''));
+                if ($nombre !== '') {
+                    return $nombre;
+                }
+            }
+        }
+
+        return 'Lider principal';
+    }
+
+    private function construirEncabezadoEquipoPrincipal(array $lideres, $idMinisterioFiltro, $nombreMinisterioFiltro) {
+        $nombrePastor = $this->construirNombreUsuarioActual();
+        $email = trim((string)($_SESSION['usuario_email'] ?? ''));
+        $telefono = trim((string)($_SESSION['usuario_telefono'] ?? ''));
+
+        $idUsuario = (int)($_SESSION['usuario_id'] ?? 0);
+        if ($idUsuario > 0) {
+            $persona = $this->personaModel->getById($idUsuario);
+            if (!empty($persona)) {
+                $nombrePersona = trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? ''));
+                if ($nombrePersona !== '') {
+                    $nombrePastor = $nombrePersona;
+                }
+
+                if ($email === '') {
+                    $email = trim((string)($persona['Email'] ?? ''));
+                }
+
+                if ($telefono === '') {
+                    $telefono = trim((string)($persona['Telefono'] ?? ''));
+                }
+            }
+        }
+
+        $equipoPrincipal = 0;
+        $superiores = [];
+        foreach ($lideres as $lider) {
+            if ((int)($lider['Es_Lider_12'] ?? 0) !== 1) {
+                continue;
+            }
+
+            $equipoPrincipal++;
+            $nombreSuperior = trim((string)($lider['Nombre_Lider'] ?? ''));
+            if ($nombreSuperior !== '' && stripos($nombreSuperior, 'sin lider') === false) {
+                $superiores[$nombreSuperior] = (int)($superiores[$nombreSuperior] ?? 0) + 1;
+            }
+        }
+
+        if (!empty($superiores)) {
+            arsort($superiores);
+            $principal = (string)array_key_first($superiores);
+            if ($principal !== '') {
+                $nombrePastor = $principal;
+            }
+        }
+
+        $ministerioTitulo = trim((string)$nombreMinisterioFiltro);
+        if ($ministerioTitulo === '') {
+            $ministerioTitulo = 'Todos los ministerios';
+        }
+
+        return [
+            'nombre' => $nombrePastor,
+            'email' => $email,
+            'telefono' => $telefono,
+            'sede' => 'Madrid',
+            'id_usuario' => $idUsuario,
+            'equipo_principal' => $equipoPrincipal,
+            'ministerio_titulo' => $ministerioTitulo,
+            'ministerio_cantidad' => count($lideres),
+            'id_ministerio' => (int)$idMinisterioFiltro,
+        ];
+    }
+
+    private function anexarResumenRedLideres(array $lideres, $idMinisterioFiltro = 0) {
+        $idsLideres = array_values(array_filter(array_map(static function($lider) {
+            return (int)($lider['Id_Persona'] ?? 0);
+        }, $lideres), static function($id) {
+            return $id > 0;
+        }));
+
+        if (empty($idsLideres)) {
+            return $lideres;
+        }
+
+        $filtroPersonas = DataIsolation::generarFiltroPersonas();
+        $resumenMap = $this->personaModel->getResumenRedLideresWithRole($idsLideres, $filtroPersonas, (int)$idMinisterioFiltro, 12);
+
+        foreach ($lideres as &$lider) {
+            $idLider = (int)($lider['Id_Persona'] ?? 0);
+            $resumen = $resumenMap[$idLider] ?? [
+                'equipo_directo' => 0,
+                'red_total' => 0,
+                'limite_equipo' => 12,
+                'cupos_disponibles' => 12,
+                'cupo_lleno' => false,
+            ];
+
+            $lider['Equipo_Directo'] = (int)($resumen['equipo_directo'] ?? 0);
+            $lider['Red_Total'] = (int)($resumen['red_total'] ?? 0);
+            $lider['Cupos_Disponibles'] = (int)($resumen['cupos_disponibles'] ?? 0);
+            $lider['Cupo_Lleno'] = !empty($resumen['cupo_lleno']);
+        }
+        unset($lider);
+
+        return $lideres;
     }
 
     private function usuarioPuedeEditarMinisterio($idMinisterio) {
@@ -905,6 +1680,132 @@ class MinisterioController extends BaseController {
         $this->redirect('ministerios&meta_guardada=1');
     }
 
+    public function actualizarLideresPrincipales() {
+        $esAdmin = AuthController::esAdministrador();
+        $puedeEditar = AuthController::tienePermiso('ministerios', 'editar');
+        if (!$esAdmin && !$puedeEditar) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('discipular/ministerios');
+            return;
+        }
+
+        $idMinisterio = (int)($_POST['id_ministerio'] ?? 0);
+        $idLider1 = (int)($_POST['id_lider_principal_1'] ?? 0);
+        $idLider2 = (int)($_POST['id_lider_principal_2'] ?? 0);
+        $returnUrl = $_POST['return_url'] ?? null;
+        $idRolLider12 = (int)$this->personaModel->resolverIdRolLider12();
+
+        if ($idRolLider12 <= 0) {
+            $this->redirigirConRetornoConParametros($returnUrl, 'discipular/ministerios', [
+                'lp_error' => 1,
+                'lp_msg' => 'No existe un rol de Lider de 12 configurado en la tabla rol.'
+            ]);
+            return;
+        }
+
+        if ($idMinisterio > 0) {
+            $filtroMinisterios = DataIsolation::generarFiltroMinisterios();
+            $ministeriosVisibles = $this->ministerioModel->getAllWithMemberCountAndRole($filtroMinisterios);
+            $idsPermitidos = array_map(static function($row) {
+                return (int)($row['Id_Ministerio'] ?? 0);
+            }, $ministeriosVisibles);
+
+            if (!in_array($idMinisterio, $idsPermitidos, true)) {
+                header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+                exit;
+            }
+        }
+
+        if ($idLider1 > 0 && $idLider2 > 0 && $idLider1 === $idLider2) {
+            $this->redirigirConRetornoConParametros($returnUrl, 'discipular/ministerios', [
+                'lp_error' => 1,
+                'lp_msg' => 'No puedes repetir el mismo lider en ambos cupos.'
+            ]);
+            return;
+        }
+
+        foreach ([$idLider1, $idLider2] as $idLider) {
+            if ($idLider <= 0) {
+                continue;
+            }
+
+            $persona = $this->personaModel->getById($idLider);
+            if (empty($persona)) {
+                $this->redirigirConRetornoConParametros($returnUrl, 'discipular/ministerios', [
+                    'lp_error' => 1,
+                    'lp_msg' => 'Uno de los lideres seleccionados no existe.'
+                ]);
+                return;
+            }
+
+            if ($idMinisterio > 0 && (int)($persona['Id_Ministerio'] ?? 0) !== $idMinisterio) {
+                $this->redirigirConRetornoConParametros($returnUrl, 'discipular/ministerios', [
+                    'lp_error' => 1,
+                    'lp_msg' => 'Los lideres deben pertenecer al mismo ministerio.'
+                ]);
+                return;
+            }
+
+            $jerarquia = $this->personaModel->getJerarquiaByRol((int)($persona['Id_Rol'] ?? 0));
+            if (!in_array($jerarquia, ['pastor', 'lider_12', 'lider_144', 'lider_celula'], true)) {
+                $this->redirigirConRetornoConParametros($returnUrl, 'discipular/ministerios', [
+                    'lp_error' => 1,
+                    'lp_msg' => 'Solo puedes elegir personas con rol de liderazgo.'
+                ]);
+                return;
+            }
+        }
+
+        $ok = $this->ministerioModel->setLideresPrincipales($idMinisterio, $idLider1, $idLider2);
+        if (!$ok) {
+            $this->redirigirConRetornoConParametros($returnUrl, 'discipular/ministerios', [
+                'lp_error' => 1,
+                'lp_msg' => 'No se pudieron guardar los lideres principales.'
+            ]);
+            return;
+        }
+
+        foreach ([$idLider1, $idLider2] as $idLider) {
+            if ($idLider <= 0) {
+                continue;
+            }
+
+            $persona = $this->personaModel->getById($idLider);
+            if (empty($persona)) {
+                continue;
+            }
+
+            $updateData = [];
+
+            // En cobertura pastoral general (id 0) no se debe escribir Id_Ministerio=0
+            // porque viola la FK persona.Id_Ministerio -> ministerio.Id_Ministerio.
+            if ($idMinisterio > 0) {
+                $updateData['Id_Ministerio'] = $idMinisterio;
+            }
+
+            $jerarquiaActual = $this->personaModel->getJerarquiaByRol((int)($persona['Id_Rol'] ?? 0));
+            if ($jerarquiaActual !== 'pastor') {
+                $updateData['Id_Rol'] = $idRolLider12;
+            }
+
+            if (!empty($updateData)) {
+                $this->personaModel->update($idLider, $updateData);
+            }
+            if (isset($updateData['Id_Rol'])) {
+                $this->personaModel->ajustarEscaleraPorRol($idLider, (int)$updateData['Id_Rol']);
+            }
+        }
+
+        $this->redirigirConRetornoConParametros($returnUrl, 'discipular/ministerios', [
+            'lp_ok' => 1,
+            'lp_msg' => 'Lideres principales guardados correctamente.'
+        ]);
+    }
+
     public function crear() {
         // Verificar permiso de crear
         if (!AuthController::tienePermiso('ministerios', 'crear')) {
@@ -915,6 +1816,8 @@ class MinisterioController extends BaseController {
         $returnUrl = $_POST['return_url'] ?? ($_GET['return_url'] ?? null);
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $idLiderPrincipal1 = (int)($_POST['id_lider_principal_1'] ?? 0);
+            $idLiderPrincipal2 = (int)($_POST['id_lider_principal_2'] ?? 0);
             $fechaMeta = trim((string)($_POST['meta_anio_fecha'] ?? ''));
             $anioMeta = (int)($_POST['anio_meta'] ?? 0);
             if ($fechaMeta !== '' && preg_match('/^(\d{4})-\d{2}-\d{2}$/', $fechaMeta, $mFechaMeta) === 1) {
@@ -928,11 +1831,29 @@ class MinisterioController extends BaseController {
                 'Descripcion' => $_POST['descripcion']
             ];
             
-            $this->ministerioModel->create($data);
-            $this->redirigirConRetorno($returnUrl, 'ministerios');
+            $idMinisterioNuevo = (int)$this->ministerioModel->create($data);
+            if ($idMinisterioNuevo > 0) {
+                $resultadoLideres = $this->guardarLideresPrincipalesDesdeFormulario($idMinisterioNuevo, $idLiderPrincipal1, $idLiderPrincipal2);
+                if (!$resultadoLideres['ok']) {
+                    $rutaEditar = 'discipular/ministerios/editar&id=' . $idMinisterioNuevo;
+                    if (!empty($returnUrl)) {
+                        $rutaEditar .= '&return_url=' . urlencode((string)$returnUrl);
+                    }
+                    $rutaEditar .= '&lp_error=1&lp_msg=' . urlencode((string)$resultadoLideres['message']);
+                    $this->redirect($rutaEditar);
+                    return;
+                }
+            }
+
+            $this->redirigirConRetorno($returnUrl, 'discipular/ministerios');
         } else {
-            $this->view('ministerios/formulario', [
-                'return_url' => $this->normalizarUrlRetorno($returnUrl)
+            $this->view('discipular/ministerios/formulario', [
+                'return_url' => $this->normalizarUrlRetorno($returnUrl),
+                'candidatos_lideres_principales' => $this->obtenerCandidatosLideresPrincipales(),
+                'id_lider_principal_1' => 0,
+                'id_lider_principal_2' => 0,
+                'lp_error' => ($_GET['lp_error'] ?? '') === '1',
+                'lp_msg' => (string)($_GET['lp_msg'] ?? ''),
             ]);
         }
     }
@@ -982,6 +1903,8 @@ class MinisterioController extends BaseController {
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $idLiderPrincipal1 = (int)($_POST['id_lider_principal_1'] ?? 0);
+            $idLiderPrincipal2 = (int)($_POST['id_lider_principal_2'] ?? 0);
             $fechaMeta = trim((string)($_POST['meta_anio_fecha'] ?? ''));
             $anioMeta = (int)($_POST['anio_meta'] ?? 0);
             if ($fechaMeta !== '' && preg_match('/^(\d{4})-\d{2}-\d{2}$/', $fechaMeta, $mFechaMeta) === 1) {
@@ -1014,14 +1937,37 @@ class MinisterioController extends BaseController {
                 'meta_n3_s1' => $_POST['meta_n3_s1'] ?? 0,
                 'meta_n3_s2' => $_POST['meta_n3_s2'] ?? 0
             ]);
-            $this->redirigirConRetorno($returnUrl, 'ministerios');
+
+            $resultadoLideres = $this->guardarLideresPrincipalesDesdeFormulario((int)$id, $idLiderPrincipal1, $idLiderPrincipal2);
+            if (!$resultadoLideres['ok']) {
+                $rutaEditar = 'discipular/ministerios/editar&id=' . (int)$id;
+                if (!empty($returnUrl)) {
+                    $rutaEditar .= '&return_url=' . urlencode((string)$returnUrl);
+                }
+                $rutaEditar .= '&lp_error=1&lp_msg=' . urlencode((string)$resultadoLideres['message']);
+                $this->redirect($rutaEditar);
+                return;
+            }
+
+            $this->redirigirConRetorno($returnUrl, 'discipular/ministerios');
         } else {
+            $lideresGuardados = $this->ministerioModel->getLideresPrincipalesByMinisterioIds([(int)$id]);
+            $lideresMinisterio = $lideresGuardados[(int)$id] ?? [
+                'id_lider_principal_1' => 0,
+                'id_lider_principal_2' => 0,
+            ];
+
             $data = [
                 'ministerio' => $this->ministerioModel->getById($id),
                 'metas' => $this->ministerioModel->getMetaDetalleByMinisterioId($id),
-                'return_url' => $this->normalizarUrlRetorno($returnUrl)
+                'return_url' => $this->normalizarUrlRetorno($returnUrl),
+                'candidatos_lideres_principales' => $this->obtenerCandidatosLideresPrincipales(),
+                'id_lider_principal_1' => (int)($lideresMinisterio['id_lider_principal_1'] ?? 0),
+                'id_lider_principal_2' => (int)($lideresMinisterio['id_lider_principal_2'] ?? 0),
+                'lp_error' => ($_GET['lp_error'] ?? '') === '1',
+                'lp_msg' => (string)($_GET['lp_msg'] ?? ''),
             ];
-            $this->view('ministerios/formulario', $data);
+            $this->view('discipular/ministerios/formulario', $data);
         }
     }
 
@@ -1039,6 +1985,6 @@ class MinisterioController extends BaseController {
             $this->ministerioModel->delete($id);
         }
 
-        $this->redirigirConRetorno($returnUrl, 'ministerios');
+        $this->redirigirConRetorno($returnUrl, 'discipular/ministerios');
     }
 }

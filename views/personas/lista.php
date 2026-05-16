@@ -1,16 +1,11 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 <?php
-$puedeVerPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver');
+$puedeVerPersona = AuthController::puedeVerPersonasConsulta();
+$puedeModuloGanarCompleto = AuthController::puedeVerModuloPersonasGanar();
 $puedeEditarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
 $puedeEliminarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'eliminar');
-$puedeCrearPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'crear');
-$puedeExportarPersonas = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
-$puedeGestionPlantillas = AuthController::esAdministrador()
-    || AuthController::tienePermiso('personas_plantillas_whatsapp', 'ver');
-$puedeVerFormularioPublico = AuthController::esAdministrador()
-    || AuthController::tienePermiso('personas_formulario_publico', 'ver');
 $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPersona;
-$mostrarEscaleraRapida = true;
+$mostrarEscaleraRapida = $puedeModuloGanarCompleto;
 ?>
 
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
@@ -18,27 +13,8 @@ $mostrarEscaleraRapida = true;
     <div class="personas-header-actions">
         <div class="personas-action-group personas-action-group-nav">
             <a href="<?= PUBLIC_URL ?>?url=personas" class="personas-action-pill is-active" aria-current="page">Discipulos</a>
+            <?php if ($puedeModuloGanarCompleto): ?>
             <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="personas-action-pill">Almas ganadas</a>
-            <a href="<?= PUBLIC_URL ?>?url=personas/universidad-vida" class="personas-action-pill">Universidad de la Vida</a>
-        </div>
-        <div class="personas-action-group">
-            <?php if ($puedeVerFormularioPublico): ?>
-            <a href="<?= PUBLIC_URL ?>?url=registro_personas" class="personas-action-pill" target="_blank" rel="noopener">
-                <i class="bi bi-box-arrow-up-right"></i> Formulario público
-            </a>
-            <?php endif; ?>
-            <?php if ($puedeExportarPersonas): ?>
-            <a href="<?= PUBLIC_URL ?>?url=personas/exportarExcel<?= !empty($_GET['ministerio']) ? '&ministerio=' . urlencode((string)$_GET['ministerio']) : '' ?><?= !empty($_GET['lider']) ? '&lider=' . urlencode((string)$_GET['lider']) : '' ?><?= !empty($_GET['buscar']) ? '&buscar=' . urlencode((string)$_GET['buscar']) : '' ?>" class="personas-action-pill">
-                <i class="bi bi-file-earmark-excel-fill"></i> Exportar Excel
-            </a>
-            <?php endif; ?>
-            <?php if ($puedeGestionPlantillas): ?>
-            <a href="<?= PUBLIC_URL ?>?url=personas/plantillas-whatsapp" class="personas-action-pill">
-                <i class="bi bi-chat-dots"></i> Plantilla mensaje what
-            </a>
-            <?php endif; ?>
-            <?php if ($puedeCrearPersona): ?>
-            <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="personas-action-pill">+ Nuevo Discipulo</a>
             <?php endif; ?>
         </div>
     </div>
@@ -47,7 +23,6 @@ $mostrarEscaleraRapida = true;
 <div class="card" style="margin-bottom: 16px;">
     <div class="card-body">
         <?php
-        $filtroPerfilListado = '';
         $filtroMinisterioListado = (string)($filtroMinisterioActual ?? ($_GET['ministerio'] ?? ''));
         $filtroLiderListado = (string)($filtroLiderActual ?? ($_GET['lider'] ?? ''));
         $lideresFiltradosFormulario = array_values(array_filter(($lideres ?? []), static function($lider) use ($filtroMinisterioListado) {
@@ -105,13 +80,13 @@ $mostrarEscaleraRapida = true;
                 </select>
             </div>
             <div class="form-group" style="min-width: 240px;">
-                <label for="filtro_nombre" style="font-size: 14px; margin-bottom: 5px;">Buscar por nombre</label>
+                <label for="filtro_nombre" style="font-size: 14px; margin-bottom: 5px;">Búsqueda universal</label>
                 <input
                     type="text"
                     id="filtro_nombre"
                     name="buscar"
                     class="form-control"
-                    placeholder="Ej: Juan Perez"
+                    placeholder="Nombre, cédula o teléfono…"
                     list="sugerencias_nombres_personas"
                     autocomplete="off"
                     value="<?= htmlspecialchars((string)($filtroNombreActual ?? ($_GET['buscar'] ?? ''))) ?>"
@@ -206,50 +181,25 @@ $esPendienteUbicacionRed = static function(array $persona) {
     return $esAntiguo && $esRolDiscipular && ($idMinisterio <= 0 || $idLider <= 0 || $idCelula <= 0);
 };
 
-$conteoPorPerfil = [
-    'pastores' => ['id' => 'pastores', 'label' => 'Pastores', 'total' => 0, 'color' => '#7c3aed', 'meta' => 'Discipulos'],
-    'lideres_12' => ['id' => 'lideres_12', 'label' => 'Lideres de 12', 'total' => 0, 'color' => '#0ea5a4', 'meta' => 'Discipulos'],
-    'lideres_celula' => ['id' => 'lideres_celula', 'label' => 'Lideres de celula', 'total' => 0, 'color' => '#f59e0b', 'meta' => 'Discipulos'],
-    'discipulos' => ['id' => 'discipulos', 'label' => 'Discipulos', 'total' => 0, 'color' => '#10b981', 'meta' => 'Discipulos'],
-    'pendientes_ubicacion' => ['id' => 'pendientes_ubicacion', 'label' => 'Por conectar a celula', 'total' => 0, 'color' => '#2563eb', 'meta' => 'Asignacion ministerial']
-];
-
-foreach (($personas ?? []) as $personaTmp) {
-    $categoriaTmp = $resolverCategoriaPerfil((array)$personaTmp);
-    if (isset($conteoPorPerfil[$categoriaTmp])) {
-        $conteoPorPerfil[$categoriaTmp]['total']++;
-    }
-
-    if ($esPendienteUbicacionRed((array)$personaTmp)) {
-        $conteoPorPerfil['pendientes_ubicacion']['total']++;
-    }
+if (!isset($totalPendientesConectarContexto)) {
+    $totalPendientesConectarContexto = is_array($personas ?? null) ? count($personas) : 0;
 }
-
-$perfilActivoVisual = '';
+$totalPendientesBanner = (int)$totalPendientesConectarContexto;
 ?>
 
-<div class="dashboard-grid personas-perfiles-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin:0 0 16px; gap:10px;">
-    <?php foreach ($conteoPorPerfil as $resumenPerfil): ?>
-    <button
-        type="button"
-        class="dashboard-card personas-perfil-card js-perfil-card <?= $perfilActivoVisual === (string)$resumenPerfil['id'] ? 'is-active' : '' ?>"
-        data-perfil-id="<?= htmlspecialchars((string)$resumenPerfil['id']) ?>"
-        style="border-left-color:<?= htmlspecialchars((string)$resumenPerfil['color']) ?>; text-align:left; cursor:pointer;"
-    >
-        <h3><?= htmlspecialchars((string)$resumenPerfil['label']) ?></h3>
-        <div class="value" style="color:<?= htmlspecialchars((string)$resumenPerfil['color']) ?>;"><?= (int)$resumenPerfil['total'] ?></div>
-        <small style="color:#637087;"><?= htmlspecialchars((string)($resumenPerfil['meta'] ?? 'Discipulos')) ?></small>
-    </button>
-    <?php endforeach; ?>
-</div>
-
-<div id="discipulosHintSeleccion" class="card" style="margin-bottom: 14px; <?= $perfilActivoVisual !== '' ? 'display:none;' : '' ?>">
-    <div class="card-body" style="padding: 12px 16px; color:#5b6d88;">
-        Selecciona una tarjeta para ver los discipulos de esa clasificacion.
+<div class="card" style="margin-bottom: 16px; border-left: 4px solid #2563eb;">
+    <div class="card-body" style="padding: 14px 18px;">
+        <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px;justify-content:space-between;">
+            <div>
+                <strong style="font-size:1.05rem;color:#1e3a5f;">Por conectar a célula</strong>
+                <div style="color:#5b6d88;font-size:13px;margin-top:4px;">Incluye discípulos del padrón con ubicación incompleta e inscripciones desde el formulario de Escuelas de Formación (Universidad de la Vida), según los filtros de arriba.</div>
+            </div>
+            <div style="font-size:1.6rem;font-weight:800;color:#2563eb;line-height:1;"><?= $totalPendientesBanner ?></div>
+        </div>
     </div>
 </div>
 
-<div id="discipulosTableWrap" class="table-container" <?= $perfilActivoVisual !== '' ? '' : 'hidden' ?>>
+<div id="discipulosTableWrap" class="table-container">
     <table class="data-table ganar-table mobile-persona-accordion">
         <thead>
             <tr>
@@ -298,7 +248,12 @@ $perfilActivoVisual = '';
                     $rowPerfilId = $resolverCategoriaPerfil((array)$persona);
                     $esFilaDiscipulo = ($rowPerfilId === 'discipulos');
                     $filaPendienteUbicacion = $esPendienteUbicacionRed((array)$persona);
-                    $mostrarEscaleraFila = ($esFilaDiscipulo || $filaPendienteUbicacion);
+                    $canalUvFormulario = trim((string)($persona['Canal_Creacion'] ?? '')) === 'Escuelas Formacion (Formulario publico)';
+                    $idMinEscalera = (int)($persona['Id_Ministerio'] ?? 0);
+                    $idLidEscalera = (int)($persona['Id_Lider'] ?? 0);
+                    $idCelEscalera = (int)($persona['Id_Celula'] ?? 0);
+                    $inscripcionUvPendienteUbicacion = $canalUvFormulario && ($idMinEscalera <= 0 || $idLidEscalera <= 0 || $idCelEscalera <= 0);
+                    $mostrarEscaleraFila = ($esFilaDiscipulo || $filaPendienteUbicacion || $inscripcionUvPendienteUbicacion);
                     $puedeEditarEscaleraInline = !empty($puedeEditarPersona) && $mostrarEscaleraFila;
                     ?>
                     <tr class="js-discipulo-row" data-perfil-id="<?= htmlspecialchars((string)$rowPerfilId) ?>" data-pendiente-ubicacion="<?= $filaPendienteUbicacion ? '1' : '0' ?>">
@@ -404,7 +359,7 @@ $perfilActivoVisual = '';
             <?php else: ?>
                 <tr>
                     <?php $columnasBase = 3 + ($mostrarEscaleraRapida ? 1 : 0) + ($mostrarAcciones ? 1 : 0); ?>
-                    <td colspan="<?= (string)$columnasBase ?>" class="text-center">No hay discipulos registrados</td>
+                    <td colspan="<?= (string)$columnasBase ?>" class="text-center">No hay discipulos pendientes por conectar con los filtros actuales.</td>
                 </tr>
             <?php endif; ?>
         </tbody>
@@ -1416,75 +1371,6 @@ if (filtroNombre && filtroPerfilForm) {
             cerrarModal();
         }
     });
-})();
-</script>
-
-<script>
-(function() {
-    const cards = Array.from(document.querySelectorAll('.js-perfil-card'));
-    const rows = Array.from(document.querySelectorAll('.js-discipulo-row'));
-    const tableWrap = document.getElementById('discipulosTableWrap');
-    const hint = document.getElementById('discipulosHintSeleccion');
-
-    if (!cards.length || !rows.length) {
-        return;
-    }
-
-    function aplicarFiltro(perfilId) {
-        const objetivo = String(perfilId || '').trim();
-
-        cards.forEach(function(card) {
-            card.classList.toggle('is-active', String(card.dataset.perfilId || '') === objetivo);
-        });
-
-        if (objetivo === '') {
-            rows.forEach(function(row) {
-                row.style.display = 'none';
-            });
-            if (tableWrap) {
-                tableWrap.setAttribute('hidden', 'hidden');
-            }
-            if (hint) {
-                hint.style.display = '';
-            }
-            return;
-        }
-
-        if (tableWrap) {
-            tableWrap.removeAttribute('hidden');
-        }
-        if (hint) {
-            hint.style.display = 'none';
-        }
-
-        rows.forEach(function(row) {
-            const rowPerfil = String(row.dataset.perfilId || 'discipulos');
-            const esPendienteUbicacion = String(row.dataset.pendienteUbicacion || '0') === '1';
-            const mostrar = objetivo === 'pendientes_ubicacion'
-                ? esPendienteUbicacion
-                : rowPerfil === objetivo;
-            row.style.display = mostrar ? '' : 'none';
-        });
-    }
-
-    cards.forEach(function(card) {
-        card.addEventListener('click', function() {
-            aplicarFiltro(String(card.dataset.perfilId || ''));
-        });
-    });
-
-    const cardInicial = cards.find(function(card) {
-        return card.classList.contains('is-active');
-    });
-    const params = new URLSearchParams(window.location.search || '');
-    const panelSolicitado = String(params.get('panel') || '').trim();
-    const cardSolicitada = cards.find(function(card) {
-        return String(card.dataset.perfilId || '') === panelSolicitado;
-    });
-    const perfilInicial = cardSolicitada
-        ? panelSolicitado
-        : (cardInicial ? String(cardInicial.dataset.perfilId || '') : '');
-    aplicarFiltro(perfilInicial);
 })();
 </script>
 

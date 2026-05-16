@@ -15,12 +15,12 @@ $modulosEventos = $modulosEventos ?? [];
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
     <div>
         <h2 style="margin:0;">Eventos</h2>
-        <small style="color:#637087;"><?= $esAdminEventos ? 'Los cuatro módulos comparten la misma lógica de acceso público y administración.' : 'Acceso rápido a los módulos públicos.' ?></small>
+        <small style="color:#637087;"><?= $esAdminEventos ? 'Los módulos comparten la misma lógica de acceso público y administración.' : 'Acceso rápido a los módulos públicos.' ?></small>
     </div>
     <div class="header-actions">
         <?php if ($esAdminEventos): ?>
         <div class="action-group action-group-nav">
-            <a href="<?= PUBLIC_URL ?>?url=eventos" class="action-pill is-active" aria-current="page">Reuniones</a>
+            <a href="<?= PUBLIC_URL ?>?url=eventos" class="action-pill is-active" aria-current="page">Eventos</a>
             <a href="<?= PUBLIC_URL ?>?url=eventos/universidad-vida" class="action-pill">Universidad de la Vida</a>
             <a href="<?= PUBLIC_URL ?>?url=eventos/capacitacion-destino" class="action-pill">Capacitación Destino</a>
             <a href="<?= PUBLIC_URL ?>?url=eventos/otros" class="action-pill">Otros</a>
@@ -31,7 +31,7 @@ $modulosEventos = $modulosEventos ?? [];
             <a href="<?= PUBLIC_URL ?>?url=eventos/crear" class="action-pill">Nuevo evento</a>
             <?php endif; ?>
             <?php if (!$esAdminEventos): ?>
-            <a href="<?= htmlspecialchars($urlEventosPublicos) ?>" target="_blank" rel="noopener" class="action-pill">Abrir reuniones</a>
+            <a href="<?= htmlspecialchars($urlEventosPublicos) ?>" target="_blank" rel="noopener" class="action-pill">Abrir eventos</a>
             <?php endif; ?>
             <a href="<?= PUBLIC_URL ?>?url=home" class="action-pill">Volver al panel</a>
         </div>
@@ -49,7 +49,7 @@ $modulosEventos = $modulosEventos ?? [];
     <div class="<?= $esAdminEventos ? 'eventos-module-grid' : 'eventos-access-grid' ?>">
         <?php foreach ($modulosEventos as $moduloItem): ?>
             <?php
-            $varianteModulo = (string)($moduloItem['variant'] ?? 'reuniones');
+            $varianteModulo = (string)($moduloItem['variant'] ?? 'otros');
             ?>
             <?php if ($esAdminEventos): ?>
             <article class="eventos-module-card eventos-module-card--<?= htmlspecialchars($varianteModulo) ?>">
@@ -82,8 +82,8 @@ $modulosEventos = $modulosEventos ?? [];
 <div class="card report-card" style="padding:16px; margin-bottom:18px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap; margin-bottom:12px;">
         <div>
-            <h3 style="margin:0;">Gestión de reuniones</h3>
-            <small style="color:#637087;">Este es el módulo principal actual y conserva el listado completo de reuniones.</small>
+            <h3 style="margin:0;">Gestión de eventos</h3>
+            <small style="color:#637087;">Este listado conserva la administración general de eventos.</small>
         </div>
         <?php if ($puedeCrearEvento): ?>
         <a href="<?= PUBLIC_URL ?>?url=eventos/crear" class="btn btn-primary">Crear evento</a>
@@ -293,10 +293,6 @@ $modulosEventos = $modulosEventos ?? [];
 
 .eventos-module-card__actions .btn {
     min-width:160px;
-}
-
-.eventos-module-card--reuniones {
-    border-top:4px solid #1f5ea8;
 }
 
 .eventos-module-card--uv {

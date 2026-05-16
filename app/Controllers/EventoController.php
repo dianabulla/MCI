@@ -91,14 +91,6 @@ class EventoController extends BaseController {
 
     private function getResumenModulosEventos() {
         $modulos = [
-            [
-                'tipo' => 'reuniones',
-                'titulo' => 'Reuniones',
-                'descripcion' => 'Módulo principal actual con los próximos eventos generales.',
-                'route_privada' => 'eventos',
-                'route_publica' => 'eventos/proximos',
-                'variant' => 'reuniones'
-            ],
             array_merge($this->getModuloConfig('universidad_vida'), [
                 'descripcion' => 'Contenido y QR público del módulo de Universidad de la Vida.',
                 'variant' => 'uv'

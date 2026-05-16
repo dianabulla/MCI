@@ -1,0 +1,85 @@
+================================================================================
+  WHATSAPP WORKER - GUÍA RÁPIDA (MCIMadrid)
+  Si no sabes por dónde empezar, sigue el orden 1 → 2 → 3 …
+================================================================================
+
+PASO 1 - Archivo .env (conexión a tu base de datos)
+----------------------------------------------------
+  a) En esta carpeta debe existir un archivo llamado:  .env
+  
+  b) Si NO lo tienes:
+     - Copia el archivo  .env.example
+     - Renómalo a  .env   (sin la palabra example)
+  
+  c) Abre .env con el Bloc de notas y pon los datos que te dio Hostinger:
+     DB_HOST    = la dirección del servidor MySQL remoto
+     DB_PORT    = normalmente 3306
+     DB_USER    = usuario MySQL
+     DB_PASS    = contraseña MySQL
+     DB_NAME    = nombre de la base (ej. mcimadrid)
+  
+  d) Si Hostinger exige conexión segura, en .env pon:
+     DB_SSL_MODE=required
+
+  Opción guiada en PowerShell (desde esta carpeta):
+     powershell -ExecutionPolicy Bypass -File .\configure_env.ps1
+
+
+PASO 2 - Probar que la PC llega a la base de datos
+----------------------------------------------------
+  Abre PowerShell en esta carpeta y ejecuta:
+
+     npm run test-db
+
+  Si falla: revisa usuario/clave/host en Hostinger y que tu IP esté permitida
+  en MySQL remoto (Whitelist remota).
+
+
+PASO 3 - Iniciar el worker de WhatsApp
+----------------------------------------
+  Opción fácil:
+     Doble clic en el archivo:   01_INICIAR_WHATSAPP.cmd
+
+  Se abrirá una ventana negra (consola):
+     1) Espera a que salga un código QR (texto o cuadrado en la consola)
+     2) En el celular: WhatsApp → Dispositivos vinculados → Vincular dispositivo
+     3) Escanea el QR
+     4) Cuando conecte verás algo como: "WhatsApp conectado. Worker activo."
+
+  IMPORTANTE: No cierres esa ventana mientras quieras enviar mensajes.
+  Si la cierras, el worker deja de funcionar hasta que lo vuelvas a abrir.
+
+
+PASO 4 (opcional) - Que arranque solo al encender el PC
+---------------------------------------------------------
+  En PowerShell (clic derecho → Ejecutar como administrador suele ayudar):
+
+     cd ruta\a\esta\carpeta\tools\whatsapp_local
+     powershell -ExecutionPolicy Bypass -File .\install_autostart_task.ps1
+
+
+PASO 5 - Ver la cola de mensajes en Hostinger (pendientes / fallidos)
+-----------------------------------------------------------------------
+  1) Entra al panel de Hostinger → Bases de datos → phpMyAdmin
+  2) Elige la MISMA base que pusiste en DB_NAME del .env
+  3) Pestaña "SQL"
+  4) Abre en el Bloc de notas el archivo:
+        consultas_cola_whatsapp.sql
+     Copia todo el texto y pégalo en phpMyAdmin → Ejecutar
+
+  Verás cuántos hay pendientes, fallidos, etc.
+
+
+Reinicio rápido después de cambiar worker.js
+----------------------------------------------
+  PowerShell en esta carpeta:
+
+     powershell -ExecutionPolicy Bypass -File .\restart_worker.ps1
+
+  Si no tienes tarea programada, el script te dirá que abras de nuevo
+  01_INICIAR_WHATSAPP.cmd
+
+
+Ayuda
+-----
+  Más detalle en: README.md (en esta misma carpeta)

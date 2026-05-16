@@ -5,6 +5,7 @@ $modulo = $modulo ?? [];
 $temas = $temas ?? [];
 $totalArchivos = (int)($total_archivos ?? 0);
 $puedeGestionar = !empty($puede_gestionar);
+$puedeSubirMaterial = !empty($puede_subir_material);
 $mensaje = (string)($mensaje ?? '');
 $tipo = (string)($tipo ?? '');
 $titulo = (string)($modulo['titulo'] ?? 'Material');
@@ -26,7 +27,52 @@ $clasesActivasRestriccionDiscipulo = (array)($restriccionDiscipuloMaterial['clas
 $modulosActivosRestriccionDiscipulo = (array)($restriccionDiscipuloMaterial['modulos_activos_por_nivel'] ?? []);
 $esDiscipuloCapDestino = !empty($es_discipulo_cap_destino) && $esCapacitacionDestino;
 $accesosDiscipuloCapDestino = (array)($accesos_discipulo_cap_destino ?? []);
+$inscritosCapNivel = (array)($inscritos_cap_nivel ?? []);
+$asistenciasPorPersona = (array)($asistencias_por_persona ?? []);
+$tareasCapNivel = (array)($tareas_cap_nivel ?? []);
+$entregasTareasCap = (array)($entregas_tareas_cap ?? []);
+$tareasDiscipuloCap = (array)($tareas_discipulo_cap ?? []);
+$capModuloVistaActual = (int)($cap_modulo_vista ?? ($_GET['cap_modulo'] ?? 0));
+$idPersonaActual = (int)($id_persona_actual ?? 0);
+$puedeSubirTareas = !empty($puede_subir_tareas);
 $rutaDetalleVistas = PUBLIC_URL . '?url=home/material/detalle-vistas&modulo=' . rawurlencode($clave);
+$capNivelVista = 0;
+$modoSeleccionNivelCap = false;
+$vistaCapNivelIndependiente = false;
+
+if ($esCapacitacionDestino && !$esDiscipuloCapDestino) {
+    $nivelSolicitado = (int)($_GET['cap_nivel'] ?? 0);
+    if ($nivelSolicitado > 0 && isset($configCapacitacionDestino[$nivelSolicitado])) {
+        $capNivelVista = $nivelSolicitado;
+    }
+    $modoSeleccionNivelCap = $capNivelVista <= 0;
+    $vistaCapNivelIndependiente = $capNivelVista > 0;
+}
+$resumenNivelesCap = [];
+
+if ($esCapacitacionDestino) {
+    foreach ($configCapacitacionDestino as $nivelResumen => $modulosResumen) {
+        $nivelInt = (int)$nivelResumen;
+        $modulosNivel = array_map('intval', (array)$modulosResumen);
+        $totalTemasNivel = 0;
+
+        foreach ($temas as $temaResumen) {
+            if ((int)($temaResumen['nivel'] ?? 0) !== $nivelInt) {
+                continue;
+            }
+            if (!in_array((int)($temaResumen['modulo_numero'] ?? 0), $modulosNivel, true)) {
+                continue;
+            }
+            $totalTemasNivel++;
+        }
+
+        $resumenNivelesCap[] = [
+            'nivel' => $nivelInt,
+            'total_modulos' => count($modulosNivel),
+            'total_temas' => $totalTemasNivel,
+        ];
+    }
+}
 
 $temasClase = [];
 $temasProfesor = [];
@@ -202,7 +248,19 @@ if ($tieneSubmodulos) {
     }
 
     .cap-nivel-section {
-        margin-bottom: 18px;
+        margin-bottom: 0;
+        border: 1px solid #c8d9ef;
+        border-radius: 14px;
+        overflow: hidden;
+        background: #ffffff;
+        box-shadow: 0 10px 24px rgba(36, 82, 133, 0.08);
+    }
+
+    .cap-niveles-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 10px;
     }
 
     .cap-nivel-header {
@@ -217,6 +275,11 @@ if ($tieneSubmodulos) {
         margin-bottom: 0;
     }
 
+    .cap-nivel-header small {
+        color: #dce9fb;
+        font-weight: 600;
+    }
+
     .cap-nivel-label {
         font-size: 15px;
         font-weight: 700;
@@ -224,11 +287,11 @@ if ($tieneSubmodulos) {
     }
 
     .cap-nivel-section .cap-destino-grid {
-        border: 1px solid #c8d9ef;
         border-top: none;
-        border-radius: 0 0 10px 10px;
+        border-radius: 0;
         padding: 10px;
         background: #f8fbff;
+        grid-template-columns: 1fr;
     }
 
     .cap-modulo-profesor-wrap {
@@ -358,6 +421,331 @@ if ($tieneSubmodulos) {
         font-size: 13px;
     }
 
+    .cap-level-selector {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 12px;
+        margin-top: 14px;
+        margin-bottom: 10px;
+    }
+
+    .cap-level-card {
+        display: block;
+        border: 1px solid #d8e2f1;
+        border-radius: 14px;
+        background: linear-gradient(160deg, #ffffff 0%, #f7fbff 100%);
+        padding: 14px;
+        color: #1e2f48;
+        text-decoration: none;
+        box-shadow: 0 6px 18px rgba(30, 56, 98, 0.08);
+        cursor: pointer;
+        transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+    }
+
+    .cap-level-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(30, 56, 98, 0.16);
+        border-color: #b9d0ec;
+    }
+
+    .cap-level-card.is-active {
+        border-color: #1f5ea8;
+        background: linear-gradient(180deg, #1f5ea8 0%, #1a518f 100%);
+        color: #fff;
+        box-shadow: 0 10px 24px rgba(23, 62, 110, 0.28);
+    }
+
+    .cap-level-card-title {
+        margin: 0 0 8px 0;
+        font-size: 17px;
+        font-weight: 700;
+    }
+
+    .cap-level-card-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #4f647f;
+    }
+
+    .cap-level-card.is-active .cap-level-card-meta {
+        color: #d8e8ff;
+    }
+
+    .cap-categoria-switch {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 0;
+    }
+
+    .cap-module-selector {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 0;
+    }
+
+    .cap-toolbar {
+        border: 1px solid #d6e3f4;
+        border-radius: 14px;
+        background: #f8fbff;
+        padding: 10px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: flex-end;
+        gap: 14px;
+        flex-wrap: wrap;
+    }
+
+    .cap-toolbar-group {
+        margin-bottom: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 220px;
+    }
+
+    .cap-toolbar-label {
+        display: block;
+        font-size: 12px;
+        font-weight: 800;
+        color: #5e7290;
+        letter-spacing: .4px;
+        text-transform: uppercase;
+        margin-bottom: 0;
+        line-height: 1.1;
+    }
+
+    .cap-view-switch {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .cap-view-btn {
+        border: 1px solid #c7d8ee;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #2e5684;
+        font-weight: 700;
+        font-size: 12px;
+        padding: 6px 12px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .cap-view-btn.is-active {
+        border-color: #3c82c8;
+        background: #3c82c8;
+        color: #fff;
+    }
+
+    .cap-view-btn .meta {
+        color: #6a82a2;
+        font-weight: 600;
+        font-size: 11px;
+    }
+
+    .cap-view-btn.is-active .meta {
+        color: #dbe9ff;
+    }
+
+    .cap-lessons-meta {
+        color: #5b7292;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .cap-academico-panel {
+        border: 1px solid #d6e3f4;
+        border-radius: 14px;
+        background: #f8fbff;
+        padding: 10px;
+        margin-bottom: 12px;
+    }
+
+    .cap-academico-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+    }
+
+    .cap-academico-section.is-hidden {
+        display: none;
+    }
+
+    .cap-main-section.is-hidden {
+        display: none;
+    }
+
+    .cap-inscritos-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        border: 1px solid #d9e5f5;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .cap-inscritos-table th,
+    .cap-inscritos-table td {
+        border-bottom: 1px solid #edf3fb;
+        padding: 7px 8px;
+        font-size: 12px;
+        color: #2f496d;
+        text-align: left;
+    }
+
+    .cap-inscritos-table th {
+        background: #eef5ff;
+        color: #355d8b;
+        font-weight: 700;
+    }
+
+    .cap-inscritos-table tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .cap-tarea-card {
+        border: 1px solid #d9e5f5;
+        border-radius: 12px;
+        background: #fff;
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+
+    .cap-tarea-title {
+        margin: 0 0 4px 0;
+        color: #1f4f84;
+        font-size: 15px;
+    }
+
+    .cap-tarea-meta {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: #5b7292;
+        margin-bottom: 8px;
+    }
+
+    .cap-entrega-item {
+        border: 1px dashed #c9d9ef;
+        border-radius: 10px;
+        padding: 8px;
+        background: #fdfefe;
+        margin-bottom: 8px;
+    }
+
+    .cap-entrega-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .cap-entrega-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+    }
+
+    .cap-entrega-calificada {
+        font-size: 11px;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: 2px 8px;
+        color: #fff;
+        background: #2f8f59;
+    }
+
+    .cap-entrega-pendiente {
+        font-size: 11px;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: 2px 8px;
+        color: #fff;
+        background: #d59a22;
+    }
+
+    @media (min-width: 992px) {
+        .cap-toolbar {
+            flex-wrap: nowrap;
+        }
+
+        .cap-toolbar-group {
+            min-width: 0;
+        }
+
+        .cap-toolbar-group:nth-child(1) {
+            flex: 1.2;
+        }
+
+        .cap-toolbar-group:nth-child(2) {
+            flex: 1.4;
+        }
+
+        .cap-toolbar-group:nth-child(3) {
+            flex: 1.1;
+        }
+    }
+
+    .cap-module-btn {
+        border: 1px solid #c7d8ee;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #2e5684;
+        font-weight: 700;
+        font-size: 12px;
+        padding: 6px 12px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .cap-module-btn .meta {
+        color: #6a82a2;
+        font-weight: 600;
+        font-size: 11px;
+    }
+
+    .cap-module-btn.is-active {
+        border-color: #3c82c8;
+        background: #3c82c8;
+        color: #fff;
+    }
+
+    .cap-module-btn.is-active .meta {
+        color: #dbe9ff;
+    }
+
+    .cap-categoria-btn {
+        border: 1px solid #c7d8ee;
+        border-radius: 999px;
+        background: #f4f8ff;
+        color: #2e5684;
+        font-weight: 700;
+        font-size: 12px;
+        padding: 6px 12px;
+        cursor: pointer;
+    }
+
+    .cap-categoria-btn.is-active {
+        border-color: #3c82c8;
+        background: #3c82c8;
+        color: #fff;
+    }
+
     .cap-panel {
         display: none;
         margin-top: 12px;
@@ -432,6 +820,7 @@ if ($tieneSubmodulos) {
 
     .cap-destino-grid .submodulo-wrap {
         margin-bottom: 10px;
+        border: 1px solid #d4e3f5;
     }
 
     .cap-destino-grid .submodulo-head {
@@ -447,21 +836,44 @@ if ($tieneSubmodulos) {
         box-shadow: 0 6px 14px rgba(45, 94, 146, 0.16);
     }
 
-    .cap-nivel-section.is-focus-mode .cap-destino-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .cap-nivel-section.is-focus-mode .cap-destino-grid .submodulo-wrap {
-        display: none;
-    }
-
-    .cap-nivel-section.is-focus-mode .cap-destino-grid .submodulo-wrap.is-focused {
-        display: block;
-        grid-column: 1 / -1;
-    }
-
     .cap-destino-grid .submodulo-wrap.is-selected .submodulo-head {
         background: linear-gradient(180deg, #eef5ff 0%, #f8fbff 100%);
+    }
+
+    .cap-modulo-head-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .cap-modulo-eval-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #2f73b7;
+        text-decoration: none;
+        border: 1px solid #bdd3ec;
+        border-radius: 999px;
+        padding: 4px 10px;
+        background: #eef5ff;
+    }
+
+    .cap-modulo-eval-link:hover {
+        color: #1f4f84;
+        border-color: #9fc0e4;
+        background: #e4efff;
+    }
+
+    .cap-modulo-carpeta {
+        font-size: 12px;
+        font-weight: 700;
+        color: #456389;
+        text-transform: uppercase;
+        letter-spacing: .03em;
     }
 
     .cap-nivel-section .submodulo-body {
@@ -500,20 +912,18 @@ if ($tieneSubmodulos) {
 
     .tema-acciones {
         display: flex;
-        flex-direction: column;
-        gap: 6px;
-        align-items: flex-start;
-    }
-
-    .tema-acciones-row {
-        display: flex;
+        flex-direction: row;
         flex-wrap: wrap;
         gap: 6px;
         align-items: center;
     }
 
+    .tema-acciones-row {
+        display: contents;
+    }
+
     .tema-acciones-row.is-danger {
-        padding-top: 2px;
+        padding-top: 0;
     }
 
     .cap-nivel-section .descripcion-cell,
@@ -766,6 +1176,10 @@ if ($tieneSubmodulos) {
     }
 
     @media (max-width: 768px) {
+        .cap-niveles-grid {
+            grid-template-columns: 1fr;
+        }
+
         .material-gallery-modal.is-open {
             padding: 10px;
         }
@@ -817,8 +1231,24 @@ if ($tieneSubmodulos) {
     </div>
 </div>
 
-<?php if ($puedeGestionar): ?>
-<div class="form-container" style="margin-bottom: 16px;">
+<?php if ($esCapacitacionDestino && $puedeGestionar && !$puedeSubirMaterial): ?>
+<div class="alert alert-warning" style="margin-bottom: 12px;">
+    Tienes acceso de gestión en este módulo, pero no cuentas con permiso para subir archivos.
+</div>
+<?php endif; ?>
+
+<?php if ($puedeGestionar && $puedeSubirMaterial && !$vistaCapNivelIndependiente): ?>
+<div style="margin-bottom: 10px;">
+    <button type="button"
+        class="btn btn-primary"
+        id="btn-toggle-upload-form"
+        aria-expanded="false"
+        aria-controls="upload-form-panel"
+        onclick="(function(btn){var panel=document.getElementById('upload-form-panel');if(!panel){return;}var abierto=panel.style.display==='block';panel.style.display=abierto?'none':'block';btn.setAttribute('aria-expanded',abierto?'false':'true');btn.textContent=abierto?'Mostrar formulario de subir material':'Ocultar formulario de subir material';})(this);">
+        Mostrar formulario de subir material
+    </button>
+</div>
+<div class="form-container" id="upload-form-panel" style="margin-bottom: 16px; display:none;">
     <h3 style="margin-top:0;">Crear módulo de material</h3>
     <form method="POST" enctype="multipart/form-data" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>">
         <input type="hidden" name="accion" value="subir">
@@ -875,24 +1305,384 @@ if ($tieneSubmodulos) {
 
 <?php if ($usaTarjetasTipoMaterial && !$esDiscipuloCapDestino): ?>
 <?php if ($esCapacitacionDestino): ?>
-<div id="cap-folder-explorer" class="folder-tree-explorer">
-    <div class="folder-tree-row">
-        <span class="folder-tree-label">Carpeta principal</span>
-        <div class="folder-tree-items" id="cap-folder-niveles"></div>
+    <?php if (!$vistaCapNivelIndependiente): ?>
+    <div class="cap-level-selector" id="cap-level-selector">
+        <?php foreach ($resumenNivelesCap as $nivelCard): ?>
+            <a class="cap-level-card js-cap-level-card <?= $capNivelVista === (int)$nivelCard['nivel'] ? 'is-active' : '' ?>"
+               data-level="<?= (int)$nivelCard['nivel'] ?>"
+               href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta, ENT_QUOTES, 'UTF-8') ?>&cap_nivel=<?= (int)$nivelCard['nivel'] ?>"
+               target="_blank"
+               rel="noopener noreferrer">
+                <h4 class="cap-level-card-title">Nivel <?= (int)$nivelCard['nivel'] ?></h4>
+                <div class="cap-level-card-meta">
+                    <span><?= (int)$nivelCard['total_modulos'] ?> módulo(s)</span>
+                    <strong><?= (int)$nivelCard['total_temas'] ?> tema(s)</strong>
+                </div>
+            </a>
+        <?php endforeach; ?>
     </div>
-    <div class="folder-tree-row">
-        <span class="folder-tree-label">Subcarpetas por módulo</span>
-        <div class="folder-tree-items" id="cap-folder-modulos"></div>
+    <?php endif; ?>
+    <?php if ($capNivelVista > 0): ?>
+        <div style="margin-bottom:10px;">
+            <a class="btn btn-sm btn-secondary" href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta, ENT_QUOTES, 'UTF-8') ?>">
+                <i class="bi bi-arrow-left-short"></i> Volver a niveles
+            </a>
+        </div>
+    <?php endif; ?>
+    <?php if (!$modoSeleccionNivelCap): ?>
+    <div class="cap-toolbar">
+        <div class="cap-toolbar-group">
+            <span class="cap-toolbar-label">Subcarpetas por módulo</span>
+            <div class="cap-module-selector" id="cap-module-selector"></div>
+        </div>
+        <div class="cap-toolbar-group">
+            <span class="cap-toolbar-label">Lecciones creadas</span>
+            <div class="cap-view-switch">
+                <button type="button" class="cap-view-btn js-cap-view-btn is-active" data-cap-view="lecciones">
+                    <i class="bi bi-book"></i> Lecciones
+                </button>
+                <button type="button" class="cap-view-btn js-cap-view-btn" data-cap-view="evaluaciones">
+                    <i class="bi bi-journal-check"></i> Evaluaciones
+                </button>
+                <span class="cap-lessons-meta" id="cap-lessons-count">Lecciones registradas: 0 items</span>
+            </div>
+        </div>
+        <div class="cap-toolbar-group">
+            <span class="cap-toolbar-label">Carpeta de material</span>
+            <div class="cap-categoria-switch">
+                <button type="button" class="cap-categoria-btn js-cap-categoria-btn is-active" data-categoria="profesor">
+                    <i class="bi bi-folder"></i> Material profesor
+                </button>
+                <button type="button" class="cap-categoria-btn js-cap-categoria-btn" data-categoria="clase">
+                    <i class="bi bi-folder"></i> Material clase
+                </button>
+            </div>
+        </div>
+
+        <?php if ($capNivelVista > 0): ?>
+            <div class="cap-toolbar-group">
+                <span class="cap-toolbar-label">Gestión del nivel</span>
+                <div class="cap-view-switch">
+                    <button type="button" class="cap-view-btn js-cap-academico-btn is-active" data-cap-academico="inscritos">
+                        <i class="bi bi-people"></i> Inscritos <span class="meta"><?= count($inscritosCapNivel) ?></span>
+                    </button>
+                    <button type="button" class="cap-view-btn js-cap-academico-btn" data-cap-academico="tareas">
+                        <i class="bi bi-journal-text"></i> Tareas <span class="meta"><?= count($tareasCapNivel) ?></span>
+                    </button>
+                </div>
+            </div>
+        <?php endif; ?>
     </div>
-    <div class="folder-tree-row">
-        <span class="folder-tree-label">Lecciones creadas</span>
-        <div class="folder-tree-items" id="cap-folder-lecciones"></div>
-    </div>
-    <div class="folder-tree-row">
-        <span class="folder-tree-label">Carpeta de material</span>
-        <div class="folder-tree-items" id="cap-folder-categorias"></div>
-    </div>
-</div>
+
+    <?php if ($capNivelVista > 0): ?>
+        <div id="cap-academico-panel" class="cap-academico-panel cap-main-section is-hidden">
+            <div class="cap-academico-head">
+                <strong style="color:#2b4f79;">Gestión académica del nivel <?= (int)$capNivelVista ?></strong>
+                <small style="color:#5a6f8d;">Inscritos y tareas del nivel actual</small>
+            </div>
+
+            <div id="cap-academico-inscritos" class="cap-academico-section">
+                <?php if (!empty($inscritosCapNivel)): ?>
+                    <div style="overflow-x: auto;">
+                        <table class="cap-inscritos-table" style="min-width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr>
+                                    <th style="position: sticky; left: 0; background: #f8f9fa; z-index: 10;">Nombre</th>
+                                    <th style="position: sticky; left: 120px; background: #f8f9fa; z-index: 10;">Cédula</th>
+                                    <th>Teléfono</th>
+                                    <th>Inscrito</th>
+                                    <th colspan="10" style="text-align:center; background:#e8f0f8;">Planilla de Asistencia</th>
+                                </tr>
+                                <tr>
+                                    <th style="position: sticky; left: 0; background: #f8f9fa; z-index: 10;"></th>
+                                    <th style="position: sticky; left: 120px; background: #f8f9fa; z-index: 10;"></th>
+                                    <th></th>
+                                    <th></th>
+                                    <?php for ($clase = 1; $clase <= 10; $clase++): ?>
+                                        <th style="text-align:center; width:50px; background:#e8f0f8; padding:6px 3px;">Clase <?= $clase ?></th>
+                                    <?php endfor; ?>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($inscritosCapNivel as $inscrito): ?>
+                                    <?php
+                                        $idPersona = (int)($inscrito['id_persona'] ?? 0);
+                                        $asistenciasPersona = !empty($asistenciasPorPersona[$idPersona]) ? (array)$asistenciasPorPersona[$idPersona] : [];
+                                    ?>
+                                    <tr>
+                                        <td style="position: sticky; left: 0; background: white; z-index: 5;"><?= htmlspecialchars((string)($inscrito['nombre'] ?? '')) ?></td>
+                                        <td style="position: sticky; left: 120px; background: white; z-index: 5;"><?= htmlspecialchars((string)($inscrito['cedula'] ?? '')) ?></td>
+                                        <td><?= htmlspecialchars((string)($inscrito['telefono'] ?? '')) ?></td>
+                                        <td><?= htmlspecialchars((string)($inscrito['fecha_registro'] ?? '')) ?></td>
+                                        <?php for ($clase = 1; $clase <= 10; $clase++): ?>
+                                            <td style="text-align:center; padding:6px 3px;">
+                                                <input type="checkbox" class="asistencia-check" 
+                                                    data-id-persona="<?= $idPersona ?>" 
+                                                    data-clase="<?= $clase ?>"
+                                                    data-nivel="<?= (int)$capNivelVista ?>"
+                                                    data-modulo="<?= (int)$capModuloVistaActual ?>"
+                                                    <?= in_array($clase, $asistenciasPersona) ? 'checked' : '' ?>
+                                                    style="width:20px; height:20px; cursor:pointer;">
+                                            </td>
+                                        <?php endfor; ?>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <style>
+                        .cap-inscritos-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-top: 10px;
+                        }
+                        .cap-inscritos-table th,
+                        .cap-inscritos-table td {
+                            border: 1px solid #ddd;
+                            padding: 8px;
+                            text-align: left;
+                        }
+                        .cap-inscritos-table th {
+                            background-color: #f8f9fa;
+                            font-weight: bold;
+                            color: #333;
+                        }
+                        .cap-inscritos-table tbody tr:nth-child(even) {
+                            background-color: #f9f9f9;
+                        }
+                        .cap-inscritos-table tbody tr:hover {
+                            background-color: #f0f0f0;
+                        }
+                        .asistencia-check:checked {
+                            accent-color: #28a745;
+                        }
+                    </style>
+
+                    <script>
+                    document.querySelectorAll('.asistencia-check').forEach(checkbox => {
+                        checkbox.addEventListener('change', function() {
+                            const idPersona = this.dataset.idPersona;
+                            const clase = this.dataset.clase;
+                            const nivel = this.dataset.nivel;
+                            const checked = this.checked;
+                            
+                            const datosEnvio = {
+                                id_persona: idPersona,
+                                clase: clase,
+                                nivel: nivel,
+                                marcar: checked ? '1' : '0'
+                            };
+                            
+                            console.log('📝 Guardando asistencia:', datosEnvio);
+                            
+                            // Construir body manualmente
+                            let body = '';
+                            for (let key in datosEnvio) {
+                                if (body) body += '&';
+                                body += encodeURIComponent(key) + '=' + encodeURIComponent(datosEnvio[key]);
+                            }
+                            
+                            console.log('📤 Body enviado:', body);
+                            
+                            fetch('<?= PUBLIC_URL ?>?url=home/guardar-asistencia-clase', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                                },
+                                body: body
+                            })
+                            .then(response => {
+                                console.log('📨 Status respuesta:', response.status);
+                                return response.text().then(text => {
+                                    console.log('📄 Respuesta texto:', text);
+                                    try {
+                                        return JSON.parse(text);
+                                    } catch (e) {
+                                        throw new Error('No es JSON válido: ' + text.substring(0, 100));
+                                    }
+                                });
+                            })
+                            .then(data => {
+                                console.log('✅ Datos parseados:', data);
+                                if (data && data.success) {
+                                    console.log('✔️ Asistencia guardada exitosamente');
+                                } else {
+                                    this.checked = !checked;
+                                    console.error('❌ Error respuesta:', data?.error);
+                                    alert('Error al guardar: ' + (data?.error || 'Desconocido'));
+                                }
+                            })
+                            .catch(error => {
+                                this.checked = !checked;
+                                console.error('❌ Error fetch:', error);
+                                alert('Error al guardar asistencia: ' + error.message);
+                            });
+                        });
+                    });
+                    </script>
+                <?php else: ?>
+                    <div class="alert alert-info" style="margin:0;">No hay inscritos registrados para este nivel.</div>
+                <?php endif; ?>
+            </div>
+
+            <div id="cap-academico-tareas" class="cap-academico-section is-hidden">
+                <div style="margin-top:4px;">
+                    <?php if ($puedeGestionar): ?>
+                        <form method="POST" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>" class="form-container" style="margin-bottom:10px;">
+                            <input type="hidden" name="accion" value="crear_tarea">
+                            <input type="hidden" name="modulo" value="<?= htmlspecialchars($clave) ?>">
+                            <input type="hidden" name="nivel" value="<?= (int)$capNivelVista ?>">
+                            <input type="hidden" name="modulo_numero" value="<?= (int)$capModuloVistaActual ?>">
+                            <input type="hidden" name="contexto_nivel" value="<?= (int)$capNivelVista ?>">
+                            <input type="hidden" name="contexto_modulo" value="<?= (int)$capModuloVistaActual ?>">
+                            <input type="hidden" name="contexto_academico" value="tareas">
+                            <div style="margin-bottom:8px;color:#526886;font-size:12px;">
+                                Creando tarea para: <strong>Nivel <?= (int)$capNivelVista ?> · Módulo <?= (int)$capModuloVistaActual ?></strong>
+                            </div>
+                            <div style="display:grid; grid-template-columns:2fr 2fr 1fr auto; gap:8px; align-items:end;">
+                                <div>
+                                    <label style="font-size:12px;">Título de la tarea</label>
+                                    <input type="text" class="form-control" name="titulo_tarea" maxlength="255" required placeholder="Ej: Taller Lección 2">
+                                </div>
+                                <div>
+                                    <label style="font-size:12px;">Descripción</label>
+                                    <input type="text" class="form-control" name="descripcion_tarea" maxlength="500" placeholder="Instrucciones para el discípulo">
+                                </div>
+                                <div>
+                                    <label style="font-size:12px;">Fecha límite</label>
+                                    <input type="date" class="form-control" name="fecha_limite_tarea">
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-success">Crear tarea</button>
+                            </div>
+                        </form>
+                    <?php endif; ?>
+
+                    <?php if (!empty($tareasCapNivel)): ?>
+                        <?php foreach ($tareasCapNivel as $tarea): ?>
+                            <?php
+                                $idTarea = (int)($tarea['Id_Tarea'] ?? 0);
+                                $entregasTarea = (array)($entregasTareasCap[$idTarea] ?? []);
+                                $moduloTarea = (int)($tarea['Modulo_Numero'] ?? 0);
+                                $totalEntregasUsuario = (int)($tarea['total_entregas_usuario'] ?? 0);
+                            ?>
+                            <div class="cap-tarea-card">
+                                <h4 class="cap-tarea-title"><?= htmlspecialchars((string)($tarea['Titulo'] ?? 'Tarea')) ?></h4>
+                                <div class="cap-tarea-meta">
+                                    <span>Módulo <?= $moduloTarea > 0 ? $moduloTarea : 'General' ?></span>
+                                    <span>Límite: <?= htmlspecialchars((string)($tarea['Fecha_Limite'] ?? 'Sin fecha')) ?></span>
+                                    <span>Entregas: <?= (int)($tarea['total_entregas'] ?? 0) ?></span>
+                                    <span>Estudiantes: <?= (int)($tarea['total_estudiantes'] ?? 0) ?></span>
+                                    <?php if ($puedeSubirTareas): ?>
+                                        <span>Tus archivos: <?= $totalEntregasUsuario ?></span>
+                                    <?php endif; ?>
+                                </div>
+
+                                <?php if ($puedeGestionar): ?>
+                                    <div style="display:flex;justify-content:flex-end;margin:6px 0 8px 0;">
+                                        <form method="POST" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>" onsubmit="return confirm('¿Seguro que deseas eliminar esta tarea? Esta acción ocultará la tarea creada.');">
+                                            <input type="hidden" name="accion" value="eliminar_tarea">
+                                            <input type="hidden" name="modulo" value="<?= htmlspecialchars($clave) ?>">
+                                            <input type="hidden" name="id_tarea" value="<?= $idTarea ?>">
+                                            <input type="hidden" name="nivel" value="<?= (int)$capNivelVista ?>">
+                                            <input type="hidden" name="modulo_numero" value="<?= $moduloTarea ?>">
+                                            <input type="hidden" name="contexto_nivel" value="<?= (int)$capNivelVista ?>">
+                                            <input type="hidden" name="contexto_modulo" value="<?= $moduloTarea ?>">
+                                            <input type="hidden" name="contexto_academico" value="tareas">
+                                            <button type="submit" class="btn btn-sm btn-danger">Eliminar tarea</button>
+                                        </form>
+                                    </div>
+                                <?php endif; ?>
+
+                                <?php if (trim((string)($tarea['Descripcion'] ?? '')) !== ''): ?>
+                                    <div style="font-size:12px; color:#4a6283; margin-bottom:8px;"><?= htmlspecialchars((string)$tarea['Descripcion']) ?></div>
+                                <?php endif; ?>
+
+                                <?php if ($puedeSubirTareas): ?>
+                                    <form method="POST" enctype="multipart/form-data" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>" style="margin-bottom:8px; display:grid; grid-template-columns:2fr 1fr auto; gap:8px; align-items:end;">
+                                        <input type="hidden" name="accion" value="subir_tarea_entrega">
+                                        <input type="hidden" name="modulo" value="<?= htmlspecialchars($clave) ?>">
+                                        <input type="hidden" name="id_tarea" value="<?= $idTarea ?>">
+                                        <input type="hidden" name="nivel" value="<?= (int)$capNivelVista ?>">
+                                        <input type="hidden" name="modulo_numero" value="<?= $moduloTarea ?>">
+                                        <input type="hidden" name="contexto_nivel" value="<?= (int)$capNivelVista ?>">
+                                        <input type="hidden" name="contexto_modulo" value="<?= $moduloTarea ?>">
+                                        <div>
+                                            <label style="font-size:12px;">Comentario</label>
+                                            <input type="text" name="comentario_entrega" class="form-control" maxlength="500" placeholder="Comentario opcional de tu entrega">
+                                        </div>
+                                        <div>
+                                            <label style="font-size:12px;">Archivos</label>
+                                            <input type="file" name="tarea_archivos[]" class="form-control" multiple required>
+                                        </div>
+                                        <button type="submit" class="btn btn-sm btn-primary">Subir tarea</button>
+                                    </form>
+                                <?php endif; ?>
+
+                                <?php if ($puedeGestionar): ?>
+                                    <details>
+                                        <summary class="btn btn-sm btn-secondary" style="cursor:pointer;">Calificar entregas (<?= count($entregasTarea) ?>)</summary>
+                                        <div style="margin-top:8px;">
+                                            <?php if (!empty($entregasTarea)): ?>
+                                                <?php foreach ($entregasTarea as $entrega): ?>
+                                                    <?php
+                                                        $nombreArchivoEntrega = (string)($entrega['Nombre_Archivo'] ?? '');
+                                                        $urlArchivoEntrega = rtrim(PUBLIC_URL, '/') . '/uploads/material_hub_tareas/' . rawurlencode($clave) . '/' . rawurlencode($nombreArchivoEntrega);
+                                                        $estaCalificada = strtolower(trim((string)($entrega['Estado_Calificacion'] ?? 'pendiente'))) === 'calificada';
+                                                    ?>
+                                                    <div class="cap-entrega-item">
+                                                        <div class="cap-entrega-head">
+                                                            <strong><?= htmlspecialchars((string)($entrega['nombre_persona'] ?? 'Estudiante')) ?></strong>
+                                                            <span class="<?= $estaCalificada ? 'cap-entrega-calificada' : 'cap-entrega-pendiente' ?>">
+                                                                <?= $estaCalificada ? 'Calificada' : 'Pendiente' ?>
+                                                            </span>
+                                                        </div>
+                                                        <div style="font-size:12px; color:#566f92; margin-bottom:6px;">
+                                                            Cédula: <?= htmlspecialchars((string)($entrega['cedula_persona'] ?? '')) ?> ·
+                                                            Entrega: <?= htmlspecialchars((string)($entrega['Fecha_Entrega'] ?? '')) ?>
+                                                        </div>
+                                                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
+                                                            <a class="btn btn-sm btn-info" target="_blank" rel="noopener noreferrer" href="<?= htmlspecialchars($urlArchivoEntrega, ENT_QUOTES, 'UTF-8') ?>">Abrir archivo</a>
+                                                            <?php if (trim((string)($entrega['Comentario'] ?? '')) !== ''): ?>
+                                                                <span style="font-size:12px; color:#4d6689;">Comentario: <?= htmlspecialchars((string)$entrega['Comentario']) ?></span>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                        <form method="POST" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>" style="display:grid; grid-template-columns:120px 1fr auto; gap:8px; align-items:end;">
+                                                            <input type="hidden" name="accion" value="calificar_tarea_entrega">
+                                                            <input type="hidden" name="modulo" value="<?= htmlspecialchars($clave) ?>">
+                                                            <input type="hidden" name="id_entrega" value="<?= (int)($entrega['Id_Entrega'] ?? 0) ?>">
+                                                            <input type="hidden" name="nivel" value="<?= (int)$capNivelVista ?>">
+                                                            <input type="hidden" name="modulo_numero" value="<?= $moduloTarea ?>">
+                                                            <input type="hidden" name="contexto_nivel" value="<?= (int)$capNivelVista ?>">
+                                                            <input type="hidden" name="contexto_modulo" value="<?= $moduloTarea ?>">
+                                                            <div>
+                                                                <label style="font-size:12px;">Nota (0-5)</label>
+                                                                <input type="number" step="0.1" min="0" max="5" name="nota_entrega" class="form-control" value="<?= htmlspecialchars((string)($entrega['Nota'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                                            </div>
+                                                            <div>
+                                                                <label style="font-size:12px;">Retroalimentación</label>
+                                                                <input type="text" name="retroalimentacion_entrega" class="form-control" maxlength="500" value="<?= htmlspecialchars((string)($entrega['Retroalimentacion'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                                            </div>
+                                                            <button type="submit" class="btn btn-sm btn-success">Guardar calificación</button>
+                                                        </form>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            <?php else: ?>
+                                                <div class="alert alert-info" style="margin:0;">Aún no hay entregas para esta tarea.</div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </details>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="alert alert-info" style="margin:0;">No hay tareas creadas para este nivel todavía.</div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+    <?php endif; ?>
 <?php else: ?>
 <div class="cap-entry-grid">
     <article class="cap-entry-card js-open-cap-modal" data-target="profesor" role="button" tabindex="0" aria-label="Abrir Material profesor">
@@ -909,7 +1699,7 @@ if ($tieneSubmodulos) {
 <div id="cap-inline-panel" class="cap-panel" aria-hidden="true">
 <?php endif; ?>
 
-<div class="card" style="padding:14px;">
+<div id="cap-material-panel" class="card cap-main-section" style="padding:14px;">
     <h3 style="margin-top:0;">Módulos de material</h3>
 
     <?php if ($esDiscipuloCapDestino): ?>
@@ -936,6 +1726,65 @@ if ($tieneSubmodulos) {
             </div>
         <?php else: ?>
             <p style="margin:0; color:#666;">No hay accesos para mostrar. Si ya estás inscrito, valida fechas activas y que el líder haya configurado el link de clase en Conexiones.</p>
+        <?php endif; ?>
+
+        <?php if (!empty($accesosDiscipuloCapDestino)): ?>
+            <div class="cap-academico-panel" style="margin-top:12px;">
+                <div class="cap-academico-head">
+                    <strong style="color:#2b4f79;">Tareas para discípulos</strong>
+                    <small style="color:#5a6f8d;">Sube PDF, videos, imágenes y otros archivos de tu tarea</small>
+                </div>
+
+                <?php foreach ($accesosDiscipuloCapDestino as $accesoDisc): ?>
+                    <?php
+                        $nivelDisc = (int)($accesoDisc['nivel'] ?? 0);
+                        $moduloDisc = (int)($accesoDisc['modulo'] ?? 0);
+                        $tareasModuloDisc = (array)($tareasDiscipuloCap[$nivelDisc . '_' . $moduloDisc] ?? []);
+                    ?>
+                    <details style="margin-bottom:8px;" open>
+                        <summary class="btn btn-sm btn-secondary" style="cursor:pointer;">Nivel <?= $nivelDisc ?> · Módulo <?= $moduloDisc ?> (<?= count($tareasModuloDisc) ?> tarea(s))</summary>
+                        <div style="margin-top:8px;">
+                            <?php if (!empty($tareasModuloDisc)): ?>
+                                <?php foreach ($tareasModuloDisc as $tareaDisc): ?>
+                                    <div class="cap-tarea-card">
+                                        <h4 class="cap-tarea-title"><?= htmlspecialchars((string)($tareaDisc['Titulo'] ?? 'Tarea')) ?></h4>
+                                        <div class="cap-tarea-meta">
+                                            <span>Límite: <?= htmlspecialchars((string)($tareaDisc['Fecha_Limite'] ?? 'Sin fecha')) ?></span>
+                                            <span>Tus archivos: <?= (int)($tareaDisc['total_entregas_usuario'] ?? 0) ?></span>
+                                        </div>
+                                        <?php if (trim((string)($tareaDisc['Descripcion'] ?? '')) !== ''): ?>
+                                            <div style="font-size:12px; color:#4a6283; margin-bottom:8px;"><?= htmlspecialchars((string)$tareaDisc['Descripcion']) ?></div>
+                                        <?php endif; ?>
+
+                                        <?php if ($puedeSubirTareas): ?>
+                                            <form method="POST" enctype="multipart/form-data" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>" style="display:grid; grid-template-columns:2fr 1fr auto; gap:8px; align-items:end;">
+                                                <input type="hidden" name="accion" value="subir_tarea_entrega">
+                                                <input type="hidden" name="modulo" value="<?= htmlspecialchars($clave) ?>">
+                                                <input type="hidden" name="id_tarea" value="<?= (int)($tareaDisc['Id_Tarea'] ?? 0) ?>">
+                                                <input type="hidden" name="nivel" value="<?= $nivelDisc ?>">
+                                                <input type="hidden" name="modulo_numero" value="<?= $moduloDisc ?>">
+                                                <input type="hidden" name="contexto_nivel" value="<?= $nivelDisc ?>">
+                                                <input type="hidden" name="contexto_modulo" value="<?= $moduloDisc ?>">
+                                                <div>
+                                                    <label style="font-size:12px;">Comentario</label>
+                                                    <input type="text" name="comentario_entrega" class="form-control" maxlength="500" placeholder="Comentario opcional de tu entrega">
+                                                </div>
+                                                <div>
+                                                    <label style="font-size:12px;">Archivos</label>
+                                                    <input type="file" name="tarea_archivos[]" class="form-control" multiple required>
+                                                </div>
+                                                <button type="submit" class="btn btn-sm btn-primary">Subir tarea</button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div class="alert alert-info" style="margin:0;">No hay tareas publicadas para este módulo por ahora.</div>
+                            <?php endif; ?>
+                        </div>
+                    </details>
+                <?php endforeach; ?>
+            </div>
         <?php endif; ?>
 
     <?php else: ?>
@@ -965,6 +1814,10 @@ if ($tieneSubmodulos) {
             if ($tieneSubmodulos && $esCapacitacionDestino) {
                 $bloques = [];
                 foreach ($configCapacitacionDestino as $nivelTmp => $modulosTmp) {
+                    if ($capNivelVista > 0 && (int)$nivelTmp !== $capNivelVista) {
+                        continue;
+                    }
+
                     if ($aplicarRestriccionDiscipuloMaterial && !isset($clasesActivasRestriccionDiscipulo[(int)$nivelTmp])) {
                         continue;
                     }
@@ -1018,6 +1871,11 @@ if ($tieneSubmodulos) {
         ?>
 
         <?php if ($usaTarjetasTipoMaterial && !$esCapacitacionDestino): ?><div class="cap-destino-grid"><?php endif; ?>
+        <?php if ($modoSeleccionNivelCap): ?>
+            <div class="alert alert-info" style="margin-top:10px;">
+                Selecciona un nivel para entrar a su vista independiente y ver todos sus módulos.
+            </div>
+        <?php else: ?>
 
         <?php
         $bloqueIndex = 0;
@@ -1050,6 +1908,21 @@ if ($tieneSubmodulos) {
                     $tituloBloque = 'Módulo ' . (int)($bloque['modulo_numero'] ?? 0)
                         . ' - Material ' . ($categoriaBloque === 'profesor' ? 'profesor' : 'clase');
                 }
+
+                $leccionEvaluacionModulo = 'Sin lección';
+                foreach ((array)($bloque['temas'] ?? []) as $temaEvalTmp) {
+                    $leccionEvalTmp = trim((string)($temaEvalTmp['leccion'] ?? ''));
+                    if ($leccionEvalTmp !== '') {
+                        $leccionEvaluacionModulo = $leccionEvalTmp;
+                        break;
+                    }
+                }
+
+                $rutaEvaluacionModulo = PUBLIC_URL
+                    . '?url=programas/evaluaciones&from_material=1'
+                    . '&nivel=' . (int)($bloque['nivel'] ?? 0)
+                    . '&modulo=' . (int)($bloque['modulo_numero'] ?? 0)
+                    . '&leccion=' . rawurlencode($leccionEvaluacionModulo);
 
                 $claseCssBloque = 'submodulo-wrap';
                 $panelIdBloque = 'submodulo-panel-' . $bloqueIndex;
@@ -1110,8 +1983,20 @@ if ($tieneSubmodulos) {
                 data-cap-total="<?= (int)$totalTemasBloque ?>"
                 role="tabpanel">
                 <div class="submodulo-head">
-                    <h4 class="submodulo-title"><?= htmlspecialchars($tituloBloque) ?></h4>
-                    <span class="submodulo-meta"><?= (int)$totalTemasBloque ?> tema(s)</span>
+                    <h4 class="submodulo-title">
+                        <?= htmlspecialchars($tituloBloque) ?>
+                        <?php if ($esCapacitacionDestino): ?>
+                            <div class="cap-modulo-carpeta">Carpeta del módulo</div>
+                        <?php endif; ?>
+                    </h4>
+                    <div class="cap-modulo-head-actions">
+                        <span class="submodulo-meta"><?= (int)$totalTemasBloque ?> tema(s)</span>
+                        <?php if ($esCapacitacionDestino && $categoriaBloque === 'clase'): ?>
+                            <a class="cap-modulo-eval-link" href="<?= htmlspecialchars($rutaEvaluacionModulo, ENT_QUOTES, 'UTF-8') ?>">
+                                <i class="bi bi-journal-check"></i> Evaluaciones
+                            </a>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
                 <?php if ($esCapacitacionDestino): ?>
@@ -1281,7 +2166,9 @@ if ($tieneSubmodulos) {
 
                                             <?php if ($puedeGestionar): ?>
                                                 <div class="tema-acciones-row">
-                                                    <button type="button" class="btn btn-sm btn-success js-toggle-agregar-archivos" data-target="<?= htmlspecialchars($temaAgregarArchivosId, ENT_QUOTES, 'UTF-8') ?>">Agregar archivos</button>
+                                                    <?php if ($puedeSubirMaterial): ?>
+                                                        <button type="button" class="btn btn-sm btn-success js-toggle-agregar-archivos" data-target="<?= htmlspecialchars($temaAgregarArchivosId, ENT_QUOTES, 'UTF-8') ?>">Agregar archivos</button>
+                                                    <?php endif; ?>
                                                     <button type="button" class="btn btn-sm btn-primary js-toggle-editar-tema" data-target="<?= htmlspecialchars($temaEditId, ENT_QUOTES, 'UTF-8') ?>">Editar</button>
                                                 </div>
                                                 <div class="tema-acciones-row is-danger">
@@ -1368,7 +2255,7 @@ if ($tieneSubmodulos) {
                                     </tr>
                                 <?php endif; ?>
 
-                                <?php if ($puedeGestionar): ?>
+                                <?php if ($puedeGestionar && $puedeSubirMaterial): ?>
                                     <tr id="<?= htmlspecialchars($temaAgregarArchivosId, ENT_QUOTES, 'UTF-8') ?>" data-tema-key="<?= htmlspecialchars($temaId, ENT_QUOTES, 'UTF-8') ?>" style="display:none; background:#eefaf4;">
                                         <td colspan="3">
                                             <form method="POST" enctype="multipart/form-data" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px; align-items:end;">
@@ -1551,6 +2438,7 @@ if ($tieneSubmodulos) {
         <?php if ($esCapacitacionDestino && $lastNivelRender !== null): ?>
             </div></div><?php // cierre .cap-destino-grid y .cap-nivel-section de la última sección ?>
         <?php endif; ?>
+        <?php endif; ?>
 
         <?php if ($usaTarjetasTipoMaterial && !$esCapacitacionDestino): ?></div><?php endif; ?>
     <?php else: ?>
@@ -1647,7 +2535,7 @@ if ($tieneSubmodulos) {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var configCapDestino = <?= json_encode($configCapacitacionDestino, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-    var rutaEvaluacionesCap = <?= json_encode(PUBLIC_URL . '?url=home/discipular/evaluaciones&from_material=1', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var rutaEvaluacionesCap = <?= json_encode(PUBLIC_URL . '?url=programas/evaluaciones&from_material=1', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
     function poblarModulosCapDestino(selectNivel, selectModulo) {
         if (!selectNivel || !selectModulo) {
@@ -2014,266 +2902,312 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    var folderExplorer = document.getElementById('cap-folder-explorer');
-    if (esCapacitacionDestinoVista && folderExplorer) {
-        var contNiveles = document.getElementById('cap-folder-niveles');
-        var contModulos = document.getElementById('cap-folder-modulos');
-        var contLecciones = document.getElementById('cap-folder-lecciones');
-        var contCategorias = document.getElementById('cap-folder-categorias');
+    var levelCards = document.querySelectorAll('.js-cap-level-card');
+    var categoriaBtns = document.querySelectorAll('.js-cap-categoria-btn');
+    var capViewBtns = document.querySelectorAll('.js-cap-view-btn');
+    var capAcademicoBtns = document.querySelectorAll('.js-cap-academico-btn');
+    var capAcademicoInscritos = document.getElementById('cap-academico-inscritos');
+    var capAcademicoTareas = document.getElementById('cap-academico-tareas');
+    var capAcademicoPanel = document.getElementById('cap-academico-panel');
+    var capMaterialPanel = document.getElementById('cap-material-panel');
+    var capLessonsCount = document.getElementById('cap-lessons-count');
+    var moduleSelector = document.getElementById('cap-module-selector');
+    var queryParamsCap = new URLSearchParams(window.location.search || '');
+    var capNivelQuery = String(queryParamsCap.get('cap_nivel') || '').trim();
+    var capModuloQuery = String(queryParamsCap.get('cap_modulo') || '').trim();
+    var capCategoriaQuery = String(queryParamsCap.get('cap_categoria') || '').trim().toLowerCase();
+    var capAcademicoQuery = String(queryParamsCap.get('cap_academico') || '').trim().toLowerCase();
+    var capRequiereSeleccionNivel = <?= $modoSeleccionNivelCap ? 'true' : 'false' ?>;
 
-        var carpetaState = {
-            nivel: '1',
-            modulo: '',
-            leccion: '',
-            categoria: 'clase'
-        };
+    var capVistaState = {
+        nivel: '',
+        categoria: 'clase',
+        modulo: '',
+        vista: 'lecciones'
+    };
 
-        var queryParams = new URLSearchParams(window.location.search || '');
-        var nivelQuery = String(queryParams.get('cap_nivel') || '').trim();
-        var moduloQuery = String(queryParams.get('cap_modulo') || '').trim();
-        var categoriaQuery = String(queryParams.get('cap_categoria') || '').trim().toLowerCase();
-        var leccionQuery = String(queryParams.get('cap_leccion') || '').trim();
-        var openLoteQuery = String(queryParams.get('cap_open_lote') || '').trim();
-        var openPanelQuery = String(queryParams.get('cap_open_panel') || '').trim().toLowerCase();
-        var aperturaRestaurada = false;
+    if (capCategoriaQuery === 'clase' || capCategoriaQuery === 'profesor') {
+        capVistaState.categoria = capCategoriaQuery;
+    }
 
-        if (nivelQuery !== '' && Object.prototype.hasOwnProperty.call(configCapDestino, nivelQuery)) {
-            carpetaState.nivel = nivelQuery;
-        }
-        if (moduloQuery !== '') {
-            carpetaState.modulo = moduloQuery;
-        }
-        if (categoriaQuery === 'clase' || categoriaQuery === 'profesor') {
-            carpetaState.categoria = categoriaQuery;
-        }
-        if (leccionQuery !== '') {
-            carpetaState.leccion = leccionQuery;
-        }
+    function obtenerPanelActivoCap() {
+        return document.querySelector('.js-cap-block.is-selected');
+    }
 
-        function temasCapDestino() {
-            return Array.prototype.slice.call(document.querySelectorAll('.js-tema-row'));
+    function obtenerLeccionEvaluacionActiva() {
+        var panelActivo = obtenerPanelActivoCap();
+        if (!panelActivo) {
+            return 'Sin lección';
         }
 
-        function renderNiveles() {
-            if (!contNiveles) return;
-            contNiveles.innerHTML = '';
-
-            Object.keys(configCapDestino).forEach(function(nivel) {
-                var btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'folder-node' + (String(carpetaState.nivel) === String(nivel) ? ' is-active' : '');
-                btn.innerHTML = '<i class="bi bi-folder2-open"></i> Nivel ' + nivel;
-                btn.addEventListener('click', function() {
-                    carpetaState.nivel = String(nivel);
-                    carpetaState.modulo = '';
-                    carpetaState.leccion = '';
-                    renderNiveles();
-                    renderModulos();
-                    renderLecciones();
-                    renderCategorias();
-                });
-                contNiveles.appendChild(btn);
-            });
+        var primeraFila = panelActivo.querySelector('.js-tema-row');
+        if (!primeraFila) {
+            return 'Sin lección';
         }
 
-        function renderModulos() {
-            if (!contModulos) return;
-            contModulos.innerHTML = '';
+        var leccion = String(primeraFila.getAttribute('data-cap-leccion') || '').trim();
+        return leccion !== '' ? leccion : 'Sin lección';
+    }
 
-            var modulos = configCapDestino[String(carpetaState.nivel)] || [];
-            if (!carpetaState.modulo && modulos.length > 0) {
-                carpetaState.modulo = String(modulos[0]);
-            }
-
-            modulos.forEach(function(moduloNum) {
-                var modulo = String(moduloNum);
-                var btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'folder-node' + (carpetaState.modulo === modulo ? ' is-active' : '');
-                btn.innerHTML = '<i class="bi bi-folder"></i> Módulo ' + modulo;
-                btn.addEventListener('click', function() {
-                    carpetaState.modulo = modulo;
-                    carpetaState.leccion = '';
-                    renderModulos();
-                    renderLecciones();
-                    renderCategorias();
-                });
-                contModulos.appendChild(btn);
-            });
+    function actualizarResumenLecciones() {
+        if (!capLessonsCount) {
+            return;
         }
 
-        function renderLecciones() {
-            if (!contLecciones) return;
-            contLecciones.innerHTML = '';
+        var panelActivo = obtenerPanelActivoCap();
+        if (!panelActivo) {
+            capLessonsCount.textContent = 'Lecciones registradas: 0 items';
+            return;
+        }
 
-            var accesos = document.createElement('div');
-            accesos.style.display = 'flex';
-            accesos.style.gap = '8px';
-            accesos.style.flexWrap = 'wrap';
-            accesos.style.marginBottom = '8px';
+        var total = parseInt(panelActivo.getAttribute('data-cap-total') || '0', 10) || 0;
+        capLessonsCount.textContent = 'Lecciones registradas: ' + String(total) + ' items';
+    }
 
-            var btnLecciones = document.createElement('button');
-            btnLecciones.type = 'button';
-            btnLecciones.className = 'folder-node' + (carpetaState.categoria === 'clase' ? ' is-active' : '');
-            btnLecciones.innerHTML = '<i class="bi bi-book"></i> Lecciones';
-            btnLecciones.addEventListener('click', function() {
-                carpetaState.categoria = 'clase';
-                carpetaState.leccion = '';
-                renderCategorias();
-                renderLecciones();
-                aplicarFiltroCapacitacion(carpetaState);
-            });
-            accesos.appendChild(btnLecciones);
+    function navegarModuloCap(modulo) {
+        var moduloStr = String(modulo || '').trim();
+        var nivelStr = String(capVistaState.nivel || '').trim();
+        if (moduloStr === '' || nivelStr === '') {
+            return;
+        }
 
-            var btnEvaluaciones = document.createElement('button');
-            btnEvaluaciones.type = 'button';
-            btnEvaluaciones.className = 'folder-node' + (carpetaState.categoria === 'evaluaciones' ? ' is-active' : '');
-            btnEvaluaciones.innerHTML = '<i class="bi bi-journal-check"></i> Evaluaciones';
-            btnEvaluaciones.addEventListener('click', function() {
-                carpetaState.categoria = 'evaluaciones';
-                renderLecciones();
-                var url = rutaEvaluacionesCap
-                    + '&nivel=' + encodeURIComponent(String(carpetaState.nivel || ''))
-                    + '&modulo=' + encodeURIComponent(String(carpetaState.modulo || ''))
-                    + '&leccion=' + encodeURIComponent(String(carpetaState.leccion || 'Sin lección'));
-                window.location.href = url;
-            });
-            accesos.appendChild(btnEvaluaciones);
+        var urlActual = new URL(window.location.href);
+        urlActual.searchParams.set('cap_nivel', nivelStr);
+        urlActual.searchParams.set('cap_modulo', moduloStr);
+        urlActual.searchParams.set('cap_categoria', String(capVistaState.categoria || 'clase'));
+        window.location.href = urlActual.toString();
+    }
 
-            contLecciones.appendChild(accesos);
+    function marcarVistaCap(vista) {
+        var vistaObj = vista === 'evaluaciones' ? 'evaluaciones' : 'lecciones';
+        capVistaState.vista = vistaObj;
+        capViewBtns.forEach(function(btn) {
+            var vistaBtn = String(btn.getAttribute('data-cap-view') || 'lecciones').toLowerCase();
+            btn.classList.toggle('is-active', vistaBtn === vistaObj);
+        });
+    }
 
-            var mapa = {};
-            temasCapDestino().forEach(function(row) {
-                if (String(row.getAttribute('data-cap-nivel') || '') !== String(carpetaState.nivel)) return;
-                if (String(row.getAttribute('data-cap-modulo') || '') !== String(carpetaState.modulo)) return;
+    function activarVistaAcademicaCap(vista) {
+        var objetivo = vista === 'tareas' ? 'tareas' : 'inscritos';
 
-                var leccionRaw = String(row.getAttribute('data-cap-leccion') || 'Sin lección');
-                var leccionKey = normalizarLeccion(leccionRaw);
-                if (!mapa[leccionKey]) {
-                    mapa[leccionKey] = { label: leccionRaw, total: 0 };
+        capAcademicoBtns.forEach(function(btn) {
+            var vistaBtn = String(btn.getAttribute('data-cap-academico') || 'inscritos').toLowerCase();
+            btn.classList.toggle('is-active', vistaBtn === objetivo);
+        });
+
+        if (capAcademicoInscritos) {
+            capAcademicoInscritos.classList.toggle('is-hidden', objetivo !== 'inscritos');
+        }
+        if (capAcademicoTareas) {
+            capAcademicoTareas.classList.toggle('is-hidden', objetivo !== 'tareas');
+        }
+
+        if (capAcademicoPanel) {
+            capAcademicoPanel.classList.remove('is-hidden');
+        }
+        if (capMaterialPanel) {
+            capMaterialPanel.classList.add('is-hidden');
+        }
+    }
+
+    function abrirEvaluacionesCap() {
+        if (!capVistaState.nivel || !capVistaState.modulo) {
+            return;
+        }
+
+        var leccionEval = obtenerLeccionEvaluacionActiva();
+        var url = '<?= PUBLIC_URL ?>?url=programas/evaluaciones&from_material=1'
+            + '&nivel=' + encodeURIComponent(String(capVistaState.nivel))
+            + '&modulo=' + encodeURIComponent(String(capVistaState.modulo))
+            + '&leccion=' + encodeURIComponent(leccionEval);
+
+        window.open(url, '_blank');
+    }
+
+    function obtenerBloquesCap(nivel, categoria) {
+        var nivelStr = String(nivel || '');
+        var categoriaStr = String(categoria || 'clase').toLowerCase();
+        return Array.prototype.slice.call(document.querySelectorAll('.js-cap-block')).filter(function(panel) {
+            var nivelPanel = String(panel.getAttribute('data-cap-nivel') || '');
+            var categoriaPanel = String(panel.getAttribute('data-cap-categoria') || '').toLowerCase();
+            return nivelPanel === nivelStr && categoriaPanel === categoriaStr;
+        });
+    }
+
+    function activarModuloCap(modulo) {
+        var moduloStr = String(modulo || '');
+        capVistaState.modulo = moduloStr;
+
+        if (capMaterialPanel) {
+            capMaterialPanel.classList.remove('is-hidden');
+        }
+        if (capAcademicoPanel) {
+            capAcademicoPanel.classList.add('is-hidden');
+        }
+
+        document.querySelectorAll('.cap-nivel-section').forEach(function(section) {
+            section.querySelectorAll('.js-cap-block').forEach(function(panel) {
+                var nivelPanel = String(panel.getAttribute('data-cap-nivel') || '');
+                var categoriaPanel = String(panel.getAttribute('data-cap-categoria') || '').toLowerCase();
+                var moduloPanel = String(panel.getAttribute('data-cap-modulo') || '');
+
+                var mostrar = nivelPanel === String(capVistaState.nivel)
+                    && categoriaPanel === String(capVistaState.categoria)
+                    && moduloPanel === moduloStr;
+
+                panel.classList.toggle('is-hidden', !mostrar);
+                panel.classList.toggle('is-selected', mostrar);
+                panel.classList.toggle('is-focused', mostrar);
+
+                var body = panel.querySelector('.submodulo-body');
+                if (body) {
+                    body.style.display = mostrar ? 'block' : 'none';
                 }
-                mapa[leccionKey].total += 1;
             });
+        });
 
-            var keys = Object.keys(mapa);
-            var totalTemas = 0;
-            keys.forEach(function(leccionKey) {
-                totalTemas += (mapa[leccionKey] && mapa[leccionKey].total) ? mapa[leccionKey].total : 0;
-            });
-
-            var resumenTexto = document.createElement('small');
-            resumenTexto.style.color = '#637087';
-            resumenTexto.style.display = 'block';
-            resumenTexto.style.marginTop = '2px';
-            if (keys.length === 0) {
-                resumenTexto.textContent = 'Sin lecciones registradas en este módulo.';
-            } else {
-                resumenTexto.textContent = 'Lecciones registradas: ' + totalTemas + ' items';
-            }
-            contLecciones.appendChild(resumenTexto);
-
-            // Sin subcarpetas por lección: mostrar todo lo del nivel/módulo actual.
-            carpetaState.leccion = '';
-
-            aplicarFiltroCapacitacion(carpetaState);
-        }
-
-        function renderCategorias() {
-            if (!contCategorias) return;
-            contCategorias.innerHTML = '';
-
-            ['profesor', 'clase'].forEach(function(cat) {
-                var btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'folder-node' + (carpetaState.categoria === cat ? ' is-active' : '');
-                if (cat === 'clase') {
-                    btn.innerHTML = '<i class="bi bi-folder2"></i> Material clase';
-                } else {
-                    btn.innerHTML = '<i class="bi bi-folder2"></i> Material ' + cat;
-                }
-                btn.addEventListener('click', function() {
-                    carpetaState.categoria = cat;
-                    renderCategorias();
-                    aplicarFiltroCapacitacion(carpetaState);
-                });
-                contCategorias.appendChild(btn);
+        if (moduleSelector) {
+            moduleSelector.querySelectorAll('.cap-module-btn').forEach(function(btn) {
+                btn.classList.toggle('is-active', String(btn.getAttribute('data-modulo') || '') === moduloStr);
             });
         }
 
-        function restaurarFilaAbierta() {
-            if (aperturaRestaurada || openLoteQuery === '') {
+        actualizarResumenLecciones();
+    }
+
+    function renderizarBotonesModulo() {
+        if (!moduleSelector) {
+            return;
+        }
+
+        moduleSelector.innerHTML = '';
+        var bloques = obtenerBloquesCap(capVistaState.nivel, capVistaState.categoria);
+        var modulos = [];
+        var mapaTotales = {};
+
+        bloques.forEach(function(panel) {
+            var modulo = String(panel.getAttribute('data-cap-modulo') || '');
+            if (!modulo) {
                 return;
             }
+            if (modulos.indexOf(modulo) === -1) {
+                modulos.push(modulo);
+            }
+            mapaTotales[modulo] = parseInt(panel.getAttribute('data-cap-total') || '0', 10) || 0;
+        });
 
-            var mainRow = null;
-            document.querySelectorAll('.js-tema-row').forEach(function(row) {
-                if (mainRow) {
+        modulos.sort(function(a, b) {
+            return parseInt(a, 10) - parseInt(b, 10);
+        });
+
+        if (!capVistaState.modulo || modulos.indexOf(String(capVistaState.modulo)) === -1) {
+            capVistaState.modulo = modulos.length > 0 ? String(modulos[0]) : '';
+        }
+
+        modulos.forEach(function(modulo) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'cap-module-btn';
+            btn.setAttribute('data-modulo', modulo);
+            btn.innerHTML = '<span>Módulo ' + modulo + '</span><span class="meta">' + String(mapaTotales[modulo] || 0) + ' tema(s)</span>';
+            btn.addEventListener('click', function() {
+                navegarModuloCap(modulo);
+            });
+            moduleSelector.appendChild(btn);
+        });
+
+        if (capVistaState.modulo !== '') {
+            activarModuloCap(capVistaState.modulo);
+        } else {
+            actualizarResumenLecciones();
+        }
+    }
+
+    function activarVistaCapPorNivelYCategoria(nivel, categoria) {
+        var nivelStr = String(nivel || '');
+        var categoriaStr = String(categoria || 'clase').toLowerCase();
+        capVistaState.nivel = nivelStr;
+        capVistaState.categoria = categoriaStr;
+
+        abrirPanelCapInline();
+
+        levelCards.forEach(function(card) {
+            card.classList.toggle('is-active', String(card.getAttribute('data-level') || '') === nivelStr);
+        });
+
+        categoriaBtns.forEach(function(btn) {
+            btn.classList.toggle('is-active', String(btn.getAttribute('data-categoria') || '').toLowerCase() === categoriaStr);
+        });
+
+        document.querySelectorAll('.cap-nivel-section').forEach(function(section) {
+            var nivelSeccion = String(section.getAttribute('data-modulo-grupo') || '');
+            var mostrarSeccion = nivelSeccion === nivelStr;
+            section.style.display = mostrarSeccion ? '' : 'none';
+
+            section.querySelectorAll('.js-cap-block').forEach(function(panel) {
+                panel.classList.add('is-hidden');
+                panel.classList.remove('is-selected');
+                panel.classList.remove('is-focused');
+
+                var body = panel.querySelector('.submodulo-body');
+                if (body) {
+                    body.style.display = 'none';
+                }
+            });
+        });
+
+        renderizarBotonesModulo();
+    }
+    if (esCapacitacionDestinoVista) {
+        if (capRequiereSeleccionNivel) {
+            return;
+        }
+
+        var nivelInicial = capNivelQuery !== ''
+            ? capNivelQuery
+            : (levelCards.length > 0 ? String(levelCards[0].getAttribute('data-level') || '1') : '1');
+        var categoriaInicial = capVistaState.categoria;
+        capVistaState.modulo = capModuloQuery !== '' ? capModuloQuery : '';
+        activarVistaCapPorNivelYCategoria(nivelInicial, categoriaInicial);
+        marcarVistaCap('lecciones');
+
+        categoriaBtns.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var nivel = capVistaState.nivel || nivelInicial;
+                var categoria = String(btn.getAttribute('data-categoria') || 'clase');
+                activarVistaCapPorNivelYCategoria(nivel, categoria);
+                marcarVistaCap('lecciones');
+            });
+        });
+
+        capViewBtns.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var vista = String(btn.getAttribute('data-cap-view') || 'lecciones').toLowerCase();
+                if (vista === 'evaluaciones') {
+                    marcarVistaCap('evaluaciones');
+                    abrirEvaluacionesCap();
                     return;
                 }
-                if (String(row.getAttribute('data-lote-id') || '') === openLoteQuery) {
-                    mainRow = row;
+                marcarVistaCap('lecciones');
+                if (capMaterialPanel) {
+                    capMaterialPanel.classList.remove('is-hidden');
+                }
+                if (capAcademicoPanel) {
+                    capAcademicoPanel.classList.add('is-hidden');
                 }
             });
+        });
 
-            if (!mainRow || mainRow.style.display === 'none') {
-                return;
-            }
-
-            var temaKey = String(mainRow.getAttribute('data-tema-key') || '');
-            var bloque = mainRow.closest('.js-cap-block');
-            if (bloque) {
-                var body = bloque.querySelector('.submodulo-body');
-                if (body) {
-                    body.style.display = 'block';
-                }
-                bloque.classList.add('is-selected');
-                bloque.classList.add('is-focused');
-                var seccion = bloque.closest('.cap-nivel-section');
-                if (seccion) {
-                    seccion.classList.add('is-focus-mode');
-                }
-            }
-
-            var filaObjetivo = null;
-            if (openPanelQuery === 'editar') {
-                document.querySelectorAll('tr[data-tema-key="' + temaKey.replace(/"/g, '\\"') + '"]').forEach(function(row) {
-                    if (filaObjetivo) {
-                        return;
-                    }
-                    var rowId = String(row.id || '');
-                    if (rowId.indexOf('tema-edit-') === 0) {
-                        filaObjetivo = row;
-                    }
+        if (capAcademicoBtns.length > 0) {
+            var vistaAcademicaInicial = capAcademicoQuery === 'tareas' ? 'tareas' : 'inscritos';
+            activarVistaAcademicaCap(vistaAcademicaInicial);
+            capAcademicoBtns.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var vista = String(btn.getAttribute('data-cap-academico') || 'inscritos').toLowerCase();
+                    activarVistaAcademicaCap(vista);
                 });
-            } else if (openPanelQuery === 'agregar') {
-                document.querySelectorAll('tr[data-tema-key="' + temaKey.replace(/"/g, '\\"') + '"]').forEach(function(row) {
-                    if (filaObjetivo) {
-                        return;
-                    }
-                    var rowId = String(row.id || '');
-                    if (rowId.indexOf('tema-add-files-') === 0) {
-                        filaObjetivo = row;
-                    }
-                });
-            } else {
-                filaObjetivo = document.getElementById(temaKey);
-            }
-
-            if (filaObjetivo) {
-                filaObjetivo.style.display = 'table-row';
-                filaObjetivo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            } else {
-                mainRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-
-            aperturaRestaurada = true;
+            });
         }
-
-        renderNiveles();
-        renderModulos();
-        renderCategorias();
-        renderLecciones();
-        restaurarFilaAbierta();
     } else {
         document.querySelectorAll('.js-open-cap-modal').forEach(function(card) {
             var abrirPanel = function() {
@@ -2310,28 +3244,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             if (esCapacitacionDestinoVista) {
-                var seccion = bloque.closest('.cap-nivel-section');
-                if (!seccion) {
-                    return;
-                }
-
                 var yaAbierto = body.style.display !== 'none' && body.style.display !== '';
-
-                seccion.querySelectorAll('.js-cap-block').forEach(function(item) {
-                    var itemBody = item.querySelector('.submodulo-body');
-                    if (itemBody) {
-                        itemBody.style.display = 'none';
-                    }
-                    item.classList.remove('is-selected');
-                    item.classList.remove('is-focused');
-                });
-
                 if (yaAbierto) {
-                    seccion.classList.remove('is-focus-mode');
+                    body.style.display = 'none';
+                    bloque.classList.remove('is-selected');
+                    bloque.classList.remove('is-focused');
                     return;
                 }
 
-                seccion.classList.add('is-focus-mode');
                 body.style.display = 'block';
                 bloque.classList.add('is-selected');
                 bloque.classList.add('is-focused');

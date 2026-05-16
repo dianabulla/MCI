@@ -78,6 +78,10 @@ $renderMediaActual = static function ($mediaUrl, $mediaTipo, $previewId) use ($d
     Campaña programada correctamente.
     <?php if (!empty($_GET['schedule_count'])): ?>Se encolaron <?= (int)$_GET['schedule_count'] ?> destinatarios.<?php endif; ?>
 </div>
+<?php elseif (!empty($_GET['schedule_error']) && $_GET['schedule_error'] === 'wrong_weekday'): ?>
+<div class="alert alert-danger" style="margin-bottom: 12px;">
+    La fecha elegida no coincide con los <strong>días permitidos</strong> para esta plantilla (Universidad de la Vida o Capacitación Destino). Ajusta la fecha o cambia los días permitidos en la configuración de la plantilla.
+</div>
 <?php elseif (!empty($_GET['schedule_error'])): ?>
 <div class="alert alert-danger" style="margin-bottom: 12px;">
     No se pudo programar la campaña. Código: <?= htmlspecialchars((string)$_GET['schedule_error']) ?>
@@ -119,12 +123,59 @@ $renderMediaActual = static function ($mediaUrl, $mediaTipo, $previewId) use ($d
                 <label for="tpl_asignacion_celula_universidad" style="font-weight: 600;">Universidad de la vida</label>
                 <textarea id="tpl_asignacion_celula_universidad" name="tpl_asignacion_celula_universidad" class="form-control" rows="3" required><?= htmlspecialchars((string)($plantillasWhatsapp['asignacion_celula_universidad']['plantilla'] ?? '')) ?></textarea>
                 <small style="display:block; margin-top:6px; color:#666;">Esta plantilla se usa para mensajes programados/manuales. Desde este mismo módulo puedes programar el envío a líderes.</small>
+                <p style="margin:10px 0 6px; font-size:13px; font-weight:600;">Días permitidos para <em>programar</em> envíos masivos (vacío = cualquier día)</p>
+                <div style="display:flex; flex-wrap:wrap; gap:10px 14px; margin-bottom:8px;">
+                    <?php
+                    $diasUvCsv = trim((string)($plantillasWhatsapp['asignacion_celula_universidad']['dias_envio_campana'] ?? ''));
+                    $diasUvSet = [];
+                    foreach (array_filter(array_map('intval', explode(',', $diasUvCsv))) as $d) {
+                        if ($d >= 1 && $d <= 7) {
+                            $diasUvSet[$d] = true;
+                        }
+                    }
+                    $labelsDia = [1 => 'Lun', 2 => 'Mar', 3 => 'Mié', 4 => 'Jue', 5 => 'Vie', 6 => 'Sáb', 7 => 'Dom'];
+                    foreach ($labelsDia as $num => $lab):
+                    ?>
+                        <label style="font-weight:500; margin:0;"><input type="checkbox" name="dias_campana_uv[]" value="<?= $num ?>" <?= isset($diasUvSet[$num]) ? 'checked' : '' ?>> <?= htmlspecialchars($lab) ?></label>
+                    <?php endforeach; ?>
+                </div>
+                <p style="margin:0 0 8px; font-size:12px; color:#666;">Si marcas días, solo podrás elegir fecha/hora de envío que caiga en uno de esos días (hora Colombia).</p>
                 <div style="margin-top:8px;">
                     <input type="file" name="media_asignacion_celula_universidad" class="form-control js-wa-media-input" accept="image/*,video/*" data-preview-target="preview_asignacion_celula_universidad">
                     <?php $renderMediaActual($plantillasWhatsapp['asignacion_celula_universidad']['media_url'] ?? null, $plantillasWhatsapp['asignacion_celula_universidad']['media_tipo'] ?? null, 'preview_asignacion_celula_universidad'); ?>
                     <?php if (!empty($plantillasWhatsapp['asignacion_celula_universidad']['media_url'])): ?>
                         <a href="<?= htmlspecialchars((string)$plantillasWhatsapp['asignacion_celula_universidad']['media_url']) ?>" target="_blank" class="btn btn-sm btn-info" style="margin-top:6px;">Ver media actual</a>
                         <label style="display:block; margin-top:6px;"><input type="checkbox" name="quitar_media_asignacion_celula_universidad" value="1"> Quitar media</label>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 14px;">
+                <label for="tpl_mensaje_capacitacion_destino" style="font-weight: 600;">Mensaje Capacitación Destino</label>
+                <textarea id="tpl_mensaje_capacitacion_destino" name="tpl_mensaje_capacitacion_destino" class="form-control" rows="3" required><?= htmlspecialchars((string)($plantillasWhatsapp['mensaje_capacitacion_destino']['plantilla'] ?? '')) ?></textarea>
+                <small style="display:block; margin-top:6px; color:#666;">Úsala para campañas/manuales hacia líderes o grupos de Capacitación Destino.</small>
+                <p style="margin:10px 0 6px; font-size:13px; font-weight:600;">Días permitidos para <em>programar</em> envíos masivos (vacío = cualquier día)</p>
+                <div style="display:flex; flex-wrap:wrap; gap:10px 14px; margin-bottom:8px;">
+                    <?php
+                    $diasCdCsv = trim((string)($plantillasWhatsapp['mensaje_capacitacion_destino']['dias_envio_campana'] ?? ''));
+                    $diasCdSet = [];
+                    foreach (array_filter(array_map('intval', explode(',', $diasCdCsv))) as $d) {
+                        if ($d >= 1 && $d <= 7) {
+                            $diasCdSet[$d] = true;
+                        }
+                    }
+                    foreach ($labelsDia as $num => $lab):
+                    ?>
+                        <label style="font-weight:500; margin:0;"><input type="checkbox" name="dias_campana_cd[]" value="<?= $num ?>" <?= isset($diasCdSet[$num]) ? 'checked' : '' ?>> <?= htmlspecialchars($lab) ?></label>
+                    <?php endforeach; ?>
+                </div>
+                <p style="margin:0 0 8px; font-size:12px; color:#666;">Si marcas días, solo podrás elegir fecha/hora de envío que caiga en uno de esos días (hora Colombia).</p>
+                <div style="margin-top:8px;">
+                    <input type="file" name="media_mensaje_capacitacion_destino" class="form-control js-wa-media-input" accept="image/*,video/*" data-preview-target="preview_mensaje_capacitacion_destino">
+                    <?php $renderMediaActual($plantillasWhatsapp['mensaje_capacitacion_destino']['media_url'] ?? null, $plantillasWhatsapp['mensaje_capacitacion_destino']['media_tipo'] ?? null, 'preview_mensaje_capacitacion_destino'); ?>
+                    <?php if (!empty($plantillasWhatsapp['mensaje_capacitacion_destino']['media_url'])): ?>
+                        <a href="<?= htmlspecialchars((string)$plantillasWhatsapp['mensaje_capacitacion_destino']['media_url']) ?>" target="_blank" class="btn btn-sm btn-info" style="margin-top:6px;">Ver media actual</a>
+                        <label style="display:block; margin-top:6px;"><input type="checkbox" name="quitar_media_mensaje_capacitacion_destino" value="1"> Quitar media</label>
                     <?php endif; ?>
                 </div>
             </div>
@@ -136,9 +187,9 @@ $renderMediaActual = static function ($mediaUrl, $mediaTipo, $previewId) use ($d
 
 <div class="card" style="margin-bottom: 16px;">
     <div class="card-body">
-        <h5>Programar campaña a líderes</h5>
+        <h5>Programar campaña por segmento</h5>
         <p style="margin: 0 0 12px; color: #5b6b84; font-size: 13px;">
-            Selecciona una de las plantillas ya guardadas y programa el envío; el sistema enviará el mensaje a todos los líderes desde este mismo módulo.
+            Selecciona una plantilla y programa el envío. El sistema segmenta automáticamente: Bienvenida (solo nuevas), Universidad de la Vida (solo inscritos), Capacitación Destino (solo inscritos), Cumpleaños (todos).
         </p>
         <form method="POST" action="<?= PUBLIC_URL ?>?url=personas/plantillas-whatsapp/programar">
             <div class="form-group" style="margin-bottom: 14px;">
@@ -151,9 +202,9 @@ $renderMediaActual = static function ($mediaUrl, $mediaTipo, $previewId) use ($d
                 </select>
             </div>
             <div class="form-group" style="margin-bottom: 14px;">
-                <label for="programado_en" style="font-weight: 600;">Fecha y hora de envío</label>
+                <label for="programado_en" style="font-weight: 600;">Fecha y hora de envío (hora Colombia)</label>
                 <input type="datetime-local" id="programado_en" name="programado_en" class="form-control" required>
-                <small style="display:block; margin-top:6px; color:#666;">La campaña quedará encolada y se enviará desde el worker local cuando llegue la hora programada.</small>
+                <small style="display:block; margin-top:6px; color:#666;">La campaña queda en la cola de producción y la procesa el worker local cuando llegue la hora (America/Bogota).</small>
             </div>
             <button type="submit" class="btn btn-success">Programar campaña</button>
         </form>

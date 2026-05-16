@@ -1,5 +1,20 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 <div class="container mt-4 obsequio-page">
+    <div class="page-header" style="margin-bottom: 20px;">
+        <h2 style="margin: 0;">Teens</h2>
+    </div>
+
+    <div class="card teen-topbar-card" style="margin-bottom:20px;">
+        <div class="card-body">
+            <div class="page-actions personas-mobile-stack teen-topbar-actions">
+            <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-nav-pill">Registro</a>
+            <a href="<?= PUBLIC_URL ?>index.php?url=teen/codigos" class="btn btn-nav-pill">Códigos</a>
+            <a href="<?= PUBLIC_URL ?>index.php?url=teen" class="btn btn-nav-pill">Material</a>
+            <a href="<?= PUBLIC_URL ?>index.php?url=entrega_obsequio" class="btn btn-nav-pill active">Obsequios</a>
+            </div>
+        </div>
+    </div>
+
     <div class="d-flex justify-content-between align-items-center module-header-card">
         <h2 class="module-title"><i class="bi bi-gift-fill"></i> Gestión de Entrega de Obsequios Navideños</h2>
         <div class="page-actions obsequio-actions">

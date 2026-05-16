@@ -2,9 +2,14 @@
 
 <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
     <h2 style="margin:0;">Células</h2>
-    <?php if (AuthController::tienePermiso('celulas', 'crear')): ?>
-        <a href="<?= PUBLIC_URL ?>?url=celulas/crear" class="btn btn-primary">+ Nueva célula</a>
-    <?php endif; ?>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('reportes', 'ver')): ?>
+            <a href="<?= PUBLIC_URL ?>?url=reportes&tipo=celulas" class="btn btn-secondary">Reporte de Células</a>
+        <?php endif; ?>
+        <?php if (AuthController::tienePermiso('celulas', 'crear')): ?>
+            <a href="<?= PUBLIC_URL ?>?url=celulas/crear" class="btn btn-primary">+ Nueva célula</a>
+        <?php endif; ?>
+    </div>
 </div>
 
 <div class="form-container" style="margin-bottom: 20px;">
@@ -40,6 +45,92 @@
             <a href="<?= PUBLIC_URL ?>?url=celulas" class="btn btn-secondary">Limpiar</a>
         </div>
     </form>
+</div>
+
+<div class="enviar-submodules-cards" style="margin: 28px 0; padding: 0;">
+    <div class="enviar-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px;">
+        <?php if ($puedeVerMaterialCelulasEnEnviar): ?>
+        <a href="<?= PUBLIC_URL ?>?url=celulas/materiales" class="enviar-card-link" style="text-decoration: none; transition: transform 0.2s ease, box-shadow 0.2s ease;">
+            <div class="enviar-card" style="
+                background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+                border: 2px solid #7c3aed;
+                border-radius: 12px;
+                padding: 24px;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            ">
+                <div>
+                    <div class="enviar-card-icon" style="
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 50px;
+                        height: 50px;
+                        background: #7c3aed;
+                        color: white;
+                        border-radius: 10px;
+                        margin-bottom: 16px;
+                        font-size: 24px;
+                    ">
+                        <i class="bi bi-journal-bookmark-fill"></i>
+                    </div>
+                    <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 18px; font-weight: 700;">Material Células</h3>
+                    <p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.5;">
+                        Accede a los materiales en PDF para las células. Gestiona y distribuye recursos educativos.
+                    </p>
+                </div>
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(124, 58, 237, 0.2);">
+                    <span style="color: #7c3aed; font-weight: 600; font-size: 13px;">Ver materiales →</span>
+                </div>
+            </div>
+        </a>
+        <?php endif; ?>
+
+        <?php if ($puedeVerAsistenciasEnEnviar): ?>
+        <a href="<?= PUBLIC_URL ?>?url=asistencias" class="enviar-card-link" style="text-decoration: none; transition: transform 0.2s ease, box-shadow 0.2s ease;">
+            <div class="enviar-card" style="
+                background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%);
+                border: 2px solid #059669;
+                border-radius: 12px;
+                padding: 24px;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            ">
+                <div>
+                    <div class="enviar-card-icon" style="
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 50px;
+                        height: 50px;
+                        background: #059669;
+                        color: white;
+                        border-radius: 10px;
+                        margin-bottom: 16px;
+                        font-size: 24px;
+                    ">
+                        <i class="bi bi-check2-square"></i>
+                    </div>
+                    <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 18px; font-weight: 700;">Asistencias</h3>
+                    <p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.5;">
+                        Registra y visualiza la asistencia semanal de las células. Mantén el control de reportes.
+                    </p>
+                </div>
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(5, 150, 105, 0.2);">
+                    <span style="color: #059669; font-weight: 600; font-size: 13px;">Ver asistencias →</span>
+                </div>
+            </div>
+        </a>
+        <?php endif; ?>
+    </div>
 </div>
 
 <?php
@@ -271,9 +362,72 @@ $slugMinisterio = static function ($texto) {
     color: #8a2631;
 }
 
+/* Estilos para tarjetas de Material Células y Asistencias */
+.enviar-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px;
+}
+
+.enviar-card-link {
+    text-decoration: none;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.enviar-card-link:hover .enviar-card {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+.enviar-card {
+    background: linear-gradient(135deg, #f5f3ff 0%, #f0f9ff 100%);
+    border-radius: 12px;
+    padding: 24px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.enviar-card h3 {
+    color: #1f2937;
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+}
+
+.enviar-card p {
+    margin: 0;
+    color: #6b7280;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.enviar-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    font-size: 24px;
+    transition: transform 0.2s ease;
+}
+
+.enviar-card-link:hover .enviar-card-icon {
+    transform: scale(1.1);
+}
+
 @media (max-width: 800px) {
     .celulas-summary-grid {
         grid-template-columns: 1fr !important;
+    }
+
+    .enviar-cards-grid {
+        grid-template-columns: 1fr;
     }
 }
 </style>

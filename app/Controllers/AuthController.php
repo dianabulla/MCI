@@ -5,17 +5,25 @@
 
 require_once APP . '/Models/Persona.php';
 require_once APP . '/Models/UsuarioAcceso.php';
+require_once APP . '/Models/UserRole.php';
+require_once APP . '/Models/Rol.php';
+require_once APP . '/Models/EscuelaFormacionInscripcion.php';
 require_once APP . '/Helpers/DataIsolation.php';
+require_once APP . '/Helpers/PermisosCatalogo.php';
 
 class AuthController extends BaseController {
     private $personaModel;
     private $usuarioAccesoModel;
+    private $userRoleModel;
+    private $rolModel;
 
     private const ROL_ADMINISTRADOR_ID = 6;
 
     public function __construct() {
         $this->personaModel = new Persona();
         $this->usuarioAccesoModel = new UsuarioAcceso();
+        $this->userRoleModel = new UserRole();
+        $this->rolModel = new Rol();
     }
 
     /**
@@ -60,7 +68,7 @@ class AuthController extends BaseController {
                     $_SESSION['flash_info'] = 'Cuenta agregada correctamente. Ya puedes cambiar entre cuentas sin volver a iniciar sesión.';
                 }
 
-                $this->redirect('home');
+                $this->redirigirPostLogin();
             } else {
                 $error = 'Usuario o contraseña incorrectos';
                 $this->view('auth/login', [
@@ -113,7 +121,7 @@ class AuthController extends BaseController {
 
         $this->iniciarSesionUsuario($cuentaDb, true);
         $_SESSION['flash_info'] = 'Cambiaste a la cuenta de ' . (($cuentaDb['Nombre'] ?? '') . ' ' . ($cuentaDb['Apellido'] ?? '')) . '.';
-        $this->redirect('home');
+        $this->redirigirPostLogin();
     }
 
     /**
@@ -157,6 +165,57 @@ class AuthController extends BaseController {
 
         $this->iniciarSesionUsuario($cuentaDb, true);
         $_SESSION['flash_info'] = 'Cuenta activa: ' . (($cuentaDb['Nombre'] ?? '') . ' ' . ($cuentaDb['Apellido'] ?? '')) . '.';
+        $this->redirigirPostLogin();
+    }
+
+    public function selectorContexto() {
+        if (!self::estaAutenticado()) {
+            $this->redirect('auth/login');
+            return;
+        }
+
+        $rolesDisponibles = (array)($_SESSION['available_roles'] ?? []);
+        if (count($rolesDisponibles) <= 1) {
+            $this->redirect('home');
+            return;
+        }
+
+        $this->view('auth/selector_contexto', [
+            'roles_disponibles' => $rolesDisponibles,
+            'usuario_nombre' => (string)($_SESSION['usuario_nombre'] ?? 'Usuario'),
+            'error' => (string)($_GET['error'] ?? ''),
+        ]);
+    }
+
+    public function seleccionarContexto() {
+        if (!self::estaAutenticado()) {
+            $this->redirect('auth/login');
+            return;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('auth/selector-contexto');
+            return;
+        }
+
+        $idRol = (int)($_POST['id_rol'] ?? 0);
+        $rolesDisponibles = (array)($_SESSION['available_roles'] ?? []);
+
+        $seleccion = null;
+        foreach ($rolesDisponibles as $rol) {
+            if ((int)($rol['id_rol'] ?? 0) === $idRol) {
+                $seleccion = $rol;
+                break;
+            }
+        }
+
+        if ($seleccion === null) {
+            $this->redirect('auth/selector-contexto&error=' . urlencode('Selecciona un perfil válido.'));
+            return;
+        }
+
+        $this->aplicarContextoActivo((int)$seleccion['id_rol'], (string)($seleccion['context_key'] ?? ''));
+        $_SESSION['require_context_selection'] = false;
         $this->redirect('home');
     }
 
@@ -314,6 +373,11 @@ class AuthController extends BaseController {
                 'editar' => !empty($permiso['Puede_Editar']) ? 1 : 0,
                 'eliminar' => !empty($permiso['Puede_Eliminar']) ? 1 : 0
             ];
+
+            $extras = PermisosCatalogo::mapaDesdeFila((array)$permiso);
+            foreach ($extras as $claveExtra => $valorExtra) {
+                $resultado[$modulo][$claveExtra] = !empty($valorExtra) ? 1 : 0;
+            }
         }
 
         return $resultado;
@@ -330,7 +394,10 @@ class AuthController extends BaseController {
             ? (int)($user['Id_Usuario_Acceso'] ?? 0)
             : $idUsuario;
         $idRol = (int)($user['Id_Rol'] ?? 0);
-        $permisos = $this->obtenerPermisosNormalizados($idRol);
+        $rolesDisponibles = $this->resolverRolesDisponibles($idUsuario, $idRol, (string)($user['Nombre_Rol'] ?? ''));
+        $rolActivo = $this->resolverRolActivoInicial($rolesDisponibles, $idRol);
+        $idRolActivo = (int)($rolActivo['id_rol'] ?? $idRol);
+        $permisos = $this->obtenerPermisosNormalizados($idRolActivo);
 
         $nombreSesion = trim((string)($user['Nombre'] ?? '') . ' ' . (string)($user['Apellido'] ?? ''));
         if ($nombreSesion === '') {
@@ -350,8 +417,12 @@ class AuthController extends BaseController {
         $_SESSION['usuario_id'] = $idUsuario > 0 ? $idUsuario : 0;
         $_SESSION['usuario_persona_id'] = $idUsuario > 0 ? $idUsuario : null;
         $_SESSION['usuario_nombre'] = $nombreSesion;
-        $_SESSION['usuario_rol'] = $idRol;
-        $_SESSION['usuario_rol_nombre'] = (string)($user['Nombre_Rol'] ?? '');
+        $_SESSION['usuario_rol'] = $idRolActivo;
+        $_SESSION['usuario_rol_nombre'] = (string)($rolActivo['nombre_rol'] ?? ($user['Nombre_Rol'] ?? ''));
+        $_SESSION['available_roles'] = $rolesDisponibles;
+        $_SESSION['active_context'] = (string)($rolActivo['context_key'] ?? $this->resolverContextoPorRolNombre((string)($rolActivo['nombre_rol'] ?? '')));
+        $_SESSION['active_context_role_id'] = $idRolActivo;
+        $_SESSION['require_context_selection'] = count($rolesDisponibles) > 1;
         $_SESSION['usuario_ministerio'] = $idMinisterio;
         $_SESSION['permisos'] = $permisos;
         $_SESSION['permisos_configurados'] = !empty($permisos);
@@ -364,6 +435,7 @@ class AuthController extends BaseController {
                 'id' => $idUsuario,
                 'nombre' => $_SESSION['usuario_nombre'],
                 'rol_nombre' => $_SESSION['usuario_rol_nombre'],
+                'active_context' => $_SESSION['active_context'],
                 'ministerio_id' => $_SESSION['usuario_ministerio'],
                 'permisos' => $permisos
             ];
@@ -376,6 +448,140 @@ class AuthController extends BaseController {
     }
 
     /**
+     * Centro de materiales: tarjeta del inicio y ruta home/material.
+     * El módulo "material" en permisos manda cuando existe configuración explícita.
+     * Si no hay fila "material" para el rol, se mantiene compatibilidad con los submódulos
+     * de Células, Teens y Capacitación Destino (no con Material UV: ese acceso es aparte).
+     */
+    public static function puedeVerCentroMaterial(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+
+        self::sincronizarPermisosSesionActual();
+
+        if (self::tienePermiso('material', 'ver')) {
+            return true;
+        }
+
+        $permisos = (array)($_SESSION['permisos'] ?? []);
+        if (!array_key_exists('material', $permisos)) {
+            return self::tienePermiso('materiales_celulas', 'ver')
+                || self::tienePermiso('material_capacitacion_destino', 'ver')
+                || self::tienePermiso('teen', 'ver');
+        }
+
+        return false;
+    }
+
+    /**
+     * Ver listados y fichas de personas (Discípulos, Universidad de la Vida, detalle).
+     * Incluye el permiso dedicado personas_consulta sin abrir el módulo completo Ganar-Consolidar.
+     */
+    public static function puedeVerPersonasConsulta(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+        if (self::tieneCoordinacionTotalProgramas()) {
+            return true;
+        }
+        self::sincronizarPermisosSesionActual();
+        return !empty($_SESSION['permisos']['personas']['ver'])
+            || !empty($_SESSION['permisos']['personas_consulta']['ver']);
+    }
+
+    /**
+     * Módulo Ganar-Consolidar (menú, campaña, vista personas/ganar).
+     */
+    public static function puedeVerModuloPersonasGanar(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+        self::sincronizarPermisosSesionActual();
+        return !empty($_SESSION['permisos']['personas']['ver']);
+    }
+
+    /**
+     * Sin modulo Personas completo pero con acceso a Programas (UV, Cap. Destino o programas ver).
+     * Quien este en este modo gestiona inscritos desde Programas; no se muestra panel Personas en inicio
+     * y las entradas personas/ redirigen al consolidado correspondiente.
+     */
+    public static function debeUsarSoloVistaProgramasPersonas(): bool {
+        if (self::esAdministrador()) {
+            return false;
+        }
+        self::sincronizarPermisosSesionActual();
+        // No usar tienePermiso('personas','ver') aquí: coordinacion_total amplía personas en código
+        // pero la UI debe seguir siendo «solo Programas» salvo que el rol tenga Personas en BD.
+        if (!empty($_SESSION['permisos']['personas']['ver'])) {
+            return false;
+        }
+        $prog = $_SESSION['permisos']['programas'] ?? [];
+        if (!is_array($prog)) {
+            return false;
+        }
+        return !empty($prog['ver'])
+            || !empty($prog['ver_universidad_vida'])
+            || !empty($prog['ver_capacitacion_destino'])
+            || !empty($prog['coordinacion_total']);
+    }
+
+    /**
+     * Ruta relativa (?url=...) hacia Programas segun permisos del rol.
+     */
+    public static function urlProgramasPreferidaRelativa(): string {
+        $full = self::tienePermiso('programas', 'ver');
+        $uv = $full || self::tienePermiso('programas', 'ver_universidad_vida');
+        $cap = $full || self::tienePermiso('programas', 'ver_capacitacion_destino');
+        if ($uv && !$cap) {
+            return 'programas/consolidar&insc_programa=universidad_vida';
+        }
+        if (!$uv && $cap) {
+            return 'programas/consolidar&insc_programa=capacitacion_destino';
+        }
+        return 'programas';
+    }
+
+    /**
+     * Rol de coordinación de formación: no es administrador global, pero debe poder
+     * operar el ecosistema Programas + personas inscritas + escuelas sin recibir «acceso denegado».
+     * Se activa solo con la acción avanzada programas → coordinacion_total en Permisos.
+     */
+    public static function tieneCoordinacionTotalProgramas(): bool {
+        if (!self::estaAutenticado() || self::esAdministrador()) {
+            return false;
+        }
+        self::sincronizarPermisosSesionActual();
+        $p = $_SESSION['permisos']['programas'] ?? null;
+        return is_array($p) && !empty($p['coordinacion_total']);
+    }
+
+    /**
+     * Módulos cubiertos por coordinacion_total (sin acceso al resto de la aplicación).
+     *
+     * @return array<int, string>
+     */
+    private static function modulosAmbitoCoordinacionProgramas(): array {
+        return [
+            'programas',
+            'personas',
+            'personas_consulta',
+            'personas_formulario_publico',
+            'escuelas_formacion',
+            'escuelas_formacion_marcar_asistencia',
+            'escuelas_formacion_editar_fechas',
+            'material_universidad_vida',
+            'material_capacitacion_destino',
+            'material',
+        ];
+    }
+
+    public static function moduloEnAmbitoCoordinacionProgramas(string $modulo): bool {
+        $modulo = strtolower(trim($modulo));
+        return in_array($modulo, self::modulosAmbitoCoordinacionProgramas(), true);
+    }
+
+    /**
      * Verificar si tiene permiso
      */
     public static function tienePermiso($modulo, $accion = 'ver') {
@@ -384,6 +590,10 @@ class AuthController extends BaseController {
         }
 
         self::sincronizarPermisosSesionActual();
+
+        if (self::tieneCoordinacionTotalProgramas() && self::moduloEnAmbitoCoordinacionProgramas($modulo)) {
+            return true;
+        }
 
         $modulo = trim((string)$modulo);
         if ($modulo === '') {
@@ -461,17 +671,70 @@ class AuthController extends BaseController {
      */
     public static function esAdministrador() {
         $rolId = isset($_SESSION['usuario_rol']) ? (int) $_SESSION['usuario_rol'] : 0;
-        if ($rolId === self::ROL_ADMINISTRADOR_ID) {
+        $rolNombre = trim((string)($_SESSION['usuario_rol_nombre'] ?? ''));
+        // Misma regla que "rol protegido" en Permisos: NO usar substr "admin"
+        // (p. ej. "Administrativo" no es administrador global).
+        return PermisosCatalogo::esRolProtegidoPermisos($rolId, $rolNombre);
+    }
+
+    /**
+     * Cuenta en usuario_acceso sin persona vinculada (pestaña "Usuarios administrativos" en Cuentas).
+     */
+    public static function esCuentaUsuarioAccesoAdministrativaPura(): bool {
+        if (empty($_SESSION['auth_user_source'])) {
+            return false;
+        }
+        $src = (string)$_SESSION['auth_user_source'];
+        $uid = (int)($_SESSION['usuario_id'] ?? 0);
+        return $src === 'acceso' && $uid === 0;
+    }
+
+    /**
+     * Permisos de módulo necesarios para operar pagos/abonos (sesión actual).
+     */
+    private static function sesionPuedeOperarPagosEscuelasPorPermiso(): bool {
+        if (self::esAdministrador()) {
             return true;
         }
+        if (self::tieneCoordinacionTotalProgramas()) {
+            return true;
+        }
+        if (self::tienePermiso('asistencias', 'ver')) {
+            return true;
+        }
+        if (self::tienePermiso('escuelas_formacion', 'ver')
+            || self::tienePermiso('escuelas_formacion', 'crear')
+            || self::tienePermiso('escuelas_formacion', 'editar')) {
+            return true;
+        }
+        return false;
+    }
 
-        $rolNombre = self::normalizarTexto((string) ($_SESSION['usuario_rol_nombre'] ?? ''));
-        return strpos($rolNombre, 'admin') !== false;
+    /**
+     * Solo administradores (rol protegido) o cuentas administrativas puras (acceso sin Id_Persona),
+     * con permisos de escuelas/asistencias o coordinación, pueden registrar recaudo en formularios públicos de Escuelas.
+     */
+    public static function puedeRecibirPagosEscuelasFormacion(): bool {
+        if (!self::estaAutenticado()) {
+            return false;
+        }
+        if (!self::sesionPuedeOperarPagosEscuelasPorPermiso()) {
+            return false;
+        }
+        if (self::esAdministrador()) {
+            return true;
+        }
+        return self::esCuentaUsuarioAccesoAdministrativaPura();
     }
 
     public static function esRolDiscipuloUsuario() {
         if (self::esAdministrador()) {
             return false;
+        }
+
+        $contextoActivo = self::normalizarTexto((string)($_SESSION['active_context'] ?? ''));
+        if ($contextoActivo !== '') {
+            return $contextoActivo === 'discipulo';
         }
 
         $rolId = isset($_SESSION['usuario_rol']) ? (int) $_SESSION['usuario_rol'] : 0;
@@ -497,6 +760,179 @@ class AuthController extends BaseController {
             'ü' => 'u',
             'ñ' => 'n'
         ]);
+    }
+
+    public static function getActiveContext(): string {
+        return self::normalizarTexto((string)($_SESSION['active_context'] ?? ''));
+    }
+
+    private function redirigirPostLogin(): void {
+        if ($this->debeMostrarSelectorContexto()) {
+            $this->redirect('auth/selector-contexto');
+            return;
+        }
+
+        $this->redirect('home');
+    }
+
+    private function debeMostrarSelectorContexto(): bool {
+        if (!self::estaAutenticado()) {
+            return false;
+        }
+
+        $rolesDisponibles = (array)($_SESSION['available_roles'] ?? []);
+        if (count($rolesDisponibles) <= 1) {
+            return false;
+        }
+
+        return !empty($_SESSION['require_context_selection']);
+    }
+
+    private function resolverRolesDisponibles(int $idPersona, int $idRolLegacy, string $nombreRolLegacy): array {
+        $roles = [];
+
+        if ($idPersona > 0) {
+            $this->userRoleModel->asegurarTabla();
+            if ($idRolLegacy > 0) {
+                $this->userRoleModel->sincronizarRolPrincipal($idPersona, $idRolLegacy);
+            }
+
+            $rolesDb = $this->userRoleModel->listarRolesPersona($idPersona);
+            foreach ($rolesDb as $rolDb) {
+                $idRol = (int)($rolDb['Id_Rol'] ?? 0);
+                $nombre = (string)($rolDb['Nombre_Rol'] ?? '');
+                if ($idRol <= 0 || isset($roles[$idRol])) {
+                    continue;
+                }
+                $roles[$idRol] = [
+                    'id_rol' => $idRol,
+                    'nombre_rol' => $nombre,
+                    'context_key' => $this->resolverContextoPorRolNombre($nombre),
+                ];
+            }
+        }
+
+        if ($idRolLegacy > 0 && !isset($roles[$idRolLegacy])) {
+            $roles[$idRolLegacy] = [
+                'id_rol' => $idRolLegacy,
+                'nombre_rol' => $nombreRolLegacy,
+                'context_key' => $this->resolverContextoPorRolNombre($nombreRolLegacy),
+            ];
+        }
+
+        // Si es lider Y está inscrito en capacitación destino, agregar el contexto de discipulo
+        $esLider = false;
+        foreach ($roles as $rol) {
+            if (strpos(self::normalizarTexto($rol['nombre_rol'] ?? ''), 'lider') !== false) {
+                $esLider = true;
+                break;
+            }
+        }
+
+        if ($esLider && $idPersona > 0) {
+            // Verificar si está inscrito en capacitación destino
+            $inscripcionModel = new EscuelaFormacionInscripcion();
+            $programas = (array)$inscripcionModel->getProgramasInscritosPersona($idPersona);
+            
+            $estaEnCapacitacionDestino = false;
+            foreach ($programas as $programa) {
+                $prog = trim((string)$programa);
+                if (strpos($prog, 'capacitacion_destino') !== false) {
+                    $estaEnCapacitacionDestino = true;
+                    break;
+                }
+            }
+
+            if ($estaEnCapacitacionDestino) {
+                // Buscar rol discipulo en BD
+                $idRolDiscipulo = $this->userRoleModel->buscarRolPorAlias('discipulo');
+                if ($idRolDiscipulo > 0 && !isset($roles[$idRolDiscipulo])) {
+                    $rolDiscipulo = $this->rolModel->getById($idRolDiscipulo);
+                    if (!empty($rolDiscipulo)) {
+                        $roles[$idRolDiscipulo] = [
+                            'id_rol' => $idRolDiscipulo,
+                            'nombre_rol' => (string)($rolDiscipulo['Nombre_Rol'] ?? ''),
+                            'context_key' => 'discipulo',
+                        ];
+                    }
+                }
+            }
+        }
+
+        return array_values($roles);
+    }
+
+    private function resolverRolActivoInicial(array $rolesDisponibles, int $idRolPreferido): array {
+        foreach ($rolesDisponibles as $rol) {
+            if ((int)($rol['id_rol'] ?? 0) === $idRolPreferido && $idRolPreferido > 0) {
+                return $rol;
+            }
+        }
+
+        if (!empty($rolesDisponibles)) {
+            return $rolesDisponibles[0];
+        }
+
+        return [
+            'id_rol' => $idRolPreferido,
+            'nombre_rol' => '',
+            'context_key' => 'lider',
+        ];
+    }
+
+    private function resolverContextoPorRolNombre(string $nombreRol): string {
+        $rol = self::normalizarTexto($nombreRol);
+        if ($rol === '') {
+            return 'lider';
+        }
+
+        if (strpos($rol, 'maestro') !== false || strpos($rol, 'teacher') !== false) {
+            return 'maestro';
+        }
+
+        if (strpos($rol, 'discipul') !== false || strpos($rol, 'disipul') !== false || strpos($rol, 'discipl') !== false || strpos($rol, 'disipl') !== false) {
+            return 'discipulo';
+        }
+
+        if (strpos($rol, 'lider') !== false || strpos($rol, 'pastor') !== false || strpos($rol, 'admin') !== false) {
+            return 'lider';
+        }
+
+        return 'lider';
+    }
+
+    private function aplicarContextoActivo(int $idRol, string $contexto): void {
+        if ($idRol <= 0) {
+            return;
+        }
+
+        $rolesDisponibles = (array)($_SESSION['available_roles'] ?? []);
+        $rolSeleccionado = null;
+        foreach ($rolesDisponibles as $rol) {
+            if ((int)($rol['id_rol'] ?? 0) === $idRol) {
+                $rolSeleccionado = $rol;
+                break;
+            }
+        }
+
+        if ($rolSeleccionado === null) {
+            return;
+        }
+
+        $_SESSION['usuario_rol'] = $idRol;
+        $_SESSION['usuario_rol_nombre'] = (string)($rolSeleccionado['nombre_rol'] ?? '');
+        $_SESSION['active_context'] = $contexto !== '' ? $contexto : (string)($rolSeleccionado['context_key'] ?? 'lider');
+        $_SESSION['active_context_role_id'] = $idRol;
+        $_SESSION['permisos'] = $this->obtenerPermisosNormalizados($idRol);
+        $_SESSION['permisos_configurados'] = !empty($_SESSION['permisos']);
+        $_SESSION['permisos_last_sync'] = time();
+
+        $activeAccountId = (int)($_SESSION['active_account_id'] ?? 0);
+        if ($activeAccountId > 0 && isset($_SESSION['account_pool'][$activeAccountId])) {
+            $_SESSION['account_pool'][$activeAccountId]['rol_nombre'] = $_SESSION['usuario_rol_nombre'];
+            $_SESSION['account_pool'][$activeAccountId]['active_context'] = $_SESSION['active_context'];
+            $_SESSION['account_pool'][$activeAccountId]['permisos'] = $_SESSION['permisos'];
+        }
     }
 
     /**

@@ -65,6 +65,10 @@ class DiscipularEvaluacionController extends BaseController {
             if ($accion === 'presentar_evaluacion' && $puedeVer) {
                 $this->procesarPresentacion();
             }
+
+            if ($accion === 'subir_tarea_entrega' && $esDiscipulo) {
+                $this->procesarEntregaTareaDiscipulo();
+            }
         }
 
         $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
@@ -85,7 +89,7 @@ class DiscipularEvaluacionController extends BaseController {
             : $this->model->listarEvaluacionesActivas();
 
         if (!$puedeGestionar) {
-            $evaluaciones = array_values(array_filter($evaluaciones, static function($evaluacion) use ($nivelesPermitidos) {
+            $evaluaciones = array_values(array_filter($evaluaciones, function($evaluacion) use ($nivelesPermitidos) {
                 $nivel = (int)($evaluacion['Nivel'] ?? 0);
                 return in_array($nivel, $nivelesPermitidos, true);
             }));
@@ -152,8 +156,46 @@ class DiscipularEvaluacionController extends BaseController {
         $resultadosUsuario = $idPersona > 0 ? $this->model->listarResultadosPorPersona($idPersona) : [];
 
         $resultadosEvaluacion = [];
-        if ($puedeGestionar && $evaluacionSeleccionada) {
-            $resultadosEvaluacion = $this->model->listarResultadosPorEvaluacion((int)$evaluacionSeleccionada['Id_Evaluacion']);
+        $resumenTodosResultados = [];
+        if ($puedeGestionar) {
+            if (empty($evaluacionSeleccionada)) {
+                // Solo último intento por persona/evaluación y solo nivel·módulo del contexto (material).
+                $resumenTodosResultados = $this->model->listarPresentacionesResumenUltimoIntento($filtroNivelContexto, $filtroModuloContexto);
+            } else {
+                // Una fila por persona: último intento presentado de esta evaluación.
+                $resultadosEvaluacion = $this->model->listarUltimosResultadosPorEvaluacion((int)$evaluacionSeleccionada['Id_Evaluacion']);
+            }
+        }
+
+        $resultadoDetalle = null;
+        $idResultadoDetalle = (int)($_GET['resultado'] ?? 0);
+        if ($idResultadoDetalle > 0) {
+            $resultadoTmp = $this->model->obtenerResultadoPorId($idResultadoDetalle);
+            if ($resultadoTmp) {
+                $idPersonaResultado = (int)($resultadoTmp['Id_Persona'] ?? 0);
+                $esPropio = $idPersona > 0 && $idPersonaResultado === $idPersona;
+                if ($puedeGestionar || $esPropio) {
+                    $resultadoDetalle = $resultadoTmp;
+                }
+            }
+        }
+
+        $accesosDirectosDiscipulo = $esDiscipulo
+            ? $this->construirAccesosDirectosDiscipulo($nivelesPermitidos, $evaluaciones)
+            : [];
+
+        $tareasPorModuloDiscipulo = [];
+        if ($esDiscipulo && $idPersona > 0 && !empty($accesosDirectosDiscipulo)) {
+            $modulosPermitidos = [];
+            foreach ($accesosDirectosDiscipulo as $accesoTmp) {
+                $nivelTmp = (int)($accesoTmp['nivel'] ?? 0);
+                $moduloTmp = (int)($accesoTmp['modulo'] ?? 0);
+                if ($nivelTmp <= 0 || $moduloTmp <= 0) {
+                    continue;
+                }
+                $modulosPermitidos[$nivelTmp . '_' . $moduloTmp] = ['nivel' => $nivelTmp, 'modulo' => $moduloTmp];
+            }
+            $tareasPorModuloDiscipulo = $this->listarTareasActivasPorModulosDiscipulo($idPersona, array_values($modulosPermitidos));
         }
 
         $resumenCapacitacionPorNivel = [];
@@ -182,7 +224,7 @@ class DiscipularEvaluacionController extends BaseController {
             }
         }
 
-        $this->view('home/discipular_evaluaciones', [
+        $this->view('programas/evaluaciones', [
             'pageTitle' => 'Discipular - Evaluaciones',
             'es_admin' => $esAdmin,
             'es_discipulo' => $esDiscipulo,
@@ -191,13 +233,14 @@ class DiscipularEvaluacionController extends BaseController {
             'evaluacion_seleccionada' => $evaluacionSeleccionada,
             'resultados_usuario' => $resultadosUsuario,
             'resultados_evaluacion' => $resultadosEvaluacion,
+            'resumen_todos_resultados' => $resumenTodosResultados,
+            'resultado_detalle' => $resultadoDetalle,
             'resumen_capacitacion_por_nivel' => $resumenCapacitacionPorNivel,
             'estado_intento' => $estadoIntento,
             'niveles_permitidos' => $nivelesPermitidos,
             'clases_links' => $this->construirLinksClases($nivelesPermitidos),
-            'accesos_directos_discipulo' => $esDiscipulo
-                ? $this->construirAccesosDirectosDiscipulo($nivelesPermitidos, $evaluaciones)
-                : [],
+            'accesos_directos_discipulo' => $accesosDirectosDiscipulo,
+            'tareas_por_modulo_discipulo' => $tareasPorModuloDiscipulo,
             'intentos_por_evaluacion' => $intentosPorEvaluacion,
             'max_intentos' => self::MAX_INTENTOS,
             'puede_configurar_fechas' => $puedeConfigurarFechas,
@@ -209,6 +252,136 @@ class DiscipularEvaluacionController extends BaseController {
             'mensaje' => (string)($_GET['mensaje'] ?? ''),
             'tipo' => (string)($_GET['tipo'] ?? ''),
         ]);
+    }
+
+    public function tareas(): void {
+        if (!AuthController::estaAutenticado()) {
+            $this->redirect('auth/login');
+        }
+
+        $esDiscipulo = AuthController::esRolDiscipuloUsuario();
+        if (!$esDiscipulo) {
+            header('Location: ' . rtrim(BASE_URL, '/') . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $accion = trim((string)($_POST['accion'] ?? ''));
+            if ($accion === 'subir_tarea_entrega') {
+                $this->procesarEntregaTareaDiscipulo();
+            } elseif ($accion === 'editar_tarea_entrega') {
+                $this->procesarEditarEntregaTareaDiscipulo();
+            } elseif ($accion === 'eliminar_tarea_entrega') {
+                $this->procesarEliminarEntregaTareaDiscipulo();
+            }
+        }
+
+        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+        $nivelesPermitidos = $this->obtenerNivelesPermitidosPorInscripcion($idPersona);
+        $evaluacionesActivas = $this->model->listarEvaluacionesActivas();
+        $evaluacionesActivas = array_values(array_filter($evaluacionesActivas, static function($evaluacion) use ($nivelesPermitidos) {
+            $nivel = (int)($evaluacion['Nivel'] ?? 0);
+            return in_array($nivel, $nivelesPermitidos, true);
+        }));
+        $evaluacionesActivas = array_values(array_filter($evaluacionesActivas, function($evaluacion) {
+            return $this->estaDisponiblePorFecha($evaluacion);
+        }));
+
+        $accesosDirectosDiscipulo = $this->construirAccesosDirectosDiscipulo($nivelesPermitidos, $evaluacionesActivas);
+
+        $modulosPermitidos = [];
+        foreach ($accesosDirectosDiscipulo as $accesoTmp) {
+            $nivelTmp = (int)($accesoTmp['nivel'] ?? 0);
+            $moduloTmp = (int)($accesoTmp['modulo'] ?? 0);
+            if ($nivelTmp <= 0 || $moduloTmp <= 0) {
+                continue;
+            }
+            $modulosPermitidos[$nivelTmp . '_' . $moduloTmp] = ['nivel' => $nivelTmp, 'modulo' => $moduloTmp];
+        }
+
+        $tareasPorModuloDiscipulo = $this->listarTareasActivasPorModulosDiscipulo($idPersona, array_values($modulosPermitidos));
+
+        $filtroNivel = (int)($_GET['nivel'] ?? 0);
+        $filtroModulo = (int)($_GET['modulo'] ?? 0);
+        if ($filtroNivel > 0 && $filtroModulo > 0) {
+            $accesosDirectosDiscipulo = array_values(array_filter($accesosDirectosDiscipulo, static function($acceso) use ($filtroNivel, $filtroModulo) {
+                return (int)($acceso['nivel'] ?? 0) === $filtroNivel && (int)($acceso['modulo'] ?? 0) === $filtroModulo;
+            }));
+        }
+
+        $this->view('programas/tareas', [
+            'pageTitle' => 'Discipular - Tareas',
+            'accesos_directos_discipulo' => $accesosDirectosDiscipulo,
+            'tareas_por_modulo_discipulo' => $tareasPorModuloDiscipulo,
+            'mensaje' => (string)($_GET['mensaje'] ?? ''),
+            'tipo' => (string)($_GET['tipo'] ?? ''),
+            'filtro_nivel' => $filtroNivel,
+            'filtro_modulo' => $filtroModulo,
+        ]);
+    }
+
+    public function irClase(): void {
+        if (!AuthController::estaAutenticado()) {
+            $this->redirect('auth/login');
+        }
+
+        $esDiscipulo = AuthController::esRolDiscipuloUsuario();
+        if (!$esDiscipulo) {
+            header('Location: ' . rtrim(BASE_URL, '/') . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+        $nivel = (int)($_GET['nivel'] ?? 0);
+        $modulo = (int)($_GET['modulo'] ?? 0);
+
+        if ($idPersona <= 0 || !$this->esContextoNivelModuloValido($nivel, $modulo)) {
+            $this->redirect('programas/evaluaciones&tipo=error&mensaje=' . urlencode('Acceso a clase inválido.'));
+        }
+
+        $nivelesPermitidos = $this->obtenerNivelesPermitidosPorInscripcion($idPersona);
+        if (!in_array($nivel, $nivelesPermitidos, true)) {
+            $this->redirect('programas/evaluaciones&tipo=error&mensaje=' . urlencode('No tienes acceso a este nivel de clase.'));
+        }
+
+        $urlClase = '';
+        $conexiones = (array)$this->model->listarConexionesClaseCapacitacionDestino();
+        foreach ($conexiones as $fila) {
+            $nivelFila = (int)($fila['Nivel'] ?? 0);
+            $moduloFila = (int)($fila['Modulo_Numero'] ?? 0);
+            if ($nivelFila !== $nivel || $moduloFila !== $modulo) {
+                continue;
+            }
+
+            $urlClase = $this->normalizarUrlClase($fila['Conexion_Zoom_URL'] ?? '');
+            if ($urlClase !== '') {
+                break;
+            }
+        }
+
+        // Compatibilidad: si no hay link exacto del módulo, usa el primero del mismo nivel.
+        if ($urlClase === '') {
+            foreach ($conexiones as $fila) {
+                $nivelFila = (int)($fila['Nivel'] ?? 0);
+                if ($nivelFila !== $nivel) {
+                    continue;
+                }
+
+                $urlClase = $this->normalizarUrlClase($fila['Conexion_Zoom_URL'] ?? '');
+                if ($urlClase !== '') {
+                    break;
+                }
+            }
+        }
+
+        if ($urlClase === '') {
+            $this->redirect('programas/evaluaciones&tipo=error&mensaje=' . urlencode('Este módulo aún no tiene link de clase configurado.'));
+        }
+
+        $this->registrarAsistenciaClaseDiscipulo($idPersona, $nivel);
+
+        header('Location: ' . $urlClase);
+        exit;
     }
 
     private function esContextoNivelModuloValido(int $nivel, int $modulo): bool {
@@ -227,11 +400,10 @@ class DiscipularEvaluacionController extends BaseController {
         $moduloNumero = (int)($_POST['modulo_numero'] ?? 0);
         $leccion = $this->normalizarLeccionTexto($_POST['leccion'] ?? '');
         $puntajeMinimo = max(80.0, (float)($_POST['puntaje_minimo'] ?? 80));
-        $modoRespuestas = strtolower(trim((string)($_POST['modo_respuestas'] ?? 'mixta')));
-        if (!in_array($modoRespuestas, ['cerrada', 'abierta', 'mixta'], true)) {
-            $modoRespuestas = 'mixta';
-        }
-        $preguntasRaw = $_POST['preguntas'] ?? [];
+        $esAutoSave = !empty($_POST['auto_save']);
+        // Forzar solo preguntas cerradas en CD
+        $modoRespuestas = 'cerrada';
+        $preguntasRaw = $this->extraerPreguntasDesdeRequest();
         $puedeConfigurarFechas = $this->tienePermisoConfigurarFechas();
 
         $fechaHabilitacionInicio = '';
@@ -241,6 +413,10 @@ class DiscipularEvaluacionController extends BaseController {
             $fechaHabilitacionFin = $this->normalizarFechaYmd($_POST['fecha_habilitacion_fin'] ?? '');
 
             if ($fechaHabilitacionInicio !== '' && $fechaHabilitacionFin !== '' && strcmp($fechaHabilitacionInicio, $fechaHabilitacionFin) > 0) {
+                if ($esAutoSave) {
+                    echo 'error: La fecha inicial no puede ser mayor que la final.';
+                    return;
+                }
                 $this->redirigirConMensaje('La fecha inicial no puede ser mayor que la final.', 'error');
             }
         }
@@ -258,18 +434,31 @@ class DiscipularEvaluacionController extends BaseController {
         }
 
         if ($titulo === '' || $nivel <= 0 || $moduloNumero <= 0) {
+            if ($esAutoSave) {
+                echo 'error: Completa título, nivel y módulo.';
+                return;
+            }
             $this->redirigirConMensaje('Completa título, nivel y módulo.', 'error');
         }
 
         $mapaLecciones = $this->obtenerMapaLeccionesMaterial();
         $leccionesDisponibles = $this->obtenerLeccionesParaNivelModulo($mapaLecciones, $nivel, $moduloNumero);
         if (!empty($leccionesDisponibles) && !in_array($leccion, $leccionesDisponibles, true)) {
+            if ($esAutoSave) {
+                echo 'error: Selecciona una lección válida del material cargado para ese nivel y módulo.';
+                return;
+            }
             $this->redirigirConMensaje('Selecciona una lección válida del material cargado para ese nivel y módulo.', 'error');
         }
 
         $preguntas = $this->normalizarPreguntas((array)$preguntasRaw, $modoRespuestas);
-        if (count($preguntas) < 5) {
-            $this->redirigirConMensaje('La evaluación debe tener mínimo 5 preguntas válidas.', 'error');
+        // Ya no se requiere mínimo de preguntas
+        if (count($preguntas) < 1) {
+            if ($esAutoSave) {
+                echo 'error: La evaluación debe tener al menos 1 pregunta cerrada.';
+                return;
+            }
+            $this->redirigirConMensaje('La evaluación debe tener al menos 1 pregunta cerrada.', 'error');
         }
 
         if ($modoRespuestas === 'mixta') {
@@ -286,6 +475,10 @@ class DiscipularEvaluacionController extends BaseController {
             }
 
             if (!$tieneAbiertas || !$tieneCerradas) {
+                if ($esAutoSave) {
+                    echo 'error: En modo mixto debes incluir al menos una pregunta abierta y una cerrada.';
+                    return;
+                }
                 $this->redirigirConMensaje('En modo mixto debes incluir al menos una pregunta abierta y una cerrada.', 'error');
             }
         }
@@ -303,36 +496,24 @@ class DiscipularEvaluacionController extends BaseController {
             'creado_por' => (int)($_SESSION['usuario_id'] ?? 0),
         ]);
 
+        if ($esAutoSave) {
+            echo 'success: Evaluación guardada automáticamente.';
+            return;
+        }
+
         $this->redirigirConMensaje('Evaluación creada correctamente.', 'success');
     }
 
     private function normalizarPreguntas(array $preguntasRaw, string $modoRespuestas = 'mixta'): array {
         $salida = [];
-        $modo = in_array($modoRespuestas, ['cerrada', 'abierta', 'mixta'], true) ? $modoRespuestas : 'mixta';
+        // Solo permitir preguntas cerradas
+        $modo = 'cerrada';
 
         foreach ($preguntasRaw as $pregunta) {
             $enunciado = trim((string)($pregunta['enunciado'] ?? ''));
-            $tipoRaw = strtolower(trim((string)($pregunta['tipo'] ?? 'cerrada')));
-            $tipo = $tipoRaw === 'abierta' ? 'abierta' : 'cerrada';
-
-            if ($modo === 'abierta') {
-                $tipo = 'abierta';
-            } elseif ($modo === 'cerrada') {
-                $tipo = 'cerrada';
-            }
-
             if ($enunciado === '') {
                 continue;
             }
-
-            if ($tipo === 'abierta') {
-                $salida[] = [
-                    'tipo' => 'abierta',
-                    'enunciado' => $enunciado,
-                ];
-                continue;
-            }
-
             $opciones = [];
             foreach (['a', 'b', 'c', 'd'] as $clave) {
                 $texto = trim((string)($pregunta['opcion_' . $clave] ?? ''));
@@ -340,11 +521,9 @@ class DiscipularEvaluacionController extends BaseController {
                     $opciones[$clave] = $texto;
                 }
             }
-
             if (count($opciones) < 2) {
                 continue;
             }
-
             $salida[] = [
                 'tipo' => 'cerrada',
                 'enunciado' => $enunciado,
@@ -352,18 +531,119 @@ class DiscipularEvaluacionController extends BaseController {
                 'respuesta_correcta' => $this->normalizarRespuestaCorrecta($pregunta, $opciones),
             ];
         }
+        return $salida;
+    }
+
+    private function extraerPreguntasDesdeRequest(): array {
+        $preguntasRaw = $_POST['preguntas'] ?? [];
+
+        if (is_string($preguntasRaw)) {
+            $decodificado = json_decode($preguntasRaw, true);
+            if (is_array($decodificado)) {
+                return $this->normalizarEstructuraPreguntasEntrada($decodificado);
+            }
+        }
+
+        if (is_array($preguntasRaw) && !empty($preguntasRaw)) {
+            return $this->normalizarEstructuraPreguntasEntrada($preguntasRaw);
+        }
+
+        // Compatibilidad con el formulario de preguntas dinámicas (arrays paralelos).
+        $enunciados = (array)($_POST['pregunta_enunciado'] ?? []);
+        $opcionesPlanas = (array)($_POST['pregunta_opciones'] ?? []);
+        $respuestas = (array)($_POST['pregunta_correcta'] ?? []);
+
+        $salida = [];
+        foreach ($enunciados as $i => $enunciadoRaw) {
+            $enunciado = trim((string)$enunciadoRaw);
+            if ($enunciado === '') {
+                continue;
+            }
+
+            $base = ((int)$i) * 4;
+            $salida[] = [
+                'enunciado' => $enunciado,
+                'opcion_a' => trim((string)($opcionesPlanas[$base] ?? '')),
+                'opcion_b' => trim((string)($opcionesPlanas[$base + 1] ?? '')),
+                'opcion_c' => trim((string)($opcionesPlanas[$base + 2] ?? '')),
+                'opcion_d' => trim((string)($opcionesPlanas[$base + 3] ?? '')),
+                'respuesta_correcta' => strtolower(trim((string)($respuestas[$i] ?? ''))),
+            ];
+        }
+
+        return $salida;
+    }
+
+    private function normalizarEstructuraPreguntasEntrada(array $preguntas): array {
+        $salida = [];
+
+        foreach ($preguntas as $pregunta) {
+            if (!is_array($pregunta)) {
+                continue;
+            }
+
+            $enunciado = trim((string)($pregunta['enunciado'] ?? ''));
+            if ($enunciado === '') {
+                continue;
+            }
+
+            $item = [
+                'enunciado' => $enunciado,
+                'opcion_a' => trim((string)($pregunta['opcion_a'] ?? '')),
+                'opcion_b' => trim((string)($pregunta['opcion_b'] ?? '')),
+                'opcion_c' => trim((string)($pregunta['opcion_c'] ?? '')),
+                'opcion_d' => trim((string)($pregunta['opcion_d'] ?? '')),
+                'respuesta_correcta' => strtolower(trim((string)($pregunta['respuesta_correcta'] ?? ''))),
+            ];
+
+            $opcionesEntrada = $pregunta['opciones'] ?? null;
+            if (is_array($opcionesEntrada)) {
+                foreach ($opcionesEntrada as $clave => $valor) {
+                    $claveNorm = '';
+                    $texto = '';
+
+                    if (is_array($valor)) {
+                        $claveNorm = strtolower(trim((string)($valor['clave'] ?? $clave)));
+                        $texto = trim((string)($valor['opcion'] ?? $valor['texto'] ?? ''));
+                    } else {
+                        $claveNorm = strtolower(trim((string)$clave));
+                        $texto = trim((string)$valor);
+                    }
+
+                    if (!in_array($claveNorm, ['a', 'b', 'c', 'd'], true)) {
+                        continue;
+                    }
+
+                    $item['opcion_' . $claveNorm] = $texto;
+                }
+            }
+
+            $salida[] = $item;
+        }
 
         return $salida;
     }
 
     private function normalizarRespuestaCorrecta(array $preguntaRaw, array $opciones): string {
         $clave = strtolower(trim((string)($preguntaRaw['respuesta_correcta'] ?? '')));
+        
+        // Validar que la respuesta correcta sea una opción válida
         if ($clave !== '' && isset($opciones[$clave])) {
             return $clave;
         }
 
+        // Fallback: usar primera opción disponible (solo para compatibilidad)
         $primera = array_key_first($opciones);
-        return is_string($primera) ? strtolower($primera) : 'a';
+        $fallback = is_string($primera) ? strtolower($primera) : 'a';
+        
+        // Log: detectar si falta respuesta correcta
+        if ($clave === '') {
+            error_log('⚠️ ADVERTENCIA: Pregunta sin respuesta_correcta. Usando fallback: ' . $fallback);
+        } elseif (!isset($opciones[$clave])) {
+            error_log('⚠️ ADVERTENCIA: Respuesta_correcta "' . $clave . '" no existe en opciones. Usando fallback: ' . $fallback);
+        }
+        
+        return $fallback;
     }
 
     private function procesarPresentacion(): void {
@@ -430,48 +710,36 @@ class DiscipularEvaluacionController extends BaseController {
         }
 
         $respuestasCerradas = (array)($_POST['respuesta'] ?? []);
-        $respuestasAbiertas = (array)($_POST['respuesta_abierta'] ?? []);
-        $respondidas = 0;
         $correctas = 0;
-        $total = count($preguntas);
+        $total = 0;
         $respuestasGuardadas = [];
 
         foreach ($preguntas as $index => $pregunta) {
             $indice = (string)$index;
             $tipoPregunta = strtolower(trim((string)($pregunta['tipo'] ?? 'cerrada')));
-            if ($tipoPregunta === 'abierta') {
-                $respuestaTexto = trim((string)($respuestasAbiertas[$indice] ?? ''));
-                $estaRespondida = $respuestaTexto !== '';
-                if ($estaRespondida) {
-                    $respondidas++;
-                    $correctas++;
-                }
-
-                $respuestasGuardadas[] = [
-                    'tipo' => 'abierta',
-                    'pregunta' => (string)($pregunta['enunciado'] ?? ''),
-                    'respuesta_texto' => $respuestaTexto,
-                    'respondida' => $estaRespondida,
-                ];
+            if ($tipoPregunta !== 'cerrada') {
                 continue;
             }
 
             $opciones = (array)($pregunta['opciones'] ?? []);
+            if (empty($opciones)) {
+                continue;
+            }
+
+            $total++;
             $respuestaClave = trim((string)($respuestasCerradas[$indice] ?? ''));
             $estaRespondida = ($respuestaClave !== '' && isset($opciones[$respuestaClave]));
             $correctaEsperada = strtolower(trim((string)($pregunta['respuesta_correcta'] ?? '')));
-            if ($estaRespondida) {
-                $respondidas++;
-            }
 
-            $esCorrecta = false;
-            if ($estaRespondida) {
-                // Compatibilidad: evaluaciones antiguas sin respuesta correcta definida.
-                if ($correctaEsperada === '' || !isset($opciones[$correctaEsperada])) {
-                    $esCorrecta = true;
-                } else {
-                    $esCorrecta = ($respuestaClave === $correctaEsperada);
-                }
+            // VALIDACIÓN CRÍTICA: respuesta_correcta DEBE estar definida
+            if ($correctaEsperada === '' || !isset($opciones[$correctaEsperada])) {
+                // NO marcar como correcta si falta respuesta esperada
+                // Esto indica un problema en los datos
+                $esCorrecta = false;
+                error_log('⚠️ ERROR: Pregunta sin respuesta_correcta válida. ID Evaluación: ' . $idEvaluacion . ', Índice: ' . $indice);
+            } else {
+                // Comparación normal
+                $esCorrecta = $estaRespondida && ($respuestaClave === $correctaEsperada);
             }
 
             if ($esCorrecta) {
@@ -489,16 +757,15 @@ class DiscipularEvaluacionController extends BaseController {
             ];
         }
 
-        $minimoRequerido = min(4, $total);
-        if ($respondidas < $minimoRequerido) {
-            $this->redirigirConMensaje('Debes responder al menos ' . $minimoRequerido . ' pregunta(s) para enviar la evaluación.', 'error', $idEvaluacion);
+        if ($total <= 0) {
+            $this->redirigirConMensaje('La evaluación no tiene preguntas cerradas válidas.', 'error', $idEvaluacion);
         }
 
-        $puntaje = $total > 0 ? round(($correctas / $total) * 100, 2) : 0.0;
+        $puntaje = round(($correctas / $total) * 100, 2);
         $puntajeMinimo = max(80.0, (float)($evaluacion['Puntaje_Minimo'] ?? 80));
         $aprobado = $puntaje >= $puntajeMinimo;
 
-        $this->model->guardarResultado([
+        $idResultado = $this->model->guardarResultado([
             'id_evaluacion' => $idEvaluacion,
             'id_persona' => $idPersona,
             'intento_numero' => $intentoEsperado,
@@ -509,15 +776,21 @@ class DiscipularEvaluacionController extends BaseController {
             'aprobado' => $aprobado,
         ]);
 
+        // Modo automatico: al presentar evaluacion se marca asistencia en Capacitacion Destino.
+        $nivelEvaluacion = (int)($evaluacion['Nivel'] ?? 0);
+        $moduloEvaluacion = (int)($evaluacion['Modulo_Numero'] ?? 0);
+        if ($idResultado > 0 && $nivelEvaluacion > 0) {
+            $this->registrarAsistenciaClaseDiscipulo($idPersona, $nivelEvaluacion, $moduloEvaluacion);
+        }
+
         $this->limpiarTimerIntento($idEvaluacion);
 
         $mensaje = $aprobado
             ? 'Evaluación enviada. Correctas: ' . $correctas . ' de ' . $total . '. Puntaje: ' . $puntaje . '%. ¡Aprobaste!'
             : 'Evaluación enviada. Correctas: ' . $correctas . ' de ' . $total . '. Puntaje: ' . $puntaje . '%. No alcanzaste el mínimo.';
 
-        // Tras enviar, cerramos el cuestionario y volvemos al listado.
-        // Si aún tiene intentos, podrá abrirlo de nuevo desde el botón "Volver a presentar".
-        $this->redirigirConMensaje($mensaje, $aprobado ? 'success' : 'error');
+        // Tras enviar, se muestra feedback inmediato del intento guardado.
+        $this->redirigirConMensaje($mensaje, $aprobado ? 'success' : 'error', $idEvaluacion, $idResultado);
     }
 
     private function procesarConfigurarFechas(): void {
@@ -595,11 +868,12 @@ class DiscipularEvaluacionController extends BaseController {
         return AuthController::tienePermiso(self::MODULO_CONFIG_FECHAS, 'editar');
     }
 
-    private function redirigirConMensaje(string $mensaje, string $tipo, int $idEvaluacion = 0): void {
+    private function redirigirConMensaje(string $mensaje, string $tipo, int $idEvaluacion = 0, int $idResultado = 0): void {
         $contexto = $this->obtenerContextoMaterialDesdeRequest();
         $queryContexto = $this->construirQueryContextoMaterial($contexto);
         $queryEvaluacion = $idEvaluacion > 0 ? '&evaluacion=' . $idEvaluacion : '';
-        $this->redirect('home/discipular/evaluaciones' . $queryContexto . $queryEvaluacion . '&mensaje=' . urlencode($mensaje) . '&tipo=' . urlencode($tipo));
+        $queryResultado = $idResultado > 0 ? '&resultado=' . $idResultado : '';
+        $this->redirect('programas/evaluaciones' . $queryContexto . $queryEvaluacion . $queryResultado . '&mensaje=' . urlencode($mensaje) . '&tipo=' . urlencode($tipo));
     }
 
     private function obtenerContextoMaterialDesdeRequest(): array {
@@ -608,11 +882,10 @@ class DiscipularEvaluacionController extends BaseController {
         $moduloRaw = $_POST['modulo'] ?? $_POST['modulo_numero'] ?? $_POST['filtro_modulo_contexto'] ?? $_GET['modulo'] ?? 0;
         $leccionRaw = $_POST['leccion'] ?? $_POST['filtro_leccion_contexto'] ?? $_GET['leccion'] ?? '';
 
-        $fromMaterial = !empty($fromMaterialRaw);
         $nivel = (int)$nivelRaw;
         $modulo = (int)$moduloRaw;
 
-        if (!$fromMaterial || !$this->esContextoNivelModuloValido($nivel, $modulo)) {
+        if (!$this->esContextoNivelModuloValido($nivel, $modulo)) {
             return [];
         }
 
@@ -671,6 +944,109 @@ class DiscipularEvaluacionController extends BaseController {
         }
 
         return $url;
+    }
+
+    private function construirUrlIrClase(int $nivel, int $modulo): string {
+        return PUBLIC_URL
+            . '?url=programas/ir-clase'
+            . '&nivel=' . $nivel
+            . '&modulo=' . $modulo;
+    }
+
+    private function resolverProgramaCapDestinoPorNivel(int $nivel): string {
+        if ($nivel === 1) {
+            return 'capacitacion_destino_nivel_1';
+        }
+        if ($nivel === 2) {
+            return 'capacitacion_destino_nivel_2';
+        }
+        if ($nivel === 3) {
+            return 'capacitacion_destino_nivel_3';
+        }
+
+        return '';
+    }
+
+    private function registrarAsistenciaClaseDiscipulo(int $idPersona, int $nivel, int $moduloNumero = 0): void {
+        $idPersona = (int)$idPersona;
+        $programaLinea = $this->resolverProgramaCapDestinoPorNivel($nivel);
+        if ($idPersona <= 0 || $programaLinea === '') {
+            return;
+        }
+
+        require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+        require_once APP . '/Models/EscuelaFormacionAsistenciaClase.php';
+
+        $inscripcionModel = new EscuelaFormacionInscripcion();
+        $asistenciaModel = new EscuelaFormacionAsistenciaClase();
+
+        $programasInscripcion = [$programaLinea];
+        if ($nivel === 1) {
+            $programasInscripcion[] = 'capacitacion_destino';
+        }
+
+        $idInscripcion = 0;
+        foreach ($programasInscripcion as $progIns) {
+            $rows = $inscripcionModel->query(
+                "SELECT Id_Inscripcion
+                 FROM escuela_formacion_inscripcion
+                 WHERE Id_Persona = ? AND Programa = ?
+                 ORDER BY Fecha_Registro DESC, Id_Inscripcion DESC
+                 LIMIT 1",
+                [$idPersona, $progIns]
+            );
+            if (!empty($rows)) {
+                $idInscripcion = (int)($rows[0]['Id_Inscripcion'] ?? 0);
+                if ($idInscripcion > 0) {
+                    break;
+                }
+            }
+        }
+
+        if ($idInscripcion > 0) {
+            $inscripcionModel->actualizarAsistenciaClase($idInscripcion, true);
+        }
+
+        // Vista material/pagos usan claves distintas; registramos en ambas para que cuadren reportes y planilla.
+        $moduloMaterial = 'modulo_' . $nivel;
+        $programaMaterial = 'capacitacion_destino';
+        $moduloPagos = 'discipular';
+
+        $numeroClase = 0;
+        if ($moduloNumero > 0) {
+            $permitidos = self::CONFIG_CAP_DESTINO[$nivel] ?? [];
+            $idx = array_search($moduloNumero, $permitidos, true);
+            if ($idx !== false) {
+                $numeroClase = $idx + 1;
+            }
+        }
+
+        if ($numeroClase <= 0) {
+            $numeroClase = $asistenciaModel->getNumeroClasePorFecha($moduloMaterial, $programaMaterial, date('Y-m-d'));
+        }
+        if ($numeroClase <= 0) {
+            $numeroClase = $asistenciaModel->getNumeroClasePorFecha($moduloPagos, $programaLinea, date('Y-m-d'));
+        }
+
+        if ($numeroClase <= 0 && $moduloNumero > 0) {
+            $numeroClase = (($moduloNumero - 1) % 2) + 1;
+        }
+
+        if ($numeroClase <= 0) {
+            $actuales = $asistenciaModel->getAsistenciasPorPrograma([$idPersona], $moduloMaterial, $programaMaterial);
+            $clasesPersona = (array)($actuales[$idPersona] ?? []);
+            for ($i = 1; $i <= 10; $i++) {
+                if (empty($clasesPersona[$i])) {
+                    $numeroClase = $i;
+                    break;
+                }
+            }
+        }
+
+        if ($numeroClase > 0) {
+            $asistenciaModel->upsertAsistencia($idPersona, $moduloMaterial, $programaMaterial, $numeroClase, true);
+            $asistenciaModel->upsertAsistencia($idPersona, $moduloPagos, $programaLinea, $numeroClase, true);
+        }
     }
 
     private function obtenerMapaLeccionesMaterial(): array {
@@ -775,7 +1151,6 @@ class DiscipularEvaluacionController extends BaseController {
         $nivelesSet = array_fill_keys($nivelesPermitidos, true);
         $accesos = [];
         $primerLinkPorNivel = [];
-        $primerEvalPorNivel = [];
         $primerEvalPorNivelModulo = [];
 
         $conexiones = (array)$this->model->listarConexionesClaseCapacitacionDestino();
@@ -813,10 +1188,6 @@ class DiscipularEvaluacionController extends BaseController {
                 continue;
             }
 
-            if (!isset($primerEvalPorNivel[$nivel])) {
-                $primerEvalPorNivel[$nivel] = $idEvaluacion;
-            }
-
             $keyNivelModulo = $nivel . '_' . $modulo;
             if (!isset($primerEvalPorNivelModulo[$keyNivelModulo])) {
                 $primerEvalPorNivelModulo[$keyNivelModulo] = $idEvaluacion;
@@ -839,7 +1210,7 @@ class DiscipularEvaluacionController extends BaseController {
             }
 
             if ((string)$accesos[$key]['url_evaluacion'] === '') {
-                $accesos[$key]['url_evaluacion'] = PUBLIC_URL . '?url=home/discipular/evaluaciones&evaluacion=' . $idEvaluacion;
+                $accesos[$key]['url_evaluacion'] = PUBLIC_URL . '?url=programas/evaluaciones&evaluacion=' . $idEvaluacion;
             }
         }
 
@@ -878,12 +1249,13 @@ class DiscipularEvaluacionController extends BaseController {
 
             $keyNivelModulo = $nivel . '_' . $modulo;
             $idEvaluacionDestino = (int)($primerEvalPorNivelModulo[$keyNivelModulo] ?? 0);
-            if ($idEvaluacionDestino <= 0) {
-                $idEvaluacionDestino = (int)($primerEvalPorNivel[$nivel] ?? 0);
-            }
 
             if ($idEvaluacionDestino > 0) {
-                $accesos[$key]['url_evaluacion'] = PUBLIC_URL . '?url=home/discipular/evaluaciones&evaluacion=' . $idEvaluacionDestino;
+                $accesos[$key]['url_evaluacion'] = PUBLIC_URL . '?url=programas/evaluaciones&evaluacion=' . $idEvaluacionDestino;
+            }
+
+            if (trim((string)($accesos[$key]['url_clase'] ?? '')) !== '') {
+                $accesos[$key]['url_clase'] = $this->construirUrlIrClase($nivel, $modulo);
             }
         }
 
@@ -900,6 +1272,527 @@ class DiscipularEvaluacionController extends BaseController {
         });
 
         return array_values($accesos);
+    }
+
+    private function asegurarTablasTareasMaterialHub(): void {
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return;
+        }
+
+        $sqlTarea = "CREATE TABLE IF NOT EXISTS material_hub_tarea (
+                        Id_Tarea INT AUTO_INCREMENT PRIMARY KEY,
+                        Modulo VARCHAR(80) NOT NULL,
+                        Nivel TINYINT UNSIGNED NOT NULL,
+                        Modulo_Numero TINYINT UNSIGNED NULL,
+                        Titulo VARCHAR(255) NOT NULL,
+                        Descripcion TEXT NULL,
+                        Fecha_Limite DATE NULL,
+                        Estado VARCHAR(20) NOT NULL DEFAULT 'activa',
+                        Creado_Por INT NULL,
+                        Fecha_Creacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        KEY idx_modulo_nivel (Modulo, Nivel),
+                        KEY idx_modulo_nivel_modulo (Modulo, Nivel, Modulo_Numero)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $pdo->exec($sqlTarea);
+
+        $sqlEntrega = "CREATE TABLE IF NOT EXISTS material_hub_tarea_entrega (
+                        Id_Entrega INT AUTO_INCREMENT PRIMARY KEY,
+                        Id_Tarea INT NOT NULL,
+                        Id_Persona INT NOT NULL,
+                        Nombre_Archivo VARCHAR(255) NOT NULL,
+                        Nombre_Original VARCHAR(255) NULL,
+                        Comentario TEXT NULL,
+                        Nota DECIMAL(5,2) NULL,
+                        Retroalimentacion TEXT NULL,
+                        Estado_Calificacion VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+                        Calificado_Por INT NULL,
+                        Fecha_Entrega DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        Fecha_Calificacion DATETIME NULL,
+                        KEY idx_tarea (Id_Tarea),
+                        KEY idx_persona (Id_Persona),
+                        KEY idx_tarea_persona (Id_Tarea, Id_Persona)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+        $pdo->exec($sqlEntrega);
+    }
+
+    private function obtenerDirectorioTareasCapDestino(): string {
+        return ROOT . '/public/uploads/material_hub_tareas/capacitacion_destino';
+    }
+
+    private function guardarArchivoEntregaTareaDiscipulo(int $idTarea, int $idPersona, array $archivo, int $indice = 1): array {
+        if (($archivo['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new Exception('Error al subir archivo de tarea.');
+        }
+
+        $tamano = (int)($archivo['size'] ?? 0);
+        if ($tamano <= 0) {
+            throw new Exception('Archivo de tarea vacío o inválido.');
+        }
+        if ($tamano > 20 * 1024 * 1024) {
+            throw new Exception('Cada archivo de tarea debe pesar máximo 20MB.');
+        }
+
+        $nombreOriginal = trim((string)($archivo['name'] ?? 'tarea.bin'));
+        $extension = strtolower((string)pathinfo($nombreOriginal, PATHINFO_EXTENSION));
+        $extension = preg_replace('/[^a-z0-9]/', '', $extension);
+        if ($extension === '') {
+            $extension = 'bin';
+        }
+        $extension = substr($extension, 0, 10);
+
+        $directorio = $this->obtenerDirectorioTareasCapDestino();
+        if (!is_dir($directorio) && !@mkdir($directorio, 0775, true) && !is_dir($directorio)) {
+            throw new Exception('No se pudo crear el directorio de tareas.');
+        }
+
+        $base = 'tarea_' . max(1, $idTarea) . '_' . max(1, $idPersona) . '_' . date('Ymd_His') . '_' . max(1, $indice);
+        $nombreFinal = $base . '.' . $extension;
+        $iter = 1;
+        while (is_file($directorio . '/' . $nombreFinal)) {
+            $iter++;
+            $nombreFinal = $base . '_' . $iter . '.' . $extension;
+        }
+
+        $destino = $directorio . '/' . $nombreFinal;
+        if (!@move_uploaded_file((string)($archivo['tmp_name'] ?? ''), $destino)) {
+            throw new Exception('No se pudo guardar un archivo de tarea en el servidor.');
+        }
+
+        return [
+            'nombre' => $nombreFinal,
+            'original' => $nombreOriginal,
+        ];
+    }
+
+    private function listarTareasActivasPorModulosDiscipulo(int $idPersona, array $modulosPermitidos): array {
+        $idPersona = (int)$idPersona;
+        if ($idPersona <= 0 || empty($modulosPermitidos)) {
+            return [];
+        }
+
+        $this->asegurarTablasTareasMaterialHub();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return [];
+        }
+
+        $condiciones = [];
+        $params = [$idPersona, 'capacitacion_destino'];
+        foreach ($modulosPermitidos as $permiso) {
+            $nivel = (int)($permiso['nivel'] ?? 0);
+            $modulo = (int)($permiso['modulo'] ?? 0);
+            if ($nivel <= 0 || $modulo <= 0) {
+                continue;
+            }
+            $condiciones[] = '(t.Nivel = ? AND t.Modulo_Numero = ?)';
+            $params[] = $nivel;
+            $params[] = $modulo;
+        }
+
+        if (empty($condiciones)) {
+            return [];
+        }
+
+        $sql = "SELECT
+                    t.Id_Tarea,
+                    t.Nivel,
+                    COALESCE(t.Modulo_Numero, 0) AS Modulo_Numero,
+                    t.Titulo,
+                    t.Descripcion,
+                    t.Fecha_Limite,
+                    t.Fecha_Creacion,
+                    (SELECT COUNT(*) FROM material_hub_tarea_entrega e WHERE e.Id_Tarea = t.Id_Tarea AND e.Id_Persona = ?) AS total_entregas_usuario
+                FROM material_hub_tarea t
+                WHERE t.Modulo = ?
+                  AND t.Estado = 'activa'
+                  AND (" . implode(' OR ', $condiciones) . ")
+                ORDER BY t.Fecha_Creacion DESC, t.Id_Tarea DESC";
+
+        // Mueve idPersona al inicio real de params de subconsulta.
+        $paramsSql = array_merge([$idPersona, 'capacitacion_destino'], array_slice($params, 2));
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($paramsSql);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $idsTarea = [];
+        foreach ($rows as $rowTmp) {
+            $idTareaTmp = (int)($rowTmp['Id_Tarea'] ?? 0);
+            if ($idTareaTmp > 0) {
+                $idsTarea[$idTareaTmp] = $idTareaTmp;
+            }
+        }
+        $entregasPorTarea = $this->listarEntregasUsuarioPorTareasDiscipulo($idPersona, array_values($idsTarea));
+
+        $map = [];
+        foreach ($rows as $row) {
+            $nivel = (int)($row['Nivel'] ?? 0);
+            $modulo = (int)($row['Modulo_Numero'] ?? 0);
+            if ($nivel <= 0 || $modulo <= 0) {
+                continue;
+            }
+
+            $key = $nivel . '_' . $modulo;
+            if (!isset($map[$key])) {
+                $map[$key] = [];
+            }
+            $row['entregas_usuario'] = (array)($entregasPorTarea[(int)($row['Id_Tarea'] ?? 0)] ?? []);
+            $map[$key][] = $row;
+        }
+
+        return $map;
+    }
+
+    private function listarEntregasUsuarioPorTareasDiscipulo(int $idPersona, array $idsTarea): array {
+        $idPersona = (int)$idPersona;
+        $idsTarea = array_values(array_filter(array_map('intval', $idsTarea), static function($id) {
+            return $id > 0;
+        }));
+
+        if ($idPersona <= 0 || empty($idsTarea)) {
+            return [];
+        }
+
+        $this->asegurarTablasTareasMaterialHub();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsTarea), '?'));
+        $sql = "SELECT
+                    e.Id_Entrega,
+                    e.Id_Tarea,
+                    e.Nombre_Archivo,
+                    e.Nombre_Original,
+                    e.Comentario,
+                    e.Nota,
+                    e.Retroalimentacion,
+                    e.Estado_Calificacion,
+                    e.Fecha_Entrega,
+                    e.Fecha_Calificacion
+                FROM material_hub_tarea_entrega e
+                WHERE e.Id_Persona = ?
+                  AND e.Id_Tarea IN ({$placeholders})
+                ORDER BY e.Fecha_Entrega DESC, e.Id_Entrega DESC";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(array_merge([$idPersona], $idsTarea));
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $map = [];
+        foreach ($rows as $row) {
+            $idTarea = (int)($row['Id_Tarea'] ?? 0);
+            if ($idTarea <= 0) {
+                continue;
+            }
+            if (!isset($map[$idTarea])) {
+                $map[$idTarea] = [];
+            }
+            $map[$idTarea][] = $row;
+        }
+
+        return $map;
+    }
+
+    private function redirigirAccionTareaDiscipulo(string $mensaje, string $tipo, bool $volverTareas, int $nivelRetorno, int $moduloRetorno): void {
+        if ($volverTareas) {
+            $ruta = 'programas/tareas';
+            if ($nivelRetorno > 0) {
+                $ruta .= '&nivel=' . $nivelRetorno;
+            }
+            if ($moduloRetorno > 0) {
+                $ruta .= '&modulo=' . $moduloRetorno;
+            }
+            $ruta .= '&mensaje=' . urlencode($mensaje) . '&tipo=' . urlencode($tipo);
+            $this->redirect($ruta);
+        }
+
+        $this->redirigirConMensaje($mensaje, $tipo);
+    }
+
+    private function procesarEntregaTareaDiscipulo(): void {
+        $volverTareas = !empty($_POST['volver_tareas']) || !empty($_GET['volver_tareas']);
+        $nivelRetorno = (int)($_POST['nivel'] ?? $_GET['nivel'] ?? 0);
+        $moduloRetorno = (int)($_POST['modulo_numero'] ?? $_GET['modulo'] ?? 0);
+
+        $redirigir = function(string $mensaje, string $tipo) use ($volverTareas, $nivelRetorno, $moduloRetorno): void {
+            $this->redirigirAccionTareaDiscipulo($mensaje, $tipo, $volverTareas, $nivelRetorno, $moduloRetorno);
+        };
+
+        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+        if ($idPersona <= 0) {
+            $redirigir('No se pudo identificar tu usuario para entregar la tarea.', 'error');
+        }
+
+        $idTarea = (int)($_POST['id_tarea'] ?? 0);
+        $nivel = (int)($_POST['nivel'] ?? 0);
+        $modulo = (int)($_POST['modulo_numero'] ?? 0);
+        $comentario = trim((string)($_POST['comentario_entrega'] ?? ''));
+
+        if ($idTarea <= 0 || $nivel <= 0 || $modulo <= 0) {
+            $redirigir('Datos incompletos para subir la tarea.', 'error');
+        }
+
+        if (!isset($_FILES['tarea_archivos'])) {
+            $redirigir('Debes seleccionar al menos un archivo.', 'error');
+        }
+
+        $nivelesPermitidos = $this->obtenerNivelesPermitidosPorInscripcion($idPersona);
+        if (!in_array($nivel, $nivelesPermitidos, true)) {
+            $redirigir('No tienes acceso a tareas de ese nivel.', 'error');
+        }
+
+        $modulosNivel = self::CONFIG_CAP_DESTINO[$nivel] ?? [];
+        if (!in_array($modulo, $modulosNivel, true)) {
+            $redirigir('No tienes acceso a tareas de ese módulo.', 'error');
+        }
+
+        $this->asegurarTablasTareasMaterialHub();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            $redirigir('No se pudo conectar para guardar tu entrega.', 'error');
+        }
+
+        $stmtTarea = $pdo->prepare("SELECT Id_Tarea, Nivel, COALESCE(Modulo_Numero, 0) AS Modulo_Numero FROM material_hub_tarea WHERE Id_Tarea = ? AND Modulo = 'capacitacion_destino' AND Estado = 'activa' LIMIT 1");
+        $stmtTarea->execute([$idTarea]);
+        $tarea = $stmtTarea->fetch(PDO::FETCH_ASSOC);
+        if (!$tarea) {
+            $redirigir('La tarea no está disponible.', 'error');
+        }
+
+        $nivelTarea = (int)($tarea['Nivel'] ?? 0);
+        $moduloTarea = (int)($tarea['Modulo_Numero'] ?? 0);
+        if ($nivelTarea !== $nivel) {
+            $redirigir('La tarea no corresponde a tu nivel seleccionado.', 'error');
+        }
+        if ($moduloTarea > 0 && $moduloTarea !== $modulo) {
+            $redirigir('La tarea no corresponde al módulo seleccionado.', 'error');
+        }
+
+        $insert = $pdo->prepare(
+            "INSERT INTO material_hub_tarea_entrega
+             (Id_Tarea, Id_Persona, Nombre_Archivo, Nombre_Original, Comentario, Estado_Calificacion)
+             VALUES (?, ?, ?, ?, ?, 'pendiente')"
+        );
+
+        $cantidad = 0;
+        $indice = 1;
+        $archivos = $_FILES['tarea_archivos'];
+        if (is_array($archivos['name'] ?? null)) {
+            $total = count($archivos['name']);
+            for ($i = 0; $i < $total; $i++) {
+                if ((int)($archivos['error'][$i] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                    continue;
+                }
+
+                $archivo = [
+                    'name' => $archivos['name'][$i] ?? '',
+                    'type' => $archivos['type'][$i] ?? '',
+                    'tmp_name' => $archivos['tmp_name'][$i] ?? '',
+                    'error' => $archivos['error'][$i] ?? UPLOAD_ERR_NO_FILE,
+                    'size' => $archivos['size'][$i] ?? 0,
+                ];
+
+                $guardado = $this->guardarArchivoEntregaTareaDiscipulo($idTarea, $idPersona, $archivo, $indice);
+                $insert->execute([
+                    $idTarea,
+                    $idPersona,
+                    (string)($guardado['nombre'] ?? ''),
+                    (string)($guardado['original'] ?? ''),
+                    $comentario !== '' ? $comentario : null,
+                ]);
+                $cantidad++;
+                $indice++;
+            }
+        } else {
+            $guardado = $this->guardarArchivoEntregaTareaDiscipulo($idTarea, $idPersona, $archivos, $indice);
+            $insert->execute([
+                $idTarea,
+                $idPersona,
+                (string)($guardado['nombre'] ?? ''),
+                (string)($guardado['original'] ?? ''),
+                $comentario !== '' ? $comentario : null,
+            ]);
+            $cantidad = 1;
+        }
+
+        if ($cantidad <= 0) {
+            $redirigir('No se detectaron archivos válidos para la entrega.', 'error');
+        }
+
+        $redirigir('Tarea enviada correctamente con ' . $cantidad . ' archivo(s).', 'success');
+    }
+
+    private function procesarEditarEntregaTareaDiscipulo(): void {
+        $volverTareas = !empty($_POST['volver_tareas']) || !empty($_GET['volver_tareas']);
+        $nivelRetorno = (int)($_POST['nivel'] ?? $_GET['nivel'] ?? 0);
+        $moduloRetorno = (int)($_POST['modulo_numero'] ?? $_GET['modulo'] ?? 0);
+
+        $redirigir = function(string $mensaje, string $tipo) use ($volverTareas, $nivelRetorno, $moduloRetorno): void {
+            $this->redirigirAccionTareaDiscipulo($mensaje, $tipo, $volverTareas, $nivelRetorno, $moduloRetorno);
+        };
+
+        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+        $idEntrega = (int)($_POST['id_entrega'] ?? 0);
+        $comentario = trim((string)($_POST['comentario_entrega_editar'] ?? ''));
+
+        if ($idPersona <= 0 || $idEntrega <= 0) {
+            $redirigir('No se pudo identificar la entrega a editar.', 'error');
+        }
+
+        $this->asegurarTablasTareasMaterialHub();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            $redirigir('No se pudo conectar para editar tu entrega.', 'error');
+        }
+
+        $sqlEntrega = "SELECT
+                            e.Id_Entrega,
+                            e.Id_Tarea,
+                            e.Id_Persona,
+                            e.Nombre_Archivo,
+                            t.Nivel,
+                            COALESCE(t.Modulo_Numero, 0) AS Modulo_Numero
+                        FROM material_hub_tarea_entrega e
+                        INNER JOIN material_hub_tarea t ON t.Id_Tarea = e.Id_Tarea
+                        WHERE e.Id_Entrega = ?
+                          AND e.Id_Persona = ?
+                          AND t.Modulo = 'capacitacion_destino'
+                        LIMIT 1";
+        $stmtEntrega = $pdo->prepare($sqlEntrega);
+        $stmtEntrega->execute([$idEntrega, $idPersona]);
+        $entrega = $stmtEntrega->fetch(PDO::FETCH_ASSOC);
+
+        if (!$entrega) {
+            $redirigir('No se encontró la entrega seleccionada.', 'error');
+        }
+
+        $nivelEntrega = (int)($entrega['Nivel'] ?? 0);
+        $moduloEntrega = (int)($entrega['Modulo_Numero'] ?? 0);
+        if ($nivelRetorno > 0 && $nivelEntrega !== $nivelRetorno) {
+            $redirigir('La entrega no corresponde al nivel seleccionado.', 'error');
+        }
+        if ($moduloRetorno > 0 && $moduloEntrega > 0 && $moduloEntrega !== $moduloRetorno) {
+            $redirigir('La entrega no corresponde al módulo seleccionado.', 'error');
+        }
+
+        $campos = [
+            'Comentario = ?',
+            'Estado_Calificacion = \'pendiente\'',
+            'Nota = NULL',
+            'Retroalimentacion = NULL',
+            'Calificado_Por = NULL',
+            'Fecha_Calificacion = NULL',
+        ];
+        $params = [$comentario !== '' ? $comentario : null];
+
+        $archivoAnterior = trim((string)($entrega['Nombre_Archivo'] ?? ''));
+        if (isset($_FILES['tarea_archivo_editar']) && (int)($_FILES['tarea_archivo_editar']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            $idTarea = (int)($entrega['Id_Tarea'] ?? 0);
+            $guardado = $this->guardarArchivoEntregaTareaDiscipulo($idTarea, $idPersona, $_FILES['tarea_archivo_editar'], 1);
+            $campos[] = 'Nombre_Archivo = ?';
+            $campos[] = 'Nombre_Original = ?';
+            $params[] = (string)($guardado['nombre'] ?? '');
+            $params[] = (string)($guardado['original'] ?? '');
+        }
+
+        $params[] = $idEntrega;
+        $params[] = $idPersona;
+
+        $sqlUpdate = "UPDATE material_hub_tarea_entrega
+                      SET " . implode(', ', $campos) . "
+                      WHERE Id_Entrega = ? AND Id_Persona = ?";
+        $stmtUpdate = $pdo->prepare($sqlUpdate);
+        $stmtUpdate->execute($params);
+
+        if (isset($guardado) && !empty($guardado['nombre']) && $archivoAnterior !== '' && $archivoAnterior !== (string)$guardado['nombre']) {
+            $this->eliminarArchivoEntregaTareaDiscipulo($archivoAnterior);
+        }
+
+        $redirigir('Entrega actualizada correctamente.', 'success');
+    }
+
+    private function procesarEliminarEntregaTareaDiscipulo(): void {
+        $volverTareas = !empty($_POST['volver_tareas']) || !empty($_GET['volver_tareas']);
+        $nivelRetorno = (int)($_POST['nivel'] ?? $_GET['nivel'] ?? 0);
+        $moduloRetorno = (int)($_POST['modulo_numero'] ?? $_GET['modulo'] ?? 0);
+
+        $redirigir = function(string $mensaje, string $tipo) use ($volverTareas, $nivelRetorno, $moduloRetorno): void {
+            $this->redirigirAccionTareaDiscipulo($mensaje, $tipo, $volverTareas, $nivelRetorno, $moduloRetorno);
+        };
+
+        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+        $idEntrega = (int)($_POST['id_entrega'] ?? 0);
+
+        if ($idPersona <= 0 || $idEntrega <= 0) {
+            $redirigir('No se pudo identificar la entrega a eliminar.', 'error');
+        }
+
+        $this->asegurarTablasTareasMaterialHub();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            $redirigir('No se pudo conectar para eliminar tu entrega.', 'error');
+        }
+
+        $sqlEntrega = "SELECT
+                            e.Id_Entrega,
+                            e.Nombre_Archivo,
+                            t.Nivel,
+                            COALESCE(t.Modulo_Numero, 0) AS Modulo_Numero
+                        FROM material_hub_tarea_entrega e
+                        INNER JOIN material_hub_tarea t ON t.Id_Tarea = e.Id_Tarea
+                        WHERE e.Id_Entrega = ?
+                          AND e.Id_Persona = ?
+                          AND t.Modulo = 'capacitacion_destino'
+                        LIMIT 1";
+        $stmtEntrega = $pdo->prepare($sqlEntrega);
+        $stmtEntrega->execute([$idEntrega, $idPersona]);
+        $entrega = $stmtEntrega->fetch(PDO::FETCH_ASSOC);
+
+        if (!$entrega) {
+            $redirigir('No se encontró la entrega seleccionada.', 'error');
+        }
+
+        $nivelEntrega = (int)($entrega['Nivel'] ?? 0);
+        $moduloEntrega = (int)($entrega['Modulo_Numero'] ?? 0);
+        if ($nivelRetorno > 0 && $nivelEntrega !== $nivelRetorno) {
+            $redirigir('La entrega no corresponde al nivel seleccionado.', 'error');
+        }
+        if ($moduloRetorno > 0 && $moduloEntrega > 0 && $moduloEntrega !== $moduloRetorno) {
+            $redirigir('La entrega no corresponde al módulo seleccionado.', 'error');
+        }
+
+        $stmtDelete = $pdo->prepare("DELETE FROM material_hub_tarea_entrega WHERE Id_Entrega = ? AND Id_Persona = ? LIMIT 1");
+        $stmtDelete->execute([$idEntrega, $idPersona]);
+
+        if ((int)$stmtDelete->rowCount() <= 0) {
+            $redirigir('No se pudo eliminar la entrega seleccionada.', 'error');
+        }
+
+        $archivo = trim((string)($entrega['Nombre_Archivo'] ?? ''));
+        if ($archivo !== '') {
+            $this->eliminarArchivoEntregaTareaDiscipulo($archivo);
+        }
+
+        $redirigir('Entrega eliminada correctamente.', 'success');
+    }
+
+    private function eliminarArchivoEntregaTareaDiscipulo(string $nombreArchivo): void {
+        $nombreArchivo = trim(basename($nombreArchivo));
+        if ($nombreArchivo === '') {
+            return;
+        }
+
+        $ruta = $this->obtenerDirectorioTareasCapDestino() . '/' . $nombreArchivo;
+        if (is_file($ruta)) {
+            @unlink($ruta);
+        }
     }
 
     private function construirEstadoIntento(int $idEvaluacion, int $idPersona): array {

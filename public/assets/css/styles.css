@@ -1490,6 +1490,117 @@ body.sidebar-collapsed .app-shell {
     flex: 1;
 }
 
+.sidebar-quick-access {
+    padding: 0 8px 10px;
+    border-bottom: 1px solid #ccdaed;
+    margin-bottom: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sidebar-quick-details {
+    border-radius: 14px;
+}
+
+.sidebar-quick-summary {
+    width: 100%;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    margin: 0;
+}
+
+.sidebar-quick-summary::-webkit-details-marker {
+    display: none;
+}
+
+.sidebar-quick-caret {
+    margin-left: auto;
+    flex-shrink: 0;
+    color: #2f4f87;
+    font-size: 0.86rem;
+    transition: transform 0.2s ease;
+}
+
+.sidebar-quick-details[open] .sidebar-quick-caret {
+    transform: rotate(180deg);
+}
+
+.sidebar-quick-access .sidebar-quick-details + .sidebar-quick-details {
+    margin-top: 6px;
+}
+
+.sidebar-quick-text-link.is-active {
+    color: #1a4480;
+    font-weight: 700;
+    background: rgba(56, 104, 181, 0.12);
+}
+
+.sidebar-quick-text-link.is-active i {
+    color: #1a4480;
+}
+
+.sidebar-quick-modules {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    margin-left: 2px;
+    margin-right: 2px;
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid #c5d7ee;
+    border-radius: 14px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.sidebar-quick-text-link {
+    display: flex !important;
+    width: 100%;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none !important;
+    color: #2f4f87;
+    font-size: 0.88rem;
+    font-weight: 600;
+    line-height: 1.3;
+    padding: 8px 10px;
+    border-radius: 10px;
+    box-sizing: border-box;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-quick-text-link i {
+    font-size: 1rem;
+    color: #3d6aad;
+    flex: 0 0 1.1rem;
+    width: 1.1rem;
+    text-align: center;
+}
+
+.sidebar-quick-text-link:hover {
+    color: #1a4480;
+    background: rgba(56, 104, 181, 0.09);
+    text-decoration: none !important;
+}
+
+.sidebar-quick-text-link:visited,
+.sidebar-quick-text-link:active,
+.sidebar-quick-text-link:focus {
+    text-decoration: none !important;
+    color: #2f4f87;
+}
+
+.sidebar-quick-text-link:focus-visible {
+    outline: 2px solid #5b7fc9;
+    outline-offset: 1px;
+}
+
 .sidebar-link {
     display: flex;
     align-items: center;

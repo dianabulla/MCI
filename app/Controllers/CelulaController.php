@@ -48,6 +48,7 @@ class CelulaController extends BaseController {
 
         // Generar filtro segun el rol del usuario
         $filtroCelulas = DataIsolation::generarFiltroCelulas();
+            // ...existing code...
 
         $filtroMinisterio = $_GET['ministerio'] ?? '';
         $filtroLider = $_GET['lider'] ?? '';
@@ -186,7 +187,7 @@ class CelulaController extends BaseController {
             ];
             
             $this->celulaModel->create($data);
-            $this->redirect('celulas');
+            $this->redirect('reportes&tipo=celulas');
         } else {
             $this->view('celulas/formulario');
         }
@@ -202,7 +203,7 @@ class CelulaController extends BaseController {
         $id = $_GET['id'] ?? null;
         
         if (!$id) {
-            $this->redirect('celulas');
+            $this->redirect('reportes&tipo=celulas');
         }
 
         if (!$this->puedeAccederCelula($id)) {
@@ -234,7 +235,7 @@ class CelulaController extends BaseController {
             }
             
             $this->celulaModel->update($id, $data);
-            $this->redirect('celulas');
+            $this->redirect('reportes&tipo=celulas');
         } else {
             $data = [
                 'celula' => $this->celulaModel->getById($id)
@@ -309,7 +310,7 @@ class CelulaController extends BaseController {
             $this->celulaModel->delete($id);
         }
         
-        $this->redirect('celulas');
+            $this->redirect('reportes&tipo=celulas');
     }
 
     /**

@@ -1,14 +1,16 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
 <div class="page-header">
-    <h2>Códigos teens-kids</h2>
+    <h2>Códigos Teens</h2>
 </div>
 
 <div class="card teen-topbar-card" style="margin-bottom:20px;">
     <div class="card-body">
         <div class="page-actions personas-mobile-stack teen-topbar-actions">
-        <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-nav-pill">Registro teens-kids</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-nav-pill">Registro</a>
         <a href="<?= PUBLIC_URL ?>index.php?url=teen/codigos" class="btn btn-nav-pill active">Códigos</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=teen" class="btn btn-nav-pill">Material</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=entrega_obsequio" class="btn btn-nav-pill">Obsequios</a>
         </div>
     </div>
 </div>
