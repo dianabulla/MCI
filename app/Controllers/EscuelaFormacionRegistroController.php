@@ -41,7 +41,7 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         return AuthController::esAdministrador()
-            || AuthController::tienePermiso('asistencias', 'ver')
+            || AuthController::puede('asistencias:ver')
             || AuthController::tieneCoordinacionTotalProgramas();
     }
 
@@ -863,95 +863,6 @@ class EscuelaFormacionRegistroController extends BaseController {
         ]);
     }
 
-    private function esRolDiscipuloPersona(int $idPersona): bool {
-        if ($idPersona <= 0) {
-            return false;
-        }
-
-        $rows = $this->personaModel->query(
-            "SELECT p.Id_Rol, COALESCE(r.Nombre_Rol, '') AS Nombre_Rol
-             FROM persona p
-             LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
-             WHERE p.Id_Persona = ?
-             LIMIT 1",
-            [$idPersona]
-        );
-
-        if (empty($rows)) {
-            return false;
-        }
-
-        $row = (array)$rows[0];
-        $idRol = (int)($row['Id_Rol'] ?? 0);
-        if ($idRol === 2) {
-            return true;
-        }
-
-        $rolNombre = $this->normalizarTextoRol((string)($row['Nombre_Rol'] ?? ''));
-        return strpos($rolNombre, 'discipul') !== false
-            || strpos($rolNombre, 'disipul') !== false
-            || strpos($rolNombre, 'discipl') !== false
-            || strpos($rolNombre, 'disipl') !== false;
-    }
-
-    private function asegurarCredencialesDiscipulo(int $idPersona, string $cedula): void {
-        $idPersona = (int)$idPersona;
-        $cedula = $this->normalizarDocumento($cedula);
-        if ($idPersona <= 0 || $cedula === '') {
-            return;
-        }
-
-        // Regla: solo crear credenciales automáticas para rol discípulo.
-        // No sobreescribe cuentas existentes (p.ej. líderes u otros roles).
-        if (!$this->esRolDiscipuloPersona($idPersona)) {
-            return;
-        }
-
-        $persona = $this->personaModel->getById($idPersona);
-        if (empty($persona)) {
-            return;
-        }
-
-        $usuarioActual = trim((string)($persona['Usuario'] ?? ''));
-        $hashActual = trim((string)($persona['Contrasena'] ?? ''));
-
-        if ($usuarioActual !== '') {
-            return;
-        }
-
-        $this->personaModel->setUsuario($idPersona, $cedula, $cedula);
-    }
-
-    private function asignarSegundoRolDiscipuloAutomatico(int $idPersona, string $programa): void {
-        $idPersona = (int)$idPersona;
-        $programa = trim((string)$programa);
-        if ($idPersona <= 0) {
-            return;
-        }
-
-        if (!in_array($programa, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
-            return;
-        }
-
-        $persona = $this->personaModel->getById($idPersona);
-        if (empty($persona)) {
-            return;
-        }
-
-        $idRolActual = (int)($persona['Id_Rol'] ?? 0);
-        if ($idRolActual > 0) {
-            $this->userRoleModel->sincronizarRolPrincipal($idPersona, $idRolActual);
-        }
-
-        $idRolDiscipulo = $this->userRoleModel->buscarRolPorAlias('discipulo');
-        if ($idRolDiscipulo <= 0) {
-            return;
-        }
-
-        // Inserción idempotente: no falla si ya existe la relación.
-        $this->userRoleModel->asignarRol($idPersona, $idRolDiscipulo);
-    }
-
     private function generarReferenciaCorta() {
         $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         $ref = 'R';
@@ -1762,34 +1673,244 @@ class EscuelaFormacionRegistroController extends BaseController {
         return 'rojo';
     }
 
-    private function coincideFiltroGeneroEscuela(string $filtroGenero, string $genero): bool {
-        $filtroGenero = strtolower(trim($filtroGenero));
-        $genero = strtolower(trim($genero));
+  /**
+     * Claves alternativas (cédula, solo dígitos, SIN-CEDULA-id) para enlazar pagos con inscripciones.
+     */
+    private function clavesIdentidadEscuelaFormacion(string $cedula = '', int $idPersona = 0, string $cedulaClave = ''): array {
+        $claves = [];
+        $cedulaClave = trim($cedulaClave);
+        $cedula = trim($cedula);
+        $idPersona = max(0, $idPersona);
 
-        if ($filtroGenero === '') {
+        if ($cedulaClave !== '') {
+            $claves[] = $cedulaClave;
+        }
+        if ($cedula !== '') {
+            $claves[] = $cedula;
+            $soloDigitos = preg_replace('/\D+/', '', $cedula);
+            if ($soloDigitos !== '') {
+                $claves[] = $soloDigitos;
+            }
+        }
+        if ($idPersona > 0) {
+            $claves[] = 'SIN-CEDULA-' . $idPersona;
+        }
+
+        return array_values(array_unique(array_filter($claves, static function($clave) {
+            return trim((string)$clave) !== '';
+        })));
+    }
+
+    private function construirMapaPagosPorClave(array $resumenPagos): array {
+        $mapa = [];
+
+        foreach ((array)$resumenPagos as $filaPago) {
+            $totalPagado = (float)($filaPago['Total_Pagado'] ?? 0);
+            $totalAbonos = (float)($filaPago['Total_Abonos'] ?? 0);
+            $totalPagoCompleto = array_key_exists('Total_Pago_Completo', (array)$filaPago)
+                ? (float)($filaPago['Total_Pago_Completo'] ?? 0)
+                : max(0, $totalPagado - $totalAbonos);
+
+            $entry = [
+                'total_pagado' => $totalPagado,
+                'total_abonos' => $totalAbonos,
+                'total_pago_completo' => $totalPagoCompleto,
+                'registros_pago' => (int)($filaPago['Registros_Pago'] ?? 0),
+            ];
+
+            $cedulaClavePago = trim((string)($filaPago['Cedula_Clave'] ?? ''));
+            $idDesdeClave = 0;
+            if (preg_match('/SIN-CEDULA-(\d+)$/i', $cedulaClavePago, $coincidenciaId)) {
+                $idDesdeClave = (int)($coincidenciaId[1] ?? 0);
+            }
+
+            $claves = $this->clavesIdentidadEscuelaFormacion(
+                (string)($filaPago['Cedula'] ?? ''),
+                $idDesdeClave,
+                $cedulaClavePago
+            );
+
+            foreach ($claves as $clave) {
+                if (!isset($mapa[$clave])) {
+                    $mapa[$clave] = $entry;
+                }
+            }
+        }
+
+        return $mapa;
+    }
+
+    private function buscarPagoEnMapa(array $mapa, array $persona): array {
+        $default = [
+            'total_pagado' => 0.0,
+            'total_abonos' => 0.0,
+            'total_pago_completo' => 0.0,
+            'registros_pago' => 0,
+        ];
+
+        $claves = $this->clavesIdentidadEscuelaFormacion(
+            (string)($persona['Cedula'] ?? ''),
+            (int)($persona['Id_Persona'] ?? 0),
+            (string)($persona['Cedula_Clave'] ?? '')
+        );
+
+        foreach ($claves as $clave) {
+            if (isset($mapa[$clave])) {
+                return $mapa[$clave];
+            }
+        }
+
+        return $default;
+    }
+
+    private function aplicarResumenPagoAPersona(array &$persona, array $mapaPagos): void {
+        $pago = $this->buscarPagoEnMapa($mapaPagos, $persona);
+        $persona['total_pagado'] = (float)$pago['total_pagado'];
+        $persona['total_abonos'] = (float)$pago['total_abonos'];
+        $persona['total_pago_completo'] = (float)$pago['total_pago_completo'];
+        $persona['registros_pago'] = (int)$pago['registros_pago'];
+        $persona['tiene_pago_registrado'] = ((float)$pago['total_pagado'] > 0) || ((int)$pago['registros_pago'] > 0);
+    }
+
+    private function indexarInscripcionesPorClave(array $inscripciones): array {
+        $indice = [];
+
+        foreach ((array)$inscripciones as $inscripcion) {
+            $idPersona = (int)($inscripcion['Id_Persona'] ?? 0);
+            $claves = $this->clavesIdentidadEscuelaFormacion(
+                (string)($inscripcion['Cedula'] ?? ''),
+                $idPersona,
+                ''
+            );
+
+            foreach ($claves as $clave) {
+                if (!isset($indice[$clave])) {
+                    $indice[$clave] = $inscripcion;
+                }
+            }
+        }
+
+        return $indice;
+    }
+
+    private function buscarInscripcionEnIndice(array $indice, string $cedula = '', string $cedulaClave = '', int $idPersona = 0): ?array {
+        foreach ($this->clavesIdentidadEscuelaFormacion($cedula, $idPersona, $cedulaClave) as $clave) {
+            if (isset($indice[$clave])) {
+                return (array)$indice[$clave];
+            }
+        }
+
+        return null;
+    }
+
+    private function calcularEstadisticasPersonasEscuela(array $personas): array {
+        $total = count($personas);
+        $conPago = 0;
+        $sinPago = 0;
+        $conAbono = 0;
+        $pagoCompletoUv = 0;
+
+        foreach ($personas as $persona) {
+            $totalPagado = (float)($persona['total_pagado'] ?? 0);
+            $totalAbonos = (float)($persona['total_abonos'] ?? 0);
+            $registrosPago = (int)($persona['registros_pago'] ?? 0);
+            $tienePago = !empty($persona['tiene_pago_registrado'])
+                || $totalPagado > 0
+                || $registrosPago > 0;
+
+            if ($tienePago) {
+                $conPago++;
+            } else {
+                $sinPago++;
+            }
+
+            if ($totalAbonos > 0) {
+                $conAbono++;
+            }
+
+            if ($totalPagado >= 180000) {
+                $pagoCompletoUv++;
+            }
+        }
+
+        return [
+            'total' => $total,
+            'con_pago' => $conPago,
+            'sin_pago' => $sinPago,
+            'con_abono' => $conAbono,
+            'pago_completo_uv' => $pagoCompletoUv,
+        ];
+    }
+
+    private function clasificarGeneroBaseEscuela(string $genero): string {
+        $genero = strtolower(trim($genero));
+        if ($genero === '') {
+            return 'otro';
+        }
+
+        $esMujer = strpos($genero, 'mujer') !== false
+            || strpos($genero, 'femen') !== false
+            || preg_match('/(^|[^a-z])(f|fem|female)([^a-z]|$)/', $genero);
+        $esHombre = strpos($genero, 'hombre') !== false
+            || strpos($genero, 'mascul') !== false
+            || preg_match('/(^|[^a-z])(m|masc|male|h)([^a-z]|$)/', $genero);
+
+        if ($esHombre && !$esMujer) {
+            return 'hombre';
+        }
+        if ($esMujer && !$esHombre) {
+            return 'mujer';
+        }
+
+        return 'otro';
+    }
+
+    private function resolverSegmentoEscuela(string $genero, int $edad, string $segmentoPreferido = ''): string {
+        $segmentoPreferido = strtolower(trim($segmentoPreferido));
+        if (in_array($segmentoPreferido, ['jovenes', 'teens', 'hombres_adultos', 'mujeres_adultas'], true)) {
+            return $segmentoPreferido;
+        }
+
+        $generoClasificado = $this->clasificarGeneroBaseEscuela($genero);
+        if ($edad >= 14 && $edad <= 28) {
+            return 'jovenes';
+        }
+        if ($edad >= 9 && $edad <= 13) {
+            return 'teens';
+        }
+        if (($edad >= 29 || $edad <= 0) && $generoClasificado === 'hombre') {
+            return 'hombres_adultos';
+        }
+        if (($edad >= 29 || $edad <= 0) && $generoClasificado === 'mujer') {
+            return 'mujeres_adultas';
+        }
+
+        $genero = strtolower(trim($genero));
+        if ($genero !== '' && strpos($genero, 'joven') !== false) {
+            return 'jovenes';
+        }
+
+        return 'otros';
+    }
+
+    private function coincideFiltroGeneroEscuela(string $filtroGenero, string $genero, int $edad = 0, string $segmentoPreferido = ''): bool {
+        $filtroGenero = strtolower(trim($filtroGenero));
+        if ($filtroGenero === '' || $filtroGenero === 'todos') {
             return true;
         }
 
-        if ($filtroGenero === 'hombres') {
-            return $genero !== '' && (
-                strpos($genero, 'hombre') !== false ||
-                strpos($genero, 'mascul') !== false ||
-                strpos($genero, 'adulto') !== false ||
-                in_array($genero, ['m', 'masc', 'male', 'h'], true)
-            );
+        $segmento = $this->resolverSegmentoEscuela($genero, $edad, $segmentoPreferido);
+
+        if ($filtroGenero === 'hombres' || $filtroGenero === 'hombre') {
+            return $segmento === 'hombres_adultos';
         }
 
-        if ($filtroGenero === 'mujeres') {
-            return $genero !== '' && (
-                strpos($genero, 'mujer') !== false ||
-                strpos($genero, 'femen') !== false ||
-                strpos($genero, 'adulta') !== false ||
-                in_array($genero, ['f', 'fem', 'female'], true)
-            );
+        if ($filtroGenero === 'mujeres' || $filtroGenero === 'mujer') {
+            return $segmento === 'mujeres_adultas';
         }
 
-        if ($filtroGenero === 'jovenes') {
-            return $genero !== '' && strpos($genero, 'joven') !== false;
+        if ($filtroGenero === 'jovenes' || $filtroGenero === 'joven') {
+            return in_array($segmento, ['jovenes', 'teens'], true);
         }
 
         return true;
@@ -1807,9 +1928,9 @@ class EscuelaFormacionRegistroController extends BaseController {
         $modulo = $this->moduloSegunProgramaEscuela($programa);
         $nivelCapDestino = $this->nivelSegunProgramaCapDestino($programa);
 
-        $resumenPagos = $this->inscripcionModel->getResumenPagosAbonos($buscar, 400, $programa);
-        $inscripciones = $this->inscripcionModel->getListado($programa, $buscar, 400);
-        $inscripcionesPorClave = [];
+        $resumenPagos = $this->inscripcionModel->getResumenPagosAbonos($buscar, 2500, $programa);
+        $inscripciones = $this->inscripcionModel->getListado($programa, $buscar, 2500);
+        $inscripcionesPorClave = $this->indexarInscripcionesPorClave((array)$inscripciones);
         $idsPersonas = [];
         $ministerios = [];
 
@@ -1817,12 +1938,6 @@ class EscuelaFormacionRegistroController extends BaseController {
             $idPersona = (int)($inscripcion['Id_Persona'] ?? 0);
             if ($idPersona > 0) {
                 $idsPersonas[$idPersona] = $idPersona;
-            }
-
-            $cedula = trim((string)($inscripcion['Cedula'] ?? ''));
-            $clave = $cedula !== '' ? $cedula : 'SIN-CEDULA-' . max(0, $idPersona);
-            if (!isset($inscripcionesPorClave[$clave])) {
-                $inscripcionesPorClave[$clave] = $inscripcion;
             }
 
             // Agregar ministerios únicos
@@ -1876,13 +1991,19 @@ class EscuelaFormacionRegistroController extends BaseController {
         $filas = [];
         foreach ((array)$resumenPagos as $filaPago) {
             $cedula = trim((string)($filaPago['Cedula'] ?? ''));
-            $clave = $cedula !== '' ? $cedula : 'SIN-CEDULA-' . max(0, (int)preg_replace('/\D+/', '', (string)($filaPago['Cedula_Clave'] ?? '')));
-            $inscripcionRef = $inscripcionesPorClave[$clave] ?? null;
+            $cedulaClave = trim((string)($filaPago['Cedula_Clave'] ?? ''));
+            $idDesdeClave = 0;
+            if (preg_match('/SIN-CEDULA-(\d+)$/i', $cedulaClave, $coincidenciaId)) {
+                $idDesdeClave = (int)($coincidenciaId[1] ?? 0);
+            }
+            $inscripcionRef = $this->buscarInscripcionEnIndice($inscripcionesPorClave, $cedula, $cedulaClave, $idDesdeClave);
             $idPersona = (int)($inscripcionRef['Id_Persona'] ?? 0);
             $nombre = trim((string)($filaPago['Nombre'] ?? ''));
             $telefono = trim((string)($filaPago['Telefono'] ?? ''));
             
             $genero = '';
+            $edad = 0;
+            $segmentoPreferido = '';
             $nombreMinisterio = '';
             $idMinisterio = 0;
 
@@ -1897,12 +2018,14 @@ class EscuelaFormacionRegistroController extends BaseController {
                     $cedula = trim((string)($inscripcionRef['Cedula'] ?? ''));
                 }
                 $genero = trim((string)($inscripcionRef['Genero'] ?? ''));
+                $edad = (int)($inscripcionRef['Edad'] ?? 0);
+                $segmentoPreferido = trim((string)($inscripcionRef['Segmento_Preferido'] ?? ''));
                 $nombreMinisterio = trim((string)($inscripcionRef['Nombre_Ministerio'] ?? ''));
                 $idMinisterio = (int)($inscripcionRef['Id_Ministerio'] ?? 0);
             }
 
-            // Aplicar filtro de género
-            if (!$this->coincideFiltroGeneroEscuela($filtroGenero, $genero)) {
+            // Aplicar filtro de género/segmento (todos = sin filtrar por segmento)
+            if (!$this->coincideFiltroGeneroEscuela($filtroGenero, $genero, $edad, $segmentoPreferido)) {
                 continue;
             }
 
@@ -1945,6 +2068,8 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'cedula' => $cedula,
                 'telefono' => $telefono,
                 'genero' => $genero,
+                'edad' => $edad,
+                'segmento_preferido' => $segmentoPreferido,
                 'ministerio' => $nombreMinisterio,
                 'id_ministerio' => $idMinisterio,
                 'programa' => $programa,
@@ -1971,6 +2096,15 @@ class EscuelaFormacionRegistroController extends BaseController {
             $detalle = $this->inscripcionModel->getDetallePagosPorCedula($cedulaDetalle, 100, $programa);
         }
 
+        $stats = $this->calcularEstadisticasPersonasEscuela(array_map(static function($fila) {
+            return [
+                'total_pagado' => (float)($fila['total_pagado'] ?? 0),
+                'total_abonos' => (float)($fila['total_abonos'] ?? 0),
+                'registros_pago' => (int)($fila['registros_pago'] ?? 0),
+                'tiene_pago_registrado' => ((float)($fila['total_pagado'] ?? 0) > 0) || ((int)($fila['registros_pago'] ?? 0) > 0),
+            ];
+        }, $filas));
+
         return [
             'programa' => $programa,
             'programa_label' => $programaLabel,
@@ -1984,6 +2118,7 @@ class EscuelaFormacionRegistroController extends BaseController {
             }, $ministerios)),
             'filtro_genero' => $filtroGenero,
             'filtro_ministerio' => $filtroMinisterio,
+            'stats' => $stats,
         ];
     }
 
@@ -2014,6 +2149,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'ministerios' => $data['ministerios'] ?? [],
                 'filtro_genero' => $data['filtro_genero'] ?? '',
                 'filtro_ministerio' => $data['filtro_ministerio'] ?? '',
+                'stats' => $data['stats'] ?? [],
             ]);
         } catch (Throwable $e) {
             while (ob_get_level() > $baseBufferLevel) {
@@ -3072,8 +3208,8 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         if ($idPersona > 0) {
-            $this->asignarSegundoRolDiscipuloAutomatico($idPersona, $programa);
-            $this->asegurarCredencialesDiscipulo($idPersona, $cedula);
+            require_once APP . '/Helpers/AccesoDiscipuloCapDestino.php';
+            AccesoDiscipuloCapDestino::provisionar($idPersona, $programa, $cedula);
         }
 
         $programasInscritos = $this->inscripcionModel->getProgramasInscritosPersona($idPersona);
@@ -3341,31 +3477,13 @@ class EscuelaFormacionRegistroController extends BaseController {
         // ── AJAX: datos JSON ──────────────────────────────────────────
         if (!empty($_GET['ajax']) || !empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
             $buscar = trim((string)($_GET['buscar'] ?? ''));
-            $limit  = max(1, min(1000, (int)($_GET['limit'] ?? 600)));
+            $limit  = max(1, min(2500, (int)($_GET['limit'] ?? 2500)));
 
             $personas = $this->inscripcionModel->getInscritosBasicos($programa, $buscar, $limit);
-
-            // Mapa de pagos por persona (clave por cédula o SIN-CEDULA-id)
-            $resumenPagos = $this->inscripcionModel->getResumenPagosAbonos('', 1000, $programa);
-            $pagosPorClave = [];
-            foreach ((array)$resumenPagos as $filaPago) {
-                $clavePago = trim((string)($filaPago['Cedula_Clave'] ?? ''));
-                if ($clavePago === '') {
-                    continue;
-                }
-                $totalPagado = (float)($filaPago['Total_Pagado'] ?? 0);
-                $totalAbonos = (float)($filaPago['Total_Abonos'] ?? 0);
-                $totalPagoCompleto = array_key_exists('Total_Pago_Completo', (array)$filaPago)
-                    ? (float)($filaPago['Total_Pago_Completo'] ?? 0)
-                    : max(0, $totalPagado - $totalAbonos);
-
-                $pagosPorClave[$clavePago] = [
-                    'total_pagado' => $totalPagado,
-                    'total_abonos' => $totalAbonos,
-                    'total_pago_completo' => $totalPagoCompleto,
-                    'registros_pago' => (int)($filaPago['Registros_Pago'] ?? 0),
-                ];
-            }
+            // Mapa completo de pagos (sin filtrar por búsqueda) para marcar bien cada inscripción.
+            $pagosPorClave = $this->construirMapaPagosPorClave(
+                $this->inscripcionModel->getResumenPagosAbonos('', 2500, $programa)
+            );
 
             $ids = array_filter(array_map(fn($p) => (int)$p['Id_Persona'], $personas));
             $ids = array_values(array_unique($ids));
@@ -3385,37 +3503,92 @@ class EscuelaFormacionRegistroController extends BaseController {
                     $p["clase_{$c}"] = isset($map[$c]) ? (bool)$map[$c] : false;
                 }
 
-                $clavePersona = trim((string)($p['Cedula_Clave'] ?? ''));
-                if ($clavePersona === '') {
-                    $cedulaPersona = trim((string)($p['Cedula'] ?? ''));
-                    $clavePersona = $cedulaPersona !== '' ? $cedulaPersona : ('SIN-CEDULA-' . $idP);
-                }
-
-                $pago = $pagosPorClave[$clavePersona] ?? [
-                    'total_pagado' => 0,
-                    'total_abonos' => 0,
-                    'total_pago_completo' => 0,
-                    'registros_pago' => 0,
-                ];
-
-                $p['total_pagado'] = (float)$pago['total_pagado'];
-                $p['total_abonos'] = (float)$pago['total_abonos'];
-                $p['total_pago_completo'] = (float)$pago['total_pago_completo'];
-                $p['registros_pago'] = (int)$pago['registros_pago'];
-                $p['tiene_pago_registrado'] = ((float)$pago['total_pagado'] > 0) || ((int)$pago['registros_pago'] > 0);
+                $this->aplicarResumenPagoAPersona($p, $pagosPorClave);
             }
             unset($p);
 
-            $this->json(['success' => true, 'datos' => $personas, 'total' => count($personas)]);
+            $stats = $this->calcularEstadisticasPersonasEscuela($personas);
+
+            $this->json([
+                'success' => true,
+                'datos' => $personas,
+                'total' => count($personas),
+                'stats' => $stats,
+                'limite' => $limit,
+            ]);
             return;
         }
 
         // ── Vista HTML ────────────────────────────────────────────────
+        $esAdmin = class_exists('AuthController') && AuthController::esAdministrador();
+        $puedeGestionarListado = $esAdmin || $this->usuarioPuedeVerPagos();
+        $puedeEliminarInscripcion = $esAdmin
+            || AuthController::puede('escuelas_formacion:eliminar')
+            || AuthController::puede('personas:eliminar');
+        $puedeEditarPersona = $esAdmin
+            || (
+                class_exists('AuthController')
+                && AuthController::puede('personas:editar')
+            );
+
         $this->view('escuelas_formacion/listado_inscritos', [
-            'programa'   => $programa,
-            'titulo'     => 'Inscritos Universidad de la Vida',
-            'public_url' => PUBLIC_URL,
+            'programa'             => $programa,
+            'titulo'               => 'Inscritos Universidad de la Vida',
+            'public_url'           => PUBLIC_URL,
+            'puede_editar'         => $puedeGestionarListado,
+            'puede_editar_persona' => $puedeEditarPersona,
+            'puede_eliminar'       => $puedeEliminarInscripcion,
         ]);
+    }
+
+    /**
+     * Elimina una inscripción desde el listado de asistencias (AJAX).
+     * POST: id_inscripcion
+     */
+    public function eliminarInscripcionListado() {
+        if (!class_exists('AuthController')) {
+            $this->json(['success' => false, 'mensaje' => 'Sin permiso'], 403);
+            return;
+        }
+
+        $puedeEliminar = AuthController::esAdministrador()
+            || AuthController::puede('escuelas_formacion:eliminar')
+            || AuthController::puede('personas:eliminar');
+        if (!$puedeEliminar) {
+            $this->json(['success' => false, 'mensaje' => 'Sin permiso para eliminar inscripciones'], 403);
+            return;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->json(['success' => false, 'mensaje' => 'Método no permitido'], 405);
+            return;
+        }
+
+        $idInscripcion = (int)($_POST['id_inscripcion'] ?? 0);
+        if ($idInscripcion <= 0) {
+            $this->json(['success' => false, 'mensaje' => 'Inscripción inválida'], 422);
+            return;
+        }
+
+        $inscripcion = $this->inscripcionModel->getByIdInscripcion($idInscripcion);
+        if (empty($inscripcion)) {
+            $this->json(['success' => false, 'mensaje' => 'La inscripción no existe o ya fue eliminada'], 404);
+            return;
+        }
+
+        $programa = trim((string)($inscripcion['Programa'] ?? ''));
+        if ($programa !== '' && $programa !== 'universidad_vida' && $programa !== 'encuentro') {
+            $this->json(['success' => false, 'mensaje' => 'Solo se pueden eliminar inscripciones de Universidad de la Vida'], 422);
+            return;
+        }
+
+        $ok = (bool)$this->inscripcionModel->delete($idInscripcion);
+        if (!$ok) {
+            $this->json(['success' => false, 'mensaje' => 'No se pudo eliminar la inscripción'], 500);
+            return;
+        }
+
+        $this->json(['success' => true, 'mensaje' => 'Inscripción eliminada correctamente']);
     }
 
     /**

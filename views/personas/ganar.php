@@ -1,16 +1,16 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 <?php
-$puedeVerPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver');
-$puedeEditarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
-$puedeEliminarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'eliminar');
+$puedeVerPersona = AuthController::puedeVerModuloPersonasGanar();
+$puedeEditarPersona = AuthController::puede('personas:editar');
+$puedeEliminarPersona = AuthController::puede('personas:eliminar');
 $puedeVerAtajoAsignados = AuthController::esAdministrador()
-    || AuthController::tienePermiso('personas_ganar_asignados', 'ver');
+    || AuthController::puede('personas_ganar_asignados:ver');
 $puedeVerAtajoReasignados = AuthController::esAdministrador()
-    || AuthController::tienePermiso('personas_ganar_reasignados', 'ver');
+    || AuthController::puede('personas_ganar_reasignados:ver');
 $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPersona;
 $puedeVerPersonasConsulta = AuthController::puedeVerPersonasConsulta();
 $puedeModuloGanarCompleto = AuthController::puedeVerModuloPersonasGanar();
-$puedeVerReportes = AuthController::esAdministrador() || AuthController::tienePermiso('reportes', 'ver');
+$puedeVerReportes = AuthController::esAdministrador() || AuthController::puede('reportes:ver');
 $verHistorialGanar = !empty($verHistorialGanar);
 ?>
 
@@ -18,13 +18,11 @@ $verHistorialGanar = !empty($verHistorialGanar);
     <h2 style="margin:0;">Almas ganadas</h2>
     <div class="personas-header-actions">
         <div class="personas-action-group personas-action-group-nav">
-            <?php if ($puedeVerPersonasConsulta): ?>
+            <?php if (AuthController::puedeVerSubmoduloPersonasConsulta()): ?>
             <a href="<?= PUBLIC_URL ?>?url=personas" class="personas-action-pill">Discipulos</a>
             <?php endif; ?>
             <?php if ($puedeModuloGanarCompleto): ?>
             <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="personas-action-pill is-active" aria-current="page">Almas ganadas</a>
-            <?php endif; ?>
-            <?php if ($puedeVerPersonasConsulta): ?>
             <?php endif; ?>
         </div>
         <div class="personas-action-group">
@@ -459,12 +457,12 @@ $historialToggleUrl = $verHistorialGanar
                         <?php if ($mostrarAcciones): ?>
                         <td class="action-col">
                             <div class="action-buttons action-buttons-compact">
-                            <?php if (AuthController::tienePermiso('personas', 'ver')): ?>
+                            <?php if (AuthController::puede('personas:ver')): ?>
                             <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlGanar) ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
                                 <i class="bi bi-eye"></i>
                             </a>
                             <?php endif; ?>
-                            <?php if (AuthController::tienePermiso('personas', 'editar')): ?>
+                            <?php if (AuthController::puede('personas:editar')): ?>
                             <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlGanar) ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
                                 <i class="bi bi-pencil"></i>
                             </a>
@@ -475,7 +473,7 @@ $historialToggleUrl = $verHistorialGanar
                             </a>
                             <?php endif; ?>
                             </div>
-                            <?php if (AuthController::tienePermiso('personas', 'editar') && $puedeAsignarDesdeAccion): ?>
+                            <?php if (AuthController::puede('personas:editar') && $puedeAsignarDesdeAccion): ?>
                             <form method="POST" action="<?= PUBLIC_URL ?>?url=personas/asignarMinisterioGanar" class="ganar-assign-form">
                                 <input type="hidden" name="id_persona" value="<?= (int)($persona['Id_Persona'] ?? 0) ?>">
                                 <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrlGanar, ENT_QUOTES, 'UTF-8') ?>">
@@ -499,7 +497,7 @@ $historialToggleUrl = $verHistorialGanar
                                 </select>
                             </form>
                             <?php endif; ?>
-                            <?php if (AuthController::tienePermiso('personas', 'editar') && (int)($persona['Id_Ministerio'] ?? 0) > 0): ?>
+                            <?php if (AuthController::puede('personas:editar') && (int)($persona['Id_Ministerio'] ?? 0) > 0): ?>
                             <form method="POST" action="<?= PUBLIC_URL ?>?url=personas/reasignarMinisterioGanar" class="ganar-assign-form ganar-reasignar-form">
                                 <input type="hidden" name="id_persona" value="<?= (int)($persona['Id_Persona'] ?? 0) ?>">
                                 <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrlGanar, ENT_QUOTES, 'UTF-8') ?>">

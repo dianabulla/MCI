@@ -39,6 +39,7 @@ $rutaDetalleVistas = PUBLIC_URL . '?url=home/material/detalle-vistas&modulo=' . 
 $capNivelVista = 0;
 $modoSeleccionNivelCap = false;
 $vistaCapNivelIndependiente = false;
+$esVistaMaestro = !empty($es_vista_maestro) && $esCapacitacionDestino;
 
 if ($esCapacitacionDestino && !$esDiscipuloCapDestino) {
     $nivelSolicitado = (int)($_GET['cap_nivel'] ?? 0);
@@ -472,6 +473,40 @@ if ($tieneSubmodulos) {
 
     .cap-level-card.is-active .cap-level-card-meta {
         color: #d8e8ff;
+    }
+
+    .maestro-welcome-banner {
+        border: 1px solid #d8e4f8;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #f4f8ff 0%, #ffffff 55%);
+        padding: 16px 18px;
+        margin-bottom: 14px;
+    }
+
+    .maestro-welcome-banner h3 {
+        margin: 0 0 6px 0;
+        font-size: 1.15rem;
+        color: #1e4a89;
+    }
+
+    .maestro-welcome-banner p {
+        margin: 0;
+        color: #50647f;
+        font-size: 14px;
+        line-height: 1.45;
+    }
+
+    body.maestro-material-focus .cap-level-selector {
+        gap: 16px;
+    }
+
+    body.maestro-material-focus .cap-level-card {
+        min-height: 118px;
+        padding: 18px 20px;
+    }
+
+    body.maestro-material-focus .cap-level-card-title {
+        font-size: 1.25rem;
     }
 
     .cap-categoria-switch {
@@ -1205,18 +1240,41 @@ if ($tieneSubmodulos) {
     }
 </style>
 
+<?php if ($esVistaMaestro): ?>
+<script>document.body.classList.add('maestro-material-focus');</script>
+<?php endif; ?>
+
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
     <div>
         <h2 style="margin:0;"><?= htmlspecialchars($titulo) ?></h2>
-        <small style="color:#637087;">Gestiona módulos de material con varios archivos por creación.</small>
+        <?php if ($esVistaMaestro && $modoSeleccionNivelCap): ?>
+            <small style="color:#637087;">Elige un nivel para ver lecciones, material de clase y material de profesor.</small>
+        <?php elseif ($esVistaMaestro): ?>
+            <small style="color:#637087;">Nivel <?= (int)$capNivelVista ?> · material y recursos de Capacitación Destino.</small>
+        <?php else: ?>
+            <small style="color:#637087;">Gestiona módulos de material con varios archivos por creación.</small>
+        <?php endif; ?>
     </div>
-    <a href="<?= PUBLIC_URL ?>?url=home/material" class="btn btn-secondary">Volver a Material</a>
+    <?php if (!$esVistaMaestro): ?>
+        <a href="<?= PUBLIC_URL ?>?url=home/material" class="btn btn-secondary">Volver a Material</a>
+    <?php elseif ($capNivelVista > 0): ?>
+        <a href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-secondary">
+            <i class="bi bi-grid-3x3-gap"></i> Ver todos los niveles
+        </a>
+    <?php endif; ?>
 </div>
 
 <?php if ($mensaje !== ''): ?>
     <div class="alert alert-<?= $tipo === 'success' ? 'success' : 'danger' ?>" style="margin-top:14px;">
         <?= htmlspecialchars($mensaje) ?>
     </div>
+<?php endif; ?>
+
+<?php if ($esVistaMaestro && $modoSeleccionNivelCap): ?>
+<div class="maestro-welcome-banner">
+    <h3>Bienvenido, maestro</h3>
+    <p>Selecciona un nivel para gestionar evaluaciones, tareas e inscritos, y consultar el material de clase y de profesor (sin subir archivos).</p>
+</div>
 <?php endif; ?>
 
 <div class="card" style="margin-top:14px; margin-bottom:14px; padding:14px; border-left:4px solid <?= htmlspecialchars($color) ?>;">
@@ -1231,28 +1289,50 @@ if ($tieneSubmodulos) {
     </div>
 </div>
 
-<?php if ($esCapacitacionDestino && $puedeGestionar && !$puedeSubirMaterial): ?>
+<?php if ($esCapacitacionDestino && $esVistaMaestro && $puedeGestionar): ?>
+<div class="alert alert-info" style="margin-bottom: 12px;">
+    Puedes gestionar evaluaciones, tareas, inscritos y conexiones. La subida de material de clase o de profesor la realiza un administrador.
+</div>
+<?php elseif ($esCapacitacionDestino && $puedeGestionar && !$puedeSubirMaterial): ?>
 <div class="alert alert-warning" style="margin-bottom: 12px;">
     Tienes acceso de gestión en este módulo, pero no cuentas con permiso para subir archivos.
 </div>
 <?php endif; ?>
 
-<?php if ($puedeGestionar && $puedeSubirMaterial && !$vistaCapNivelIndependiente): ?>
+<?php
+$mostrarFormularioSubidaCap = $puedeGestionar && $puedeSubirMaterial;
+if ($esCapacitacionDestino) {
+    $mostrarFormularioSubidaCap = $mostrarFormularioSubidaCap && ($vistaCapNivelIndependiente || $modoSeleccionNivelCap);
+}
+$categoriaSubidaInicial = strtolower(trim((string)($_GET['cap_categoria'] ?? 'profesor')));
+if (!in_array($categoriaSubidaInicial, ['clase', 'profesor'], true)) {
+    $categoriaSubidaInicial = 'profesor';
+}
+$formularioSubidaAbierto = $vistaCapNivelIndependiente;
+?>
+<?php if ($mostrarFormularioSubidaCap): ?>
 <div style="margin-bottom: 10px;">
     <button type="button"
         class="btn btn-primary"
         id="btn-toggle-upload-form"
-        aria-expanded="false"
+        aria-expanded="<?= $formularioSubidaAbierto ? 'true' : 'false' ?>"
         aria-controls="upload-form-panel"
         onclick="(function(btn){var panel=document.getElementById('upload-form-panel');if(!panel){return;}var abierto=panel.style.display==='block';panel.style.display=abierto?'none':'block';btn.setAttribute('aria-expanded',abierto?'false':'true');btn.textContent=abierto?'Mostrar formulario de subir material':'Ocultar formulario de subir material';})(this);">
-        Mostrar formulario de subir material
+        <?= $formularioSubidaAbierto ? 'Ocultar formulario de subir material' : 'Mostrar formulario de subir material' ?>
     </button>
 </div>
-<div class="form-container" id="upload-form-panel" style="margin-bottom: 16px; display:none;">
-    <h3 style="margin-top:0;">Crear módulo de material</h3>
+<div class="form-container" id="upload-form-panel" style="margin-bottom: 16px; display:<?= $formularioSubidaAbierto ? 'block' : 'none' ?>;">
+    <h3 style="margin-top:0;">Subir material (profesor / clase)</h3>
     <form method="POST" enctype="multipart/form-data" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>">
         <input type="hidden" name="accion" value="subir">
         <input type="hidden" name="modulo" value="<?= htmlspecialchars($clave) ?>">
+        <?php if ($capNivelVista > 0): ?>
+            <input type="hidden" name="contexto_nivel" value="<?= (int)$capNivelVista ?>">
+        <?php endif; ?>
+        <?php if ($capModuloVistaActual > 0): ?>
+            <input type="hidden" name="contexto_modulo" value="<?= (int)$capModuloVistaActual ?>">
+            <input type="hidden" name="contexto_categoria" value="<?= htmlspecialchars($categoriaSubidaInicial, ENT_QUOTES, 'UTF-8') ?>">
+        <?php endif; ?>
         <div class="form-group" style="margin-bottom: 12px;">
             <label for="titulo">Título</label>
             <input type="text" id="titulo" name="titulo" class="form-control" maxlength="255" required placeholder="Ej: Guía Semana 1">
@@ -1265,8 +1345,8 @@ if ($tieneSubmodulos) {
             <div class="form-group" style="margin-bottom: 12px;">
                 <label for="categoria">Submódulo</label>
                 <select id="categoria" name="categoria" class="form-control" required>
-                    <option value="clase">Material clase</option>
-                    <option value="profesor">Material profesor</option>
+                    <option value="clase" <?= $categoriaSubidaInicial === 'clase' ? 'selected' : '' ?>>Material clase</option>
+                    <option value="profesor" <?= $categoriaSubidaInicial === 'profesor' ? 'selected' : '' ?>>Material profesor</option>
                 </select>
             </div>
         <?php endif; ?>
@@ -1274,18 +1354,15 @@ if ($tieneSubmodulos) {
             <div class="form-group" style="margin-bottom: 12px;">
                 <label for="nivel">Nivel</label>
                 <select id="nivel" name="nivel" class="form-control" required>
-                    <option value="1">Nivel 1</option>
-                    <option value="2">Nivel 2</option>
-                    <option value="3">Nivel 3</option>
+                    <option value="1" <?= $capNivelVista === 1 || $capNivelVista <= 0 ? 'selected' : '' ?>>Nivel 1</option>
+                    <option value="2" <?= $capNivelVista === 2 ? 'selected' : '' ?>>Nivel 2</option>
+                    <option value="3" <?= $capNivelVista === 3 ? 'selected' : '' ?>>Nivel 3</option>
                 </select>
             </div>
 
             <div class="form-group" style="margin-bottom: 12px;">
                 <label for="modulo_numero">Módulo</label>
-                <select id="modulo_numero" name="modulo_numero" class="form-control" required>
-                    <option value="1">Módulo 1</option>
-                    <option value="2">Módulo 2</option>
-                </select>
+                <select id="modulo_numero" name="modulo_numero" class="form-control" required data-selected="<?= $capModuloVistaActual > 0 ? (int)$capModuloVistaActual : '' ?>"></select>
             </div>
 
             <div class="form-group" style="margin-bottom: 12px;">
@@ -1310,9 +1387,7 @@ if ($tieneSubmodulos) {
         <?php foreach ($resumenNivelesCap as $nivelCard): ?>
             <a class="cap-level-card js-cap-level-card <?= $capNivelVista === (int)$nivelCard['nivel'] ? 'is-active' : '' ?>"
                data-level="<?= (int)$nivelCard['nivel'] ?>"
-               href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta, ENT_QUOTES, 'UTF-8') ?>&cap_nivel=<?= (int)$nivelCard['nivel'] ?>"
-               target="_blank"
-               rel="noopener noreferrer">
+               href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta, ENT_QUOTES, 'UTF-8') ?>&cap_nivel=<?= (int)$nivelCard['nivel'] ?>">
                 <h4 class="cap-level-card-title">Nivel <?= (int)$nivelCard['nivel'] ?></h4>
                 <div class="cap-level-card-meta">
                     <span><?= (int)$nivelCard['total_modulos'] ?> módulo(s)</span>
@@ -1725,7 +1800,13 @@ if ($tieneSubmodulos) {
                 <?php endforeach; ?>
             </div>
         <?php else: ?>
-            <p style="margin:0; color:#666;">No hay accesos para mostrar. Si ya estás inscrito, valida fechas activas y que el líder haya configurado el link de clase en Conexiones.</p>
+            <p style="margin:0; color:#666;">
+                <?php if ($mensajeRestriccionDiscipuloMaterial !== ''): ?>
+                    <?= htmlspecialchars($mensajeRestriccionDiscipuloMaterial) ?>
+                <?php else: ?>
+                    No hay accesos para mostrar. Si ya estás inscrito, valida fechas activas y que el líder haya configurado el link de clase en Conexiones.
+                <?php endif; ?>
+            </p>
         <?php endif; ?>
 
         <?php if (!empty($accesosDiscipuloCapDestino)): ?>
@@ -3021,7 +3102,7 @@ document.addEventListener('DOMContentLoaded', function() {
             + '&modulo=' + encodeURIComponent(String(capVistaState.modulo))
             + '&leccion=' + encodeURIComponent(leccionEval);
 
-        window.open(url, '_blank');
+        window.location.href = url;
     }
 
     function obtenerBloquesCap(nivel, categoria) {
@@ -3177,6 +3258,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 var categoria = String(btn.getAttribute('data-categoria') || 'clase');
                 activarVistaCapPorNivelYCategoria(nivel, categoria);
                 marcarVistaCap('lecciones');
+                var categoriaSelect = document.getElementById('categoria');
+                if (categoriaSelect) {
+                    categoriaSelect.value = categoria;
+                }
             });
         });
 

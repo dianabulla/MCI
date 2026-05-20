@@ -7,7 +7,7 @@ class TransmisionController extends BaseController {
     private $transmision;
 
     private function tienePermiso($accion = 'ver') {
-        return AuthController::esAdministrador() || AuthController::tienePermiso('transmisiones', $accion);
+        return AuthController::esAdministrador() || AuthController::puede('transmisiones:' . $accion);
     }
 
     public function __construct() {

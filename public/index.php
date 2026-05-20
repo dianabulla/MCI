@@ -114,6 +114,15 @@ foreach ($authRoutesFallback as $routeKey => $routeTarget) {
     }
 }
 
+$reportesRoutesFallback = [
+    'reportes/dashboard-escuelas-uv-detalle' => 'ReporteController@dashboardEscuelasUvDetalleMinisterio',
+];
+foreach ($reportesRoutesFallback as $routeKey => $routeTarget) {
+    if (!array_key_exists($routeKey, $routes)) {
+        $routes[$routeKey] = $routeTarget;
+    }
+}
+
 // Obtener la URL solicitada (soporta tanto 'url' como 'route')
 $url = isset($_GET['url']) ? trim($_GET['url'], '/') : (isset($_GET['route']) ? trim($_GET['route'], '/') : 'home');
 
@@ -169,6 +178,9 @@ if (!in_array($url, $rutasPublicas)) {
         header('Location: ' . rtrim(PUBLIC_URL, '/') . '/index.php?url=auth/login');
         exit;
     }
+
+    require_once APP . '/Helpers/RouteGuard.php';
+    RouteGuard::denegarSiNoPuede($url);
 }
 
 // Buscar la ruta

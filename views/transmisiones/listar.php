@@ -2,9 +2,9 @@
 
 <div class="page-header">
     <h2>Gestión de Transmisiones</h2>
-    <?php $puedeCrearTransmision = AuthController::esAdministrador() || AuthController::tienePermiso('transmisiones', 'crear'); ?>
-    <?php $puedeEditarTransmision = AuthController::esAdministrador() || AuthController::tienePermiso('transmisiones', 'editar'); ?>
-    <?php $puedeEliminarTransmision = AuthController::esAdministrador() || AuthController::tienePermiso('transmisiones', 'eliminar'); ?>
+    <?php $puedeCrearTransmision = AuthController::esAdministrador() || AuthController::puede('transmisiones:crear'); ?>
+    <?php $puedeEditarTransmision = AuthController::esAdministrador() || AuthController::puede('transmisiones:editar'); ?>
+    <?php $puedeEliminarTransmision = AuthController::esAdministrador() || AuthController::puede('transmisiones:eliminar'); ?>
     <?php $puedeGestionarTransmision = $puedeEditarTransmision || $puedeEliminarTransmision; ?>
     <div class="page-actions">
         <?php if ($puedeCrearTransmision): ?>

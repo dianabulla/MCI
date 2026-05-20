@@ -15,8 +15,22 @@ class EventoController extends BaseController {
     private const MAX_IMAGE_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
     private const MAX_VIDEO_UPLOAD_BYTES = 500 * 1024 * 1024; // 500MB
 
+    private function puedeGestionarPanelEventos(): bool {
+        return AuthController::esAdministrador()
+            || AuthController::puede('eventos:editar')
+            || AuthController::puede('eventos:crear')
+            || AuthController::puede('eventos:gestionar_contenido_publico');
+    }
+
+    private function puedeGestionarContenidoPublicoEventos(): bool {
+        return AuthController::esAdministrador()
+            || AuthController::puede('eventos:gestionar_contenido_publico')
+            || AuthController::puede('eventos:editar');
+    }
+
+    /** @deprecated Use puedeGestionarPanelEventos() — compatibilidad con vistas */
     private function esAdminEventos() {
-        return AuthController::esAdministrador();
+        return $this->puedeGestionarPanelEventos();
     }
 
     private function ordenarItemsPublicosRecientes($items) {
@@ -152,7 +166,7 @@ class EventoController extends BaseController {
     }
 
     private function renderModuloContenido($tipo) {
-        if (!AuthController::tienePermiso('eventos', 'ver') && !AuthController::esAdministrador()) {
+        if (!AuthController::puede('eventos:ver') && !AuthController::esAdministrador()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -165,7 +179,7 @@ class EventoController extends BaseController {
 
         // Cualquier usuario autenticado que no sea admin se envía a la versión pública,
         // incluso si no tiene el permiso específico de "eventos".
-        if (!$this->esAdminEventos()) {
+        if (!$this->puedeGestionarContenidoPublicoEventos()) {
             $this->redirect($config['route_publica']);
             return;
         }
@@ -197,7 +211,7 @@ class EventoController extends BaseController {
     }
 
     public function index() {
-        if (!AuthController::tienePermiso('eventos', 'ver') && !AuthController::esAdministrador()) {
+        if (!AuthController::puede('eventos:ver') && !AuthController::esAdministrador()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -224,7 +238,7 @@ class EventoController extends BaseController {
     }
 
     public function exportarExcel() {
-        if (!AuthController::tienePermiso('eventos', 'ver')) {
+        if (!AuthController::puede('eventos:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -251,7 +265,7 @@ class EventoController extends BaseController {
     }
 
     public function crear() {
-        if (!$this->esAdminEventos()) {
+        if (!AuthController::puede('eventos:crear')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -286,7 +300,7 @@ class EventoController extends BaseController {
     }
 
     public function editar() {
-        if (!$this->esAdminEventos()) {
+        if (!AuthController::puede('eventos:editar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -358,7 +372,7 @@ class EventoController extends BaseController {
     }
 
     public function eliminar() {
-        if (!$this->esAdminEventos()) {
+        if (!AuthController::puede('eventos:eliminar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -454,7 +468,7 @@ class EventoController extends BaseController {
     }
 
     public function guardarModuloContenido() {
-        if (!$this->esAdminEventos()) {
+        if (!$this->puedeGestionarContenidoPublicoEventos()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -542,7 +556,7 @@ class EventoController extends BaseController {
     }
 
     public function duplicarModuloContenido() {
-        if (!$this->esAdminEventos()) {
+        if (!$this->puedeGestionarContenidoPublicoEventos()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -566,7 +580,7 @@ class EventoController extends BaseController {
     }
 
     public function eliminarModuloContenido() {
-        if (!$this->esAdminEventos()) {
+        if (!AuthController::puede('eventos:eliminar') && !$this->puedeGestionarContenidoPublicoEventos()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }

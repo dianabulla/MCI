@@ -502,7 +502,7 @@ class MinisterioController extends BaseController {
     }
 
     public function index() {
-        if (!AuthController::tienePermiso('ministerios', 'ver')) {
+        if (!AuthController::puede('ministerios:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -745,7 +745,7 @@ class MinisterioController extends BaseController {
     }
 
     public function equipoPrincipal() {
-        if (!AuthController::tienePermiso('ministerios', 'ver')) {
+        if (!AuthController::puede('ministerios:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -955,6 +955,14 @@ class MinisterioController extends BaseController {
         $encabezado['equipo_principal_hombres'] = count($lideresHombres);
         $encabezado['equipo_principal_mujeres'] = count($lideresMujeres);
 
+        $equipoDirectoPorLider = $this->construirEquipoDirectoPorLider($liderazgoRed, $discipulos);
+        $jerarquiaPastor1 = $idLiderPrincipal1 > 0
+            ? ($jerarquiaPorLiderId[$idLiderPrincipal1] ?? $this->personaModel->getJerarquiaByRol((int)($this->personaModel->getById($idLiderPrincipal1)['Id_Rol'] ?? 0)))
+            : '';
+        $jerarquiaPastor2 = $idLiderPrincipal2 > 0
+            ? ($jerarquiaPorLiderId[$idLiderPrincipal2] ?? $this->personaModel->getJerarquiaByRol((int)($this->personaModel->getById($idLiderPrincipal2)['Id_Rol'] ?? 0)))
+            : '';
+
         $this->view('discipular/ministerios/lideres', [
             'id_ministerio_filtro' => $idMinisterioFiltro,
             'nombre_ministerio_filtro' => $nombreMinisterioFiltro,
@@ -978,11 +986,28 @@ class MinisterioController extends BaseController {
                 'discipulos' => count($discipulos),
             ],
             'ministerios_navegacion' => $ministeriosNavegacion,
+            'equipo_directo_por_lider' => $equipoDirectoPorLider,
+            'cupos_panel_hombre' => $this->construirPanelCuposLider(
+                $idLiderPrincipal1,
+                $nombreLiderPrincipal1,
+                $jerarquiaPastor1 !== '' ? $jerarquiaPastor1 : 'pastor',
+                $equipoDirectoPorLider,
+                $idMinisterioFiltro,
+                'pastor_hombre'
+            ),
+            'cupos_panel_mujer' => $this->construirPanelCuposLider(
+                $idLiderPrincipal2,
+                $nombreLiderPrincipal2,
+                $jerarquiaPastor2 !== '' ? $jerarquiaPastor2 : 'pastor',
+                $equipoDirectoPorLider,
+                $idMinisterioFiltro,
+                'pastor_mujer'
+            ),
         ]);
     }
 
     public function lideresCelula() {
-        if (!AuthController::tienePermiso('ministerios', 'ver')) {
+        if (!AuthController::puede('ministerios:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -1037,7 +1062,7 @@ class MinisterioController extends BaseController {
     }
 
     public function validarCupoLider() {
-        if (!AuthController::tienePermiso('ministerios', 'ver')) {
+        if (!AuthController::puede('ministerios:ver')) {
             $this->json(['ok' => false, 'error' => 'No autorizado'], 403);
         }
 
@@ -1070,7 +1095,7 @@ class MinisterioController extends BaseController {
     }
 
     public function asignarCupo() {
-        if (!AuthController::tienePermiso('ministerios', 'ver')) {
+        if (!AuthController::puede('ministerios:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -1218,8 +1243,60 @@ class MinisterioController extends BaseController {
         $this->redirect($queryBase . '&asignacion_ok=1&asignacion_msg=' . urlencode($mensajeExito));
     }
 
+    /**
+     * Quita a una persona del cupo (equipo directo) de un líder sin borrar la persona.
+     */
+    public function liberarCupo() {
+        if (!AuthController::puede('ministerios:ver')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('discipular/ministerios/equipo-principal');
+            return;
+        }
+
+        $idLider = (int)($_POST['id_lider'] ?? 0);
+        $idPersona = (int)($_POST['id_persona'] ?? 0);
+        $idMinisterio = (int)($_POST['id_ministerio'] ?? 0);
+        $numeroCupo = (int)($_POST['numero_cupo'] ?? 0);
+
+        $queryBase = 'discipular/ministerios/equipo-principal';
+        if ($idMinisterio > 0) {
+            $queryBase .= '&id_ministerio=' . $idMinisterio;
+        }
+
+        if ($idLider <= 0 || $idPersona <= 0) {
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('Datos incompletos para quitar del cupo.'));
+            return;
+        }
+
+        $persona = $this->personaModel->getById($idPersona);
+        if (empty($persona)) {
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('La persona no existe.'));
+            return;
+        }
+
+        if ((int)($persona['Id_Lider'] ?? 0) !== $idLider) {
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('Esa persona ya no está bajo ese líder. Recarga la página.'));
+            return;
+        }
+
+        $ok = $this->personaModel->update($idPersona, ['Id_Lider' => null]);
+        if (!$ok) {
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('No se pudo quitar la persona del cupo.'));
+            return;
+        }
+
+        $msg = $numeroCupo > 0
+            ? 'Casilla ' . $numeroCupo . ' quedó libre.'
+            : 'Persona quitada del equipo directo.';
+        $this->redirect($queryBase . '&asignacion_ok=1&asignacion_msg=' . urlencode($msg));
+    }
+
     public function reasignarCupo() {
-        if (!AuthController::tienePermiso('ministerios', 'ver')) {
+        if (!AuthController::puede('ministerios:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -1468,6 +1545,97 @@ class MinisterioController extends BaseController {
         return 'Lider principal';
     }
 
+    /**
+     * Equipo directo indexado por Id_Lider (máx. 12 por líder, orden alfabético).
+     *
+     * @return array<int, array<int, array<string, mixed>>>
+     */
+    private function construirEquipoDirectoPorLider(array $liderazgoRed, array $discipulos): array {
+        $porLider = [];
+
+        $agregar = static function (array $fila) use (&$porLider): void {
+            $idLider = (int)($fila['Id_Lider'] ?? 0);
+            $idPersona = (int)($fila['Id_Persona'] ?? 0);
+            if ($idLider <= 0 || $idPersona <= 0) {
+                return;
+            }
+
+            $nombre = trim((string)($fila['Nombre'] ?? '') . ' ' . (string)($fila['Apellido'] ?? ''));
+            if (!isset($porLider[$idLider])) {
+                $porLider[$idLider] = [];
+            }
+
+            $porLider[$idLider][] = [
+                'id_persona' => $idPersona,
+                'nombre' => $nombre !== '' ? $nombre : ('Persona ' . $idPersona),
+                'documento' => trim((string)($fila['Numero_Documento'] ?? '')),
+                'telefono' => trim((string)($fila['Telefono'] ?? '')),
+                'email' => trim((string)($fila['Email'] ?? '')),
+                'nombre_rol' => trim((string)($fila['Nombre_Rol'] ?? '')),
+            ];
+        };
+
+        foreach ($liderazgoRed as $fila) {
+            $agregar($fila);
+        }
+        foreach ($discipulos as $fila) {
+            $agregar($fila);
+        }
+
+        foreach ($porLider as &$miembros) {
+            usort($miembros, static function ($a, $b) {
+                return strcasecmp((string)($a['nombre'] ?? ''), (string)($b['nombre'] ?? ''));
+            });
+            foreach ($miembros as $idx => &$miembro) {
+                $miembro['slot_numero'] = $idx + 1;
+            }
+            unset($miembro);
+        }
+        unset($miembros);
+
+        return $porLider;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function construirPanelCuposLider(
+        int $idLider,
+        string $nombreLider,
+        string $jerarquiaLider,
+        array $equipoDirectoPorLider,
+        int $idMinisterio,
+        string $tipoPanel
+    ): ?array {
+        if ($idLider <= 0) {
+            return null;
+        }
+
+        $equipo = (array)($equipoDirectoPorLider[$idLider] ?? []);
+        $slots = [];
+        for ($i = 1; $i <= 12; $i++) {
+            $persona = $equipo[$i - 1] ?? null;
+            $slots[] = [
+                'numero' => $i,
+                'libre' => empty($persona),
+                'persona' => $persona,
+            ];
+        }
+
+        $ocupados = count($equipo);
+
+        return [
+            'id_lider' => $idLider,
+            'nombre_lider' => $nombreLider !== '' ? $nombreLider : ('Líder ' . $idLider),
+            'jerarquia_lider' => $jerarquiaLider,
+            'id_ministerio' => $idMinisterio,
+            'tipo_panel' => $tipoPanel,
+            'slots' => $slots,
+            'ocupados' => $ocupados,
+            'disponibles' => max(0, 12 - $ocupados),
+        ];
+    }
+
     private function construirEncabezadoEquipoPrincipal(array $lideres, $idMinisterioFiltro, $nombreMinisterioFiltro) {
         $nombrePastor = $this->construirNombreUsuarioActual();
         $email = trim((string)($_SESSION['usuario_email'] ?? ''));
@@ -1576,7 +1744,7 @@ class MinisterioController extends BaseController {
             return true;
         }
 
-        if (!AuthController::tienePermiso('ministerios', 'editar')) {
+        if (!AuthController::puede('ministerios:editar')) {
             return false;
         }
 
@@ -1639,7 +1807,7 @@ class MinisterioController extends BaseController {
 
     public function actualizarMeta() {
         $esAdmin = AuthController::esAdministrador();
-        $puedeEditar = AuthController::tienePermiso('ministerios', 'editar');
+        $puedeEditar = AuthController::puede('ministerios:editar');
         if (!$esAdmin && !$puedeEditar) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
@@ -1682,7 +1850,7 @@ class MinisterioController extends BaseController {
 
     public function actualizarLideresPrincipales() {
         $esAdmin = AuthController::esAdministrador();
-        $puedeEditar = AuthController::tienePermiso('ministerios', 'editar');
+        $puedeEditar = AuthController::puede('ministerios:editar');
         if (!$esAdmin && !$puedeEditar) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
@@ -1808,7 +1976,7 @@ class MinisterioController extends BaseController {
 
     public function crear() {
         // Verificar permiso de crear
-        if (!AuthController::tienePermiso('ministerios', 'crear')) {
+        if (!AuthController::puede('ministerios:crear')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -1859,7 +2027,7 @@ class MinisterioController extends BaseController {
     }
 
     public function exportarExcel() {
-        if (!AuthController::tienePermiso('ministerios', 'ver')) {
+        if (!AuthController::puede('ministerios:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -1885,7 +2053,7 @@ class MinisterioController extends BaseController {
 
     public function editar() {
         // Verificar permiso de editar
-        if (!AuthController::tienePermiso('ministerios', 'editar')) {
+        if (!AuthController::puede('ministerios:editar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -1973,7 +2141,7 @@ class MinisterioController extends BaseController {
 
     public function eliminar() {
         // Verificar permiso de eliminar
-        if (!AuthController::tienePermiso('ministerios', 'eliminar')) {
+        if (!AuthController::puede('ministerios:eliminar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }

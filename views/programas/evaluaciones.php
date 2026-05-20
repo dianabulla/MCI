@@ -8,14 +8,25 @@ $evaluacionActiva = $evaluacion_seleccionada ?? null;
 $historialUsuario = (array)($resultados_usuario ?? []);
 $historialEvaluacion = (array)($resultados_evaluacion ?? []);
 $puedeGestionarEval = !empty($puede_gestionar);
+$puedeEditarEval = !empty($puede_editar);
+$puedeEliminarEval = !empty($puede_eliminar);
+$evaluacionEdicion = $evaluacion_edicion ?? null;
+$modoEdicionEval = !empty($evaluacionEdicion);
 $puedeConfigurarFechasEval = !empty($puede_configurar_fechas);
+$presentacionOk = !empty($presentacion_ok);
+$confirmarPresentarEval = "¿Seguro que quieres presentar esta evaluación?\n\n"
+    . "Después de ingresar debes presentarla: el tiempo de 20 minutos empieza a correr en cuanto abras la evaluación.\n"
+    . "Si no estás listo, cancela y no ingreses todavía.";
 $esDiscipuloRol = !empty($es_discipulo);
+$esVistaDiscipuloSimplificada = class_exists('AuthController') && AuthController::esVistaDiscipuloSimplificada();
+$avisoAccesoDiscipulo = trim((string)($aviso_acceso_discipulo ?? ''));
 $estadoIntento = (array)($estado_intento ?? []);
 $clasesLinks = (array)($clases_links ?? []);
 $accesosDirectosDiscipulo = (array)($accesos_directos_discipulo ?? []);
 $tareasPorModuloDiscipulo = (array)($tareas_por_modulo_discipulo ?? []);
 $intentosPorEvaluacion = (array)($intentos_por_evaluacion ?? []);
 $maxIntentos = (int)($max_intentos ?? 2);
+$confirmarReactivarIntentos = '¿Reactivar los intentos de esta persona en esta evaluación? Se borrarán todos los intentos registrados y podrá volver a presentar (máximo ' . $maxIntentos . ' intentos).';
 $resultadoDetalle = $resultado_detalle ?? null;
 $resumenCapacitacionPorNivel = (array)($resumen_capacitacion_por_nivel ?? []);
 $filtroNivelContexto = (int)($filtro_nivel_contexto ?? 0);
@@ -80,7 +91,7 @@ usort($grupos, static function($a, $b) {
 });
 
 $evaluacionesOcultasSinFechas = [];
-if ($puedeGestionarEval) {
+if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
     foreach ($evaluacionesLista as $evaluacionTmpFechas) {
         $fechaInicioTmp = trim((string)($evaluacionTmpFechas['Fecha_Habilitacion_Inicio'] ?? ''));
         $fechaFinTmp = trim((string)($evaluacionTmpFechas['Fecha_Habilitacion_Fin'] ?? ''));
@@ -148,6 +159,11 @@ if ($puedeGestionarEval) {
     <div>
         <h2 style="margin:0;">Discipular - Evaluaciones</h2>
         <small style="color:#637087;">Solo preguntas cerradas. Se aprueba con 80%.</small>
+        <?php if ($esVistaDiscipuloSimplificada): ?>
+            <p style="margin:8px 0 0 0;color:#637087;max-width:720px;">
+                Al pulsar <strong>Responder</strong> entrarás a la evaluación en esta misma página. El tiempo de 20 minutos empieza al entrar; si no estás listo, no la abras todavía.
+            </p>
+        <?php endif; ?>
     </div>
     <div class="header-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
         <?php if ($contextoDesdeMaterial): ?>
@@ -155,22 +171,55 @@ if ($puedeGestionarEval) {
                 <i class="bi bi-folder"></i> Volver a Material Capacitacion Destino
             </a>
         <?php endif; ?>
-        <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas">
-            <i class="bi bi-arrow-left-short"></i> Volver a Programas
-        </a>
+        <?php if (!$esVistaDiscipuloSimplificada): ?>
+            <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas">
+                <i class="bi bi-arrow-left-short"></i> Volver a Programas
+            </a>
+        <?php elseif ($contextoDesdeMaterial): ?>
+            <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones">
+                <i class="bi bi-arrow-left-short"></i> Volver a mis módulos
+            </a>
+        <?php endif; ?>
     </div>
 </div>
 
-<?php if ($filtroNivelContexto > 0 && $filtroModuloContexto > 0): ?>
+<?php if ($filtroNivelContexto > 0 && $filtroModuloContexto > 0 && !$esVistaDiscipuloSimplificada): ?>
     <div class="alert alert-info" style="margin:12px 0;">
         Contexto carpeta activo: Nivel <?= $filtroNivelContexto ?> / Modulo <?= $filtroModuloContexto ?> / Lección <?= htmlspecialchars($filtroLeccionContexto) ?>.
         Las evaluaciones mostradas y nuevas se manejan en este modulo.
+    </div>
+<?php elseif ($esVistaDiscipuloSimplificada && $contextoDesdeMaterial): ?>
+    <div class="alert alert-info" style="margin:12px 0;">
+        Nivel <?= $filtroNivelContexto ?> · Módulo <?= $filtroModuloContexto ?> — elige una evaluación y pulsa <strong>Responder</strong> cuando estés listo.
     </div>
 <?php endif; ?>
 
 <?php if ($mensajeFlash !== ''): ?>
     <div class="alert alert-<?= $tipoFlash === 'success' ? 'success' : 'danger' ?>" style="margin:12px 0;">
         <?= htmlspecialchars($mensajeFlash) ?>
+    </div>
+<?php endif; ?>
+
+<?php if ($presentacionOk): ?>
+<script>
+(function() {
+    if (window.opener && !window.opener.closed) {
+        try { window.opener.location.reload(); } catch (e) {}
+        window.close();
+    }
+})();
+</script>
+<?php endif; ?>
+
+<?php if ($avisoAccesoDiscipulo !== ''): ?>
+    <div class="alert alert-warning" style="margin:12px 0;">
+        <?= htmlspecialchars($avisoAccesoDiscipulo) ?>
+    </div>
+<?php endif; ?>
+
+<?php if ($esDiscipuloRol && !$esVistaDiscipuloSimplificada): ?>
+    <div class="alert alert-warning" style="margin:12px 0;">
+        Al pulsar <strong>Responder</strong> entrarás a la evaluación en esta misma página. El tiempo de 20 minutos empieza al entrar; si no estás listo, no la abras todavía.
     </div>
 <?php endif; ?>
 
@@ -295,6 +344,10 @@ if ($puedeGestionarEval) {
         <?php endforeach; ?>
     </div>
 </div>
+<?php elseif ($esDiscipuloRol && $avisoAccesoDiscipulo === ''): ?>
+    <div class="card report-card" style="padding:14px; margin-bottom:14px;">
+        <small style="color:#637087;">No hay módulos disponibles en este momento. Si crees que es un error, contacta a tu líder.</small>
+    </div>
 <?php endif; ?>
 
 <?php if ($puedeGestionarEval): ?>
@@ -303,8 +356,8 @@ if ($puedeGestionarEval) {
     <div style="background:linear-gradient(135deg, #1f4f93 0%, #2d5fa3 100%); padding:18px 20px; color:white;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <div>
-                <h2 style="margin:0;font-size:22px;font-weight:600;">Crear evaluación</h2>
-                <small style="opacity:0.9;">Completa los detalles y agrega preguntas</small>
+                <h2 style="margin:0;font-size:22px;font-weight:600;"><?= $modoEdicionEval ? 'Editar evaluación' : 'Crear evaluación' ?></h2>
+                <small style="opacity:0.9;"><?= $modoEdicionEval ? 'Modifica los detalles y las preguntas' : 'Completa los detalles y agrega preguntas' ?></small>
             </div>
             <div id="estadoGuardado" style="font-size:13px;color:#10b981;font-weight:bold;display:none;background:rgba(255,255,255,0.15);padding:8px 12px;border-radius:6px;">
                 <span id="textoEstado">✓ Guardado automático</span>
@@ -314,6 +367,7 @@ if ($puedeGestionarEval) {
 
     <form id="formCrearEvaluacion" method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>" style="padding:20px;">
         <input type="hidden" name="accion" value="crear_evaluacion">
+        <input type="hidden" name="id_evaluacion" id="id_evaluacion_borrador" value="0">
         <?= $contextoHiddenHtml ?>
         
         <!-- Sección: Información básica -->
@@ -407,7 +461,25 @@ if ($puedeGestionarEval) {
         const textoEstadoEl = document.getElementById('textoEstado');
         const contadorUI = document.getElementById('contadorPreguntasUI');
         let timerAutoSave = null;
+        let guardandoAhora = false;
+        let enviandoFormulario = false;
         let contadorPreguntas = 0;
+        const inputIdEvaluacion = document.getElementById('id_evaluacion_borrador');
+
+        function puedeAutoguardar() {
+            const titulo = (formEl.querySelector('[name="titulo"]')?.value || '').trim();
+            const nivel = parseInt(formEl.querySelector('[name="nivel"]')?.value || '0', 10);
+            const modulo = parseInt(formEl.querySelector('[name="modulo_numero"]')?.value || '0', 10);
+            return titulo !== '' && nivel > 0 && modulo > 0;
+        }
+
+        function aplicarIdEvaluacionDesdeRespuesta(respText) {
+            const match = String(respText || '').match(/\|id:(\d+)/);
+            if (!match || !inputIdEvaluacion) {
+                return;
+            }
+            inputIdEvaluacion.value = match[1];
+        }
 
         function actualizarContador() {
             const cantidad = document.querySelectorAll('[data-pregunta-id]').length;
@@ -447,29 +519,38 @@ if ($puedeGestionarEval) {
         }
 
         function guardarAutomaticamente() {
-            clearTimeout(timerAutoSave);
-            
+            if (guardandoAhora || enviandoFormulario || !puedeAutoguardar()) {
+                return;
+            }
+
+            guardandoAhora = true;
             const formData = new FormData(formEl);
             formData.set('preguntas', JSON.stringify(obtenerDatos()));
             formData.set('auto_save', '1');
+            if (inputIdEvaluacion && parseInt(inputIdEvaluacion.value || '0', 10) > 0) {
+                formData.set('id_evaluacion', inputIdEvaluacion.value);
+            }
 
             mostrarEstado('Guardando...', '#f59e0b');
-            
+
             fetch(window.location.href, {
                 method: 'POST',
                 body: formData
             })
             .then(resp => resp.text())
             .then(respText => {
+                guardandoAhora = false;
                 if (respText.includes('error:')) {
                     mostrarEstado('✗ Error al guardar', '#ef4444');
                     setTimeout(() => ocultarEstado(), 3000);
                 } else {
+                    aplicarIdEvaluacionDesdeRespuesta(respText);
                     mostrarEstado('✓ Guardado automático', '#10b981');
                     setTimeout(() => ocultarEstado(), 2000);
                 }
             })
             .catch(err => {
+                guardandoAhora = false;
                 console.error(err);
                 mostrarEstado('✗ Error de conexión', '#ef4444');
                 setTimeout(() => ocultarEstado(), 3000);
@@ -549,15 +630,112 @@ if ($puedeGestionarEval) {
             }
         });
 
-        // Agregar primeros campos si no hay preguntas
-        if (contenedorEl.children.length === 0) {
+        function cargarPreguntaEnBloque(preguntaDiv, pregunta) {
+            const enunciado = preguntaDiv.querySelector('[name="pregunta_enunciado[]"]');
+            if (enunciado) {
+                enunciado.value = pregunta.enunciado || '';
+            }
+            const opcionesInputs = preguntaDiv.querySelectorAll('[name="pregunta_opciones[]"]');
+            const opcionesRaw = pregunta.opciones || {};
+            const letras = ['a', 'b', 'c', 'd'];
+            letras.forEach(function(letra, idx) {
+                if (!opcionesInputs[idx]) {
+                    return;
+                }
+                const valor = opcionesRaw[letra] ?? opcionesRaw[letra.toUpperCase()] ?? '';
+                opcionesInputs[idx].value = valor;
+            });
+            const correcta = preguntaDiv.querySelector('[name="pregunta_correcta[]"]');
+            if (correcta) {
+                correcta.value = (pregunta.respuesta_correcta || '').toString().toUpperCase();
+            }
+        }
+
+        function cargarEvaluacionEnFormulario(ev) {
+            if (!ev || !formEl) {
+                return;
+            }
+            if (inputIdEvaluacion) {
+                inputIdEvaluacion.value = String(ev.Id_Evaluacion || '0');
+            }
+            const setVal = function(name, value) {
+                const field = formEl.querySelector('[name="' + name + '"]');
+                if (field) {
+                    field.value = value ?? '';
+                }
+            };
+            setVal('titulo', ev.Titulo || '');
+            setVal('descripcion', ev.Descripcion || '');
+            setVal('nivel', ev.Nivel || '');
+            setVal('modulo_numero', ev.Modulo_Numero || '');
+            setVal('puntaje_minimo', ev.Puntaje_Minimo || 80);
+            setVal('fecha_habilitacion_inicio', ev.Fecha_Habilitacion_Inicio || '');
+            setVal('fecha_habilitacion_fin', ev.Fecha_Habilitacion_Fin || '');
+            const leccionField = formEl.querySelector('[name="leccion"]');
+            if (leccionField) {
+                leccionField.value = ev.Leccion || '';
+            }
+            let preguntas = [];
+            try {
+                preguntas = JSON.parse(ev.Preguntas_JSON || '[]');
+            } catch (e) {
+                preguntas = [];
+            }
+            if (!Array.isArray(preguntas)) {
+                preguntas = [];
+            }
+            contenedorEl.innerHTML = '';
+            contadorPreguntas = 0;
+            if (preguntas.length === 0) {
+                agregarPregunta();
+            } else {
+                preguntas.forEach(function(pregunta) {
+                    agregarPregunta();
+                    const bloques = contenedorEl.querySelectorAll('[data-pregunta-id]');
+                    const ultimo = bloques[bloques.length - 1];
+                    if (ultimo) {
+                        cargarPreguntaEnBloque(ultimo, pregunta || {});
+                    }
+                });
+            }
+            actualizarContador();
+            formEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        const evaluacionEdicionInicial = <?= json_encode($evaluacionEdicion, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: 'null' ?>;
+        if (evaluacionEdicionInicial) {
+            cargarEvaluacionEnFormulario(evaluacionEdicionInicial);
+        } else if (contenedorEl.children.length === 0) {
             agregarPregunta();
         }
+
+        formEl.addEventListener('submit', function(event) {
+            if (enviandoFormulario) {
+                event.preventDefault();
+                return;
+            }
+            enviandoFormulario = true;
+
+            let inputPreguntas = formEl.querySelector('input[name="preguntas"]');
+            if (!inputPreguntas) {
+                inputPreguntas = document.createElement('input');
+                inputPreguntas.type = 'hidden';
+                inputPreguntas.name = 'preguntas';
+                formEl.appendChild(inputPreguntas);
+            }
+            inputPreguntas.value = JSON.stringify(obtenerDatos());
+        });
     })();
     </script>
 </div>
 <?php endif; ?>
 
+<?php
+$mostrarListadoEvaluacionesDiscipulo = $esDiscipuloRol
+    ? $contextoDesdeMaterial
+    : true;
+?>
+<?php if ($mostrarListadoEvaluacionesDiscipulo): ?>
 <div class="dashboard-grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin-bottom:14px;">
     <?php foreach ($grupos as $grupo): ?>
         <div class="card report-card" style="padding:12px;">
@@ -567,11 +745,14 @@ if ($puedeGestionarEval) {
                 <?php
                 $intentosUsados = (int)($intentosPorEvaluacion[$idEv] ?? 0);
                 $intentosRestantes = max(0, $maxIntentos - $intentosUsados);
-                $intentosAgotados = !$puedeGestionarEval && $intentosRestantes <= 0;
-                $yaPresentada = !$puedeGestionarEval && $intentosUsados > 0;
-                $textoAccionResponder = $puedeGestionarEval
-                    ? 'Abrir'
-                    : ($intentosUsados > 0 ? 'Volver a presentar' : 'Responder');
+                $intentosAgotados = $esDiscipuloRol && $intentosRestantes <= 0;
+                $yaPresentada = $esDiscipuloRol && $intentosUsados > 0;
+                $textoAccionResponder = $intentosUsados > 0 ? 'Responder de nuevo' : 'Responder';
+                $urlPresentarEval = PUBLIC_URL . '?url=programas/evaluaciones/presentar&evaluacion=' . $idEv;
+                if ($contextoQuery !== '') {
+                    $urlPresentarEval .= $contextoQuery;
+                }
+                $urlEditarEval = PUBLIC_URL . '?url=programas/evaluaciones' . $contextoQuery . '&editar=' . $idEv;
 
                 $preguntasEvalTmp = json_decode((string)($ev['Preguntas_JSON'] ?? '[]'), true);
                 if (!is_array($preguntasEvalTmp)) {
@@ -607,7 +788,7 @@ if ($puedeGestionarEval) {
                             $fechaFinEv = trim((string)($ev['Fecha_Habilitacion_Fin'] ?? ''));
                             ?>
                             <div><small style="color:#637087;">Ventana: <?= $fechaIniEv !== '' ? htmlspecialchars($fechaIniEv) : 'sin inicio' ?> a <?= $fechaFinEv !== '' ? htmlspecialchars($fechaFinEv) : 'sin fin' ?></small></div>
-                            <?php if (!$puedeGestionarEval): ?>
+                            <?php if ($esDiscipuloRol): ?>
                                 <div><small style="color:#637087;">Intentos: <?= $intentosUsados ?>/<?= $maxIntentos ?></small></div>
                                 <?php if ($yaPresentada): ?>
                                     <div><small style="color:#065f46;">Ya presentada. Puedes reintentar si aún tienes cupo.</small></div>
@@ -621,18 +802,36 @@ if ($puedeGestionarEval) {
                         <?php endif; ?>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-                        <?php if (!$intentosAgotados): ?>
-                            <a class="btn btn-info btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEv ?>"><?= htmlspecialchars($textoAccionResponder) ?></a>
-                        <?php else: ?>
-                            <span class="badge" style="background:#fee2e2;color:#7f1d1d;padding:8px 10px;">Intentos agotados</span>
-                        <?php endif; ?>
-                        <?php if ($puedeGestionarEval && (int)($ev['Activa'] ?? 0) === 1): ?>
-                            <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>" style="margin:0;">
-                                <input type="hidden" name="accion" value="desactivar_evaluacion">
-                                <input type="hidden" name="id_evaluacion" value="<?= $idEv ?>">
-                                <?= $contextoHiddenHtml ?>
-                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('¿Desactivar evaluación?');">Desactivar</button>
-                            </form>
+                        <?php if ($esDiscipuloRol): ?>
+                            <?php if (!$intentosAgotados): ?>
+                                <button
+                                    type="button"
+                                    class="btn btn-primary btn-sm js-abrir-evaluacion"
+                                    data-url="<?= htmlspecialchars($urlPresentarEval, ENT_QUOTES, 'UTF-8') ?>"
+                                    data-confirm="<?= htmlspecialchars($confirmarPresentarEval, ENT_QUOTES, 'UTF-8') ?>"
+                                ><?= htmlspecialchars($textoAccionResponder) ?></button>
+                            <?php else: ?>
+                                <span class="badge" style="background:#fee2e2;color:#7f1d1d;padding:8px 10px;">Intentos agotados</span>
+                            <?php endif; ?>
+                        <?php elseif ($puedeGestionarEval): ?>
+                            <a class="btn btn-primary btn-sm" href="<?= htmlspecialchars($urlEditarEval, ENT_QUOTES, 'UTF-8') ?>">Editar</a>
+                            <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEv ?>">Notas</a>
+                            <?php if ((int)($ev['Activa'] ?? 0) !== 1 && ($puedeEditarEval || $puedeEliminarEval)): ?>
+                                <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>" style="margin:0;">
+                                    <input type="hidden" name="accion" value="activar_evaluacion">
+                                    <input type="hidden" name="id_evaluacion" value="<?= $idEv ?>">
+                                    <?= $contextoHiddenHtml ?>
+                                    <button type="submit" class="btn btn-success btn-sm" onclick="return confirm('¿Activar esta evaluación?');">Activar</button>
+                                </form>
+                            <?php endif; ?>
+                            <?php if ($puedeEliminarEval): ?>
+                                <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>" style="margin:0;">
+                                    <input type="hidden" name="accion" value="eliminar_evaluacion">
+                                    <input type="hidden" name="id_evaluacion" value="<?= $idEv ?>">
+                                    <?= $contextoHiddenHtml ?>
+                                    <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('¿Eliminar esta evaluación de forma permanente? También se borrarán las notas de los alumnos vinculadas.');">Eliminar</button>
+                                </form>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </div>
 
@@ -661,12 +860,17 @@ if ($puedeGestionarEval) {
 
     <?php if (empty($grupos)): ?>
         <div class="card report-card" style="padding:14px;">
-            <small style="color:#637087;">No hay evaluaciones creadas todavía.</small>
+            <?php if ($esDiscipuloRol): ?>
+                <small style="color:#637087;">No hay evaluaciones activas con fechas vigentes para hoy en este módulo. Entra desde la tarjeta de tu nivel cuando tu líder las habilite.</small>
+            <?php else: ?>
+                <small style="color:#637087;">No hay evaluaciones creadas todavía.</small>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 </div>
+<?php endif; ?>
 
-<?php if (!empty($evaluacionActiva)): ?>
+<?php if (false && !empty($evaluacionActiva)): ?>
     <?php
     $preguntasEvaluacion = json_decode((string)($evaluacionActiva['Preguntas_JSON'] ?? '[]'), true);
     if (!is_array($preguntasEvaluacion)) {
@@ -685,7 +889,13 @@ if ($puedeGestionarEval) {
             <div style="margin-top:10px;padding:10px;border:1px solid #dfe5ef;border-radius:10px;background:#f8fafc;">
                 <div><strong>Intentos:</strong> <?= (int)($estadoIntento['intentos_realizados'] ?? 0) ?>/<?= (int)($estadoIntento['max_intentos'] ?? 2) ?></div>
                 <div><strong>Tiempo máximo:</strong> 20 minutos</div>
-                <div><strong>Tiempo restante:</strong> <span id="evalTimerDisplay"><?= (int)($estadoIntento['tiempo_restante'] ?? 0) ?> s</span></div>
+                <div><strong>Tiempo restante:</strong>
+                    <?php if (!empty($estadoIntento['intento_iniciado'])): ?>
+                    <span id="evalTimerDisplay" data-segundos="<?= (int)($estadoIntento['tiempo_restante'] ?? 0) ?>">--:--</span>
+                    <?php else: ?>
+                    <span>20:00 (al iniciar)</span>
+                    <?php endif; ?>
+                </div>
             </div>
         <?php endif; ?>
 
@@ -693,6 +903,18 @@ if ($puedeGestionarEval) {
             <div class="alert alert-danger" style="margin-top:10px;">Esta evaluación está inactiva.</div>
         <?php elseif (!$puedeGestionarEval && empty($estadoIntento['puede_responder'])): ?>
             <div class="alert alert-danger" style="margin-top:10px;">Ya agotaste el máximo de 2 intentos para esta evaluación.</div>
+        <?php elseif (!$puedeGestionarEval && empty($estadoIntento['intento_iniciado'])): ?>
+            <div class="alert alert-warning" style="margin-top:12px;margin-bottom:0;">
+                Cuando estés listo, inicia el intento. El cronómetro de <strong>20 minutos</strong> empieza solo al pulsar el botón (no al abrir esta página).
+            </div>
+            <div style="margin-top:12px;">
+                <a
+                    class="btn btn-primary btn-lg"
+                    href="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= (int)($evaluacionActiva['Id_Evaluacion'] ?? 0) ?>&iniciar=1"
+                >
+                    Iniciar evaluación (20 minutos)
+                </a>
+            </div>
         <?php else: ?>
             <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>" style="margin-top:12px;display:flex;flex-direction:column;gap:12px;">
                 <input type="hidden" name="accion" value="presentar_evaluacion">
@@ -799,9 +1021,13 @@ $resumenTodosResultados = (array)($resumen_todos_resultados ?? []);
                     <th>Nivel</th>
                     <th>Módulo</th>
                     <th>Intento</th>
+                    <th>Usados</th>
                     <th>Puntaje</th>
                     <th>Resultado</th>
                     <th>Detalle</th>
+                    <?php if ($puedeEditarEval): ?>
+                        <th>Acciones</th>
+                    <?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -823,6 +1049,8 @@ $resumenTodosResultados = (array)($resumen_todos_resultados ?? []);
                     $resultadoText = $aprobado ? 'Aprobado' : 'Reprobado';
                     $idEvalRes = (int)($resultado['Id_Evaluacion'] ?? 0);
                     $idResultadoRes = (int)($resultado['Id_Resultado'] ?? 0);
+                    $idPersonaRes = (int)($resultado['Id_Persona'] ?? 0);
+                    $intentosUsadosRes = (int)($resultado['Total_Intentos_Registrados'] ?? 0);
                     ?>
                     <tr>
                         <td><?= htmlspecialchars($fechaFormato) ?></td>
@@ -831,6 +1059,7 @@ $resumenTodosResultados = (array)($resumen_todos_resultados ?? []);
                         <td><?= (int)($resultado['Nivel'] ?? 0) ?></td>
                         <td><?= (int)($resultado['Modulo_Numero'] ?? 0) ?></td>
                         <td><?= (int)($resultado['Intento_Numero'] ?? 0) ?></td>
+                        <td><?= $intentosUsadosRes ?>/<?= $maxIntentos ?></td>
                         <td><?= number_format($puntaje, 1, ',', '.') ?>%</td>
                         <td><span style="font-weight:bold;color:<?= $aprobado ? '#065f46' : '#b91c1c' ?>"><?= $resultadoText ?></span></td>
                         <td>
@@ -840,6 +1069,21 @@ $resumenTodosResultados = (array)($resumen_todos_resultados ?? []);
                                 —
                             <?php endif; ?>
                         </td>
+                        <?php if ($puedeEditarEval): ?>
+                            <td>
+                                <?php if ($idEvalRes > 0 && $idPersonaRes > 0): ?>
+                                    <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>" style="display:inline;margin:0;" onsubmit="return confirm(<?= json_encode($confirmarReactivarIntentos, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>);">
+                                        <input type="hidden" name="accion" value="reactivar_intentos">
+                                        <input type="hidden" name="id_evaluacion" value="<?= $idEvalRes ?>">
+                                        <input type="hidden" name="id_persona" value="<?= $idPersonaRes ?>">
+                                        <?= $contextoHiddenHtml ?>
+                                        <button type="submit" class="btn btn-warning btn-sm" title="Borrar intentos y permitir presentar de nuevo">Reactivar intentos</button>
+                                    </form>
+                                <?php else: ?>
+                                    —
+                                <?php endif; ?>
+                            </td>
+                        <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -867,11 +1111,15 @@ $resumenTodosResultados = (array)($resumen_todos_resultados ?? []);
                     <th>Fecha</th>
                     <th>Persona</th>
                     <th>Intento</th>
+                    <th>Usados</th>
                     <th>Correctas</th>
                     <th>Total</th>
                     <th>Puntaje</th>
                     <th>Resultado</th>
                     <th>Detalle</th>
+                    <?php if ($puedeEditarEval): ?>
+                        <th>Acciones</th>
+                    <?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -879,11 +1127,15 @@ $resumenTodosResultados = (array)($resumen_todos_resultados ?? []);
                     <?php
                     $idResultadoAdmin = (int)($resultadoAdmin['Id_Resultado'] ?? 0);
                     $idEvalAdmin = (int)($resultadoAdmin['Id_Evaluacion'] ?? 0);
+                    $idPersonaAdmin = (int)($resultadoAdmin['Id_Persona'] ?? 0);
+                    $intentosUsadosAdmin = (int)($resultadoAdmin['Total_Intentos_Registrados'] ?? 0);
+                    $nombrePersonaAdmin = trim((string)($resultadoAdmin['Nombre'] ?? '') . ' ' . (string)($resultadoAdmin['Apellido'] ?? ''));
                     ?>
                     <tr>
                         <td><?= htmlspecialchars((string)($resultadoAdmin['Fecha_Presentacion'] ?? '')) ?></td>
-                        <td><?= htmlspecialchars(trim((string)($resultadoAdmin['Nombre'] ?? '') . ' ' . (string)($resultadoAdmin['Apellido'] ?? ''))) ?></td>
+                        <td><?= htmlspecialchars($nombrePersonaAdmin) ?></td>
                         <td><?= (int)($resultadoAdmin['Intento_Numero'] ?? 0) ?></td>
+                        <td><?= $intentosUsadosAdmin ?>/<?= $maxIntentos ?></td>
                         <td><?= (int)($resultadoAdmin['Correctas'] ?? 0) ?></td>
                         <td><?= (int)($resultadoAdmin['Total_Preguntas'] ?? 0) ?></td>
                         <td><?= (float)($resultadoAdmin['Puntaje'] ?? 0) ?>%</td>
@@ -891,6 +1143,21 @@ $resumenTodosResultados = (array)($resumen_todos_resultados ?? []);
                         <td>
                             <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEvalAdmin ?>&resultado=<?= $idResultadoAdmin ?>">Ver detalle</a>
                         </td>
+                        <?php if ($puedeEditarEval): ?>
+                            <td>
+                                <?php if ($idEvalAdmin > 0 && $idPersonaAdmin > 0): ?>
+                                    <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEvalAdmin ?>" style="display:inline;margin:0;" onsubmit="return confirm(<?= json_encode($confirmarReactivarIntentos, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>);">
+                                        <input type="hidden" name="accion" value="reactivar_intentos">
+                                        <input type="hidden" name="id_evaluacion" value="<?= $idEvalAdmin ?>">
+                                        <input type="hidden" name="id_persona" value="<?= $idPersonaAdmin ?>">
+                                        <?= $contextoHiddenHtml ?>
+                                        <button type="submit" class="btn btn-warning btn-sm" title="Borrar intentos y permitir presentar de nuevo">Reactivar intentos</button>
+                                    </form>
+                                <?php else: ?>
+                                    —
+                                <?php endif; ?>
+                            </td>
+                        <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -900,6 +1167,22 @@ $resumenTodosResultados = (array)($resumen_todos_resultados ?? []);
 <?php endif; ?>
 
 <script>
+(function() {
+    document.querySelectorAll('.js-abrir-evaluacion').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var url = btn.getAttribute('data-url') || '';
+            if (!url) {
+                return;
+            }
+            var mensaje = btn.getAttribute('data-confirm') || '';
+            if (mensaje !== '' && !window.confirm(mensaje)) {
+                return;
+            }
+            window.location.href = url;
+        });
+    });
+})();
+
 (function() {
     document.querySelectorAll('.js-disc-toggle-tareas').forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -1019,124 +1302,17 @@ $resumenTodosResultados = (array)($resumen_todos_resultados ?? []);
 })();
 
 (function() {
-    const form = document.getElementById('formCrearEvaluacion');
-    const estadoDiv = document.getElementById('estadoGuardado');
-    const textoEstado = document.getElementById('textoEstado');
-    
-    if (!form) {
-        return;
-    }
-
-    let timerGuardado = null;
-    let guardandoAhora = false;
-
-    function mostrarEstado(texto, color = '#10b981', duracion = 3000) {
-        estadoDiv.style.display = 'block';
-        estadoDiv.style.color = color;
-        textoEstado.textContent = texto;
-        
-        if (duracion > 0) {
-            clearTimeout(timerGuardado);
-            timerGuardado = setTimeout(function() {
-                estadoDiv.style.display = 'none';
-            }, duracion);
-        }
-    }
-
-    function guardarAutomaticamente() {
-        if (guardandoAhora) {
-            return;
-        }
-
-        guardandoAhora = true;
-        mostrarEstado('⏳ Guardando...', '#f59e0b', 0);
-
-        const formData = new FormData(form);
-        formData.set('accion', 'crear_evaluacion');
-        formData.set('auto_save', '1');
-
-        fetch(form.action, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.text())
-        .then(data => {
-            guardandoAhora = false;
-            if (data.includes('exitosamente') || data.includes('success')) {
-                mostrarEstado('✓ Guardado automático', '#10b981', 2000);
-            } else if (data.includes('error') || data.includes('Error')) {
-                mostrarEstado('✗ Error al guardar', '#ef4444', 3000);
-                console.error('Error al guardar:', data);
-            } else {
-                mostrarEstado('✓ Guardado automático', '#10b981', 2000);
-            }
-        })
-        .catch(error => {
-            guardandoAhora = false;
-            mostrarEstado('✗ Error de conexión', '#ef4444', 3000);
-            console.error('Error:', error);
-        });
-    }
-
-    form.querySelectorAll('input[type="text"], input[type="number"], input[type="date"], textarea, select').forEach(function(campo) {
-        campo.addEventListener('change', function() {
-            clearTimeout(timerGuardado);
-            timerGuardado = setTimeout(guardarAutomaticamente, 2000);
-        });
-
-        if (campo.tagName === 'INPUT' && campo.type === 'text') {
-            campo.addEventListener('input', function() {
-                clearTimeout(timerGuardado);
-                timerGuardado = setTimeout(guardarAutomaticamente, 3000);
-            });
-        }
-    });
-
-    const btnAgregarPregunta = document.getElementById('btnAgregarPregunta');
-    const contenedorPreguntas = document.getElementById('contenedorPreguntas');
-    
-    if (btnAgregarPregunta && contenedorPreguntas) {
-        const observer = new MutationObserver(function() {
-            clearTimeout(timerGuardado);
-            timerGuardado = setTimeout(guardarAutomaticamente, 1500);
-            
-            contenedorPreguntas.querySelectorAll('input, select').forEach(function(campo) {
-                if (!campo.__autoSaveListener) {
-                    campo.__autoSaveListener = true;
-                    campo.addEventListener('change', function() {
-                        clearTimeout(timerGuardado);
-                        timerGuardado = setTimeout(guardarAutomaticamente, 2000);
-                    });
-                    
-                    if (campo.tagName === 'INPUT' && campo.type === 'text') {
-                        campo.addEventListener('input', function() {
-                            clearTimeout(timerGuardado);
-                            timerGuardado = setTimeout(guardarAutomaticamente, 3000);
-                        });
-                    }
-                }
-            });
-        });
-
-        observer.observe(contenedorPreguntas, {
-            childList: true,
-            subtree: true,
-            characterData: true
-        });
-    }
-})();
-
-(function() {
     const timerEl = document.getElementById('evalTimerDisplay');
     const btnEnviar = document.getElementById('btnEnviarEvaluacion');
     if (!timerEl || !btnEnviar) {
         return;
     }
 
-    let segundos = parseInt(timerEl.textContent, 10);
+    let segundos = parseInt(timerEl.getAttribute('data-segundos') || '0', 10);
     if (Number.isNaN(segundos) || segundos < 0) {
         segundos = 0;
     }
+    timerEl.setAttribute('data-segundos', String(segundos));
 
     function formatearTiempo(totalSegundos) {
         const minutos = Math.floor(totalSegundos / 60);

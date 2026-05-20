@@ -25,13 +25,18 @@ class DiscipularEvaluacionController extends BaseController {
         }
 
         $esAdmin = AuthController::esAdministrador();
-        $esDiscipulo = AuthController::esRolDiscipuloUsuario();
-        $puedeVer = $esAdmin || $esDiscipulo || AuthController::tienePermiso('discipular_evaluaciones', 'ver');
-        $puedeCrear = !$esDiscipulo && ($esAdmin || AuthController::tienePermiso('discipular_evaluaciones', 'crear'));
-        $puedeEditar = !$esDiscipulo && ($esAdmin || AuthController::tienePermiso('discipular_evaluaciones', 'editar'));
-        $puedeEliminar = !$esDiscipulo && ($esAdmin || AuthController::tienePermiso('discipular_evaluaciones', 'eliminar'));
+        $esDiscipulo = AuthController::usaVistaDiscipuloCapacitacionDestino();
+        $esMaestroCap = AuthController::puedeGestionarCapDestinoComoMaestro();
+        $idPersona = AuthController::obtenerIdPersonaSesion();
+        $nivelesInscripcionCap = AuthController::obtenerNivelesCapacitacionDestinoInscripcion($idPersona);
+        $puedeVer = AuthController::puedeAccederEvaluacionesDiscipular()
+            || !empty($nivelesInscripcionCap);
+        $puedeGestionarEval = AuthController::puedeGestionarEvaluacionesDiscipular();
+        $puedeCrear = !$esDiscipulo && ($esAdmin || AuthController::puede('discipular_evaluaciones:crear') || $esMaestroCap);
+        $puedeEditar = !$esDiscipulo && ($esAdmin || AuthController::puede('discipular_evaluaciones:editar') || $esMaestroCap);
+        $puedeEliminar = !$esDiscipulo && ($esAdmin || AuthController::puede('discipular_evaluaciones:eliminar') || $esMaestroCap);
         $puedeConfigurarFechas = $this->tienePermisoConfigurarFechas();
-        $puedeGestionar = $puedeCrear || $puedeEditar || $puedeEliminar;
+        $puedeGestionar = $puedeGestionarEval || $puedeCrear || $puedeEditar || $puedeEliminar;
 
         if (!$puedeVer) {
             header('Location: ' . rtrim(BASE_URL, '/') . '/public/?url=auth/acceso-denegado');
@@ -39,7 +44,7 @@ class DiscipularEvaluacionController extends BaseController {
         }
 
         $contextoMaterial = $this->obtenerContextoMaterialDesdeRequest();
-        if (empty($contextoMaterial) && !$esDiscipulo) {
+        if (empty($contextoMaterial) && !$esDiscipulo && !$esMaestroCap) {
             $this->redirect('home/material/capacitacion-destino');
         }
 
@@ -50,12 +55,20 @@ class DiscipularEvaluacionController extends BaseController {
                 $this->procesarCrearEvaluacion();
             }
 
-            if ($accion === 'desactivar_evaluacion' && ($puedeEliminar || $puedeEditar)) {
+            if ($accion === 'activar_evaluacion' && ($puedeEliminar || $puedeEditar)) {
                 $idEvaluacion = (int)($_POST['id_evaluacion'] ?? 0);
                 if ($idEvaluacion > 0) {
-                    $this->model->desactivarEvaluacion($idEvaluacion);
+                    $this->model->activarEvaluacion($idEvaluacion);
                 }
-                $this->redirigirConMensaje('Evaluación desactivada.', 'success');
+                $this->redirigirConMensaje('Evaluación activada.', 'success');
+            }
+
+            if ($accion === 'eliminar_evaluacion' && $puedeEliminar) {
+                $idEvaluacion = (int)($_POST['id_evaluacion'] ?? 0);
+                if ($idEvaluacion > 0) {
+                    $this->model->eliminarEvaluacion($idEvaluacion);
+                }
+                $this->redirigirConMensaje('Evaluación eliminada.', 'success');
             }
 
             if ($accion === 'configurar_fechas' && $puedeConfigurarFechas) {
@@ -69,10 +82,24 @@ class DiscipularEvaluacionController extends BaseController {
             if ($accion === 'subir_tarea_entrega' && $esDiscipulo) {
                 $this->procesarEntregaTareaDiscipulo();
             }
+
+            if ($accion === 'reactivar_intentos' && $puedeEditar) {
+                $this->procesarReactivarIntentos();
+            }
         }
 
-        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
         $idEvaluacionSeleccionada = (int)($_GET['evaluacion'] ?? 0);
+
+        if (
+            $_SERVER['REQUEST_METHOD'] === 'GET'
+            && $idEvaluacionSeleccionada > 0
+            && !$puedeGestionar
+            && (int)($_GET['resultado'] ?? 0) <= 0
+        ) {
+            $queryContexto = $this->construirQueryContextoMaterial($contextoMaterial);
+            $this->redirect('programas/evaluaciones/presentar&evaluacion=' . $idEvaluacionSeleccionada . $queryContexto);
+        }
+
         $contextoDesdeMaterial = !empty($contextoMaterial);
         $filtroNivelContexto = (int)($contextoMaterial['nivel'] ?? 0);
         $filtroModuloContexto = (int)($contextoMaterial['modulo'] ?? 0);
@@ -82,7 +109,7 @@ class DiscipularEvaluacionController extends BaseController {
         if (!empty($leccionesContexto) && !in_array($filtroLeccionContexto, $leccionesContexto, true)) {
             $filtroLeccionContexto = (string)$leccionesContexto[0];
         }
-        $nivelesPermitidos = $this->obtenerNivelesPermitidosPorInscripcion($idPersona);
+        $nivelesPermitidos = $nivelesInscripcionCap;
 
         $evaluaciones = $puedeGestionar
             ? $this->model->listarEvaluaciones()
@@ -123,6 +150,7 @@ class DiscipularEvaluacionController extends BaseController {
             'tiempo_inicio' => 0,
             'tiempo_restante' => 0,
             'puede_responder' => false,
+            'intento_iniciado' => false,
         ];
 
         if ($idEvaluacionSeleccionada > 0) {
@@ -165,6 +193,9 @@ class DiscipularEvaluacionController extends BaseController {
                 // Una fila por persona: último intento presentado de esta evaluación.
                 $resultadosEvaluacion = $this->model->listarUltimosResultadosPorEvaluacion((int)$evaluacionSeleccionada['Id_Evaluacion']);
             }
+
+            $resumenTodosResultados = $this->enriquecerFilasConTotalIntentos($resumenTodosResultados);
+            $resultadosEvaluacion = $this->enriquecerFilasConTotalIntentos($resultadosEvaluacion);
         }
 
         $resultadoDetalle = null;
@@ -224,11 +255,31 @@ class DiscipularEvaluacionController extends BaseController {
             }
         }
 
+        $evaluacionEdicion = null;
+        $idEditarEvaluacion = (int)($_GET['editar'] ?? 0);
+        if ($idEditarEvaluacion > 0 && $puedeGestionar) {
+            $evalTmp = $this->model->obtenerEvaluacion($idEditarEvaluacion);
+            if ($evalTmp && $this->puedeModificarEvaluacion((array)$evalTmp)) {
+                if ($filtroNivelContexto > 0 && $filtroModuloContexto > 0) {
+                    $nivelEvalTmp = (int)($evalTmp['Nivel'] ?? 0);
+                    $moduloEvalTmp = (int)($evalTmp['Modulo_Numero'] ?? 0);
+                    if ($nivelEvalTmp === $filtroNivelContexto && $moduloEvalTmp === $filtroModuloContexto) {
+                        $evaluacionEdicion = $evalTmp;
+                    }
+                } else {
+                    $evaluacionEdicion = $evalTmp;
+                }
+            }
+        }
+
         $this->view('programas/evaluaciones', [
             'pageTitle' => 'Discipular - Evaluaciones',
             'es_admin' => $esAdmin,
             'es_discipulo' => $esDiscipulo,
             'puede_gestionar' => $puedeGestionar,
+            'puede_editar' => $puedeEditar,
+            'puede_eliminar' => $puedeEliminar,
+            'evaluacion_edicion' => $evaluacionEdicion,
             'evaluaciones' => $evaluaciones,
             'evaluacion_seleccionada' => $evaluacionSeleccionada,
             'resultados_usuario' => $resultadosUsuario,
@@ -238,6 +289,7 @@ class DiscipularEvaluacionController extends BaseController {
             'resumen_capacitacion_por_nivel' => $resumenCapacitacionPorNivel,
             'estado_intento' => $estadoIntento,
             'niveles_permitidos' => $nivelesPermitidos,
+            'aviso_acceso_discipulo' => $this->construirAvisoAccesoDiscipuloCapDestino($idPersona, $nivelesPermitidos, $accesosDirectosDiscipulo),
             'clases_links' => $this->construirLinksClases($nivelesPermitidos),
             'accesos_directos_discipulo' => $accesosDirectosDiscipulo,
             'tareas_por_modulo_discipulo' => $tareasPorModuloDiscipulo,
@@ -251,6 +303,91 @@ class DiscipularEvaluacionController extends BaseController {
             'lecciones_por_nivel_modulo' => $mapaLecciones,
             'mensaje' => (string)($_GET['mensaje'] ?? ''),
             'tipo' => (string)($_GET['tipo'] ?? ''),
+            'presentacion_ok' => !empty($_GET['presentacion_ok']),
+        ]);
+    }
+
+    public function presentar(): void {
+        if (!AuthController::estaAutenticado()) {
+            $this->redirect('auth/login');
+        }
+
+        $esDiscipulo = AuthController::usaVistaDiscipuloCapacitacionDestino();
+        $idPersona = AuthController::obtenerIdPersonaSesion();
+        $puedeVer = AuthController::puedeAccederEvaluacionesDiscipular()
+            || !empty(AuthController::obtenerNivelesCapacitacionDestinoInscripcion($idPersona));
+        $puedeGestionar = !$esDiscipulo && AuthController::puedeGestionarEvaluacionesDiscipular();
+
+        if (!$puedeVer) {
+            header('Location: ' . rtrim(BASE_URL, '/') . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $preview = !empty($_GET['preview']) && $puedeGestionar;
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $accion = trim((string)($_POST['accion'] ?? ''));
+            if ($accion === 'presentar_evaluacion') {
+                $this->procesarPresentacion();
+            }
+            return;
+        }
+
+        $idEvaluacion = (int)($_GET['evaluacion'] ?? 0);
+        $contextoMaterial = $this->obtenerContextoMaterialDesdeRequest();
+        $queryContexto = $this->construirQueryContextoMaterial($contextoMaterial);
+        $urlListado = PUBLIC_URL . '?url=programas/evaluaciones' . $queryContexto;
+
+        if ($idEvaluacion <= 0) {
+            $this->redirect('programas/evaluaciones' . $queryContexto . '&tipo=error&mensaje=' . urlencode('Evaluación no indicada.'));
+        }
+
+        $evaluacion = $this->model->obtenerEvaluacion($idEvaluacion);
+        if (!$evaluacion) {
+            $this->redirect('programas/evaluaciones' . $queryContexto . '&tipo=error&mensaje=' . urlencode('Evaluación no encontrada.'));
+        }
+
+        if (!$preview) {
+            if ((int)($evaluacion['Activa'] ?? 0) !== 1) {
+                $this->redirect('programas/evaluaciones' . $queryContexto . '&tipo=error&mensaje=' . urlencode('Esta evaluación está inactiva.'));
+            }
+
+            if (!$this->estaDisponiblePorFecha($evaluacion)) {
+                $this->redirect('programas/evaluaciones' . $queryContexto . '&tipo=error&mensaje=' . urlencode('La evaluación está fuera del rango de fechas habilitado.'));
+            }
+
+            $nivelesPermitidos = $this->obtenerNivelesPermitidosPorInscripcion($idPersona);
+            $nivelEvaluacion = (int)($evaluacion['Nivel'] ?? 0);
+            if (!in_array($nivelEvaluacion, $nivelesPermitidos, true)) {
+                $this->redirect('programas/evaluaciones' . $queryContexto . '&tipo=error&mensaje=' . urlencode('No tienes acceso a esta evaluación.'));
+            }
+
+            $this->asegurarIntentoIniciadoAlAbrir($idEvaluacion, $idPersona, $evaluacion);
+        }
+
+        $estadoIntento = $idPersona > 0
+            ? $this->construirEstadoIntento($idEvaluacion, $idPersona)
+            : [
+                'intentos_realizados' => 0,
+                'intentos_disponibles' => self::MAX_INTENTOS,
+                'max_intentos' => self::MAX_INTENTOS,
+                'tiempo_maximo_segundos' => self::MAX_SEGUNDOS_INTENTO,
+                'tiempo_inicio' => 0,
+                'tiempo_restante' => 0,
+                'puede_responder' => false,
+                'intento_iniciado' => false,
+            ];
+
+        $this->view('programas/evaluacion_presentar', [
+            'pageTitle' => (string)($evaluacion['Titulo'] ?? 'Evaluación'),
+            'evaluacion' => $evaluacion,
+            'estado_intento' => $estadoIntento,
+            'preview' => $preview,
+            'puede_gestionar' => $puedeGestionar,
+            'url_listado' => $urlListado,
+            'url_presentar' => PUBLIC_URL . '?url=programas/evaluaciones/presentar&evaluacion=' . $idEvaluacion . $queryContexto,
+            'contexto_hidden_html' => $this->construirHiddenContextoMaterial($contextoMaterial),
+            'max_intentos' => self::MAX_INTENTOS,
         ]);
     }
 
@@ -259,8 +396,7 @@ class DiscipularEvaluacionController extends BaseController {
             $this->redirect('auth/login');
         }
 
-        $esDiscipulo = AuthController::esRolDiscipuloUsuario();
-        if (!$esDiscipulo) {
+        if (!AuthController::usaVistaDiscipuloCapacitacionDestino()) {
             header('Location: ' . rtrim(BASE_URL, '/') . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -276,7 +412,7 @@ class DiscipularEvaluacionController extends BaseController {
             }
         }
 
-        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+        $idPersona = AuthController::obtenerIdPersonaSesion();
         $nivelesPermitidos = $this->obtenerNivelesPermitidosPorInscripcion($idPersona);
         $evaluacionesActivas = $this->model->listarEvaluacionesActivas();
         $evaluacionesActivas = array_values(array_filter($evaluacionesActivas, static function($evaluacion) use ($nivelesPermitidos) {
@@ -325,13 +461,12 @@ class DiscipularEvaluacionController extends BaseController {
             $this->redirect('auth/login');
         }
 
-        $esDiscipulo = AuthController::esRolDiscipuloUsuario();
-        if (!$esDiscipulo) {
+        if (!AuthController::usaVistaDiscipuloCapacitacionDestino()) {
             header('Location: ' . rtrim(BASE_URL, '/') . '/public/?url=auth/acceso-denegado');
             exit;
         }
 
-        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+        $idPersona = AuthController::obtenerIdPersonaSesion();
         $nivel = (int)($_GET['nivel'] ?? 0);
         $modulo = (int)($_GET['modulo'] ?? 0);
 
@@ -483,25 +618,98 @@ class DiscipularEvaluacionController extends BaseController {
             }
         }
 
-        $this->model->crearEvaluacion([
+        $payload = [
             'titulo' => $titulo,
             'descripcion' => $descripcion,
             'nivel' => $nivel,
             'modulo_numero' => $moduloNumero,
-            'leccion' => $leccion,
+            'leccion' => $leccion !== '' ? $leccion : null,
             'puntaje_minimo' => $puntajeMinimo,
             'preguntas_json' => json_encode($preguntas, JSON_UNESCAPED_UNICODE),
             'fecha_habilitacion_inicio' => $fechaHabilitacionInicio !== '' ? $fechaHabilitacionInicio : null,
             'fecha_habilitacion_fin' => $fechaHabilitacionFin !== '' ? $fechaHabilitacionFin : null,
             'creado_por' => (int)($_SESSION['usuario_id'] ?? 0),
-        ]);
+        ];
+
+        $idEvaluacion = (int)($_POST['id_evaluacion'] ?? 0);
+        $idEvaluacion = $this->resolverIdEvaluacionParaGuardar($idEvaluacion, $nivel, $moduloNumero, $leccion, (int)$payload['creado_por']);
+
+        if ($idEvaluacion > 0) {
+            $existente = $this->model->obtenerEvaluacion($idEvaluacion);
+            if (!$existente) {
+                if ($esAutoSave) {
+                    echo 'error: La evaluación ya no está disponible para editar.';
+                    return;
+                }
+                $this->redirigirConMensaje('La evaluación ya no está disponible para editar.', 'error');
+            }
+
+            if (!$this->puedeModificarEvaluacion((array)$existente)) {
+                if ($esAutoSave) {
+                    echo 'error: No tienes permiso para editar esta evaluación.';
+                    return;
+                }
+                $this->redirigirConMensaje('No tienes permiso para editar esta evaluación.', 'error');
+            }
+
+            $this->model->actualizarEvaluacion($idEvaluacion, $payload);
+
+            if ($esAutoSave) {
+                echo 'success: Evaluación actualizada.|id:' . $idEvaluacion;
+                return;
+            }
+
+            $this->redirigirConMensaje('Evaluación actualizada correctamente.', 'success');
+            return;
+        }
+
+        $nuevoId = $this->model->crearEvaluacion($payload);
 
         if ($esAutoSave) {
-            echo 'success: Evaluación guardada automáticamente.';
+            echo 'success: Evaluación guardada automáticamente.|id:' . $nuevoId;
             return;
         }
 
         $this->redirigirConMensaje('Evaluación creada correctamente.', 'success');
+    }
+
+    private function resolverIdEvaluacionParaGuardar(int $idEvaluacion, int $nivel, int $moduloNumero, string $leccion, int $creadoPor): int {
+        if ($idEvaluacion > 0) {
+            return $idEvaluacion;
+        }
+
+        $existente = $this->model->buscarEvaluacionActivaPorContexto($nivel, $moduloNumero, $leccion, $creadoPor);
+        if (!$existente) {
+            return 0;
+        }
+
+        if (!$this->puedeModificarEvaluacion((array)$existente)) {
+            return 0;
+        }
+
+        return (int)($existente['Id_Evaluacion'] ?? 0);
+    }
+
+    private function puedeModificarEvaluacion(array $evaluacion): bool {
+        if (AuthController::esAdministrador()) {
+            return true;
+        }
+
+        if (AuthController::puedeGestionarCapDestinoComoMaestro()) {
+            return true;
+        }
+
+        if (AuthController::puede('discipular_evaluaciones:editar')) {
+            return true;
+        }
+
+        if (AuthController::puede('discipular_evaluaciones:crear')) {
+            $creador = (int)($evaluacion['Creado_Por'] ?? 0);
+            $usuario = (int)($_SESSION['usuario_id'] ?? 0);
+            return $creador > 0 && $creador === $usuario;
+        }
+
+        return false;
     }
 
     private function normalizarPreguntas(array $preguntasRaw, string $modoRespuestas = 'mixta'): array {
@@ -651,37 +859,34 @@ class DiscipularEvaluacionController extends BaseController {
         $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
 
         if ($idEvaluacion <= 0 || $idPersona <= 0) {
-            $this->redirigirConMensaje('No fue posible registrar tu evaluación.', 'error');
+            $this->redirigirDesdePresentacion('No fue posible registrar tu evaluación.', 'error');
         }
 
         $evaluacion = $this->model->obtenerEvaluacion($idEvaluacion);
         if (!$evaluacion || (int)($evaluacion['Activa'] ?? 0) !== 1) {
-            $this->redirigirConMensaje('La evaluación no está disponible.', 'error', $idEvaluacion);
+            $this->redirigirDesdePresentacion('La evaluación no está disponible.', 'error', $idEvaluacion);
         }
 
         if (!$this->estaDisponiblePorFecha($evaluacion)) {
-            $this->redirigirConMensaje('La evaluación está fuera del rango de fechas habilitado.', 'error', $idEvaluacion);
+            $this->redirigirDesdePresentacion('La evaluación está fuera del rango de fechas habilitado.', 'error', $idEvaluacion);
         }
 
         $nivelesPermitidos = $this->obtenerNivelesPermitidosPorInscripcion($idPersona);
         $nivelEvaluacion = (int)($evaluacion['Nivel'] ?? 0);
         if (!in_array($nivelEvaluacion, $nivelesPermitidos, true)) {
-            $this->redirigirConMensaje('No tienes acceso a esta evaluación.', 'error', $idEvaluacion);
+            $this->redirigirDesdePresentacion('No tienes acceso a esta evaluación.', 'error', $idEvaluacion);
         }
 
         $intentosRealizados = $this->model->contarIntentosPersonaEvaluacion($idEvaluacion, $idPersona);
         if ($intentosRealizados >= self::MAX_INTENTOS) {
-            $this->redirigirConMensaje('Ya agotaste el máximo de 2 intentos para esta evaluación.', 'error', $idEvaluacion);
+            $this->redirigirDesdePresentacion('Ya agotaste el máximo de 2 intentos para esta evaluación.', 'error', $idEvaluacion);
         }
 
-        $timer = $this->obtenerTimerIntento($idEvaluacion);
-        $inicioIntento = (int)($timer['started_at'] ?? 0);
-        $intentoTimer = (int)($timer['attempt'] ?? 0);
         $intentoEsperado = $intentosRealizados + 1;
+        $inicioIntento = $this->model->obtenerInicioIntentoActivo($idEvaluacion, $idPersona, $intentoEsperado);
 
-        if ($inicioIntento <= 0 || $intentoTimer !== $intentoEsperado) {
-            $this->setTimerIntento($idEvaluacion, $intentoEsperado, time());
-            $this->redirigirConMensaje('Se inició tu intento. Vuelve a enviar la evaluación dentro de 20 minutos.', 'error', $idEvaluacion);
+        if ($inicioIntento === null) {
+            $this->redirigirDesdePresentacion('Debes abrir la evaluación para que inicie el tiempo antes de enviarla.', 'error', $idEvaluacion);
         }
 
         $segundosTranscurridos = time() - $inicioIntento;
@@ -700,13 +905,18 @@ class DiscipularEvaluacionController extends BaseController {
                 'aprobado' => false,
             ]);
 
+            $this->model->eliminarIntentoActivo($idEvaluacion, $idPersona, $intentoEsperado);
             $this->limpiarTimerIntento($idEvaluacion);
-            $this->redirigirConMensaje('Tiempo agotado (20 minutos). El intento quedó registrado con 0%.', 'error', $idEvaluacion);
+            if ($this->esRetornoListadoPresentacion()) {
+                $this->redirigirTrasPresentar('Tiempo agotado (20 minutos). El intento quedó registrado con 0%.', 'error');
+            } else {
+                $this->redirigirConMensaje('Tiempo agotado (20 minutos). El intento quedó registrado con 0%.', 'error', $idEvaluacion);
+            }
         }
 
         $preguntas = json_decode((string)($evaluacion['Preguntas_JSON'] ?? '[]'), true);
         if (!is_array($preguntas) || empty($preguntas)) {
-            $this->redirigirConMensaje('La evaluación no tiene preguntas válidas.', 'error', $idEvaluacion);
+            $this->redirigirDesdePresentacion('La evaluación no tiene preguntas válidas.', 'error', $idEvaluacion);
         }
 
         $respuestasCerradas = (array)($_POST['respuesta'] ?? []);
@@ -758,7 +968,7 @@ class DiscipularEvaluacionController extends BaseController {
         }
 
         if ($total <= 0) {
-            $this->redirigirConMensaje('La evaluación no tiene preguntas cerradas válidas.', 'error', $idEvaluacion);
+            $this->redirigirDesdePresentacion('La evaluación no tiene preguntas cerradas válidas.', 'error', $idEvaluacion);
         }
 
         $puntaje = round(($correctas / $total) * 100, 2);
@@ -783,14 +993,75 @@ class DiscipularEvaluacionController extends BaseController {
             $this->registrarAsistenciaClaseDiscipulo($idPersona, $nivelEvaluacion, $moduloEvaluacion);
         }
 
+        $this->model->eliminarIntentoActivo($idEvaluacion, $idPersona, $intentoEsperado);
         $this->limpiarTimerIntento($idEvaluacion);
 
         $mensaje = $aprobado
             ? 'Evaluación enviada. Correctas: ' . $correctas . ' de ' . $total . '. Puntaje: ' . $puntaje . '%. ¡Aprobaste!'
             : 'Evaluación enviada. Correctas: ' . $correctas . ' de ' . $total . '. Puntaje: ' . $puntaje . '%. No alcanzaste el mínimo.';
 
-        // Tras enviar, se muestra feedback inmediato del intento guardado.
-        $this->redirigirConMensaje($mensaje, $aprobado ? 'success' : 'error', $idEvaluacion, $idResultado);
+        if ($this->esRetornoListadoPresentacion()) {
+            $this->redirigirTrasPresentar($mensaje, $aprobado ? 'success' : 'error');
+        } else {
+            $this->redirigirConMensaje($mensaje, $aprobado ? 'success' : 'error', $idEvaluacion, $idResultado);
+        }
+    }
+
+    private function asegurarIntentoIniciadoAlAbrir(int $idEvaluacion, int $idPersona, array $evaluacion): void {
+        $intentosRealizados = $this->model->contarIntentosPersonaEvaluacion($idEvaluacion, $idPersona);
+        if ($intentosRealizados >= self::MAX_INTENTOS) {
+            $this->redirigirTrasPresentar('Ya agotaste el máximo de 2 intentos para esta evaluación.', 'error');
+        }
+
+        $intentoEsperado = $intentosRealizados + 1;
+        if ($this->model->existeResultadoIntento($idEvaluacion, $idPersona, $intentoEsperado)) {
+            $this->redirigirTrasPresentar('Este intento ya fue registrado.', 'error');
+        }
+
+        $inicioIntento = $this->model->obtenerInicioIntentoActivo($idEvaluacion, $idPersona, $intentoEsperado);
+        if ($inicioIntento !== null) {
+            $this->setTimerIntento($idEvaluacion, $intentoEsperado, $inicioIntento);
+            return;
+        }
+
+        $inicio = time();
+        $this->model->registrarInicioIntentoActivo($idEvaluacion, $idPersona, $intentoEsperado, $inicio);
+        $this->setTimerIntento($idEvaluacion, $intentoEsperado, $inicio);
+        $this->limpiarTimerIntentoLegacyObsoleto($idEvaluacion, $intentoEsperado);
+    }
+
+    private function accionIniciarIntentoEvaluacion(int $idEvaluacion, int $idPersona): void {
+        $evaluacion = $this->model->obtenerEvaluacion($idEvaluacion);
+        if (!$evaluacion || (int)($evaluacion['Activa'] ?? 0) !== 1) {
+            $this->redirigirConMensaje('La evaluación no está disponible.', 'error', $idEvaluacion);
+        }
+
+        if (!$this->estaDisponiblePorFecha($evaluacion)) {
+            $this->redirigirConMensaje('La evaluación está fuera del rango de fechas habilitado.', 'error', $idEvaluacion);
+        }
+
+        $nivelesPermitidos = $this->obtenerNivelesPermitidosPorInscripcion($idPersona);
+        $nivelEvaluacion = (int)($evaluacion['Nivel'] ?? 0);
+        if (!in_array($nivelEvaluacion, $nivelesPermitidos, true)) {
+            $this->redirigirConMensaje('No tienes acceso a esta evaluación.', 'error', $idEvaluacion);
+        }
+
+        $intentosRealizados = $this->model->contarIntentosPersonaEvaluacion($idEvaluacion, $idPersona);
+        if ($intentosRealizados >= self::MAX_INTENTOS) {
+            $this->redirigirConMensaje('Ya agotaste el máximo de 2 intentos para esta evaluación.', 'error', $idEvaluacion);
+        }
+
+        $intentoEsperado = $intentosRealizados + 1;
+        if ($this->model->existeResultadoIntento($idEvaluacion, $idPersona, $intentoEsperado)) {
+            $this->redirigirConMensaje('Este intento ya fue registrado.', 'error', $idEvaluacion);
+        }
+
+        $inicio = time();
+        $this->model->registrarInicioIntentoActivo($idEvaluacion, $idPersona, $intentoEsperado, $inicio);
+        $this->setTimerIntento($idEvaluacion, $intentoEsperado, $inicio);
+        $this->limpiarTimerIntentoLegacyObsoleto($idEvaluacion, $intentoEsperado);
+
+        $this->redirigirConMensaje('Intento iniciado. Tienes 20 minutos para enviar la evaluación.', 'success', $idEvaluacion);
     }
 
     private function procesarConfigurarFechas(): void {
@@ -864,8 +1135,46 @@ class DiscipularEvaluacionController extends BaseController {
             return true;
         }
 
-        // Permiso granular obligatorio para controlar publicación por fechas.
-        return AuthController::tienePermiso(self::MODULO_CONFIG_FECHAS, 'editar');
+        if (AuthController::puedeGestionarCapDestinoComoMaestro()) {
+            return true;
+        }
+
+        return AuthController::puede(self::MODULO_CONFIG_FECHAS . ':ver')
+            || AuthController::puede(self::MODULO_CONFIG_FECHAS . ':editar');
+    }
+
+    private function procesarReactivarIntentos(): void {
+        $idEvaluacion = (int)($_POST['id_evaluacion'] ?? 0);
+        $idPersona = (int)($_POST['id_persona'] ?? 0);
+
+        if ($idEvaluacion <= 0 || $idPersona <= 0) {
+            $this->redirigirConMensaje('Datos inválidos para reactivar intentos.', 'error', $idEvaluacion);
+        }
+
+        $evaluacion = $this->model->obtenerEvaluacion($idEvaluacion);
+        if (empty($evaluacion)) {
+            $this->redirigirConMensaje('Evaluación no encontrada.', 'error');
+        }
+
+        $eliminados = $this->model->reactivarIntentosPersonaEvaluacion($idEvaluacion, $idPersona);
+        $mensaje = $eliminados > 0
+            ? 'Intentos reactivados: se eliminaron ' . $eliminados . ' registro(s). La persona puede volver a presentar (máximo ' . self::MAX_INTENTOS . ' intentos).'
+            : 'No había intentos registrados para esa persona en esta evaluación. Ya puede presentar por primera vez.';
+
+        $this->redirigirConMensaje($mensaje, 'success', $idEvaluacion);
+    }
+
+    private function enriquecerFilasConTotalIntentos(array $filas): array {
+        foreach ($filas as &$fila) {
+            $idEvaluacion = (int)($fila['Id_Evaluacion'] ?? 0);
+            $idPersona = (int)($fila['Id_Persona'] ?? 0);
+            $fila['Total_Intentos_Registrados'] = ($idEvaluacion > 0 && $idPersona > 0)
+                ? $this->model->contarIntentosPersonaEvaluacion($idEvaluacion, $idPersona)
+                : 0;
+        }
+        unset($fila);
+
+        return $filas;
     }
 
     private function redirigirConMensaje(string $mensaje, string $tipo, int $idEvaluacion = 0, int $idResultado = 0): void {
@@ -874,6 +1183,47 @@ class DiscipularEvaluacionController extends BaseController {
         $queryEvaluacion = $idEvaluacion > 0 ? '&evaluacion=' . $idEvaluacion : '';
         $queryResultado = $idResultado > 0 ? '&resultado=' . $idResultado : '';
         $this->redirect('programas/evaluaciones' . $queryContexto . $queryEvaluacion . $queryResultado . '&mensaje=' . urlencode($mensaje) . '&tipo=' . urlencode($tipo));
+    }
+
+    private function esRetornoListadoPresentacion(): bool {
+        return trim((string)($_POST['retorno_lista'] ?? '')) === '1';
+    }
+
+    private function redirigirTrasPresentar(string $mensaje, string $tipo): void {
+        $contexto = $this->obtenerContextoMaterialDesdeRequest();
+        $queryContexto = $this->construirQueryContextoMaterial($contexto);
+        $this->redirect('programas/evaluaciones' . $queryContexto . '&mensaje=' . urlencode($mensaje) . '&tipo=' . urlencode($tipo) . '&presentacion_ok=1');
+    }
+
+    private function redirigirDesdePresentacion(string $mensaje, string $tipo, int $idEvaluacion = 0, int $idResultado = 0): void {
+        if ($this->esRetornoListadoPresentacion()) {
+            if ($idEvaluacion > 0) {
+                $contexto = $this->obtenerContextoMaterialDesdeRequest();
+                $queryContexto = $this->construirQueryContextoMaterial($contexto);
+                $this->redirect('programas/evaluaciones/presentar&evaluacion=' . $idEvaluacion . $queryContexto
+                    . '&mensaje=' . urlencode($mensaje) . '&tipo=' . urlencode($tipo));
+                return;
+            }
+            $this->redirigirTrasPresentar($mensaje, $tipo);
+            return;
+        }
+
+        $this->redirigirConMensaje($mensaje, $tipo, $idEvaluacion, $idResultado);
+    }
+
+    private function construirHiddenContextoMaterial(array $contexto): string {
+        if (empty($contexto)) {
+            return '';
+        }
+
+        $nivel = (int)($contexto['nivel'] ?? 0);
+        $modulo = (int)($contexto['modulo'] ?? 0);
+        $leccion = htmlspecialchars((string)($contexto['leccion'] ?? ''), ENT_QUOTES, 'UTF-8');
+
+        return '<input type="hidden" name="from_material" value="1">'
+            . '<input type="hidden" name="filtro_nivel_contexto" value="' . $nivel . '">'
+            . '<input type="hidden" name="filtro_modulo_contexto" value="' . $modulo . '">'
+            . '<input type="hidden" name="filtro_leccion_contexto" value="' . $leccion . '">';
     }
 
     private function obtenerContextoMaterialDesdeRequest(): array {
@@ -1086,31 +1436,28 @@ class DiscipularEvaluacionController extends BaseController {
     }
 
     private function obtenerNivelesPermitidosPorInscripcion(int $idPersona): array {
+        return AuthController::obtenerNivelesCapacitacionDestinoInscripcion($idPersona);
+    }
+
+    private function construirAvisoAccesoDiscipuloCapDestino(int $idPersona, array $nivelesPermitidos, array $accesos): string {
+        if (!AuthController::usaVistaDiscipuloCapacitacionDestino()) {
+            return '';
+        }
+
         if ($idPersona <= 0) {
-            return [];
+            return 'Tu cuenta de acceso no está vinculada a una persona en el sistema. Pide al administrador que asocie tu usuario con tu ficha (cédula o documento) para ver clases y evaluaciones.';
         }
 
-        require_once APP . '/Models/EscuelaFormacionInscripcion.php';
-        $inscripcionModel = new EscuelaFormacionInscripcion();
-        $programas = (array)$inscripcionModel->getProgramasInscritosPersona($idPersona);
-
-        $niveles = [];
-        foreach ($programas as $programa) {
-            $programa = trim((string)$programa);
-            if ($programa === 'capacitacion_destino' || $programa === 'capacitacion_destino_nivel_1') {
-                $niveles[1] = true;
-            }
-            if ($programa === 'capacitacion_destino_nivel_2') {
-                $niveles[2] = true;
-            }
-            if ($programa === 'capacitacion_destino_nivel_3') {
-                $niveles[3] = true;
-            }
+        if (empty($nivelesPermitidos)) {
+            return 'No encontramos inscripción vinculada a tu usuario (ID persona ' . $idPersona . '). '
+                . 'Si en Programas apareces inscrito/a, pide al administrador que la cédula de tu cuenta coincida con la de la inscripción o que vincule tu usuario a la ficha correcta.';
         }
 
-        $resultado = array_map('intval', array_keys($niveles));
-        sort($resultado);
-        return $resultado;
+        if (empty($accesos)) {
+            return 'Estás inscrito, pero aún no hay módulos disponibles. Revisa que existan evaluaciones activas con fechas de hoy o que tu líder haya configurado los enlaces de clase.';
+        }
+
+        return '';
     }
 
     private function construirLinksClases(array $nivelesPermitidos): array {
@@ -1210,26 +1557,29 @@ class DiscipularEvaluacionController extends BaseController {
             }
 
             if ((string)$accesos[$key]['url_evaluacion'] === '') {
-                $accesos[$key]['url_evaluacion'] = PUBLIC_URL . '?url=programas/evaluaciones&evaluacion=' . $idEvaluacion;
+                $accesos[$key]['url_evaluacion'] = PUBLIC_URL
+                    . '?url=programas/evaluaciones&from_material=1&nivel=' . $nivel
+                    . '&modulo=' . $modulo;
             }
         }
 
         $configCap = self::CONFIG_CAP_DESTINO;
         foreach ($nivelesPermitidos as $nivelPermitido) {
-            $modulosNivel = array_values(array_map('intval', (array)($configCap[(int)$nivelPermitido] ?? [])));
-            if (empty($modulosNivel)) {
-                continue;
-            }
-
-            $moduloBase = (int)$modulosNivel[0];
-            $keyBase = (int)$nivelPermitido . '_' . $moduloBase;
-            if (!isset($accesos[$keyBase])) {
+            $nivelPermitido = (int)$nivelPermitido;
+            $modulosNivel = array_values(array_map('intval', (array)($configCap[$nivelPermitido] ?? [])));
+            foreach ($modulosNivel as $moduloNivel) {
+                $keyBase = $nivelPermitido . '_' . (int)$moduloNivel;
+                if (isset($accesos[$keyBase])) {
+                    continue;
+                }
                 $accesos[$keyBase] = [
-                    'nivel' => (int)$nivelPermitido,
-                    'modulo' => $moduloBase,
+                    'nivel' => $nivelPermitido,
+                    'modulo' => (int)$moduloNivel,
                     'leccion' => 'Sin lección activa',
                     'url_clase' => '',
-                    'url_evaluacion' => '',
+                    'url_evaluacion' => PUBLIC_URL
+                        . '?url=programas/evaluaciones&from_material=1&nivel=' . $nivelPermitido
+                        . '&modulo=' . (int)$moduloNivel,
                 ];
             }
         }
@@ -1251,7 +1601,9 @@ class DiscipularEvaluacionController extends BaseController {
             $idEvaluacionDestino = (int)($primerEvalPorNivelModulo[$keyNivelModulo] ?? 0);
 
             if ($idEvaluacionDestino > 0) {
-                $accesos[$key]['url_evaluacion'] = PUBLIC_URL . '?url=programas/evaluaciones&evaluacion=' . $idEvaluacionDestino;
+                $accesos[$key]['url_evaluacion'] = PUBLIC_URL
+                    . '?url=programas/evaluaciones&from_material=1&nivel=' . $nivel
+                    . '&modulo=' . $modulo;
             }
 
             if (trim((string)($accesos[$key]['url_clase'] ?? '')) !== '') {
@@ -1799,19 +2151,30 @@ class DiscipularEvaluacionController extends BaseController {
         $intentosRealizados = $this->model->contarIntentosPersonaEvaluacion($idEvaluacion, $idPersona);
         $intentosDisponibles = max(0, self::MAX_INTENTOS - $intentosRealizados);
         $puedeResponder = $intentosDisponibles > 0;
+        $intentoEsperado = $intentosRealizados + 1;
 
         $tiempoInicio = 0;
         $tiempoRestante = 0;
+        $intentoIniciado = false;
 
         if ($puedeResponder) {
-            $intentoEsperado = $intentosRealizados + 1;
-            $timer = $this->obtenerTimerIntento($idEvaluacion);
-            if ((int)($timer['attempt'] ?? 0) !== $intentoEsperado || (int)($timer['started_at'] ?? 0) <= 0) {
-                $timer = $this->setTimerIntento($idEvaluacion, $intentoEsperado, time());
-            }
+            $this->limpiarTimerIntentoLegacyObsoleto($idEvaluacion, $intentoEsperado);
 
-            $tiempoInicio = (int)($timer['started_at'] ?? 0);
-            $tiempoRestante = max(0, self::MAX_SEGUNDOS_INTENTO - (time() - $tiempoInicio));
+            $inicioDb = $this->model->obtenerInicioIntentoActivo($idEvaluacion, $idPersona, $intentoEsperado);
+            if ($inicioDb !== null) {
+                $tiempoInicio = $inicioDb;
+                $tiempoRestante = max(0, self::MAX_SEGUNDOS_INTENTO - (time() - $inicioDb));
+
+                if ($tiempoRestante <= 0 && !$this->model->existeResultadoIntento($idEvaluacion, $idPersona, $intentoEsperado)) {
+                    $this->model->eliminarIntentoActivo($idEvaluacion, $idPersona, $intentoEsperado);
+                    $this->limpiarTimerIntento($idEvaluacion);
+                    $tiempoRestante = 0;
+                    $tiempoInicio = 0;
+                } else {
+                    $intentoIniciado = true;
+                    $this->setTimerIntento($idEvaluacion, $intentoEsperado, $inicioDb);
+                }
+            }
         }
 
         return [
@@ -1820,9 +2183,36 @@ class DiscipularEvaluacionController extends BaseController {
             'max_intentos' => self::MAX_INTENTOS,
             'tiempo_maximo_segundos' => self::MAX_SEGUNDOS_INTENTO,
             'tiempo_inicio' => $tiempoInicio,
-            'tiempo_restante' => $tiempoRestante,
+            'tiempo_restante' => $intentoIniciado ? $tiempoRestante : self::MAX_SEGUNDOS_INTENTO,
             'puede_responder' => $puedeResponder,
+            'intento_iniciado' => $intentoIniciado,
+            'intento_esperado' => $intentoEsperado,
         ];
+    }
+
+    private function limpiarTimerIntentoLegacyObsoleto(int $idEvaluacion, int $intentoEsperado): void {
+        $timer = $this->obtenerTimerIntento($idEvaluacion);
+        $attemptSession = (int)($timer['attempt'] ?? 0);
+        $startedSession = (int)($timer['started_at'] ?? 0);
+
+        if ($startedSession <= 0) {
+            return;
+        }
+
+        if ($attemptSession !== $intentoEsperado) {
+            $this->limpiarTimerIntento($idEvaluacion);
+            return;
+        }
+
+        $inicioDb = $this->model->obtenerInicioIntentoActivo(
+            $idEvaluacion,
+            (int)($_SESSION['usuario_id'] ?? 0),
+            $intentoEsperado
+        );
+
+        if ($inicioDb === null) {
+            $this->limpiarTimerIntento($idEvaluacion);
+        }
     }
 
     private function obtenerTimerIntento(int $idEvaluacion): array {

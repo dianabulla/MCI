@@ -1,24 +1,16 @@
-<?php include VIEWS . '/layout/header.php'; ?>
-
-<div class="page-header" style="margin-bottom: 20px;">
-    <h2 style="margin: 0;">Administración</h2>
-</div>
-
-<div class="card" style="margin-bottom:20px;">
-    <div class="card-body">
-        <div class="page-actions personas-mobile-stack" style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="<?= PUBLIC_URL ?>index.php?url=cuentas" class="btn btn-nav-pill">Cuentas</a>
-        <a href="<?= PUBLIC_URL ?>index.php?url=roles" class="btn btn-nav-pill active">Roles</a>
-        <a href="<?= PUBLIC_URL ?>index.php?url=permisos" class="btn btn-nav-pill">Permisos</a>
-        </div>
-    </div>
-</div>
+<?php
+include VIEWS . '/layout/header.php';
+require_once APP . '/Helpers/GestionSistemaAccess.php';
+$puedeGestionarPermisosRol = GestionSistemaAccess::puedeVerMatrizPermisos();
+$admin_nav_active = 'roles';
+include VIEWS . '/partials/admin_nav.php';
+?>
 
 <div class="page-header" style="margin-bottom: 20px;">
     <h2>Roles</h2>
-    <?php $puedeCrearRoles = AuthController::esAdministrador() || AuthController::tienePermiso('roles', 'crear'); ?>
-    <?php $puedeEditarRoles = AuthController::esAdministrador() || AuthController::tienePermiso('roles', 'editar'); ?>
-    <?php $puedeEliminarRoles = AuthController::esAdministrador() || AuthController::tienePermiso('roles', 'eliminar'); ?>
+    <?php $puedeCrearRoles = AuthController::esAdministrador() || AuthController::puede('roles:crear'); ?>
+    <?php $puedeEditarRoles = AuthController::esAdministrador() || AuthController::puede('roles:editar'); ?>
+    <?php $puedeEliminarRoles = AuthController::esAdministrador() || AuthController::puede('roles:eliminar'); ?>
     <?php $puedeGestionarRoles = $puedeEditarRoles || $puedeEliminarRoles; ?>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <?php if ($puedeCrearRoles): ?>
@@ -34,7 +26,7 @@
                 <th>Nombre</th>
                 <th>Descripción</th>
                 <th>Total Personas</th>
-                <?php if ($puedeGestionarRoles): ?><th>Acciones</th><?php endif; ?>
+                <?php if ($puedeGestionarRoles || $puedeGestionarPermisosRol): ?><th>Acciones</th><?php endif; ?>
             </tr>
         </thead>
         <tbody>
@@ -44,8 +36,11 @@
                         <td><?= htmlspecialchars($rol['Nombre_Rol']) ?></td>
                         <td><?= htmlspecialchars($rol['Descripcion']) ?></td>
                         <td><?= $rol['Total_Personas'] ?></td>
-                        <?php if ($puedeGestionarRoles): ?>
+                        <?php if ($puedeGestionarRoles || $puedeGestionarPermisosRol): ?>
                         <td>
+                            <?php if ($puedeGestionarPermisosRol): ?>
+                            <a href="<?= PUBLIC_URL ?>index.php?url=permisos&amp;rol=<?= (int)($rol['Id_Rol'] ?? 0) ?>" class="btn btn-sm btn-primary" title="Configurar permisos de este rol">Permisos</a>
+                            <?php endif; ?>
                             <?php if ($puedeEditarRoles): ?>
                             <a href="<?= PUBLIC_URL ?>index.php?url=roles/editar&id=<?= $rol['Id_Rol'] ?>" class="btn btn-sm btn-warning">Editar</a>
                             <?php endif; ?>

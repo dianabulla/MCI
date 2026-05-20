@@ -57,6 +57,29 @@ class Persona extends BaseModel {
         }
     }
 
+    /**
+     * Tipo_Reunion (Ganado en) normalizado para comparaciones en SQL.
+     */
+    private function sqlTipoReunionNormalizado(string $alias = 'p'): string {
+        return "REPLACE(REPLACE(LOWER(TRIM(COALESCE({$alias}.Tipo_Reunion, ''))), 'é', 'e'), 'í', 'i')";
+    }
+
+    /** Ganado en célula. */
+    private function sqlEsGanadoEnCelula(string $alias = 'p'): string {
+        $tipo = $this->sqlTipoReunionNormalizado($alias);
+        return "({$tipo} LIKE '%celula%')";
+    }
+
+    /**
+     * Ganado en iglesia: cualquier opción distinta de célula (Domingo, Somos Uno, Otros, etc.).
+     * Excluye vacío y migrados.
+     */
+    private function sqlEsGanadoEnIglesia(string $alias = 'p'): string {
+        $tipo = $this->sqlTipoReunionNormalizado($alias);
+        $celula = $this->sqlEsGanadoEnCelula($alias);
+        return "({$tipo} <> '' AND NOT {$celula} AND {$tipo} NOT LIKE '%migrados%')";
+    }
+
     private function normalizarDocumentoParaComparacion($documento) {
         $documento = strtoupper(trim((string)$documento));
         if ($documento === '') {
@@ -1719,17 +1742,19 @@ class Persona extends BaseModel {
         }
 
         if ($origen !== null && $origen !== '') {
-            $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
             $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
-            $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%cÃ©lula%')";
-            $esIglesiaExpr = "({$tipoReunionExpr} LIKE '%domingo%' OR {$tipoReunionExpr} LIKE '%iglesia%')";
+            $esCelulaExpr = $this->sqlEsGanadoEnCelula('p');
+            $esIglesiaExpr = $this->sqlEsGanadoEnIglesia('p');
             $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
             $esAsignadoExpr = "({$esIglesiaExpr} AND {$invitadoExpr} = '' AND {$tieneAsignacionExpr})";
 
             if ($origen === 'celula') {
                 $sql .= " AND {$esCelulaExpr}";
-            } elseif ($origen === 'domingo') {
-                $sql .= " AND {$esIglesiaExpr} AND NOT {$esAsignadoExpr}";
+            } elseif ($origen === 'domingo' || $origen === 'iglesia') {
+                $sql .= " AND {$esIglesiaExpr}";
+                if ($origen === 'domingo') {
+                    $sql .= " AND NOT {$esAsignadoExpr}";
+                }
             } elseif ($origen === 'asignados') {
                 $sql .= " AND {$esAsignadoExpr}";
             }
@@ -1846,17 +1871,19 @@ class Persona extends BaseModel {
         }
 
         if ($origen !== null && $origen !== '') {
-            $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
             $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
-            $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%cÃ©lula%')";
-            $esIglesiaExpr = "({$tipoReunionExpr} LIKE '%domingo%' OR {$tipoReunionExpr} LIKE '%iglesia%')";
+            $esCelulaExpr = $this->sqlEsGanadoEnCelula('p');
+            $esIglesiaExpr = $this->sqlEsGanadoEnIglesia('p');
             $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
             $esAsignadoExpr = "({$esIglesiaExpr} AND {$invitadoExpr} = '' AND {$tieneAsignacionExpr})";
 
             if ($origen === 'celula') {
                 $sql .= " AND {$esCelulaExpr}";
-            } elseif ($origen === 'domingo') {
-                $sql .= " AND {$esIglesiaExpr} AND NOT {$esAsignadoExpr}";
+            } elseif ($origen === 'domingo' || $origen === 'iglesia') {
+                $sql .= " AND {$esIglesiaExpr}";
+                if ($origen === 'domingo') {
+                    $sql .= " AND NOT {$esAsignadoExpr}";
+                }
             } elseif ($origen === 'asignados') {
                 $sql .= " AND {$esAsignadoExpr}";
             }
@@ -2037,16 +2064,15 @@ class Persona extends BaseModel {
     }
 
     public function getResumenGanadosOrigenWithRole($fechaInicio, $fechaFin, $filtroRol, $idMinisterio = '', $idLider = '') {
-        $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
         $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
         $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
 
-        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%cÃ©lula%')";
-        $esIglesiaExpr = "(NOT {$esCelulaExpr})";
+        $esCelulaExpr = $this->sqlEsGanadoEnCelula('p');
+        $esIglesiaExpr = $this->sqlEsGanadoEnIglesia('p');
         $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
 
         $sql = "SELECT
-                    SUM(CASE WHEN {$tipoReunionExpr} LIKE '%celula%' THEN 1 ELSE 0 END) AS Ganados_Celula,
+                    SUM(CASE WHEN {$esCelulaExpr} THEN 1 ELSE 0 END) AS Ganados_Celula,
                     SUM(CASE WHEN {$esIglesiaExpr} THEN 1 ELSE 0 END) AS Ganados_Iglesia,
                     SUM(CASE WHEN {$esIglesiaExpr} AND {$invitadoExpr} = '' AND {$tieneAsignacionExpr} THEN 1 ELSE 0 END) AS Asignados,
                     COUNT(*) AS Total
@@ -2079,12 +2105,11 @@ class Persona extends BaseModel {
     }
 
     public function getDetalleGanadosOrigenWithRole($fechaInicio, $fechaFin, $filtroRol, $origen, $idMinisterio = '', $idLider = '') {
-        $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
         $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
         $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
 
-        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%cÃ©lula%')";
-        $esIglesiaExpr = "(NOT {$esCelulaExpr})";
+        $esCelulaExpr = $this->sqlEsGanadoEnCelula('p');
+        $esIglesiaExpr = $this->sqlEsGanadoEnIglesia('p');
         $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
 
         $sql = "SELECT
@@ -2101,7 +2126,6 @@ class Persona extends BaseModel {
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
                 LEFT JOIN persona l ON p.Id_Lider = l.Id_Persona
                 WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
-                  AND {$esIglesiaExpr}
                   AND $filtroRol" . $filtroNuevas;
 
         $params = [$fechaInicio, $fechaFin];
@@ -2183,12 +2207,10 @@ class Persona extends BaseModel {
      * Por verificar: domingo sin lÃ­der asignado.
      */
     public function getResumenGanadosFinSemanaAnteriorPorMinisterioWithRole($fechaInicio, $fechaFin, $filtroRol, $idMinisterio = '', $idLider = '') {
-        $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
         $invitadoExpr = "TRIM(COALESCE(p.Invitado_Por, ''))";
         $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
 
-        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%cÃ©lula%')";
-        $esIglesiaExpr = "(NOT {$esCelulaExpr})";
+        $esIglesiaExpr = $this->sqlEsGanadoEnIglesia('p');
         $tieneAsignacionExpr = "((p.Id_Lider IS NOT NULL AND p.Id_Lider > 0) OR (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0))";
 
         $sql = "SELECT
@@ -2255,11 +2277,9 @@ class Persona extends BaseModel {
     }
 
     public function getDetalleGanadosFinSemanaAnteriorPorMinisterioWithRole($fechaInicio, $fechaFin, $filtroRol, $idMinisterio = '', $idLider = '') {
-        $tipoReunionExpr = "LOWER(TRIM(COALESCE(p.Tipo_Reunion, '')))";
         $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
 
-        $esCelulaExpr = "({$tipoReunionExpr} LIKE '%celula%' OR {$tipoReunionExpr} LIKE '%cÃ©lula%')";
-        $esIglesiaExpr = "(NOT {$esCelulaExpr})";
+        $esIglesiaExpr = $this->sqlEsGanadoEnIglesia('p');
 
         $sql = "SELECT
                     p.Id_Persona,

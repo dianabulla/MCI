@@ -45,7 +45,7 @@ $labelClase = static function(int $i) use ($encuentroDobleClase5): string {
     }
     return 'CL' . $i;
 };
-$puedeEditarPersonaFormacion = class_exists('AuthController') && AuthController::tienePermiso('personas', 'editar');
+$puedeEditarPersonaFormacion = class_exists('AuthController') && AuthController::puede('personas:editar');
 
 $parametrosRetornoFormacion = $_GET;
 if (!isset($parametrosRetornoFormacion['url']) || trim((string)$parametrosRetornoFormacion['url']) === '') {

@@ -27,6 +27,9 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
 .unified-pagos-summary-metric small { color:#4b6482; font-size:0.76rem; font-weight:600; text-transform:uppercase; letter-spacing:.03em; }
 .unified-pagos-summary-card p { margin:0; color:#52657d; font-size:0.78rem; }
 .unified-pagos-summary-card--abonos { background:linear-gradient(180deg, #fffdfa 0%, #fff4e8 100%); border-color:#f2dcc1; }
+.unified-pagos-summary-card--ok { background:linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 100%); border-color:#bbf7d0; }
+.unified-pagos-summary-card--warn { background:linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%); border-color:#fde68a; }
+.unified-pagos-resumen-filtro { margin:0 0 12px; padding:8px 12px; font-size:0.78rem; color:#1e40af; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; }
 .unified-pagos-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .unified-pagos-table { width:100%; border-collapse:collapse; }
 .unified-pagos-table th, .unified-pagos-table td { border-bottom:1px solid #eef2f7; padding:9px 10px; font-size:0.82rem; text-align:left; vertical-align:middle; }
@@ -349,27 +352,57 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         return '$' + num.toLocaleString('es-CO', { maximumFractionDigits: 0 });
     }
 
-    function getSegmento(genero) {
+    function clasificarGeneroBase(genero) {
         const g = String(genero || '').trim().toLowerCase();
-        if (g.includes('joven')) return 'Joven';
-        if (esGeneroMujer(g)) return 'Adulta';
-        if (esGeneroHombre(g)) return 'Adulto';
+        if (!g) return 'otro';
+        const esMujer = g.includes('mujer') || g.includes('femen')
+            || /(^|[^a-z])(f|fem|female)([^a-z]|$)/.test(g);
+        const esHombre = g.includes('hombre') || g.includes('mascul')
+            || /(^|[^a-z])(m|masc|male|h)([^a-z]|$)/.test(g);
+        if (esHombre && !esMujer) return 'hombre';
+        if (esMujer && !esHombre) return 'mujer';
+        return 'otro';
+    }
+
+    function resolverSegmento(row) {
+        const segPref = String(row.segmento_preferido || row.Segmento_Preferido || '').trim().toLowerCase();
+        if (['jovenes', 'teens', 'hombres_adultos', 'mujeres_adultas'].includes(segPref)) {
+            return segPref;
+        }
+
+        const edad = Number(row.edad || row.Edad || 0);
+        const gc = clasificarGeneroBase(row.genero);
+        if (edad >= 14 && edad <= 28) return 'jovenes';
+        if (edad >= 9 && edad <= 13) return 'teens';
+        if ((edad >= 29 || edad <= 0) && gc === 'hombre') return 'hombres_adultos';
+        if ((edad >= 29 || edad <= 0) && gc === 'mujer') return 'mujeres_adultas';
+
+        const g = String(row.genero || '').trim().toLowerCase();
+        if (g.includes('joven')) return 'jovenes';
+        return 'otros';
+    }
+
+    function getSegmento(rowOrGenero) {
+        const segmento = typeof rowOrGenero === 'object'
+            ? resolverSegmento(rowOrGenero)
+            : resolverSegmento({ genero: rowOrGenero });
+        if (segmento === 'jovenes' || segmento === 'teens') return 'Joven';
+        if (segmento === 'mujeres_adultas') return 'Adulta';
+        if (segmento === 'hombres_adultos') return 'Adulto';
         return '-';
     }
 
-    function esGeneroHombre(genero) {
-        const g = String(genero || '').trim().toLowerCase();
-        return g.includes('hombre') || g.includes('mascul') || g.includes('adulto') || ['m', 'masc', 'male', 'h'].includes(g);
+    function esGeneroHombre(row) {
+        return resolverSegmento(row) === 'hombres_adultos';
     }
 
-    function esGeneroMujer(genero) {
-        const g = String(genero || '').trim().toLowerCase();
-        return g.includes('mujer') || g.includes('femen') || g.includes('adulta') || ['f', 'fem', 'female'].includes(g);
+    function esGeneroMujer(row) {
+        return resolverSegmento(row) === 'mujeres_adultas';
     }
 
-    function esGeneroJoven(genero) {
-        const g = String(genero || '').trim().toLowerCase();
-        return g.includes('joven');
+    function esGeneroJoven(row) {
+        const segmento = resolverSegmento(row);
+        return segmento === 'jovenes' || segmento === 'teens';
     }
 
     function calcularTotales(rows) {
@@ -379,6 +412,122 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
             acc.abonos += Number(row.total_abonos || 0);
             return acc;
         }, { pagado: 0, pagadoCompleto: 0, abonos: 0 });
+    }
+
+    function tienePagoRegistradoRow(row) {
+        return Number(row && row.total_pagado ? row.total_pagado : 0) > 0
+            || Number(row && row.registros_pago ? row.registros_pago : 0) > 0;
+    }
+
+    function filasResumenActivas() {
+        const rows = (datosActuales && datosActuales.resumen) ? datosActuales.resumen : [];
+        const filtroGenero = filtroGeneroInput ? String(filtroGeneroInput.value || '') : '';
+        return filtrarResumenPorGenero(rows, filtroGenero);
+    }
+
+    function hayFiltrosPagosActivos() {
+        const buscar = buscarInput ? String(buscarInput.value || '').trim() : '';
+        const genero = filtroGeneroInput ? String(filtroGeneroInput.value || '') : '';
+        const ministerio = filtroMinisterioInput ? String(filtroMinisterioInput.value || '') : '';
+        return buscar !== '' || genero !== '' || ministerio !== '';
+    }
+
+    function ensurePagosResumenPersonasDom() {
+        if (document.getElementById('pagos-resumen-personas')) {
+            return;
+        }
+        const ref = document.getElementById('resumen-genero-uv');
+        if (!ref || !ref.parentNode) {
+            return;
+        }
+
+        const wrap = document.createElement('div');
+        wrap.id = 'pagos-resumen-personas';
+        wrap.className = 'unified-pagos-summary';
+        wrap.innerHTML = ''
+            + '<div class="unified-pagos-summary-card"><strong>Personas en tabla</strong>'
+            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-personas">0</span><small>registros</small></div></div>'
+            + '<div class="unified-pagos-summary-card unified-pagos-summary-card--ok"><strong id="pagos-label-con-pago">Con pago registrado</strong>'
+            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-con-pago">0</span><small>personas</small></div>'
+            + '<p id="pagos-sub-con-pago" style="margin:0;font-size:0.78rem;color:#52657d;" hidden></p></div>'
+            + '<div class="unified-pagos-summary-card unified-pagos-summary-card--warn"><strong>Con abono</strong>'
+            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-abonos">0</span><small>personas</small></div></div>'
+            + '<div class="unified-pagos-summary-card"><strong>Pago completo UV (&ge; $180.000)</strong>'
+            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-pago-completo">0</span><small>personas</small></div></div>';
+
+        const filtro = document.createElement('p');
+        filtro.id = 'pagos-resumen-filtro';
+        filtro.className = 'unified-pagos-resumen-filtro';
+        filtro.hidden = true;
+
+        ref.parentNode.insertBefore(wrap, ref);
+        ref.parentNode.insertBefore(filtro, ref);
+    }
+
+    function actualizarResumenPersonasPagos(programa, rows) {
+        ensurePagosResumenPersonasDom();
+
+        const total = (rows || []).length;
+        const conPago = (rows || []).filter((row) => tienePagoRegistradoRow(row)).length;
+        const conAbono = (rows || []).filter((row) => Number(row.total_abonos || 0) > 0).length;
+        const pagoCompleto = (rows || []).filter((row) => tienePagoTotalUv(row)).length;
+        const filtrosActivos = hayFiltrosPagosActivos();
+        const rowsGlobal = (datosActuales && datosActuales.resumen) ? datosActuales.resumen : rows;
+        const totalGlobal = rowsGlobal.length;
+        const conPagoGlobal = rowsGlobal.filter((row) => tienePagoRegistradoRow(row)).length;
+
+        const elTotal = document.getElementById('pagos-total-personas');
+        const elConPago = document.getElementById('pagos-total-con-pago');
+        const elAbonos = document.getElementById('pagos-total-abonos');
+        const elCompleto = document.getElementById('pagos-total-pago-completo');
+        const elSubConPago = document.getElementById('pagos-sub-con-pago');
+        const elFiltro = document.getElementById('pagos-resumen-filtro');
+
+        if (elTotal) elTotal.textContent = String(total);
+        if (elConPago) elConPago.textContent = String(conPago);
+        if (elAbonos) elAbonos.textContent = String(conAbono);
+        if (elCompleto) elCompleto.textContent = String(pagoCompleto);
+
+        if (conPago > total) {
+            console.warn('Conteo de pagos: con pago supera filas visibles', { total, conPago });
+        }
+
+        if (elSubConPago) {
+            if (filtrosActivos && total !== totalGlobal) {
+                elSubConPago.textContent = 'de ' + conPagoGlobal + ' con pago en total';
+                elSubConPago.hidden = false;
+            } else {
+                elSubConPago.hidden = true;
+            }
+        }
+
+        if (elFiltro) {
+            if (filtrosActivos) {
+                const partes = [];
+                if (buscarInput && buscarInput.value.trim() !== '') {
+                    partes.push('Búsqueda: «' + buscarInput.value.trim() + '»');
+                }
+                if (filtroGeneroInput && filtroGeneroInput.value !== '') {
+                    partes.push(getEtiquetaFiltroGenero(filtroGeneroInput.value));
+                }
+                if (filtroMinisterioInput && filtroMinisterioInput.value !== '') {
+                    partes.push('Ministerio: ' + filtroMinisterioInput.value);
+                }
+                elFiltro.textContent = 'Filtro activo: ' + partes.join(' · ')
+                    + ' — ' + total + ' persona' + (total === 1 ? '' : 's') + ' en tabla'
+                    + (total !== totalGlobal ? (' (de ' + totalGlobal + ' con movimiento de pago)') : '')
+                    + ' · ' + conPago + ' con pago';
+                elFiltro.hidden = false;
+            } else {
+                elFiltro.hidden = true;
+                elFiltro.textContent = '';
+            }
+        }
+
+        if (String(programa) !== 'universidad_vida' && document.getElementById('pagos-resumen-personas')) {
+            const cardCompleto = document.querySelector('#pagos-resumen-personas .unified-pagos-summary-card:last-child');
+            if (cardCompleto) cardCompleto.style.display = 'none';
+        }
     }
 
     function valorPagosSinAbonos(row) {
@@ -448,13 +597,13 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
     function filtrarResumenPorGenero(rows, genero) {
         const valor = String(genero || '').trim().toLowerCase();
         if (valor === 'hombres') {
-            return (rows || []).filter((row) => esGeneroHombre(row.genero));
+            return (rows || []).filter((row) => esGeneroHombre(row));
         }
         if (valor === 'mujeres') {
-            return (rows || []).filter((row) => esGeneroMujer(row.genero));
+            return (rows || []).filter((row) => esGeneroMujer(row));
         }
         if (valor === 'jovenes') {
-            return (rows || []).filter((row) => esGeneroJoven(row.genero));
+            return (rows || []).filter((row) => esGeneroJoven(row));
         }
         return rows || [];
     }
@@ -522,11 +671,11 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         let rowsFiltradas = rows;
         if (filtrarPor) {
             rowsFiltradas = rows.filter(r => {
-                const generoNormalizado = String(r.genero || '').trim().toLowerCase();
                 if (filtrarPor === 'hombres') {
-                    return esGeneroHombre(generoNormalizado);
-                } else if (filtrarPor === 'mujeres') {
-                    return esGeneroMujer(generoNormalizado);
+                    return esGeneroHombre(r);
+                }
+                if (filtrarPor === 'mujeres') {
+                    return esGeneroMujer(r);
                 }
                 return true;
             });
@@ -547,7 +696,7 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         if (bodyElement) {
             bodyElement.innerHTML = rowsFiltradas.map((row) => {
                 const detalleClave = escapeHtml(row.cedula_clave || row.cedula || '');
-                const segmento = getSegmento(row.genero);
+                const segmento = getSegmento(row);
                 const notaTxt = row.nota_final === null || row.nota_final === undefined || row.nota_final === ''
                     ? '-'
                     : Number(row.nota_final).toFixed(1) + '%';
@@ -656,10 +805,13 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
             renderHead(data.programa, 'mujeres');
             renderRows(data.programa, data.resumen || [], 'mujeres', 'mujeres');
 
-            actualizarResumenRecaudo(data.programa, data.resumen || []);
-            actualizarResumenGeneroUv(data.programa, data.resumen || [], filtroGeneroInput ? filtroGeneroInput.value : '');
+            const filasActivas = data.resumen || [];
+            actualizarResumenRecaudo(data.programa, filasActivas);
+            actualizarResumenPersonasPagos(data.programa, filasActivas);
+            actualizarResumenGeneroUv(data.programa, filasActivas, filtroGeneroInput ? filtroGeneroInput.value : '');
 
-            estadoCarga.textContent = 'Datos actualizados';
+            estadoCarga.textContent = 'Datos actualizados'
+                + (filasActivas.length ? (' · ' + filasActivas.length + ' en tabla') : '');
         } catch (error) {
             estadoCarga.textContent = 'Error al cargar';
             console.error(error);
@@ -745,7 +897,7 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
                 ministerioModalBody.innerHTML = '<tr><td colspan="5">Sin personas inscritas en este ministerio con los filtros actuales.</td></tr>';
             } else {
                 ministerioModalBody.innerHTML = personas.map(p => {
-                    const segmento = getSegmento(p.genero);
+                    const segmento = getSegmento(p);
                     return '<tr>' +
                         '<td>' + escapeHtml(p.persona || '') + '</td>' +
                         '<td>' + escapeHtml(p.cedula || '') + '</td>' +

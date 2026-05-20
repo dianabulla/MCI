@@ -41,7 +41,7 @@ class CelulaController extends BaseController {
     }
 
     public function index() {
-        if (!AuthController::tienePermiso('celulas', 'ver')) {
+        if (!AuthController::puede('celulas:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -156,7 +156,7 @@ class CelulaController extends BaseController {
 
     public function crear() {
         // Verificar permiso de crear
-        if (!AuthController::tienePermiso('celulas', 'crear')) {
+        if (!AuthController::puede('celulas:crear')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -195,7 +195,7 @@ class CelulaController extends BaseController {
 
     public function editar() {
         // Verificar permiso de editar
-        if (!AuthController::tienePermiso('celulas', 'editar')) {
+        if (!AuthController::puede('celulas:editar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -261,7 +261,7 @@ class CelulaController extends BaseController {
     }
 
     public function exportarExcel() {
-        if (!AuthController::tienePermiso('celulas', 'ver')) {
+        if (!AuthController::puede('celulas:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -295,7 +295,7 @@ class CelulaController extends BaseController {
 
     public function eliminar() {
         // Verificar permiso de eliminar
-        if (!AuthController::tienePermiso('celulas', 'eliminar')) {
+        if (!AuthController::puede('celulas:eliminar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -436,7 +436,7 @@ class CelulaController extends BaseController {
     }
 
     public function materiales() {
-        if (!AuthController::tienePermiso('materiales_celulas', 'ver')) {
+        if (!AuthController::puede('materiales_celulas:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -453,7 +453,7 @@ class CelulaController extends BaseController {
                 $accion = trim((string)($_POST['accion'] ?? 'subir'));
 
                 if ($accion === 'eliminar') {
-                    if (!AuthController::tienePermiso('materiales_celulas', 'eliminar')) {
+                    if (!AuthController::puede('materiales_celulas:eliminar')) {
                         throw new Exception('No tienes permiso para eliminar material.');
                     }
 
@@ -479,8 +479,8 @@ class CelulaController extends BaseController {
 
                 if ($accion === 'editar') {
                     $puedeEditarMaterial = AuthController::esAdministrador()
-                        || AuthController::tienePermiso('materiales_celulas', 'editar')
-                        || AuthController::tienePermiso('materiales_celulas', 'crear');
+                        || AuthController::puede('materiales_celulas:editar')
+                        || AuthController::puede('materiales_celulas:crear');
 
                     if (!$puedeEditarMaterial) {
                         throw new Exception('No tienes permiso para editar material.');
@@ -538,7 +538,7 @@ class CelulaController extends BaseController {
                     return;
                 }
 
-                if (!AuthController::tienePermiso('materiales_celulas', 'crear')) {
+                if (!AuthController::puede('materiales_celulas:crear')) {
                     throw new Exception('No tienes permiso para subir material.');
                 }
 
@@ -655,7 +655,7 @@ class CelulaController extends BaseController {
      * Abrir material PDF y registrar visualización.
      */
     public function verMaterial() {
-        if (!AuthController::tienePermiso('materiales_celulas', 'ver')) {
+        if (!AuthController::puede('materiales_celulas:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -849,7 +849,7 @@ class CelulaController extends BaseController {
      * Obtener detalles de quiénes vieron un material específico (AJAX)
      */
     public function detalleVistasMaterial() {
-        if (!AuthController::tienePermiso('materiales_celulas', 'ver')) {
+        if (!AuthController::puede('materiales_celulas:ver')) {
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'message' => 'Acceso denegado']);
             exit;

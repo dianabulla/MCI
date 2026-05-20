@@ -40,6 +40,39 @@ class HomeController extends BaseController {
         return $programa;
     }
 
+    private function responderMoverProgramaFormacion(
+        bool $ok,
+        string $returnUrl,
+        string $mensaje,
+        int $idInscripcion,
+        string $programaDestino
+    ): void {
+        $esAjax = isset($_SERVER['HTTP_X_REQUESTED_WITH'])
+            && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+
+        if ($esAjax) {
+            if ($ok) {
+                $this->json([
+                    'ok' => true,
+                    'id_inscripcion' => $idInscripcion,
+                    'programa_destino' => $programaDestino,
+                    'mensaje' => $mensaje,
+                ]);
+                return;
+            }
+
+            $this->json([
+                'ok' => false,
+                'error' => $mensaje,
+            ], $idInscripcion > 0 ? 422 : 400);
+            return;
+        }
+
+        $tipo = $ok ? 'success' : 'error';
+        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=' . urlencode($tipo) . '&mensaje=' . urlencode($mensaje));
+        exit;
+    }
+
     private function obtenerProgramaDestinoMovimientoFormacion(string $programaActual): string {
         $programaActual = trim($programaActual);
 
@@ -718,98 +751,92 @@ class HomeController extends BaseController {
             }
         }
 
-        $tablaUvPorMinisterioMap = [];
-        $detalleLideresMinisterioUvMap = [];
-        foreach ($inscripcionesPublicas as $inscripcionUv) {
-            if ((string)($inscripcionUv['Programa'] ?? '') !== 'universidad_vida') {
-                continue;
-            }
+        require_once APP . '/Helpers/EscuelaFormacionResumenHelper.php';
 
-            $ministerioNombre = trim((string)($inscripcionUv['Nombre_Ministerio'] ?? ''));
-            if ($ministerioNombre === '') {
-                $ministerioNombre = 'Sin ministerio';
-            }
+        $programaResumenTabla = $this->normalizarProgramaConsolidar($filtroProgramaInscripcion);
+        $esTablaCapDestino = EscuelaFormacionResumenHelper::esProgramaCapacitacionDestino($programaResumenTabla)
+            || EscuelaFormacionResumenHelper::esProgramaCapacitacionDestino($filtroProgramaInscripcion);
 
-            $liderNombre = trim((string)($inscripcionUv['Lider'] ?? ''));
-            if ($liderNombre === '') {
-                $liderNombre = 'Sin lider';
-            }
+        if ($esTablaCapDestino) {
+            $tablaUvPorMinisterio = EscuelaFormacionResumenHelper::construirTablaCapDestinoPorMinisterio(
+                $inscripcionesPublicas,
+                $personasConAsistenciaReal
+            );
+            $detalleLideresMinisterioUv = [];
+        } else {
+            $tablaUvPorMinisterio = EscuelaFormacionResumenHelper::construirTablaUniversidadVidaPorMinisterio(
+                $inscripcionesPublicas,
+                $personasConAsistenciaReal
+            );
 
-            $edadUv = (int)($inscripcionUv['Edad'] ?? 0);
-            $generoUv = strtolower(trim((string)($inscripcionUv['Genero'] ?? '')));
-            $esMujerUv = strpos($generoUv, 'mujer') !== false
-                || strpos($generoUv, 'femen') !== false
-                || in_array($generoUv, ['f', 'fem', 'female'], true);
-            $esHombreUv = strpos($generoUv, 'hombre') !== false
-                || strpos($generoUv, 'mascul') !== false
-                || in_array($generoUv, ['m', 'masc', 'male', 'h'], true);
-            $esJovenUv = $edadUv >= 14 && $edadUv <= 28;
-
-            if (!isset($tablaUvPorMinisterioMap[$ministerioNombre])) {
-                $tablaUvPorMinisterioMap[$ministerioNombre] = [
-                    'ministerio' => $ministerioNombre,
-                    'hombres' => 0,
-                    'mujeres' => 0,
-                    'jovenes' => 0,
-                    'asistencias_reales' => 0,
-                    'total' => 0,
-                ];
-            }
-            if (!isset($detalleLideresMinisterioUvMap[$ministerioNombre])) {
-                $detalleLideresMinisterioUvMap[$ministerioNombre] = [];
-            }
-            if (!isset($detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre])) {
-                $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre] = [
-                    'lider' => $liderNombre,
-                    'hombres' => 0,
-                    'mujeres' => 0,
-                    'jovenes' => 0,
-                    'asistencias_reales' => 0,
-                    'total' => 0,
-                ];
-            }
-
-            if ($esJovenUv) {
-                $tablaUvPorMinisterioMap[$ministerioNombre]['jovenes']++;
-                $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['jovenes']++;
-            } elseif ($esHombreUv) {
-                $tablaUvPorMinisterioMap[$ministerioNombre]['hombres']++;
-                $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['hombres']++;
-            } elseif ($esMujerUv) {
-                $tablaUvPorMinisterioMap[$ministerioNombre]['mujeres']++;
-                $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['mujeres']++;
-            }
-
-            $tablaUvPorMinisterioMap[$ministerioNombre]['total']++;
-            $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['total']++;
-
-            $idPersonaInscripcionUv = (int)($inscripcionUv['Id_Persona'] ?? 0);
-            if ($idPersonaInscripcionUv > 0 && !empty($personasConAsistenciaReal[$idPersonaInscripcionUv])) {
-                $tablaUvPorMinisterioMap[$ministerioNombre]['asistencias_reales']++;
-                $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['asistencias_reales']++;
-            }
-        }
-
-        $tablaUvPorMinisterio = array_values($tablaUvPorMinisterioMap);
-        usort($tablaUvPorMinisterio, static function($a, $b) {
-            $cmpTotal = ((int)($b['total'] ?? 0)) <=> ((int)($a['total'] ?? 0));
-            if ($cmpTotal !== 0) {
-                return $cmpTotal;
-            }
-            return strcmp((string)($a['ministerio'] ?? ''), (string)($b['ministerio'] ?? ''));
-        });
-
-        $detalleLideresMinisterioUv = [];
-        foreach ($detalleLideresMinisterioUvMap as $ministerioNombre => $detalleLideres) {
-            $rowsLideres = array_values($detalleLideres);
-            usort($rowsLideres, static function($a, $b) {
-                $cmpTotal = ((int)($b['total'] ?? 0)) <=> ((int)($a['total'] ?? 0));
-                if ($cmpTotal !== 0) {
-                    return $cmpTotal;
+            $detalleLideresMinisterioUvMap = [];
+            foreach ($inscripcionesPublicas as $inscripcionUv) {
+                if ((string)($inscripcionUv['Programa'] ?? '') !== 'universidad_vida') {
+                    continue;
                 }
-                return strcmp((string)($a['lider'] ?? ''), (string)($b['lider'] ?? ''));
-            });
-            $detalleLideresMinisterioUv[$ministerioNombre] = $rowsLideres;
+
+                $ministerioNombre = trim((string)($inscripcionUv['Nombre_Ministerio'] ?? ''));
+                if ($ministerioNombre === '') {
+                    $ministerioNombre = 'Sin ministerio';
+                }
+
+                $liderNombre = trim((string)($inscripcionUv['Lider'] ?? ''));
+                if ($liderNombre === '') {
+                    $liderNombre = 'Sin lider';
+                }
+
+                $edadUv = (int)($inscripcionUv['Edad'] ?? 0);
+                $generoUv = strtolower(trim((string)($inscripcionUv['Genero'] ?? '')));
+                $esMujerUv = strpos($generoUv, 'mujer') !== false
+                    || strpos($generoUv, 'femen') !== false
+                    || in_array($generoUv, ['f', 'fem', 'female'], true);
+                $esHombreUv = strpos($generoUv, 'hombre') !== false
+                    || strpos($generoUv, 'mascul') !== false
+                    || in_array($generoUv, ['m', 'masc', 'male', 'h'], true);
+                $esJovenUv = $edadUv >= 14 && $edadUv <= 28;
+
+                if (!isset($detalleLideresMinisterioUvMap[$ministerioNombre])) {
+                    $detalleLideresMinisterioUvMap[$ministerioNombre] = [];
+                }
+                if (!isset($detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre])) {
+                    $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre] = [
+                        'lider' => $liderNombre,
+                        'hombres' => 0,
+                        'mujeres' => 0,
+                        'jovenes' => 0,
+                        'asistencias_reales' => 0,
+                        'total' => 0,
+                    ];
+                }
+
+                if ($esJovenUv) {
+                    $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['jovenes']++;
+                } elseif ($esHombreUv) {
+                    $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['hombres']++;
+                } elseif ($esMujerUv) {
+                    $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['mujeres']++;
+                }
+
+                $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['total']++;
+
+                $idPersonaInscripcionUv = (int)($inscripcionUv['Id_Persona'] ?? 0);
+                if ($idPersonaInscripcionUv > 0 && !empty($personasConAsistenciaReal[$idPersonaInscripcionUv])) {
+                    $detalleLideresMinisterioUvMap[$ministerioNombre][$liderNombre]['asistencias_reales']++;
+                }
+            }
+
+            $detalleLideresMinisterioUv = [];
+            foreach ($detalleLideresMinisterioUvMap as $ministerioNombre => $detalleLideres) {
+                $rowsLideres = array_values($detalleLideres);
+                usort($rowsLideres, static function ($a, $b) {
+                    $cmpTotal = ((int)($b['total'] ?? 0)) <=> ((int)($a['total'] ?? 0));
+                    if ($cmpTotal !== 0) {
+                        return $cmpTotal;
+                    }
+                    return strcmp((string)($a['lider'] ?? ''), (string)($b['lider'] ?? ''));
+                });
+                $detalleLideresMinisterioUv[$ministerioNombre] = $rowsLideres;
+            }
         }
 
         $resumenInscripciones = $inscripcionModel->getResumenProgramas();
@@ -847,6 +874,7 @@ class HomeController extends BaseController {
             'filtro_insc_programa' => $filtroProgramaInscripcion,
             'programas_opciones' => $config['programas_opciones'],
             'tabla_uv_ministerio' => $tablaUvPorMinisterio,
+            'tabla_resumen_ministerio_tipo' => $esTablaCapDestino ? 'cap' : 'uv',
             'detalle_lideres_ministerio_uv' => $detalleLideresMinisterioUv,
         ];
     }
@@ -1103,9 +1131,9 @@ class HomeController extends BaseController {
 
     private function exportarModuloFormacion($modulo) {
         if (!AuthController::esAdministrador()
-            && !AuthController::tienePermiso('personas', 'ver')
+            && !AuthController::puede('personas:ver')
             && !AuthController::tieneCoordinacionTotalProgramas()
-            && !AuthController::tienePermiso('programas', 'exportar_consolidado')) {
+            && !AuthController::puede('programas:exportar_consolidado')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -1124,6 +1152,10 @@ class HomeController extends BaseController {
     }
 
     public function index() {
+        if (AuthController::esContextoMaestro() || AuthController::esVistaDiscipuloSimplificada()) {
+            $this->redirect(AuthController::obtenerUrlInicioSesion());
+        }
+
         require_once APP . '/Models/Persona.php';
         require_once APP . '/Models/Celula.php';
         require_once APP . '/Models/Evento.php';
@@ -1215,7 +1247,16 @@ class HomeController extends BaseController {
     }
 
     private function puedeVerModuloMaterial(array $modulo): bool {
-        return AuthController::esAdministrador() || AuthController::tienePermiso((string)$modulo['permiso'], 'ver');
+        if (AuthController::esAdministrador()) {
+            return true;
+        }
+
+        $clave = (string)($modulo['clave'] ?? '');
+        if ($clave === 'capacitacion_destino') {
+            return AuthController::puedeVerMaterialCapacitacionDestino();
+        }
+
+        return AuthController::puede((string)$modulo['permiso'] . ':ver');
     }
 
     private function puedeGestionarModuloMaterial(array $modulo): bool {
@@ -1223,18 +1264,42 @@ class HomeController extends BaseController {
             return true;
         }
 
+        if ((string)($modulo['clave'] ?? '') === 'capacitacion_destino'
+            && AuthController::puedeGestionarCapDestinoComoMaestro()) {
+            return true;
+        }
+
         $permiso = (string)$modulo['permiso'];
-        return AuthController::tienePermiso($permiso, 'crear') || AuthController::tienePermiso($permiso, 'editar');
+        return AuthController::puede($permiso . ':crear') || AuthController::puede($permiso . ':editar');
     }
 
-    private function puedeSubirEnModuloMaterial(array $modulo): bool {
+    private function puedeEliminarEnModuloMaterial(array $modulo): bool {
         if (AuthController::esAdministrador()) {
             return true;
         }
 
-        // En Capacitación Destino la subida se controla con un permiso dedicado.
+        $permiso = trim((string)($modulo['permiso'] ?? ''));
+        if ($permiso === '') {
+            return false;
+        }
+
+        return AuthController::puede($permiso . ':eliminar')
+            || AuthController::puede($permiso . ':editar');
+    }
+
+    private function puedeSubirEnModuloMaterial(array $modulo): bool {
+        // Maestro: ver y gestionar tareas/evaluaciones, pero no subir PDFs de clase ni profesor.
+        if ((string)($modulo['clave'] ?? '') === 'capacitacion_destino'
+            && AuthController::esContextoMaestro()) {
+            return false;
+        }
+
+        if (AuthController::esAdministrador()) {
+            return true;
+        }
+
         if ((string)($modulo['clave'] ?? '') === 'capacitacion_destino') {
-            return AuthController::tienePermiso('material_capacitacion_destino_subir', 'crear');
+            return AuthController::puede('material_capacitacion_destino_subir:crear');
         }
 
         return $this->puedeGestionarModuloMaterial($modulo);
@@ -1606,31 +1671,7 @@ class HomeController extends BaseController {
     }
 
     private function obtenerNivelesCapacitacionDestinoPermitidosPorInscripcion(int $idPersona): array {
-        if ($idPersona <= 0) {
-            return [];
-        }
-
-        require_once APP . '/Models/EscuelaFormacionInscripcion.php';
-        $inscripcionModel = new EscuelaFormacionInscripcion();
-        $programas = (array)$inscripcionModel->getProgramasInscritosPersona($idPersona);
-
-        $niveles = [];
-        foreach ($programas as $programa) {
-            $programa = trim((string)$programa);
-            if ($programa === 'capacitacion_destino' || $programa === 'capacitacion_destino_nivel_1') {
-                $niveles[1] = true;
-            }
-            if ($programa === 'capacitacion_destino_nivel_2') {
-                $niveles[2] = true;
-            }
-            if ($programa === 'capacitacion_destino_nivel_3') {
-                $niveles[3] = true;
-            }
-        }
-
-        $resultado = array_map('intval', array_keys($niveles));
-        sort($resultado);
-        return $resultado;
+        return AuthController::obtenerNivelesCapacitacionDestinoInscripcion($idPersona);
     }
 
     private function obtenerClasesActivasCapDestinoPorNivel(array $niveles, ?string $fecha = null): array {
@@ -1670,17 +1711,21 @@ class HomeController extends BaseController {
             'mensaje' => '',
         ];
 
-        if (!AuthController::esRolDiscipuloUsuario() || trim($moduloClave) !== 'capacitacion_destino') {
+        if (!AuthController::usaVistaDiscipuloCapacitacionDestino() || trim($moduloClave) !== 'capacitacion_destino') {
             return ['temas' => $temas, 'restriccion' => $restriccion];
         }
 
         $restriccion['aplicar'] = true;
-        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+        $idPersona = AuthController::obtenerIdPersonaSesion();
         $nivelesPermitidos = $this->obtenerNivelesCapacitacionDestinoPermitidosPorInscripcion($idPersona);
         $restriccion['niveles_permitidos'] = $nivelesPermitidos;
 
         if (empty($nivelesPermitidos)) {
-            $restriccion['mensaje'] = 'No tienes inscripción activa en Capacitación Destino.';
+            if ($idPersona <= 0) {
+                $restriccion['mensaje'] = 'Tu usuario no está vinculado a una ficha de persona. Pide al administrador que relacione tu cuenta con tu inscripción en Capacitación Destino.';
+            } else {
+                $restriccion['mensaje'] = 'No encontramos inscripción en Capacitación Destino para tu perfil. Verifica que estés inscrito en el nivel correcto.';
+            }
             return ['temas' => [], 'restriccion' => $restriccion];
         }
 
@@ -1688,8 +1733,7 @@ class HomeController extends BaseController {
         $restriccion['clases_activas_por_nivel'] = $clasesActivasPorNivel;
 
         if (empty($clasesActivasPorNivel)) {
-            $restriccion['mensaje'] = 'Hoy no hay lecciones activas programadas para tu nivel inscrito.';
-            return ['temas' => [], 'restriccion' => $restriccion];
+            $restriccion['mensaje'] = 'Hoy no hay lección activa en el calendario para tu nivel. Aun así puedes entrar a clase y evaluaciones si tu líder ya las habilitó.';
         }
 
         $filtrados = [];
@@ -1749,7 +1793,7 @@ class HomeController extends BaseController {
             return false;
         }
 
-        if (!AuthController::esRolDiscipuloUsuario() || trim($moduloClave) !== 'capacitacion_destino') {
+        if (!AuthController::usaVistaDiscipuloCapacitacionDestino() || trim($moduloClave) !== 'capacitacion_destino') {
             return true;
         }
 
@@ -3006,8 +3050,8 @@ class HomeController extends BaseController {
         }
 
         $moduloVista = $modulosVisibles[$moduloActual];
-        $esDiscipuloCapDestino = AuthController::esRolDiscipuloUsuario()
-            && (string)($moduloVista['clave'] ?? '') === 'capacitacion_destino';
+        $esDiscipuloCapDestino = (string)($moduloVista['clave'] ?? '') === 'capacitacion_destino'
+            && AuthController::usaVistaDiscipuloCapacitacionDestino();
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $accion = trim((string)($_POST['accion'] ?? ''));
@@ -3018,8 +3062,8 @@ class HomeController extends BaseController {
             }
 
             $moduloSeleccionado = $modulosVisibles[$moduloPost];
-            $esDiscipuloCapDestinoPost = AuthController::esRolDiscipuloUsuario()
-                && (string)($moduloSeleccionado['clave'] ?? '') === 'capacitacion_destino';
+            $esDiscipuloCapDestinoPost = (string)($moduloSeleccionado['clave'] ?? '') === 'capacitacion_destino'
+                && AuthController::usaVistaDiscipuloCapacitacionDestino();
             $contextoRetorno = [
                 'nivel' => (int)($_POST['contexto_nivel'] ?? $_POST['nivel'] ?? 0),
                 'modulo' => (int)($_POST['contexto_modulo'] ?? $_POST['modulo_numero'] ?? 0),
@@ -3048,8 +3092,21 @@ class HomeController extends BaseController {
                 $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'Tu rol discípulo solo puede ver el acceso a clase y evaluaciones activas.', 'error'));
             }
 
-            if (in_array($accion, $accionesGestionMaterial, true) && !$this->puedeGestionarModuloMaterial($moduloSeleccionado)) {
+            $accionesEliminarMaterial = ['eliminar', 'eliminar_tema', 'eliminar_tarea'];
+            if (in_array($accion, $accionesEliminarMaterial, true) && !$this->puedeEliminarEnModuloMaterial($moduloSeleccionado)) {
+                $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'No tienes permiso para eliminar material en este módulo.', 'error'));
+            } elseif (in_array($accion, $accionesGestionMaterial, true) && !$this->puedeGestionarModuloMaterial($moduloSeleccionado)) {
                 $this->redirect($this->construirRutaMaterialConContexto($moduloSeleccionado, $contextoRetorno, 'No tienes permiso para gestionar este material.', 'error'));
+            }
+
+            if (AuthController::esContextoMaestro()
+                && in_array($accion, ['subir', 'agregar_archivos_tema'], true)) {
+                $this->redirect($this->construirRutaMaterialConContexto(
+                    $moduloSeleccionado,
+                    $contextoRetorno,
+                    'Como maestro no puedes subir material de clase ni de profesor.',
+                    'error'
+                ));
             }
 
             try {
@@ -3426,6 +3483,10 @@ class HomeController extends BaseController {
         }
 
         $this->view('home/material_detalle', [
+            'pageTitle' => AuthController::esContextoMaestro()
+                ? 'Material Capacitación Destino'
+                : ((string)($modulo['titulo'] ?? 'Material')),
+            'es_vista_maestro' => AuthController::esContextoMaestro(),
             'modulo' => $modulo,
             'temas' => $temas,
             'total_archivos' => $totalArchivos,
@@ -3444,7 +3505,7 @@ class HomeController extends BaseController {
             'id_persona_actual' => (int)($_SESSION['usuario_id'] ?? 0),
             'puede_gestionar' => !$esDiscipuloCapDestino && $this->puedeGestionarModuloMaterial($modulo),
             'puede_subir_material' => !$esDiscipuloCapDestino && $this->puedeSubirEnModuloMaterial($modulo),
-            'puede_subir_tareas' => AuthController::esRolDiscipuloUsuario() && (string)($modulo['clave'] ?? '') === 'capacitacion_destino',
+            'puede_subir_tareas' => AuthController::usaVistaDiscipuloCapacitacionDestino() && (string)($modulo['clave'] ?? '') === 'capacitacion_destino',
             'mensaje' => (string)($_GET['mensaje'] ?? ''),
             'tipo' => (string)($_GET['tipo'] ?? ''),
         ]);
@@ -3534,6 +3595,10 @@ class HomeController extends BaseController {
     }
 
     public function material() {
+        if (AuthController::esContextoMaestro()) {
+            $this->redirect('home/material/capacitacion-destino');
+        }
+
         if (!AuthController::puedeVerCentroMaterial()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
@@ -3761,47 +3826,31 @@ class HomeController extends BaseController {
         if (AuthController::tieneCoordinacionTotalProgramas()) {
             return true;
         }
-        if (AuthController::tienePermiso('personas', 'ver')) {
+        if (AuthController::puede('programas:ver')) {
             return true;
         }
-        if (AuthController::tienePermiso('personas_consulta', 'ver')) {
-            return true;
-        }
-        if (AuthController::tienePermiso('programas', 'ver')) {
-            return true;
-        }
-        return AuthController::tienePermiso('programas', 'ver_universidad_vida')
-            || AuthController::tienePermiso('programas', 'ver_capacitacion_destino');
+        return AuthController::puede('programas:ver_universidad_vida')
+            || AuthController::puede('programas:ver_capacitacion_destino');
     }
 
     /**
      * Linea de programa en Programas (UV o Cap. Destino) para usuarios sin acceso global.
      */
     private function puedeVerLineaPrograma(string $clave): bool {
-        if (AuthController::esAdministrador()) {
-            return true;
-        }
-        if (AuthController::tieneCoordinacionTotalProgramas()) {
-            return true;
-        }
-        if (AuthController::tienePermiso('personas', 'ver')) {
-            return true;
-        }
-        if (AuthController::tienePermiso('programas', 'ver')) {
-            return true;
-        }
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
         if ($clave === 'universidad_vida') {
-            return AuthController::tienePermiso('programas', 'ver_universidad_vida');
+            return PermisosProgramasAccess::puedeVerLineaUniversidadVida();
         }
         if ($clave === 'capacitacion_destino') {
-            return AuthController::tienePermiso('programas', 'ver_capacitacion_destino');
+            return PermisosProgramasAccess::puedeVerLineaCapacitacionDestino();
         }
         return false;
     }
 
     private function aplicarRestriccionProgramaConsolidarEnRequest(): void {
-        $allowUv = $this->puedeVerLineaPrograma('universidad_vida');
-        $allowCap = $this->puedeVerLineaPrograma('capacitacion_destino');
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        $allowUv = PermisosProgramasAccess::puedeVerLineaUniversidadVida();
+        $allowCap = PermisosProgramasAccess::puedeVerLineaCapacitacionDestino();
         if ($allowUv && $allowCap) {
             return;
         }
@@ -3819,20 +3868,27 @@ class HomeController extends BaseController {
             $programaActivo = 'capacitacion_destino';
         }
 
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        $allowUv = PermisosProgramasAccess::puedeVerLineaUniversidadVida();
+        $allowCap = PermisosProgramasAccess::puedeVerLineaCapacitacionDestino();
+
         $rutaBaseTab = $vistaAsistencias ? 'programas/consolidar/asistencias' : 'programas/consolidar';
 
-        $tabs = [
-            [
+        $tabs = [];
+        if ($allowUv) {
+            $tabs[] = [
                 'label' => 'Universidad de la Vida',
                 'url' => $rutaBaseTab . '&insc_programa=universidad_vida',
                 'active' => $programaActivo === 'universidad_vida',
-            ],
-            [
+            ];
+        }
+        if ($allowCap) {
+            $tabs[] = [
                 'label' => 'Capacitación Destino',
                 'url' => $rutaBaseTab . '&insc_programa=capacitacion_destino',
                 'active' => $programaActivo === 'capacitacion_destino',
-            ],
-        ];
+            ];
+        }
 
         if ($programaUnico !== null && in_array($programaUnico, ['universidad_vida', 'capacitacion_destino'], true)) {
             $tabs = array_values(array_filter($tabs, static function(array $tab) use ($programaUnico) {
@@ -3844,45 +3900,67 @@ class HomeController extends BaseController {
     }
 
     private function obtenerSubmodulosProgramas(): array {
-        $puedeVerMaterialUv = AuthController::esAdministrador() || AuthController::tienePermiso('material_universidad_vida', 'ver');
-        $puedeVerMaterialDestino = AuthController::esAdministrador() || AuthController::tienePermiso('material_capacitacion_destino', 'ver');
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
 
-        $subs = [
+        $definiciones = [
             [
                 'clave' => 'universidad_vida',
                 'titulo' => 'Universidad de la Vida',
                 'descripcion' => 'Inscripciones, seguimiento y asistencia del programa Universidad de la Vida.',
                 'icono' => 'bi bi-mortarboard-fill',
-                'href' => PUBLIC_URL . '?url=programas/consolidar&insc_programa=universidad_vida',
-                'asistencias_href' => PUBLIC_URL . '?url=programas/consolidar/asistencias&insc_programa=universidad_vida',
-                'material_href' => $puedeVerMaterialUv ? (PUBLIC_URL . '?url=home/material/universidad-vida') : '',
                 'gradiente' => 'linear-gradient(135deg, #1e4a89 0%, #3f73be 100%)',
+                'consolidar_url' => 'programas/consolidar&insc_programa=universidad_vida',
+                'asistencias_url' => 'programas/consolidar/asistencias&insc_programa=universidad_vida',
+                'dashboard_url' => 'reportes/dashboard-escuelas-uv',
+                'pagos_url' => 'escuelas_formacion/pagos/consolidar',
+                'formulario_url' => 'escuelas_formacion/registro-publico/universidad-vida',
+                'material_url' => 'home/material/universidad-vida',
             ],
             [
                 'clave' => 'capacitacion_destino',
                 'titulo' => 'Capacitación Destino',
-                'descripcion' => 'Gestión por niveles, asistencia y seguimiento del proceso de Capacitación Destino.',
+                'descripcion' => 'Gestión por niveles y seguimiento de Capacitación Destino.',
                 'icono' => 'bi bi-signpost-split-fill',
-                'href' => PUBLIC_URL . '?url=programas/consolidar&insc_programa=capacitacion_destino',
-                'asistencias_href' => PUBLIC_URL . '?url=programas/consolidar/asistencias&insc_programa=capacitacion_destino',
-                'material_href' => $puedeVerMaterialDestino ? (PUBLIC_URL . '?url=home/material/capacitacion-destino') : '',
                 'gradiente' => 'linear-gradient(135deg, #7a4e08 0%, #c8881e 100%)',
+                'consolidar_url' => 'programas/consolidar&insc_programa=capacitacion_destino',
+                'asistencias_url' => '',
+                'dashboard_url' => 'reportes/dashboard-escuelas-capacitacion',
+                'pagos_url' => 'escuelas_formacion/pagos/enviar',
+                'formulario_url' => 'escuelas_formacion/registro-publico/capacitacion-destino',
+                'material_url' => 'home/material/capacitacion-destino',
             ],
         ];
 
-        $out = [];
-        foreach ($subs as $s) {
-            $clave = (string)($s['clave'] ?? '');
-            if ($clave === 'universidad_vida' && !$this->puedeVerLineaPrograma('universidad_vida')) {
+        $subs = [];
+        foreach ($definiciones as $def) {
+            $clave = (string)$def['clave'];
+            $perm = PermisosProgramasAccess::permisosUiLinea($clave);
+            if (empty($perm['ver_linea'])) {
                 continue;
             }
-            if ($clave === 'capacitacion_destino' && !$this->puedeVerLineaPrograma('capacitacion_destino')) {
-                continue;
-            }
-            $out[] = $s;
+            $subs[] = [
+                'clave' => $clave,
+                'titulo' => $def['titulo'],
+                'descripcion' => $def['descripcion'],
+                'icono' => $def['icono'],
+                'gradiente' => $def['gradiente'],
+                'href' => !empty($perm['consolidado']) ? (PUBLIC_URL . '?url=' . $def['consolidar_url']) : '',
+                'asistencias_href' => !empty($perm['asistencias']) && $def['asistencias_url'] !== ''
+                    ? (PUBLIC_URL . '?url=' . $def['asistencias_url']) : '',
+                'dashboard_href' => !empty($perm['dashboard']) ? (PUBLIC_URL . '?url=' . $def['dashboard_url']) : '',
+                'pagos_href' => !empty($perm['pagos']) ? (PUBLIC_URL . '?url=' . $def['pagos_url']) : '',
+                'formulario_href' => !empty($perm['formulario']) ? (PUBLIC_URL . '?url=' . $def['formulario_url']) : '',
+                'material_href' => !empty($perm['material']) ? (PUBLIC_URL . '?url=' . $def['material_url']) : '',
+                'puede_consolidar' => !empty($perm['consolidado']),
+                'puede_asistencias' => !empty($perm['asistencias']),
+                'puede_dashboard' => !empty($perm['dashboard']),
+                'puede_pagos' => !empty($perm['pagos']),
+                'puede_formulario' => !empty($perm['formulario']),
+                'puede_material' => !empty($perm['material']),
+            ];
         }
 
-        return $out;
+        return $subs;
     }
 
     private function renderProgramasLanding(): void {
@@ -3893,7 +3971,27 @@ class HomeController extends BaseController {
 
         $this->view('programas/landing', [
             'submodulosProgramas' => $this->obtenerSubmodulosProgramas(),
+            'resumenProgramas' => $this->obtenerResumenProgramasLanding(),
         ]);
+    }
+
+    /**
+     * Totales de inscritos visibles para el usuario (misma regla de aislamiento que consolidar).
+     *
+     * @return array<string, int>
+     */
+    private function obtenerResumenProgramasLanding(): array {
+        $resumen = ['universidad_vida' => 0, 'capacitacion_destino' => 0];
+        foreach (['universidad_vida', 'capacitacion_destino'] as $linea) {
+            if (!$this->puedeVerLineaPrograma($linea)) {
+                continue;
+            }
+            $_GET['insc_programa'] = $linea;
+            $data = $this->obtenerDatosModuloFormacion('consolidar');
+            $resumen[$linea] = count((array)($data['inscripciones_publicas'] ?? []));
+        }
+
+        return $resumen;
     }
 
     private function renderProgramasRegistro(): void {
@@ -3920,7 +4018,8 @@ class HomeController extends BaseController {
     }
 
     private function renderProgramasAsistencias(): void {
-        if (!$this->puedeVerProgramas()) {
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        if (!PermisosProgramasAccess::puedeVerAsistenciasUniversidadVida()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -3949,7 +4048,8 @@ class HomeController extends BaseController {
     }
 
     private function exportarProgramasConsolidar(): void {
-        if (!$this->puedeVerProgramas()) {
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        if (!PermisosProgramasAccess::puedeExportarConsolidado()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -3960,10 +4060,24 @@ class HomeController extends BaseController {
     }
 
     public function programas() {
+        if (AuthController::esVistaDiscipuloSimplificada()) {
+            $this->redirect('programas/evaluaciones');
+        }
+
         $this->renderProgramasLanding();
     }
 
     public function programasConsolidar() {
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        $linea = $this->normalizarProgramaConsolidar((string)($_GET['insc_programa'] ?? 'universidad_vida'));
+        if ($linea === 'universidad_vida' && !PermisosProgramasAccess::puedeVerLineaUniversidadVida()) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+        if ($linea === 'capacitacion_destino' && !PermisosProgramasAccess::puedeVerLineaCapacitacionDestino()) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
         $this->renderProgramasRegistro();
     }
 
@@ -4005,19 +4119,19 @@ class HomeController extends BaseController {
 
     private function puedeVerEscuelasFormacion(): bool {
         return AuthController::esAdministrador()
-            || AuthController::tienePermiso('escuelas_formacion', 'ver')
-            || AuthController::tienePermiso('personas', 'ver');
+            || AuthController::puede('escuelas_formacion:ver')
+            || AuthController::puede('personas:ver');
     }
 
     private function puedeEditarEscuelasFormacion(): bool {
         return AuthController::esAdministrador()
-            || AuthController::tienePermiso('escuelas_formacion', 'editar')
-            || AuthController::tienePermiso('personas', 'editar');
+            || AuthController::puede('escuelas_formacion:editar')
+            || AuthController::puede('personas:editar');
     }
 
     private function puedeMarcarAsistenciaEscuelasFormacion(): bool {
         return AuthController::esAdministrador()
-            || AuthController::tienePermiso('escuelas_formacion_marcar_asistencia', 'editar');
+            || AuthController::puede('escuelas_formacion_marcar_asistencia:editar');
     }
 
     private function esProgramaCapacitacionDestino(string $programa): bool {
@@ -4040,7 +4154,7 @@ class HomeController extends BaseController {
 
     private function puedeEditarFechasEscuelasFormacion(): bool {
         return AuthController::esAdministrador()
-            || AuthController::tienePermiso('escuelas_formacion_editar_fechas', 'editar');
+            || AuthController::puede('escuelas_formacion_editar_fechas:editar');
     }
 
     public function actualizarEstadoEscuelaFormacion() {
@@ -4083,9 +4197,11 @@ class HomeController extends BaseController {
     }
 
     public function eliminarInscripcionFormacion() {
-        if (!AuthController::tienePermiso('personas', 'eliminar')) {
-            $this->json(['ok' => false, 'error' => 'No autorizado'], 403);
-        }
+        require_once APP . '/Helpers/PermisoGuard.php';
+        PermisoGuard::exigirCualquiera(['personas:eliminar', 'escuelas_formacion:eliminar'], [
+            'json' => true,
+            'mensaje' => 'No autorizado para eliminar inscripciones',
+        ]);
 
         $idInscripcion = (int)($_POST['id_inscripcion'] ?? 0);
         $returnUrl = trim((string)($_POST['return_url'] ?? ''));
@@ -4190,14 +4306,9 @@ class HomeController extends BaseController {
                         exit;
                     }
 
-                    $idPersonaInscripcion = (int)($inscripcion['Id_Persona'] ?? 0);
-                    if ($idPersonaInscripcion <= 0) {
-                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('La inscripción no tiene una persona vinculada para mover.'));
-                        exit;
-                    }
-
-                    if (!$this->puedeGestionarPersonaFormacion($idPersonaInscripcion)) {
-                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('Sin acceso para mover esta inscripción.'));
+                    $idPersonaInscripcion = $inscripcionModel->resolverIdPersonaDesdeInscripcion($inscripcion);
+                    if ($idPersonaInscripcion > 0 && !$this->puedeGestionarPersonaFormacion($idPersonaInscripcion)) {
+                        $this->responderMoverProgramaFormacion(false, $returnUrl, 'Sin acceso para mover esta inscripción.', $idInscripcion, '');
                         exit;
                     }
 
@@ -4218,7 +4329,7 @@ class HomeController extends BaseController {
                         }
 
                         if (!in_array($programaDestino, $programasDestinoPermitidos, true)) {
-                            header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('El programa destino no es válido para esta inscripción.'));
+                            $this->responderMoverProgramaFormacion(false, $returnUrl, 'El programa destino no es válido para esta inscripción.', $idInscripcion, '');
                             exit;
                         }
                     } else {
@@ -4226,43 +4337,38 @@ class HomeController extends BaseController {
                     }
 
                     if ($programaDestino === '') {
-                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('Este programa no se puede mover automáticamente.'));
+                        $this->responderMoverProgramaFormacion(false, $returnUrl, 'Este programa no se puede mover automáticamente.', $idInscripcion, '');
                         exit;
                     }
 
-                    $okDestino = (bool)$inscripcionModel->crearDesdePersonaSiNoExiste(
-                        $idPersonaInscripcion,
-                        $programaDestino,
-                        'Escuelas de formacion (movido de programa)'
-                    );
+                    if ($idPersonaInscripcion > 0) {
+                        $idInscripcionDuplicada = $inscripcionModel->getIdInscripcionPersonaPrograma($idPersonaInscripcion, $programaDestino);
+                        if ($idInscripcionDuplicada > 0 && $idInscripcionDuplicada !== $idInscripcion) {
+                            $inscripcionModel->delete($idInscripcion);
+                            $idInscripcion = $idInscripcionDuplicada;
+                        }
+                    }
 
-                    if (!$okDestino) {
-                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('No se pudo crear la inscripción de destino.'));
+                    $okMover = $inscripcionModel->moverProgramaInscripcion($idInscripcion, $programaDestino, $idPersonaInscripcion > 0 ? $idPersonaInscripcion : null);
+                    if (!$okMover) {
+                        $this->responderMoverProgramaFormacion(false, $returnUrl, 'No se pudo actualizar el programa en la base de datos.', $idInscripcion, '');
                         exit;
                     }
 
-                    $okEliminarOrigen = $inscripcionModel->delete($idInscripcion);
-                    if (!$okEliminarOrigen) {
-                        header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=error&mensaje=' . urlencode('Se creó el destino, pero no se pudo eliminar la inscripción origen.'));
+                    $inscripcionVerificada = $inscripcionModel->getByIdInscripcion($idInscripcion);
+                    $programaGuardado = trim((string)($inscripcionVerificada['Programa'] ?? ''));
+                    if ($programaGuardado !== $programaDestino) {
+                        $this->responderMoverProgramaFormacion(false, $returnUrl, 'El cambio no quedó guardado. Verifica la inscripción e intenta de nuevo.', $idInscripcion, '');
                         exit;
                     }
 
-                    $mensaje = 'Persona movida a ' . $this->getProgramaEscuelaLabel($programaDestino) . ' correctamente.';
-                    if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
-                        $this->json([
-                            'ok' => true,
-                            'id_inscripcion' => $idInscripcion,
-                            'programa_destino' => $programaDestino,
-                            'mensaje' => $mensaje,
-                        ]);
-                    }
-
-                    header('Location: ' . PUBLIC_URL . $returnUrl . '&tipo=success&mensaje=' . urlencode($mensaje));
+                    $mensaje = 'Inscripción actualizada a ' . $this->getProgramaEscuelaLabel($programaDestino) . ' correctamente.';
+                    $this->responderMoverProgramaFormacion(true, $returnUrl, $mensaje, $idInscripcion, $programaDestino);
                     exit;
                 }
 
                 if ($accion === 'eliminar_inscripcion') {
-                    if (!AuthController::tienePermiso('personas', 'eliminar')) {
+                    if (!AuthController::puede('personas:eliminar')) {
                         $this->json(['ok' => false, 'error' => 'No autorizado'], 403);
                     }
 
@@ -4316,8 +4422,12 @@ class HomeController extends BaseController {
             require_once APP . '/Models/EscuelaFormacionInscripcion.php';
             $inscripcionModel = new EscuelaFormacionInscripcion();
             $inscripcion = $inscripcionModel->getByIdInscripcion($idInscripcion);
-            $idPersonaInscripcion = (int)($inscripcion['Id_Persona'] ?? 0);
-            if ($idPersonaInscripcion <= 0 || !$this->puedeGestionarPersonaFormacion($idPersonaInscripcion)) {
+            if (empty($inscripcion)) {
+                $this->json(['ok' => false, 'error' => 'Inscripción no encontrada'], 404);
+            }
+
+            $idPersonaInscripcion = $inscripcionModel->resolverIdPersonaDesdeInscripcion($inscripcion);
+            if ($idPersonaInscripcion > 0 && !$this->puedeGestionarPersonaFormacion($idPersonaInscripcion)) {
                 $this->json(['ok' => false, 'error' => 'Sin acceso a esta inscripción'], 403);
             }
 
@@ -4331,16 +4441,49 @@ class HomeController extends BaseController {
                 'nivel_3' => 'capacitacion_destino_nivel_3',
             ];
 
-            // Cambiar solo Segmento_Preferido deja pagos/asistencias/evaluaciones en el nivel anterior (usan Programa).
+            if ($idPersonaInscripcion <= 0) {
+                $idPersonaInscripcion = $inscripcionModel->resolverIdPersonaDesdeInscripcion($inscripcion);
+            }
+
+            // Pasar de Universidad de la Vida (u otro) a Cap. Destino: actualizar Programa en la misma fila.
+            if (!$esCapDestino && isset($mapNivelAPrograma[$segmentoNuevo])) {
+                $programaDestinoSync = $mapNivelAPrograma[$segmentoNuevo];
+                $okMover = $inscripcionModel->moverProgramaInscripcion($idInscripcion, $programaDestinoSync, $idPersonaInscripcion > 0 ? $idPersonaInscripcion : null);
+                if (!$okMover) {
+                    $this->json([
+                        'ok' => false,
+                        'error' => 'No se pudo mover la inscripción a Capacitación Destino en la base de datos.',
+                    ], 500);
+                }
+
+                $inscripcionTrasMover = $inscripcionModel->getByIdInscripcion($idInscripcion);
+                $programaTrasMover = trim((string)($inscripcionTrasMover['Programa'] ?? ''));
+                if ($programaTrasMover !== $programaDestinoSync) {
+                    $this->json([
+                        'ok' => false,
+                        'error' => 'El cambio de programa no quedó guardado. Usa el botón de mover programa o contacta al administrador.',
+                    ], 422);
+                }
+
+                $this->json([
+                    'ok' => true,
+                    'id_inscripcion' => $idInscripcion,
+                    'programa' => $programaTrasMover,
+                    'segmento_nuevo' => $segmentoNuevo,
+                ]);
+            }
+
+            // Cambiar nivel dentro de Cap. Destino: actualizar Programa (no solo Segmento_Preferido).
             if ($esCapDestino && isset($mapNivelAPrograma[$segmentoNuevo])) {
                 $programaDestinoSync = $mapNivelAPrograma[$segmentoNuevo];
-                $syncOk = $inscripcionModel->sincronizarProgramaCapacitacionDestinoPorPersona($idPersonaInscripcion, $programaDestinoSync);
-                if (!$syncOk) {
+                $okMover = $inscripcionModel->moverProgramaInscripcion($idInscripcion, $programaDestinoSync, $idPersonaInscripcion > 0 ? $idPersonaInscripcion : null);
+                if (!$okMover) {
                     $this->json([
                         'ok' => false,
                         'error' => 'No se pudo actualizar el nivel en Capacitación Destino.',
                     ], 500);
                 }
+
                 $inscripcionTrasSync = $inscripcionModel->getByIdInscripcion($idInscripcion);
                 $programaTrasSync = trim((string)($inscripcionTrasSync['Programa'] ?? ''));
                 if ($programaTrasSync !== $programaDestinoSync) {
@@ -4442,7 +4585,7 @@ class HomeController extends BaseController {
         require_once APP . '/Models/Persona.php';
         require_once APP . '/Helpers/DataIsolation.php';
 
-        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('personas', 'ver')) {
+        if (!AuthController::esAdministrador() && !AuthController::puede('personas:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }

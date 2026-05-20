@@ -2,9 +2,9 @@
 
 <div class="page-header">
     <h2>Peticiones de Oración</h2>
-    <?php $puedeCrearPeticion = AuthController::esAdministrador() || AuthController::tienePermiso('peticiones', 'crear'); ?>
-    <?php $puedeEditarPeticion = AuthController::esAdministrador() || AuthController::tienePermiso('peticiones', 'editar'); ?>
-    <?php $puedeEliminarPeticion = AuthController::esAdministrador() || AuthController::tienePermiso('peticiones', 'eliminar'); ?>
+    <?php $puedeCrearPeticion = AuthController::esAdministrador() || AuthController::puede('peticiones:crear'); ?>
+    <?php $puedeEditarPeticion = AuthController::esAdministrador() || AuthController::puede('peticiones:editar'); ?>
+    <?php $puedeEliminarPeticion = AuthController::esAdministrador() || AuthController::puede('peticiones:eliminar'); ?>
     <?php $puedeGestionarPeticion = $puedeEditarPeticion || $puedeEliminarPeticion; ?>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <a href="<?= PUBLIC_URL ?>?url=peticiones/exportarExcel<?= !empty($_GET['celula']) ? '&celula=' . urlencode((string)$_GET['celula']) : '' ?>" class="btn btn-success">

@@ -4,7 +4,7 @@
     <h2>Detalle de Célula</h2>
     <div>
         <a href="<?= PUBLIC_URL ?>index.php?url=personas/crear&return_to=celulas&return_url=<?= urlencode(PUBLIC_URL . 'index.php?url=celulas/detalle&id=' . (int)$celula['Id_Celula']) ?>" class="btn btn-sm btn-primary">+ Nueva Persona</a>
-        <?php if (AuthController::tienePermiso('asistencias', 'crear')): ?>
+        <?php if (AuthController::puede('asistencias:crear')): ?>
         <a href="<?= PUBLIC_URL ?>index.php?url=asistencias/registrar&celula=<?= $celula['Id_Celula'] ?>" class="btn btn-sm btn-success">Asistencias</a>
         <?php endif; ?>
         <a href="<?= PUBLIC_URL ?>index.php?url=celulas/editar&id=<?= $celula['Id_Celula'] ?>" class="btn btn-sm btn-warning">Editar</a>

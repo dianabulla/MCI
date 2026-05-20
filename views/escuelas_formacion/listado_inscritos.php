@@ -4,6 +4,37 @@ $programa   = (string)($programa   ?? 'universidad_vida');
 $titulo     = (string)($titulo     ?? 'Inscritos Universidad de la Vida');
 $publicUrl  = rtrim((string)($public_url ?? PUBLIC_URL), '/');
 $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
+$returnUrlInscritos = '?url=escuelas_formacion/inscritos';
+
+// Permisos: si la vista se incluye desde programas/asistencias puede no venir del controlador.
+$esAdminSesion = class_exists('AuthController') && AuthController::esAdministrador();
+$puedeAccesoListado = $esAdminSesion
+    || (class_exists('AuthController') && (
+        AuthController::puede('asistencias:ver')
+        || AuthController::tieneCoordinacionTotalProgramas()
+    ));
+
+if (!isset($puede_editar)) {
+    $puede_editar = $puedeAccesoListado;
+}
+if (!isset($puede_eliminar)) {
+    $puede_eliminar = $puedeAccesoListado;
+}
+if (!isset($puede_editar_persona)) {
+    $puede_editar_persona = $esAdminSesion
+        || (class_exists('AuthController') && AuthController::puede('personas:editar'));
+}
+
+// Administrador: siempre puede editar y eliminar en esta tabla.
+if ($esAdminSesion) {
+    $puede_editar = true;
+    $puede_eliminar = true;
+    $puede_editar_persona = true;
+}
+
+$puedeEditar        = !empty($puede_editar);
+$puedeEditarPersona = !empty($puede_editar_persona);
+$puedeEliminar      = !empty($puede_eliminar);
 ?>
 
 <style>
@@ -31,6 +62,30 @@ $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
   padding:10px 16px; min-width:130px; flex:1 1 130px; }
 .li-stat strong { display:block; font-size:1.3rem; font-weight:800; color:#1e3a5f; }
 .li-stat span   { font-size:0.73rem; color:#4b6482; text-transform:uppercase; letter-spacing:.04em; }
+.li-stat-sub    { display:block; margin-top:2px; font-size:0.68rem; color:#64748b; font-weight:600; text-transform:none; letter-spacing:0; }
+.li-stat--filtro.is-active { background:#eef6ff; border-color:#93c5fd; }
+.li-stat--filtro.is-active strong { color:#1d4ed8; }
+.li-stat--ok  { background:#ecfdf5; border-color:#a7f3d0; }
+.li-stat--ok strong { color:#166534; }
+.li-stat--enc { background:#ecfdf5; border-color:#86efac; }
+.li-stat--enc .li-encuentro-titulo {
+  display:block; font-size:0.73rem; color:#166534; font-weight:700;
+  text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px;
+}
+.li-stat--enc .li-encuentro-asist {
+  display:flex; flex-wrap:wrap; gap:8px 12px;
+}
+.li-stat--enc .li-enc-badge {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:6px 12px; border-radius:8px; font-size:0.85rem; font-weight:800;
+  background:#dcfce7; color:#166534; border:1px solid #86efac;
+}
+.li-stat--enc .li-enc-badge--d2 { background:#d1fae5; color:#047857; border-color:#6ee7b7; }
+.li-stat--enc .li-enc-badge small { font-weight:700; opacity:.9; font-size:0.72rem; text-transform:uppercase; }
+.li-resumen-filtro {
+  margin:-6px 0 0; padding:8px 12px; font-size:0.78rem; color:#1e40af;
+  background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px;
+}
 
 /* ── Tabla ──────────────────────────────────────────────────────── */
 .li-card { background:#fff; border:1px solid #dbe7f3; border-radius:12px;
@@ -119,6 +174,37 @@ $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
   color:#166534;
 }
 
+/* ── Acciones (editar / eliminar) ───────────────────────────────── */
+.li-acciones {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.li-acc-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid #c5d5e8;
+  background: #fff;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  text-decoration: none;
+  line-height: 1;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.li-acc-btn i { font-size: 13px; line-height: 1; }
+.li-acc-btn:hover { background: #f1f7ff; border-color: #93c5fd; color: #1e40af; }
+.li-acc-btn--edit:hover { color: #1d4ed8; }
+.li-acc-btn--del { border-color: #fecaca; color: #b91c1c; }
+.li-acc-btn--del:hover { background: #fef2f2; border-color: #f87171; color: #991b1b; }
+.li-acc-btn:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
+
 /* ── Estado de carga ────────────────────────────────────────────── */
 .li-loading { padding:40px; text-align:center; color:#64748b; font-size:0.88rem; }
 .li-empty   { padding:32px; text-align:center; color:#94a3b8; font-size:0.85rem; }
@@ -181,15 +267,28 @@ $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
       <strong id="li-total-personas">–</strong>
       <span>Total inscritos</span>
     </div>
-    <div class="li-stat">
-      <strong id="li-total-asistencias">–</strong>
-      <span>Asistencias marcadas</span>
-    </div>
-    <div class="li-stat" id="li-stat-visible" style="display:none;">
+    <div class="li-stat li-stat--filtro" id="li-stat-visible">
       <strong id="li-total-visibles">–</strong>
-      <span>Visible / filtro</span>
+      <span id="li-label-visibles">Personas mostradas</span>
+      <small id="li-sub-visibles" class="li-stat-sub" hidden></small>
+    </div>
+    <div class="li-stat li-stat--ok">
+      <strong id="li-total-pagados">–</strong>
+      <span id="li-label-pagados">Con pago</span>
+      <small id="li-sub-pagados" class="li-stat-sub" hidden></small>
+    </div>
+    <div class="li-stat li-stat--enc" style="min-width:180px;">
+      <div class="li-encuentro-asist" id="li-encuentro-asist">
+        <span class="li-enc-badge" title="Asistieron al día 1 del encuentro">
+          <small>Día 1</small> <span id="li-enc-d1">–</span>
+        </span>
+        <span class="li-enc-badge li-enc-badge--d2" title="Asistieron al día 2 del encuentro">
+          <small>Día 2</small> <span id="li-enc-d2">–</span>
+        </span>
+      </div>
     </div>
   </div>
+  <p id="li-resumen-filtro" class="li-resumen-filtro" hidden></p>
 
   <!-- Tabla -->
   <div class="li-card">
@@ -206,6 +305,7 @@ $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
             <th class="t-left" rowspan="2" style="min-width:120px;">Líder</th>
             <!-- Pago -->
             <th rowspan="2">Pago / Abono</th>
+            <th rowspan="2" style="min-width:64px;">Acciones</th>
             <!-- Grupos asistencia -->
             <th colspan="4" class="th-pre">Clases Pre-Encuentro</th>
             <th colspan="2" class="th-enc">Encuentro</th>
@@ -228,7 +328,7 @@ $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
           </tr>
         </thead>
         <tbody id="li-tbody">
-          <tr><td colspan="17" class="li-loading">Cargando datos…</td></tr>
+          <tr><td colspan="18" class="li-loading">Cargando datos…</td></tr>
         </tbody>
         <tfoot id="li-tfoot"></tfoot>
       </table>
@@ -246,9 +346,18 @@ $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
 
   const PROGRAMA   = <?= json_encode($programa) ?>;
   const BASE_URL   = <?= json_encode($publicUrl . '/index.php?url=') ?>;
-  const ABONO_URL  = BASE_URL + 'escuelas_formacion/inscritos/abono-admin';
-  const ASIST_URL  = BASE_URL + 'escuelas_formacion/inscritos/guardar-asistencia';
-  const DATOS_URL  = BASE_URL + 'escuelas_formacion/inscritos&ajax=1';
+  const ABONO_URL    = BASE_URL + 'escuelas_formacion/inscritos/abono-admin';
+  const ASIST_URL    = BASE_URL + 'escuelas_formacion/inscritos/guardar-asistencia';
+  const ELIMINAR_URL = BASE_URL + 'escuelas_formacion/inscritos/eliminar';
+  const DATOS_URL    = BASE_URL + 'escuelas_formacion/inscritos&ajax=1';
+  const EDITAR_URL   = BASE_URL + 'personas/editar';
+  const REGISTRO_UV_URL = BASE_URL + 'escuelas_formacion/registro-publico/universidad-vida';
+  const RETURN_URL   = <?= json_encode($returnUrlInscritos) ?>;
+  const PERMISOS     = {
+    puedeEditar:        <?= $puedeEditar ? 'true' : 'false' ?>,
+    puedeEditarPersona: <?= $puedeEditarPersona ? 'true' : 'false' ?>,
+    puedeEliminar:      <?= $puedeEliminar ? 'true' : 'false' ?>
+  };
 
   let todosLosDatos  = [];
   let guardandoCheck = false;
@@ -267,17 +376,59 @@ $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
       if (!json.success) throw new Error('Respuesta errónea del servidor');
       todosLosDatos = json.datos || [];
       renderTabla();
-      setEstado(todosLosDatos.length + ' registros cargados');
+      if (json.limite && todosLosDatos.length >= json.limite) {
+        setEstado(document.getElementById('li-estado').textContent + ' (límite ' + json.limite + ')');
+      }
     } catch (e) {
       setEstado('Error al cargar datos');
       document.getElementById('li-tbody').innerHTML =
-        '<tr><td colspan="17" class="li-empty">No se pudieron cargar los datos. Intenta de nuevo.</td></tr>';
+        '<tr><td colspan="18" class="li-empty">No se pudieron cargar los datos. Intenta de nuevo.</td></tr>';
     }
   }
 
   function tienePagoRegistrado(p) {
     const totalPagado = Number(p.total_pagado || 0);
-    return !!p.tiene_pago_registrado || totalPagado > 0;
+    const registrosPago = Number(p.registros_pago || 0);
+    return !!p.tiene_pago_registrado || totalPagado > 0 || registrosPago > 0;
+  }
+
+  function clasificarGeneroBase(g) {
+    const genero = normalizar(g || '');
+    if (!genero) return 'otro';
+    const esMujer = genero.includes('mujer') || genero.includes('femen')
+      || /(^|[^a-z])(f|fem|female)([^a-z]|$)/.test(genero);
+    const esHombre = genero.includes('hombre') || genero.includes('mascul')
+      || /(^|[^a-z])(m|masc|male|h)([^a-z]|$)/.test(genero);
+    if (esHombre && !esMujer) return 'hombre';
+    if (esMujer && !esHombre) return 'mujer';
+    return 'otro';
+  }
+
+  function resolverSegmento(p) {
+    const segPref = normalizar(p.Segmento_Preferido || '');
+    if (['jovenes', 'teens', 'hombres_adultos', 'mujeres_adultas'].includes(segPref)) {
+      return segPref;
+    }
+
+    const edad = Number(p.Edad || 0);
+    const gc = clasificarGeneroBase(p.Genero);
+    if (edad >= 14 && edad <= 28) return 'jovenes';
+    if (edad >= 9 && edad <= 13) return 'teens';
+    if ((edad >= 29 || edad <= 0) && gc === 'hombre') return 'hombres_adultos';
+    if ((edad >= 29 || edad <= 0) && gc === 'mujer') return 'mujeres_adultas';
+
+    const g = normalizar(p.Genero || '');
+    if (g.includes('joven')) return 'jovenes';
+    return 'otros';
+  }
+
+  function coincideFiltroSegmento(p, filtroGenero) {
+    if (filtroGenero === 'todos' || filtroGenero === '') return true;
+    const segmento = resolverSegmento(p);
+    if (filtroGenero === 'hombre') return segmento === 'hombres_adultos';
+    if (filtroGenero === 'mujer') return segmento === 'mujeres_adultas';
+    if (filtroGenero === 'joven') return segmento === 'jovenes' || segmento === 'teens';
+    return true;
   }
 
   // ── Filtrado en frontend ────────────────────────────────────────
@@ -286,27 +437,22 @@ $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
     const genero = document.getElementById('li-genero').value;
     const filtroPago = document.getElementById('li-pago').value;
 
+    const terminoBuscar = normalizar(buscar);
+
     return todosLosDatos.filter(p => {
       const pagado = tienePagoRegistrado(p);
       if (filtroPago === 'pagados' && !pagado) return false;
       if (filtroPago === 'sin_pago' && pagado) return false;
 
-      // Búsqueda universal — si hay término, ignora el filtro de segmento
-      if (buscar !== '') {
-        const hayCoincidencia =
-          normalizar(p.Nombre).includes(buscar) ||
-          normalizar(p.Cedula).includes(buscar) ||
-          normalizar(p.Telefono).includes(buscar);
-        return hayCoincidencia;
+      if (terminoBuscar !== '') {
+        const coincideBuscar =
+          normalizar(p.Nombre).includes(terminoBuscar)
+          || normalizar(p.Cedula).includes(terminoBuscar)
+          || normalizar(p.Telefono).includes(terminoBuscar);
+        if (!coincideBuscar) return false;
       }
 
-      // Sin búsqueda → aplica filtro de género/segmento
-      if (genero === 'todos') return true;
-      const g = normalizar(p.Genero || '');
-      if (genero === 'hombre')  return g.includes('hombre') || g.includes('mascul') || g === 'm';
-      if (genero === 'mujer')   return g.includes('mujer')  || g.includes('femen')  || g === 'f';
-      if (genero === 'joven')   return g.includes('joven');
-      return true;
+      return coincideFiltroSegmento(p, genero);
     });
   }
 
@@ -315,32 +461,168 @@ $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   }
 
+  function hayFiltrosActivos() {
+    const buscar = document.getElementById('li-buscar').value.trim();
+    const genero = document.getElementById('li-genero').value;
+    const pago = document.getElementById('li-pago').value;
+    return buscar !== '' || genero !== 'todos' || pago !== 'todos';
+  }
+
+  function etiquetaFiltroGenero(valor) {
+    if (valor === 'hombre') return 'Hombres adultos';
+    if (valor === 'mujer') return 'Mujeres adultas';
+    if (valor === 'joven') return 'Jóvenes y teens';
+    return '';
+  }
+
+  function etiquetaFiltroPago(valor) {
+    if (valor === 'pagados') return 'Con pago';
+    if (valor === 'sin_pago') return 'Sin pago';
+    return '';
+  }
+
+  function describirFiltrosActivos() {
+    const partes = [];
+    const buscar = document.getElementById('li-buscar').value.trim();
+    const genero = document.getElementById('li-genero').value;
+    const pago = document.getElementById('li-pago').value;
+    if (buscar !== '') partes.push('Búsqueda: «' + buscar + '»');
+    const eg = etiquetaFiltroGenero(genero);
+    if (eg) partes.push(eg);
+    const ep = etiquetaFiltroPago(pago);
+    if (ep) partes.push(ep);
+    return partes.join(' · ');
+  }
+
+  function contarConPago(lista) {
+    return (lista || []).filter((p) => tienePagoRegistrado(p)).length;
+  }
+
+  function contarSinPago(lista) {
+    return (lista || []).filter((p) => !tienePagoRegistrado(p)).length;
+  }
+
+  /** Encuentro: clase 5 = día 1, clase 6 = día 2 */
+  const CLASE_ENC_D1 = 5;
+  const CLASE_ENC_D2 = 6;
+
+  function contarAsistenciaClase(lista, numeroClase) {
+    const key = 'clase_' + numeroClase;
+    return (lista || []).filter((p) => !!p[key]).length;
+  }
+
+  function actualizarEncuentroCard(filas) {
+    const elD1 = document.getElementById('li-enc-d1');
+    const elD2 = document.getElementById('li-enc-d2');
+    if (!elD1 || !elD2) return;
+
+    const total = (filas || []).length;
+    const asistD1 = contarAsistenciaClase(filas, CLASE_ENC_D1);
+    const asistD2 = contarAsistenciaClase(filas, CLASE_ENC_D2);
+
+    elD1.textContent = asistD1 + ' / ' + total;
+    elD2.textContent = asistD2 + ' / ' + total;
+  }
+
+  function actualizarEstadoCarga(filas) {
+    const total = todosLosDatos.length;
+    const visibles = filas.length;
+    const pagados = contarConPago(filas);
+    const sinPago = contarSinPago(filas);
+    let estado = total + ' registros cargados';
+    if (hayFiltrosActivos()) {
+      estado = visibles + ' mostradas · ' + pagados + ' con pago · ' + sinPago + ' sin pago';
+      if (visibles !== total) {
+        estado += ' (de ' + total + ')';
+      }
+    } else {
+      estado += ' · ' + pagados + ' con pago · ' + sinPago + ' sin pago';
+    }
+    setEstado(estado);
+  }
+
+  function actualizarResumenConteos(filas) {
+    const total = todosLosDatos.length;
+    const visibles = filas.length;
+    const filtrosActivos = hayFiltrosActivos();
+
+    document.getElementById('li-total-personas').textContent = String(total);
+    document.getElementById('li-total-visibles').textContent = String(visibles);
+
+    const statVisible = document.getElementById('li-stat-visible');
+    const labelVisible = document.getElementById('li-label-visibles');
+    const subVisible = document.getElementById('li-sub-visibles');
+
+    if (filtrosActivos) {
+      statVisible.classList.add('is-active');
+      labelVisible.textContent = 'Personas con filtro';
+      subVisible.textContent = visibles === total
+        ? 'Coincide con el total'
+        : ('de ' + total + ' inscritos');
+      subVisible.hidden = false;
+    } else {
+      statVisible.classList.remove('is-active');
+      labelVisible.textContent = 'Personas mostradas';
+      subVisible.textContent = 'Sin filtros activos';
+      subVisible.hidden = false;
+    }
+
+    const pagadosGlobal = contarConPago(todosLosDatos);
+    const pagadosVista = contarConPago(filas);
+    const sinPagoGlobal = contarSinPago(todosLosDatos);
+    const sinPagoVista = contarSinPago(filas);
+
+    const elPagados = document.getElementById('li-total-pagados');
+    const labelPagados = document.getElementById('li-label-pagados');
+    const subPagados = document.getElementById('li-sub-pagados');
+
+    if (filtrosActivos) {
+      elPagados.textContent = String(pagadosVista);
+      labelPagados.textContent = 'Con pago (filtro)';
+      subPagados.textContent = pagadosVista === pagadosGlobal
+        ? 'en esta vista'
+        : ('de ' + pagadosGlobal + ' en total');
+      subPagados.hidden = false;
+    } else {
+      elPagados.textContent = String(pagadosGlobal);
+      labelPagados.textContent = 'Con pago';
+      subPagados.hidden = true;
+    }
+
+    actualizarEncuentroCard(filas);
+
+    if (pagadosVista + sinPagoVista !== visibles) {
+      console.warn('Conteo de pagos no coincide con personas visibles', {
+        visibles,
+        pagadosVista,
+        sinPagoVista
+      });
+    }
+
+    const resumenFiltro = document.getElementById('li-resumen-filtro');
+    if (filtrosActivos) {
+      const detalle = describirFiltrosActivos();
+      resumenFiltro.textContent = 'Filtro activo: ' + detalle
+        + ' — Mostrando ' + visibles + ' persona' + (visibles === 1 ? '' : 's')
+        + (visibles !== total ? (' de ' + total) : '')
+        + ' · ' + pagadosVista + ' con pago, ' + sinPagoVista + ' sin pago';
+      resumenFiltro.hidden = false;
+    } else {
+      resumenFiltro.hidden = true;
+      resumenFiltro.textContent = '';
+    }
+  }
+
   // ── Renderizado ─────────────────────────────────────────────────
   function renderTabla() {
     const filas = filasPorFiltro();
     const tbody = document.getElementById('li-tbody');
 
-    // Estadísticas
-    let totalAsist = 0;
-    todosLosDatos.forEach(p => {
-      for (let c = 1; c <= 10; c++) {
-        if (p['clase_' + c]) totalAsist++;
-      }
-    });
-    document.getElementById('li-total-personas').textContent    = todosLosDatos.length;
-    document.getElementById('li-total-asistencias').textContent = totalAsist;
-
-    const statV = document.getElementById('li-stat-visible');
-    const el = document.getElementById('li-total-visibles');
-    if (filas.length < todosLosDatos.length) {
-      statV.style.display = '';
-      el.textContent = filas.length;
-    } else {
-      statV.style.display = 'none';
-    }
+    actualizarResumenConteos(filas);
+    actualizarEstadoCarga(filas);
 
     if (filas.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="17" class="li-empty">Sin resultados para este filtro.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="18" class="li-empty">Sin resultados para este filtro.</td></tr>';
       return;
     }
 
@@ -358,6 +640,7 @@ $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
         <td>${esc(p.Telefono || '–')}</td>
         <td class="t-left" style="color:#475569;">${esc(p.Lider || '–')}</td>
         <td>${btnPago(p)}</td>
+        <td>${btnAcciones(p)}</td>
       `;
 
       // Checkboxes de asistencia (10 en total)
@@ -394,6 +677,83 @@ $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
     if (n.includes('mujer') || n.includes('femen') || n === 'f')
       return '<span style="background:#fce7f3;color:#9d174d;padding:2px 7px;border-radius:99px;font-size:0.70rem;font-weight:700;">♀ M</span>';
     return '<span style="color:#64748b;font-size:0.75rem;">' + esc(g) + '</span>';
+  }
+
+  // ── Acciones editar / eliminar ──────────────────────────────────
+  function btnAcciones(p) {
+    if (!PERMISOS.puedeEditar && !PERMISOS.puedeEliminar) {
+      return '<span style="color:#94a3b8;font-size:0.75rem;">–</span>';
+    }
+
+    const idPersona = Number(p.Id_Persona || 0);
+    const idInscripcion = Number(p.Id_Inscripcion || 0);
+    const nombre = esc(p.Nombre || 'esta persona');
+    let html = '<div class="li-acciones" role="group" aria-label="Acciones">';
+
+    if (PERMISOS.puedeEditar) {
+      if (idPersona > 0 && PERMISOS.puedeEditarPersona) {
+        const editHref = EDITAR_URL
+          + '&id=' + encodeURIComponent(idPersona)
+          + '&return_to=formacion'
+          + '&return_url=' + encodeURIComponent(RETURN_URL);
+        html += '<a href="' + editHref + '" class="li-acc-btn li-acc-btn--edit" title="Editar persona" aria-label="Editar">'
+          + '<i class="bi bi-pencil-square" aria-hidden="true"></i></a>';
+      } else if (idInscripcion > 0) {
+        const regHref = REGISTRO_UV_URL + '&id_inscripcion=' + encodeURIComponent(idInscripcion);
+        html += '<a href="' + regHref + '" class="li-acc-btn li-acc-btn--edit" title="Editar inscripción" aria-label="Editar">'
+          + '<i class="bi bi-pencil-square" aria-hidden="true"></i></a>';
+      } else if (idPersona > 0) {
+        const regHref = REGISTRO_UV_URL
+          + '&id_persona=' + encodeURIComponent(idPersona)
+          + '&id_inscripcion=' + encodeURIComponent(idInscripcion);
+        html += '<a href="' + regHref + '" class="li-acc-btn li-acc-btn--edit" title="Editar inscripción" aria-label="Editar">'
+          + '<i class="bi bi-pencil-square" aria-hidden="true"></i></a>';
+      } else {
+        html += '<button type="button" class="li-acc-btn li-acc-btn--edit" disabled title="Sin registro para editar" aria-label="Editar">'
+          + '<i class="bi bi-pencil-square" aria-hidden="true"></i></button>';
+      }
+    }
+
+    if (PERMISOS.puedeEliminar) {
+      if (idInscripcion > 0) {
+        html += '<button type="button" class="li-acc-btn li-acc-btn--del js-li-eliminar"'
+          + ' data-id-inscripcion="' + idInscripcion + '"'
+          + ' data-nombre="' + nombre + '"'
+          + ' title="Eliminar inscripción" aria-label="Eliminar">'
+          + '<i class="bi bi-trash" aria-hidden="true"></i></button>';
+      } else {
+        html += '<button type="button" class="li-acc-btn li-acc-btn--del" disabled title="Inscripción inválida" aria-label="Eliminar">'
+          + '<i class="bi bi-trash" aria-hidden="true"></i></button>';
+      }
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  async function eliminarInscripcion(idInscripcion, nombre) {
+    if (!confirm('¿Eliminar la inscripción de ' + nombre + '?')) {
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append('id_inscripcion', String(idInscripcion));
+
+    try {
+      const resp = await fetch(ELIMINAR_URL, {
+        method: 'POST',
+        body: fd,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      const json = await resp.json();
+      if (!json.success) {
+        throw new Error(json.mensaje || 'No se pudo eliminar');
+      }
+      mostrarIndicador('Inscripción eliminada', false);
+      await cargarDatos();
+    } catch (e) {
+      mostrarIndicador(e.message || 'Error al eliminar', true);
+    }
   }
 
   // ── Botón pago ──────────────────────────────────────────────────
@@ -458,8 +818,7 @@ $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
       const json = await resp.json();
       if (!json.success) throw new Error('Error al guardar');
       mostrarIndicador('✓ Guardado', false);
-      // Actualizar resumen total
-      actualizarTotalAsistencias();
+      renderTabla();
     } catch (err) {
       cb.checked = !cb.checked;  // revertir
       if (p) p['clase_' + clase] = !!cb.checked;
@@ -467,16 +826,6 @@ $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
     } finally {
       cb.disabled = false;
     }
-  }
-
-  function actualizarTotalAsistencias() {
-    let total = 0;
-    todosLosDatos.forEach(p => {
-      for (let c = 1; c <= 10; c++) {
-        if (p['clase_' + c]) total++;
-      }
-    });
-    document.getElementById('li-total-asistencias').textContent = total;
   }
 
   // ── Indicador de guardado ───────────────────────────────────────
@@ -509,6 +858,16 @@ $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
   });
   document.getElementById('li-genero').addEventListener('change', renderTabla);
   document.getElementById('li-pago').addEventListener('change', renderTabla);
+
+  document.getElementById('li-tbody').addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.js-li-eliminar');
+    if (!btn) return;
+    const idInscripcion = Number(btn.dataset.idInscripcion || 0);
+    const nombre = btn.dataset.nombre || 'esta persona';
+    if (idInscripcion > 0) {
+      eliminarInscripcion(idInscripcion, nombre);
+    }
+  });
 
   // ── Carga inicial ───────────────────────────────────────────────
   cargarDatos();

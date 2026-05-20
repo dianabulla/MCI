@@ -1,4 +1,7 @@
-<?php include VIEWS . '/layout/header.php'; ?>
+<?php
+require_once APP . '/Helpers/PermisosProgramasAccess.php';
+include VIEWS . '/layout/header.php';
+?>
 
 <?php
 $configModulo = $config_modulo ?? [];
@@ -17,16 +20,25 @@ $filtroBuscar = (string)($filtro_buscar ?? '');
 $filtroGenero = (string)($filtro_genero ?? 'todos');
 $inscripcionesPublicas = $inscripciones_publicas ?? [];
 $tablaUvMinisterio = $tabla_uv_ministerio ?? [];
-$detalleLideresMinisterioUv = $detalle_lideres_ministerio_uv ?? [];
-$detalleLideresMinisterioUvJson = json_encode($detalleLideresMinisterioUv, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
-if ($detalleLideresMinisterioUvJson === false) {
-    $detalleLideresMinisterioUvJson = '{}';
-}
 $programaReporte = (string)($programa_reporte ?? '');
 $programaReporteLabel = (string)($programa_reporte_label ?? 'Programa');
 $programaRutaActual = $programaReporte;
 if (in_array($programaRutaActual, ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
     $programaRutaActual = 'capacitacion_destino';
+}
+require_once APP . '/Helpers/EscuelaFormacionResumenHelper.php';
+$tablaResumenTipo = trim((string)($tabla_resumen_ministerio_tipo ?? ''));
+if ($tablaResumenTipo === '') {
+    $tablaResumenTipo = EscuelaFormacionResumenHelper::esProgramaCapacitacionDestino($programaRutaActual)
+        || EscuelaFormacionResumenHelper::esProgramaCapacitacionDestino($programaReporte)
+        ? 'cap'
+        : 'uv';
+}
+$esTablaResumenCap = $tablaResumenTipo === 'cap';
+$detalleLideresMinisterioUv = $detalle_lideres_ministerio_uv ?? [];
+$detalleLideresMinisterioUvJson = json_encode($detalleLideresMinisterioUv, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+if ($detalleLideresMinisterioUvJson === false) {
+    $detalleLideresMinisterioUvJson = '{}';
 }
 $programasOpciones = $programas_opciones ?? [];
 $programasTabs = $programas_tabs ?? [];
@@ -34,18 +46,28 @@ $tarjetasResumen = $tarjetas_resumen ?? [];
 $vistaActual = (string)($vista_actual ?? 'registro');
 $registroActivo = $vistaActual !== 'asistencias';
 $asistenciasActivo = $vistaActual === 'asistencias';
-$mostrarAccesoAsistencias = $programaRutaActual !== 'capacitacion_destino';
-$puedeEditarPersonaFormacion = class_exists('AuthController') && AuthController::tienePermiso('personas', 'editar');
+$mostrarAccesoAsistencias = $programaRutaActual === 'universidad_vida'
+    && PermisosProgramasAccess::puedeVerAsistenciasUniversidadVida();
+$puedeEditarPersonaFormacion = class_exists('AuthController') && AuthController::puedeEditarPersonasConsulta();
 $moduloFormacionActual = strtolower(trim((string)($configModulo['modulo'] ?? '')));
 $puedeEditarRegistroFormacion = class_exists('AuthController')
     && (
         AuthController::esAdministrador()
-        || AuthController::tienePermiso('escuelas_formacion', 'editar')
-        || AuthController::tienePermiso('personas', 'editar')
+        || AuthController::puede('escuelas_formacion:editar')
+        || AuthController::puedeEditarPersonasConsulta()
     );
 $puedeEliminarInscripcionFormacion = $moduloFormacionActual === 'consolidar'
     && class_exists('AuthController')
-    && AuthController::tienePermiso('personas', 'eliminar');
+    && AuthController::puedeEliminarPersonasConsulta();
+$puedeVerDashboardUv = PermisosProgramasAccess::puedeVerDashboardUniversidadVida();
+$puedeVerDashboardCap = PermisosProgramasAccess::puedeVerDashboardCapacitacionDestino();
+$puedeGestionarPagosUv = PermisosProgramasAccess::puedeGestionarPagosUniversidadVida();
+$puedeGestionarPagosCap = PermisosProgramasAccess::puedeGestionarPagosCapacitacionDestino();
+$puedeFormularioUv = PermisosProgramasAccess::puedeVerFormularioUniversidadVida();
+$puedeFormularioCap = PermisosProgramasAccess::puedeVerFormularioCapacitacionDestino();
+$puedeMaterialUv = PermisosProgramasAccess::puedeVerMaterialUniversidadVida();
+$puedeMaterialCap = PermisosProgramasAccess::puedeVerMaterialCapacitacionDestino();
+$puedeExportarConsolidado = PermisosProgramasAccess::puedeExportarConsolidado();
 $esModuloConsolidar = $moduloFormacionActual === 'consolidar';
 $mostrarTablaProgramaMinisterio = in_array($moduloFormacionActual, ['consolidar', 'discipular'], true);
 $tituloTablaProgramaMinisterio = trim($programaReporteLabel) !== ''
@@ -67,7 +89,7 @@ $renderAccionesRegistroFormacion = static function(array $ins, int $idPersonaIns
     $nombreInscripcion = (string)($ins['Nombre'] ?? '');
     $programaInscripcion = trim((string)($ins['Programa'] ?? ''));
     $esCapacitacionDestinoInscripcion = in_array($programaInscripcion, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true);
-    $textoCambio = $esCapacitacionDestinoInscripcion ? 'Cambiar nivel' : 'Cambiar a';
+    $textoCambio = $esCapacitacionDestinoInscripcion ? 'Cambiar nivel' : 'Cambiar segmento';
 
     $puedeMoverPrograma = in_array($programaInscripcion, ['universidad_vida', 'encuentro', 'bautismo', 'capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true);
 
@@ -82,7 +104,7 @@ $renderAccionesRegistroFormacion = static function(array $ins, int $idPersonaIns
             <?php endif; ?>
             <button type="button" class="btn btn-info btn-sm btn-insc-icon js-cambio-segmento" data-id-inscripcion="<?= $idInscripcion ?>" data-nombre="<?= htmlspecialchars($nombreInscripcion) ?>" data-segmento-actual="<?= htmlspecialchars($segmentoActual) ?>" data-programa-actual="<?= htmlspecialchars($programaInscripcion) ?>" <?= $idInscripcion > 0 ? '' : 'disabled' ?> title="<?= $idInscripcion > 0 ? htmlspecialchars($textoCambio, ENT_QUOTES, 'UTF-8') : 'Inscripción inválida' ?>" aria-label="<?= htmlspecialchars($textoCambio, ENT_QUOTES, 'UTF-8') ?>"><i class="bi bi-arrow-left-right" aria-hidden="true"></i></button>
             <?php if ($puedeMoverPrograma): ?>
-                <?php if ($idInscripcion > 0 && $idPersonaIns > 0): ?>
+                <?php if ($idInscripcion > 0): ?>
                     <button
                         type="button"
                         class="btn btn-info btn-sm btn-insc-icon js-cambio-programa"
@@ -185,28 +207,30 @@ if ($moduloFormacionActual === 'discipular') {
         </div>
         <div class="action-group">
             <?php if ($programaRutaActual === 'universidad_vida'): ?>
+                <?php if ($puedeFormularioUv): ?>
                 <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/universidad-vida" class="action-pill" target="_blank" rel="noopener">Formulario</a>
-                <?php if (class_exists('AuthController') && (AuthController::esAdministrador() || AuthController::tienePermiso('material_universidad_vida', 'ver'))): ?>
+                <?php endif; ?>
+                <?php if ($puedeMaterialUv): ?>
                     <a href="<?= PUBLIC_URL ?>?url=home/material/universidad-vida" class="action-pill">Material U.V</a>
                 <?php endif; ?>
-                <?php if ($esModuloConsolidar): ?>
+                <?php if ($esModuloConsolidar && $puedeGestionarPagosUv): ?>
                     <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/pagos/consolidar" class="action-pill">Pagos U. de la Vida</a>
                 <?php endif; ?>
-                <?php if (class_exists('AuthController') && (AuthController::esAdministrador() || AuthController::tienePermiso('reportes', 'ver'))): ?>
+                <?php if ($puedeVerDashboardUv): ?>
                     <a href="<?= PUBLIC_URL ?>?url=reportes/dashboard-escuelas-uv" class="action-pill">Dashboard U.V</a>
                 <?php endif; ?>
             <?php else: ?>
+                <?php if ($puedeFormularioCap): ?>
                 <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/capacitacion-destino" class="action-pill" target="_blank" rel="noopener">Formulario</a>
-                <?php if (class_exists('AuthController') && (AuthController::esAdministrador() || AuthController::tienePermiso('material_capacitacion_destino', 'ver'))): ?>
+                <?php endif; ?>
+                <?php if ($puedeMaterialCap): ?>
                     <a href="<?= PUBLIC_URL ?>?url=home/material/capacitacion-destino" class="action-pill">Material C. Destino</a>
                 <?php endif; ?>
-                <?php if ($esModuloConsolidar): ?>
+                <?php if ($esModuloConsolidar && $puedeGestionarPagosCap): ?>
                     <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/pagos/enviar" class="action-pill">Pagos Capacitación Destino</a>
-                    <?php if (class_exists('AuthController') && (AuthController::esAdministrador() || AuthController::tienePermiso('reportes', 'ver'))): ?>
+                <?php endif; ?>
+                <?php if ($puedeVerDashboardCap): ?>
                     <a href="<?= PUBLIC_URL ?>?url=reportes/dashboard-escuelas-capacitacion" class="action-pill">Dashboard C. Destino</a>
-                    <?php endif; ?>
-                <?php elseif ($esModuloEnviar): ?>
-                    <a href="<?= PUBLIC_URL ?>?url=escuelas_formacion/pagos/enviar" class="action-pill">Pagos Capacitación Destino</a>
                 <?php endif; ?>
             <?php endif; ?>
             <a href="<?= htmlspecialchars($urlVolverContextual, ENT_QUOTES, 'UTF-8') ?>" class="action-pill"><?= htmlspecialchars($etiquetaVolverContextual, ENT_QUOTES, 'UTF-8') ?></a>
@@ -309,7 +333,7 @@ if ($moduloFormacionActual === 'discipular') {
 <div class="card report-card" style="margin-bottom:14px; padding:14px;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <h3 style="margin:0;"><?= htmlspecialchars($tituloTablaProgramaMinisterio) ?></h3>
-        <small style="color:#637087;">Inscritos por hombres, mujeres y jóvenes</small>
+        <small style="color:#637087;"><?= $esTablaResumenCap ? 'Inscritos por nivel (1, 2 y 3)' : 'Inscritos por hombres, mujeres y jóvenes' ?></small>
     </div>
 
     <div class="table-container formacion-resumen-table-wrap">
@@ -317,57 +341,73 @@ if ($moduloFormacionActual === 'discipular') {
             <thead>
                 <tr>
                     <th>Ministerio</th>
+                    <?php if ($esTablaResumenCap): ?>
+                    <th style="color:#1e6b3c;">Nivel 1</th>
+                    <th style="color:#7b3fa0;">Nivel 2</th>
+                    <th style="color:#1e4a89;">Nivel 3</th>
+                    <?php else: ?>
                     <th style="color:#1e4a89;">Hombres</th>
                     <th style="color:#8b1c62;">Mujeres</th>
                     <th style="color:#0f766e;">Jóvenes</th>
+                    <?php endif; ?>
                     <th style="color:#166534;">Total</th>
                     <th style="color:#7c3aed;">Asistencias reales</th>
                 </tr>
             </thead>
             <tbody>
                 <?php
-                $totUvH = 0;
-                $totUvM = 0;
-                $totUvJ = 0;
-                $totUvT = 0;
-                $totUvAsis = 0;
+                $totCol1 = 0;
+                $totCol2 = 0;
+                $totCol3 = 0;
+                $totTotal = 0;
+                $totAsis = 0;
                 ?>
                 <?php if (!empty($tablaUvMinisterio)): ?>
                     <?php foreach ($tablaUvMinisterio as $filaUvMin): ?>
                         <?php
-                        $uvH = (int)($filaUvMin['hombres'] ?? 0);
-                        $uvM = (int)($filaUvMin['mujeres'] ?? 0);
-                        $uvJ = (int)($filaUvMin['jovenes'] ?? 0);
-                        $uvT = (int)($filaUvMin['total'] ?? 0);
-                        $uvAsis = (int)($filaUvMin['asistencias_reales'] ?? 0);
+                        if ($esTablaResumenCap) {
+                            $c1 = (int)($filaUvMin['nivel_1'] ?? 0);
+                            $c2 = (int)($filaUvMin['nivel_2'] ?? 0);
+                            $c3 = (int)($filaUvMin['nivel_3'] ?? 0);
+                        } else {
+                            $c1 = (int)($filaUvMin['hombres'] ?? 0);
+                            $c2 = (int)($filaUvMin['mujeres'] ?? 0);
+                            $c3 = (int)($filaUvMin['jovenes'] ?? 0);
+                        }
+                        $tot = (int)($filaUvMin['total'] ?? 0);
+                        $asis = (int)($filaUvMin['asistencias_reales'] ?? 0);
                         $ministerioNombre = (string)($filaUvMin['ministerio'] ?? 'Sin ministerio');
 
-                        $totUvH += $uvH;
-                        $totUvM += $uvM;
-                        $totUvJ += $uvJ;
-                        $totUvT += $uvT;
-                        $totUvAsis += $uvAsis;
+                        $totCol1 += $c1;
+                        $totCol2 += $c2;
+                        $totCol3 += $c3;
+                        $totTotal += $tot;
+                        $totAsis += $asis;
                         ?>
                         <tr>
                             <td>
+                                <?php if (!$esTablaResumenCap): ?>
                                 <button type="button" class="report-link-button js-open-ministerio-uv" data-ministerio="<?= htmlspecialchars($ministerioNombre, ENT_QUOTES, 'UTF-8') ?>">
                                     <?= htmlspecialchars($ministerioNombre) ?>
                                 </button>
+                                <?php else: ?>
+                                    <?= htmlspecialchars($ministerioNombre) ?>
+                                <?php endif; ?>
                             </td>
-                            <td style="color:#1e4a89;"><strong><?= $uvH ?></strong></td>
-                            <td style="color:#8b1c62;"><strong><?= $uvM ?></strong></td>
-                            <td style="color:#0f766e;"><strong><?= $uvJ ?></strong></td>
-                            <td style="color:#166534;"><strong><?= $uvT ?></strong></td>
-                            <td style="color:#7c3aed;"><strong><?= $uvAsis ?></strong></td>
+                            <td><strong><?= $c1 ?></strong></td>
+                            <td><strong><?= $c2 ?></strong></td>
+                            <td><strong><?= $c3 ?></strong></td>
+                            <td style="color:#166534;"><strong><?= $tot ?></strong></td>
+                            <td style="color:#7c3aed;"><strong><?= $asis ?></strong></td>
                         </tr>
                     <?php endforeach; ?>
                     <tr class="reporte-metas-total-row">
                         <td><strong>TOTAL</strong></td>
-                        <td style="color:#1e4a89;"><strong><?= $totUvH ?></strong></td>
-                        <td style="color:#8b1c62;"><strong><?= $totUvM ?></strong></td>
-                        <td style="color:#0f766e;"><strong><?= $totUvJ ?></strong></td>
-                        <td style="color:#166534;"><strong><?= $totUvT ?></strong></td>
-                        <td style="color:#7c3aed;"><strong><?= $totUvAsis ?></strong></td>
+                        <td><strong><?= $totCol1 ?></strong></td>
+                        <td><strong><?= $totCol2 ?></strong></td>
+                        <td><strong><?= $totCol3 ?></strong></td>
+                        <td style="color:#166534;"><strong><?= $totTotal ?></strong></td>
+                        <td style="color:#7c3aed;"><strong><?= $totAsis ?></strong></td>
                     </tr>
                 <?php else: ?>
                     <tr>
@@ -421,9 +461,12 @@ if ($moduloFormacionActual === 'discipular') {
         foreach ($inscripcionesPublicas as $ins) {
             $programaInscripcion = strtolower(trim((string)($ins['Programa'] ?? '')));
             $segmentoPreferido = strtolower(trim((string)($ins['Segmento_Preferido'] ?? '')));
-            $nivelPreferido = in_array($segmentoPreferido, ['nivel_1', 'nivel_2', 'nivel_3'], true)
-                ? $segmentoPreferido
-                : '';
+            $nivelPreferido = '';
+            if (strpos($programaInscripcion, 'capacitacion_destino') !== false
+                && in_array($segmentoPreferido, ['nivel_1', 'nivel_2', 'nivel_3'], true)
+            ) {
+                $nivelPreferido = $segmentoPreferido;
+            }
 
             if ($nivelPreferido !== '') {
                 if ($nivelPreferido === 'nivel_1') {
@@ -1227,6 +1270,38 @@ if ($moduloFormacionActual === 'discipular') {
         }
 
         modalSegmentoNuevo.innerHTML = '';
+        const programaActualNorm = String(programaActual || '').trim();
+        const esUv = ['universidad_vida', 'encuentro', 'bautismo'].includes(programaActualNorm);
+
+        if (esUv) {
+            [
+                { value: '', label: '-- Sin cambio (por edad/género) --' },
+                { value: 'jovenes', label: 'Jóvenes' },
+                { value: 'hombres_adultos', label: 'Hombres' },
+                { value: 'mujeres_adultas', label: 'Mujeres' }
+            ].forEach((op) => {
+                const option = document.createElement('option');
+                option.value = op.value;
+                option.textContent = op.label;
+                modalSegmentoNuevo.appendChild(option);
+            });
+
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = 'Mover a Capacitación Destino';
+            [
+                { value: 'nivel_1', label: 'Capacitación Destino - Nivel 1' },
+                { value: 'nivel_2', label: 'Capacitación Destino - Nivel 2' },
+                { value: 'nivel_3', label: 'Capacitación Destino - Nivel 3' }
+            ].forEach((op) => {
+                const option = document.createElement('option');
+                option.value = op.value;
+                option.textContent = op.label;
+                optgroup.appendChild(option);
+            });
+            modalSegmentoNuevo.appendChild(optgroup);
+            return;
+        }
+
         [
             { value: '', label: '-- Sin cambio (por edad/género) --' },
             { value: 'jovenes', label: 'Jóvenes' },
@@ -1302,7 +1377,10 @@ if ($moduloFormacionActual === 'discipular') {
                     }
 
                     cerrarModalCambioSegmento();
-                    alert('Cambio guardado correctamente. Recargando página...');
+                    const msgOk = (data && data.programa)
+                        ? 'Programa actualizado en base de datos. Recargando página...'
+                        : 'Cambio guardado correctamente. Recargando página...';
+                    alert(msgOk);
                     window.location.reload();
                 } catch (error) {
                     alert(error.message || 'Error al guardar el cambio');
@@ -1322,7 +1400,9 @@ if ($moduloFormacionActual === 'discipular') {
         }
 
         if (['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'].includes(p)) {
-            return [];
+            return [
+                { value: 'universidad_vida', label: 'Universidad de la Vida' }
+            ];
         }
 
         return [];

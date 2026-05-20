@@ -38,7 +38,7 @@ class PeticionController extends BaseController {
     }
 
     public function index() {
-        if (!AuthController::tienePermiso('peticiones', 'ver')) {
+        if (!AuthController::puede('peticiones:ver')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -71,7 +71,7 @@ class PeticionController extends BaseController {
     }
 
     public function exportarExcel() {
-        if (!AuthController::tienePermiso('peticiones', 'ver')) {
+        if (!AuthController::puede('peticiones:ver')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -155,7 +155,7 @@ class PeticionController extends BaseController {
 
     public function crear() {
         // Verificar permiso de crear
-        if (!AuthController::tienePermiso('peticiones', 'crear')) {
+        if (!AuthController::puede('peticiones:crear')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -186,7 +186,7 @@ class PeticionController extends BaseController {
 
     public function editar() {
         // Verificar permiso de editar
-        if (!AuthController::tienePermiso('peticiones', 'editar')) {
+        if (!AuthController::puede('peticiones:editar')) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }
@@ -223,7 +223,7 @@ class PeticionController extends BaseController {
 
     public function eliminar() {
         // Verificar permiso de eliminar
-        if (!AuthController::tienePermiso('peticiones', 'eliminar')) {
+        if (!AuthController::puede('peticiones:eliminar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }

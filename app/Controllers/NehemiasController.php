@@ -9,6 +9,7 @@ require_once APP . '/Models/Seremos1200.php';
 require_once APP . '/Models/TestigoElectoral.php';
 require_once APP . '/Models/Persona.php';
 require_once APP . '/Helpers/DataIsolation.php';
+require_once APP . '/Helpers/PermisosUiBuilder.php';
 require_once APP . '/Controllers/AuthController.php';
 
 class NehemiasController extends BaseController {
@@ -19,57 +20,16 @@ class NehemiasController extends BaseController {
     private $testigosUploadDir;
 
     private function tienePermiso($accion = 'ver') {
-        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias', $accion);
-    }
-
-    private function puedeVerCedulaNehemias() {
-        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_cols_cedula', 'ver');
-    }
-
-    private function puedeVerTelefonoNehemias() {
-        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_cols_telefono', 'ver');
-    }
-
-    private function puedeVerSubidoLinkNehemias() {
-        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_cols_subido_link', 'ver');
-    }
-
-    private function puedeVerBogotaSubioNehemias() {
-        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_cols_bogota_subio', 'ver');
-    }
-
-    private function puedeVerPuestoNehemias() {
-        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_cols_puesto', 'ver');
-    }
-
-    private function puedeVerMesaNehemias() {
-        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_cols_mesa', 'ver');
-    }
-
-    private function puedeVerAceptaNehemias() {
-        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_cols_acepta', 'ver');
-    }
-
-    private function puedeEditarRegistrosNehemias() {
-        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_acciones_editar', 'ver');
-    }
-
-    private function puedeEliminarRegistrosNehemias() {
-        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias_acciones_eliminar', 'ver');
+        return AuthController::esAdministrador() || AuthController::puede('nehemias:' . $accion);
     }
 
     private function getPermisosUiListaNehemias() {
-        return [
-            'ver_cedula' => $this->puedeVerCedulaNehemias(),
-            'ver_telefono' => $this->puedeVerTelefonoNehemias(),
-            'ver_subido_link' => $this->puedeVerSubidoLinkNehemias(),
-            'ver_bogota_subio' => $this->puedeVerBogotaSubioNehemias(),
-            'ver_puesto' => $this->puedeVerPuestoNehemias(),
-            'ver_mesa' => $this->puedeVerMesaNehemias(),
-            'ver_acepta' => $this->puedeVerAceptaNehemias(),
-            'mostrar_boton_editar' => $this->tienePermiso('editar') && $this->puedeEditarRegistrosNehemias(),
-            'mostrar_boton_eliminar' => $this->tienePermiso('editar') && $this->puedeEliminarRegistrosNehemias(),
-        ];
+        $ui = PermisosUiBuilder::construir('nehemias');
+        $ui['mostrar_boton_editar'] = $this->tienePermiso('editar')
+            && PermisosUiBuilder::puedeAccionGranular('nehemias', 'editar');
+        $ui['mostrar_boton_eliminar'] = $this->tienePermiso('editar')
+            && PermisosUiBuilder::puedeAccionGranular('nehemias', 'eliminar');
+        return $ui;
     }
 
     public function __construct() {
@@ -1273,7 +1233,9 @@ class NehemiasController extends BaseController {
      * Eliminar registro (admin)
      */
     public function eliminar() {
-        if (!$this->tienePermiso('editar') || !$this->puedeEliminarRegistrosNehemias()) {
+        $puedeEliminar = AuthController::puede('nehemias:eliminar')
+            || ($this->puedeEliminarRegistrosNehemias() && AuthController::puede('nehemias:editar'));
+        if (!$puedeEliminar) {
             header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
             exit;
         }

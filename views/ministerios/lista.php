@@ -13,9 +13,9 @@ $slugMinisterio = static function ($texto) {
     return $slug !== '' ? $slug : 'sin-ministerio';
 };
 
-$puedeCrearMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'crear');
-$puedeEditarMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'editar');
-$puedeEliminarMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'eliminar');
+$puedeCrearMinisterio = AuthController::esAdministrador() || AuthController::puede('ministerios:crear');
+$puedeEditarMinisterio = AuthController::esAdministrador() || AuthController::puede('ministerios:editar');
+$puedeEliminarMinisterio = AuthController::esAdministrador() || AuthController::puede('ministerios:eliminar');
 $urlEquipoPrincipal = PUBLIC_URL . '?url=discipular/ministerios/equipo-principal';
 $urlLideresCelula = PUBLIC_URL . '?url=discipular/ministerios/lideres-celula';
 $fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));

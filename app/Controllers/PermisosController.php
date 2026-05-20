@@ -7,18 +7,24 @@ require_once APP . '/Models/Rol.php';
 require_once APP . '/Controllers/AuthController.php';
 require_once APP . '/Config/Database.php';
 require_once APP . '/Helpers/PermisosCatalogo.php';
+require_once APP . '/Helpers/PermisosModulos.php';
+require_once APP . '/Helpers/GestionSistemaAccess.php';
 
 class PermisosController extends BaseController {
     private $rolModel;
     private $db;
 
     public function __construct() {
-        // Verificar que sea administrador
-        if (!AuthController::esAdministrador()) {
-            header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
-            exit;
+        $url = isset($_GET['url']) ? trim((string) $_GET['url'], '/') : '';
+        $esApi = in_array($url, ['permisos/actualizar', 'permisos/limpiar-obsoletos'], true);
+        $requiereEditar = in_array($url, ['permisos/actualizar', 'permisos/limpiar-obsoletos'], true);
+
+        if ($requiereEditar) {
+            GestionSistemaAccess::denegarSiNoPuedeEditarPermisos(['json' => $esApi]);
+        } else {
+            GestionSistemaAccess::denegarSiNoPuedeVerPermisos(['json' => $esApi]);
         }
-        
+
         $this->rolModel = new Rol();
         $this->db = $this->obtenerConexionDb();
     }
@@ -54,13 +60,29 @@ class PermisosController extends BaseController {
             $permisos[$rol['Id_Rol']] = $this->getPermisosPorRol($rol['Id_Rol']);
         }
         
+        $rolPreseleccionado = (int)($_GET['rol'] ?? 0);
+        $indiceRolActivo = 0;
+        if ($rolPreseleccionado > 0) {
+            foreach ($roles as $i => $rol) {
+                if ((int)($rol['Id_Rol'] ?? 0) === $rolPreseleccionado) {
+                    $indiceRolActivo = (int)$i;
+                    break;
+                }
+            }
+        }
+
         $data = [
             'pageTitle' => 'Administración de Permisos',
             'roles' => $roles,
             'modulos' => $modulos,
             'permisos' => $permisos,
             'modulos_obsoletos' => $modulosObsoletos,
+            'grupos_modulos' => PermisosModulos::gruposParaPantalla(),
+            'definiciones_modulos' => PermisosModulos::definiciones(),
             'catalogo_acciones_modulo' => PermisosCatalogo::accionesPorModulo(),
+            'puede_editar_matriz' => GestionSistemaAccess::puedeEditarMatrizPermisos(),
+            'rol_preseleccionado' => $rolPreseleccionado,
+            'indice_rol_activo' => $indiceRolActivo,
         ];
         
         $this->view('permisos/index', $data);
@@ -324,47 +346,7 @@ class PermisosController extends BaseController {
      * Obtener módulos disponibles
      */
     private function getModulosBaseCatalogo(): array {
-        return [
-            'personas' => 'Personas',
-            'personas_consulta' => 'Personas: solo consulta (sin módulo Ganar)',
-            'personas_formulario_publico' => 'Personas: Ver formulario publico',
-            'personas_plantillas_whatsapp' => 'Personas: Ver plantillas WhatsApp',
-            'personas_ganar_asignados' => 'Personas: Ver atajo Asignados (Pendiente)',
-            'personas_ganar_reasignados' => 'Personas: Ver atajo Reasignados (Pendiente)',
-            'celulas' => 'Células',
-            'material' => 'Material (centro de materiales / inicio)',
-            'materiales_celulas' => 'Material: Células',
-            'material_universidad_vida' => 'Material: Universidad de la Vida',
-            'material_capacitacion_destino' => 'Material: Capacitación Destino',
-            'material_capacitacion_destino_subir' => 'Material: Capacitación Destino (Subir archivos)',
-            'ministerios' => 'Ministerios',
-            'roles' => 'Roles',
-            'eventos' => 'Eventos',
-            'peticiones' => 'Peticiones',
-            'asistencias' => 'Asistencias',
-            'reportes' => 'Reportes',
-            'transmisiones' => 'Transmisiones',
-            'programas' => 'Programas (formación / consolidado)',
-            'escuelas_formacion' => 'Escuelas de Formación',
-            'escuelas_formacion_marcar_asistencia' => 'Escuelas: Marcar asistencia',
-            'escuelas_formacion_editar_fechas' => 'Escuelas: Editar fechas de clases',
-            'discipular_evaluaciones' => 'Discipular: Evaluaciones',
-            'discipular_evaluaciones_fechas' => 'Discipular: Configurar fechas evaluaciones',
-            'entrega_obsequio' => 'Entrega de Obsequios',
-            'registro_obsequio' => 'Registro de Obsequios',
-            'teen' => 'Material: Teens',
-            'nehemias' => 'Nehemias',
-            'nehemias_cols_cedula' => 'Nehemias: Ver Cédula',
-            'nehemias_cols_telefono' => 'Nehemias: Ver Teléfono',
-            'nehemias_cols_subido_link' => 'Nehemias: Ver Link subido',
-            'nehemias_cols_bogota_subio' => 'Nehemias: Ver En Bogotá se le subió',
-            'nehemias_cols_puesto' => 'Nehemias: Ver Puesto',
-            'nehemias_cols_mesa' => 'Nehemias: Ver Mesa',
-            'nehemias_cols_acepta' => 'Nehemias: Ver Acepta',
-            'nehemias_acciones_editar' => 'Nehemias: Botón editar',
-            'nehemias_acciones_eliminar' => 'Nehemias: Botón eliminar',
-            'permisos' => 'Permisos'
-        ];
+        return PermisosModulos::catalogoPlano();
     }
 
     private function getModulos() {
@@ -389,9 +371,10 @@ class PermisosController extends BaseController {
     }
 
     private function getModulosActivosReferencia(): array {
-        $base = array_keys($this->getModulosBaseCatalogo());
-        $desdeCodigo = $this->getModulosDesdeCodigo();
-        $activos = array_values(array_unique(array_merge($base, $desdeCodigo)));
+        $activos = array_values(array_unique(array_merge(
+            PermisosModulos::modulosActivos(),
+            $this->getModulosDesdeCodigo()
+        )));
         sort($activos, SORT_NATURAL | SORT_FLAG_CASE);
         return $activos;
     }
@@ -467,6 +450,14 @@ class PermisosController extends BaseController {
 
                 if (preg_match_all('/AuthController::tienePermiso\s*\(\s*[\'\"]([^\'\"]+)[\'\"]\s*(?:,|\))/u', $contenido, $matches)) {
                     foreach ((array)($matches[1] ?? []) as $modulo) {
+                        $modulo = trim((string)$modulo);
+                        if ($modulo !== '') {
+                            $modulos[] = $modulo;
+                        }
+                    }
+                }
+                if (preg_match_all('/AuthController::puede\s*\(\s*[\'\"]([^\'\":]+):[^\'\"]+[\'\"]\s*\)/u', $contenido, $matchesPuede)) {
+                    foreach ((array)($matchesPuede[1] ?? []) as $modulo) {
                         $modulo = trim((string)$modulo);
                         if ($modulo !== '') {
                             $modulos[] = $modulo;

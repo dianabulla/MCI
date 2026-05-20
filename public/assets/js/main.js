@@ -296,73 +296,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    const ganarAlertToast = document.getElementById('ganarAlertToast');
-    const ganarAlertToastClose = document.getElementById('ganarAlertToastClose');
-    const ganarAlertBell = document.getElementById('ganarAlertBell');
-    const ganarAlertPanel = document.getElementById('ganarAlertPanel');
-    const ganarAlertPanelClose = document.getElementById('ganarAlertPanelClose');
-
-    if (ganarAlertBell && ganarAlertPanel) {
-        const cerrarPanel = function() {
-            ganarAlertPanel.classList.remove('visible');
-            ganarAlertPanel.setAttribute('aria-hidden', 'true');
-            ganarAlertBell.setAttribute('aria-expanded', 'false');
-        };
-
-        const abrirPanel = function() {
-            ganarAlertPanel.classList.add('visible');
-            ganarAlertPanel.setAttribute('aria-hidden', 'false');
-            ganarAlertBell.setAttribute('aria-expanded', 'true');
-        };
-
-        ganarAlertBell.addEventListener('click', function(e) {
-            e.preventDefault();
-            if (ganarAlertPanel.classList.contains('visible')) {
-                cerrarPanel();
-            } else {
-                abrirPanel();
-            }
-        });
-
-        if (ganarAlertPanelClose) {
-            ganarAlertPanelClose.addEventListener('click', function() {
-                cerrarPanel();
-            });
-        }
-
-        document.addEventListener('click', function(e) {
-            if (!ganarAlertPanel.classList.contains('visible')) {
-                return;
-            }
-
-            if (ganarAlertPanel.contains(e.target) || ganarAlertBell.contains(e.target)) {
-                return;
-            }
-
-            cerrarPanel();
-        });
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && ganarAlertPanel.classList.contains('visible')) {
-                cerrarPanel();
-            }
-        });
-    }
-
-    if (ganarAlertToast) {
-        const pendientes = parseInt(ganarAlertToast.dataset.pendientes || '0', 10);
-        const showOnLogin = (ganarAlertToast.dataset.showOnLogin || '0') === '1';
-
-        if (showOnLogin && pendientes > 0) {
-            ganarAlertToast.classList.add('visible');
-        }
-
-        if (ganarAlertToastClose) {
-            ganarAlertToastClose.addEventListener('click', function() {
-                ganarAlertToast.classList.remove('visible');
-            });
-        }
-    }
+    // Removido: lógica de interacción de la campana de notificaciones (ganar-alert)
 });
 
 // Función para búsqueda en tablas

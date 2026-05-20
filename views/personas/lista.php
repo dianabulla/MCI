@@ -1,9 +1,11 @@
 <?php include VIEWS . '/layout/header.php'; ?>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="<?= ASSETS_URL ?>/js/descargar_tabla_asistencia.js?v=20260520"></script>
 <?php
 $puedeVerPersona = AuthController::puedeVerPersonasConsulta();
 $puedeModuloGanarCompleto = AuthController::puedeVerModuloPersonasGanar();
-$puedeEditarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
-$puedeEliminarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'eliminar');
+$puedeEditarPersona = AuthController::puedeEditarPersonasConsulta();
+$puedeEliminarPersona = AuthController::puedeEliminarPersonasConsulta();
 $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPersona;
 $mostrarEscaleraRapida = $puedeModuloGanarCompleto;
 ?>
@@ -162,10 +164,7 @@ $resolverCategoriaPerfil = static function(array $persona) use ($normalizarRolPe
 };
 
 $esPendienteUbicacionRed = static function(array $persona) {
-    $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
-    $idLider = (int)($persona['Id_Lider'] ?? 0);
     $idCelula = (int)($persona['Id_Celula'] ?? 0);
-    $esAntiguo = (int)($persona['Es_Antiguo'] ?? 1) === 1;
     $rolNormalizado = strtolower(trim((string)($persona['Nombre_Rol'] ?? '')));
     $rolNormalizado = strtr($rolNormalizado, [
         'á' => 'a',
@@ -176,9 +175,15 @@ $esPendienteUbicacionRed = static function(array $persona) {
         'ü' => 'u',
         'ñ' => 'n'
     ]);
-    $esRolDiscipular = (strpos($rolNormalizado, 'discipul') !== false || strpos($rolNormalizado, 'disipul') !== false);
+    $esRolLiderazgo = (
+        strpos($rolNormalizado, 'pastor') !== false
+        || strpos($rolNormalizado, 'lider de 12') !== false
+        || strpos($rolNormalizado, 'lider 12') !== false
+        || strpos($rolNormalizado, 'lider de celula') !== false
+        || strpos($rolNormalizado, 'lider celula') !== false
+    );
 
-    return $esAntiguo && $esRolDiscipular && ($idMinisterio <= 0 || $idLider <= 0 || $idCelula <= 0);
+    return $idCelula <= 0 && !$esRolLiderazgo;
 };
 
 if (!isset($totalPendientesConectarContexto)) {
@@ -192,15 +197,30 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
         <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px;justify-content:space-between;">
             <div>
                 <strong style="font-size:1.05rem;color:#1e3a5f;">Por conectar a célula</strong>
-                <div style="color:#5b6d88;font-size:13px;margin-top:4px;">Incluye discípulos del padrón con ubicación incompleta e inscripciones desde el formulario de Escuelas de Formación (Universidad de la Vida), según los filtros de arriba.</div>
+                <div style="color:#5b6d88;font-size:13px;margin-top:4px;">Personas activas sin célula asignada: nuevas, antiguas, inscripciones de Universidad de la Vida y demás registros del padrón (según filtros de arriba).</div>
             </div>
             <div style="font-size:1.6rem;font-weight:800;color:#2563eb;line-height:1;"><?= $totalPendientesBanner ?></div>
         </div>
     </div>
 </div>
 
+<div class="discipulos-export-toolbar" style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+    <small style="color:#64748b;font-size:0.82rem;margin-right:auto;">La imagen refleja los discípulos visibles con los filtros actuales.</small>
+    <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm btn-descargar-imagen-tabla"
+        data-tabla-id="discipulosTableWrap"
+        data-export-title="Discípulos — Ganar-Consolidar"
+        data-filename="discipulos-ganar-consolidar"
+        data-export-subtitle-from="filtro_perfil_form"
+        data-label-default="Descargar tabla como imagen"
+        title="Descargar la tabla filtrada como PNG">
+        <i class="bi bi-image"></i> Descargar tabla como imagen
+    </button>
+</div>
+
 <div id="discipulosTableWrap" class="table-container">
-    <table class="data-table ganar-table mobile-persona-accordion">
+    <table id="tabla-discipulos" class="data-table ganar-table mobile-persona-accordion">
         <thead>
             <tr>
                 <th>Nombre</th>
@@ -252,8 +272,8 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
                     $idMinEscalera = (int)($persona['Id_Ministerio'] ?? 0);
                     $idLidEscalera = (int)($persona['Id_Lider'] ?? 0);
                     $idCelEscalera = (int)($persona['Id_Celula'] ?? 0);
-                    $inscripcionUvPendienteUbicacion = $canalUvFormulario && ($idMinEscalera <= 0 || $idLidEscalera <= 0 || $idCelEscalera <= 0);
-                    $mostrarEscaleraFila = ($esFilaDiscipulo || $filaPendienteUbicacion || $inscripcionUvPendienteUbicacion);
+                    $sinCelulaAsignada = $idCelEscalera <= 0;
+                    $mostrarEscaleraFila = ($sinCelulaAsignada && $rowPerfilId !== 'pastores' && $rowPerfilId !== 'lideres_12' && $rowPerfilId !== 'lideres_celula');
                     $puedeEditarEscaleraInline = !empty($puedeEditarPersona) && $mostrarEscaleraFila;
                     ?>
                     <tr class="js-discipulo-row" data-perfil-id="<?= htmlspecialchars((string)$rowPerfilId) ?>" data-pendiente-ubicacion="<?= $filaPendienteUbicacion ? '1' : '0' ?>">
@@ -359,7 +379,7 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
             <?php else: ?>
                 <tr>
                     <?php $columnasBase = 3 + ($mostrarEscaleraRapida ? 1 : 0) + ($mostrarAcciones ? 1 : 0); ?>
-                    <td colspan="<?= (string)$columnasBase ?>" class="text-center">No hay discipulos pendientes por conectar con los filtros actuales.</td>
+                    <td colspan="<?= (string)$columnasBase ?>" class="text-center">No hay personas sin célula asignada con los filtros actuales.</td>
                 </tr>
             <?php endif; ?>
         </tbody>

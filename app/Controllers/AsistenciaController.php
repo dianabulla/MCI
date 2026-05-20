@@ -60,7 +60,7 @@ class AsistenciaController extends BaseController {
     }
 
     public function index() {
-        if (!AuthController::tienePermiso('asistencias', 'ver')) {
+        if (!AuthController::puede('asistencias:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -306,7 +306,7 @@ class AsistenciaController extends BaseController {
     }
 
     public function exportarExcel() {
-        if (!AuthController::tienePermiso('asistencias', 'ver')) {
+        if (!AuthController::puede('asistencias:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -394,7 +394,7 @@ class AsistenciaController extends BaseController {
 
     public function registrar() {
         // Verificar permiso de crear
-        if (!AuthController::tienePermiso('asistencias', 'crear')) {
+        if (!AuthController::puede('asistencias:crear')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -535,7 +535,7 @@ class AsistenciaController extends BaseController {
             $this->json(['success' => false, 'message' => 'Metodo no permitido'], 405);
         }
 
-        if (!AuthController::tienePermiso('asistencias', 'crear') && !AuthController::tienePermiso('asistencias', 'editar')) {
+        if (!AuthController::puede('asistencias:crear') && !AuthController::puede('asistencias:editar')) {
             $this->json(['success' => false, 'message' => 'No autorizado'], 403);
         }
 

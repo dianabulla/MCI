@@ -35,7 +35,7 @@ $totalCuposDisponibles = 0;
 
 $urlMinisteriosLista = PUBLIC_URL . '?url=discipular/ministerios';
 $urlMinisteriosCrear = PUBLIC_URL . '?url=discipular/ministerios/crear';
-$puedeCrearMinisterio = AuthController::esAdministrador() || AuthController::tienePermiso('ministerios', 'crear');
+$puedeCrearMinisterio = AuthController::esAdministrador() || AuthController::puede('ministerios:crear');
 
 $asignacionOk = (string)($_GET['asignacion_ok'] ?? '') === '1';
 $asignacionError = (string)($_GET['asignacion_error'] ?? '') === '1';
@@ -51,6 +51,9 @@ $idLiderPrincipal2 = (int)($id_lider_principal_2 ?? 0);
 $nombreLiderPrincipal1 = trim((string)($nombre_lider_principal_1 ?? ''));
 $nombreLiderPrincipal2 = trim((string)($nombre_lider_principal_2 ?? ''));
 $candidatosLideresPrincipales = is_array($candidatos_lideres_principales ?? null) ? $candidatos_lideres_principales : [];
+$cuposPanelHombre = is_array($cupos_panel_hombre ?? null) ? $cupos_panel_hombre : null;
+$cuposPanelMujer = is_array($cupos_panel_mujer ?? null) ? $cupos_panel_mujer : null;
+$equipoDirectoDesdeController = is_array($equipo_directo_por_lider ?? null) ? $equipo_directo_por_lider : null;
 
 $normalizarTextoMinisterio = static function($texto) {
     $valor = strtolower(trim((string)$texto));
@@ -314,7 +317,8 @@ if ($idPerfilPrincipal > 0) {
     }
 }
 
-$equipoDirectoPorLider = [];
+$equipoDirectoPorLider = $equipoDirectoDesdeController ?? [];
+if ($equipoDirectoPorLider === []) {
 foreach ($rowsTabla as $row) {
     $idLiderActualRow = (int)($row['id_lider_actual'] ?? 0);
     $idPersonaRow = (int)($row['id'] ?? 0);
@@ -355,6 +359,7 @@ foreach ($equipoDirectoPorLider as &$equipoLider) {
     unset($personaEquipo);
 }
 unset($equipoLider);
+}
 
 $cupoNumeroPorPersona = [];
 foreach ($equipoDirectoPorLider as $equipoLider) {
@@ -520,6 +525,8 @@ $jerarquiaLiderGestionDefault = trim((string)($jerarquiaPorLiderId[$liderGestion
         </div>
     </section>
 
+    <?php include VIEWS . '/discipular/partials/cupos_pastorales_section.php'; ?>
+
     <div id="modalAsignarCupo" class="cupos-modal" aria-hidden="true">
         <div class="cupos-modal-backdrop" data-close-modal="1"></div>
         <section class="card cupos-card cupos-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modalAsignarTitulo">
@@ -617,8 +624,17 @@ $jerarquiaLiderGestionDefault = trim((string)($jerarquiaPorLiderId[$liderGestion
 
                 <div class="cupos-footer-row">
                     <small id="helpModoCupo" style="display:block; margin-top:4px; color:#60708f;">Selecciona una persona y pulsa Confirmar asignación.</small>
-                    <button type="submit" id="btnAsignarCupo" class="btn btn-primary btn-sm">Confirmar asignación</button>
+                    <div class="cupos-footer-actions">
+                        <button type="button" id="btnLiberarCupo" class="btn btn-outline-danger btn-sm" style="display:none;">Quitar de este cupo</button>
+                        <button type="submit" id="btnAsignarCupo" class="btn btn-primary btn-sm">Confirmar asignación</button>
+                    </div>
                 </div>
+            </form>
+            <form id="formLiberarCupo" method="post" action="<?= PUBLIC_URL ?>?url=discipular/ministerios/liberar-cupo" style="display:none;">
+                <input type="hidden" name="id_lider" id="liberar_id_lider" value="">
+                <input type="hidden" name="id_persona" id="liberar_id_persona" value="">
+                <input type="hidden" name="id_ministerio" id="liberar_id_ministerio" value="<?= $idMinisterioFiltro ?>">
+                <input type="hidden" name="numero_cupo" id="liberar_numero_cupo" value="">
             </form>
         </section>
     </div>
@@ -724,7 +740,8 @@ $jerarquiaLiderGestionDefault = trim((string)($jerarquiaPorLiderId[$liderGestion
         <table class="data-table ministerios-equipo-table">
             <thead>
                 <tr>
-                    <th title="Casilla del 1 al 12 en el equipo directo del líder o pastor">Casilla</th>
+                    <th title="Número de casilla bajo su líder inmediato">Bajo líder</th>
+                    <th title="Gestionar las 12 personas de su red directa">Su equipo</th>
                     <th>Identificación</th>
                     <th>Nombre</th>
                     <th>Apellido</th>
@@ -753,6 +770,16 @@ $jerarquiaLiderGestionDefault = trim((string)($jerarquiaPorLiderId[$liderGestion
                         $idLiderActualFila = (int)($row['id_lider_actual'] ?? 0);
                         $nombreLiderActualFila = trim((string)($row['nombre_lider_actual'] ?? ''));
                         $cupoNumeroFila = (int)($cupoNumeroPorPersona[$idPersona] ?? 0);
+                        $puedeGestionarPropioEquipo = !empty($row['es_equipo_principal']) || !empty($row['es_lider_144']) || !empty($row['es_lider_celula']);
+                        if (!empty($row['es_equipo_principal'])) {
+                            $modoCupoPropio = 'lider_12';
+                        } elseif (!empty($row['es_lider_144'])) {
+                            $modoCupoPropio = 'lider_144';
+                        } else {
+                            $modoCupoPropio = 'lider_celula';
+                        }
+                        $jerarquiaPropio = trim((string)($jerarquiaPorLiderId[$idPersona] ?? $modoCupoPropio));
+                        $nombreCompletoFila = trim($nombre . ' ' . $apellido);
                         $liderObjetivoFila = $idLiderActualFila > 0 ? $idLiderActualFila : $liderGestionCuposId;
                         $nombreLiderObjetivoFila = $nombreLiderActualFila;
                         if ($nombreLiderObjetivoFila === '' && $liderObjetivoFila === $idLiderPrincipal1) {
@@ -786,25 +813,25 @@ $jerarquiaLiderGestionDefault = trim((string)($jerarquiaPorLiderId[$liderGestion
                             data-search="<?= htmlspecialchars($textoBusqueda) ?>"
                             data-search-digits="<?= htmlspecialchars($digitosBusqueda) ?>"
                         >
+                            <td class="text-center">
+                                <?= $cupoNumeroFila > 0 ? (int)$cupoNumeroFila : '—' ?>
+                            </td>
                             <td>
-                                <?php if ($liderObjetivoFila > 0): ?>
+                                <?php if ($puedeGestionarPropioEquipo): ?>
                                     <button
                                         type="button"
-                                        class="btn btn-xs <?= $cupoNumeroFila > 0 ? 'btn-outline-primary' : 'btn-outline-success' ?> js-asignar-desde-cupo"
-                                        data-id-lider="<?= $liderObjetivoFila ?>"
+                                        class="btn btn-xs btn-primary js-asignar-desde-cupo"
+                                        data-id-lider="<?= $idPersona ?>"
                                         data-id-ministerio="<?= $idMinisterioFiltro > 0 ? $idMinisterioFiltro : $idMinisterioFila ?>"
-                                        data-nombre-lider="<?= htmlspecialchars($nombreLiderObjetivoFila) ?>"
-                                        data-jerarquia-lider="<?= htmlspecialchars($jerarquiaPorLiderId[$liderObjetivoFila] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                        data-nombre-lider="<?= htmlspecialchars($nombreCompletoFila !== '' ? $nombreCompletoFila : ('Persona ' . $idPersona)) ?>"
+                                        data-jerarquia-lider="<?= htmlspecialchars($jerarquiaPropio, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-modo-cupo="<?= htmlspecialchars($modoCupoPropio, ENT_QUOTES, 'UTF-8') ?>"
                                         data-nombre-ministerio="<?= htmlspecialchars($nombreMinisterioFila) ?>"
                                         data-nombre-rol="<?= htmlspecialchars($nombreRolFila) ?>"
-                                        data-slot-numero="<?= $cupoNumeroFila > 0 ? $cupoNumeroFila : '' ?>"
-                                        data-id-persona-objetivo="<?= $idPersona ?>"
-                                        title="<?= $cupoNumeroFila > 0 ? ('Abrir ventana: casilla ' . $cupoNumeroFila . ' (cambiar persona)') : 'Abrir ventana: asignar a una casilla libre' ?>"
-                                    >
-                                        <?= $cupoNumeroFila > 0 ? $cupoNumeroFila : '+' ?>
-                                    </button>
+                                        title="Abrir las 12 casillas de su equipo directo"
+                                    >Su equipo (12)</button>
                                 <?php else: ?>
-                                    <button type="button" class="btn btn-xs btn-outline-secondary" title="Configura la cabeza pastoral primero" disabled>?</button>
+                                    <span class="text-muted" style="font-size:12px;">—</span>
                                 <?php endif; ?>
                             </td>
                             <td><?= htmlspecialchars($documento !== '' ? $documento : '-') ?></td>
@@ -827,17 +854,17 @@ $jerarquiaLiderGestionDefault = trim((string)($jerarquiaPorLiderId[$liderGestion
                     $cuposLibres = $cuposTotales - $cuposOcupados;
                     ?>
                     <tr id="rowCuposEquipo" style="<?= $tabActivo === 'equipo_principal' ? '' : 'display:none;' ?>">
-                        <td colspan="7" class="text-center cupos-libre-row">
+                        <td colspan="8" class="text-center cupos-libre-row">
                             <span class="cupos-libre-label">Recordatorio:</span>
-                            La columna <strong>Casilla</strong> abre la ventana de los 12 cupos. El símbolo <strong>+</strong> asigna una casilla libre; si ya hay número, sirve para sustituir a esa persona.
+                            Usa los paneles de arriba para los cupos del pastor. En la tabla, <strong>Su equipo (12)</strong> abre las casillas de cada líder de 12 o de 144.
                         </td>
                     </tr>
                 <?php else: ?>
                     <tr>
-                        <td colspan="7" class="text-center">No hay líderes asignados en el equipo principal.</td>
+                        <td colspan="8" class="text-center">No hay líderes asignados en el equipo principal.</td>
                     </tr>
                     <tr id="rowCuposEquipo" style="<?= $tabActivo === 'equipo_principal' ? '' : 'display:none;' ?>">
-                        <td colspan="7" class="text-center cupos-libre-row">
+                        <td colspan="8" class="text-center cupos-libre-row">
                             <span class="cupos-libre-label">Siguiente paso:</span>
                             <?php if ($hayFiltroMinisterio): ?>
                                 <?= htmlspecialchars($textoAvisoConfigurarLideres) ?>
@@ -1515,6 +1542,54 @@ $jerarquiaLiderGestionDefault = trim((string)($jerarquiaPorLiderId[$liderGestion
     margin-right: 4px;
 }
 
+.cupos-pastorales-wrap {
+    display: grid;
+    gap: 14px;
+}
+.cupos-pastorales-intro {
+    padding: 16px 18px;
+}
+.cupos-pastorales-title {
+    margin: 0 0 8px;
+    font-size: 1.15rem;
+    color: #1f365f;
+}
+.cupos-pastorales-lead {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #4d5f7a;
+    line-height: 1.45;
+}
+.cupos-pastorales-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 14px;
+}
+.cupos-panel {
+    padding: 14px 16px;
+}
+.cupos-panel-head {
+    margin-bottom: 12px;
+}
+.cupos-panel-title {
+    margin: 0 0 4px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1d4f93;
+}
+.cupos-panel-sub {
+    margin: 0;
+    font-size: 0.82rem;
+    color: #5a6f8f;
+}
+.cupos-footer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
 .cupos-libre-num {
     color: #2f6f3f;
     font-weight: bold;
@@ -2187,6 +2262,8 @@ $jerarquiaLiderGestionDefault = trim((string)($jerarquiaPorLiderId[$liderGestion
             if (modoCupo === 'pastoral') {
                 okPerfil = jerarquiaPermiteAsignacion(jerLiderEfectiva, jerPersona)
                     || (idCobertura !== '0' && idLiderActual === idCobertura);
+            } else {
+                okPerfil = jerarquiaPermiteAsignacion(jerLiderEfectiva, jerPersona);
             }
             const okTexto = texto === '' || search.indexOf(texto) !== -1;
             op.hidden = !(okPerfil && okTexto);
@@ -2211,15 +2288,58 @@ $jerarquiaLiderGestionDefault = trim((string)($jerarquiaPorLiderId[$liderGestion
         sincronizarAyudaBusquedaCupo();
     }
 
-    function activarModoCupoPastoral() {
+    const btnLiberarCupo = document.getElementById('btnLiberarCupo');
+    const formLiberarCupo = document.getElementById('formLiberarCupo');
+    const liberarIdLider = document.getElementById('liberar_id_lider');
+    const liberarIdPersona = document.getElementById('liberar_id_persona');
+    const liberarIdMinisterio = document.getElementById('liberar_id_ministerio');
+    const liberarNumeroCupo = document.getElementById('liberar_numero_cupo');
+
+    function activarModoCupo(modo) {
+        const m = String(modo || 'pastoral');
         if (modoCupoAsignar) {
-            modoCupoAsignar.value = 'pastoral';
+            modoCupoAsignar.value = m;
         }
         if (labelCoberturaCupo) {
-            labelCoberturaCupo.textContent = usaEtiquetasPastorales ? 'Pastor/Pastora seleccionado(a)' : 'Lider principal seleccionado(a)';
+            if (m === 'lider_12') {
+                labelCoberturaCupo.textContent = 'Líder de 12 — su equipo directo (hasta 144)';
+            } else if (m === 'lider_144') {
+                labelCoberturaCupo.textContent = 'Líder de 144 — su equipo directo';
+            } else if (m === 'lider_celula') {
+                labelCoberturaCupo.textContent = 'Líder de célula — su equipo directo';
+            } else {
+                labelCoberturaCupo.textContent = usaEtiquetasPastorales ? 'Pastor/Pastora seleccionado(a)' : 'Líder principal seleccionado(a)';
+            }
         }
         if (helpModoCupo) {
-            helpModoCupo.textContent = 'Elige una persona en los resultados y pulsa el botón azul de abajo. Si el equipo ya tiene 12 personas, solo puedes sustituir una casilla ocupada.';
+            helpModoCupo.textContent = 'Elige una persona y confirma. Si la casilla está ocupada, puedes sustituir o usar «Quitar de este cupo». Máximo 12 por líder.';
+        }
+        sincronizarAyudaBusquedaCupo();
+    }
+
+    function activarModoCupoPastoral() {
+        activarModoCupo('pastoral');
+    }
+
+    function sincronizarBotonLiberar() {
+        if (!btnLiberarCupo) {
+            return;
+        }
+        const persona = slotActualSeleccionado && slotActualSeleccionado.persona;
+        const idOcupante = persona && persona.id_persona ? String(persona.id_persona) : '';
+        const mostrar = idOcupante !== '' && liderAsignar && String(liderAsignar.value || '').trim() !== '';
+        btnLiberarCupo.style.display = mostrar ? '' : 'none';
+        if (liberarIdLider && liderAsignar) {
+            liberarIdLider.value = String(liderAsignar.value || '');
+        }
+        if (liberarIdPersona) {
+            liberarIdPersona.value = idOcupante;
+        }
+        if (liberarNumeroCupo && slotActualSeleccionado) {
+            liberarNumeroCupo.value = String(slotActualSeleccionado.slot_numero || '');
+        }
+        if (liberarIdMinisterio && idMinisterioAsignar) {
+            liberarIdMinisterio.value = String(idMinisterioAsignar.value || '0');
         }
     }
 
@@ -2366,8 +2486,23 @@ $jerarquiaLiderGestionDefault = trim((string)($jerarquiaPorLiderId[$liderGestion
         }
     });
 
+    if (btnLiberarCupo && formLiberarCupo) {
+        btnLiberarCupo.addEventListener('click', function() {
+            sincronizarBotonLiberar();
+            const idP = liberarIdPersona ? String(liberarIdPersona.value || '').trim() : '';
+            if (idP === '') {
+                return;
+            }
+            if (!window.confirm('¿Quitar a esta persona del cupo? Quedará sin líder asignado.')) {
+                return;
+            }
+            formLiberarCupo.submit();
+        });
+    }
+
     function prepararAsignacionDesdeBoton(btn) {
-        activarModoCupoPastoral();
+        const modoBtn = String(btn.dataset.modoCupo || 'pastoral').trim();
+        activarModoCupo(modoBtn);
         const jerRaw = String(btn.dataset.jerarquiaLider || '').trim();
         jerarquiaLiderActiva = jerRaw !== '' ? jerRaw : (usaEtiquetasPastorales ? 'pastor' : 'lider_12');
         let idLider = String(btn.dataset.idLider || '').trim();

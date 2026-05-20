@@ -248,6 +248,7 @@ $ganarInicio = (string)($ganar_inicio ?? $fecha_inicio ?? '');
 $ganarFin = (string)($ganar_fin ?? $fecha_fin ?? '');
 $fechaInicioFiltro = (string)($fecha_inicio_filtro ?? '');
 $fechaFinFiltro = (string)($fecha_fin_filtro ?? '');
+$semanaVencidaPorDefecto = !empty($semana_vencida_por_defecto);
 $mesEscaleraSeleccionado = (string)($mes_escalera ?? date('Y-m'));
 $mesEscaleraLabel = trim((string)($reporteEscaleraMesActual['mes_label'] ?? ''));
 if ($mesEscaleraLabel === '') {
@@ -269,8 +270,6 @@ $parametrosReporteActual = [
     'tipo' => $tipoReporte,
     'escala_ganar' => $escalaGanar,
     'fecha_referencia' => (string)$fecha_referencia,
-    'fecha_inicio' => $fechaInicioFiltro,
-    'fecha_fin' => $fechaFinFiltro,
     'ministerio' => (string)$filtro_ministerio,
     'lider' => (string)$filtro_lider,
     'celula' => (string)$filtro_celula,
@@ -488,9 +487,16 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
         <input type="hidden" name="tipo" value="<?= htmlspecialchars($tipoReporte) ?>">
 
         <div class="form-group report-date-group" style="margin: 0;">
-            <label for="fecha_referencia">Fecha de la semana (lunes a domingo)</label>
-            <input type="date" id="fecha_referencia" name="fecha_referencia" class="form-control" value="<?= htmlspecialchars((string)$fecha_referencia) ?>" required>
-            <small style="color:#637087;">Rango aplicado: <?= date('d/m/Y', strtotime($fecha_inicio)) ?> - <?= date('d/m/Y', strtotime($fecha_fin)) ?></small>
+            <label for="fecha_referencia">Semana a consultar (lun. a dom.)</label>
+            <input type="date" id="fecha_referencia" name="fecha_referencia" class="form-control" value="<?= htmlspecialchars((string)$fecha_referencia) ?>" <?= $semanaVencidaPorDefecto ? '' : 'required' ?>>
+            <small style="color:#637087;">
+                <?php if ($semanaVencidaPorDefecto): ?>
+                    Semana vencida (por defecto): <?= date('d/m/Y', strtotime($fecha_inicio)) ?> – <?= date('d/m/Y', strtotime($fecha_fin)) ?>.
+                    Elige cualquier día de otra semana y pulsa Aplicar.
+                <?php else: ?>
+                    Rango aplicado: <?= date('d/m/Y', strtotime($fecha_inicio)) ?> – <?= date('d/m/Y', strtotime($fecha_fin)) ?> (según el día elegido).
+                <?php endif; ?>
+            </small>
         </div>
 
         <div class="filters-actions">
@@ -514,8 +520,6 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
             <input type="hidden" name="tipo" value="<?= htmlspecialchars($tipoReporte) ?>">
             <input type="hidden" name="escala_ganar" value="<?= htmlspecialchars((string)$escalaGanar) ?>">
             <input type="hidden" name="fecha_referencia" value="<?= htmlspecialchars((string)$fecha_referencia) ?>">
-            <input type="hidden" name="fecha_inicio" value="<?= htmlspecialchars((string)$fechaInicioFiltro) ?>">
-            <input type="hidden" name="fecha_fin" value="<?= htmlspecialchars((string)$fechaFinFiltro) ?>">
             <input type="hidden" name="lider" value="<?= htmlspecialchars((string)$filtro_lider) ?>">
             <input type="hidden" name="celula" value="<?= htmlspecialchars((string)$filtro_celula) ?>">
             <input type="hidden" name="mes_meta" value="<?= htmlspecialchars((string)$filtroMesMeta) ?>">
@@ -558,8 +562,8 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </button>
     <button type="button" class="report-kpi-card report-kpi-button kpi-escalera js-kpi-detalle" data-origen="todos">
         <div class="report-kpi-icon">📊</div>
-        <div class="report-kpi-label">Total ganados esta semana</div>
-        <div class="report-kpi-value"><?= (int)($resumenOrigen['Ganados_Celula'] ?? 0) + (int)($resumenOrigen['Ganados_Iglesia'] ?? ($resumenOrigen['Ganados_Domingo'] ?? 0)) + (int)($resumenOrigen['Asignados'] ?? 0) ?></div>
+        <div class="report-kpi-label">Total ganados (semana vencida)</div>
+        <div class="report-kpi-value"><?= (int)($resumenOrigen['Total'] ?? 0) ?></div>
     </button>
     <button type="button" class="report-kpi-card report-kpi-button kpi-celula js-kpi-detalle" data-origen="hombres_anio">
         <div class="report-kpi-icon">👨</div>
@@ -715,6 +719,10 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 
 <div class="card report-card report-chart-only" style="margin-bottom: 22px;">
     <h3>Almas ganadas por ministerio</h3>
+    <small style="color:#637087;display:block;margin-bottom:8px;">
+        Período: <?= date('d/m/Y', strtotime($ganarInicio ?: $fecha_inicio)) ?> – <?= date('d/m/Y', strtotime($ganarFin ?: $fecha_fin)) ?>
+        (<?= htmlspecialchars($ganarLabel) ?>)
+    </small>
     <div id="chartAlmasMinisterio"></div>
     <details style="margin-top: 14px;">
         <summary>Ver detalle por ministerio</summary>

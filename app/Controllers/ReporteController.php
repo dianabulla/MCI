@@ -21,6 +21,12 @@ class ReporteController extends BaseController {
     private $escuelaEstadoModel;
     private $escuelaAsistenciaClaseModel;
 
+    /** @var array<int, array{pagado: bool, valor: float}> */
+    private $mapaPagosMovimientosUv = [];
+
+    /** @var array<string, array{pagado: bool, valor: float}> */
+    private $mapaPagosMovimientosUvPorCedula = [];
+
     public function __construct() {
         $this->personaModel = new Persona();
         $this->asistenciaModel = new Asistencia();
@@ -46,6 +52,129 @@ class ReporteController extends BaseController {
         $fin = strtotime('+6 days', $inicio);
 
         return [date('Y-m-d', $inicio), date('Y-m-d', $fin)];
+    }
+
+    /**
+     * Semana calendario completa anterior (lunes–domingo) respecto a la fecha dada.
+     */
+    private function calcularRangoSemanaVencida($fechaReferencia = null) {
+        $timestamp = strtotime((string)($fechaReferencia ?: date('Y-m-d')));
+        if ($timestamp === false) {
+            $timestamp = time();
+        }
+
+        $diaSemana = (int)date('N', $timestamp);
+        $inicioSemanaActual = strtotime('-' . ($diaSemana - 1) . ' days', $timestamp);
+        $finVencida = strtotime('-1 day', $inicioSemanaActual);
+        $inicioVencida = strtotime('-6 days', $finVencida);
+
+        return [date('Y-m-d', $inicioVencida), date('Y-m-d', $finVencida)];
+    }
+
+    /**
+     * Resuelve fechas del reporte evitando rangos huérfanos en la URL.
+     *
+     * @return array{
+     *   fecha_referencia: string,
+     *   fecha_inicio: string,
+     *   fecha_fin: string,
+     *   fecha_inicio_ganar: string,
+     *   fecha_fin_ganar: string,
+     *   rango_ganar: array{inicio: string, fin: string, label: string},
+     *   usar_rango_personalizado: bool,
+     *   fecha_inicio_filtro: string,
+     *   fecha_fin_filtro: string,
+     *   semana_vencida_por_defecto: bool
+     * }
+     */
+    private function resolverRangosFechaReporte(string $tipoReporte, string $escalaGanar): array {
+        $fechaReferenciaExplicita = $this->normalizarFechaYmd($_GET['fecha_referencia'] ?? '');
+        $fechaInicioPersonalizada = $this->normalizarFechaYmd($_GET['fecha_inicio'] ?? '');
+        $fechaFinPersonalizada = $this->normalizarFechaYmd($_GET['fecha_fin'] ?? '');
+        if ($fechaInicioPersonalizada !== '' && $fechaFinPersonalizada !== '' && strcmp($fechaInicioPersonalizada, $fechaFinPersonalizada) > 0) {
+            [$fechaInicioPersonalizada, $fechaFinPersonalizada] = [$fechaFinPersonalizada, $fechaInicioPersonalizada];
+        }
+
+        $semanaVencidaPorDefecto = false;
+
+        if ($tipoReporte === 'personas') {
+            // Una sola fuente: fecha_referencia (o semana vencida si no viene en la URL).
+            // Se ignoran fecha_inicio/fecha_fin para evitar rangos viejos en enlaces o formularios ocultos.
+            if ($fechaReferenciaExplicita === '') {
+                [$fechaInicio, $fechaFin] = $this->calcularRangoSemanaVencida();
+                $fechaReferencia = $fechaFin;
+                $semanaVencidaPorDefecto = true;
+            } else {
+                $fechaReferencia = $fechaReferenciaExplicita;
+                [$fechaInicio, $fechaFin] = $this->calcularRangoSemanaDomingoADomingo($fechaReferencia);
+            }
+
+            $rangoGanar = $this->construirRangoGanar($fechaReferencia, $escalaGanar);
+            if ($escalaGanar === 'semanal') {
+                $fechaInicioGanar = $fechaInicio;
+                $fechaFinGanar = $fechaFin;
+                $rangoGanar = [
+                    'inicio' => $fechaInicioGanar,
+                    'fin' => $fechaFinGanar,
+                    'label' => $semanaVencidaPorDefecto ? 'Semana vencida' : 'Semanal',
+                ];
+            } else {
+                $fechaInicioGanar = (string)($rangoGanar['inicio'] ?? $fechaInicio);
+                $fechaFinGanar = (string)($rangoGanar['fin'] ?? $fechaFin);
+            }
+
+            return [
+                'fecha_referencia' => $fechaReferencia,
+                'fecha_inicio' => $fechaInicio,
+                'fecha_fin' => $fechaFin,
+                'fecha_inicio_ganar' => $fechaInicioGanar,
+                'fecha_fin_ganar' => $fechaFinGanar,
+                'rango_ganar' => $rangoGanar,
+                'usar_rango_personalizado' => false,
+                'fecha_inicio_filtro' => '',
+                'fecha_fin_filtro' => '',
+                'semana_vencida_por_defecto' => $semanaVencidaPorDefecto,
+            ];
+        }
+
+        $fechaReferencia = $fechaReferenciaExplicita;
+        if ($fechaReferencia === '') {
+            $fechaReferencia = date('Y-m-d');
+        }
+        [$fechaInicio, $fechaFin] = $this->calcularRangoSemanaDomingoADomingo($fechaReferencia);
+
+        $usarRangoPersonalizado = ($fechaInicioPersonalizada !== '' && $fechaFinPersonalizada !== '');
+        if ($usarRangoPersonalizado) {
+            $fechaInicio = $fechaInicioPersonalizada;
+            $fechaFin = $fechaFinPersonalizada;
+            $fechaReferencia = $fechaFinPersonalizada;
+        }
+
+        $rangoGanar = $this->construirRangoGanar($fechaReferencia, $escalaGanar);
+        $fechaInicioGanar = (string)($rangoGanar['inicio'] ?? $fechaInicio);
+        $fechaFinGanar = (string)($rangoGanar['fin'] ?? $fechaFin);
+        if ($usarRangoPersonalizado) {
+            $fechaInicioGanar = $fechaInicio;
+            $fechaFinGanar = $fechaFin;
+            $rangoGanar = [
+                'inicio' => $fechaInicioGanar,
+                'fin' => $fechaFinGanar,
+                'label' => 'Personalizado',
+            ];
+        }
+
+        return [
+            'fecha_referencia' => $fechaReferencia,
+            'fecha_inicio' => $fechaInicio,
+            'fecha_fin' => $fechaFin,
+            'fecha_inicio_ganar' => $fechaInicioGanar,
+            'fecha_fin_ganar' => $fechaFinGanar,
+            'rango_ganar' => $rangoGanar,
+            'usar_rango_personalizado' => $usarRangoPersonalizado,
+            'fecha_inicio_filtro' => $fechaInicioPersonalizada,
+            'fecha_fin_filtro' => $fechaFinPersonalizada,
+            'semana_vencida_por_defecto' => false,
+        ];
     }
 
     private function normalizarAnioMeta($anio, $anioFallback) {
@@ -448,12 +577,11 @@ class ReporteController extends BaseController {
             return false;
         }
 
-        return strpos($tipo, 'celula') !== false
-            || strpos($tipo, 'célula') !== false
-            || strpos($tipo, 'domingo') !== false
-            || strpos($tipo, 'somos uno') !== false
-            || strpos($tipo, 'somosuno') !== false
-            || strpos($tipo, 'otro') !== false;
+        if (strpos($tipo, 'celula') !== false || strpos($tipo, 'célula') !== false || strpos($tipo, 'migrados') !== false) {
+            return false;
+        }
+
+        return $tipo !== '';
     }
 
     private function construirReporteUniversidadVidaEscuelas(array $personas): array {
@@ -1427,11 +1555,11 @@ class ReporteController extends BaseController {
                 continue;
             }
 
-            $tipoReunion = $this->normalizarTexto($persona['Tipo_Reunion'] ?? '');
-            if (strpos($tipoReunion, 'celula') !== false) {
+            $origenGanado = $this->clasificarOrigenGanar($persona);
+            if ($origenGanado === 'celula') {
                 $rowsMap[$idMinisterioPersona]['meses'][$mesKey]['celula']++;
                 $rowsMap[$idMinisterioPersona]['ganados']++;
-            } elseif (strpos($tipoReunion, 'domingo') !== false || strpos($tipoReunion, 'iglesia') !== false || strpos($tipoReunion, 'somos uno') !== false || strpos($tipoReunion, 'somosuno') !== false || strpos($tipoReunion, 'viernes') !== false || strpos($tipoReunion, 'otro') !== false) {
+            } elseif ($origenGanado === 'iglesia') {
                 $rowsMap[$idMinisterioPersona]['meses'][$mesKey]['iglesia']++;
                 $rowsMap[$idMinisterioPersona]['ganados']++;
             }
@@ -1499,7 +1627,13 @@ class ReporteController extends BaseController {
      */
     private function clasificarOrigenGanar(array $persona): string {
         $tipo = strtolower(trim((string)($persona['Tipo_Reunion'] ?? '')));
-        if (strpos($tipo, 'celula') !== false || strpos($tipo, 'célula') !== false) {
+        $tipo = strtr($tipo, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        ]);
+        if ($tipo === '' || strpos($tipo, 'migrados') !== false) {
+            return 'otros';
+        }
+        if (strpos($tipo, 'celula') !== false) {
             return 'celula';
         }
 
@@ -1521,12 +1655,11 @@ class ReporteController extends BaseController {
             return false;
         }
 
-        return strpos($tipo, 'celula') !== false
-            || strpos($tipo, 'célula') !== false
-            || strpos($tipo, 'domingo') !== false
-            || strpos($tipo, 'somos uno') !== false
-            || strpos($tipo, 'somosuno') !== false
-            || strpos($tipo, 'otro') !== false;
+        if (strpos($tipo, 'celula') !== false || strpos($tipo, 'célula') !== false || strpos($tipo, 'migrados') !== false) {
+            return false;
+        }
+
+        return $tipo !== '';
     }
 
     /**
@@ -1957,7 +2090,7 @@ class ReporteController extends BaseController {
     }
 
     public function ministerial() {
-        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('reportes', 'ver')) {
+        if (!AuthController::esAdministrador() && !AuthController::puede('reportes:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -2056,32 +2189,24 @@ class ReporteController extends BaseController {
     }
 
     public function index() {
-        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('reportes', 'ver')) {
+        if (!AuthController::esAdministrador() && !AuthController::puede('reportes:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
 
         $tipoReporte = $this->resolverTipoReporte($_GET['tipo'] ?? 'personas');
-        $fechaReferencia = $this->normalizarFechaYmd($_GET['fecha_referencia'] ?? '');
-        if ($fechaReferencia === '') {
-            $fechaReferencia = date('Y-m-d', strtotime('-7 days'));
-        }
-        [$fechaInicio, $fechaFin] = $this->calcularRangoSemanaDomingoADomingo($fechaReferencia);
-        $fechaInicioPersonalizada = $this->normalizarFechaYmd($_GET['fecha_inicio'] ?? '');
-        $fechaFinPersonalizada = $this->normalizarFechaYmd($_GET['fecha_fin'] ?? '');
-        if ($fechaInicioPersonalizada !== '' && $fechaFinPersonalizada !== '' && strcmp($fechaInicioPersonalizada, $fechaFinPersonalizada) > 0) {
-            [$fechaInicioPersonalizada, $fechaFinPersonalizada] = [$fechaFinPersonalizada, $fechaInicioPersonalizada];
-        }
-        if ($tipoReporte === 'personas' && $fechaInicioPersonalizada === '' && $fechaFinPersonalizada === '') {
-            $fechaInicioPersonalizada = $fechaInicio;
-            $fechaFinPersonalizada = $fechaFin;
-        }
-        $usarRangoPersonalizado = ($fechaInicioPersonalizada !== '' && $fechaFinPersonalizada !== '');
-        if ($usarRangoPersonalizado) {
-            $fechaInicio = $fechaInicioPersonalizada;
-            $fechaFin = $fechaFinPersonalizada;
-            $fechaReferencia = $fechaFinPersonalizada;
-        }
+        $escalaGanar = $this->resolverEscalaGanar($_GET['escala_ganar'] ?? 'semanal');
+        $rangosFecha = $this->resolverRangosFechaReporte($tipoReporte, $escalaGanar);
+        $fechaReferencia = (string)$rangosFecha['fecha_referencia'];
+        $fechaInicio = (string)$rangosFecha['fecha_inicio'];
+        $fechaFin = (string)$rangosFecha['fecha_fin'];
+        $fechaInicioGanar = (string)$rangosFecha['fecha_inicio_ganar'];
+        $fechaFinGanar = (string)$rangosFecha['fecha_fin_ganar'];
+        $rangoGanar = (array)$rangosFecha['rango_ganar'];
+        $usarRangoPersonalizado = (bool)$rangosFecha['usar_rango_personalizado'];
+        $fechaInicioPersonalizada = (string)$rangosFecha['fecha_inicio_filtro'];
+        $fechaFinPersonalizada = (string)$rangosFecha['fecha_fin_filtro'];
+        $semanaVencidaPorDefecto = (bool)$rangosFecha['semana_vencida_por_defecto'];
 
         $filtroCelula = $_GET['celula'] ?? '';
         $filtroMinisterio = $_GET['ministerio'] ?? '';
@@ -2091,19 +2216,6 @@ class ReporteController extends BaseController {
         $mesEscalera = (string)($rangoEscalera['mes'] ?? date('Y-m'));
         $fechaInicioEscalera = (string)($rangoEscalera['inicio'] ?? date('Y-m-01'));
         $fechaFinEscalera = (string)($rangoEscalera['fin'] ?? date('Y-m-t'));
-        $escalaGanar = $this->resolverEscalaGanar($_GET['escala_ganar'] ?? 'semanal');
-        $rangoGanar = $this->construirRangoGanar($fechaReferencia, $escalaGanar);
-        $fechaInicioGanar = (string)$rangoGanar['inicio'];
-        $fechaFinGanar = (string)$rangoGanar['fin'];
-        if ($usarRangoPersonalizado) {
-            $rangoGanar = [
-                'inicio' => $fechaInicio,
-                'fin' => $fechaFin,
-                'label' => 'Personalizado'
-            ];
-            $fechaInicioGanar = $fechaInicio;
-            $fechaFinGanar = $fechaFin;
-        }
 
         $filtroRol = DataIsolation::generarFiltroPersonas();
         $filtroCelulas = DataIsolation::generarFiltroCelulas();
@@ -2500,6 +2612,7 @@ class ReporteController extends BaseController {
             'ganar_label' => (string)($rangoGanar['label'] ?? 'Semanal'),
             'ganar_inicio' => $fechaInicioGanar,
             'ganar_fin' => $fechaFinGanar,
+            'semana_vencida_por_defecto' => $semanaVencidaPorDefecto,
             'celulas_disponibles' => $celulasDisponibles,
             'ministerios_disponibles' => $opcionesFiltro['ministerios_disponibles'],
             'lideres_disponibles' => $opcionesFiltro['lideres_disponibles'],
@@ -2542,7 +2655,7 @@ class ReporteController extends BaseController {
     }
 
     public function exportarExcel() {
-        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('reportes', 'ver')) {
+        if (!AuthController::esAdministrador() && !AuthController::puede('reportes:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -2746,7 +2859,7 @@ class ReporteController extends BaseController {
     }
 
     public function dashboardGanar() {
-        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('reportes', 'ver')) {
+        if (!AuthController::esAdministrador() && !AuthController::puede('reportes:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -3195,29 +3308,168 @@ class ReporteController extends BaseController {
     }
 
     private function deduplicarInscripcionesDashboard(array $inscripciones): array {
-        $inscripciones = array_values($inscripciones);
-        usort($inscripciones, static function($a, $b) {
-            $fa = (string)($a['Fecha_Registro'] ?? '');
-            $fb = (string)($b['Fecha_Registro'] ?? '');
-            if ($fa === $fb) {
-                return (int)($b['Id_Inscripcion'] ?? 0) <=> (int)($a['Id_Inscripcion'] ?? 0);
-            }
-            return strcmp($fb, $fa);
-        });
-
-        $deduplicadas = [];
-        $vistas = [];
+        $porClave = [];
         foreach ($inscripciones as $inscripcion) {
             $clave = $this->construirClaveUnicaInscripcionDashboard((array)$inscripcion);
-            if (isset($vistas[$clave])) {
-                continue;
+            if (!isset($porClave[$clave])) {
+                $porClave[$clave] = [];
+            }
+            $porClave[$clave][] = $inscripcion;
+        }
+
+        $deduplicadas = [];
+        foreach ($porClave as $grupo) {
+            usort($grupo, static function ($a, $b) {
+                $fa = (string)($a['Fecha_Registro'] ?? '');
+                $fb = (string)($b['Fecha_Registro'] ?? '');
+                if ($fa === $fb) {
+                    return (int)($b['Id_Inscripcion'] ?? 0) <=> (int)($a['Id_Inscripcion'] ?? 0);
+                }
+                return strcmp($fb, $fa);
+            });
+
+            $elegida = $grupo[0];
+            $valorMax = (float)($elegida['Valor_Pago'] ?? 0);
+            $metodo = trim((string)($elegida['Metodo_Pago'] ?? ''));
+            $referencia = trim((string)($elegida['Referencia_Pago'] ?? ''));
+
+            foreach ($grupo as $otra) {
+                $valorOtro = (float)($otra['Valor_Pago'] ?? 0);
+                if ($valorOtro > $valorMax) {
+                    $valorMax = $valorOtro;
+                    $elegida['Valor_Pago'] = $valorOtro;
+                }
+                $metodoOtro = trim((string)($otra['Metodo_Pago'] ?? ''));
+                if ($metodoOtro !== '') {
+                    $metodo = $metodoOtro;
+                    $elegida['Metodo_Pago'] = $metodoOtro;
+                }
+                $refOtro = trim((string)($otra['Referencia_Pago'] ?? ''));
+                if ($refOtro !== '') {
+                    $referencia = $refOtro;
+                    $elegida['Referencia_Pago'] = $refOtro;
+                }
             }
 
-            $vistas[$clave] = true;
-            $deduplicadas[] = $inscripcion;
+            if ($metodo !== '') {
+                $elegida['Metodo_Pago'] = $metodo;
+            }
+            if ($referencia !== '') {
+                $elegida['Referencia_Pago'] = $referencia;
+            }
+            if ($valorMax > 0) {
+                $elegida['Valor_Pago'] = $valorMax;
+            }
+
+            $idsRelacionados = [];
+            foreach ($grupo as $otraIns) {
+                $idRel = (int)($otraIns['Id_Inscripcion'] ?? 0);
+                if ($idRel > 0) {
+                    $idsRelacionados[] = $idRel;
+                }
+            }
+            if (!empty($idsRelacionados)) {
+                $elegida['_ids_inscripcion_relacionadas'] = array_values(array_unique($idsRelacionados));
+            }
+
+            $deduplicadas[] = $elegida;
         }
 
         return $deduplicadas;
+    }
+
+    private function prepararMapaPagosMovimientosUv(array $inscripciones): void {
+        $ids = [];
+        $cedulas = [];
+        foreach ($inscripciones as $inscripcion) {
+            $idIns = (int)($inscripcion['Id_Inscripcion'] ?? 0);
+            if ($idIns > 0) {
+                $ids[] = $idIns;
+            }
+            $cedula = preg_replace('/\D+/', '', (string)($inscripcion['Cedula'] ?? ''));
+            if ($cedula !== '') {
+                $cedulas[] = $cedula;
+            }
+        }
+        $this->mapaPagosMovimientosUv = $this->escuelaInscripcionModel->getMapaPagosMovimientosPorInscripcion($ids);
+        $this->mapaPagosMovimientosUvPorCedula = $this->escuelaInscripcionModel->getMapaPagosMovimientosPorCedula($cedulas);
+    }
+
+    private function normalizarCedulaDashboard(string $cedula): string {
+        return preg_replace('/\D+/', '', $cedula);
+    }
+
+    private function inscripcionTienePagoEnMovimientos(array $inscripcion): bool {
+        $ids = [(int)($inscripcion['Id_Inscripcion'] ?? 0)];
+        if (!empty($inscripcion['_ids_inscripcion_relacionadas']) && is_array($inscripcion['_ids_inscripcion_relacionadas'])) {
+            foreach ($inscripcion['_ids_inscripcion_relacionadas'] as $idRel) {
+                $ids[] = (int)$idRel;
+            }
+        }
+
+        foreach (array_unique(array_filter($ids, static function ($id) {
+            return $id > 0;
+        })) as $idIns) {
+            if (!empty($this->mapaPagosMovimientosUv[$idIns]['pagado'])) {
+                return true;
+            }
+        }
+
+        $cedula = $this->normalizarCedulaDashboard((string)($inscripcion['Cedula'] ?? ''));
+        if ($cedula !== '' && !empty($this->mapaPagosMovimientosUvPorCedula[$cedula]['pagado'])) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function valorPagoMovimientosInscripcion(array $inscripcion): float {
+        $valor = 0.0;
+        $ids = [(int)($inscripcion['Id_Inscripcion'] ?? 0)];
+        if (!empty($inscripcion['_ids_inscripcion_relacionadas']) && is_array($inscripcion['_ids_inscripcion_relacionadas'])) {
+            foreach ($inscripcion['_ids_inscripcion_relacionadas'] as $idRel) {
+                $ids[] = (int)$idRel;
+            }
+        }
+
+        foreach (array_unique(array_filter($ids, static function ($id) {
+            return $id > 0;
+        })) as $idIns) {
+            $valor = max($valor, (float)($this->mapaPagosMovimientosUv[$idIns]['valor'] ?? 0));
+        }
+
+        $cedula = $this->normalizarCedulaDashboard((string)($inscripcion['Cedula'] ?? ''));
+        if ($cedula !== '') {
+            $valor = max($valor, (float)($this->mapaPagosMovimientosUvPorCedula[$cedula]['valor'] ?? 0));
+        }
+
+        return $valor;
+    }
+
+    /**
+     * @return array{semestre: int, fecha_inicio: string, fecha_fin: string, etiqueta: string}
+     */
+    private function resolverRangoSemestreDashboardUv(int $anio, $semestreInput = null): array {
+        $semestre = (int)$semestreInput;
+        if ($semestre !== 1 && $semestre !== 2) {
+            $semestre = ((int)date('n')) <= 6 ? 1 : 2;
+        }
+
+        if ($semestre === 1) {
+            return [
+                'semestre' => 1,
+                'fecha_inicio' => sprintf('%04d-01-01', $anio),
+                'fecha_fin' => sprintf('%04d-06-30', $anio),
+                'etiqueta' => 'Semestre 1 (Enero – Junio)',
+            ];
+        }
+
+        return [
+            'semestre' => 2,
+            'fecha_inicio' => sprintf('%04d-07-01', $anio),
+            'fecha_fin' => sprintf('%04d-12-31', $anio),
+            'etiqueta' => 'Semestre 2 (Julio – Diciembre)',
+        ];
     }
 
     private function filtrarInscripcionesPorAislamientoDashboard(array $inscripciones, $filtroRol, ?int $idMinisterioFiltro, ?int $idLiderFiltro): array {
@@ -3246,19 +3498,43 @@ class ReporteController extends BaseController {
         }));
     }
 
-    private function obtenerInscripcionesPublicasModoConsolidar($filtroRol, ?int $idMinisterioFiltro, ?int $idLiderFiltro): array {
-        $programasConsulta = ['universidad_vida', 'encuentro'];
+    /**
+     * @return array<int, string>
+     */
+    private function programasConsultaModoConsolidar(string $lineaPrograma = 'uv'): array {
+        if ($lineaPrograma === 'cap') {
+            return [
+                'capacitacion_destino',
+                'capacitacion_destino_nivel_1',
+                'capacitacion_destino_nivel_2',
+                'capacitacion_destino_nivel_3',
+            ];
+        }
+
+        return ['universidad_vida', 'encuentro'];
+    }
+
+    private function obtenerInscripcionesPublicasModoConsolidar(
+        $filtroRol,
+        ?int $idMinisterioFiltro,
+        ?int $idLiderFiltro,
+        ?string $fechaInicio = null,
+        ?string $fechaFin = null,
+        string $lineaPrograma = 'uv'
+    ): array {
+        $programasConsulta = $this->programasConsultaModoConsolidar($lineaPrograma);
         $inscripcionesPublicas = [];
 
         foreach ($programasConsulta as $programaConsulta) {
-            // Máximo admitido por getListado (1000): misma base que el consolidado del dashboard.
+            // Misma base que Consolidar; tope ampliado para el dashboard.
             $inscripcionesPrograma = $this->escuelaInscripcionModel->getListado(
                 $programaConsulta,
                 '',
-                1000,
+                5000,
                 'todos',
                 $idMinisterioFiltro,
-                $idLiderFiltro
+                $idLiderFiltro,
+                5000
             );
 
             foreach ((array)$inscripcionesPrograma as $inscripcionTmp) {
@@ -3271,11 +3547,26 @@ class ReporteController extends BaseController {
             }
         }
 
-        $inscripcionesPublicas = $this->deduplicarInscripcionesDashboard($inscripcionesPublicas);
+        $inscripcionesSinDedup = array_values($inscripcionesPublicas);
+        $this->prepararMapaPagosMovimientosUv($inscripcionesSinDedup);
+        $inscripcionesPublicas = $this->deduplicarInscripcionesDashboard($inscripcionesSinDedup);
         $inscripcionesPublicas = array_values(array_filter($inscripcionesPublicas, static function($inscripcion) use ($programasConsulta) {
             return in_array((string)($inscripcion['Programa'] ?? ''), $programasConsulta, true);
         }));
         $inscripcionesPublicas = $this->filtrarInscripcionesPorAislamientoDashboard($inscripcionesPublicas, $filtroRol, $idMinisterioFiltro, $idLiderFiltro);
+
+        $fechaInicio = trim((string)$fechaInicio);
+        $fechaFin = trim((string)$fechaFin);
+        if ($fechaInicio !== '' && $fechaFin !== '') {
+            $inscripcionesPublicas = array_values(array_filter($inscripcionesPublicas, static function ($inscripcion) use ($fechaInicio, $fechaFin) {
+                $fechaRegistro = substr(trim((string)($inscripcion['Fecha_Registro'] ?? '')), 0, 10);
+                if ($fechaRegistro === '' || $fechaRegistro === '0000-00-00') {
+                    return false;
+                }
+
+                return $fechaRegistro >= $fechaInicio && $fechaRegistro <= $fechaFin;
+            }));
+        }
 
         foreach ($inscripcionesPublicas as &$inscripcionTmp) {
             $nombreActual = trim((string)($inscripcionTmp['Nombre_Persona_Actual'] ?? ''));
@@ -3305,6 +3596,115 @@ class ReporteController extends BaseController {
         return $inscripcionesPublicas;
     }
 
+    /**
+     * @param array<int, int> $idsPersona
+     * @return array<int, bool>
+     */
+    private function obtenerMapaAsistenciaPorPrograma(array $idsPersona, string $programa): array {
+        $idsPersona = array_values(array_unique(array_filter(array_map('intval', $idsPersona), static function ($id) {
+            return $id > 0;
+        })));
+        $programa = trim($programa);
+        if (empty($idsPersona) || $programa === '') {
+            return [];
+        }
+
+        $personasConAsistencia = [];
+        $asistenciasPrograma = $this->escuelaAsistenciaClaseModel->getAsistenciasPorPrograma($idsPersona, 'consolidar', $programa);
+        foreach ((array)$asistenciasPrograma as $idPersonaAsistencia => $clasesAsistencia) {
+            foreach ((array)$clasesAsistencia as $asistioClase) {
+                if (!empty($asistioClase)) {
+                    $personasConAsistencia[(int)$idPersonaAsistencia] = true;
+                    break;
+                }
+            }
+        }
+
+        return $personasConAsistencia;
+    }
+
+    /**
+     * Condición SQL sobre alias p (tabla persona) para dashboard UV.
+     *
+     * @return array{0:string,1:array<int, mixed>}
+     */
+    private function construirCondicionSqlPersonasDashboard($filtroRol, ?int $idMinisterioFiltro, ?int $idLiderFiltro): array {
+        $where = ['(' . trim((string)$filtroRol) . ')'];
+        $params = [];
+
+        if ($idMinisterioFiltro !== null && $idMinisterioFiltro > 0) {
+            $where[] = 'p.Id_Ministerio = ?';
+            $params[] = $idMinisterioFiltro;
+        }
+        if ($idLiderFiltro !== null && $idLiderFiltro > 0) {
+            $where[] = 'p.Id_Lider = ?';
+            $params[] = $idLiderFiltro;
+        }
+
+        return [implode(' AND ', $where), $params];
+    }
+
+    /**
+     * KPIs iglesia: todas las personas (tabla persona) vs asistencia al programa Encuentro.
+     *
+     * @return array<string, int|float|string>
+     */
+    private function construirIndicadoresEncuentroUvModoConsolidar(
+        $filtroRol,
+        ?int $idMinisterioFiltro,
+        ?int $idLiderFiltro,
+        ?string $fechaInicio = null,
+        ?string $fechaFin = null
+    ): array {
+        unset($fechaInicio, $fechaFin);
+
+        [$condPersonas, $paramsPersonas] = $this->construirCondicionSqlPersonasDashboard(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro
+        );
+
+        $tablaAsistencia = 'escuela_formacion_asistencia_clase';
+
+        $rowTotal = $this->personaModel->query(
+            "SELECT COUNT(*) AS total FROM persona p WHERE {$condPersonas}",
+            $paramsPersonas
+        );
+        $total = (int)($rowTotal[0]['total'] ?? 0);
+
+        $rowAsistieron = $this->personaModel->query(
+            "SELECT COUNT(DISTINCT p.Id_Persona) AS total
+             FROM persona p
+             INNER JOIN {$tablaAsistencia} a
+               ON a.Id_Persona = p.Id_Persona
+              AND a.Modulo = 'consolidar'
+              AND a.Programa = 'encuentro'
+              AND a.Asistio = 1
+             WHERE {$condPersonas}",
+            $paramsPersonas
+        );
+        $asistieron = (int)($rowAsistieron[0]['total'] ?? 0);
+        $sinAsistencia = max(0, $total - $asistieron);
+
+        $alcance = 'toda_la_iglesia';
+        if ($idMinisterioFiltro !== null && $idMinisterioFiltro > 0) {
+            $alcance = 'ministerio';
+        } elseif ($idLiderFiltro !== null && $idLiderFiltro > 0) {
+            $alcance = 'lider';
+        } elseif (trim((string)$filtroRol) !== '1=1') {
+            $alcance = 'alcance_rol';
+        }
+
+        return [
+            'total_personas' => $total,
+            'asistieron_encuentro' => $asistieron,
+            'sin_asistencia_encuentro' => $sinAsistencia,
+            'pct_asistieron' => $total > 0 ? round(($asistieron / $total) * 100, 1) : 0.0,
+            'pct_sin_asistencia' => $total > 0 ? round(($sinAsistencia / $total) * 100, 1) : 0.0,
+            'alcance' => $alcance,
+        ];
+    }
+
     private function obtenerMapaAsistenciaRealModoConsolidar(array $inscripcionesPublicas): array {
         $idsPersonaInscritas = array_values(array_unique(array_filter(array_map(static function($inscripcion) {
             return (int)($inscripcion['Id_Persona'] ?? 0);
@@ -3314,22 +3714,50 @@ class ReporteController extends BaseController {
 
         $personasConAsistenciaReal = [];
         foreach (['universidad_vida', 'encuentro'] as $programaConsulta) {
-            $asistenciasPrograma = $this->escuelaAsistenciaClaseModel->getAsistenciasPorPrograma($idsPersonaInscritas, 'consolidar', $programaConsulta);
-            foreach ((array)$asistenciasPrograma as $idPersonaAsistencia => $clasesAsistencia) {
-                foreach ((array)$clasesAsistencia as $asistioClase) {
-                    if (!empty($asistioClase)) {
-                        $personasConAsistenciaReal[(int)$idPersonaAsistencia] = true;
-                        break;
-                    }
-                }
+            foreach ($this->obtenerMapaAsistenciaPorPrograma($idsPersonaInscritas, $programaConsulta) as $idPersona => $_ok) {
+                $personasConAsistenciaReal[$idPersona] = true;
             }
         }
 
         return $personasConAsistenciaReal;
     }
 
-    private function construirTablaUvPorMinisterioModoConsolidar($filtroRol, ?int $idMinisterioFiltro, ?int $idLiderFiltro): array {
-        $inscripcionesPublicas = $this->obtenerInscripcionesPublicasModoConsolidar($filtroRol, $idMinisterioFiltro, $idLiderFiltro);
+    private function clasificarSegmentoUvInscripcion(array $inscripcion): array {
+        $edad = (int)($inscripcion['Edad'] ?? 0);
+        $genero = strtolower(trim((string)($inscripcion['Genero'] ?? '')));
+        $esMujer = strpos($genero, 'mujer') !== false
+            || strpos($genero, 'femen') !== false
+            || in_array($genero, ['f', 'fem', 'female'], true);
+        $esHombre = strpos($genero, 'hombre') !== false
+            || strpos($genero, 'mascul') !== false
+            || in_array($genero, ['m', 'masc', 'male', 'h'], true);
+        $esTeen = ($edad >= 9 && $edad <= 12);
+        $esJoven = ($edad >= 13 && $edad <= 30);
+        $esHombreAdulto = !$esTeen && !$esJoven && $esHombre;
+        $esMujerAdulta = !$esTeen && !$esJoven && $esMujer;
+
+        return [
+            'es_teen' => $esTeen,
+            'es_joven' => $esJoven,
+            'es_hombre_adulto' => $esHombreAdulto,
+            'es_mujer_adulta' => $esMujerAdulta,
+        ];
+    }
+
+    private function construirTablaUvPorMinisterioModoConsolidar(
+        $filtroRol,
+        ?int $idMinisterioFiltro,
+        ?int $idLiderFiltro,
+        ?string $fechaInicio = null,
+        ?string $fechaFin = null
+    ): array {
+        $inscripcionesPublicas = $this->obtenerInscripcionesPublicasModoConsolidar(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            $fechaInicio,
+            $fechaFin
+        );
         $personasConAsistenciaReal = $this->obtenerMapaAsistenciaRealModoConsolidar($inscripcionesPublicas);
 
         $tablaUvPorMinisterioMap = [];
@@ -3346,15 +3774,7 @@ class ReporteController extends BaseController {
                 continue;
             }
 
-            $edadUv = (int)($inscripcionUv['Edad'] ?? 0);
-            $generoUv = strtolower(trim((string)($inscripcionUv['Genero'] ?? '')));
-            $esMujerUv = strpos($generoUv, 'mujer') !== false
-                || strpos($generoUv, 'femen') !== false
-                || in_array($generoUv, ['f', 'fem', 'female'], true);
-            $esHombreUv = strpos($generoUv, 'hombre') !== false
-                || strpos($generoUv, 'mascul') !== false
-                || in_array($generoUv, ['m', 'masc', 'male', 'h'], true);
-            $esJovenUv = $edadUv >= 14 && $edadUv <= 28;
+            $segmento = $this->clasificarSegmentoUvInscripcion($inscripcionUv);
 
             if (!isset($tablaUvPorMinisterioMap[$ministerioNombre])) {
                 $tablaUvPorMinisterioMap[$ministerioNombre] = [
@@ -3362,16 +3782,23 @@ class ReporteController extends BaseController {
                     'hombres' => 0,
                     'mujeres' => 0,
                     'jovenes' => 0,
+                    'teens' => 0,
                     'asistencias_reales' => 0,
+                    'asist_hombres' => 0,
+                    'asist_mujeres' => 0,
+                    'asist_jovenes' => 0,
+                    'asist_teens' => 0,
                     'total' => 0,
                 ];
             }
 
-            if ($esJovenUv) {
+            if (!empty($segmento['es_joven'])) {
                 $tablaUvPorMinisterioMap[$ministerioNombre]['jovenes']++;
-            } elseif ($esHombreUv) {
+            } elseif (!empty($segmento['es_teen'])) {
+                $tablaUvPorMinisterioMap[$ministerioNombre]['teens']++;
+            } elseif (!empty($segmento['es_hombre_adulto'])) {
                 $tablaUvPorMinisterioMap[$ministerioNombre]['hombres']++;
-            } elseif ($esMujerUv) {
+            } elseif (!empty($segmento['es_mujer_adulta'])) {
                 $tablaUvPorMinisterioMap[$ministerioNombre]['mujeres']++;
             }
 
@@ -3380,6 +3807,15 @@ class ReporteController extends BaseController {
             $idPersonaInscripcionUv = (int)($inscripcionUv['Id_Persona'] ?? 0);
             if ($idPersonaInscripcionUv > 0 && !empty($personasConAsistenciaReal[$idPersonaInscripcionUv])) {
                 $tablaUvPorMinisterioMap[$ministerioNombre]['asistencias_reales']++;
+                if (!empty($segmento['es_joven'])) {
+                    $tablaUvPorMinisterioMap[$ministerioNombre]['asist_jovenes']++;
+                } elseif (!empty($segmento['es_teen'])) {
+                    $tablaUvPorMinisterioMap[$ministerioNombre]['asist_teens']++;
+                } elseif (!empty($segmento['es_hombre_adulto'])) {
+                    $tablaUvPorMinisterioMap[$ministerioNombre]['asist_hombres']++;
+                } elseif (!empty($segmento['es_mujer_adulta'])) {
+                    $tablaUvPorMinisterioMap[$ministerioNombre]['asist_mujeres']++;
+                }
             }
         }
 
@@ -3395,8 +3831,140 @@ class ReporteController extends BaseController {
         return $tablaUvPorMinisterio;
     }
 
-    private function construirConteoInscritosPorLiderModoConsolidar($filtroRol, ?int $idMinisterioFiltro, ?int $idLiderFiltro): array {
-        $inscripcionesPublicas = $this->obtenerInscripcionesPublicasModoConsolidar($filtroRol, $idMinisterioFiltro, $idLiderFiltro);
+    private function construirTablaCapPorMinisterioModoConsolidar(
+        $filtroRol,
+        ?int $idMinisterioFiltro,
+        ?int $idLiderFiltro,
+        ?string $fechaInicio = null,
+        ?string $fechaFin = null
+    ): array {
+        require_once APP . '/Helpers/EscuelaFormacionResumenHelper.php';
+
+        $inscripcionesPublicas = $this->obtenerInscripcionesPublicasModoConsolidar(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            $fechaInicio,
+            $fechaFin,
+            'cap'
+        );
+
+        $idsPersona = array_values(array_unique(array_filter(array_map(static function ($inscripcion) {
+            return (int)($inscripcion['Id_Persona'] ?? 0);
+        }, $inscripcionesPublicas), static function ($id) {
+            return $id > 0;
+        })));
+
+        $personasConAsistencia = [];
+        foreach ($this->programasConsultaModoConsolidar('cap') as $programaCap) {
+            foreach ($this->obtenerMapaAsistenciaPorPrograma($idsPersona, $programaCap) as $idPersona => $_ok) {
+                $personasConAsistencia[$idPersona] = true;
+            }
+        }
+
+        return EscuelaFormacionResumenHelper::construirTablaCapDestinoPorMinisterio(
+            $inscripcionesPublicas,
+            $personasConAsistencia
+        );
+    }
+
+    private function construirTablaPagosCapModoConsolidar(
+        $filtroRol,
+        ?int $idMinisterioFiltro,
+        ?int $idLiderFiltro,
+        ?string $fechaInicio = null,
+        ?string $fechaFin = null
+    ): array {
+        require_once APP . '/Helpers/EscuelaFormacionResumenHelper.php';
+
+        $inscripcionesPublicas = $this->obtenerInscripcionesPublicasModoConsolidar(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            $fechaInicio,
+            $fechaFin,
+            'cap'
+        );
+
+        $tablaPagosMap = [];
+        foreach ($inscripcionesPublicas as $inscripcion) {
+            if (!EscuelaFormacionResumenHelper::esProgramaCapacitacionDestino((string)($inscripcion['Programa'] ?? ''))) {
+                continue;
+            }
+
+            $ministerioNombre = trim((string)($inscripcion['Nombre_Ministerio'] ?? ''));
+            if ($ministerioNombre === '') {
+                $ministerioNombre = 'Sin ministerio';
+            }
+            if ($this->esMinisterioPastoral($ministerioNombre)) {
+                continue;
+            }
+
+            if (!isset($tablaPagosMap[$ministerioNombre])) {
+                $tablaPagosMap[$ministerioNombre] = [
+                    'Ministerio' => $ministerioNombre,
+                    'Inscritos' => 0,
+                    'Pagados' => 0,
+                    'Valor_Recaudado' => 0.0,
+                    'Inscritos_Nivel_1' => 0,
+                    'Inscritos_Nivel_2' => 0,
+                    'Inscritos_Nivel_3' => 0,
+                    'Pagados_Nivel_1' => 0,
+                    'Pagados_Nivel_2' => 0,
+                    'Pagados_Nivel_3' => 0,
+                ];
+            }
+
+            $tablaPagosMap[$ministerioNombre]['Inscritos']++;
+            $nivel = EscuelaFormacionResumenHelper::resolverNivelCapacitacionDestino($inscripcion);
+            if ($nivel === 'nivel_1') {
+                $tablaPagosMap[$ministerioNombre]['Inscritos_Nivel_1']++;
+            } elseif ($nivel === 'nivel_2') {
+                $tablaPagosMap[$ministerioNombre]['Inscritos_Nivel_2']++;
+            } elseif ($nivel === 'nivel_3') {
+                $tablaPagosMap[$ministerioNombre]['Inscritos_Nivel_3']++;
+            }
+
+            if ($this->esInscripcionUvPagada($inscripcion)) {
+                $tablaPagosMap[$ministerioNombre]['Pagados']++;
+                $tablaPagosMap[$ministerioNombre]['Valor_Recaudado'] += $this->valorPagoInscripcionUv($inscripcion);
+                if ($nivel === 'nivel_1') {
+                    $tablaPagosMap[$ministerioNombre]['Pagados_Nivel_1']++;
+                } elseif ($nivel === 'nivel_2') {
+                    $tablaPagosMap[$ministerioNombre]['Pagados_Nivel_2']++;
+                } elseif ($nivel === 'nivel_3') {
+                    $tablaPagosMap[$ministerioNombre]['Pagados_Nivel_3']++;
+                }
+            }
+        }
+
+        $tablaPagos = array_values($tablaPagosMap);
+        usort($tablaPagos, static function ($a, $b) {
+            $cmp = ((int)($b['Inscritos'] ?? 0)) <=> ((int)($a['Inscritos'] ?? 0));
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+
+            return strcmp((string)($a['Ministerio'] ?? ''), (string)($b['Ministerio'] ?? ''));
+        });
+
+        return $tablaPagos;
+    }
+
+    private function construirConteoInscritosPorLiderModoConsolidar(
+        $filtroRol,
+        ?int $idMinisterioFiltro,
+        ?int $idLiderFiltro,
+        ?string $fechaInicio = null,
+        ?string $fechaFin = null
+    ): array {
+        $inscripcionesPublicas = $this->obtenerInscripcionesPublicasModoConsolidar(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            $fechaInicio,
+            $fechaFin
+        );
 
         $conteoPorLider = [];
         foreach ($inscripcionesPublicas as $inscripcion) {
@@ -3432,11 +4000,41 @@ class ReporteController extends BaseController {
         $valorPago = (float)($inscripcion['Valor_Pago'] ?? 0);
         $metodoPago = trim((string)($inscripcion['Metodo_Pago'] ?? ''));
         $referenciaPago = trim((string)($inscripcion['Referencia_Pago'] ?? ''));
-        return ($valorPago > 0) || ($metodoPago !== '') || ($referenciaPago !== '');
+        if ($valorPago > 0 || $metodoPago !== '' || $referenciaPago !== '') {
+            return true;
+        }
+
+        if ($this->inscripcionTienePagoEnMovimientos($inscripcion)) {
+            return true;
+        }
+
+        return false;
     }
 
-    private function construirResumenInscritosPagadosPorLiderUvModoConsolidar($filtroRol, ?int $idMinisterioFiltro, ?int $idLiderFiltro): array {
-        $inscripcionesPublicas = $this->obtenerInscripcionesPublicasModoConsolidar($filtroRol, $idMinisterioFiltro, $idLiderFiltro);
+    private function valorPagoInscripcionUv(array $inscripcion): float {
+        $valor = (float)($inscripcion['Valor_Pago'] ?? 0);
+        $valorMov = $this->valorPagoMovimientosInscripcion($inscripcion);
+        if ($valorMov > $valor) {
+            return $valorMov;
+        }
+
+        return $valor;
+    }
+
+    private function construirResumenInscritosPagadosPorLiderUvModoConsolidar(
+        $filtroRol,
+        ?int $idMinisterioFiltro,
+        ?int $idLiderFiltro,
+        ?string $fechaInicio = null,
+        ?string $fechaFin = null
+    ): array {
+        $inscripcionesPublicas = $this->obtenerInscripcionesPublicasModoConsolidar(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            $fechaInicio,
+            $fechaFin
+        );
         $resumen = [];
 
         foreach ($inscripcionesPublicas as $inscripcion) {
@@ -3467,45 +4065,33 @@ class ReporteController extends BaseController {
 
             $resumen[$liderKey]['inscritos']++;
 
-            $edad = (int)($inscripcion['Edad'] ?? 0);
-            $genero = strtolower(trim((string)($inscripcion['Genero'] ?? '')));
-            $esMujer = strpos($genero, 'mujer') !== false
-                || strpos($genero, 'femen') !== false
-                || in_array($genero, ['f', 'fem', 'female'], true);
-            $esHombre = strpos($genero, 'hombre') !== false
-                || strpos($genero, 'mascul') !== false
-                || in_array($genero, ['m', 'masc', 'male', 'h'], true);
+            $segmento = $this->clasificarSegmentoUvInscripcion($inscripcion);
 
-            $esTeen = ($edad >= 9 && $edad <= 12);
-            $esJoven = ($edad >= 13 && $edad <= 30);
-            $esHombreAdulto = !$esTeen && !$esJoven && $esHombre;
-            $esMujerAdulta = !$esTeen && !$esJoven && $esMujer;
-
-            if ($esHombreAdulto) {
+            if (!empty($segmento['es_hombre_adulto'])) {
                 $resumen[$liderKey]['inscritos_hombres']++;
             }
-            if ($esMujerAdulta) {
+            if (!empty($segmento['es_mujer_adulta'])) {
                 $resumen[$liderKey]['inscritos_mujeres']++;
             }
-            if ($esJoven) {
+            if (!empty($segmento['es_joven'])) {
                 $resumen[$liderKey]['inscritos_jovenes']++;
             }
-            if ($esTeen) {
+            if (!empty($segmento['es_teen'])) {
                 $resumen[$liderKey]['inscritos_teens']++;
             }
 
             if ($this->esInscripcionUvPagada($inscripcion)) {
                 $resumen[$liderKey]['pagados']++;
-                if ($esHombreAdulto) {
+                if (!empty($segmento['es_hombre_adulto'])) {
                     $resumen[$liderKey]['pagados_hombres']++;
                 }
-                if ($esMujerAdulta) {
+                if (!empty($segmento['es_mujer_adulta'])) {
                     $resumen[$liderKey]['pagados_mujeres']++;
                 }
-                if ($esJoven) {
+                if (!empty($segmento['es_joven'])) {
                     $resumen[$liderKey]['pagados_jovenes']++;
                 }
-                if ($esTeen) {
+                if (!empty($segmento['es_teen'])) {
                     $resumen[$liderKey]['pagados_teens']++;
                 }
             }
@@ -3514,8 +4100,20 @@ class ReporteController extends BaseController {
         return $resumen;
     }
 
-    private function construirTablaPagosUvModoConsolidar($filtroRol, ?int $idMinisterioFiltro, ?int $idLiderFiltro): array {
-        $inscripcionesPublicas = $this->obtenerInscripcionesPublicasModoConsolidar($filtroRol, $idMinisterioFiltro, $idLiderFiltro);
+    private function construirTablaPagosUvModoConsolidar(
+        $filtroRol,
+        ?int $idMinisterioFiltro,
+        ?int $idLiderFiltro,
+        ?string $fechaInicio = null,
+        ?string $fechaFin = null
+    ): array {
+        $inscripcionesPublicas = $this->obtenerInscripcionesPublicasModoConsolidar(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            $fechaInicio,
+            $fechaFin
+        );
 
         $tablaPagosMap = [];
         foreach ($inscripcionesPublicas as $inscripcion) {
@@ -3550,48 +4148,37 @@ class ReporteController extends BaseController {
 
             $tablaPagosMap[$ministerioNombre]['Inscritos']++;
 
-            $edad = (int)($inscripcion['Edad'] ?? 0);
-            $genero = strtolower(trim((string)($inscripcion['Genero'] ?? '')));
-            $esMujer = strpos($genero, 'mujer') !== false
-                || strpos($genero, 'femen') !== false
-                || in_array($genero, ['f', 'fem', 'female'], true);
-            $esHombre = strpos($genero, 'hombre') !== false
-                || strpos($genero, 'mascul') !== false
-                || in_array($genero, ['m', 'masc', 'male', 'h'], true);
-            $esTeen = ($edad >= 9 && $edad <= 12);
-            $esJoven = ($edad >= 13 && $edad <= 30);
-            $esHombreAdulto = !$esTeen && !$esJoven && $esHombre;
-            $esMujerAdulta = !$esTeen && !$esJoven && $esMujer;
+            $segmento = $this->clasificarSegmentoUvInscripcion($inscripcion);
 
-            if ($esHombreAdulto) {
+            if (!empty($segmento['es_hombre_adulto'])) {
                 $tablaPagosMap[$ministerioNombre]['Inscritos_Hombres']++;
             }
-            if ($esMujerAdulta) {
+            if (!empty($segmento['es_mujer_adulta'])) {
                 $tablaPagosMap[$ministerioNombre]['Inscritos_Mujeres']++;
             }
-            if ($esJoven) {
+            if (!empty($segmento['es_joven'])) {
                 $tablaPagosMap[$ministerioNombre]['Inscritos_Jovenes']++;
             }
-            if ($esTeen) {
+            if (!empty($segmento['es_teen'])) {
                 $tablaPagosMap[$ministerioNombre]['Inscritos_Teens']++;
             }
 
-            $valorPago = (float)($inscripcion['Valor_Pago'] ?? 0);
+            $valorPago = $this->valorPagoInscripcionUv($inscripcion);
             $estaPagado = $this->esInscripcionUvPagada($inscripcion);
 
             if ($estaPagado) {
                 $tablaPagosMap[$ministerioNombre]['Pagados']++;
                 $tablaPagosMap[$ministerioNombre]['Valor_Recaudado'] += $valorPago;
-                if ($esHombreAdulto) {
+                if (!empty($segmento['es_hombre_adulto'])) {
                     $tablaPagosMap[$ministerioNombre]['Pagados_Hombres']++;
                 }
-                if ($esMujerAdulta) {
+                if (!empty($segmento['es_mujer_adulta'])) {
                     $tablaPagosMap[$ministerioNombre]['Pagados_Mujeres']++;
                 }
-                if ($esJoven) {
+                if (!empty($segmento['es_joven'])) {
                     $tablaPagosMap[$ministerioNombre]['Pagados_Jovenes']++;
                 }
-                if ($esTeen) {
+                if (!empty($segmento['es_teen'])) {
                     $tablaPagosMap[$ministerioNombre]['Pagados_Teens']++;
                 }
             }
@@ -3599,14 +4186,95 @@ class ReporteController extends BaseController {
 
         $tablaPagos = array_values($tablaPagosMap);
         usort($tablaPagos, static function($a, $b) {
+            $cmp = ((int)($b['Inscritos'] ?? 0)) <=> ((int)($a['Inscritos'] ?? 0));
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+
             return strcmp((string)($a['Ministerio'] ?? ''), (string)($b['Ministerio'] ?? ''));
         });
 
         return $tablaPagos;
     }
 
-    private function construirDetalleLideresMinisterioUvModoConsolidar($filtroRol, int $idMinisterioFiltro, ?int $idLiderFiltro): array {
-        $inscripcionesPublicas = $this->obtenerInscripcionesPublicasModoConsolidar($filtroRol, $idMinisterioFiltro, $idLiderFiltro);
+    /**
+     * Tabla principal UV: inscritos y pagos por ministerio, segmento H/M/J/Teens y asistencias.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function construirReporteUvMinisterioDashboard(
+        $filtroRol,
+        ?int $idMinisterioFiltro,
+        ?int $idLiderFiltro,
+        string $fechaInicio,
+        string $fechaFin
+    ): array {
+        $tablaPagos = $this->construirTablaPagosUvModoConsolidar(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            $fechaInicio,
+            $fechaFin
+        );
+        $tablaUv = $this->construirTablaUvPorMinisterioModoConsolidar(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            $fechaInicio,
+            $fechaFin
+        );
+
+        $asistenciasPorMinisterio = [];
+        foreach ($tablaUv as $filaUv) {
+            $nombreMin = trim((string)($filaUv['ministerio'] ?? ''));
+            if ($nombreMin === '') {
+                continue;
+            }
+            $asistenciasPorMinisterio[$nombreMin] = (int)($filaUv['asistencias_reales'] ?? 0);
+        }
+
+        $reporte = [];
+        foreach ($tablaPagos as $fila) {
+            $ministerio = trim((string)($fila['Ministerio'] ?? 'Sin ministerio'));
+            $inscritos = (int)($fila['Inscritos'] ?? 0);
+            $pagados = (int)($fila['Pagados'] ?? 0);
+
+            $reporte[] = [
+                'ministerio' => $ministerio,
+                'inscritos' => $inscritos,
+                'pagados' => $pagados,
+                'pendientes' => max(0, $inscritos - $pagados),
+                'pct_pago' => $inscritos > 0 ? round(($pagados / $inscritos) * 100, 1) : 0.0,
+                'valor_recaudado' => (float)($fila['Valor_Recaudado'] ?? 0),
+                'ins_hombres' => (int)($fila['Inscritos_Hombres'] ?? 0),
+                'ins_mujeres' => (int)($fila['Inscritos_Mujeres'] ?? 0),
+                'ins_jovenes' => (int)($fila['Inscritos_Jovenes'] ?? 0),
+                'ins_teens' => (int)($fila['Inscritos_Teens'] ?? 0),
+                'pag_hombres' => (int)($fila['Pagados_Hombres'] ?? 0),
+                'pag_mujeres' => (int)($fila['Pagados_Mujeres'] ?? 0),
+                'pag_jovenes' => (int)($fila['Pagados_Jovenes'] ?? 0),
+                'pag_teens' => (int)($fila['Pagados_Teens'] ?? 0),
+                'asistencias_reales' => (int)($asistenciasPorMinisterio[$ministerio] ?? 0),
+            ];
+        }
+
+        return $reporte;
+    }
+
+    private function construirDetalleLideresMinisterioUvModoConsolidar(
+        $filtroRol,
+        int $idMinisterioFiltro,
+        ?int $idLiderFiltro,
+        ?string $fechaInicio = null,
+        ?string $fechaFin = null
+    ): array {
+        $inscripcionesPublicas = $this->obtenerInscripcionesPublicasModoConsolidar(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            $fechaInicio,
+            $fechaFin
+        );
         $personasConAsistenciaReal = $this->obtenerMapaAsistenciaRealModoConsolidar($inscripcionesPublicas);
 
         $rowsMap = [];
@@ -3692,7 +4360,7 @@ class ReporteController extends BaseController {
     }
 
     private function dashboardEscuelasPorLinea($linea, $titulo, $rutaDashboard) {
-        if (!AuthController::esAdministrador() && !AuthController::tienePermiso('reportes', 'ver')) {
+        if (!AuthController::puedeVerDashboardEscuelasLinea((string)$linea)) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -3706,6 +4374,8 @@ class ReporteController extends BaseController {
         if ($mes < 1 || $mes > 12) {
             $mes = (int)date('n');
         }
+        $semestreUv = (int)($_GET['semestre'] ?? 0);
+        $etiquetaPeriodoUv = '';
 
         $filtroMinisterio = $_GET['ministerio'] ?? '';
         $filtroLider = $_GET['lider'] ?? '';
@@ -3721,18 +4391,28 @@ class ReporteController extends BaseController {
         $idMinisterioFiltro = ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null;
         $idLiderFiltro = ($filtroLider !== '' && (int)$filtroLider > 0) ? (int)$filtroLider : null;
 
-        $fechaInicioMes = sprintf('%04d-%02d-01', $anio, $mes);
-        $fechaFinMes = date('Y-m-t', strtotime($fechaInicioMes));
-        $diasMes = (int)date('t', strtotime($fechaInicioMes));
-
-        $mesActualKey = date('Y-m');
-        $mesTableroKey = sprintf('%04d-%02d', $anio, $mes);
-        if ($mesTableroKey < $mesActualKey) {
-            $diaTranscurrido = $diasMes;
-        } elseif ($mesTableroKey > $mesActualKey) {
-            $diaTranscurrido = 0;
-        } else {
+        if ($linea === 'universidad_vida') {
+            $rangoUv = $this->resolverRangoSemestreDashboardUv($anio, $semestreUv > 0 ? $semestreUv : null);
+            $semestreUv = (int)$rangoUv['semestre'];
+            $fechaInicioMes = (string)$rangoUv['fecha_inicio'];
+            $fechaFinMes = (string)$rangoUv['fecha_fin'];
+            $etiquetaPeriodoUv = (string)$rangoUv['etiqueta'];
             $diaTranscurrido = (int)date('j');
+            $diasMes = (int)date('t');
+        } else {
+            $fechaInicioMes = sprintf('%04d-%02d-01', $anio, $mes);
+            $fechaFinMes = date('Y-m-t', strtotime($fechaInicioMes));
+            $diasMes = (int)date('t', strtotime($fechaInicioMes));
+
+            $mesActualKey = date('Y-m');
+            $mesTableroKey = sprintf('%04d-%02d', $anio, $mes);
+            if ($mesTableroKey < $mesActualKey) {
+                $diaTranscurrido = $diasMes;
+            } elseif ($mesTableroKey > $mesActualKey) {
+                $diaTranscurrido = 0;
+            } else {
+                $diaTranscurrido = (int)date('j');
+            }
         }
 
         $metaPorLider = 6;
@@ -3755,7 +4435,9 @@ class ReporteController extends BaseController {
             $conteoMesPorLiderRows = $this->construirConteoInscritosPorLiderModoConsolidar(
                 $filtroRol,
                 $idMinisterioFiltro,
-                $idLiderFiltro
+                $idLiderFiltro,
+                $fechaInicioMes,
+                $fechaFinMes
             );
         } else {
             $conteoMesPorLiderRows = $this->escuelaInscripcionModel->getConteoInscritosPorLiderLineaFlexible(
@@ -3795,7 +4477,9 @@ class ReporteController extends BaseController {
             $resumenLiderUv = $this->construirResumenInscritosPagadosPorLiderUvModoConsolidar(
                 $filtroRol,
                 $idMinisterioFiltro,
-                $idLiderFiltro
+                $idLiderFiltro,
+                $fechaInicioMes,
+                $fechaFinMes
             );
 
             foreach ((array)$resumenLiderUv as $nombreRef => $resumenLiderData) {
@@ -4124,20 +4808,58 @@ class ReporteController extends BaseController {
 
         $tablaPagosUv = [];
         $tablaUvModoConsolidar = [];
+        $tablaCapModoConsolidar = [];
+        $tablaPagosCap = [];
+        $reporteUvMinisterios = [];
+        $totalInscripcionesUvPeriodo = 0;
+        $totalInscripcionesCapPeriodo = 0;
+        $indicadoresEncuentroUv = [];
         $detalleLideresMinisterioUv = [];
         $nombreMinisterioFiltrado = '';
         if ($linea === 'universidad_vida') {
+            $indicadoresEncuentroUv = $this->construirIndicadoresEncuentroUvModoConsolidar(
+                $filtroRol,
+                $idMinisterioFiltro,
+                $idLiderFiltro,
+                $fechaInicioMes,
+                $fechaFinMes
+            );
+            $reporteUvMinisterios = $this->construirReporteUvMinisterioDashboard(
+                $filtroRol,
+                $idMinisterioFiltro,
+                $idLiderFiltro,
+                $fechaInicioMes,
+                $fechaFinMes
+            );
+
             $tablaPagosUv = $this->construirTablaPagosUvModoConsolidar(
                 $filtroRol,
                 $idMinisterioFiltro,
-                $idLiderFiltro
+                $idLiderFiltro,
+                $fechaInicioMes,
+                $fechaFinMes
             );
 
             $tablaUvModoConsolidar = $this->construirTablaUvPorMinisterioModoConsolidar(
                 $filtroRol,
                 $idMinisterioFiltro,
-                $idLiderFiltro
+                $idLiderFiltro,
+                $fechaInicioMes,
+                $fechaFinMes
             );
+
+            $inscripcionesUvPeriodo = $this->obtenerInscripcionesPublicasModoConsolidar(
+                $filtroRol,
+                $idMinisterioFiltro,
+                $idLiderFiltro,
+                $fechaInicioMes,
+                $fechaFinMes
+            );
+            foreach ($inscripcionesUvPeriodo as $insUv) {
+                if ((string)($insUv['Programa'] ?? '') === 'universidad_vida') {
+                    $totalInscripcionesUvPeriodo++;
+                }
+            }
 
             if ($idMinisterioFiltro !== null && $idMinisterioFiltro > 0) {
                 foreach ((array)($opcionesFiltro['ministerios_disponibles'] ?? []) as $ministerioOpt) {
@@ -4150,8 +4872,45 @@ class ReporteController extends BaseController {
                 $detalleLideresMinisterioUv = $this->construirDetalleLideresMinisterioUvModoConsolidar(
                     $filtroRol,
                     $idMinisterioFiltro,
-                    $idLiderFiltro
+                    $idLiderFiltro,
+                    $fechaInicioMes,
+                    $fechaFinMes
                 );
+            }
+        } elseif ($linea === 'capacitacion_destino') {
+            // Tablas alineadas con Consolidar: inscripciones Cap sin recorte por mes (solo año en filtros de líderes).
+            $fechaInicioTablasCap = null;
+            $fechaFinTablasCap = null;
+
+            $tablaCapModoConsolidar = $this->construirTablaCapPorMinisterioModoConsolidar(
+                $filtroRol,
+                $idMinisterioFiltro,
+                $idLiderFiltro,
+                $fechaInicioTablasCap,
+                $fechaFinTablasCap
+            );
+
+            $tablaPagosCap = $this->construirTablaPagosCapModoConsolidar(
+                $filtroRol,
+                $idMinisterioFiltro,
+                $idLiderFiltro,
+                $fechaInicioTablasCap,
+                $fechaFinTablasCap
+            );
+
+            $inscripcionesCapPeriodo = $this->obtenerInscripcionesPublicasModoConsolidar(
+                $filtroRol,
+                $idMinisterioFiltro,
+                $idLiderFiltro,
+                $fechaInicioTablasCap,
+                $fechaFinTablasCap,
+                'cap'
+            );
+            require_once APP . '/Helpers/EscuelaFormacionResumenHelper.php';
+            foreach ($inscripcionesCapPeriodo as $insCap) {
+                if (EscuelaFormacionResumenHelper::esProgramaCapacitacionDestino((string)($insCap['Programa'] ?? ''))) {
+                    $totalInscripcionesCapPeriodo++;
+                }
             }
         }
 
@@ -4161,6 +4920,8 @@ class ReporteController extends BaseController {
             'ruta_dashboard' => $rutaDashboard,
             'anio' => $anio,
             'mes' => $mes,
+            'semestre_uv' => $semestreUv,
+            'etiqueta_periodo_uv' => $etiquetaPeriodoUv,
             'filtro_ministerio' => (string)$filtroMinisterio,
             'filtro_lider' => (string)$filtroLider,
             'ministerios_disponibles' => $opcionesFiltro['ministerios_disponibles'],
@@ -4179,10 +4940,208 @@ class ReporteController extends BaseController {
             'dashboard_metas_ministerio' => $dashboardMetasMinisterio,
             'tabla_pagos_uv' => $tablaPagosUv,
             'tabla_pagos_uv_modo' => ($linea === 'universidad_vida') ? 'consolidar' : 'mensual',
+            'reporte_uv_ministerios' => $reporteUvMinisterios,
+            'total_inscripciones_uv_periodo' => $totalInscripcionesUvPeriodo,
             'tabla_uv_modo_consolidar' => $tablaUvModoConsolidar,
+            'tabla_cap_modo_consolidar' => $tablaCapModoConsolidar,
+            'tabla_pagos_cap' => $tablaPagosCap,
+            'total_inscripciones_cap_periodo' => $totalInscripcionesCapPeriodo,
+            'indicadores_encuentro_uv' => $indicadoresEncuentroUv,
             'detalle_lideres_ministerio_uv' => $detalleLideresMinisterioUv,
             'nombre_ministerio_filtrado' => $nombreMinisterioFiltrado,
         ]);
+    }
+
+    private function slugMinisterioDashboard(string $nombre): string {
+        $s = strtolower(trim(preg_replace('/\s+/u', ' ', $nombre)));
+        return $s === '' ? 'sin-ministerio' : $s;
+    }
+
+    private function etiquetaSegmentoUvInscripcion(array $segmento): array {
+        if (!empty($segmento['es_joven'])) {
+            return ['key' => 'j', 'label' => 'Joven'];
+        }
+        if (!empty($segmento['es_teen'])) {
+            return ['key' => 't', 'label' => 'Teen'];
+        }
+        if (!empty($segmento['es_hombre_adulto'])) {
+            return ['key' => 'h', 'label' => 'Hombre'];
+        }
+        if (!empty($segmento['es_mujer_adulta'])) {
+            return ['key' => 'm', 'label' => 'Mujer'];
+        }
+
+        return ['key' => '', 'label' => 'Sin segmento'];
+    }
+
+    /**
+     * Detalle de personas por ministerio (JSON) para el dashboard UV.
+     */
+    public function dashboardEscuelasUvDetalleMinisterio() {
+        if (!AuthController::esAdministrador() && !AuthController::puede('reportes:ver')) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'mensaje' => 'Sin permiso'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $anio = (int)($_GET['anio'] ?? date('Y'));
+        if ($anio < 2020 || $anio > ((int)date('Y') + 2)) {
+            $anio = (int)date('Y');
+        }
+        $semestreUv = (int)($_GET['semestre'] ?? 0);
+        $rangoUv = $this->resolverRangoSemestreDashboardUv($anio, $semestreUv > 0 ? $semestreUv : null);
+
+        $ministerioSlug = $this->slugMinisterioDashboard((string)($_GET['ministerio'] ?? ''));
+        if ($ministerioSlug === '' || $ministerioSlug === 'sin-ministerio') {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'mensaje' => 'Ministerio no indicado'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $vista = strtolower(trim((string)($_GET['vista'] ?? 'todas')));
+        if (!in_array($vista, ['todas', 'asistencias', 'pagos'], true)) {
+            $vista = 'todas';
+        }
+
+        $genFiltro = [];
+        $genRaw = trim((string)($_GET['gen'] ?? ''));
+        if ($genRaw !== '') {
+            foreach (explode(',', $genRaw) as $g) {
+                $g = strtolower(trim($g));
+                if (in_array($g, ['h', 'm', 'j', 't'], true)) {
+                    $genFiltro[] = $g;
+                }
+            }
+            $genFiltro = array_values(array_unique($genFiltro));
+        }
+
+        $filtroMinisterio = $_GET['filtro_ministerio'] ?? '';
+        $filtroLider = $_GET['filtro_lider'] ?? '';
+        $filtroRol = DataIsolation::generarFiltroPersonas();
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        $opcionesFiltro = $this->construirOpcionesFiltroMinisterioLider($filtroCelulas);
+        $filtroMinisterio = ($filtroMinisterio !== '' && isset($opcionesFiltro['ministerio_ids_permitidos'][(int)$filtroMinisterio]))
+            ? (int)$filtroMinisterio : '';
+        $filtroLider = ($filtroLider !== '' && isset($opcionesFiltro['lider_ids_permitidos'][(int)$filtroLider]))
+            ? (int)$filtroLider : '';
+        $idMinisterioFiltro = ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null;
+        $idLiderFiltro = ($filtroLider !== '' && (int)$filtroLider > 0) ? (int)$filtroLider : null;
+
+        $fechaInicioMes = (string)$rangoUv['fecha_inicio'];
+        $fechaFinMes = (string)$rangoUv['fecha_fin'];
+
+        $inscripciones = $this->obtenerInscripcionesPublicasModoConsolidar(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            $fechaInicioMes,
+            $fechaFinMes
+        );
+        $personasConAsistencia = $this->obtenerMapaAsistenciaRealModoConsolidar($inscripciones);
+
+        $nombreMinisterio = '';
+        $personas = [];
+        foreach ($inscripciones as $inscripcion) {
+            if ((string)($inscripcion['Programa'] ?? '') !== 'universidad_vida') {
+                continue;
+            }
+
+            $ministerioNombre = trim((string)($inscripcion['Nombre_Ministerio'] ?? ''));
+            if ($ministerioNombre === '') {
+                $ministerioNombre = 'Sin ministerio';
+            }
+            if ($this->esMinisterioPastoral($ministerioNombre)) {
+                continue;
+            }
+            if ($this->slugMinisterioDashboard($ministerioNombre) !== $ministerioSlug) {
+                continue;
+            }
+
+            if ($nombreMinisterio === '') {
+                $nombreMinisterio = $ministerioNombre;
+            }
+
+            $segmento = $this->clasificarSegmentoUvInscripcion($inscripcion);
+            $segInfo = $this->etiquetaSegmentoUvInscripcion($segmento);
+            if (!empty($genFiltro) && ($segInfo['key'] === '' || !in_array($segInfo['key'], $genFiltro, true))) {
+                continue;
+            }
+
+            $idPersona = (int)($inscripcion['Id_Persona'] ?? 0);
+            $pagado = $this->esInscripcionUvPagada($inscripcion);
+            $asistio = $idPersona > 0 && !empty($personasConAsistencia[$idPersona]);
+
+            if ($vista === 'asistencias' && !$asistio) {
+                continue;
+            }
+            if ($vista === 'pagos' && !$pagado) {
+                continue;
+            }
+
+            $personas[] = [
+                'id_inscripcion' => (int)($inscripcion['Id_Inscripcion'] ?? 0),
+                'id_persona' => $idPersona,
+                'nombre' => trim((string)($inscripcion['Nombre'] ?? '')),
+                'cedula' => trim((string)($inscripcion['Cedula'] ?? '')),
+                'lider' => trim((string)($inscripcion['Lider'] ?? '')),
+                'segmento' => $segInfo['label'],
+                'segmento_key' => $segInfo['key'],
+                'fecha_registro' => substr(trim((string)($inscripcion['Fecha_Registro'] ?? '')), 0, 10),
+                'pagado' => $pagado,
+                'asistencia_real' => $asistio,
+                'valor_pago' => $this->valorPagoInscripcionUv($inscripcion),
+                'metodo_pago' => trim((string)($inscripcion['Metodo_Pago'] ?? '')),
+                'referencia_pago' => trim((string)($inscripcion['Referencia_Pago'] ?? '')),
+            ];
+        }
+
+        usort($personas, static function ($a, $b) {
+            $cmp = strcmp((string)($a['nombre'] ?? ''), (string)($b['nombre'] ?? ''));
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+            return ((int)($b['id_inscripcion'] ?? 0)) <=> ((int)($a['id_inscripcion'] ?? 0));
+        });
+
+        $totPagados = 0;
+        $totAsistencias = 0;
+        foreach ($personas as $p) {
+            if (!empty($p['pagado'])) {
+                $totPagados++;
+            }
+            if (!empty($p['asistencia_real'])) {
+                $totAsistencias++;
+            }
+        }
+
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'ok' => true,
+            'ministerio' => $nombreMinisterio !== '' ? $nombreMinisterio : $ministerioSlug,
+            'ministerio_slug' => $ministerioSlug,
+            'vista' => $vista,
+            'periodo' => [
+                'anio' => $anio,
+                'semestre' => (int)$rangoUv['semestre'],
+                'fecha_inicio' => $fechaInicioMes,
+                'fecha_fin' => $fechaFinMes,
+                'etiqueta' => (string)$rangoUv['etiqueta'],
+            ],
+            'personas' => $personas,
+            'totales' => [
+                'listado' => count($personas),
+                'pagados' => $totPagados,
+                'asistencias_reales' => $totAsistencias,
+            ],
+            'alineacion' => [
+                'inscripciones' => 'escuela_formacion_inscripcion · listado Consolidar (programa universidad_vida, fecha de registro en el semestre)',
+                'pagos' => 'Ficha de inscripción (Valor_Pago, Método, Referencia) y movimientos en escuela_formacion_pago_movimiento',
+                'asistencias' => 'escuela_asistencia_clase · módulo consolidar · programa universidad_vida o encuentro (al menos una clase marcada)',
+                'nota_pagos_pantalla' => 'Si el pago se registró solo como movimiento y no en la ficha, ahora también se cuenta.',
+            ],
+        ], JSON_UNESCAPED_UNICODE);
     }
 
     public function dashboardEscuelasUniversidadVida() {

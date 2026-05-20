@@ -18,7 +18,7 @@ class WhatsappCampanaController extends BaseController {
     }
 
     private function tienePermiso($accion = 'ver') {
-        return AuthController::esAdministrador() || AuthController::tienePermiso('nehemias', $accion);
+        return AuthController::esAdministrador() || AuthController::puede('nehemias:' . $accion);
     }
 
     private function esErrorEsquemaWhatsapp(Exception $e) {

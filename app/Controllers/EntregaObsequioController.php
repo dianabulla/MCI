@@ -13,7 +13,7 @@ class EntregaObsequioController extends BaseController {
     private $ministerioModel;
 
     private function tienePermiso($accion = 'ver') {
-        return AuthController::esAdministrador() || AuthController::tienePermiso('entrega_obsequio', $accion);
+        return AuthController::esAdministrador() || AuthController::puede('entrega_obsequio:' . $accion);
     }
 
     public function __construct() {

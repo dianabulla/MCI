@@ -367,10 +367,15 @@ class DataIsolation {
             return "1=1";
         }
 
-        // Solo consulta (sin modulo Ganar completo): mismo alcance de datos en filtros SQL.
+        // Solo Discípulos (sin Almas ganadas): datos de su red, no listado global.
         if (isset($_SESSION['permisos']['personas_consulta'])
-            && !empty($_SESSION['permisos']['personas_consulta']['ver'])) {
-            return "1=1";
+            && !empty($_SESSION['permisos']['personas_consulta']['ver'])
+            && (empty($_SESSION['permisos']['personas']['ver']))) {
+            $usuarioId = self::getUsuarioId();
+            if ($usuarioId > 0) {
+                return self::generarCondicionAnclajePersonas('p');
+            }
+            return "1=0";
         }
 
         // Programas / escuelas de formacion (UV, Cap. Destino, etc.): sin esto el WHERE caía en 1=0

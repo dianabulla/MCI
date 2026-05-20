@@ -16,7 +16,10 @@ $urlProgramas = PUBLIC_URL . '?url=programas';
     </summary>
     <div class="dj12-panel-body">
         <p class="dj12-panel-lead">
-            La visión se organiza por mentoreo y redes (no solo por cargos tradicionales). Abajo, cada nivel con su equivalente en MCI Madrid.
+            La visión se organiza por mentoreo y redes. En <strong>Equipo principal</strong> asignas cupos así:
+            <strong>pastor/pastora → 12 líderes de 12 cada uno</strong>;
+            cada <strong>líder de 12 → 12 líderes de 144</strong> (botón «Su equipo»);
+            cada <strong>líder de 144 → 12 líderes de célula</strong>. Filtra por ministerio para trabajar una red.
         </p>
         <ol class="dj12-panel-list">
             <li>

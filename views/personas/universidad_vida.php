@@ -2,8 +2,8 @@
 <?php
 $puedeVerPersona    = AuthController::puedeVerPersonasConsulta();
 $puedeModuloGanarCompleto = AuthController::puedeVerModuloPersonasGanar();
-$puedeEditarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'editar');
-$puedeEliminarPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'eliminar');
+$puedeEditarPersona = AuthController::esAdministrador() || AuthController::puede('personas:editar');
+$puedeEliminarPersona = AuthController::esAdministrador() || AuthController::puede('personas:eliminar');
 $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPersona;
 $filtroNombre = (string)($filtroNombreActual ?? '');
 $personas = is_array($personas ?? null) ? $personas : [];
@@ -39,7 +39,7 @@ foreach ($personas as $personaResumen) {
             <a href="<?= PUBLIC_URL ?>?url=personas/universidad-vida" class="personas-action-pill is-active" aria-current="page">Universidad de la Vida</a>
         </div>
         <div class="personas-action-group">
-            <?php if (AuthController::tienePermiso('personas', 'crear')): ?>
+            <?php if (AuthController::puede('personas:crear')): ?>
             <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="personas-action-pill">+ Nuevo Discipulo</a>
             <?php endif; ?>
         </div>

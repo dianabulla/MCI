@@ -401,12 +401,119 @@ class EscuelaFormacionInscripcion extends BaseModel {
             return [];
         }
 
-        $rows = $this->query(
-            "SELECT DISTINCT Programa FROM {$this->table} WHERE Id_Persona = ?",
-            [$idPersona]
+        $programas = [];
+        $this->agregarProgramasDesdeFilas(
+            $this->query(
+                "SELECT DISTINCT Programa FROM {$this->table} WHERE Id_Persona = ?",
+                [$idPersona]
+            ),
+            $programas
         );
 
-        return array_column((array)$rows, 'Programa');
+        $cedulaNorm = '';
+        $telefonoNorm = '';
+        require_once APP . '/Models/Persona.php';
+        $personaModel = new Persona();
+        $persona = $personaModel->getById($idPersona);
+        if (!empty($persona)) {
+            $cedulaNorm = $this->normalizarDocumentoParaComparacion(
+                (string)($persona['Numero_Documento'] ?? $persona['Cedula'] ?? '')
+            );
+            if ($cedulaNorm === '') {
+                $cedulaNorm = $this->normalizarDocumentoParaComparacion((string)($persona['Usuario'] ?? ''));
+            }
+            $telefonoNorm = $this->normalizarTelefonoParaComparacion((string)($persona['Telefono'] ?? ''));
+        }
+
+        if ($cedulaNorm !== '') {
+            $this->vincularInscripcionesHuérfanasAPersona($idPersona, $cedulaNorm, '');
+            $exprCedula = $this->sqlExprCedulaNormalizada('Cedula');
+            $this->agregarProgramasDesdeFilas(
+                $this->query(
+                    "SELECT DISTINCT Programa FROM {$this->table}
+                     WHERE {$exprCedula} = ?",
+                    [$cedulaNorm]
+                ),
+                $programas
+            );
+        }
+
+        if ($telefonoNorm !== '') {
+            $exprTelefono = $this->sqlExprTelefonoNormalizado('Telefono');
+            $this->agregarProgramasDesdeFilas(
+                $this->query(
+                    "SELECT DISTINCT Programa FROM {$this->table}
+                     WHERE {$exprTelefono} = ?",
+                    [$telefonoNorm]
+                ),
+                $programas
+            );
+        }
+
+        return array_values(array_keys($programas));
+    }
+
+    private function agregarProgramasDesdeFilas(array $rows, array &$programas): void {
+        foreach ((array)$rows as $row) {
+            $programa = trim((string)($row['Programa'] ?? ''));
+            if ($programa !== '') {
+                $programas[$programa] = true;
+            }
+        }
+    }
+
+    private function vincularInscripcionesHuérfanasAPersona(int $idPersona, string $cedulaNorm, string $telefonoNorm): void {
+        if ($idPersona <= 0) {
+            return;
+        }
+
+        $exprCedula = $this->sqlExprCedulaNormalizada('Cedula');
+        if ($cedulaNorm !== '') {
+            $this->execute(
+                "UPDATE {$this->table}
+                 SET Id_Persona = ?
+                 WHERE (Id_Persona IS NULL OR Id_Persona = 0)
+                   AND {$exprCedula} = ?",
+                [$idPersona, $cedulaNorm]
+            );
+        }
+
+        $exprTelefono = $this->sqlExprTelefonoNormalizado('Telefono');
+        if ($telefonoNorm !== '') {
+            $this->execute(
+                "UPDATE {$this->table}
+                 SET Id_Persona = ?
+                 WHERE (Id_Persona IS NULL OR Id_Persona = 0)
+                   AND {$exprTelefono} = ?",
+                [$idPersona, $telefonoNorm]
+            );
+        }
+    }
+
+    private function sqlExprCedulaNormalizada(string $columna): string {
+        return "REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE({$columna}, ''))), ' ', ''), '.', ''), '-', ''), '_', '')";
+    }
+
+    private function sqlExprTelefonoNormalizado(string $columna): string {
+        return "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE({$columna}, '')), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '')";
+    }
+
+    private function normalizarDocumentoParaComparacion(string $documento): string {
+        $documento = strtoupper(trim($documento));
+        if ($documento === '') {
+            return '';
+        }
+
+        return preg_replace('/[^A-Z0-9]/', '', $documento);
+    }
+
+    private function normalizarTelefonoParaComparacion(string $telefono): string {
+        $telefono = trim($telefono);
+        if ($telefono === '') {
+            return '';
+        }
+
+        return preg_replace('/\D+/', '', $telefono);
     }
 
     public function getIdInscripcionPersonaPrograma($idPersona, $programa) {
@@ -422,6 +529,130 @@ class EscuelaFormacionInscripcion extends BaseModel {
         );
 
         return !empty($rows) ? (int)($rows[0]['Id_Inscripcion'] ?? 0) : 0;
+    }
+
+    /**
+     * Resuelve Id_Persona a partir de la inscripción (columna Id_Persona o cédula/teléfono).
+     */
+    public function resolverIdPersonaDesdeInscripcion(array $inscripcion): int {
+        $idPersona = (int)($inscripcion['Id_Persona'] ?? 0);
+        if ($idPersona > 0) {
+            return $idPersona;
+        }
+
+        require_once APP . '/Models/Persona.php';
+        $personaModel = new Persona();
+
+        $cedulaNorm = $this->normalizarDocumentoParaComparacion((string)($inscripcion['Cedula'] ?? ''));
+        if ($cedulaNorm !== '') {
+            $personaPorDocumento = $personaModel->query(
+                "SELECT Id_Persona FROM persona
+                 WHERE REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(Numero_Documento, ''))), ' ', ''), '.', ''), '-', '') = ?
+                 ORDER BY Id_Persona DESC LIMIT 1",
+                [$cedulaNorm]
+            );
+            if (!empty($personaPorDocumento)) {
+                return (int)($personaPorDocumento[0]['Id_Persona'] ?? 0);
+            }
+        }
+
+        $telefonoNorm = $this->normalizarTelefonoParaComparacion((string)($inscripcion['Telefono'] ?? ''));
+        if ($telefonoNorm !== '') {
+            $personaPorTelefono = $personaModel->query(
+                "SELECT Id_Persona FROM persona
+                 WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(Telefono, '')), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '') = ?
+                 ORDER BY Id_Persona DESC LIMIT 1",
+                [$telefonoNorm]
+            );
+            if (!empty($personaPorTelefono)) {
+                return (int)($personaPorTelefono[0]['Id_Persona'] ?? 0);
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Cambia el programa de la misma fila de inscripción (persiste en BD).
+     */
+    public function moverProgramaInscripcion(int $idInscripcion, string $programaDestino, ?int $idPersona = null): bool {
+        $idInscripcion = (int)$idInscripcion;
+        $programaDestino = trim($programaDestino);
+        if ($idInscripcion <= 0 || $programaDestino === '') {
+            return false;
+        }
+
+        $inscripcion = $this->getByIdInscripcion($idInscripcion);
+        if (empty($inscripcion)) {
+            return false;
+        }
+
+        $idPersona = (int)($idPersona ?? 0);
+        if ($idPersona <= 0) {
+            $idPersona = $this->resolverIdPersonaDesdeInscripcion($inscripcion);
+        }
+
+        $segmentoPreferido = $this->segmentoPreferidoParaPrograma($programaDestino);
+
+        $sets = ['Programa = ?'];
+        $params = [$programaDestino];
+
+        if ($idPersona > 0) {
+            $sets[] = 'Id_Persona = ?';
+            $params[] = $idPersona;
+        }
+
+        if ($segmentoPreferido !== null) {
+            $sets[] = 'Segmento_Preferido = ?';
+            $params[] = $segmentoPreferido;
+        }
+
+        $params[] = $idInscripcion;
+
+        $ok = $this->execute(
+            'UPDATE ' . $this->table . ' SET ' . implode(', ', $sets) . ' WHERE Id_Inscripcion = ?',
+            $params
+        );
+
+        if ($ok) {
+            $inscripcion['Programa'] = $programaDestino;
+            if ($idPersona > 0) {
+                $inscripcion['Id_Persona'] = $idPersona;
+            }
+            $this->provisionarAccesoDiscipuloCapDestino($inscripcion);
+        }
+
+        return $ok;
+    }
+
+    public function create($data) {
+        $idInscripcion = parent::create($data);
+        if ((int)$idInscripcion > 0) {
+            $fila = array_merge($data, ['Id_Inscripcion' => (int)$idInscripcion]);
+            $this->provisionarAccesoDiscipuloCapDestino($fila);
+        }
+
+        return $idInscripcion;
+    }
+
+    private function provisionarAccesoDiscipuloCapDestino(array $inscripcion): void {
+        require_once APP . '/Helpers/AccesoDiscipuloCapDestino.php';
+        AccesoDiscipuloCapDestino::provisionarDesdeInscripcion($inscripcion);
+    }
+
+    private function segmentoPreferidoParaPrograma(string $programa): ?string {
+        $programa = strtolower(trim($programa));
+        if ($programa === 'capacitacion_destino_nivel_1' || $programa === 'capacitacion_destino') {
+            return 'nivel_1';
+        }
+        if ($programa === 'capacitacion_destino_nivel_2') {
+            return 'nivel_2';
+        }
+        if ($programa === 'capacitacion_destino_nivel_3') {
+            return 'nivel_3';
+        }
+
+        return null;
     }
 
     public function sincronizarProgramaCapacitacionDestinoPorPersona($idPersona, $programaDestino) {
@@ -823,13 +1054,14 @@ class EscuelaFormacionInscripcion extends BaseModel {
         );
     }
 
-    public function getListado($programa = '', $buscar = '', $limit = 300, $genero = 'todos', $idMinisterio = null, $idLider = null) {
+    public function getListado($programa = '', $buscar = '', $limit = 300, $genero = 'todos', $idMinisterio = null, $idLider = null, $limiteMaximo = 1000) {
         $limit = (int)$limit;
         if ($limit <= 0) {
             $limit = 300;
         }
-        if ($limit > 1000) {
-            $limit = 1000;
+        $limiteMaximo = max(1000, (int)$limiteMaximo);
+        if ($limit > $limiteMaximo) {
+            $limit = $limiteMaximo;
         }
 
         $programa = trim((string)$programa);
@@ -1337,6 +1569,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
                     ) AS Nombre,
                     COALESCE(NULLIF(TRIM(p.Genero),''), base.Genero) AS Genero,
                     COALESCE(p.Edad, base.Edad) AS Edad,
+                    base.Segmento_Preferido,
                     COALESCE(NULLIF(TRIM(p.Numero_Documento),''), base.Cedula) AS Cedula,
                     COALESCE(NULLIF(TRIM(p.Telefono),''), base.Telefono) AS Telefono,
                     COALESCE(
@@ -1355,6 +1588,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
                         MAX(COALESCE(NULLIF(TRIM(i.Nombre),''), 'SIN NOMBRE'))         AS Nombre,
                         MAX(COALESCE(NULLIF(TRIM(i.Genero),''), ''))                   AS Genero,
                         MAX(COALESCE(i.Edad, 0))                                       AS Edad,
+                        MAX(COALESCE(NULLIF(TRIM(i.Segmento_Preferido),''), ''))       AS Segmento_Preferido,
                         MAX(COALESCE(NULLIF(TRIM(i.Cedula),''), ''))                   AS Cedula,
                         MAX(COALESCE(NULLIF(TRIM(i.Telefono),''), ''))                 AS Telefono,
                         MAX(COALESCE(NULLIF(TRIM(i.Lider),''), ''))                    AS Lider,
@@ -1375,5 +1609,115 @@ class EscuelaFormacionInscripcion extends BaseModel {
                 LIMIT {$limit}";
 
         return $this->query($sql, $innerParams);
+    }
+
+    /**
+     * Pagos registrados en movimientos (tabla escuela_formacion_pago_movimiento) por inscripción.
+     *
+     * @param array<int, int> $idsInscripcion
+     * @return array<int, array{pagado: bool, valor: float}>
+     */
+    public function getMapaPagosMovimientosPorInscripcion(array $idsInscripcion): array {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $idsInscripcion), static function ($id) {
+            return $id > 0;
+        })));
+
+        if (empty($ids)) {
+            return [];
+        }
+
+        $mapa = [];
+        foreach (array_chunk($ids, 400) as $lote) {
+            $placeholders = implode(',', array_fill(0, count($lote), '?'));
+            $sql = "SELECT
+                        Id_Inscripcion,
+                        SUM(COALESCE(Valor_Pago, 0)) AS Total_Pagado,
+                        MAX(CASE WHEN TRIM(COALESCE(Metodo_Pago, '')) <> '' THEN 1 ELSE 0 END) AS Tiene_Metodo,
+                        MAX(CASE WHEN TRIM(COALESCE(Referencia_Pago, '')) <> '' THEN 1 ELSE 0 END) AS Tiene_Ref
+                    FROM {$this->tablePagos}
+                    WHERE Id_Inscripcion IN ({$placeholders})
+                    GROUP BY Id_Inscripcion";
+
+            try {
+                $rows = $this->query($sql, $lote);
+            } catch (Throwable $e) {
+                error_log('getMapaPagosMovimientosPorInscripcion: ' . $e->getMessage());
+                continue;
+            }
+
+            foreach ((array)$rows as $row) {
+                $idIns = (int)($row['Id_Inscripcion'] ?? 0);
+                if ($idIns <= 0) {
+                    continue;
+                }
+                $total = (float)($row['Total_Pagado'] ?? 0);
+                $pagado = $total > 0
+                    || (int)($row['Tiene_Metodo'] ?? 0) === 1
+                    || (int)($row['Tiene_Ref'] ?? 0) === 1;
+                $mapa[$idIns] = [
+                    'pagado' => $pagado,
+                    'valor' => $total,
+                ];
+            }
+        }
+
+        return $mapa;
+    }
+
+    /**
+     * Pagos en movimientos agrupados por cédula normalizada (misma lógica que pantalla Pagos UV).
+     *
+     * @param array<int, string> $cedulas
+     * @return array<string, array{pagado: bool, valor: float}>
+     */
+    public function getMapaPagosMovimientosPorCedula(array $cedulas): array {
+        $cedulasNorm = array_values(array_unique(array_filter(array_map(static function ($cedula) {
+            return preg_replace('/\D+/', '', (string)$cedula);
+        }, $cedulas), static function ($cedula) {
+            return $cedula !== '';
+        })));
+
+        if (empty($cedulasNorm)) {
+            return [];
+        }
+
+        $exprCedula = $this->sqlExprCedulaNormalizada('Cedula');
+        $mapa = [];
+
+        foreach (array_chunk($cedulasNorm, 200) as $lote) {
+            $placeholders = implode(',', array_fill(0, count($lote), '?'));
+            $sql = "SELECT
+                        {$exprCedula} AS Cedula_Norm,
+                        SUM(COALESCE(Valor_Pago, 0)) AS Total_Pagado,
+                        MAX(CASE WHEN TRIM(COALESCE(Metodo_Pago, '')) <> '' THEN 1 ELSE 0 END) AS Tiene_Metodo,
+                        MAX(CASE WHEN TRIM(COALESCE(Referencia_Pago, '')) <> '' THEN 1 ELSE 0 END) AS Tiene_Ref
+                    FROM {$this->tablePagos}
+                    WHERE {$exprCedula} IN ({$placeholders})
+                    GROUP BY Cedula_Norm";
+
+            try {
+                $rows = $this->query($sql, $lote);
+            } catch (Throwable $e) {
+                error_log('getMapaPagosMovimientosPorCedula: ' . $e->getMessage());
+                continue;
+            }
+
+            foreach ((array)$rows as $row) {
+                $cedulaNorm = preg_replace('/\D+/', '', (string)($row['Cedula_Norm'] ?? ''));
+                if ($cedulaNorm === '') {
+                    continue;
+                }
+                $total = (float)($row['Total_Pagado'] ?? 0);
+                $pagado = $total > 0
+                    || (int)($row['Tiene_Metodo'] ?? 0) === 1
+                    || (int)($row['Tiene_Ref'] ?? 0) === 1;
+                $mapa[$cedulaNorm] = [
+                    'pagado' => $pagado,
+                    'valor' => $total,
+                ];
+            }
+        }
+
+        return $mapa;
     }
 }

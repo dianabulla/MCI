@@ -30,19 +30,47 @@ class PermisosCatalogo {
             'programas' => [
                 'coordinacion_total' => [
                     'label' => 'Coordinación total (solo ámbito programas)',
-                    'descripcion' => 'Privilegios amplios tipo administrador solo en Programas, Personas vinculadas (editar/gestionar inscritos), escuelas de formación, materiales UV/Cap. Destino y pagos/abonos de escuela. No abre el resto del sistema (células, ministerios, reportes generales, etc.). Marcar solo en roles de coordinación de formación.',
+                    'descripcion' => 'Privilegios amplios en Programas (consolidados, pagos, dashboards, formularios). No abre el resto del sistema.',
                 ],
                 'ver_universidad_vida' => [
-                    'label' => 'Programas: Universidad de la Vida',
-                    'descripcion' => 'Acceso al consolidado y vistas de Universidad de la Vida dentro de Programas.',
+                    'label' => 'Ver consolidado Universidad de la Vida',
+                    'descripcion' => 'Listado e inscritos del programa Universidad de la Vida.',
                 ],
                 'ver_capacitacion_destino' => [
-                    'label' => 'Programas: Capacitación Destino',
-                    'descripcion' => 'Acceso al consolidado y vistas de Capacitación Destino dentro de Programas.',
+                    'label' => 'Ver consolidado Capacitación Destino',
+                    'descripcion' => 'Listado e inscritos de Capacitación Destino.',
+                ],
+                'dashboard_universidad_vida' => [
+                    'label' => 'Dashboard Universidad de la Vida',
+                    'descripcion' => 'Tablero estadístico UV (solo datos de su alcance).',
+                ],
+                'dashboard_capacitacion_destino' => [
+                    'label' => 'Dashboard Capacitación Destino',
+                    'descripcion' => 'Tablero estadístico Cap. Destino (solo datos de su alcance).',
+                ],
+                'gestionar_pagos_universidad_vida' => [
+                    'label' => 'Gestionar pagos Universidad de la Vida',
+                    'descripcion' => 'Pantalla de pagos y abonos UV.',
+                ],
+                'gestionar_pagos_capacitacion_destino' => [
+                    'label' => 'Gestionar pagos Capacitación Destino',
+                    'descripcion' => 'Pantalla de pagos Cap. Destino.',
+                ],
+                'formulario_universidad_vida' => [
+                    'label' => 'Formulario público Universidad de la Vida',
+                    'descripcion' => 'Enlace al formulario de inscripción UV.',
+                ],
+                'formulario_capacitacion_destino' => [
+                    'label' => 'Formulario público Capacitación Destino',
+                    'descripcion' => 'Enlace al formulario de inscripción Cap. Destino.',
+                ],
+                'asistencias_universidad_vida' => [
+                    'label' => 'Asistencias Universidad de la Vida',
+                    'descripcion' => 'Vista de asistencias del programa UV.',
                 ],
                 'exportar_consolidado' => [
                     'label' => 'Exportar consolidado programas',
-                    'descripcion' => 'Exportar planillas del consolidado de programas de formación.',
+                    'descripcion' => 'Descargar planillas del consolidado.',
                 ],
             ],
             'escuelas_formacion' => [
@@ -83,6 +111,68 @@ class PermisosCatalogo {
                 'calificar_terceros' => [
                     'label' => 'Calificar a otros',
                     'descripcion' => 'Registrar resultados de evaluaciones en nombre de otros usuarios (rol formativo).',
+                ],
+            ],
+            'asistencias' => [
+                'exportar_excel' => [
+                    'label' => 'Exportar asistencias',
+                    'descripcion' => 'Descargar planillas de asistencias a Excel.',
+                ],
+            ],
+            'teen' => [
+                'exportar_datos' => [
+                    'label' => 'Exportar datos teens',
+                    'descripcion' => 'Exportar listados del módulo Teens.',
+                ],
+            ],
+            'nehemias' => [
+                'importar_masivo' => [
+                    'label' => 'Importación masiva',
+                    'descripcion' => 'Importar archivos y reparaciones masivas en Nehemias.',
+                ],
+            ],
+            'transmisiones' => [
+                'exportar_excel' => [
+                    'label' => 'Exportar transmisiones',
+                    'descripcion' => 'Exportar listado de transmisiones.',
+                ],
+            ],
+            'entrega_obsequio' => [
+                'exportar_pdf' => [
+                    'label' => 'Exportar PDF obsequios',
+                    'descripcion' => 'Generar PDF de entregas de obsequios.',
+                ],
+                'exportar_excel' => [
+                    'label' => 'Exportar Excel obsequios',
+                    'descripcion' => 'Exportar listado de obsequios a Excel.',
+                ],
+            ],
+            'roles' => [
+                'exportar_excel' => [
+                    'label' => 'Exportar roles',
+                    'descripcion' => 'Exportar matriz de roles a Excel.',
+                ],
+            ],
+            'material' => [
+                'gestionar_subida' => [
+                    'label' => 'Gestionar subida global',
+                    'descripcion' => 'Subir o reemplazar archivos en el centro de material.',
+                ],
+            ],
+            'materiales_celulas' => [
+                'exportar_datos' => [
+                    'label' => 'Exportar material células',
+                    'descripcion' => 'Exportar métricas o listados del material de células.',
+                ],
+            ],
+            'escuelas_formacion' => [
+                'exportar_inscritos' => [
+                    'label' => 'Exportar inscritos',
+                    'descripcion' => 'Exportar listados de inscritos y asistencias de escuelas.',
+                ],
+                'gestionar_pagos' => [
+                    'label' => 'Gestionar pagos escuela',
+                    'descripcion' => 'Consolidar y enviar pagos de formación.',
                 ],
             ],
         ];

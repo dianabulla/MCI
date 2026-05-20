@@ -126,12 +126,38 @@ Para evitar que salgan todos los mensajes de una vez, el worker aplica una pausa
 	- `WA_DELAY_MAX_MS=180000`
 - Si prefieres tiempo fijo, puedes usar `WA_DELAY_MS` (compatibilidad), por ejemplo `WA_DELAY_MS=120000`.
 
-## 9) Zona horaria y antigüedad de la cola
+## 9) Zona horaria y cola solo del día
 
-- Al abrir cada conexión MySQL el worker ejecuta `SET time_zone = '-05:00'` (Colombia) para que `NOW()` coincida con la hora usada al programar campañas. Desactivar: `WA_DB_SET_TIMEZONE=0`. Otro offset SQL: `WA_DB_TIME_ZONE_SQL=SET time_zone = '+00:00'`.
-- Los pendientes **sin** `programado_en` se envían en cuanto el worker pueda (no solo si fueron creados "hoy"), para evitar mensajes huérfanos si la PC estuvo apagada.
-- Los pendientes **con** `programado_en` se envían cuando `programado_en <= NOW()`, aunque el worker fallara el día anterior.
-- Mensajes muy antiguos se ignoran tras `WA_QUEUE_MAX_AGE_DAYS` (por defecto **45** días) para no vaciar colas abandonadas sin revisión.
+- Al abrir cada conexión MySQL el worker ejecuta `SET time_zone = '-05:00'` (Colombia) para que `NOW()` y `CURDATE()` coincidan con Bogotá. Desactivar: `WA_DB_SET_TIMEZONE=0`.
+- Por defecto `WA_ONLY_TODAY=1`: el worker **solo envía** pendientes cuyo día es hoy:
+  - sin programar: `DATE(creado_en) = CURDATE()`
+  - programados: `DATE(programado_en) = CURDATE()` y `programado_en <= NOW()`
+- Los mensajes de días anteriores **no se envían** aunque sigan en `pendiente`; hay que cancelarlos con la limpieza (sección 11).
+- Modo antiguo (ventana de días): `WA_ONLY_TODAY=0` y opcional `WA_QUEUE_MAX_AGE_DAYS=45`.
+
+## 11) Limpiar cola atrasada en producción (empezar desde cero)
+
+Si hubo meses sin worker y no quieres que salgan textos viejos:
+
+1. **Detén el worker** (cierra `npm start` o la tarea programada).
+2. **Vista previa** (usa el `.env` del worker, misma BD que Hostinger):
+
+```powershell
+cd C:\xampp\htdocs\mcimadrid
+C:\xampp\php\php.exe tools\whatsapp_local\limpiar_cola_atrasada.php
+```
+
+3. **Aplicar cancelación** de todo lo atrasado (marca `fallido`, no borra filas):
+
+```powershell
+C:\xampp\php\php.exe tools\whatsapp_local\limpiar_cola_atrasada.php --execute
+```
+
+Alternativa: ejecutar `limpiar_cola_atrasada.sql` en phpMyAdmin de producción (descomenta el `UPDATE` tras revisar conteos).
+
+4. **Reinicia el worker** (`restart_worker.ps1` o `npm start`).
+
+A partir de ahí solo saldrán mensajes encolados **hoy** (o programados para **hoy**).
 
 ## 10) Después de actualizar `worker.js`: reinicio y revisión
 

@@ -21,6 +21,7 @@ $fechaFinMes = (string)($fecha_fin_mes ?? date('Y-m-t'));
 $diaTranscurrido = (int)($dia_transcurrido ?? date('j'));
 $diasMes = (int)($dias_mes ?? date('t'));
 $dashboardMetasMinisterio = (array)($dashboard_metas_ministerio ?? ['items' => []]);
+$reporteUvMinisterios = (array)($reporte_uv_ministerios ?? []);
 $tablaPagosUv = (array)($tabla_pagos_uv ?? []);
 $tablaPagosUvModo = (string)($tabla_pagos_uv_modo ?? 'mensual');
 $tablaUvModoConsolidar = (array)($tabla_uv_modo_consolidar ?? []);
@@ -200,6 +201,141 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
     margin-top: 2px;
 }
 
+.uv-reporte-principal { border: 2px solid #c5daf5; background: linear-gradient(180deg, #f8fbff 0%, #fff 100%); }
+.uv-reporte-title { margin: 0 0 6px; font-size: 1.2rem; color: #1e3a6e; }
+.uv-reporte-sub { margin: 0 0 4px; font-size: 0.88rem; color: #475569; line-height: 1.45; }
+.uv-reporte-sub-muted { font-size: 0.8rem; color: #64748b; }
+.uv-kpi-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+.uv-kpi { flex: 1 1 120px; min-width: 100px; background: #fff; border: 1px solid #dbe7f3; border-radius: 10px; padding: 10px 12px; }
+.uv-kpi span { display: block; font-size: 0.72rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.03em; }
+.uv-kpi strong { font-size: 1.35rem; color: #1e293b; }
+.uv-kpi-ok strong { color: #166534; }
+.uv-kpi-warn strong { color: #b45309; }
+.uv-kpi-total strong { color: #1e4a89; }
+.uv-kpi-pct { display: block; font-size: 0.78rem; font-style: normal; color: #64748b; margin-top: 2px; font-weight: 600; }
+.uv-encuentro-kpis { border: 2px solid #bfdbfe; background: linear-gradient(180deg, #f0f7ff 0%, #fff 100%); margin-bottom: 14px; }
+.uv-dash-kpi-note { margin: 0 0 12px; font-size: 0.82rem; color: #475569; line-height: 1.45; }
+.uv-dash-kpi-empty { margin: 8px 0 0; font-size: 0.85rem; color: #94a3b8; }
+.uv-kpi-row-encuentro .uv-kpi { flex: 1 1 160px; }
+.uv-encuentro-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: #e2e8f0; margin-top: 4px; }
+.uv-encuentro-bar__asistio { background: linear-gradient(90deg, #22c55e, #16a34a); transition: width .3s ease; }
+.uv-encuentro-bar__pendiente { background: linear-gradient(90deg, #fbbf24, #f59e0b); transition: width .3s ease; }
+.uv-encuentro-bar-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 0.75rem; color: #64748b; }
+.uv-legend-asistio::before, .uv-legend-pendiente::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.uv-legend-asistio::before { background: #22c55e; }
+.uv-legend-pendiente::before { background: #f59e0b; }
+.uv-reporte-table { min-width: 920px; }
+.uv-reporte-table .uv-th-group { text-align: center; font-size: 0.7rem; }
+.uv-th-ins { background: #e8f2fc !important; color: #1e4f8a !important; }
+.uv-th-pag { background: #e8f7ee !important; color: #166534 !important; }
+.uv-th-seg { text-align: center !important; font-size: 0.68rem !important; width: 48px; }
+.uv-td-ministerio { font-weight: 600; color: #1e3a5f; min-width: 140px; }
+.uv-num { text-align: center; font-variant-numeric: tabular-nums; }
+.uv-num-pag { background: #f6fdf8; }
+.uv-pend { font-weight: 600; color: #b45309; }
+.uv-pct-ok { color: #166534; font-weight: 700; }
+.uv-pct-mid { color: #b45309; font-weight: 700; }
+.uv-pct-low { color: #b91c1c; font-weight: 700; }
+.uv-tfoot-row th { background: #f1f5f9; font-weight: 700; }
+.dash-col-seg-hidden { display: none !important; }
+.dash-uv-detalle { margin-top: 8px; }
+.dash-uv-detalle summary { cursor: pointer; font-weight: 600; color: #475569; padding: 8px 0; }
+.uv-dash-intro { margin: 0 0 12px; font-size: 0.88rem; color: #475569; line-height: 1.45; }
+.uv-dash-intro-compact { margin: 0 0 10px; font-size: 0.82rem; line-height: 1.4; }
+.uv-dash-alineacion-inline { display: inline; margin-left: 0.35rem; }
+.uv-dash-alineacion-inline a { color: #1d4ed8; text-decoration: none; }
+.uv-dash-alineacion-inline a:hover { text-decoration: underline; }
+.uv-dash-tables-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}
+@media (min-width: 1100px) {
+    .uv-dash-tables-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        align-items: start;
+    }
+}
+.uv-dash-table-card {
+    margin-bottom: 0;
+    padding: 12px 14px;
+    width: 100%;
+    min-width: 0;
+}
+.uv-dash-table-note { color: #64748b; display: block; margin-bottom: 6px; font-size: 0.78rem; }
+.uv-dash-table-card .section-title { margin-bottom: 6px; }
+.uv-dash-table-card .table-wrap {
+    width: 100%;
+}
+.uv-simple-table.leader-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+}
+.uv-simple-table col.uv-col-num { width: 4.1rem; }
+.uv-simple-table col.uv-col-num-wide { width: 5.1rem; }
+.uv-simple-table.leader-table th:nth-child(1),
+.uv-simple-table.leader-table td:nth-child(1) {
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.uv-simple-table.leader-table th:nth-child(n+2),
+.uv-simple-table.leader-table td:nth-child(n+2) {
+    text-align: center;
+    padding-left: 4px;
+    padding-right: 4px;
+}
+.uv-simple-table.leader-table th,
+.uv-simple-table.leader-table td {
+    padding: 5px 8px;
+    vertical-align: middle;
+}
+.uv-simple-table.leader-table thead th {
+    text-align: center;
+    line-height: 1.2;
+    white-space: normal;
+    word-break: break-word;
+    hyphens: auto;
+}
+.uv-simple-table.leader-table thead th:first-child {
+    text-align: left;
+}
+.uv-simple-table.leader-table tfoot th {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.uv-simple-table.leader-table tfoot th:first-child {
+    text-align: left;
+}
+.uv-simple-table .uv-num { text-align: center !important; font-variant-numeric: tabular-nums; }
+.uv-simple-table .uv-num-total { font-weight: 600; }
+.uv-simple-table .uv-num-pag { font-weight: 600; color: #166534; }
+.uv-dash-alineacion { margin: 0 0 12px; font-size: 0.8rem; color: #64748b; }
+.uv-dash-alineacion a { color: #1d4ed8; }
+.uv-min-clickable { cursor: pointer; color: #1e40af; text-decoration: underline; text-underline-offset: 2px; }
+.uv-min-clickable:hover { color: #1e3a8a; }
+.uv-detalle-modal { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.uv-detalle-modal[hidden] { display: none !important; }
+.uv-detalle-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); }
+.uv-detalle-panel { position: relative; z-index: 1; background: #fff; border-radius: 12px; max-width: 960px; width: 100%; max-height: 90vh; overflow: auto; padding: 16px; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.2); }
+.uv-detalle-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.uv-detalle-head h4 { margin: 0; font-size: 1.1rem; color: #1e293b; }
+.uv-detalle-sub { margin: 4px 0 0; font-size: 0.82rem; color: #64748b; }
+.uv-detalle-cerrar { border: none; background: #f1f5f9; width: 32px; height: 32px; border-radius: 8px; font-size: 1.25rem; line-height: 1; cursor: pointer; color: #475569; }
+.uv-detalle-filtros { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.uv-det-filt { border: 1px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 4px 12px; font-size: 0.78rem; cursor: pointer; }
+.uv-det-filt.active { background: #1e40af; border-color: #1e40af; color: #fff; }
+.uv-detalle-alineacion { font-size: 0.72rem; color: #94a3b8; margin: 0 0 10px; line-height: 1.4; }
+.uv-detalle-loading { padding: 20px; text-align: center; color: #64748b; }
+.uv-detalle-vacio { padding: 16px; text-align: center; color: #94a3b8; }
+.uv-detalle-table-wrap { max-height: 50vh; }
+.uv-det-ok { color: #166534; font-weight: 600; }
+.uv-det-no { color: #94a3b8; }
+
 @media (max-width: 768px) {
     .dashboard-escuelas-wrap { gap: 12px; }
     .dash-card { padding: 10px; }
@@ -211,8 +347,19 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
     .filters-form .group label { font-size: 0.78rem; }
     .filters-form select { min-width: 0; width: 100%; font-size: 0.82rem; padding: 5px 8px; }
     .leader-table { min-width: 560px; }
+    .uv-dash-tables-grid { grid-template-columns: 1fr; }
+    .uv-simple-table.leader-table { min-width: 0; }
+    .uv-simple-table col.uv-col-num { width: 3.2rem; }
+    .uv-simple-table col.uv-col-num-wide { width: 4.2rem; }
     .leader-table th, .leader-table td { padding: 5px 6px; font-size: 0.74rem; }
     .leader-table th { font-size: 0.66rem; }
+}
+.uv-dash-table-card .dash-table-tool-row {
+    margin-bottom: 6px;
+    gap: 8px;
+}
+.uv-dash-table-card .dash-inline-filters {
+    gap: 6px;
 }
 </style>
 
@@ -220,7 +367,13 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
     <div class="dash-head">
         <div>
             <h2><?= htmlspecialchars($tituloDashboard) ?></h2>
-            <small style="color:#64748b;">Módulo exclusivo: <?= htmlspecialchars($labelLinea) ?> · Meta por líder (hombre/mujer): <?= $metaPorLider ?> inscritos</small>
+            <?php if ($lineaDashboard === 'universidad_vida'): ?>
+                <small style="color:#64748b;">Universidad de la Vida · Inscripciones y pagos por ministerio (modo Consolidar)</small>
+            <?php elseif ($lineaDashboard === 'capacitacion_destino'): ?>
+                <small style="color:#64748b;">Capacitación Destino · Inscripciones y pagos por ministerio y nivel (modo Consolidar)</small>
+            <?php else: ?>
+                <small style="color:#64748b;">Módulo exclusivo: <?= htmlspecialchars($labelLinea) ?> · Meta por líder (hombre/mujer): <?= $metaPorLider ?> inscritos</small>
+            <?php endif; ?>
         </div>
         <div class="dash-toolbar">
             <a href="<?= PUBLIC_URL ?>index.php?url=reportes/dashboard-ganar" class="btn btn-primary">Dashboard Ganar</a>
@@ -228,6 +381,16 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
     </div>
 
     <div class="dash-card">
+        <?php if ($lineaDashboard === 'universidad_vida'): ?>
+            <p style="margin:0 0 10px;font-size:0.86rem;color:#475569;">
+                Filtro por <strong>semestre</strong> (fecha de registro del inscripción, igual que Consolidar).
+                Los pagos cuentan si están en la ficha <em>o</em> en movimientos de pago.
+            </p>
+        <?php elseif ($lineaDashboard === 'capacitacion_destino'): ?>
+            <p style="margin:0 0 10px;font-size:0.86rem;color:#475569;">
+                Las tablas de inscripciones y pagos usan la misma base que <strong>Consolidar</strong> (todos los niveles).
+            </p>
+        <?php endif; ?>
         <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="filters-form">
             <input type="hidden" name="url" value="<?= htmlspecialchars($rutaDashboard) ?>">
 
@@ -240,14 +403,25 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
                 </select>
             </div>
 
-            <div class="group">
-                <label>Mes</label>
-                <select name="mes" onchange="this.form.submit()">
-                    <?php for ($m = 1; $m <= 12; $m++): ?>
-                        <option value="<?= $m ?>" <?= $m === $mes ? 'selected' : '' ?>><?= htmlspecialchars($meses[$m] ?? (string)$m) ?></option>
-                    <?php endfor; ?>
-                </select>
-            </div>
+            <?php if ($lineaDashboard === 'universidad_vida'): ?>
+                <?php $semestreUv = (int)($semestre_uv ?? 0); ?>
+                <div class="group">
+                    <label>Semestre</label>
+                    <select name="semestre" onchange="this.form.submit()">
+                        <option value="1" <?= $semestreUv === 1 ? 'selected' : '' ?>>Semestre 1 (Ene – Jun)</option>
+                        <option value="2" <?= $semestreUv === 2 ? 'selected' : '' ?>>Semestre 2 (Jul – Dic)</option>
+                    </select>
+                </div>
+            <?php else: ?>
+                <div class="group">
+                    <label>Mes</label>
+                    <select name="mes" onchange="this.form.submit()">
+                        <?php for ($m = 1; $m <= 12; $m++): ?>
+                            <option value="<?= $m ?>" <?= $m === $mes ? 'selected' : '' ?>><?= htmlspecialchars($meses[$m] ?? (string)$m) ?></option>
+                        <?php endfor; ?>
+                    </select>
+                </div>
+            <?php endif; ?>
 
             <div class="group">
                 <label>Ministerio</label>
@@ -275,407 +449,12 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
         </form>
     </div>
 
-    <div class="dash-card">
-        <h4 class="section-title">Cumplimiento por líder de célula (meta = <?= $metaPorLider ?>)</h4>
-        <small style="color:#64748b;display:block;margin-bottom:10px;">Se incluye líder de célula aunque también sea líder de 12.</small>
-
-        <h5 class="section-title">Líderes hombres</h5>
-        <div class="table-wrap">
-            <table class="leader-table js-dash-filterable" data-dash-gen-mode="hmjt" data-dash-enable-pago="1">
-                <thead>
-                    <tr>
-                        <th>Líder</th>
-                        <th>Ministerio</th>
-                        <th>Inscritos</th>
-                        <th>Pagados</th>
-                        <th>Meta</th>
-                        <th>Estado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (!empty($lideresHombre)): ?>
-                        <?php foreach ($lideresHombre as $row): ?>
-                            <tr<?= $dashAttrsLeaderRow($row) ?>>
-                                <td><?= htmlspecialchars((string)($row['lider'] ?? '')) ?></td>
-                                <td><?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio')) ?></td>
-                                <td><?= (int)($row['inscritos_grupo'] ?? $row['inscritos_mes'] ?? 0) ?></td>
-                                <td><?= (int)($row['pagados_grupo'] ?? $row['pagados_lider'] ?? 0) ?></td>
-                                <td><?= (int)($row['meta_lider'] ?? 0) ?></td>
-                                <td><span class="estado <?= htmlspecialchars((string)($row['semaforo'] ?? 'rojo')) ?>"><?= htmlspecialchars(ucfirst((string)($row['semaforo'] ?? 'rojo'))) ?></span></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <tr><td colspan="6">No hay líderes hombres para este filtro.</td></tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <h5 class="section-title" style="margin-top:14px;">Líderes mujeres</h5>
-        <div class="table-wrap">
-            <table class="leader-table js-dash-filterable" data-dash-gen-mode="hmjt" data-dash-enable-pago="1">
-                <thead>
-                    <tr>
-                        <th>Líder</th>
-                        <th>Ministerio</th>
-                        <th>Inscritos</th>
-                        <th>Pagados</th>
-                        <th>Meta</th>
-                        <th>Estado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (!empty($lideresMujer)): ?>
-                        <?php foreach ($lideresMujer as $row): ?>
-                            <tr<?= $dashAttrsLeaderRow($row) ?>>
-                                <td><?= htmlspecialchars((string)($row['lider'] ?? '')) ?></td>
-                                <td><?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio')) ?></td>
-                                <td><?= (int)($row['inscritos_grupo'] ?? $row['inscritos_mes'] ?? 0) ?></td>
-                                <td><?= (int)($row['pagados_grupo'] ?? $row['pagados_lider'] ?? 0) ?></td>
-                                <td><?= (int)($row['meta_lider'] ?? 0) ?></td>
-                                <td><span class="estado <?= htmlspecialchars((string)($row['semaforo'] ?? 'rojo')) ?>"><?= htmlspecialchars(ucfirst((string)($row['semaforo'] ?? 'rojo'))) ?></span></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <tr><td colspan="6">No hay líderes mujeres para este filtro.</td></tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <h5 class="section-title" style="margin-top:14px;">Líderes jóvenes</h5>
-        <div class="table-wrap">
-            <table class="leader-table js-dash-filterable" data-dash-gen-mode="hmjt" data-dash-enable-pago="1">
-                <thead>
-                    <tr>
-                        <th>Líder</th>
-                        <th>Ministerio</th>
-                        <th>Inscritos</th>
-                        <th>Pagados</th>
-                        <th>Meta</th>
-                        <th>Estado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (!empty($lideresJoven)): ?>
-                        <?php foreach ($lideresJoven as $row): ?>
-                            <tr<?= $dashAttrsLeaderRow($row) ?>>
-                                <td><?= htmlspecialchars((string)($row['lider'] ?? '')) ?></td>
-                                <td><?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio')) ?></td>
-                                <td><?= (int)($row['inscritos_grupo'] ?? $row['inscritos_mes'] ?? 0) ?></td>
-                                <td><?= (int)($row['pagados_grupo'] ?? $row['pagados_lider'] ?? 0) ?></td>
-                                <td><?= (int)($row['meta_lider'] ?? 0) ?></td>
-                                <td><span class="estado <?= htmlspecialchars((string)($row['semaforo'] ?? 'rojo')) ?>"><?= htmlspecialchars(ucfirst((string)($row['semaforo'] ?? 'rojo'))) ?></span></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <tr><td colspan="6">No hay líderes jóvenes para este filtro.</td></tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <h5 class="section-title" style="margin-top:14px;">Líderes teens</h5>
-        <div class="table-wrap">
-            <table class="leader-table js-dash-filterable" data-dash-gen-mode="hmjt" data-dash-enable-pago="1">
-                <thead>
-                    <tr>
-                        <th>Líder</th>
-                        <th>Ministerio</th>
-                        <th>Inscritos</th>
-                        <th>Pagados</th>
-                        <th>Meta</th>
-                        <th>Estado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (!empty($lideresTeen)): ?>
-                        <?php foreach ($lideresTeen as $row): ?>
-                            <tr<?= $dashAttrsLeaderRow($row) ?>>
-                                <td><?= htmlspecialchars((string)($row['lider'] ?? '')) ?></td>
-                                <td><?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio')) ?></td>
-                                <td><?= (int)($row['inscritos_grupo'] ?? $row['inscritos_mes'] ?? 0) ?></td>
-                                <td><?= (int)($row['pagados_grupo'] ?? $row['pagados_lider'] ?? 0) ?></td>
-                                <td><?= (int)($row['meta_lider'] ?? 0) ?></td>
-                                <td><span class="estado <?= htmlspecialchars((string)($row['semaforo'] ?? 'rojo')) ?>"><?= htmlspecialchars(ucfirst((string)($row['semaforo'] ?? 'rojo'))) ?></span></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <tr><td colspan="6">No hay líderes teens para este filtro.</td></tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <?php if (!empty($lideresOtros)): ?>
-            <h5 class="section-title" style="margin-top:14px;">Líderes sin género identificado</h5>
-            <div class="table-wrap">
-                <table class="leader-table js-dash-filterable" data-dash-gen-mode="hmjt" data-dash-enable-pago="1">
-                    <thead>
-                        <tr>
-                            <th>Líder</th>
-                            <th>Ministerio</th>
-                            <th>Inscritos</th>
-                            <th>Pagados</th>
-                            <th>Meta</th>
-                            <th>Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($lideresOtros as $row): ?>
-                            <tr<?= $dashAttrsLeaderRow($row) ?>>
-                                <td><?= htmlspecialchars((string)($row['lider'] ?? '')) ?></td>
-                                <td><?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio')) ?></td>
-                                <td><?= (int)($row['inscritos_grupo'] ?? $row['inscritos_mes'] ?? 0) ?></td>
-                                <td><?= (int)($row['pagados_grupo'] ?? $row['pagados_lider'] ?? 0) ?></td>
-                                <td><?= (int)($row['meta_lider'] ?? 0) ?></td>
-                                <td><span class="estado <?= htmlspecialchars((string)($row['semaforo'] ?? 'rojo')) ?>"><?= htmlspecialchars(ucfirst((string)($row['semaforo'] ?? 'rojo'))) ?></span></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-        <?php endif; ?>
-    </div>
-
     <?php if ($lineaDashboard === 'universidad_vida'): ?>
-        <?php
-        $totUvConsHombres = 0;
-        $totUvConsMujeres = 0;
-        $totUvConsJovenes = 0;
-        $totUvConsTotal = 0;
-        $totUvConsAsistencias = 0;
-        foreach ($tablaUvModoConsolidar as $filaConsUv) {
-            $totUvConsHombres += (int)($filaConsUv['hombres'] ?? 0);
-            $totUvConsMujeres += (int)($filaConsUv['mujeres'] ?? 0);
-            $totUvConsJovenes += (int)($filaConsUv['jovenes'] ?? 0);
-            $totUvConsTotal += (int)($filaConsUv['total'] ?? 0);
-            $totUvConsAsistencias += (int)($filaConsUv['asistencias_reales'] ?? 0);
-        }
-
-        $totInscritosUv = 0;
-        $totPagadosUv = 0;
-        $totValorUv = 0.0;
-        $totInsJovenUv = 0;
-        $totInsTeenUv = 0;
-        $totPagJovenUv = 0;
-        $totPagTeenUv = 0;
-        foreach ($tablaPagosUv as $filaPagoUv) {
-            $totInscritosUv += (int)($filaPagoUv['Inscritos'] ?? 0);
-            $totPagadosUv += (int)($filaPagoUv['Pagados'] ?? 0);
-            $totValorUv += (float)($filaPagoUv['Valor_Recaudado'] ?? 0);
-            $totInsJovenUv += (int)($filaPagoUv['Inscritos_Jovenes'] ?? 0);
-            $totInsTeenUv += (int)($filaPagoUv['Inscritos_Teens'] ?? 0);
-            $totPagJovenUv += (int)($filaPagoUv['Pagados_Jovenes'] ?? 0);
-            $totPagTeenUv += (int)($filaPagoUv['Pagados_Teens'] ?? 0);
-        }
-        $totPendientesUv = max(0, $totInscritosUv - $totPagadosUv);
-        $totPctUv = $totInscritosUv > 0 ? round(($totPagadosUv / $totInscritosUv) * 100, 1) : 0;
-        ?>
-        <div class="dash-card">
-            <h4 class="section-title">Universidad de la Vida por ministerio (modo Consolidar)</h4>
-            <small style="color:#64748b;display:block;margin-bottom:10px;">Mismo criterio de clasificacion del modulo Consolidar para comparar datos 1 a 1.</small>
-
-            <div class="table-wrap">
-                <table class="leader-table js-dash-filterable" data-dash-gen-mode="hmjt" data-dash-enable-pago="0">
-                    <thead>
-                        <tr>
-                            <th>Ministerio</th>
-                            <th>Hombres</th>
-                            <th>Mujeres</th>
-                            <th>Jovenes</th>
-                            <th>Total</th>
-                            <th>Asistencias reales</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (!empty($tablaUvModoConsolidar)): ?>
-                            <?php foreach ($tablaUvModoConsolidar as $filaConsUv): ?>
-                                <tr<?= $dashAttrsUvMinRow($filaConsUv) ?>>
-                                    <td><?= htmlspecialchars((string)($filaConsUv['ministerio'] ?? 'Sin ministerio')) ?></td>
-                                    <td><?= (int)($filaConsUv['hombres'] ?? 0) ?></td>
-                                    <td><?= (int)($filaConsUv['mujeres'] ?? 0) ?></td>
-                                    <td><?= (int)($filaConsUv['jovenes'] ?? 0) ?></td>
-                                    <td><?= (int)($filaConsUv['total'] ?? 0) ?></td>
-                                    <td><?= (int)($filaConsUv['asistencias_reales'] ?? 0) ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <tr>
-                                <td colspan="6">No hay datos de Universidad de la Vida para este filtro.</td>
-                            </tr>
-                        <?php endif; ?>
-                    </tbody>
-                    <tfoot class="js-dash-tfoot">
-                        <tr>
-                            <th>TOTAL</th>
-                            <th><?= $totUvConsHombres ?></th>
-                            <th><?= $totUvConsMujeres ?></th>
-                            <th><?= $totUvConsJovenes ?></th>
-                            <th><?= $totUvConsTotal ?></th>
-                            <th><?= $totUvConsAsistencias ?></th>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        </div>
-
-        <div class="dash-card">
-            <h4 class="section-title">Pagos Universidad de la Vida (de inscritos)</h4>
-            <?php if ($tablaPagosUvModo === 'consolidar'): ?>
-                <small style="color:#64748b;display:block;margin-bottom:6px;">Origen: inscripciones de Universidad de la Vida en modo consolidado (misma consulta que «UV por ministerio» y líderes arriba; ficha en inscripción, no el listado por cédula de la pantalla Escuelas → Pagos, que usa movimientos en otra tabla).</small>
-                <small style="color:#64748b;display:block;margin-bottom:10px;">Se cuenta como pagado si en esa inscripción hay valor de pago, método o referencia. En filtros de segmento: hombres y mujeres son adultos (excluye jóvenes 13–30 y teens 9–12); jóvenes y teens van aparte.</small>
-            <?php else: ?>
-                <small style="color:#64748b;display:block;margin-bottom:10px;">Periodo: <?= htmlspecialchars($fechaInicioMes) ?> a <?= htmlspecialchars($fechaFinMes) ?></small>
-            <?php endif; ?>
-
-            <div class="table-wrap">
-                <table class="leader-table js-dash-filterable" data-dash-gen-mode="hmjt" data-dash-enable-pago="1">
-                    <thead>
-                        <tr>
-                            <th>Ministerio</th>
-                            <th>Inscritos</th>
-                            <th>Pagados</th>
-                            <th>Pendientes</th>
-                            <th>Jóvenes</th>
-                            <th>Teens</th>
-                            <th>Pag. Jóvenes</th>
-                            <th>Pag. Teens</th>
-                            <th>% Pago</th>
-                            <th>Valor recaudado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (!empty($tablaPagosUv)): ?>
-                            <?php foreach ($tablaPagosUv as $filaPagoUv): ?>
-                                <?php
-                                $ins = (int)($filaPagoUv['Inscritos'] ?? 0);
-                                $pag = (int)($filaPagoUv['Pagados'] ?? 0);
-                                $pend = max(0, $ins - $pag);
-                                $pct = $ins > 0 ? round(($pag / $ins) * 100, 1) : 0;
-                                $valor = (float)($filaPagoUv['Valor_Recaudado'] ?? 0);
-                                $insJ = (int)($filaPagoUv['Inscritos_Jovenes'] ?? 0);
-                                $insT = (int)($filaPagoUv['Inscritos_Teens'] ?? 0);
-                                $pagJ = (int)($filaPagoUv['Pagados_Jovenes'] ?? 0);
-                                $pagT = (int)($filaPagoUv['Pagados_Teens'] ?? 0);
-                                ?>
-                                <tr<?= $dashAttrsPagosRow($filaPagoUv) ?>>
-                                    <td><?= htmlspecialchars((string)($filaPagoUv['Ministerio'] ?? 'Sin ministerio')) ?></td>
-                                    <td><?= $ins ?></td>
-                                    <td><?= $pag ?></td>
-                                    <td><?= $pend ?></td>
-                                    <td><?= $insJ ?></td>
-                                    <td><?= $insT ?></td>
-                                    <td><?= $pagJ ?></td>
-                                    <td><?= $pagT ?></td>
-                                    <td><?= number_format($pct, 1) ?>%</td>
-                                    <td>$ <?= number_format($valor, 0, ',', '.') ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <tr>
-                                <td colspan="10">No hay inscritos de Universidad de la Vida para este filtro y periodo.</td>
-                            </tr>
-                        <?php endif; ?>
-                    </tbody>
-                    <tfoot class="js-dash-tfoot">
-                        <tr>
-                            <th>TOTAL</th>
-                            <th><?= $totInscritosUv ?></th>
-                            <th><?= $totPagadosUv ?></th>
-                            <th><?= $totPendientesUv ?></th>
-                            <th><?= $totInsJovenUv ?></th>
-                            <th><?= $totInsTeenUv ?></th>
-                            <th><?= $totPagJovenUv ?></th>
-                            <th><?= $totPagTeenUv ?></th>
-                            <th><?= number_format($totPctUv, 1) ?>%</th>
-                            <th>$ <?= number_format($totValorUv, 0, ',', '.') ?></th>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        </div>
-
-        <?php if ($filtroMinisterio !== '' && !empty($detalleLideresMinisterioUv)): ?>
-            <?php
-            $totDetIns = 0;
-            $totDetHom = 0;
-            $totDetMuj = 0;
-            $totDetJov = 0;
-            $totDetAsi = 0;
-            $totDetPag = 0;
-            $totDetPen = 0;
-            $totDetVal = 0.0;
-            foreach ($detalleLideresMinisterioUv as $detLiderUv) {
-                $totDetIns += (int)($detLiderUv['inscritos'] ?? 0);
-                $totDetHom += (int)($detLiderUv['hombres'] ?? 0);
-                $totDetMuj += (int)($detLiderUv['mujeres'] ?? 0);
-                $totDetJov += (int)($detLiderUv['jovenes'] ?? 0);
-                $totDetAsi += (int)($detLiderUv['asistencias_reales'] ?? 0);
-                $totDetPag += (int)($detLiderUv['pagados'] ?? 0);
-                $totDetPen += (int)($detLiderUv['pendientes'] ?? 0);
-                $totDetVal += (float)($detLiderUv['valor_recaudado'] ?? 0);
-            }
-            $totDetPct = $totDetIns > 0 ? round(($totDetPag / $totDetIns) * 100, 1) : 0;
-            ?>
-            <div class="dash-card">
-                <h4 class="section-title">Detalle por líderes del ministerio filtrado</h4>
-                <small style="color:#64748b;display:block;margin-bottom:10px;">
-                    Ministerio: <?= htmlspecialchars($nombreMinisterioFiltrado !== '' ? $nombreMinisterioFiltrado : 'Seleccionado') ?>
-                </small>
-
-                <div class="table-wrap">
-                    <table class="leader-table js-dash-filterable" data-dash-gen-mode="hmjt" data-dash-enable-pago="1"
-                        data-dash-ministry-label="<?= htmlspecialchars($nombreMinisterioFiltrado !== '' ? $nombreMinisterioFiltrado : 'Ministerio filtrado', ENT_QUOTES, 'UTF-8') ?>">
-                        <thead>
-                            <tr>
-                                <th>Líder célula</th>
-                                <th>Inscritos</th>
-                                <th>Hombres</th>
-                                <th>Mujeres</th>
-                                <th>Jóvenes</th>
-                                <th>Asist. reales</th>
-                                <th>Pagados</th>
-                                <th>Pendientes</th>
-                                <th>% Pago</th>
-                                <th>Valor recaudado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($detalleLideresMinisterioUv as $detLiderUv): ?>
-                                <tr<?= $dashAttrsDetalleRow($detLiderUv) ?>>
-                                    <td><?= htmlspecialchars((string)($detLiderUv['lider'] ?? 'Sin líder')) ?></td>
-                                    <td><?= (int)($detLiderUv['inscritos'] ?? 0) ?></td>
-                                    <td><?= (int)($detLiderUv['hombres'] ?? 0) ?></td>
-                                    <td><?= (int)($detLiderUv['mujeres'] ?? 0) ?></td>
-                                    <td><?= (int)($detLiderUv['jovenes'] ?? 0) ?></td>
-                                    <td><?= (int)($detLiderUv['asistencias_reales'] ?? 0) ?></td>
-                                    <td><?= (int)($detLiderUv['pagados'] ?? 0) ?></td>
-                                    <td><?= (int)($detLiderUv['pendientes'] ?? 0) ?></td>
-                                    <td><?= number_format((float)($detLiderUv['pct_pago'] ?? 0), 1) ?>%</td>
-                                    <td>$ <?= number_format((float)($detLiderUv['valor_recaudado'] ?? 0), 0, ',', '.') ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                        <tfoot class="js-dash-tfoot">
-                            <tr>
-                                <th>TOTAL</th>
-                                <th><?= $totDetIns ?></th>
-                                <th><?= $totDetHom ?></th>
-                                <th><?= $totDetMuj ?></th>
-                                <th><?= $totDetJov ?></th>
-                                <th><?= $totDetAsi ?></th>
-                                <th><?= $totDetPag ?></th>
-                                <th><?= $totDetPen ?></th>
-                                <th><?= number_format($totDetPct, 1) ?>%</th>
-                                <th>$ <?= number_format($totDetVal, 0, ',', '.') ?></th>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            </div>
-        <?php endif; ?>
+        <?php include VIEWS . '/reportes/partials/uv_dashboard_simple.php'; ?>
+    <?php elseif ($lineaDashboard === 'capacitacion_destino'): ?>
+        <?php include VIEWS . '/reportes/partials/cap_dashboard_simple.php'; ?>
     <?php endif; ?>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -729,6 +508,34 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
         return tr.cells[0] ? String(tr.cells[0].textContent || '').trim() : '';
     }
 
+    function dashGenConfig(genMode) {
+        if (genMode === 'ajt') {
+            return {
+                keys: ['a', 'j', 't'],
+                segments: [['a', 'Adultos'], ['j', 'Jóvenes'], ['t', 'Teens']],
+                label: 'Segmento',
+                hintUv: 'Sin marcar = todos. Si marcas segmentos, se suman (ej. mujeres + jóvenes) y Total / Asistencias / Pagos usan solo esos segmentos.',
+                hintDefault: 'Sin marcar = todas las columnas. Si marcas segmentos, se muestran esas columnas y filas con al menos uno de los marcados.'
+            };
+        }
+        if (genMode === 'n123' || genMode === 'hmj') {
+            return {
+                keys: ['h', 'm', 'j'],
+                segments: [['h', 'Nivel 1'], ['m', 'Nivel 2'], ['j', 'Nivel 3']],
+                label: 'Nivel',
+                hintUv: 'Sin marcar = todos los niveles. Si marcas niveles, se suman y Total / Asistencias / Pagos usan solo esos niveles.',
+                hintDefault: 'Sin marcar = todos los niveles. Si marcas niveles, se muestran esas columnas y filas con inscritos en al menos uno de los niveles marcados.'
+            };
+        }
+        return {
+            keys: ['h', 'm', 'j', 't'],
+            segments: [['h', 'Hombres'], ['m', 'Mujeres'], ['j', 'Jóvenes'], ['t', 'Teens']],
+            label: 'Segmento',
+            hintUv: 'Sin marcar = todos. Si marcas segmentos, se suman (ej. mujeres + jóvenes) y Total / Asistencias / Pagos usan solo esos segmentos.',
+            hintDefault: 'Sin marcar = todas las columnas. Si marcas segmentos, se muestran esas columnas y filas con al menos uno de los marcados.'
+        };
+    }
+
     function construirOpcionesMinisterio(table) {
         const map = {};
         table.querySelectorAll('tbody tr[data-dash-row]').forEach(function(tr) {
@@ -760,20 +567,24 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
         const genSel = filt.gen;
         const genKeys = (genSel !== 'all' && Array.isArray(genSel) && genSel.length) ? genSel : null;
         if (genKeys) {
+            let coincideSegmento = false;
             if (genMode === 'ajt') {
                 const a = parseInt(tr.getAttribute('data-dash-a') || '0', 10) || 0;
                 const j = parseInt(tr.getAttribute('data-dash-j') || '0', 10) || 0;
                 const t = parseInt(tr.getAttribute('data-dash-t') || '0', 10) || 0;
                 for (let i = 0; i < genKeys.length; i++) {
                     const g = genKeys[i];
-                    if (g === 'a' && a <= 0) {
-                        return false;
+                    if (g === 'a' && a > 0) {
+                        coincideSegmento = true;
+                        break;
                     }
-                    if (g === 'j' && j <= 0) {
-                        return false;
+                    if (g === 'j' && j > 0) {
+                        coincideSegmento = true;
+                        break;
                     }
-                    if (g === 't' && t <= 0) {
-                        return false;
+                    if (g === 't' && t > 0) {
+                        coincideSegmento = true;
+                        break;
                     }
                 }
             } else {
@@ -783,19 +594,26 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
                 const t = parseInt(tr.getAttribute('data-dash-t') || '0', 10) || 0;
                 for (let i = 0; i < genKeys.length; i++) {
                     const g = genKeys[i];
-                    if (g === 'h' && h <= 0) {
-                        return false;
+                    if (g === 'h' && h > 0) {
+                        coincideSegmento = true;
+                        break;
                     }
-                    if (g === 'm' && m <= 0) {
-                        return false;
+                    if (g === 'm' && m > 0) {
+                        coincideSegmento = true;
+                        break;
                     }
-                    if (g === 'j' && j <= 0) {
-                        return false;
+                    if (g === 'j' && j > 0) {
+                        coincideSegmento = true;
+                        break;
                     }
-                    if (g === 't' && t <= 0) {
-                        return false;
+                    if (g === 't' && t > 0) {
+                        coincideSegmento = true;
+                        break;
                     }
                 }
+            }
+            if (!coincideSegmento) {
+                return false;
             }
         }
 
@@ -816,6 +634,155 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
         return true;
     }
 
+    function aplicarVisibilidadColumnasSegmento(table) {
+        const celdasSeg = table.querySelectorAll('[data-dash-seg]');
+        if (!celdasSeg.length) {
+            return;
+        }
+        const genMode = table.getAttribute('data-dash-gen-mode') || 'hmjt';
+        const allKeys = dashGenConfig(genMode).keys;
+        const filt = table._dashFiltro || {};
+        let keysVisibles = allKeys.slice();
+        if (filt.gen !== 'all' && Array.isArray(filt.gen) && filt.gen.length > 0) {
+            keysVisibles = filt.gen.filter(function(k) {
+                return allKeys.indexOf(k) !== -1;
+            });
+            if (!keysVisibles.length) {
+                keysVisibles = allKeys.slice();
+            }
+        }
+        const visSet = {};
+        keysVisibles.forEach(function(k) {
+            visSet[k] = true;
+        });
+        celdasSeg.forEach(function(el) {
+            const seg = el.getAttribute('data-dash-seg');
+            if (visSet[seg]) {
+                el.classList.remove('dash-col-seg-hidden');
+            } else {
+                el.classList.add('dash-col-seg-hidden');
+            }
+        });
+        const n = keysVisibles.length;
+        const thIns = table.querySelector('[data-dash-colspan-ins]');
+        const thPag = table.querySelector('[data-dash-colspan-pag]');
+        if (thIns) {
+            thIns.colSpan = Math.max(1, n);
+        }
+        if (thPag) {
+            thPag.colSpan = Math.max(1, n);
+        }
+    }
+
+    function obtenerSegmentosActivosTabla(table) {
+        const genMode = table.getAttribute('data-dash-gen-mode') || 'hmjt';
+        const allKeys = dashGenConfig(genMode).keys;
+        const filt = table._dashFiltro || {};
+        if (filt.gen !== 'all' && Array.isArray(filt.gen) && filt.gen.length > 0) {
+            return filt.gen.filter(function(k) {
+                return allKeys.indexOf(k) !== -1;
+            });
+        }
+        return allKeys.slice();
+    }
+
+    function sumarSegmentosEnFila(tr, keys, prefijoAttr) {
+        let suma = 0;
+        keys.forEach(function(g) {
+            const attr = prefijoAttr ? ('data-dash-' + prefijoAttr + g) : ('data-dash-' + g);
+            suma += parseInt(tr.getAttribute(attr) || '0', 10) || 0;
+        });
+        return suma;
+    }
+
+    function actualizarFilasUvPorSegmento(table) {
+        if (!table.classList.contains('uv-simple-table')) {
+            return;
+        }
+        const filt = table._dashFiltro || {};
+        const genActivo = filt.gen !== 'all' && Array.isArray(filt.gen) && filt.gen.length > 0;
+        const keys = obtenerSegmentosActivosTabla(table);
+        const esPagos = table.id === 'tablaUvPagos' || table.id === 'tablaCapPagos';
+        const esCapInscritos = table.id === 'tablaCapInscripciones';
+        const prefExtra = esPagos ? 'pag-' : 'asist-';
+
+        table.querySelectorAll('tbody tr[data-dash-row]').forEach(function(tr) {
+            const tdTotal = tr.querySelector('.uv-dash-col-total');
+            const tdExtra = tr.querySelector('.uv-dash-col-extra');
+            if (!genActivo) {
+                if (tdTotal) {
+                    tdTotal.textContent = String(parseInt(tr.getAttribute('data-dash-ins') || '0', 10) || 0);
+                }
+                if (tdExtra) {
+                    tdExtra.textContent = String(parseInt(tr.getAttribute('data-dash-extra') || '0', 10) || 0);
+                }
+                return;
+            }
+            if (tdTotal) {
+                tdTotal.textContent = String(sumarSegmentosEnFila(tr, keys, ''));
+            }
+            if (tdExtra) {
+                if (esCapInscritos) {
+                    tdExtra.textContent = String(parseInt(tr.getAttribute('data-dash-extra') || '0', 10) || 0);
+                } else {
+                    tdExtra.textContent = String(sumarSegmentosEnFila(tr, keys, prefExtra));
+                }
+            }
+        });
+    }
+
+    function recalcularTotalesUv(table) {
+        if (!table.classList.contains('uv-simple-table')) {
+            return;
+        }
+        const tfoot = table.querySelector('tfoot.js-dash-tfoot tr');
+        if (!tfoot) {
+            return;
+        }
+        const filt = table._dashFiltro || {};
+        const genActivo = filt.gen !== 'all' && Array.isArray(filt.gen) && filt.gen.length > 0;
+        const keys = obtenerSegmentosActivosTabla(table);
+        const esPagos = table.id === 'tablaUvPagos' || table.id === 'tablaCapPagos';
+        const esCapInscritos = table.id === 'tablaCapInscripciones';
+        const prefExtra = esPagos ? 'pag-' : 'asist-';
+        const sums = { h: 0, m: 0, j: 0, t: 0, a: 0, total: 0, extra: 0 };
+
+        table.querySelectorAll('tbody tr[data-dash-row]').forEach(function(tr) {
+            if (tr.style.display === 'none') {
+                return;
+            }
+            keys.forEach(function(g) {
+                sums[g] += parseInt(tr.getAttribute('data-dash-' + g) || '0', 10) || 0;
+            });
+            if (genActivo) {
+                sums.total += sumarSegmentosEnFila(tr, keys, '');
+                if (esCapInscritos) {
+                    sums.extra += parseInt(tr.getAttribute('data-dash-extra') || '0', 10) || 0;
+                } else {
+                    sums.extra += sumarSegmentosEnFila(tr, keys, prefExtra);
+                }
+            } else {
+                sums.total += parseInt(tr.getAttribute('data-dash-ins') || '0', 10) || 0;
+                sums.extra += parseInt(tr.getAttribute('data-dash-extra') || '0', 10) || 0;
+            }
+        });
+
+        keys.forEach(function(g) {
+            const th = tfoot.querySelector('[data-dash-seg="' + g + '"]');
+            if (th) {
+                th.textContent = String(sums[g]);
+            }
+        });
+        const thTotal = tfoot.querySelector('.uv-dash-col-total');
+        const thExtra = tfoot.querySelector('.uv-dash-col-extra');
+        if (thTotal) {
+            thTotal.textContent = String(sums.total);
+        }
+        if (thExtra) {
+            thExtra.textContent = String(sums.extra);
+        }
+    }
+
     function aplicarFiltrosTabla(table) {
         const tbody = table.querySelector('tbody');
         const tfoot = table.querySelector('tfoot.js-dash-tfoot');
@@ -823,6 +790,7 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
             return;
         }
 
+        const esUvSimple = table.classList.contains('uv-simple-table');
         let activo = false;
         const f = table._dashFiltro || {};
         const genActivo = f.gen !== 'all' && Array.isArray(f.gen) && f.gen.length > 0;
@@ -839,8 +807,16 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
             tr.style.display = ok ? '' : 'none';
         });
 
+        aplicarVisibilidadColumnasSegmento(table);
+        actualizarFilasUvPorSegmento(table);
+
         if (tfoot) {
-            tfoot.style.display = activo ? 'none' : '';
+            if (esUvSimple) {
+                tfoot.style.display = '';
+                recalcularTotalesUv(table);
+            } else {
+                tfoot.style.display = activo ? 'none' : '';
+            }
         }
     }
 
@@ -890,15 +866,14 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
         segmentWrap.className = 'dash-segment-checks';
         const segmentHint = document.createElement('div');
         segmentHint.className = 'dash-segment-hint';
-        segmentHint.textContent = 'Marca uno o varios: la fila debe cumplir todos los marcados (Y). Sin marcar = todos.';
+        segmentHint.textContent = table.classList.contains('uv-simple-table')
+            ? genCfg.hintUv
+            : genCfg.hintDefault;
         segmentCol.appendChild(segmentWrap);
         segmentCol.appendChild(segmentHint);
 
         const segmentInputs = [];
-        const segmentDefs = genMode === 'ajt'
-            ? [['a', 'Adultos'], ['j', 'Jóvenes'], ['t', 'Teens']]
-            : [['h', 'Hombres'], ['m', 'Mujeres'], ['j', 'Jóvenes'], ['t', 'Teens']];
-        segmentDefs.forEach(function(def) {
+        genCfg.segments.forEach(function(def) {
             const lab = document.createElement('label');
             lab.className = 'dash-segment-opt';
             const inp = document.createElement('input');
@@ -909,14 +884,10 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
             segmentWrap.appendChild(lab);
             segmentInputs.push(inp);
         });
-        addGroupBlock('Segmento', segmentCol);
+        addGroupBlock(genCfg.label, segmentCol);
 
         let tieneDesgloseGen = false;
         table.querySelectorAll('tbody tr[data-dash-row]').forEach(function(tr) {
-            const s = (parseInt(tr.getAttribute('data-dash-h') || '0', 10) || 0)
-                + (parseInt(tr.getAttribute('data-dash-m') || '0', 10) || 0)
-                + (parseInt(tr.getAttribute('data-dash-j') || '0', 10) || 0)
-                + (parseInt(tr.getAttribute('data-dash-t') || '0', 10) || 0);
             if (genMode === 'ajt') {
                 const sa = (parseInt(tr.getAttribute('data-dash-a') || '0', 10) || 0)
                     + (parseInt(tr.getAttribute('data-dash-j') || '0', 10) || 0)
@@ -924,15 +895,22 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
                 if (sa > 0) {
                     tieneDesgloseGen = true;
                 }
-            } else if (s > 0) {
-                tieneDesgloseGen = true;
+            } else {
+                genCfg.keys.forEach(function(k) {
+                    if ((parseInt(tr.getAttribute('data-dash-' + k) || '0', 10) || 0) > 0) {
+                        tieneDesgloseGen = true;
+                    }
+                });
             }
         });
         if (!tieneDesgloseGen) {
             segmentInputs.forEach(function(inp) {
                 inp.disabled = true;
             });
-            segmentCol.title = 'Sin desglose por segmento en esta tabla para el periodo o línea seleccionados.';
+            const sinDesgloseMsg = genMode === 'n123' || genMode === 'hmj'
+                ? 'Sin inscripciones por nivel en esta tabla para el filtro actual.'
+                : 'Sin desglose por segmento en esta tabla para el periodo o línea seleccionados.';
+            segmentCol.title = sinDesgloseMsg;
         }
 
         const selPago = document.createElement('select');
@@ -1040,6 +1018,47 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
         enlace.click();
     }
 
+    function slugMinisterioNombre(nombre) {
+        return slugifyTitulo(nombre).replace(/-/g, ' ');
+    }
+
+    function aplicarFiltroMinisterioGlobalEnTabla(table) {
+        const globalMinId = String(table.getAttribute('data-dash-global-ministerio-id') || '').trim();
+        if (!globalMinId) {
+            return;
+        }
+        const globalSelect = document.querySelector('select[name="ministerio"]');
+        if (!globalSelect) {
+            return;
+        }
+        const optGlobal = globalSelect.querySelector('option[value="' + globalMinId.replace(/"/g, '') + '"]');
+        if (!optGlobal) {
+            return;
+        }
+        const nombreGlobal = slugMinisterioNombre(optGlobal.textContent || '');
+        const wrap = table.closest('.table-wrap');
+        if (!wrap) {
+            return;
+        }
+        const toolRow = wrap.previousElementSibling;
+        if (!toolRow || !toolRow.classList.contains('dash-table-tool-row')) {
+            return;
+        }
+        const selMin = toolRow.querySelector('.dash-inline-filters select');
+        if (!selMin) {
+            return;
+        }
+        Array.from(selMin.options).forEach(function(op) {
+            if (op.value && slugMinisterioNombre(op.textContent || '') === nombreGlobal) {
+                selMin.value = op.value;
+            }
+        });
+        if (typeof table._dashFiltro === 'object') {
+            table._dashFiltro.min = selMin.value || '';
+            aplicarFiltrosTabla(table);
+        }
+    }
+
     if (contenedorDashboard && typeof html2canvas !== 'undefined') {
         const tableWraps = Array.from(document.querySelectorAll('.dash-card .table-wrap')).filter(function(wrap) {
             return wrap.querySelector('table') !== null;
@@ -1059,12 +1078,21 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
 
                 const hint = document.createElement('p');
                 hint.className = 'dash-filter-hint';
-                hint.textContent = 'Filtros por tabla: ministerio; segmento (varias casillas a la vez = debe cumplir todas); pagos. El pie de totales se oculta mientras hay filtros activos.';
+                const hintGenCfg = dashGenConfig(table.getAttribute('data-dash-gen-mode') || 'hmjt');
+                const hintFiltroDetalle = hintGenCfg.label.toLowerCase();
+                if (table.classList.contains('uv-simple-table')) {
+                    hint.textContent = 'Filtros: ministerio; ' + hintFiltroDetalle
+                        + ' (oculta columnas y recalcula totales). Pagos solo en la tabla de pagos.';
+                } else {
+                    hint.textContent = 'Filtros por tabla: ministerio; ' + hintFiltroDetalle
+                        + ' (oculta columnas no marcadas y filtra filas); pagos. El pie de totales se oculta mientras hay filtros activos.';
+                }
                 leftCol.appendChild(hint);
 
                 const filtros = crearBarraFiltros(table, wrap);
                 leftCol.appendChild(filtros);
                 toolRow.appendChild(leftCol);
+                aplicarFiltroMinisterioGlobalEnTabla(table);
             }
 
             const actions = document.createElement('div');
@@ -1093,6 +1121,205 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
             actions.appendChild(btn);
             toolRow.appendChild(actions);
             wrap.parentNode.insertBefore(toolRow, wrap);
+        });
+    }
+
+    if (window.UV_DASH_DETALLE && window.UV_DASH_DETALLE.route) {
+        const uvModal = document.getElementById('uvDetalleModal');
+        const uvTitulo = document.getElementById('uvDetalleTitulo');
+        const uvSub = document.getElementById('uvDetalleSub');
+        const uvBody = document.getElementById('uvDetalleBody');
+        const uvVacio = document.getElementById('uvDetalleVacio');
+        const uvLoading = document.getElementById('uvDetalleLoading');
+        const uvAlineacion = document.getElementById('uvDetalleAlineacion');
+        const uvCfg = window.UV_DASH_DETALLE;
+        let uvEstado = { slug: '', nombre: '', vista: 'todas', gen: [] };
+
+        function uvGenDesdeTabla(table) {
+            const filt = table && table._dashFiltro ? table._dashFiltro : {};
+            if (filt.gen !== 'all' && Array.isArray(filt.gen) && filt.gen.length) {
+                return filt.gen.slice();
+            }
+            return [];
+        }
+
+        function uvMarcarFiltrosModal(vista) {
+            document.querySelectorAll('.uv-det-filt').forEach(function(btn) {
+                btn.classList.toggle('active', btn.getAttribute('data-uv-filt') === vista);
+            });
+        }
+
+        function uvRenderFilas(personas) {
+            if (!uvBody) {
+                return;
+            }
+            uvBody.innerHTML = '';
+            if (!personas.length) {
+                if (uvVacio) {
+                    uvVacio.hidden = false;
+                }
+                return;
+            }
+            if (uvVacio) {
+                uvVacio.hidden = true;
+            }
+            personas.forEach(function(p) {
+                const tr = document.createElement('tr');
+                const pagoTxt = p.pagado
+                    ? ('<span class="uv-det-ok">Sí</span>' + (p.valor_pago > 0 ? ' ($' + Math.round(p.valor_pago) + ')' : ''))
+                    : '<span class="uv-det-no">No</span>';
+                const asisTxt = p.asistencia_real
+                    ? '<span class="uv-det-ok">Sí</span>'
+                    : '<span class="uv-det-no">No</span>';
+                tr.innerHTML = '<td>' + (p.nombre || '—') + '</td>'
+                    + '<td>' + (p.cedula || '—') + '</td>'
+                    + '<td>' + (p.lider || '—') + '</td>'
+                    + '<td>' + (p.segmento || '—') + '</td>'
+                    + '<td>' + (p.fecha_registro || '—') + '</td>'
+                    + '<td>' + pagoTxt + '</td>'
+                    + '<td>' + asisTxt + '</td>';
+                uvBody.appendChild(tr);
+            });
+        }
+
+        function uvCerrarModal() {
+            if (!uvModal) {
+                return;
+            }
+            uvModal.hidden = true;
+            uvModal.setAttribute('aria-hidden', 'true');
+        }
+
+        function uvAbrirModal() {
+            if (!uvModal) {
+                return;
+            }
+            uvModal.hidden = false;
+            uvModal.setAttribute('aria-hidden', 'false');
+        }
+
+        function uvUrlDetalleApi(extraParams) {
+            const pageUrl = new URL(window.location.href);
+            const apiUrl = new URL(pageUrl.pathname, pageUrl.origin);
+            apiUrl.searchParams.set('url', uvCfg.route || 'reportes/dashboard-escuelas-uv-detalle');
+            Object.keys(extraParams || {}).forEach(function(key) {
+                const val = extraParams[key];
+                if (val !== undefined && val !== null && String(val) !== '') {
+                    apiUrl.searchParams.set(key, String(val));
+                }
+            });
+            return apiUrl.toString();
+        }
+
+        async function uvCargarDetalle() {
+            if (!uvEstado.slug) {
+                return;
+            }
+            if (uvLoading) {
+                uvLoading.hidden = false;
+            }
+            if (uvVacio) {
+                uvVacio.hidden = true;
+                uvVacio.textContent = 'No hay personas para este criterio.';
+            }
+            const query = {
+                ministerio: uvEstado.slug,
+                anio: String(uvCfg.anio || ''),
+                semestre: String(uvCfg.semestre || ''),
+                vista: uvEstado.vista || 'todas',
+                filtro_ministerio: uvCfg.filtroMinisterio || '',
+                filtro_lider: uvCfg.filtroLider || ''
+            };
+            if (uvEstado.gen.length) {
+                query.gen = uvEstado.gen.join(',');
+            }
+            try {
+                const res = await fetch(uvUrlDetalleApi(query), {
+                    headers: { 'Accept': 'application/json' },
+                    credentials: 'same-origin'
+                });
+                const raw = await res.text();
+                let data;
+                try {
+                    data = JSON.parse(raw);
+                } catch (parseErr) {
+                    if (res.status === 404) {
+                        throw new Error('Ruta no encontrada (404). Recarga la página con Ctrl+F5.');
+                    }
+                    throw new Error('Respuesta no válida del servidor (¿sesión expirada?).');
+                }
+                if (!res.ok || !data.ok) {
+                    throw new Error(data.mensaje || ('Error al cargar (' + res.status + ')'));
+                }
+                if (uvTitulo) {
+                    uvTitulo.textContent = data.ministerio || uvEstado.nombre;
+                }
+                if (uvSub && data.periodo) {
+                    const etq = data.periodo.etiqueta ? (data.periodo.etiqueta + ' ' + data.periodo.anio + ' · ') : '';
+                    uvSub.textContent = etq + 'Periodo ' + data.periodo.fecha_inicio + ' a ' + data.periodo.fecha_fin
+                        + ' · ' + (data.totales ? data.totales.listado : 0) + ' persona(s)'
+                        + ' · ' + (data.totales ? data.totales.pagados : 0) + ' con pago'
+                        + ' · ' + (data.totales ? data.totales.asistencias_reales : 0) + ' con asistencia real';
+                }
+                if (uvAlineacion && data.alineacion) {
+                    uvAlineacion.textContent = 'Pagos: ' + data.alineacion.pagos + ' · Asistencias: ' + data.alineacion.asistencias;
+                }
+                uvRenderFilas(data.personas || []);
+            } catch (err) {
+                if (uvBody) {
+                    uvBody.innerHTML = '';
+                }
+                if (uvVacio) {
+                    uvVacio.hidden = false;
+                    uvVacio.textContent = err.message || 'No se pudo cargar el detalle.';
+                }
+            } finally {
+                if (uvLoading) {
+                    uvLoading.hidden = true;
+                }
+            }
+        }
+
+        document.querySelectorAll('.uv-dash-tabla-detalle').forEach(function(table) {
+            table.querySelectorAll('tbody tr[data-dash-row] .uv-min-clickable').forEach(function(td) {
+                td.addEventListener('click', function() {
+                    const tr = td.closest('tr');
+                    if (!tr) {
+                        return;
+                    }
+                    const slug = tr.getAttribute('data-dash-min') || '';
+                    const nombre = String(td.textContent || '').trim();
+                    if (!slug) {
+                        return;
+                    }
+                    uvEstado.slug = slug;
+                    uvEstado.nombre = nombre;
+                    uvEstado.gen = uvGenDesdeTabla(table);
+                    const vistaIni = table.getAttribute('data-uv-vista-inicial') || 'todas';
+                    uvEstado.vista = vistaIni;
+                    uvMarcarFiltrosModal(vistaIni);
+                    uvAbrirModal();
+                    uvCargarDetalle();
+                });
+            });
+        });
+
+        document.querySelectorAll('[data-uv-cerrar]').forEach(function(el) {
+            el.addEventListener('click', uvCerrarModal);
+        });
+
+        document.querySelectorAll('.uv-det-filt').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                uvEstado.vista = btn.getAttribute('data-uv-filt') || 'todas';
+                uvMarcarFiltrosModal(uvEstado.vista);
+                uvCargarDetalle();
+            });
+        });
+
+        document.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Escape' && uvModal && !uvModal.hidden) {
+                uvCerrarModal();
+            }
         });
     }
 

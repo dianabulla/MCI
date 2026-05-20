@@ -48,8 +48,20 @@ class DiscipularEvaluacion extends BaseModel {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ";
 
+        $sqlIntentoActivo = "
+            CREATE TABLE IF NOT EXISTS discipular_evaluacion_intento_activo (
+                Id_Evaluacion INT NOT NULL,
+                Id_Persona INT NOT NULL,
+                Intento_Numero INT NOT NULL,
+                Iniciado_En INT UNSIGNED NOT NULL,
+                PRIMARY KEY (Id_Evaluacion, Id_Persona, Intento_Numero),
+                INDEX idx_persona (Id_Persona)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ";
+
         $this->db->exec($sqlEvaluaciones);
         $this->db->exec($sqlResultados);
+        $this->db->exec($sqlIntentoActivo);
 
         // Compatibilidad con instalaciones existentes que ya tenían la tabla creada.
         $this->asegurarColumnaEvaluaciones('Fecha_Habilitacion_Inicio', 'DATE NULL');
@@ -89,6 +101,69 @@ class DiscipularEvaluacion extends BaseModel {
         return (int)$this->db->lastInsertId();
     }
 
+    public function actualizarEvaluacion(int $idEvaluacion, array $data): bool {
+        $idEvaluacion = (int)$idEvaluacion;
+        if ($idEvaluacion <= 0) {
+            return false;
+        }
+
+        $stmt = $this->db->prepare("UPDATE discipular_evaluaciones SET
+            Titulo = ?,
+            Descripcion = ?,
+            Nivel = ?,
+            Modulo_Numero = ?,
+            Leccion = ?,
+            Puntaje_Minimo = ?,
+            Preguntas_JSON = ?,
+            Fecha_Habilitacion_Inicio = ?,
+            Fecha_Habilitacion_Fin = ?
+            WHERE Id_Evaluacion = ?");
+
+        return (bool)$stmt->execute([
+            $data['titulo'],
+            $data['descripcion'],
+            (int)$data['nivel'],
+            (int)$data['modulo_numero'],
+            $data['leccion'] ?? null,
+            (float)$data['puntaje_minimo'],
+            $data['preguntas_json'],
+            $data['fecha_habilitacion_inicio'] ?? null,
+            $data['fecha_habilitacion_fin'] ?? null,
+            $idEvaluacion,
+        ]);
+    }
+
+    public function buscarEvaluacionActivaPorContexto(int $nivel, int $moduloNumero, string $leccion, int $creadoPor = 0): ?array {
+        $nivel = (int)$nivel;
+        $moduloNumero = (int)$moduloNumero;
+        $leccion = trim($leccion);
+        if ($nivel <= 0 || $moduloNumero <= 0) {
+            return null;
+        }
+
+        $sql = "SELECT * FROM discipular_evaluaciones
+            WHERE Activa = 1 AND Nivel = ? AND Modulo_Numero = ?";
+        $params = [$nivel, $moduloNumero];
+
+        if ($leccion !== '') {
+            $sql .= " AND Leccion = ?";
+            $params[] = $leccion;
+        }
+
+        if ($creadoPor > 0) {
+            $sql .= " AND Creado_Por = ?";
+            $params[] = $creadoPor;
+        }
+
+        $sql .= " ORDER BY Id_Evaluacion DESC LIMIT 1";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $row ?: null;
+    }
+
     public function listarEvaluaciones(): array {
         $stmt = $this->db->query("SELECT * FROM discipular_evaluaciones ORDER BY Nivel ASC, Modulo_Numero ASC, Fecha_Creacion DESC");
         return (array)$stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -108,6 +183,25 @@ class DiscipularEvaluacion extends BaseModel {
 
     public function desactivarEvaluacion(int $idEvaluacion): bool {
         $stmt = $this->db->prepare("UPDATE discipular_evaluaciones SET Activa = 0 WHERE Id_Evaluacion = ?");
+        return (bool)$stmt->execute([$idEvaluacion]);
+    }
+
+    public function activarEvaluacion(int $idEvaluacion): bool {
+        $stmt = $this->db->prepare("UPDATE discipular_evaluaciones SET Activa = 1 WHERE Id_Evaluacion = ?");
+        return (bool)$stmt->execute([$idEvaluacion]);
+    }
+
+    public function eliminarEvaluacion(int $idEvaluacion): bool {
+        if ($idEvaluacion <= 0) {
+            return false;
+        }
+
+        $stmtIntentos = $this->db->prepare(
+            "DELETE FROM discipular_evaluacion_intento_activo WHERE Id_Evaluacion = ?"
+        );
+        $stmtIntentos->execute([$idEvaluacion]);
+
+        $stmt = $this->db->prepare("DELETE FROM discipular_evaluaciones WHERE Id_Evaluacion = ?");
         return (bool)$stmt->execute([$idEvaluacion]);
     }
 
@@ -138,6 +232,77 @@ class DiscipularEvaluacion extends BaseModel {
             WHERE Id_Evaluacion = ? AND Id_Persona = ?");
         $stmt->execute([$idEvaluacion, $idPersona]);
         return (int)($stmt->fetchColumn() ?: 0);
+    }
+
+    public function existeResultadoIntento(int $idEvaluacion, int $idPersona, int $intentoNumero): bool {
+        $stmt = $this->db->prepare("SELECT 1
+            FROM discipular_evaluacion_resultados
+            WHERE Id_Evaluacion = ? AND Id_Persona = ? AND Intento_Numero = ?
+            LIMIT 1");
+        $stmt->execute([(int)$idEvaluacion, (int)$idPersona, (int)$intentoNumero]);
+        return (bool)$stmt->fetchColumn();
+    }
+
+    public function obtenerInicioIntentoActivo(int $idEvaluacion, int $idPersona, int $intentoNumero): ?int {
+        $stmt = $this->db->prepare("SELECT Iniciado_En
+            FROM discipular_evaluacion_intento_activo
+            WHERE Id_Evaluacion = ? AND Id_Persona = ? AND Intento_Numero = ?
+            LIMIT 1");
+        $stmt->execute([(int)$idEvaluacion, (int)$idPersona, (int)$intentoNumero]);
+        $valor = $stmt->fetchColumn();
+        if ($valor === false || $valor === null) {
+            return null;
+        }
+
+        $inicio = (int)$valor;
+        return $inicio > 0 ? $inicio : null;
+    }
+
+    public function registrarInicioIntentoActivo(int $idEvaluacion, int $idPersona, int $intentoNumero, ?int $iniciadoEn = null): int {
+        $iniciadoEn = (int)($iniciadoEn ?? time());
+        if ($iniciadoEn <= 0) {
+            $iniciadoEn = time();
+        }
+
+        $stmt = $this->db->prepare("INSERT INTO discipular_evaluacion_intento_activo
+            (Id_Evaluacion, Id_Persona, Intento_Numero, Iniciado_En)
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE Iniciado_En = VALUES(Iniciado_En)");
+        $stmt->execute([(int)$idEvaluacion, (int)$idPersona, (int)$intentoNumero, $iniciadoEn]);
+
+        return $iniciadoEn;
+    }
+
+    public function eliminarIntentoActivo(int $idEvaluacion, int $idPersona, int $intentoNumero): void {
+        $stmt = $this->db->prepare("DELETE FROM discipular_evaluacion_intento_activo
+            WHERE Id_Evaluacion = ? AND Id_Persona = ? AND Intento_Numero = ?");
+        $stmt->execute([(int)$idEvaluacion, (int)$idPersona, (int)$intentoNumero]);
+    }
+
+    /**
+     * Elimina todos los intentos (resultados y timers activos) de una persona en una evaluación.
+     * Devuelve cuántos resultados se eliminaron.
+     */
+    public function reactivarIntentosPersonaEvaluacion(int $idEvaluacion, int $idPersona): int {
+        $idEvaluacion = (int)$idEvaluacion;
+        $idPersona = (int)$idPersona;
+        if ($idEvaluacion <= 0 || $idPersona <= 0) {
+            return 0;
+        }
+
+        $stmtActivos = $this->db->prepare(
+            "DELETE FROM discipular_evaluacion_intento_activo
+             WHERE Id_Evaluacion = ? AND Id_Persona = ?"
+        );
+        $stmtActivos->execute([$idEvaluacion, $idPersona]);
+
+        $stmtResultados = $this->db->prepare(
+            "DELETE FROM discipular_evaluacion_resultados
+             WHERE Id_Evaluacion = ? AND Id_Persona = ?"
+        );
+        $stmtResultados->execute([$idEvaluacion, $idPersona]);
+
+        return (int)$stmtResultados->rowCount();
     }
 
     public function contarIntentosPorEvaluacionesPersona(array $idsEvaluacion, int $idPersona): array {

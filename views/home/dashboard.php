@@ -2,7 +2,7 @@
 
 <?php
 $cardsDashboard = [];
-$esDiscipuloSoloDiscipular = AuthController::esRolDiscipuloUsuario()
+$esDiscipuloSoloDiscipular = AuthController::usaVistaDiscipuloCapacitacionDestino()
     && !AuthController::esAdministrador();
 $esContextoMaestro = AuthController::getActiveContext() === 'maestro';
 
@@ -18,17 +18,23 @@ if ($esDiscipuloSoloDiscipular) {
     ];
 }
 
-if (!$esDiscipuloSoloDiscipular && AuthController::puedeVerModuloPersonasGanar()) {
+if (!$esDiscipuloSoloDiscipular && AuthController::puedeAccederAreaGanarConsolidar()) {
     $cardsDashboard[] = [
         'titulo' => 'Ganar-Consolidar',
-        'subtitulo' => 'Almas nuevas y primer contacto',
+        'subtitulo' => AuthController::puedeVerModuloPersonasGanar()
+            ? 'Almas ganadas y discípulos'
+            : 'Discípulos de tu red',
         'valor' => (int)($totalPersonas ?? 0),
-        'accion' => 'Ver todas',
-        'href' => PUBLIC_URL . '?url=personas',
+        'accion' => 'Abrir',
+        'href' => PUBLIC_URL . '?url=' . AuthController::urlEntradaGanarConsolidarRelativa(),
         'icono' => 'bi-person-heart',
         'clase' => 'ganar',
     ];
+}
 
+if (!$esDiscipuloSoloDiscipular
+    && AuthController::puedeVerModuloPersonasGanar()
+    && AuthController::puede('ministerios:ver')) {
     $cardsDashboard[] = [
         'titulo' => 'Discipular',
         'subtitulo' => 'Formacion y crecimiento',
@@ -41,25 +47,10 @@ if (!$esDiscipuloSoloDiscipular && AuthController::puedeVerModuloPersonasGanar()
 }
 
 if (!$esDiscipuloSoloDiscipular
-    && AuthController::puedeVerPersonasConsulta()
-    && !AuthController::puedeVerModuloPersonasGanar()
-    && !AuthController::debeUsarSoloVistaProgramasPersonas()) {
-    $cardsDashboard[] = [
-        'titulo' => 'Personas',
-        'subtitulo' => 'Consulta de discipulos y listados',
-        'valor' => (int)($totalPersonas ?? 0),
-        'accion' => 'Abrir listado',
-        'href' => PUBLIC_URL . '?url=personas',
-        'icono' => 'bi-people',
-        'clase' => 'personas-consulta',
-    ];
-}
-
-if (!$esDiscipuloSoloDiscipular
     && !$esContextoMaestro
     && !AuthController::esAdministrador()
-    && !AuthController::tienePermiso('personas', 'ver')
-    && AuthController::tienePermiso('discipular_evaluaciones', 'ver')) {
+    && !AuthController::puede('personas:ver')
+    && AuthController::puede('discipular_evaluaciones:ver')) {
     $cardsDashboard[] = [
         'titulo' => 'Discipular',
         'subtitulo' => 'Formacion y crecimiento',
@@ -71,7 +62,7 @@ if (!$esDiscipuloSoloDiscipular
     ];
 }
 
-if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::tienePermiso('celulas', 'ver'))) {
+if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::puede('celulas:ver'))) {
     $cardsDashboard[] = [
         'titulo' => 'Enviar',
         'subtitulo' => 'Celulas activas en mision',
@@ -83,7 +74,7 @@ if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthCon
     ];
 }
 
-if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::tienePermiso('teen', 'ver'))) {
+if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::puede('teen:ver'))) {
     $cardsDashboard[] = [
         'titulo' => 'Teens',
         'subtitulo' => 'Acompanamiento de nuevas generaciones',
@@ -99,10 +90,10 @@ if (!$esDiscipuloSoloDiscipular
     && !$esContextoMaestro
     && (
         AuthController::esAdministrador()
-        || AuthController::tienePermiso('programas', 'ver')
-        || AuthController::tienePermiso('personas_consulta', 'ver')
-        || AuthController::tienePermiso('programas', 'ver_universidad_vida')
-        || AuthController::tienePermiso('programas', 'ver_capacitacion_destino')
+        || AuthController::puede('programas:ver')
+        || AuthController::puede('personas_consulta:ver')
+        || AuthController::puede('programas:ver_universidad_vida')
+        || AuthController::puede('programas:ver_capacitacion_destino')
     )) {
     $cardsDashboard[] = [
         'titulo' => 'Programas',
@@ -144,7 +135,7 @@ if (!$esDiscipuloSoloDiscipular
     <?php endforeach; ?>
 </div>
 
-<?php if (!$esDiscipuloSoloDiscipular && !empty($eventosProximos) && (AuthController::esAdministrador() || AuthController::tienePermiso('eventos', 'ver'))): ?>
+<?php if (!$esDiscipuloSoloDiscipular && !empty($eventosProximos) && (AuthController::esAdministrador() || AuthController::puede('eventos:ver'))): ?>
 <div class="main-content" style="margin-top: 30px;">
     <h3>Próximos Eventos</h3>
     <table class="data-table">

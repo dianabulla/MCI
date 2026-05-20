@@ -8,6 +8,8 @@ require_once APP . '/Models/UsuarioAcceso.php';
 require_once APP . '/Models/Rol.php';
 require_once APP . '/Models/UserRole.php';
 require_once APP . '/Controllers/AuthController.php';
+require_once APP . '/Helpers/GestionSistemaAccess.php';
+require_once APP . '/Helpers/PermisoGuard.php';
 
 class CuentaController extends BaseController {
     private $personaModel;
@@ -23,10 +25,7 @@ class CuentaController extends BaseController {
     }
 
     public function index() {
-        if (!AuthController::esAdministrador()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
-            exit;
-        }
+        GestionSistemaAccess::denegarSiNoPuedeVerCuentas();
 
         $cuentasPersona = $this->personaModel->getPersonasConUsuario();
         $cuentasAcceso = $this->usuarioAccesoModel->getAllWithRelations();
@@ -71,10 +70,7 @@ class CuentaController extends BaseController {
     }
 
     public function asignarSegundoRol() {
-        if (!AuthController::esAdministrador()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
-            exit;
-        }
+        PermisoGuard::exigir('cuentas:editar');
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->redirect('cuentas');
@@ -121,10 +117,7 @@ class CuentaController extends BaseController {
     }
 
     public function crear() {
-        if (!AuthController::esAdministrador()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
-            exit;
-        }
+        PermisoGuard::exigir('cuentas:crear');
 
         $tablaDisponible = $this->usuarioAccesoModel->existeTabla();
         $roles = $this->rolModel->getAll();
@@ -210,10 +203,7 @@ class CuentaController extends BaseController {
     }
 
     public function editar() {
-        if (!AuthController::esAdministrador()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
-            exit;
-        }
+        PermisoGuard::exigir('cuentas:editar');
 
         $tablaDisponible = $this->usuarioAccesoModel->existeTabla();
         $roles = $this->rolModel->getAll();

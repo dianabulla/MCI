@@ -50,10 +50,20 @@ const DELAY_MIN_MS = Math.max(500, Number.isFinite(delayMinRaw) ? delayMinRaw : 
 const DELAY_MAX_MS = Math.max(DELAY_MIN_MS, Number.isFinite(delayMaxRaw) ? delayMaxRaw : 180000);
 const POLL_MS = Math.max(3000, parseInt(process.env.WA_POLL_MS || '5000', 10));
 const MAX_ATTEMPTS = Math.max(1, parseInt(process.env.WA_MAX_ATTEMPTS || '3', 10));
+const WAIT_ACK = parseBoolean(process.env.WA_WAIT_ACK, true);
+/** Cumpleaños: la API suele dar ACK_ERROR aunque el envío manual sí llega; por defecto no bloquear por ACK. */
+const WAIT_ACK_CUMPLEANOS = parseBoolean(process.env.WA_WAIT_ACK_CUMPLEANOS, false);
+const WAIT_ACK_MS = Math.max(5000, parseInt(process.env.WA_WAIT_ACK_MS || '90000', 10));
+const MIN_ACK_ENVIO = parseInt(process.env.WA_MIN_ACK || '1', 10); // 1 = ACK_SERVER
+const ACK_ERROR_GRACE_MS = Math.max(3000, parseInt(process.env.WA_ACK_ERROR_GRACE_MS || '12000', 10));
+const SKIP_MEDIA_CUMPLEANOS = parseBoolean(process.env.WA_SKIP_MEDIA_CUMPLEANOS, false);
+const CUMPLE_TYPING_MS = Math.max(0, parseInt(process.env.WA_CUMPLE_TYPING_MS || '2000', 10));
 const DEFAULT_TEMPLATE_CUMPLEANOS = 'Hoy celebramos tu vida y damos gracias a Dios por tu corazón tan dispuesto para servir.\n\nTu esfuerzo, tu amor por las personas y tu entrega han dejado huellas profundas en nuestra iglesia. Gracias por guiar, apoyar y nunca rendirte.\n\nOramos para que este nuevo año llegue lleno de bendición, fuerzas renovadas y mucha alegría.\n\n¡Feliz cumpleaños te desea MCI Madrid! 🎉 Te honramos y te agradecemos de corazón.';
 
 let procesando = false;
+let procesamientoIniciado = false;
 let ultimaFechaCumpleanosProcesada = null;
+let ultimoLogColaVacia = 0;
 
 async function asegurarTabla() {
   await pool.query(
@@ -100,6 +110,238 @@ function normalizarTelefono(telefono) {
   if (/^\d{10}$/.test(digits)) return `57${digits}`;
   if (/^\d{11,15}$/.test(digits)) return digits;
   return null;
+}
+
+/**
+ * Resuelve el chatId real en WhatsApp (c.us o lid). Evita falsos "enviado" con @c.us inventado.
+ */
+async function resolverDestinoChat(client, telefonoNorm) {
+  if (!telefonoNorm) return null;
+
+  try {
+    const numberId = await client.getNumberId(telefonoNorm);
+    if (numberId && numberId._serialized) {
+      return String(numberId._serialized);
+    }
+  } catch (err) {
+    console.warn(`[WA] getNumberId(${telefonoNorm}):`, err && err.message ? err.message : err);
+  }
+
+  try {
+    const legacyId = `${telefonoNorm}@c.us`;
+    if (typeof client.isRegisteredUser === 'function') {
+      const registrado = await client.isRegisteredUser(legacyId);
+      if (registrado) {
+        return legacyId;
+      }
+    }
+  } catch (err) {
+    console.warn(`[WA] isRegisteredUser(${telefonoNorm}):`, err && err.message ? err.message : err);
+  }
+
+  return null;
+}
+
+function mensajeTieneIdEnvio(sentMsg) {
+  if (!sentMsg) return false;
+  if (sentMsg.id && (sentMsg.id._serialized || sentMsg.id.id || sentMsg.id)) return true;
+  if (sentMsg._data && sentMsg._data.id) return true;
+  return false;
+}
+
+function idMensajeSerializado(sentMsg) {
+  if (!sentMsg || !sentMsg.id) return '';
+  return String(sentMsg.id._serialized || sentMsg.id.id || sentMsg.id || '');
+}
+
+/**
+ * Espera confirmación real de WhatsApp (ACK_SERVER) antes de marcar enviado en BD.
+ */
+function esperarAckMensaje(client, sentMsg, timeoutMs = WAIT_ACK_MS) {
+  const msgId = idMensajeSerializado(sentMsg);
+  if (!msgId) {
+    return Promise.reject(new Error('Mensaje sin id serializado'));
+  }
+
+  if (sentMsg.ack !== undefined && sentMsg.ack >= MIN_ACK_ENVIO) {
+    return Promise.resolve(sentMsg.ack);
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let lastAck = typeof sentMsg.ack === 'number' ? sentMsg.ack : 0;
+    let errorGraceTimer = null;
+
+    const cleanup = () => {
+      client.removeListener('message_ack', onAck);
+      if (errorGraceTimer) {
+        clearTimeout(errorGraceTimer);
+        errorGraceTimer = null;
+      }
+    };
+
+    const finishResolve = (ackVal) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      cleanup();
+      resolve(ackVal);
+    };
+
+    const finishReject = (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      cleanup();
+      reject(err);
+    };
+
+    const timer = setTimeout(() => {
+      if (lastAck >= MIN_ACK_ENVIO) {
+        finishResolve(lastAck);
+        return;
+      }
+      finishReject(
+        new Error(
+          `Timeout ACK (${timeoutMs}ms). Último ack=${lastAck} — WhatsApp no confirmó el envío.`
+        )
+      );
+    }, timeoutMs);
+
+    function scheduleErrorGrace() {
+      if (errorGraceTimer) return;
+      errorGraceTimer = setTimeout(() => {
+        errorGraceTimer = null;
+        if (settled) return;
+        if (lastAck >= MIN_ACK_ENVIO) {
+          finishResolve(lastAck);
+          return;
+        }
+        if (lastAck === -1) {
+          finishReject(
+            new Error(
+              'WhatsApp rechazó el mensaje (ACK_ERROR). Suele ser la imagen/video adjunta o límite de la cuenta; el número puede existir igual.'
+            )
+          );
+        }
+      }, ACK_ERROR_GRACE_MS);
+    }
+
+    function onAck(msg, ack) {
+      const ackVal = typeof ack === 'number' ? ack : (msg && msg.ack);
+      const incomingId = msg && msg.id ? idMensajeSerializado(msg) : '';
+      if (incomingId !== msgId) return;
+
+      lastAck = ackVal;
+      sentMsg.ack = ackVal;
+
+      if (ackVal >= MIN_ACK_ENVIO) {
+        finishResolve(ackVal);
+        return;
+      }
+
+      if (ackVal === -1) {
+        scheduleErrorGrace();
+      }
+    }
+
+    client.on('message_ack', onAck);
+    if (lastAck === -1) {
+      scheduleErrorGrace();
+    }
+  });
+}
+
+async function activarChatHumano(client, chatId) {
+  if (CUMPLE_TYPING_MS <= 0) return;
+  try {
+    const chat = await client.getChatById(chatId);
+    if (chat && typeof chat.sendStateTyping === 'function') {
+      await chat.sendStateTyping();
+      await sleep(CUMPLE_TYPING_MS);
+    }
+  } catch (_) {
+    /* ignorar */
+  }
+}
+
+/**
+ * Cumpleaños con imagen: escribiendo… y luego imagen+caption (como envío manual).
+ */
+async function enviarCumpleanosHumano(client, chatId, texto, mediaUrl, mediaTipo) {
+  await activarChatHumano(client, chatId);
+  const media = await MessageMedia.fromUrl(mediaUrl, { unsafeMime: true });
+  const mimeHint = String(mediaTipo || '').trim() || inferirMimeDesdeUrl(mediaUrl);
+  if (mimeHint && media && !media.mimetype) {
+    media.mimetype = mimeHint;
+  }
+  return client.sendMessage(chatId, media, { caption: texto || undefined });
+}
+
+async function confirmarEnvioOpcional(client, sentMsg, esCumple) {
+  if (!mensajeTieneIdEnvio(sentMsg)) {
+    throw new Error('WhatsApp no devolvió id de mensaje');
+  }
+  const exigirAck = WAIT_ACK && (!esCumple || WAIT_ACK_CUMPLEANOS);
+  if (!exigirAck) {
+    if (esCumple) {
+      console.log(
+        `[WA] Cumpleaños enviado por API (id OK). No se exige ACK: a veces la API marca error y el mensaje sí llega, como en envío manual.`
+      );
+    }
+    return typeof sentMsg.ack === 'number' ? sentMsg.ack : 0;
+  }
+  return esperarAckMensaje(client, sentMsg);
+}
+
+/**
+ * Envía y confirma; cumpleaños con media usa flujo humano; ACK_ERROR en cumpleaños no bloquea por defecto.
+ */
+async function enviarYConfirmarCola(client, chatId, item) {
+  const texto = String(item.mensaje || '').trim();
+  let payload = { ...item };
+  const esCumple = String(item.tipo_evento || '') === 'felicitacion_cumpleanos';
+
+  if (SKIP_MEDIA_CUMPLEANOS && esCumple) {
+    payload = { ...payload, media_url: null, media_tipo: null };
+  }
+
+  const mediaUrl = String(payload.media_url || '').trim();
+  const tieneMedia = mediaUrl !== '';
+
+  const enviarTextoSolo = async () => {
+    if (!texto) {
+      throw new Error('Sin texto para reintento');
+    }
+    console.warn(`[WA] Reintento solo texto -> ${chatId}`);
+    await activarChatHumano(client, chatId);
+    const sentMsg = await client.sendMessage(chatId, texto);
+    await confirmarEnvioOpcional(client, sentMsg, esCumple);
+    return sentMsg;
+  };
+
+  try {
+    let sentMsg;
+    if (esCumple && tieneMedia) {
+      sentMsg = await enviarCumpleanosHumano(client, chatId, texto, mediaUrl, payload.media_tipo);
+    } else {
+      sentMsg = await enviarMensajeCola(client, chatId, payload);
+    }
+    try {
+      await confirmarEnvioOpcional(client, sentMsg, esCumple);
+    } catch (ackErr) {
+      if (tieneMedia && texto && esCumple) {
+        return enviarTextoSolo();
+      }
+      throw ackErr;
+    }
+    return sentMsg;
+  } catch (err) {
+    if (tieneMedia && texto) {
+      return enviarTextoSolo();
+    }
+    throw err;
+  }
 }
 
 function sleep(ms) {
@@ -194,6 +436,7 @@ async function encolarCumpleanosDelDiaSiAplica() {
   const template = await obtenerTemplateCumpleanos();
   const cumpleaneros = await obtenerCumpleanerosDelDia(month, day);
   let encolados = 0;
+  let actualizados = 0;
 
   for (const persona of cumpleaneros) {
     const idPersona = Number(persona.Id_Persona || 0);
@@ -226,26 +469,52 @@ async function encolarCumpleanosDelDiaSiAplica() {
       [telefonoNormalizado, mensaje, template.media_url, template.media_tipo, referencia]
     );
 
-    if (result && result.affectedRows > 0) {
+    if (result && result.affectedRows === 1) {
       encolados += 1;
+    } else if (result && result.affectedRows === 2) {
+      actualizados += 1;
     }
   }
 
   ultimaFechaCumpleanosProcesada = fechaHoy;
-  if (encolados > 0) {
-    console.log(`[CUMPLEANOS] ${encolados} mensaje(s) encolado(s) para ${fechaHoy}.`);
+  const total = cumpleaneros.length;
+  if (total > 0) {
+    console.log(
+      `[CUMPLEANOS] ${fechaHoy}: ${total} cumpleañero(s); ${encolados} nuevo(s) en cola, ${actualizados} ya existían (no se reenvían si están "enviado").`
+    );
+    if (encolados === 0 && actualizados > 0) {
+      console.log(
+        '[CUMPLEANOS] Si no llegaron al celular, ejecuta: php tools/whatsapp_local/reencolar_cumpleanos_hoy.php --execute'
+      );
+    }
   }
 }
 
-async function obtenerPendientes(limit) {
-  // Sin programado_en: enviar cuanto antes (no limitar a "creado hoy" — eso dejaba mensajes huérfanos).
-  // Con programado_en: enviar cuando ya pasó la hora (aunque el worker estuvo apagado días).
+function buildFiltroFechaColaSql() {
+  const onlyToday = parseBoolean(process.env.WA_ONLY_TODAY, true);
+  if (onlyToday) {
+    return `AND (
+            (programado_en IS NULL AND DATE(creado_en) = CURDATE())
+            OR (programado_en IS NOT NULL AND DATE(programado_en) = CURDATE())
+          )`;
+  }
+
   const maxAgeDays = Math.max(1, parseInt(process.env.WA_QUEUE_MAX_AGE_DAYS || '45', 10));
-  const [rows] = await pool.query(
-    `SELECT id, telefono, mensaje, media_url, media_tipo, intentos
+  return `AND creado_en >= DATE_SUB(NOW(), INTERVAL ${maxAgeDays} DAY)`;
+}
+
+async function obtenerPendientes(limit) {
+  // WA_ONLY_TODAY=1 (defecto): solo mensajes de hoy (por creado_en o por programado_en).
+  // Con programado_en: enviar cuando programado_en <= NOW() dentro del mismo día.
+  const filtroFecha = buildFiltroFechaColaSql();
+  const onlyToday = parseBoolean(process.env.WA_ONLY_TODAY, true);
+  const params = onlyToday ? [MAX_ATTEMPTS, limit] : [MAX_ATTEMPTS, limit];
+
+    const [rows] = await pool.query(
+    `SELECT id, telefono, mensaje, media_url, media_tipo, tipo_evento, intentos
      FROM whatsapp_local_queue
      WHERE estado = 'pendiente' AND intentos < ?
-       AND creado_en >= DATE_SUB(NOW(), INTERVAL ? DAY)
+       ${filtroFecha}
        AND (
             programado_en IS NULL
             OR programado_en <= NOW()
@@ -256,7 +525,7 @@ async function obtenerPendientes(limit) {
        ELSE 2
      END ASC, id ASC
      LIMIT ?`,
-    [MAX_ATTEMPTS, maxAgeDays, limit]
+    params
   );
   return rows;
 }
@@ -288,6 +557,48 @@ async function marcarFallido(id, error) {
   );
 }
 
+function inferirMimeDesdeUrl(url) {
+  const u = String(url || '').toLowerCase();
+  if (/\.jpe?g(\?|$)/.test(u)) return 'image/jpeg';
+  if (/\.png(\?|$)/.test(u)) return 'image/png';
+  if (/\.gif(\?|$)/.test(u)) return 'image/gif';
+  if (/\.webp(\?|$)/.test(u)) return 'image/webp';
+  if (/\.mp4(\?|$)/.test(u)) return 'video/mp4';
+  if (/\.pdf(\?|$)/.test(u)) return 'application/pdf';
+  return null;
+}
+
+async function enviarMensajeCola(client, chatId, item) {
+  const texto = String(item.mensaje || '');
+  const mediaUrl = String(item.media_url || '').trim();
+  let sentMsg;
+
+  if (mediaUrl) {
+    try {
+      const media = await MessageMedia.fromUrl(mediaUrl, { unsafeMime: true });
+      const mimeHint = String(item.media_tipo || '').trim() || inferirMimeDesdeUrl(mediaUrl);
+      if (mimeHint && media && !media.mimetype) {
+        media.mimetype = mimeHint;
+      }
+      sentMsg = await client.sendMessage(chatId, media, { caption: texto || undefined });
+    } catch (mediaErr) {
+      console.warn(
+        `[WA] Media no cargó (${mediaUrl}):`,
+        mediaErr && mediaErr.message ? mediaErr.message : mediaErr,
+        '— se envía solo texto.'
+      );
+      if (!texto) {
+        throw mediaErr;
+      }
+      sentMsg = await client.sendMessage(chatId, texto);
+    }
+  } else {
+    sentMsg = await client.sendMessage(chatId, texto);
+  }
+
+  return sentMsg;
+}
+
 async function marcarReintento(id, error) {
   await pool.query(
     `UPDATE whatsapp_local_queue
@@ -306,8 +617,15 @@ async function procesarCola(client) {
 
     const pendientes = await obtenerPendientes(BATCH_LIMIT);
     if (!pendientes.length) {
+      const ahora = Date.now();
+      if (ahora - ultimoLogColaVacia > 120000) {
+        console.log('[COLA] Sin mensajes pendientes listos para enviar (hoy / programado_en).');
+        ultimoLogColaVacia = ahora;
+      }
       return;
     }
+
+    console.log(`[COLA] Enviando ${pendientes.length} mensaje(s) (pausa ${Math.round(DELAY_MIN_MS / 1000)}–${Math.round(DELAY_MAX_MS / 1000)}s entre cada uno)...`);
 
     for (const item of pendientes) {
       const id = Number(item.id || 0);
@@ -322,20 +640,19 @@ async function procesarCola(client) {
         continue;
       }
 
-      const chatId = `${telefono}@c.us`;
+      const chatId = await resolverDestinoChat(client, telefono);
+      if (!chatId) {
+        await marcarFallido(id, 'Número no registrado en WhatsApp o no se pudo resolver chat (getNumberId)');
+        console.error(`[FAIL] ${id} -> ${telefono}: sin chatId válido en WhatsApp`);
+        continue;
+      }
+
       try {
-        const texto = String(item.mensaje || '');
-        const mediaUrl = String(item.media_url || '').trim();
-
-        if (mediaUrl) {
-          const media = await MessageMedia.fromUrl(mediaUrl, { unsafeMime: true });
-          await client.sendMessage(chatId, media, { caption: texto || undefined });
-        } else {
-          await client.sendMessage(chatId, texto);
-        }
-
+        const sentMsg = await enviarYConfirmarCola(client, chatId, item);
+        const msgRef = idMensajeSerializado(sentMsg);
+        const ackNivel = typeof sentMsg.ack === 'number' ? sentMsg.ack : '?';
         await marcarEnviado(id);
-        console.log(`[OK] ${id} -> ${telefono}`);
+        console.log(`[OK] ${id} -> ${chatId} (${telefono}) msg=${msgRef} ack=${ackNivel}`);
       } catch (err) {
         const errorMsg = err && err.message ? err.message : 'Error de envío';
         if (intentoActual < MAX_ATTEMPTS) {
@@ -386,8 +703,14 @@ client.on('qr', (qr) => {
 });
 
 client.on('ready', () => {
+  if (procesamientoIniciado) {
+    console.log('[WA] Sesión reconectada (el procesamiento ya estaba activo).');
+    return;
+  }
+  procesamientoIniciado = true;
   console.log('WhatsApp conectado. Worker activo.');
   console.log(`[CONFIG] Delay aleatorio entre ${Math.round(DELAY_MIN_MS / 1000)}s y ${Math.round(DELAY_MAX_MS / 1000)}s.`);
+  console.log(`[CONFIG] Esperar ACK (otros mensajes): ${WAIT_ACK ? 'sí' : 'no'}. Cumpleaños: ${WAIT_ACK_CUMPLEANOS ? 'sí' : 'no (recomendado)'}.`);
   iniciarProcesamiento(client)
     .catch((err) => {
       console.error('No se pudo asegurar tabla whatsapp_local_queue:', err && err.message ? err.message : err);

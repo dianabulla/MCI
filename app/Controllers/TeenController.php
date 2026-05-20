@@ -20,6 +20,539 @@ class TeenController extends BaseController {
         $this->ministerioModel = new Ministerio();
     }
 
+    private function obtenerDirectorioMaterialesTeen(): string {
+        $override = trim((string)(getenv('TEENS_UPLOAD_DIR') ?: ''));
+        if ($override !== '') {
+            $override = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $override), DIRECTORY_SEPARATOR);
+            if (is_dir($override)) {
+                return $override;
+            }
+        }
+
+        $directorio = ROOT . '/public/uploads/teens';
+        if (!is_dir($directorio) && !@mkdir($directorio, 0775, true) && !is_dir($directorio)) {
+            throw new RuntimeException('No se pudo crear el directorio de material teens.');
+        }
+
+        return $directorio;
+    }
+
+    /** Rutas antiguas donde pudo quedar material si cambió el despliegue o el hosting. */
+    private function obtenerDirectoriosLegacyTeen(): array {
+        $docRoot = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, (string)($_SERVER['DOCUMENT_ROOT'] ?? '')), DIRECTORY_SEPARATOR);
+        $candidatos = [
+            ROOT . '/uploads/teens',
+            ROOT . '/public/uploads/material_hub/teens',
+            ROOT . '/public/uploads/material_teens',
+            dirname(ROOT) . '/public/uploads/teens',
+            dirname(ROOT) . '/uploads/teens',
+        ];
+        if ($docRoot !== '') {
+            $candidatos[] = $docRoot . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'teens';
+            $candidatos[] = $docRoot . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'teens';
+        }
+
+        $principal = $this->obtenerDirectorioMaterialesTeen();
+        $unicos = [];
+        foreach ($candidatos as $ruta) {
+            $ruta = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $ruta), DIRECTORY_SEPARATOR);
+            if ($ruta === '' || $ruta === $principal) {
+                continue;
+            }
+            $unicos[$ruta] = true;
+        }
+
+        return array_keys($unicos);
+    }
+
+    /** Directorios donde buscar PDF (principal + legacy), sin duplicados. */
+    private function obtenerDirectoriosBusquedaTeen(): array {
+        $principal = $this->obtenerDirectorioMaterialesTeen();
+        $dirs = array_merge([$principal], $this->obtenerDirectoriosLegacyTeen());
+
+        $unicos = [];
+        foreach ($dirs as $dir) {
+            $dir = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $dir), DIRECTORY_SEPARATOR);
+            if ($dir !== '' && is_dir($dir)) {
+                $unicos[$dir] = true;
+            }
+        }
+
+        return array_keys($unicos);
+    }
+
+    /** Índice nombre => ruta física bajo public/uploads (una vez por petición). */
+    private function indicePdfsBajoUploads(): array {
+        static $indice = null;
+        if ($indice !== null) {
+            return $indice;
+        }
+
+        $indice = [];
+        $base = ROOT . '/public/uploads';
+        if (!is_dir($base)) {
+            return $indice;
+        }
+
+        try {
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($base, FilesystemIterator::SKIP_DOTS),
+                RecursiveIteratorIterator::SELF_FIRST
+            );
+
+            foreach ($iterator as $archivo) {
+                if (!$archivo->isFile()) {
+                    continue;
+                }
+
+                $nombre = $archivo->getFilename();
+                if (strtolower((string)pathinfo($nombre, PATHINFO_EXTENSION)) !== 'pdf') {
+                    continue;
+                }
+
+                $indice[$nombre] = $archivo->getPathname();
+            }
+        } catch (Throwable $e) {
+            error_log('TeenController: no se pudo escanear uploads: ' . $e->getMessage());
+        }
+
+        return $indice;
+    }
+
+    private function copiarPdfTeenAlPrincipal(string $origen, string $nombreArchivo, string $directorioPrincipal): ?string {
+        $destino = rtrim($directorioPrincipal, '/\\') . DIRECTORY_SEPARATOR . $nombreArchivo;
+        if (is_file($destino)) {
+            return $destino;
+        }
+
+        if (!is_file($origen) || !is_readable($origen)) {
+            return null;
+        }
+
+        if (@copy($origen, $destino) || is_file($destino)) {
+            return $destino;
+        }
+
+        return is_file($origen) ? $origen : null;
+    }
+
+    /**
+     * Extrae nombres de archivo PDF desde el campo archivos_pdf (JSON, texto o URLs).
+     *
+     * @return list<string>
+     */
+    private function parsearArchivosPdfRegistro($archivosPdfRaw): array {
+        $raw = trim((string)$archivosPdfRaw);
+        if ($raw === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            $decoded = json_decode(stripslashes($raw), true);
+        }
+
+        if (!is_array($decoded)) {
+            $uno = $this->normalizarNombreArchivoDesdeRegistro($raw);
+            return $uno !== '' ? [$uno] : [];
+        }
+
+        $nombres = [];
+        foreach ($decoded as $item) {
+            if (is_string($item)) {
+                $nombre = $this->normalizarNombreArchivoDesdeRegistro($item);
+                if ($nombre !== '') {
+                    $nombres[] = $nombre;
+                }
+                continue;
+            }
+
+            if (!is_array($item)) {
+                continue;
+            }
+
+            foreach (['archivo', 'nombre', 'file', 'filename', 'path', 'url'] as $clave) {
+                if (empty($item[$clave])) {
+                    continue;
+                }
+                $nombre = $this->normalizarNombreArchivoDesdeRegistro((string)$item[$clave]);
+                if ($nombre !== '') {
+                    $nombres[] = $nombre;
+                    break;
+                }
+            }
+        }
+
+        return array_values(array_unique($nombres));
+    }
+
+    private function normalizarNombreArchivoDesdeRegistro(string $valor): string {
+        $valor = trim(urldecode($valor));
+        if ($valor === '') {
+            return '';
+        }
+
+        if (preg_match('#^https?://#i', $valor)) {
+            $path = (string)(parse_url($valor, PHP_URL_PATH) ?? '');
+            $valor = $path !== '' ? $path : $valor;
+        }
+
+        $valor = basename(str_replace('\\', '/', $valor));
+        if (strtolower((string)pathinfo($valor, PATHINFO_EXTENSION)) !== 'pdf') {
+            return '';
+        }
+
+        return $valor;
+    }
+
+    /** Clave para emparejar aunque cambie el prefijo de fecha/hash al subir por FTP. */
+    private function obtenerClaveComparacionPdfTeen(string $nombreArchivo): string {
+        $nombre = strtolower(basename($nombreArchivo));
+        if (preg_match('/^\d{8}_\d{6}_[a-f0-9]{8}_(.+)$/i', $nombre, $coincidencia)) {
+            return (string)$coincidencia[1];
+        }
+        if (preg_match('/^material_teens_\d{8}_\d{6}_[a-f0-9]+_\d+_(.+)$/i', $nombre, $coincidencia)) {
+            return (string)$coincidencia[1];
+        }
+
+        return $nombre;
+    }
+
+    /**
+     * @return array{exact: array<string, array{nombre:string,ruta:string}>, slug: array<string, list<array{nombre:string,ruta:string}>>}
+     */
+    private function indicePdfsDisponiblesTeen(): array {
+        static $cache = null;
+        if ($cache !== null) {
+            return $cache;
+        }
+
+        $cache = ['exact' => [], 'slug' => []];
+
+        foreach ($this->obtenerDirectoriosBusquedaTeen() as $directorio) {
+            $archivos = @scandir($directorio) ?: [];
+            foreach ($archivos as $archivo) {
+                if ($archivo === '.' || $archivo === '..') {
+                    continue;
+                }
+                if (strtolower((string)pathinfo($archivo, PATHINFO_EXTENSION)) !== 'pdf') {
+                    continue;
+                }
+
+                $ruta = $directorio . DIRECTORY_SEPARATOR . $archivo;
+                if (!is_file($ruta)) {
+                    continue;
+                }
+
+                $entrada = ['nombre' => $archivo, 'ruta' => $ruta];
+                $cache['exact'][strtolower($archivo)] = $entrada;
+
+                $slug = $this->obtenerClaveComparacionPdfTeen($archivo);
+                if ($slug !== '') {
+                    $cache['slug'][$slug][] = $entrada;
+                }
+            }
+        }
+
+        foreach ($this->indicePdfsBajoUploads() as $nombre => $ruta) {
+            if (!is_file($ruta)) {
+                continue;
+            }
+            $entrada = ['nombre' => $nombre, 'ruta' => $ruta];
+            $cache['exact'][strtolower($nombre)] = $entrada;
+            $slug = $this->obtenerClaveComparacionPdfTeen($nombre);
+            if ($slug !== '') {
+                $cache['slug'][$slug][] = $entrada;
+            }
+        }
+
+        return $cache;
+    }
+
+    private function buscarPdfTeenFlexible(string $nombreEsperado, string $directorioPrincipal): ?string {
+        $indice = $this->indicePdfsDisponiblesTeen();
+        $lower = strtolower($nombreEsperado);
+
+        if (isset($indice['exact'][$lower])) {
+            return $this->copiarPdfTeenAlPrincipal($indice['exact'][$lower]['ruta'], $nombreEsperado, $directorioPrincipal);
+        }
+
+        $slug = $this->obtenerClaveComparacionPdfTeen($nombreEsperado);
+        if ($slug === '' || empty($indice['slug'][$slug])) {
+            return null;
+        }
+
+        $candidatos = $indice['slug'][$slug];
+        if (count($candidatos) === 1) {
+            return $this->copiarPdfTeenAlPrincipal($candidatos[0]['ruta'], $nombreEsperado, $directorioPrincipal);
+        }
+
+        $mejor = null;
+        $mejorPuntaje = -1;
+        foreach ($candidatos as $candidato) {
+            $puntaje = 0;
+            similar_text(strtolower($nombreEsperado), strtolower((string)$candidato['nombre']), $puntaje);
+            if ($puntaje > $mejorPuntaje) {
+                $mejorPuntaje = $puntaje;
+                $mejor = $candidato;
+            }
+        }
+
+        if ($mejor === null) {
+            return null;
+        }
+
+        return $this->copiarPdfTeenAlPrincipal($mejor['ruta'], $nombreEsperado, $directorioPrincipal);
+    }
+
+    private function migrarMaterialesTeensLegacy(string $directorioDestino): void {
+        foreach ($this->obtenerDirectoriosLegacyTeen() as $directorioLegacy) {
+            if (!is_dir($directorioLegacy)) {
+                continue;
+            }
+
+            $archivos = @scandir($directorioLegacy) ?: [];
+            foreach ($archivos as $archivo) {
+                if ($archivo === '.' || $archivo === '..') {
+                    continue;
+                }
+
+                if (strtolower((string)pathinfo($archivo, PATHINFO_EXTENSION)) !== 'pdf') {
+                    continue;
+                }
+
+                $origen = $directorioLegacy . '/' . $archivo;
+                if (!is_file($origen)) {
+                    continue;
+                }
+
+                $destino = rtrim($directorioDestino, '/') . '/' . $archivo;
+                if (!is_file($destino)) {
+                    @copy($origen, $destino);
+                }
+            }
+        }
+    }
+
+    private function resolverRutaPdfTeen(string $nombreArchivo): ?string {
+        $nombreArchivo = basename(trim($nombreArchivo));
+        if ($nombreArchivo === '' || strtolower(pathinfo($nombreArchivo, PATHINFO_EXTENSION)) !== 'pdf') {
+            return null;
+        }
+
+        $directorioPrincipal = $this->obtenerDirectorioMaterialesTeen();
+        $rutaPrincipal = $directorioPrincipal . DIRECTORY_SEPARATOR . $nombreArchivo;
+        if (is_file($rutaPrincipal)) {
+            return $rutaPrincipal;
+        }
+
+        foreach ($this->obtenerDirectoriosBusquedaTeen() as $directorio) {
+            if ($directorio === $directorioPrincipal) {
+                continue;
+            }
+
+            $ruta = $directorio . DIRECTORY_SEPARATOR . $nombreArchivo;
+            if (!is_file($ruta)) {
+                continue;
+            }
+
+            $copiada = $this->copiarPdfTeenAlPrincipal($ruta, $nombreArchivo, $directorioPrincipal);
+            if ($copiada !== null) {
+                return $copiada;
+            }
+        }
+
+        $indice = $this->indicePdfsBajoUploads();
+        if (isset($indice[$nombreArchivo])) {
+            return $this->copiarPdfTeenAlPrincipal($indice[$nombreArchivo], $nombreArchivo, $directorioPrincipal);
+        }
+
+        return $this->buscarPdfTeenFlexible($nombreArchivo, $directorioPrincipal);
+    }
+
+    /**
+     * Intenta copiar al directorio principal todos los PDF referenciados en BD que existan en otra ruta.
+     *
+     * @return array{recuperados:int,faltan:int}
+     */
+    private function repararRegistrosArchivosPdfEnBd(): int {
+        $corregidos = 0;
+
+        foreach ((array)$this->teenModel->getAll() as $material) {
+            $id = (int)($material['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+
+            $raw = (string)($material['archivos_pdf'] ?? '');
+            $nombres = $this->parsearArchivosPdfRegistro($raw);
+            if (empty($nombres)) {
+                continue;
+            }
+
+            $jsonNuevo = json_encode($nombres, JSON_UNESCAPED_UNICODE);
+            if ($jsonNuevo === false || $jsonNuevo === $raw) {
+                continue;
+            }
+
+            $this->teenModel->updateTeen($id, ['archivos_pdf' => $jsonNuevo]);
+            $corregidos++;
+        }
+
+        return $corregidos;
+    }
+
+    private function recuperarArchivosFaltantesTeen(): array {
+        $directorioPrincipal = $this->obtenerDirectorioMaterialesTeen();
+        $this->migrarMaterialesTeensLegacy($directorioPrincipal);
+        $jsonReparados = $this->repararRegistrosArchivosPdfEnBd();
+
+        $recuperados = 0;
+        $faltan = 0;
+        $nombresVistos = [];
+
+        foreach ((array)$this->teenModel->getAll() as $material) {
+            $idMaterial = (int)($material['id'] ?? 0);
+            $nombres = $this->parsearArchivosPdfRegistro($material['archivos_pdf'] ?? '');
+            $nombresActualizados = $nombres;
+            $huboCambioNombres = false;
+
+            foreach ($nombres as $idx => $nombre) {
+                if ($nombre === '' || isset($nombresVistos[$nombre])) {
+                    continue;
+                }
+                $nombresVistos[$nombre] = true;
+
+                $rutaPrincipalArchivo = $directorioPrincipal . DIRECTORY_SEPARATOR . $nombre;
+                $existiaEnPrincipal = is_file($rutaPrincipalArchivo);
+                $ruta = $this->resolverRutaPdfTeen($nombre);
+
+                if ($ruta === null || !is_file($ruta)) {
+                    $faltan++;
+                    continue;
+                }
+
+                if (!$existiaEnPrincipal && is_file($rutaPrincipalArchivo)) {
+                    $recuperados++;
+                } elseif (!$existiaEnPrincipal) {
+                    $nombreEnDisco = basename($ruta);
+                    if ($nombreEnDisco !== '' && $nombreEnDisco !== $nombre) {
+                        $nombresActualizados[$idx] = $nombreEnDisco;
+                        $huboCambioNombres = true;
+                        $recuperados++;
+                    }
+                }
+            }
+
+            if ($huboCambioNombres && $idMaterial > 0) {
+                $jsonNuevo = json_encode(array_values(array_unique($nombresActualizados)), JSON_UNESCAPED_UNICODE);
+                if ($jsonNuevo !== false) {
+                    $this->teenModel->updateTeen($idMaterial, ['archivos_pdf' => $jsonNuevo]);
+                }
+            }
+        }
+
+        return [
+            'recuperados' => $recuperados,
+            'faltan' => $faltan,
+            'json_reparados' => $jsonReparados,
+        ];
+    }
+
+    private function contarPdfsEnDirectorio(string $directorio): int {
+        if (!is_dir($directorio)) {
+            return 0;
+        }
+
+        $total = 0;
+        foreach (@scandir($directorio) ?: [] as $archivo) {
+            if ($archivo === '.' || $archivo === '..') {
+                continue;
+            }
+            if (is_file($directorio . DIRECTORY_SEPARATOR . $archivo)
+                && strtolower((string)pathinfo($archivo, PATHINFO_EXTENSION)) === 'pdf') {
+                $total++;
+            }
+        }
+
+        return $total;
+    }
+
+    /**
+     * Acción admin: buscar PDF en carpetas legacy / uploads y copiarlos a teens.
+     */
+    public function recuperarArchivos() {
+        if (!AuthController::puede('teen:editar')) {
+            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $resultado = $this->recuperarArchivosFaltantesTeen();
+        $recuperados = (int)($resultado['recuperados'] ?? 0);
+        $faltan = (int)($resultado['faltan'] ?? 0);
+        $jsonReparados = (int)($resultado['json_reparados'] ?? 0);
+
+        if ($faltan === 0) {
+            $mensaje = 'Todos los PDF del módulo están disponibles.';
+            if ($recuperados > 0) {
+                $mensaje = 'Se emparejaron ' . $recuperados . ' archivo(s) con la base de datos. ' . $mensaje;
+            }
+            if ($jsonReparados > 0) {
+                $mensaje .= ' Se corrigieron ' . $jsonReparados . ' registro(s) en BD.';
+            }
+            $tipo = 'success';
+        } elseif ($recuperados > 0 || $jsonReparados > 0) {
+            $mensaje = 'Se emparejaron ' . $recuperados . ' archivo(s)';
+            if ($jsonReparados > 0) {
+                $mensaje .= ' y se corrigieron ' . $jsonReparados . ' registro(s) en BD';
+            }
+            $mensaje .= '. Aún faltan ' . $faltan . ': el nombre en disco debe coincidir (ej. PRE-HA-Intro-Maestro.pdf) o sube de nuevo desde Material Teens.';
+            $tipo = 'success';
+        } else {
+            $mensaje = 'Hay ' . $faltan . ' PDF en BD sin archivo en el servidor. Verifica que estén en public/uploads/teens con el mismo nombre (o similar, ej. sin prefijo de fecha). Carpeta: ' . $this->obtenerDirectorioMaterialesTeen();
+            $tipo = 'error';
+        }
+
+        $this->redirect('teen&mensaje=' . urlencode($mensaje) . '&tipo=' . $tipo);
+    }
+
+    private function urlVerPdfTeen(string $nombreArchivo, bool $soloEmbed = false): string {
+        $url = PUBLIC_URL . 'index.php?url=teen/verPdf&archivo=' . rawurlencode(basename($nombreArchivo));
+        if ($soloEmbed) {
+            $url .= '&embed=1';
+        }
+
+        return $url;
+    }
+
+    private function urlPublicaPdfTeen(string $nombreArchivo): string {
+        return rtrim(PUBLIC_URL, '/') . '/uploads/teens/' . rawurlencode(basename($nombreArchivo));
+    }
+
+    private function servirPdfTeen(string $rutaFisica, string $nombreArchivo): void {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        $tamano = (int)@filesize($rutaFisica);
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: inline; filename="' . addslashes($nombreArchivo) . '"');
+        header('Content-Transfer-Encoding: binary');
+        header('Accept-Ranges: bytes');
+        if ($tamano > 0) {
+            header('Content-Length: ' . $tamano);
+        }
+
+        $fp = fopen($rutaFisica, 'rb');
+        if ($fp === false) {
+            throw new RuntimeException('No se pudo abrir el PDF.');
+        }
+
+        fpassthru($fp);
+        fclose($fp);
+        exit;
+    }
+
     private function normalizarTextoMayusculas($valor) {
         $valor = trim((string)$valor);
         if ($valor === '') {
@@ -167,18 +700,32 @@ class TeenController extends BaseController {
      * POST: sube nuevo PDF
      */
     public function index() {
-        if (!AuthController::tienePermiso('teen', 'ver')) {
+        if (!AuthController::puede('teen:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
 
-        $directorioMateriales = ROOT . '/public/uploads/teens';
-        if (!is_dir($directorioMateriales)) {
-            @mkdir($directorioMateriales, 0775, true);
+        $directorioMateriales = $this->obtenerDirectorioMaterialesTeen();
+        $this->migrarMaterialesTeensLegacy($directorioMateriales);
+
+        $mensaje = (string)($_GET['mensaje'] ?? '');
+        $tipo = (string)($_GET['tipo'] ?? '');
+
+        if ($_SERVER['REQUEST_METHOD'] === 'GET' && AuthController::puede('teen:editar')) {
+            $sync = $this->recuperarArchivosFaltantesTeen();
+            $rec = (int)($sync['recuperados'] ?? 0);
+            $jsonFix = (int)($sync['json_reparados'] ?? 0);
+            if ($mensaje === '' && ($rec > 0 || $jsonFix > 0)) {
+                $mensaje = 'Material actualizado: ' . $rec . ' archivo(s) vinculado(s) al servidor.';
+                if ($jsonFix > 0) {
+                    $mensaje .= ' (' . $jsonFix . ' registro(s) corregido(s) en BD)';
+                }
+                $tipo = 'success';
+            }
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            if (!AuthController::tienePermiso('teen', 'crear')) {
+            if (!AuthController::puede('teen:crear')) {
                 $this->redirect('teen&mensaje=' . urlencode('No tienes permiso para subir material.') . '&tipo=error');
                 return;
             }
@@ -248,16 +795,9 @@ class TeenController extends BaseController {
                     'archivos_pdf' => $archivosJson
                 ];
 
-                // Debug: log de datos antes de insertar
-                error_log('TeenController: Insertando ' . count($archivosSubidos) . ' archivo(s)');
-                error_log('TeenController: JSON = ' . $archivosJson);
-                error_log('TeenController: Data = ' . print_r($data, true));
-
                 $id = $this->teenModel->create($data);
-                
-                error_log('TeenController: Insertado con ID = ' . $id);
 
-                $mensaje = count($archivosSubidos) . ' archivo(s) agregado(s) al módulo "' . htmlspecialchars($titulo) . '" correctamente.';
+                $mensaje = count($archivosSubidos) . ' archivo(s) publicado(s) en "' . $titulo . '" correctamente.';
                 if (!empty($erroresSubida)) {
                     $mensaje .= ' Errores: ' . implode('; ', $erroresSubida);
                 }
@@ -278,31 +818,42 @@ class TeenController extends BaseController {
             $vistasPorArchivo = [];
         }
 
+        $totalArchivosRegistrados = 0;
+        $totalArchivosOk = 0;
+        $totalModulos = count($materiales);
         foreach ($materiales as &$material) {
-            $archivosJson = (string)($material['archivos_pdf'] ?? '');
-            $archivos = [];
-            
-            if (!empty($archivosJson)) {
-                $archivos = json_decode($archivosJson, true);
-                if (!is_array($archivos)) {
-                    $archivos = [];
-                }
-            }
-            
+            $archivos = $this->parsearArchivosPdfRegistro($material['archivos_pdf'] ?? '');
             $material['archivos'] = [];
             $pesoTotal = 0;
             $vistasTotales = 0;
             $fechaUltima = 0;
             
             foreach ($archivos as $nombreArchivo) {
-                $nombreArchivo = (string)$nombreArchivo;
-                $ruta = $directorioMateriales . '/' . basename($nombreArchivo);
-                
+                $nombreArchivo = basename((string)$nombreArchivo);
+                if ($nombreArchivo === '') {
+                    continue;
+                }
+
+                $totalArchivosRegistrados++;
+                $ruta = $this->resolverRutaPdfTeen($nombreArchivo);
+                $existe = $ruta !== null && is_file($ruta);
+                if ($existe) {
+                    $totalArchivosOk++;
+                }
+
+                $urlPublica = $this->urlPublicaPdfTeen($nombreArchivo);
+                $enCarpetaPublica = is_file($directorioMateriales . DIRECTORY_SEPARATOR . $nombreArchivo);
+
                 $infArchivo = [
                     'nombre' => $nombreArchivo,
-                    'url' => PUBLIC_URL . 'index.php?url=teen/verPdf&archivo=' . rawurlencode($nombreArchivo),
-                    'peso_kb' => is_file($ruta) ? round(((int)@filesize($ruta)) / 1024, 2) : 0,
-                    'fecha_mod' => is_file($ruta) ? (@filemtime($ruta) ?: 0) : 0
+                    'url' => $this->urlVerPdfTeen($nombreArchivo),
+                    'url_preview' => $enCarpetaPublica
+                        ? $urlPublica
+                        : $this->urlVerPdfTeen($nombreArchivo, true),
+                    'url_embed' => $this->urlVerPdfTeen($nombreArchivo, true),
+                    'existe' => $existe,
+                    'peso_kb' => $existe ? round(((int)@filesize($ruta)) / 1024, 2) : 0,
+                    'fecha_mod' => $existe ? (@filemtime($ruta) ?: 0) : 0
                 ];
                 
                 $material['archivos'][] = $infArchivo;
@@ -314,6 +865,9 @@ class TeenController extends BaseController {
             $material['peso_total_kb'] = $pesoTotal;
             $material['vistas_totales'] = $vistasTotales;
             $material['fecha_ultima'] = $fechaUltima;
+            $archivosLista = $material['archivos'] ?? [];
+            $material['archivos_ok'] = count(array_filter($archivosLista, static fn($a) => !empty($a['existe'])));
+            $material['archivos_total'] = count($archivosLista);
         }
         unset($material);
 
@@ -323,13 +877,21 @@ class TeenController extends BaseController {
 
         $this->view('teen/lista', [
             'materiales' => $materiales,
-            'mensaje' => $_GET['mensaje'] ?? '',
-            'tipo' => $_GET['tipo'] ?? ''
+            'mensaje' => $mensaje,
+            'tipo' => $tipo,
+            'total_modulos' => $totalModulos,
+            'total_archivos_faltantes' => max(0, $totalArchivosRegistrados - $totalArchivosOk),
+            'total_archivos_registrados' => $totalArchivosRegistrados,
+            'total_archivos_ok' => $totalArchivosOk,
+            'pdfs_en_carpeta' => $this->contarPdfsEnDirectorio($directorioMateriales),
+            'puede_subir' => AuthController::puede('teen:crear'),
+            'puede_editar' => AuthController::puede('teen:editar'),
+            'puede_eliminar' => AuthController::puede('teen:eliminar'),
         ]);
     }
 
     public function registroMenores() {
-        if (!AuthController::tienePermiso('teen', 'ver')) {
+        if (!AuthController::puede('teen:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -359,7 +921,7 @@ class TeenController extends BaseController {
     }
 
     public function guardarMenor() {
-        if (!AuthController::tienePermiso('teen', 'crear')) {
+        if (!AuthController::puede('teen:crear')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -693,7 +1255,7 @@ class TeenController extends BaseController {
     }
 
     public function codigos() {
-        if (!AuthController::tienePermiso('teen', 'ver')) {
+        if (!AuthController::puede('teen:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -708,7 +1270,7 @@ class TeenController extends BaseController {
     }
 
     public function buscarAcudientes() {
-        if (!AuthController::tienePermiso('teen', 'ver')) {
+        if (!AuthController::puede('teen:ver')) {
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'message' => 'Acceso denegado']);
             exit;
@@ -787,7 +1349,7 @@ class TeenController extends BaseController {
      * Abrir PDF y registrar visualización.
      */
     public function verPdf() {
-        if (!AuthController::tienePermiso('teen', 'ver')) {
+        if (!AuthController::puede('teen:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -798,29 +1360,36 @@ class TeenController extends BaseController {
             return;
         }
 
-        $ruta = ROOT . '/public/uploads/teens/' . $archivo;
-        if (!is_file($ruta)) {
-            $this->redirect('teen&mensaje=' . urlencode('El archivo no existe') . '&tipo=error');
+        $ruta = $this->resolverRutaPdfTeen($archivo);
+        if ($ruta === null || !is_file($ruta)) {
+            $this->redirect('teen&mensaje=' . urlencode('El archivo no está en el servidor. Puede que no se haya subido en producción o haya cambiado de carpeta.') . '&tipo=error');
             return;
         }
 
+        $soloEmbed = isset($_GET['embed']) && (string)$_GET['embed'] === '1';
         $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
 
-        try {
-            $this->registrarVistaTeen($archivo, $idPersona);
-        } catch (Throwable $e) {
-            // No bloquear apertura del PDF por fallo de tracking.
+        if (!$soloEmbed) {
+            try {
+                $this->registrarVistaTeen($archivo, $idPersona);
+            } catch (Throwable $e) {
+                // No bloquear apertura del PDF por fallo de tracking.
+            }
         }
 
-        header('Location: ' . PUBLIC_URL . 'uploads/teens/' . rawurlencode($archivo));
-        exit;
+        try {
+            $this->servirPdfTeen($ruta, $archivo);
+        } catch (Throwable $e) {
+            error_log('Error sirviendo PDF teen: ' . $e->getMessage());
+            $this->redirect('teen&mensaje=' . urlencode('No se pudo abrir el PDF.') . '&tipo=error');
+        }
     }
 
     /**
      * Eliminar módulo completamente (todos sus archivos)
      */
     public function eliminar() {
-        if (!AuthController::tienePermiso('teen', 'eliminar')) {
+        if (!AuthController::puede('teen:eliminar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -832,18 +1401,11 @@ class TeenController extends BaseController {
 
             if ($material) {
                 // Eliminar todos los archivos físicos
-                $archivosJson = (string)($material['archivos_pdf'] ?? '');
-                if (!empty($archivosJson)) {
-                    $archivos = json_decode($archivosJson, true);
-                    if (is_array($archivos)) {
-                        foreach ($archivos as $nombreArchivo) {
-                            $archivo = basename((string)$nombreArchivo);
-                            if ($archivo !== '') {
-                                $ruta = ROOT . '/public/uploads/teens/' . $archivo;
-                                if (is_file($ruta)) {
-                                    @unlink($ruta);
-                                }
-                            }
+                foreach ($this->parsearArchivosPdfRegistro($material['archivos_pdf'] ?? '') as $archivo) {
+                    if ($archivo !== '') {
+                        $ruta = $this->resolverRutaPdfTeen($archivo);
+                        if ($ruta !== null && is_file($ruta)) {
+                            @unlink($ruta);
                         }
                     }
                 }
@@ -859,7 +1421,7 @@ class TeenController extends BaseController {
      * AJAX: detalle de quiénes vieron un material.
      */
     public function detalleVistas() {
-        if (!AuthController::tienePermiso('teen', 'ver')) {
+        if (!AuthController::puede('teen:ver')) {
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'message' => 'Acceso denegado']);
             exit;
@@ -1046,7 +1608,7 @@ class TeenController extends BaseController {
      * Editar material: actualizar título, descripción y/o agregar archivos
      */
     public function editar() {
-        if (!AuthController::tienePermiso('teen', 'editar')) {
+        if (!AuthController::puede('teen:editar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -1063,20 +1625,11 @@ class TeenController extends BaseController {
             return;
         }
 
-        $directorioMateriales = ROOT . '/public/uploads/teens';
-        if (!is_dir($directorioMateriales)) {
-            @mkdir($directorioMateriales, 0775, true);
-        }
+        $directorioMateriales = $this->obtenerDirectorioMaterialesTeen();
+        $this->migrarMaterialesTeensLegacy($directorioMateriales);
 
         // Preparar archivos actuales
-        $archivosActuales = [];
-        $archivosJson = (string)($material['archivos_pdf'] ?? '');
-        if (!empty($archivosJson)) {
-            $archivosActuales = json_decode($archivosJson, true);
-            if (!is_array($archivosActuales)) {
-                $archivosActuales = [];
-            }
-        }
+        $archivosActuales = $this->parsearArchivosPdfRegistro($material['archivos_pdf'] ?? '');
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
@@ -1095,8 +1648,8 @@ class TeenController extends BaseController {
                         $archivosActualizados[] = $archivoNombre;
                     } else {
                         // Eliminar archivo físico
-                        $ruta = $directorioMateriales . '/' . basename($archivoNombre);
-                        if (is_file($ruta)) {
+                        $ruta = $this->resolverRutaPdfTeen((string)$archivoNombre);
+                        if ($ruta !== null && is_file($ruta)) {
                             @unlink($ruta);
                         }
                     }

@@ -14,7 +14,7 @@ class RolController extends BaseController {
     }
 
     public function index() {
-        if (!AuthController::tienePermiso('roles', 'ver')) {
+        if (!AuthController::puede('roles:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -24,7 +24,7 @@ class RolController extends BaseController {
     }
 
     public function exportarExcel() {
-        if (!AuthController::tienePermiso('roles', 'ver')) {
+        if (!AuthController::puede('roles:ver')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -49,7 +49,7 @@ class RolController extends BaseController {
 
     public function crear() {
         // Verificar permiso de crear
-        if (!AuthController::tienePermiso('roles', 'crear')) {
+        if (!AuthController::puede('roles:crear')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -69,7 +69,7 @@ class RolController extends BaseController {
 
     public function editar() {
         // Verificar permiso de editar
-        if (!AuthController::tienePermiso('roles', 'editar')) {
+        if (!AuthController::puede('roles:editar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -98,7 +98,7 @@ class RolController extends BaseController {
 
     public function eliminar() {
         // Verificar permiso de eliminar
-        if (!AuthController::tienePermiso('roles', 'eliminar')) {
+        if (!AuthController::puede('roles:eliminar')) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }

@@ -3,10 +3,10 @@
 <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
     <h2 style="margin:0;">Células</h2>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-        <?php if (AuthController::esAdministrador() || AuthController::tienePermiso('reportes', 'ver')): ?>
+        <?php if (AuthController::esAdministrador() || AuthController::puede('reportes:ver')): ?>
             <a href="<?= PUBLIC_URL ?>?url=reportes&tipo=celulas" class="btn btn-secondary">Reporte de Células</a>
         <?php endif; ?>
-        <?php if (AuthController::tienePermiso('celulas', 'crear')): ?>
+        <?php if (AuthController::puede('celulas:crear')): ?>
             <a href="<?= PUBLIC_URL ?>?url=celulas/crear" class="btn btn-primary">+ Nueva célula</a>
         <?php endif; ?>
     </div>
@@ -215,15 +215,19 @@ $slugMinisterio = static function ($texto) {
                                     <a href="<?= PUBLIC_URL ?>?url=personas/crear&return_to=celulas&return_url=<?= urlencode(PUBLIC_URL . '?url=celulas') ?>&celula=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon" title="Nueva persona" aria-label="Nueva persona">
                                         <i class="bi bi-person-plus-fill" aria-hidden="true"></i>
                                     </a>
-                                    <?php if (AuthController::tienePermiso('asistencias', 'crear')): ?>
+                                    <?php if (AuthController::puede('asistencias:crear')): ?>
                                         <a href="<?= PUBLIC_URL ?>?url=asistencias/registrar&celula=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--report">Reportar célula</a>
                                     <?php endif; ?>
+                                    <?php if (AuthController::puede('celulas:editar')): ?>
                                     <a href="<?= PUBLIC_URL ?>?url=celulas/editar&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon celulas-action-btn--edit" title="Editar" aria-label="Editar">
                                         <i class="bi bi-pencil-fill" aria-hidden="true"></i>
                                     </a>
+                                    <?php endif; ?>
+                                    <?php if (AuthController::puede('celulas:eliminar')): ?>
                                     <a href="<?= PUBLIC_URL ?>?url=celulas/eliminar&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon celulas-action-btn--delete" title="Eliminar" aria-label="Eliminar" onclick="return confirm('¿Eliminar esta célula?')">
                                         <i class="bi bi-trash-fill" aria-hidden="true"></i>
                                     </a>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>

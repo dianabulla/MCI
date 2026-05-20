@@ -10,6 +10,7 @@ require_once APP . '/Models/Rol.php';
 require_once APP . '/Models/EscuelaFormacionInscripcion.php';
 require_once APP . '/Helpers/DataIsolation.php';
 require_once APP . '/Helpers/PermisosCatalogo.php';
+require_once APP . '/Helpers/MenuBuilder.php';
 
 class AuthController extends BaseController {
     private $personaModel;
@@ -216,7 +217,7 @@ class AuthController extends BaseController {
 
         $this->aplicarContextoActivo((int)$seleccion['id_rol'], (string)($seleccion['context_key'] ?? ''));
         $_SESSION['require_context_selection'] = false;
-        $this->redirect('home');
+        $this->redirect(self::obtenerUrlInicioSesion());
     }
 
     /**
@@ -445,6 +446,8 @@ class AuthController extends BaseController {
         if ($origenCuenta === 'acceso' && $idAuthUser > 0) {
             $this->usuarioAccesoModel->actualizarUltimoAcceso($idAuthUser);
         }
+
+        self::reconstruirMenuYSesion();
     }
 
     /**
@@ -468,15 +471,196 @@ class AuthController extends BaseController {
         if (!array_key_exists('material', $permisos)) {
             return self::tienePermiso('materiales_celulas', 'ver')
                 || self::tienePermiso('material_capacitacion_destino', 'ver')
-                || self::tienePermiso('teen', 'ver');
+                || self::tienePermiso('teen', 'ver')
+                || !empty(self::obtenerNivelesCapacitacionDestinoInscripcion());
         }
 
         return false;
     }
 
     /**
+     * Id_Persona efectivo de la sesión (inscripciones, evaluaciones, material discípulo).
+     * Si la cuenta de acceso no tenía Id_Persona en sesión, intenta resolverlo desde usuario_acceso o documento.
+     */
+    public static function obtenerIdPersonaSesion(): int {
+        $id = (int)($_SESSION['usuario_id'] ?? 0);
+        if ($id <= 0) {
+            $id = (int)($_SESSION['usuario_persona_id'] ?? 0);
+        }
+
+        if ($id <= 0 && (string)($_SESSION['auth_user_source'] ?? '') === 'acceso') {
+            $id = self::resolverIdPersonaDesdeCuentaAcceso((int)($_SESSION['auth_user_id'] ?? 0));
+            if ($id > 0) {
+                $_SESSION['usuario_id'] = $id;
+                $_SESSION['usuario_persona_id'] = $id;
+            }
+        }
+
+        return max(0, $id);
+    }
+
+    /**
+     * Niveles (1–3) en los que la persona tiene inscripción en Capacitación Destino.
+     *
+     * @return int[]
+     */
+    public static function obtenerNivelesCapacitacionDestinoInscripcion(?int $idPersona = null): array {
+        $idPersona = $idPersona ?? self::obtenerIdPersonaSesion();
+        if ($idPersona <= 0) {
+            return [];
+        }
+
+        require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+        $inscripcionModel = new EscuelaFormacionInscripcion();
+        $programas = (array)$inscripcionModel->getProgramasInscritosPersona($idPersona);
+
+        $niveles = [];
+        foreach ($programas as $programa) {
+            $nivel = self::mapearProgramaInscripcionANivelCapDestino((string)$programa);
+            if ($nivel > 0) {
+                $niveles[$nivel] = true;
+            }
+        }
+
+        $resultado = array_map('intval', array_keys($niveles));
+        sort($resultado);
+        return $resultado;
+    }
+
+    public static function esInscritoCapacitacionDestino(?int $idPersona = null): bool {
+        return !empty(self::obtenerNivelesCapacitacionDestinoInscripcion($idPersona));
+    }
+
+    /**
+     * Vista de alumno en Cap. Destino (menú reducido, evaluaciones como discípulo).
+     * Respeta el modo elegido en login: con contexto «líder» no se fuerza por inscripción.
+     */
+    public static function usaVistaDiscipuloCapacitacionDestino(): bool {
+        if (self::esAdministrador() || self::esContextoMaestro()) {
+            return false;
+        }
+
+        $contexto = self::getActiveContext();
+        if ($contexto === 'lider') {
+            return false;
+        }
+        if ($contexto === 'discipulo') {
+            return true;
+        }
+
+        if (self::esRolDiscipuloUsuario()) {
+            return true;
+        }
+
+        // Sin selector de contexto: compatibilidad con cuenta solo discípulo o solo inscrita.
+        return $contexto === '' && self::esInscritoCapacitacionDestino();
+    }
+
+    /**
+     * Acceso al módulo Material Capacitación Destino por permiso o por inscripción.
+     */
+    public static function puedeVerMaterialCapacitacionDestino(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+
+        if (self::esContextoMaestro()) {
+            return true;
+        }
+
+        self::sincronizarPermisosSesionActual();
+
+        if (self::tienePermiso('material_capacitacion_destino', 'ver')) {
+            return true;
+        }
+
+        return self::esInscritoCapacitacionDestino();
+    }
+
+    private static function mapearProgramaInscripcionANivelCapDestino(string $programa): int {
+        $clave = self::normalizarTexto(trim($programa));
+        $clave = str_replace([' ', '-'], '_', $clave);
+        $clave = preg_replace('/_+/', '_', trim((string)$clave, '_'));
+
+        if ($clave === '' || strpos($clave, 'capacitacion_destino') === false) {
+            return 0;
+        }
+
+        if (preg_match('/nivel[_\s-]*3(?:\D|$)/', $clave) === 1) {
+            return 3;
+        }
+        if (preg_match('/nivel[_\s-]*2(?:\D|$)/', $clave) === 1) {
+            return 2;
+        }
+
+        return 1;
+    }
+
+    private static function resolverIdPersonaDesdeCuentaAcceso(int $idUsuarioAcceso): int {
+        if ($idUsuarioAcceso <= 0) {
+            return 0;
+        }
+
+        require_once APP . '/Models/UsuarioAcceso.php';
+        require_once APP . '/Models/Persona.php';
+
+        $uaModel = new UsuarioAcceso();
+        $personaModel = new Persona();
+
+        $rows = $uaModel->query(
+            'SELECT Id_Persona, Usuario FROM usuario_acceso WHERE Id_Usuario_Acceso = ? LIMIT 1',
+            [$idUsuarioAcceso]
+        );
+        if (empty($rows)) {
+            return 0;
+        }
+
+        $fila = $rows[0];
+        $idPersona = (int)($fila['Id_Persona'] ?? 0);
+        if ($idPersona > 0) {
+            return $idPersona;
+        }
+
+        $usuarioLogin = trim((string)($fila['Usuario'] ?? ''));
+        if ($usuarioLogin === '') {
+            return 0;
+        }
+
+        $personaPorUsuario = $personaModel->query(
+            'SELECT Id_Persona FROM persona WHERE Usuario = ? ORDER BY Id_Persona DESC LIMIT 1',
+            [$usuarioLogin]
+        );
+        if (!empty($personaPorUsuario)) {
+            return (int)($personaPorUsuario[0]['Id_Persona'] ?? 0);
+        }
+
+        $personaPorDocumento = $personaModel->query(
+            "SELECT Id_Persona FROM persona
+             WHERE REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(Numero_Documento, ''))), ' ', ''), '.', ''), '-', '')
+               = REPLACE(REPLACE(REPLACE(UPPER(?), ' ', ''), '.', ''), '-', '')
+             ORDER BY Id_Persona DESC LIMIT 1",
+            [$usuarioLogin]
+        );
+        if (!empty($personaPorDocumento)) {
+            return (int)($personaPorDocumento[0]['Id_Persona'] ?? 0);
+        }
+
+        return 0;
+    }
+
+    /**
+     * Submódulo Discípulos (personas_consulta), sin Almas ganadas.
+     */
+    public static function puedeVerSubmoduloPersonasConsulta(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+        self::sincronizarPermisosSesionActual();
+        return !empty($_SESSION['permisos']['personas_consulta']['ver']);
+    }
+
+    /**
      * Ver listados y fichas de personas (Discípulos, Universidad de la Vida, detalle).
-     * Incluye el permiso dedicado personas_consulta sin abrir el módulo completo Ganar-Consolidar.
      */
     public static function puedeVerPersonasConsulta(): bool {
         if (self::esAdministrador()) {
@@ -485,9 +669,78 @@ class AuthController extends BaseController {
         if (self::tieneCoordinacionTotalProgramas()) {
             return true;
         }
-        self::sincronizarPermisosSesionActual();
-        return !empty($_SESSION['permisos']['personas']['ver'])
-            || !empty($_SESSION['permisos']['personas_consulta']['ver']);
+        return self::puedeVerModuloPersonasGanar() || self::puedeVerSubmoduloPersonasConsulta();
+    }
+
+    /**
+     * Menú Ganar-Consolidar: Almas ganadas y/o Discípulos.
+     */
+    public static function puedeAccederAreaGanarConsolidar(): bool {
+        return self::puedeVerModuloPersonasGanar() || self::puedeVerSubmoduloPersonasConsulta();
+    }
+
+    /**
+     * Ruta de entrada al área Ganar-Consolidar según permisos del rol.
+     */
+    public static function urlEntradaGanarConsolidarRelativa(): string {
+        if (self::puedeVerModuloPersonasGanar()) {
+            return 'personas/ganar';
+        }
+        if (self::puedeVerSubmoduloPersonasConsulta()) {
+            return 'personas';
+        }
+        return 'auth/acceso-denegado';
+    }
+
+    public static function puedeEditarPersonasConsulta(): bool {
+        return self::esAdministrador()
+            || self::puede('personas:editar')
+            || self::puede('personas_consulta:editar');
+    }
+
+    public static function puedeEliminarPersonasConsulta(): bool {
+        return self::esAdministrador()
+            || self::puede('personas:eliminar')
+            || self::puede('personas_consulta:eliminar');
+    }
+
+    public static function puedeCrearPersonasConsulta(): bool {
+        return self::esAdministrador()
+            || self::puede('personas:crear')
+            || self::puede('personas_consulta:crear');
+    }
+
+    /**
+     * Dashboard escuelas UV / Cap. Destino (permiso granular por línea).
+     */
+    public static function puedeVerDashboardEscuelasLinea(string $linea): bool {
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        return PermisosProgramasAccess::puedeVerDashboardEscuelasLinea($linea);
+    }
+
+    public static function puedeGestionarPagosProgramaUv(): bool {
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        return PermisosProgramasAccess::puedeGestionarPagosUniversidadVida();
+    }
+
+    public static function puedeGestionarPagosProgramaCap(): bool {
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        return PermisosProgramasAccess::puedeGestionarPagosCapacitacionDestino();
+    }
+
+    public static function puedeVerDashboardProgramaUv(): bool {
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        return PermisosProgramasAccess::puedeVerDashboardUniversidadVida();
+    }
+
+    public static function puedeVerDashboardProgramaCap(): bool {
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        return PermisosProgramasAccess::puedeVerDashboardCapacitacionDestino();
+    }
+
+    public static function puedeVerAsistenciasProgramaUv(): bool {
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        return PermisosProgramasAccess::puedeVerAsistenciasUniversidadVida();
     }
 
     /**
@@ -499,6 +752,34 @@ class AuthController extends BaseController {
         }
         self::sincronizarPermisosSesionActual();
         return !empty($_SESSION['permisos']['personas']['ver']);
+    }
+
+    /**
+     * Acceso al ecosistema Programas (menú, consolidados, asistencias de formación).
+     */
+    public static function puedeAccederModuloProgramas(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+        return self::puede('programas:ver')
+            || self::puede('personas:ver')
+            || self::puede('personas_consulta:ver')
+            || self::puede('programas:ver_universidad_vida')
+            || self::puede('programas:ver_capacitacion_destino')
+            || self::tieneCoordinacionTotalProgramas();
+    }
+
+    /**
+     * Escuelas de formación en panel (home/escuelas-formacion y rutas escuelas_formacion/* privadas).
+     */
+    public static function puedeAccederEscuelasFormacion(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+        return self::puede('escuelas_formacion:ver')
+            || self::puede('escuelas_formacion:crear')
+            || self::puede('escuelas_formacion:editar')
+            || self::puede('personas:ver');
     }
 
     /**
@@ -514,6 +795,10 @@ class AuthController extends BaseController {
         // No usar tienePermiso('personas','ver') aquí: coordinacion_total amplía personas en código
         // pero la UI debe seguir siendo «solo Programas» salvo que el rol tenga Personas en BD.
         if (!empty($_SESSION['permisos']['personas']['ver'])) {
+            return false;
+        }
+        // Con Discípulos (personas_consulta) debe poder abrir ?url=personas aunque tenga Programas.
+        if (!empty($_SESSION['permisos']['personas_consulta']['ver'])) {
             return false;
         }
         $prog = $_SESSION['permisos']['programas'] ?? [];
@@ -553,7 +838,16 @@ class AuthController extends BaseController {
         }
         self::sincronizarPermisosSesionActual();
         $p = $_SESSION['permisos']['programas'] ?? null;
-        return is_array($p) && !empty($p['coordinacion_total']);
+        if (is_array($p) && !empty($p['coordinacion_total'])) {
+            return true;
+        }
+        if (!class_exists('PermisosUiCatalogo', false)) {
+            require_once APP . '/Helpers/PermisosUiCatalogo.php';
+        }
+        $claveSub = PermisosUiCatalogo::claveAccion('programas', 'coordinacion_total');
+        $sub = $_SESSION['permisos'][$claveSub] ?? null;
+
+        return is_array($sub) && !empty($sub['ver']);
     }
 
     /**
@@ -579,6 +873,66 @@ class AuthController extends BaseController {
     public static function moduloEnAmbitoCoordinacionProgramas(string $modulo): bool {
         $modulo = strtolower(trim($modulo));
         return in_array($modulo, self::modulosAmbitoCoordinacionProgramas(), true);
+    }
+
+    /**
+     * Permiso atómico estilo modulo:accion (delega en tienePermiso).
+     */
+    public static function puede(string $clave): bool {
+        $clave = strtolower(trim($clave));
+        if ($clave === '' || strpos($clave, ':') === false) {
+            return false;
+        }
+
+        [$modulo, $accion] = explode(':', $clave, 2);
+        $modulo = trim($modulo);
+        $accion = trim($accion);
+        if ($modulo === '' || $accion === '') {
+            return false;
+        }
+
+        return self::tienePermiso($modulo, $accion);
+    }
+
+    /**
+     * Atajo para comprobar permiso de ver un módulo (modulo:ver).
+     */
+    public static function puedeVerModulo(string $modulo): bool {
+        $modulo = strtolower(trim($modulo));
+        if ($modulo === '') {
+            return false;
+        }
+        if (self::esAdministrador()) {
+            return true;
+        }
+        return self::puede($modulo . ':ver');
+    }
+
+    /**
+     * Lista plana de permisos activos en sesión (para vistas / JS).
+     *
+     * @return array<int, string>
+     */
+    public static function getPermisosPlanos(): array {
+        if (!self::estaAutenticado()) {
+            return [];
+        }
+
+        if (!empty($_SESSION['permisos_planos']) && is_array($_SESSION['permisos_planos'])) {
+            return $_SESSION['permisos_planos'];
+        }
+
+        return MenuBuilder::construirPermisosPlanos();
+    }
+
+    /**
+     * Reconstruye menú lateral y permisos planos tras login o cambio de contexto.
+     */
+    public static function reconstruirMenuYSesion(): void {
+        if (!self::estaAutenticado()) {
+            return;
+        }
+        MenuBuilder::sincronizarSesion();
     }
 
     /**
@@ -608,7 +962,20 @@ class AuthController extends BaseController {
         // Si existe permiso explicito de modulo, SIEMPRE manda lo configurado
         // por el administrador.
         if (isset($_SESSION['permisos'][$modulo]) && is_array($_SESSION['permisos'][$modulo])) {
-            return !empty($_SESSION['permisos'][$modulo][$accion]);
+            if (array_key_exists($accion, $_SESSION['permisos'][$modulo])) {
+                return !empty($_SESSION['permisos'][$modulo][$accion]);
+            }
+        }
+
+        // Submódulo UI: personas_acciones_exportar_excel, nehemias_cols_*, etc.
+        if (!class_exists('PermisosUiCatalogo', false)) {
+            require_once APP . '/Helpers/PermisosUiCatalogo.php';
+        }
+        if (PermisosUiCatalogo::tieneAccionUi($modulo, $accion)) {
+            $claveSub = PermisosUiCatalogo::claveAccion($modulo, $accion);
+            if (isset($_SESSION['permisos'][$claveSub]) && is_array($_SESSION['permisos'][$claveSub])) {
+                return !empty($_SESSION['permisos'][$claveSub]['ver']);
+            }
         }
 
         // Si el rol YA tiene matriz de permisos configurada,
@@ -766,13 +1133,105 @@ class AuthController extends BaseController {
         return self::normalizarTexto((string)($_SESSION['active_context'] ?? ''));
     }
 
+    public static function esContextoMaestro(): bool {
+        if (self::getActiveContext() === 'maestro') {
+            return true;
+        }
+
+        return self::esRolMaestroUsuario();
+    }
+
+    /**
+     * Vista simplificada de alumno (menú y pantalla de evaluaciones).
+     */
+    public static function esVistaDiscipuloSimplificada(): bool {
+        if (self::esAdministrador() || self::esContextoMaestro()) {
+            return false;
+        }
+
+        return self::usaVistaDiscipuloCapacitacionDestino();
+    }
+
+    public static function esRolMaestroUsuario(): bool {
+        if (self::esAdministrador()) {
+            return false;
+        }
+
+        $nombreRol = self::normalizarTexto((string)($_SESSION['usuario_rol_nombre'] ?? ''));
+        return strpos($nombreRol, 'maestro') !== false || strpos($nombreRol, 'teacher') !== false;
+    }
+
+    /**
+     * Maestro de Cap. Destino: gestión académica (evaluaciones, tareas, inscritos, etc.).
+     * No incluye subir archivos de material clase/profesor.
+     */
+    public static function puedeGestionarCapDestinoComoMaestro(): bool {
+        return self::esContextoMaestro() && self::puedeVerMaterialCapacitacionDestino();
+    }
+
+    /** @deprecated alias */
+    public static function puedeGestionarEvaluacionesComoMaestro(): bool {
+        return self::puedeGestionarCapDestinoComoMaestro();
+    }
+
+    /**
+     * Ver listado o presentar evaluaciones (permiso explícito, discípulo o maestro Cap. Destino).
+     */
+    public static function puedeAccederEvaluacionesDiscipular(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+        if (self::puede('discipular_evaluaciones:ver')) {
+            return true;
+        }
+        if (self::puedeGestionarEvaluacionesComoMaestro()) {
+            return true;
+        }
+        if (self::usaVistaDiscipuloCapacitacionDestino()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Crear, editar o eliminar evaluaciones (no aplica a vista discípulo).
+     */
+    public static function puedeGestionarEvaluacionesDiscipular(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+        if (self::puedeGestionarEvaluacionesComoMaestro()) {
+            return true;
+        }
+
+        return self::puede('discipular_evaluaciones:crear')
+            || self::puede('discipular_evaluaciones:editar')
+            || self::puede('discipular_evaluaciones:eliminar');
+    }
+
+    /**
+     * Ruta de inicio según el perfil activo (maestro → material Cap. Destino, discípulo → evaluaciones).
+     */
+    public static function obtenerUrlInicioSesion(): string {
+        if (self::esContextoMaestro()) {
+            return 'home/material/capacitacion-destino';
+        }
+
+        if (self::usaVistaDiscipuloCapacitacionDestino()) {
+            return 'programas/evaluaciones';
+        }
+
+        return 'home';
+    }
+
     private function redirigirPostLogin(): void {
         if ($this->debeMostrarSelectorContexto()) {
             $this->redirect('auth/selector-contexto');
             return;
         }
 
-        $this->redirect('home');
+        $this->redirect(self::obtenerUrlInicioSesion());
     }
 
     private function debeMostrarSelectorContexto(): bool {
@@ -933,6 +1392,8 @@ class AuthController extends BaseController {
             $_SESSION['account_pool'][$activeAccountId]['active_context'] = $_SESSION['active_context'];
             $_SESSION['account_pool'][$activeAccountId]['permisos'] = $_SESSION['permisos'];
         }
+
+        self::reconstruirMenuYSesion();
     }
 
     /**

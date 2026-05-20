@@ -1,6 +1,6 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 <?php
-$puedeVerPersona = AuthController::esAdministrador() || AuthController::tienePermiso('personas', 'ver');
+$puedeVerPersona = AuthController::esAdministrador() || AuthController::puede('personas:ver');
 
 $subprocesosPorEtapa = [
     'Ganar' => ['Primer contacto', 'Asignacion a lideres y ministerio', 'Fonovisita', 'Visita', 'Asignacion a una celula', 'No se dispone'],
