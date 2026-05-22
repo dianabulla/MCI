@@ -700,7 +700,7 @@ class TeenController extends BaseController {
      * POST: sube nuevo PDF
      */
     public function index() {
-        if (!AuthController::puede('teen:ver')) {
+        if (!AuthController::puedeVerMaterialTeens()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -887,6 +887,7 @@ class TeenController extends BaseController {
             'puede_subir' => AuthController::puede('teen:crear'),
             'puede_editar' => AuthController::puede('teen:editar'),
             'puede_eliminar' => AuthController::puede('teen:eliminar'),
+            'solo_ver_material' => AuthController::puedeVerMaterialExistente() && !AuthController::puede('teen:ver'),
         ]);
     }
 
@@ -1349,7 +1350,7 @@ class TeenController extends BaseController {
      * Abrir PDF y registrar visualización.
      */
     public function verPdf() {
-        if (!AuthController::puede('teen:ver')) {
+        if (!AuthController::puedeVerMaterialTeens()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -1421,7 +1422,7 @@ class TeenController extends BaseController {
      * AJAX: detalle de quiénes vieron un material.
      */
     public function detalleVistas() {
-        if (!AuthController::puede('teen:ver')) {
+        if (!AuthController::puedeVerMaterialTeens()) {
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'message' => 'Acceso denegado']);
             exit;

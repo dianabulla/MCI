@@ -179,6 +179,16 @@ if (!in_array($url, $rutasPublicas)) {
         exit;
     }
 
+    $rutasSinAcuerdoConfidencialidad = [
+        'auth/acuerdo-confidencialidad',
+        'auth/aceptar-acuerdo-confidencialidad',
+        'auth/logout',
+    ];
+    if (AuthController::debeAceptarAcuerdoConfidencialidad() && !in_array($url, $rutasSinAcuerdoConfidencialidad, true)) {
+        header('Location: ' . rtrim(PUBLIC_URL, '/') . '/index.php?url=auth/acuerdo-confidencialidad');
+        exit;
+    }
+
     require_once APP . '/Helpers/RouteGuard.php';
     RouteGuard::denegarSiNoPuede($url);
 }

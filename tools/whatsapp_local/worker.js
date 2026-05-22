@@ -1,7 +1,19 @@
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const { spawn } = require('child_process');
 const mysql = require('mysql2/promise');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+
+const WA_CLIENT_ID = String(process.env.WA_CLIENT_ID || 'mcimadrid_server').trim() || 'mcimadrid_server';
+/** Sesión siempre en la raíz del proyecto (no depende de desde dónde se ejecute node). */
+const WA_AUTH_PATH = path.resolve(
+  process.env.WA_AUTH_PATH || path.join(__dirname, '..', '..', '.wwebjs_auth')
+);
+const LOG_DIR = path.join(__dirname, 'logs');
+const QR_HTML_PATH = path.join(LOG_DIR, 'whatsapp-qr.html');
+const WORKER_LOCK_PATH = path.join(LOG_DIR, 'worker.lock');
 
 function parseBoolean(value, defaultValue = false) {
   if (value === undefined || value === null || value === '') {
@@ -9,6 +21,121 @@ function parseBoolean(value, defaultValue = false) {
   }
   const normalized = String(value).trim().toLowerCase();
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'si';
+}
+
+function resolveHeadlessMode() {
+  const env = process.env.WA_HEADLESS;
+  if (env !== undefined && env !== null && String(env).trim() !== '') {
+    return parseBoolean(env, true);
+  }
+  // En Windows, por defecto mostrar Chrome para escanear QR (evita ventana que se cierra sin ver código).
+  return process.platform !== 'win32';
+}
+
+function buildPuppeteerConfig() {
+  const config = {
+    headless: resolveHeadlessMode(),
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-first-run',
+    ],
+  };
+  const chromePath = String(process.env.CHROME_PATH || process.env.PUPPETEER_EXECUTABLE_PATH || '').trim();
+  if (chromePath) {
+    config.executablePath = chromePath;
+  }
+  return config;
+}
+
+function rutaSesionWhatsApp() {
+  return path.join(WA_AUTH_PATH, `session-${WA_CLIENT_ID}`);
+}
+
+function sesionPareceVinculada() {
+  const base = rutaSesionWhatsApp();
+  const marcadores = [
+    path.join(base, 'Default', 'Cookies'),
+    path.join(base, 'Default', 'IndexedDB', 'https_web.whatsapp.com_0.indexeddb.leveldb'),
+  ];
+  return marcadores.some((p) => fs.existsSync(p));
+}
+
+function asegurarDirectorioLogs() {
+  if (!fs.existsSync(LOG_DIR)) {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+  }
+}
+
+function escribirQrParaEscaneo(qr) {
+  asegurarDirectorioLogs();
+  const qrEncoded = encodeURIComponent(String(qr || ''));
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="25">
+  <title>Vincular WhatsApp - MCIMadrid</title>
+  <style>
+    body { font-family:Segoe UI,Arial,sans-serif; text-align:center; padding:24px; background:#f4f7fb; color:#1e2f48; }
+    img { max-width:360px; border:8px solid #fff; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.12); }
+    .hint { max-width:520px; margin:16px auto; line-height:1.5; color:#4f647f; }
+  </style>
+</head>
+<body>
+  <h1>Vincular WhatsApp</h1>
+  <p class="hint">En el celular: WhatsApp → Dispositivos vinculados → Vincular dispositivo. Esta página se actualiza sola si el código cambia.</p>
+  <img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&amp;data=${qrEncoded}" alt="QR WhatsApp">
+  <p class="hint">Archivo: ${QR_HTML_PATH.replace(/\\/g, '/')}</p>
+</body>
+</html>`;
+  fs.writeFileSync(QR_HTML_PATH, html, 'utf8');
+  console.log(`[QR] Abre en el navegador: ${QR_HTML_PATH}`);
+  if (process.platform === 'win32' && parseBoolean(process.env.WA_OPEN_QR_BROWSER, true)) {
+    try {
+      spawn('cmd', ['/c', 'start', '', QR_HTML_PATH], { detached: true, stdio: 'ignore' }).unref();
+    } catch (_) {
+      /* ignorar */
+    }
+  }
+}
+
+function adquirirLockWorker() {
+  asegurarDirectorioLogs();
+  try {
+    if (fs.existsSync(WORKER_LOCK_PATH)) {
+      const raw = fs.readFileSync(WORKER_LOCK_PATH, 'utf8').trim();
+      const pid = parseInt(raw, 10);
+      if (pid > 0) {
+        try {
+          process.kill(pid, 0);
+          console.error(
+            `[LOCK] Ya hay un worker en ejecución (PID ${pid}). Cierra la otra ventana o borra ${WORKER_LOCK_PATH} si el proceso murió.`
+          );
+          return false;
+        } catch (_) {
+          /* proceso anterior no existe */
+        }
+      }
+    }
+    fs.writeFileSync(WORKER_LOCK_PATH, String(process.pid), 'utf8');
+    return true;
+  } catch (err) {
+    console.warn('[LOCK] No se pudo crear lock:', err && err.message ? err.message : err);
+    return true;
+  }
+}
+
+function liberarLockWorker() {
+  try {
+    if (fs.existsSync(WORKER_LOCK_PATH)) {
+      fs.unlinkSync(WORKER_LOCK_PATH);
+    }
+  } catch (_) {
+    /* ignorar */
+  }
 }
 
 function getDbSslConfig() {
@@ -490,39 +617,97 @@ async function encolarCumpleanosDelDiaSiAplica() {
   }
 }
 
-function buildFiltroFechaColaSql() {
-  const onlyToday = parseBoolean(process.env.WA_ONLY_TODAY, true);
-  if (onlyToday) {
-    return `AND (
-            (programado_en IS NULL AND DATE(creado_en) = CURDATE())
-            OR (programado_en IS NOT NULL AND DATE(programado_en) = CURDATE())
-          )`;
+function soloProcesarColaDeHoy() {
+  return parseBoolean(process.env.WA_ONLY_TODAY, true);
+}
+
+/**
+ * Condición SQL: mensajes válidos para el día actual (Colombia, fecha explícita).
+ * - Sin programar: bienvenida, asignaciones y cumpleaños de hoy (creado_en = hoy).
+ * - Cumpleaños: además la referencia debe ser cumpleanos:YYYY-MM-DD:...
+ * - Plantillas programadas: programado_en con fecha de hoy y hora ya vencida al enviar.
+ */
+function buildFiltroSoloHoySql(fechaHoy) {
+  return {
+    sql: `AND (
+            (
+              programado_en IS NULL
+              AND DATE(creado_en) = ?
+              AND (
+                tipo_evento <> 'felicitacion_cumpleanos'
+                OR referencia LIKE ?
+              )
+            )
+            OR (
+              programado_en IS NOT NULL
+              AND DATE(programado_en) = ?
+            )
+          )`,
+    params: [fechaHoy, `cumpleanos:${fechaHoy}:%`, fechaHoy],
+  };
+}
+
+function buildFiltroFechaColaSql(fechaHoy) {
+  if (soloProcesarColaDeHoy()) {
+    return buildFiltroSoloHoySql(fechaHoy);
   }
 
   const maxAgeDays = Math.max(1, parseInt(process.env.WA_QUEUE_MAX_AGE_DAYS || '45', 10));
-  return `AND creado_en >= DATE_SUB(NOW(), INTERVAL ${maxAgeDays} DAY)`;
+  return {
+    sql: `AND creado_en >= DATE_SUB(NOW(), INTERVAL ${maxAgeDays} DAY)`,
+    params: [],
+  };
+}
+
+/**
+ * Pendientes de días anteriores no se envían: se marcan fallido para no acumular cola vieja.
+ */
+async function expirarPendientesFueraDeHoy() {
+  if (!soloProcesarColaDeHoy()) {
+    return 0;
+  }
+
+  const fechaHoy = getFechaHoyBogotaYmd();
+  const [result] = await pool.query(
+    `UPDATE whatsapp_local_queue
+     SET estado = 'fallido',
+         ultimo_error = 'No enviado: el worker solo procesa mensajes del día actual (Colombia).',
+         procesado_en = NOW()
+     WHERE estado = 'pendiente'
+       AND NOT (
+         (programado_en IS NULL AND DATE(creado_en) = ?)
+         OR (programado_en IS NOT NULL AND DATE(programado_en) = ?)
+       )`,
+    [fechaHoy, fechaHoy]
+  );
+
+  const n = Number(result && result.affectedRows ? result.affectedRows : 0);
+  if (n > 0) {
+    console.log(`[COLA] ${n} pendiente(s) de otros días marcados como fallido (solo se envía lo de hoy).`);
+  }
+  return n;
 }
 
 async function obtenerPendientes(limit) {
-  // WA_ONLY_TODAY=1 (defecto): solo mensajes de hoy (por creado_en o por programado_en).
-  // Con programado_en: enviar cuando programado_en <= NOW() dentro del mismo día.
-  const filtroFecha = buildFiltroFechaColaSql();
-  const onlyToday = parseBoolean(process.env.WA_ONLY_TODAY, true);
-  const params = onlyToday ? [MAX_ATTEMPTS, limit] : [MAX_ATTEMPTS, limit];
+  const fechaHoy = getFechaHoyBogotaYmd();
+  const filtroFecha = buildFiltroFechaColaSql(fechaHoy);
+  const params = [MAX_ATTEMPTS, ...filtroFecha.params, limit];
 
-    const [rows] = await pool.query(
+  const [rows] = await pool.query(
     `SELECT id, telefono, mensaje, media_url, media_tipo, tipo_evento, intentos
      FROM whatsapp_local_queue
      WHERE estado = 'pendiente' AND intentos < ?
-       ${filtroFecha}
+       ${filtroFecha.sql}
        AND (
             programado_en IS NULL
             OR programado_en <= NOW()
        )
      ORDER BY CASE
        WHEN tipo_evento IN ('mensaje_capacitacion_destino', 'programacion_mensaje_capacitacion_destino') THEN 0
-       WHEN tipo_evento = 'felicitacion_cumpleanos' THEN 1
-       ELSE 2
+       WHEN tipo_evento LIKE 'programacion_%' THEN 0
+       WHEN tipo_evento = 'bienvenida_persona' THEN 1
+       WHEN tipo_evento = 'felicitacion_cumpleanos' THEN 2
+       ELSE 3
      END ASC, id ASC
      LIMIT ?`,
     params
@@ -614,12 +799,17 @@ async function procesarCola(client) {
 
   try {
     await encolarCumpleanosDelDiaSiAplica();
+    await expirarPendientesFueraDeHoy();
 
     const pendientes = await obtenerPendientes(BATCH_LIMIT);
     if (!pendientes.length) {
       const ahora = Date.now();
       if (ahora - ultimoLogColaVacia > 120000) {
-        console.log('[COLA] Sin mensajes pendientes listos para enviar (hoy / programado_en).');
+        const fechaHoy = getFechaHoyBogotaYmd();
+        const modo = soloProcesarColaDeHoy()
+          ? `solo hoy (${fechaHoy}): cumpleaños, bienvenida y programados de hoy`
+          : 'ventana ampliada (WA_ONLY_TODAY=0)';
+        console.log(`[COLA] Sin mensajes pendientes listos. Modo: ${modo}.`);
         ultimoLogColaVacia = ahora;
       }
       return;
@@ -685,20 +875,40 @@ async function iniciarProcesamiento(client) {
   }, POLL_MS);
 }
 
+if (!adquirirLockWorker()) {
+  process.exit(1);
+}
+
+console.log(`[WA] Carpeta de sesión: ${rutaSesionWhatsApp()}`);
+console.log(`[WA] Sesión vinculada: ${sesionPareceVinculada() ? 'sí (reconexión)' : 'no (se pedirá QR)'}`);
+console.log(`[WA] Modo navegador: ${resolveHeadlessMode() ? 'oculto (headless)' : 'visible (recomendado para escanear QR)'}`);
+
 const client = new Client({
-  authStrategy: new LocalAuth({ clientId: process.env.WA_CLIENT_ID || 'mcimadrid_server' }),
-  puppeteer: {
-    headless: String(process.env.WA_HEADLESS || 'true').toLowerCase() !== 'false',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  },
+  authStrategy: new LocalAuth({
+    clientId: WA_CLIENT_ID,
+    dataPath: WA_AUTH_PATH,
+  }),
+  puppeteer: buildPuppeteerConfig(),
 });
 
 client.on('qr', (qr) => {
-  console.log('QR generado. Escanéalo con WhatsApp.');
+  console.log('QR generado. Escanéalo con WhatsApp (Dispositivos vinculados).');
+  escribirQrParaEscaneo(qr);
   try {
     qrcode.generate(qr, { small: true });
   } catch (e) {
     console.log(qr);
+  }
+});
+
+client.on('authenticated', () => {
+  console.log('[WA] Autenticación correcta. Esperando conexión lista...');
+  try {
+    if (fs.existsSync(QR_HTML_PATH)) {
+      fs.unlinkSync(QR_HTML_PATH);
+    }
+  } catch (_) {
+    /* ignorar */
   }
 });
 
@@ -711,6 +921,11 @@ client.on('ready', () => {
   console.log('WhatsApp conectado. Worker activo.');
   console.log(`[CONFIG] Delay aleatorio entre ${Math.round(DELAY_MIN_MS / 1000)}s y ${Math.round(DELAY_MAX_MS / 1000)}s.`);
   console.log(`[CONFIG] Esperar ACK (otros mensajes): ${WAIT_ACK ? 'sí' : 'no'}. Cumpleaños: ${WAIT_ACK_CUMPLEANOS ? 'sí' : 'no (recomendado)'}.`);
+  if (soloProcesarColaDeHoy()) {
+    console.log(`[CONFIG] Cola: SOLO HOY (${getFechaHoyBogotaYmd()}) — cumpleaños, bienvenida y plantillas programadas para hoy.`);
+  } else {
+    console.log(`[CONFIG] Cola: ventana de ${Math.max(1, parseInt(process.env.WA_QUEUE_MAX_AGE_DAYS || '45', 10))} días (WA_ONLY_TODAY=0).`);
+  }
   iniciarProcesamiento(client)
     .catch((err) => {
       console.error('No se pudo asegurar tabla whatsapp_local_queue:', err && err.message ? err.message : err);
@@ -725,7 +940,7 @@ client.on('disconnected', (reason) => {
   console.error('WhatsApp desconectado:', reason);
 });
 
-process.on('SIGINT', async () => {
+async function cerrarWorker(codigoSalida = 0) {
   console.log('Cerrando worker...');
   try {
     await client.destroy();
@@ -733,7 +948,29 @@ process.on('SIGINT', async () => {
   } catch (e) {
     // Ignorar errores de cierre.
   }
-  process.exit(0);
+  liberarLockWorker();
+  process.exit(codigoSalida);
+}
+
+process.on('SIGINT', () => {
+  cerrarWorker(0).catch(() => process.exit(0));
 });
 
-client.initialize();
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Excepción no capturada:', err && err.stack ? err.stack : err);
+  liberarLockWorker();
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] Promesa rechazada:', reason);
+});
+
+client.initialize().catch((err) => {
+  console.error('[FATAL] No se pudo iniciar WhatsApp:', err && err.message ? err.message : err);
+  console.error(
+    'Sugerencia: cierra otros Chrome/WhatsApp worker, ejecuta 01_INICIAR_WHATSAPP.cmd y escanea el QR.'
+  );
+  liberarLockWorker();
+  process.exit(1);
+});

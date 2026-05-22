@@ -436,7 +436,7 @@ class CelulaController extends BaseController {
     }
 
     public function materiales() {
-        if (!AuthController::puede('materiales_celulas:ver')) {
+        if (!AuthController::puedeVerMaterialCelulas()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -655,7 +655,7 @@ class CelulaController extends BaseController {
      * Abrir material PDF y registrar visualización.
      */
     public function verMaterial() {
-        if (!AuthController::puede('materiales_celulas:ver')) {
+        if (!AuthController::puedeVerMaterialCelulas()) {
             header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
             exit;
         }
@@ -849,7 +849,7 @@ class CelulaController extends BaseController {
      * Obtener detalles de quiénes vieron un material específico (AJAX)
      */
     public function detalleVistasMaterial() {
-        if (!AuthController::puede('materiales_celulas:ver')) {
+        if (!AuthController::puedeVerMaterialCelulas()) {
             header('Content-Type: application/json');
             echo json_encode(['success' => false, 'message' => 'Acceso denegado']);
             exit;

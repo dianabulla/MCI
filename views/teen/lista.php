@@ -9,6 +9,7 @@ $pdfsEnCarpeta = (int)($pdfs_en_carpeta ?? 0);
 $puedeSubir = !empty($puede_subir);
 $puedeEditar = !empty($puede_editar);
 $puedeEliminar = !empty($puede_eliminar);
+$soloVerMaterial = !empty($solo_ver_material);
 ?>
 
 <div class="teen-material-page">
@@ -18,10 +19,17 @@ $puedeEliminar = !empty($puede_eliminar);
             <p class="teen-material-subtitle">Gestiona y comparte PDF con los equipos.</p>
         </div>
         <div class="page-actions personas-mobile-stack teen-nav-pills">
+            <?php if (!$soloVerMaterial): ?>
             <a href="<?= PUBLIC_URL ?>index.php?url=teen/registro-menores" class="btn btn-nav-pill">Registro</a>
             <a href="<?= PUBLIC_URL ?>index.php?url=teen/codigos" class="btn btn-nav-pill">Códigos</a>
+            <?php endif; ?>
             <a href="<?= PUBLIC_URL ?>index.php?url=teen" class="btn btn-nav-pill active">Material</a>
+            <?php if (!$soloVerMaterial): ?>
             <a href="<?= PUBLIC_URL ?>index.php?url=entrega_obsequio" class="btn btn-nav-pill">Obsequios</a>
+            <?php endif; ?>
+            <?php if ($soloVerMaterial): ?>
+            <a href="<?= PUBLIC_URL ?>?url=home/material" class="btn btn-nav-pill">Volver a Material</a>
+            <?php endif; ?>
         </div>
     </div>
 

@@ -239,25 +239,178 @@ class EscuelaFormacionInscripcion extends BaseModel {
             return false;
         }
 
-        return $this->execute(
+        $programa = trim((string)($inscripcion['Programa'] ?? ''));
+        $cedula = trim((string)($inscripcion['Cedula'] ?? ''));
+        $idPersona = (int)($inscripcion['Id_Persona'] ?? 0);
+        $tipoPago = $this->resolverTipoPagoTrasMovimiento($programa, (string)$tipoPago, (float)$valorPago, $cedula, $idPersona);
+
+        $ok = $this->execute(
             "INSERT INTO {$this->tablePagos}
              (Id_Inscripcion, Id_Persona, Nombre, Cedula, Telefono, Programa, Metodo_Pago, Recibido_Por, Tipo_Pago, Valor_Pago, Entrego_Libro, Referencia_Pago)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 $idInscripcion,
-                (int)($inscripcion['Id_Persona'] ?? 0) > 0 ? (int)$inscripcion['Id_Persona'] : null,
+                $idPersona > 0 ? $idPersona : null,
                 (string)($inscripcion['Nombre'] ?? ''),
-                (string)($inscripcion['Cedula'] ?? ''),
+                $cedula,
                 (string)($inscripcion['Telefono'] ?? ''),
-                (string)($inscripcion['Programa'] ?? ''),
+                $programa,
                 (string)$metodoPago,
                 trim((string)$recibidoPor) !== '' ? trim((string)$recibidoPor) : null,
-                (string)$tipoPago,
+                $tipoPago,
                 (float)$valorPago,
                 $entregoLibro === null ? null : ((int)$entregoLibro === 1 ? 1 : 0),
                 (string)$referenciaPago
             ]
         );
+
+        if ($ok && $this->programaUsaUmbralPagoCompletoUv($programa)) {
+            $this->sincronizarTiposPagoAcumuladoCompleto($programa, 180000, $cedula, $idPersona);
+        }
+
+        return $ok;
+    }
+
+    public function programaUsaUmbralPagoCompletoUv(string $programa): bool {
+        $programa = strtolower(trim($programa));
+        return in_array($programa, ['universidad_vida', 'encuentro', 'bautismo'], true);
+    }
+
+    public function getTotalPagadoAcumuladoPorClave(string $cedula, int $idPersona, string $programa): float {
+        $cedula = trim($cedula);
+        $programa = trim($programa);
+        $idPersona = (int)$idPersona;
+
+        $where = ['COALESCE(s.Valor_Pago, 0) > 0'];
+        $params = [];
+
+        $wherePrograma = $this->getSqlFiltroProgramaPagos($programa, 's');
+        if ($wherePrograma !== '') {
+            $where[] = $wherePrograma;
+        }
+
+        if ($cedula !== '') {
+            $where[] = 'TRIM(COALESCE(s.Cedula, \'\')) = ?';
+            $params[] = $cedula;
+        } elseif ($idPersona > 0) {
+            $where[] = 's.Id_Persona = ?';
+            $params[] = $idPersona;
+        } else {
+            return 0.0;
+        }
+
+        $sql = "SELECT COALESCE(SUM(COALESCE(s.Valor_Pago, 0)), 0) AS Total
+                FROM {$this->tablePagos} s
+                WHERE " . implode(' AND ', $where);
+
+        $rows = $this->query($sql, $params);
+        return (float)($rows[0]['Total'] ?? 0);
+    }
+
+    public function resolverTipoPagoTrasMovimiento(string $programa, string $tipoPago, float $valorNuevo, string $cedula, int $idPersona): string {
+        $tipoPago = strtolower(trim($tipoPago)) === 'completo' ? 'completo' : 'abono';
+        if (!$this->programaUsaUmbralPagoCompletoUv($programa) || $valorNuevo <= 0) {
+            return $tipoPago;
+        }
+
+        $acumulado = $this->getTotalPagadoAcumuladoPorClave($cedula, $idPersona, $programa) + $valorNuevo;
+        if ($acumulado >= 180000) {
+            return 'completo';
+        }
+
+        return $tipoPago;
+    }
+
+    /**
+     * Si la persona acumuló >= umbral en el programa, marca todos sus movimientos como pago completo.
+     */
+    public function sincronizarTiposPagoAcumuladoCompleto(string $programa, float $umbral = 180000, string $cedula = '', int $idPersona = 0): void {
+        $programa = trim($programa);
+        $umbral = max(1, (float)$umbral);
+        $cedula = trim($cedula);
+        $idPersona = (int)$idPersona;
+
+        $whereProgramaSub = $this->getSqlFiltroProgramaPagos($programa, 's');
+        $whereProgramaMov = $this->getSqlFiltroProgramaPagos($programa, 'm');
+        if ($whereProgramaSub === '' || $whereProgramaMov === '') {
+            return;
+        }
+
+        $filtroPersonaSub = '';
+        $filtroPersonaMov = '';
+        $paramsSub = [$umbral];
+        $paramsMov = [];
+
+        if ($cedula !== '') {
+            $filtroPersonaSub = ' AND TRIM(COALESCE(s.Cedula, \'\')) = ?';
+            $filtroPersonaMov = ' AND TRIM(COALESCE(m.Cedula, \'\')) = ?';
+            $paramsSub[] = $cedula;
+            $paramsMov[] = $cedula;
+        } elseif ($idPersona > 0) {
+            $filtroPersonaSub = ' AND s.Id_Persona = ?';
+            $filtroPersonaMov = ' AND m.Id_Persona = ?';
+            $paramsSub[] = $idPersona;
+            $paramsMov[] = $idPersona;
+        }
+
+        $exprClaveSub = "COALESCE(NULLIF(TRIM(s.Cedula), ''), CONCAT('SIN-CEDULA-', COALESCE(s.Id_Persona, 0)))";
+        $exprClaveMov = "COALESCE(NULLIF(TRIM(m.Cedula), ''), CONCAT('SIN-CEDULA-', COALESCE(m.Id_Persona, 0)))";
+        $exprProgSub = "COALESCE(NULLIF(TRIM(s.Programa), ''), 'SIN-PROGRAMA')";
+        $exprProgMov = "COALESCE(NULLIF(TRIM(m.Programa), ''), 'SIN-PROGRAMA')";
+
+        $sqlMovimientos = "UPDATE {$this->tablePagos} m
+            INNER JOIN (
+                SELECT {$exprClaveSub} AS ClavePersona, {$exprProgSub} AS ClavePrograma
+                FROM {$this->tablePagos} s
+                WHERE {$whereProgramaSub}
+                  AND COALESCE(s.Valor_Pago, 0) > 0
+                  {$filtroPersonaSub}
+                GROUP BY {$exprClaveSub}, {$exprProgSub}
+                HAVING SUM(COALESCE(s.Valor_Pago, 0)) >= ?
+            ) k ON k.ClavePersona = {$exprClaveMov} AND k.ClavePrograma = {$exprProgMov}
+            SET m.Tipo_Pago = 'completo'
+            WHERE {$whereProgramaMov}
+              AND COALESCE(m.Valor_Pago, 0) > 0
+              AND COALESCE(LOWER(TRIM(m.Tipo_Pago)), '') <> 'completo'
+              {$filtroPersonaMov}";
+
+        $this->execute($sqlMovimientos, array_merge($paramsSub, $paramsMov));
+
+        $whereProgramaIns = $this->getSqlFiltroProgramaPagos($programa, 'i');
+        if ($whereProgramaIns === '') {
+            return;
+        }
+
+        $filtroPersonaIns = '';
+        $paramsIns = [];
+        if ($cedula !== '') {
+            $filtroPersonaIns = ' AND TRIM(COALESCE(i.Cedula, \'\')) = ?';
+            $paramsIns[] = $cedula;
+        } elseif ($idPersona > 0) {
+            $filtroPersonaIns = ' AND i.Id_Persona = ?';
+            $paramsIns[] = $idPersona;
+        }
+
+        $exprClaveIns = "COALESCE(NULLIF(TRIM(i.Cedula), ''), CONCAT('SIN-CEDULA-', COALESCE(i.Id_Persona, 0)))";
+
+        $sqlInscripcion = "UPDATE {$this->table} i
+            INNER JOIN (
+                SELECT {$exprClaveSub} AS ClavePersona, {$exprProgSub} AS ClavePrograma
+                FROM {$this->tablePagos} s
+                WHERE {$whereProgramaSub}
+                  AND COALESCE(s.Valor_Pago, 0) > 0
+                  {$filtroPersonaSub}
+                GROUP BY {$exprClaveSub}, {$exprProgSub}
+                HAVING SUM(COALESCE(s.Valor_Pago, 0)) >= ?
+            ) k ON k.ClavePersona = {$exprClaveIns}
+               AND k.ClavePrograma = COALESCE(NULLIF(TRIM(i.Programa), ''), 'SIN-PROGRAMA')
+            SET i.Tipo_Pago = 'completo'
+            WHERE {$whereProgramaIns}
+              AND COALESCE(i.Valor_Pago, 0) > 0
+              AND COALESCE(LOWER(TRIM(i.Tipo_Pago)), '') <> 'completo'
+              {$filtroPersonaIns}";
+
+        $this->execute($sqlInscripcion, array_merge($paramsSub, $paramsIns));
     }
 
     public function actualizarAsistenciaClase($idInscripcion, $asistio) {
@@ -1121,6 +1274,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
                     TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, ''))) AS Nombre_Persona_Actual,
                     p.Genero AS Genero_Persona_Actual,
                     p.Edad AS Edad_Persona_Actual,
+                    p.Id_Lider AS Id_Lider_Persona_Actual,
                     TRIM(CONCAT(COALESCE(lp.Nombre, ''), ' ', COALESCE(lp.Apellido, ''))) AS Lider_Persona_Actual,
                     mp.Nombre_Ministerio AS Nombre_Ministerio_Persona_Actual
                 FROM {$this->table} s
@@ -1719,5 +1873,40 @@ class EscuelaFormacionInscripcion extends BaseModel {
         }
 
         return $mapa;
+    }
+
+    /**
+     * Total pagado en movimientos para una cédula dentro del mismo programa (evita duplicar UV + encuentro).
+     */
+    public function getTotalPagadoMovimientosPorCedulaPrograma(string $cedula, string $programa): float {
+        $cedula = preg_replace('/\D+/', '', trim($cedula));
+        $programa = trim($programa);
+        if ($cedula === '' || $programa === '') {
+            return 0.0;
+        }
+
+        $exprCedula = $this->sqlExprCedulaNormalizada('s.Cedula');
+        $where = [
+            "{$exprCedula} = ?",
+            'COALESCE(s.Valor_Pago, 0) > 0',
+        ];
+        $params = [$cedula];
+
+        $wherePrograma = $this->getSqlFiltroProgramaPagos($programa, 's');
+        if ($wherePrograma !== '') {
+            $where[] = $wherePrograma;
+        }
+
+        $sql = "SELECT COALESCE(SUM(COALESCE(s.Valor_Pago, 0)), 0) AS Total_Pagado
+                FROM {$this->tablePagos} s
+                WHERE " . implode(' AND ', $where);
+
+        try {
+            $rows = $this->query($sql, $params);
+            return (float)($rows[0]['Total_Pagado'] ?? 0);
+        } catch (Throwable $e) {
+            error_log('getTotalPagadoMovimientosPorCedulaPrograma: ' . $e->getMessage());
+            return 0.0;
+        }
     }
 }

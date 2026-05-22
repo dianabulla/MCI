@@ -22,6 +22,7 @@ class RegistroPersonaController extends BaseController {
     private $soportaCreadoPor = false;
     private $soportaCanalCreacion = false;
     private $soportaEsAntiguo = false;
+    private $soportaTratamientoDatos = false;
     private $idRolAsistenteCache = null;
 
     public function __construct() {
@@ -39,6 +40,7 @@ class RegistroPersonaController extends BaseController {
         $this->personaModel->ensureCreadoPorColumnExists();
         $this->personaModel->ensureCanalCreacionColumnExists();
         $this->personaModel->ensureEsAntiguoColumnExists();
+        $this->personaModel->ensureTratamientoDatosColumnExists();
 
         $this->soportaProceso = $this->personaModel->tieneColumna('Proceso');
         $this->soportaOrigenGanar = $this->personaModel->tieneColumna('Origen_Ganar');
@@ -46,6 +48,18 @@ class RegistroPersonaController extends BaseController {
         $this->soportaCreadoPor = $this->personaModel->tieneColumna('Creado_Por');
         $this->soportaCanalCreacion = $this->personaModel->tieneColumna('Canal_Creacion');
         $this->soportaEsAntiguo = $this->personaModel->tieneColumna('Es_Antiguo');
+        $this->soportaTratamientoDatos = $this->personaModel->tieneColumna('Tratamiento_Datos');
+    }
+
+    private function normalizarTratamientoDatosInput($valor): ?string {
+        $texto = strtolower(trim((string)$valor));
+        if (in_array($texto, ['acepta', 'si', 'sí', '1', 'yes'], true)) {
+            return 'Acepta';
+        }
+        if (in_array($texto, ['no acepta', 'no_acepta', 'no', '0'], true)) {
+            return 'No acepta';
+        }
+        return null;
     }
 
     private function buildAbsolutePublicUrl($route) {
@@ -249,6 +263,7 @@ class RegistroPersonaController extends BaseController {
     public function index() {
         $data = [
             'ministerios' => $this->ministerioModel->getAll(),
+            'soportaTratamientoDatos' => $this->soportaTratamientoDatos,
             'mensaje' => $_GET['mensaje'] ?? null,
             'tipo_mensaje' => $_GET['tipo'] ?? null,
             'registro_exitoso' => isset($_GET['exito']) && $_GET['exito'] === '1',
@@ -322,6 +337,14 @@ class RegistroPersonaController extends BaseController {
             $errores[] = 'Debes escribir una observación cuando seleccionas Otros';
         }
 
+        $tratamientoDatos = null;
+        if ($this->soportaTratamientoDatos) {
+            $tratamientoDatos = $this->normalizarTratamientoDatosInput($_POST['tratamiento_datos'] ?? '');
+            if ($tratamientoDatos === null) {
+                $errores[] = 'Debe indicar si acepta o no el tratamiento de datos';
+            }
+        }
+
         $duplicado = $this->personaModel->findDuplicateByCedulaOrTelefono($cedula, $telefono, null, $tipoDocumento);
         if (!empty($duplicado)) {
             $errores[] = $this->construirMensajeDuplicadoPersona($duplicado, $cedula, $telefono);
@@ -369,6 +392,10 @@ class RegistroPersonaController extends BaseController {
             // Queda visible en filtros operativos por defecto.
             'Estado_Cuenta' => 'Activo'
         ];
+
+        if ($this->soportaTratamientoDatos && $tratamientoDatos !== null) {
+            $data['Tratamiento_Datos'] = $tratamientoDatos;
+        }
 
         $idRolDiscipulo = $this->obtenerIdRolDiscipuloDefault();
         if ($idRolDiscipulo > 0) {

@@ -429,6 +429,88 @@ class Persona extends BaseModel {
         }
     }
 
+    public function ensureTratamientoDatosColumnExists() {
+        if ($this->tieneColumna('Tratamiento_Datos')) {
+            return true;
+        }
+
+        try {
+            $sql = "ALTER TABLE {$this->table} ADD COLUMN Tratamiento_Datos ENUM('Acepta', 'No acepta') NULL AFTER Peticion";
+            $this->db->exec($sql);
+            $this->columnasCache['Tratamiento_Datos'] = true;
+            return true;
+        } catch (Exception $e) {
+            error_log('No se pudo crear columna Tratamiento_Datos en persona: ' . $e->getMessage());
+            $this->columnasCache['Tratamiento_Datos'] = false;
+            return false;
+        }
+    }
+
+    public function ensureAcuerdoConfidencialidadColumnsExist() {
+        $ok = true;
+        if (!$this->tieneColumna('Acuerdo_Confidencialidad_At')) {
+            try {
+                $sql = "ALTER TABLE {$this->table} ADD COLUMN Acuerdo_Confidencialidad_At DATETIME NULL AFTER Tratamiento_Datos";
+                $this->db->exec($sql);
+                $this->columnasCache['Acuerdo_Confidencialidad_At'] = true;
+            } catch (Exception $e) {
+                error_log('No se pudo crear columna Acuerdo_Confidencialidad_At: ' . $e->getMessage());
+                $this->columnasCache['Acuerdo_Confidencialidad_At'] = false;
+                $ok = false;
+            }
+        }
+        if (!$this->tieneColumna('Acuerdo_Confidencialidad_Version')) {
+            try {
+                $sql = "ALTER TABLE {$this->table} ADD COLUMN Acuerdo_Confidencialidad_Version VARCHAR(32) NULL AFTER Acuerdo_Confidencialidad_At";
+                $this->db->exec($sql);
+                $this->columnasCache['Acuerdo_Confidencialidad_Version'] = true;
+            } catch (Exception $e) {
+                error_log('No se pudo crear columna Acuerdo_Confidencialidad_Version: ' . $e->getMessage());
+                $this->columnasCache['Acuerdo_Confidencialidad_Version'] = false;
+                $ok = false;
+            }
+        }
+        return $ok;
+    }
+
+    public function registrarAcuerdoConfidencialidadPersona(int $idPersona, string $version): bool {
+        $idPersona = (int)$idPersona;
+        if ($idPersona <= 0 || !$this->tieneColumna('Acuerdo_Confidencialidad_At')) {
+            return false;
+        }
+
+        $data = ['Acuerdo_Confidencialidad_At' => date('Y-m-d H:i:s')];
+        if ($this->tieneColumna('Acuerdo_Confidencialidad_Version')) {
+            $data['Acuerdo_Confidencialidad_Version'] = $version;
+        }
+
+        return $this->update($idPersona, $data);
+    }
+
+    public function tieneAcuerdoConfidencialidadVigente(int $idPersona, string $versionActual): bool {
+        $idPersona = (int)$idPersona;
+        if ($idPersona <= 0 || !$this->tieneColumna('Acuerdo_Confidencialidad_At')) {
+            return true;
+        }
+
+        $persona = $this->getById($idPersona);
+        if (empty($persona)) {
+            return false;
+        }
+
+        $fecha = trim((string)($persona['Acuerdo_Confidencialidad_At'] ?? ''));
+        if ($fecha === '') {
+            return false;
+        }
+
+        if ($this->tieneColumna('Acuerdo_Confidencialidad_Version')) {
+            $versionGuardada = trim((string)($persona['Acuerdo_Confidencialidad_Version'] ?? ''));
+            return $versionGuardada === $versionActual;
+        }
+
+        return true;
+    }
+
     public function puedeEditarEscaleraPorRol($idPersona, $filtroRol) {
         $idPersona = (int)$idPersona;
         if ($idPersona <= 0) {

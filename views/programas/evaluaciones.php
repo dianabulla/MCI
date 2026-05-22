@@ -11,7 +11,11 @@ $puedeGestionarEval = !empty($puede_gestionar);
 $puedeEditarEval = !empty($puede_editar);
 $puedeEliminarEval = !empty($puede_eliminar);
 $evaluacionEdicion = $evaluacion_edicion ?? null;
-$modoEdicionEval = !empty($evaluacionEdicion);
+$formularioRepost = is_array($formulario_repost ?? null) ? $formulario_repost : null;
+$modoEdicionEval = !empty($evaluacionEdicion) || !empty($formularioRepost['modo_edicion']);
+$idEdicionFormulario = $modoEdicionEval
+    ? (int)($evaluacionEdicion['Id_Evaluacion'] ?? $formularioRepost['id_evaluacion_edicion'] ?? $formularioRepost['id_evaluacion'] ?? 0)
+    : 0;
 $puedeConfigurarFechasEval = !empty($puede_configurar_fechas);
 $presentacionOk = !empty($presentacion_ok);
 $confirmarPresentarEval = "¿Seguro que quieres presentar esta evaluación?\n\n"
@@ -357,7 +361,7 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <div>
                 <h2 style="margin:0;font-size:22px;font-weight:600;"><?= $modoEdicionEval ? 'Editar evaluación' : 'Crear evaluación' ?></h2>
-                <small style="opacity:0.9;"><?= $modoEdicionEval ? 'Modifica los detalles y las preguntas' : 'Completa los detalles y agrega preguntas' ?></small>
+                <small style="opacity:0.9;"><?= $modoEdicionEval ? 'Modifica los detalles y las preguntas' : 'Completa los detalles y agrega preguntas' ?> · Se guarda automáticamente y también en borrador local si sales del sistema.</small>
             </div>
             <div id="estadoGuardado" style="font-size:13px;color:#10b981;font-weight:bold;display:none;background:rgba(255,255,255,0.15);padding:8px 12px;border-radius:6px;">
                 <span id="textoEstado">✓ Guardado automático</span>
@@ -365,9 +369,21 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
         </div>
     </div>
 
+    <div id="bannerBorradorLocal" style="display:none;margin:0 20px 12px;padding:12px 14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
+        <span style="font-size:13px;color:#92400e;">Tienes un borrador guardado en este navegador (por si saliste sin terminar).</span>
+        <div style="display:flex;gap:8px;">
+            <button type="button" class="btn btn-primary btn-sm" id="btnRestaurarBorrador">Restaurar borrador</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnDescartarBorrador">Descartar</button>
+        </div>
+    </div>
+
     <form id="formCrearEvaluacion" method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>" style="padding:20px;">
         <input type="hidden" name="accion" value="crear_evaluacion">
-        <input type="hidden" name="id_evaluacion" id="id_evaluacion_borrador" value="0">
+        <input type="hidden" name="id_evaluacion" id="id_evaluacion_borrador" value="<?= $idEdicionFormulario > 0 ? $idEdicionFormulario : (int)($formularioRepost['id_evaluacion'] ?? 0) ?>">
+        <?php if ($modoEdicionEval): ?>
+        <input type="hidden" name="modo_edicion" value="1">
+        <input type="hidden" name="id_evaluacion_edicion" id="id_evaluacion_edicion" value="<?= $idEdicionFormulario ?>">
+        <?php endif; ?>
         <?= $contextoHiddenHtml ?>
         
         <!-- Sección: Información básica -->
@@ -437,6 +453,7 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
                 <span id="contadorPreguntasUI" style="background:#1f4f93;color:white;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;">0 preguntas</span>
             </div>
             <div id="contenedorPreguntas" style="display:flex;flex-direction:column;gap:14px;"></div>
+            <input type="hidden" name="preguntas" id="preguntas_json_hidden" value="">
             <button type="button" class="btn btn-secondary" onclick="agregarPregunta()" style="margin-top:14px;padding:10px 16px;border-radius:6px;border:1px dashed #d1d5db;background:white;color:#1f4f93;font-weight:600;">
                 <i class="bi bi-plus-circle"></i> Agregar pregunta
             </button>
@@ -461,10 +478,224 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
         const textoEstadoEl = document.getElementById('textoEstado');
         const contadorUI = document.getElementById('contadorPreguntasUI');
         let timerAutoSave = null;
+        let timerBorradorLocal = null;
         let guardandoAhora = false;
         let enviandoFormulario = false;
         let contadorPreguntas = 0;
         const inputIdEvaluacion = document.getElementById('id_evaluacion_borrador');
+        const inputIdEdicion = document.getElementById('id_evaluacion_edicion');
+        const bannerBorrador = document.getElementById('bannerBorradorLocal');
+        const btnRestaurarBorrador = document.getElementById('btnRestaurarBorrador');
+        const btnDescartarBorrador = document.getElementById('btnDescartarBorrador');
+        const borradorCfg = {
+            usuarioId: <?= (int)($_SESSION['usuario_id'] ?? 0) ?>,
+            contexto: 'n<?= (int)$filtroNivelContexto ?>_m<?= (int)$filtroModuloContexto ?>',
+            modoEdicion: <?= $modoEdicionEval ? 'true' : 'false' ?>,
+            idEdicion: <?= $idEdicionFormulario ?>
+        };
+
+        function claveBorradorLocal() {
+            const idActual = parseInt(inputIdEvaluacion?.value || borradorCfg.idEdicion || '0', 10);
+            const sufijo = borradorCfg.modoEdicion && idActual > 0
+                ? ('edit_' + idActual)
+                : ('nuevo_' + borradorCfg.contexto);
+            return 'mcimadrid_eval_cap_' + borradorCfg.usuarioId + '_' + sufijo;
+        }
+
+        function serializarFormularioBorrador() {
+            const leccionField = formEl.querySelector('[name="leccion"]');
+            return {
+                id_evaluacion: parseInt(inputIdEvaluacion?.value || '0', 10) || 0,
+                titulo: (formEl.querySelector('[name="titulo"]')?.value || '').trim(),
+                descripcion: (formEl.querySelector('[name="descripcion"]')?.value || '').trim(),
+                nivel: formEl.querySelector('[name="nivel"]')?.value || '',
+                modulo_numero: formEl.querySelector('[name="modulo_numero"]')?.value || '',
+                leccion: leccionField ? leccionField.value : '',
+                puntaje_minimo: formEl.querySelector('[name="puntaje_minimo"]')?.value || '',
+                fecha_habilitacion_inicio: formEl.querySelector('[name="fecha_habilitacion_inicio"]')?.value || '',
+                fecha_habilitacion_fin: formEl.querySelector('[name="fecha_habilitacion_fin"]')?.value || '',
+                preguntas: obtenerDatos(),
+                updated_at: Date.now()
+            };
+        }
+
+        function setBannerBorradorVisible(visible) {
+            if (!bannerBorrador) {
+                return;
+            }
+            bannerBorrador.style.display = visible ? 'flex' : 'none';
+        }
+
+        function borradorTieneContenidoUtil(data) {
+            if (!data || typeof data !== 'object') {
+                return false;
+            }
+            if ((data.titulo || '').trim() !== '' || (data.descripcion || '').trim() !== '') {
+                return true;
+            }
+            const preguntas = Array.isArray(data.preguntas) ? data.preguntas : [];
+            return preguntas.some(function(pregunta) {
+                if (!pregunta || typeof pregunta !== 'object') {
+                    return false;
+                }
+                const enunciado = (pregunta.enunciado || '').trim();
+                const opciones = normalizarOpcionesPregunta(pregunta);
+                const tieneOpcion = Object.values(opciones).some(function(v) { return v !== ''; });
+                const correcta = (pregunta.respuesta_correcta || '').trim();
+                return enunciado !== '' || tieneOpcion || correcta !== '';
+            });
+        }
+
+        function normalizarPreguntasParaComparar(preguntas) {
+            const lista = Array.isArray(preguntas) ? preguntas : [];
+            return lista.map(function(pregunta) {
+                const opciones = normalizarOpcionesPregunta(pregunta || {});
+                return {
+                    enunciado: (pregunta?.enunciado || '').trim(),
+                    opciones: opciones,
+                    respuesta_correcta: (pregunta?.respuesta_correcta || '').toString().trim().toUpperCase()
+                };
+            }).filter(function(p) {
+                const tieneOpcion = Object.values(p.opciones).some(function(v) { return v !== ''; });
+                return p.enunciado !== '' || tieneOpcion || p.respuesta_correcta !== '';
+            });
+        }
+
+        function borradorDifiereDelFormulario(data) {
+            if (!data || !formEl) {
+                return false;
+            }
+            const actual = serializarFormularioBorrador();
+            const campos = ['titulo', 'descripcion', 'nivel', 'modulo_numero', 'leccion', 'puntaje_minimo', 'fecha_habilitacion_inicio', 'fecha_habilitacion_fin'];
+            for (let i = 0; i < campos.length; i++) {
+                const nombre = campos[i];
+                if (String(actual[nombre] ?? '').trim() !== String(data[nombre] ?? '').trim()) {
+                    return true;
+                }
+            }
+            const fpActual = JSON.stringify(normalizarPreguntasParaComparar(actual.preguntas));
+            const fpBorrador = JSON.stringify(normalizarPreguntasParaComparar(data.preguntas));
+            return fpActual !== fpBorrador;
+        }
+
+        function guardarBorradorLocal() {
+            try {
+                const data = serializarFormularioBorrador();
+                const key = claveBorradorLocal();
+                if (!borradorTieneContenidoUtil(data)) {
+                    localStorage.removeItem(key);
+                    setBannerBorradorVisible(false);
+                    return;
+                }
+                localStorage.setItem(key, JSON.stringify(data));
+                evaluarBannerBorrador();
+            } catch (e) {
+                console.warn('No se pudo guardar borrador local', e);
+            }
+        }
+
+        function programarBorradorLocal(delay) {
+            clearTimeout(timerBorradorLocal);
+            timerBorradorLocal = setTimeout(function() {
+                sincronizarCampoPreguntasJson();
+                guardarBorradorLocal();
+            }, delay || 600);
+        }
+
+        function leerBorradorLocal() {
+            try {
+                const raw = localStorage.getItem(claveBorradorLocal());
+                if (!raw) {
+                    return null;
+                }
+                const data = JSON.parse(raw);
+                return data && typeof data === 'object' ? data : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function descartarBorradorLocal() {
+            try {
+                localStorage.removeItem(claveBorradorLocal());
+            } catch (e) {}
+            setBannerBorradorVisible(false);
+        }
+
+        function restaurarBorradorDesdeObjeto(data, conservarBorradorLocal) {
+            if (!data || !formEl) {
+                return;
+            }
+            const mantenerLocal = conservarBorradorLocal === true;
+            if (inputIdEvaluacion && parseInt(data.id_evaluacion || '0', 10) > 0) {
+                inputIdEvaluacion.value = String(data.id_evaluacion);
+            }
+            const setVal = function(name, value) {
+                const field = formEl.querySelector('[name="' + name + '"]');
+                if (field) {
+                    field.value = value ?? '';
+                }
+            };
+            setVal('titulo', data.titulo || '');
+            setVal('descripcion', data.descripcion || '');
+            setVal('nivel', data.nivel || '');
+            setVal('modulo_numero', data.modulo_numero || '');
+            setVal('puntaje_minimo', data.puntaje_minimo || 80);
+            setVal('fecha_habilitacion_inicio', data.fecha_habilitacion_inicio || '');
+            setVal('fecha_habilitacion_fin', data.fecha_habilitacion_fin || '');
+            const leccionField = formEl.querySelector('[name="leccion"]');
+            if (leccionField) {
+                leccionField.value = data.leccion || '';
+            }
+            const preguntas = Array.isArray(data.preguntas) ? data.preguntas : [];
+            contenedorEl.innerHTML = '';
+            contadorPreguntas = 0;
+            if (preguntas.length === 0) {
+                agregarPregunta();
+            } else {
+                preguntas.forEach(function(pregunta) {
+                    agregarPregunta();
+                    const bloques = contenedorEl.querySelectorAll('[data-pregunta-id]');
+                    const ultimo = bloques[bloques.length - 1];
+                    if (ultimo) {
+                        cargarPreguntaEnBloque(ultimo, pregunta || {});
+                    }
+                });
+            }
+            actualizarContador();
+            sincronizarCampoPreguntasJson();
+            if (!mantenerLocal) {
+                descartarBorradorLocal();
+            }
+        }
+
+        function evaluarBannerBorrador() {
+            if (!bannerBorrador) {
+                return;
+            }
+            const data = leerBorradorLocal();
+            if (!data || !borradorTieneContenidoUtil(data)) {
+                setBannerBorradorVisible(false);
+                return;
+            }
+            const idBorrador = parseInt(data.id_evaluacion || '0', 10);
+            const idActual = parseInt(inputIdEvaluacion?.value || '0', 10);
+            if (borradorCfg.modoEdicion) {
+                const idEsperado = borradorCfg.idEdicion || idActual;
+                if (idBorrador > 0 && idBorrador !== idEsperado) {
+                    setBannerBorradorVisible(false);
+                    return;
+                }
+            } else if (idActual > 0 && idBorrador > 0 && idActual !== idBorrador) {
+                setBannerBorradorVisible(false);
+                return;
+            }
+            if (!borradorDifiereDelFormulario(data)) {
+                setBannerBorradorVisible(false);
+                return;
+            }
+            setBannerBorradorVisible(true);
+        }
 
         function puedeAutoguardar() {
             const titulo = (formEl.querySelector('[name="titulo"]')?.value || '').trim();
@@ -486,6 +717,51 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
             contadorUI.textContent = cantidad + ' ' + (cantidad === 1 ? 'pregunta' : 'preguntas');
         }
 
+        const inputPreguntasJson = document.getElementById('preguntas_json_hidden');
+
+        function normalizarOpcionesPregunta(pregunta) {
+            const out = { a: '', b: '', c: '', d: '' };
+            if (!pregunta || typeof pregunta !== 'object') {
+                return out;
+            }
+            ['a', 'b', 'c', 'd'].forEach(function(letra) {
+                const directa = pregunta['opcion_' + letra] ?? pregunta['opcion_' + letra.toUpperCase()];
+                if (directa != null && String(directa).trim() !== '') {
+                    out[letra] = String(directa).trim();
+                }
+            });
+            const raw = pregunta.opciones;
+            if (Array.isArray(raw)) {
+                raw.forEach(function(item, idx) {
+                    if (!item || typeof item !== 'object') {
+                        return;
+                    }
+                    let letra = String(item.clave || '').toLowerCase();
+                    if (['a', 'b', 'c', 'd'].indexOf(letra) < 0) {
+                        letra = ['a', 'b', 'c', 'd'][idx] || '';
+                    }
+                    if (letra) {
+                        out[letra] = String(item.opcion || item.texto || '').trim();
+                    }
+                });
+            } else if (raw && typeof raw === 'object') {
+                ['a', 'b', 'c', 'd'].forEach(function(letra) {
+                    const valor = raw[letra] ?? raw[letra.toUpperCase()];
+                    if (valor != null && String(valor).trim() !== '') {
+                        out[letra] = String(valor).trim();
+                    }
+                });
+            }
+            return out;
+        }
+
+        function sincronizarCampoPreguntasJson() {
+            if (!inputPreguntasJson) {
+                return;
+            }
+            inputPreguntasJson.value = JSON.stringify(obtenerDatos());
+        }
+
         function obtenerDatos() {
             const preguntas = [];
             document.querySelectorAll('[data-pregunta-id]').forEach(pregEl => {
@@ -493,27 +769,26 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
                 const tipoInput = pregEl.querySelector('[name="pregunta_tipo[]"]')?.value || 'cerrada';
                 const opcionesInputs = pregEl.querySelectorAll('[name="pregunta_opciones[]"]');
                 const correctaInput = pregEl.querySelector('[name="pregunta_correcta[]"]');
-                
-                const opciones = [];
-                const opcionesMap = {};
-                opcionesInputs.forEach((optEl, idx) => {
-                    const valor = optEl.value.trim();
-                    if (valor !== '') {
-                        const clave = String.fromCharCode(65 + idx); // A, B, C, D
-                        opciones.push({ clave, opcion: valor });
-                        opcionesMap[clave] = valor;
+                const opciones = { a: '', b: '', c: '', d: '' };
+                opcionesInputs.forEach(function(optEl, idx) {
+                    const letra = ['a', 'b', 'c', 'd'][idx];
+                    if (letra) {
+                        opciones[letra] = (optEl.value || '').trim();
                     }
                 });
-
-                if (enunciado.trim() !== '') {
-                    preguntas.push({
-                        tipo: tipoInput,
-                        enunciado: enunciado,
-                        opciones: opciones,
-                        respuesta_correcta: correctaInput?.value || '',
-                        descripcion_extra: pregEl.querySelector('[name="pregunta_descripcion[]"]')?.value || ''
-                    });
+                const tieneContenido = enunciado.trim() !== ''
+                    || Object.values(opciones).some(function(v) { return v !== ''; })
+                    || (correctaInput?.value || '').trim() !== '';
+                if (!tieneContenido) {
+                    return;
                 }
+                preguntas.push({
+                    tipo: tipoInput,
+                    enunciado: enunciado,
+                    opciones: opciones,
+                    respuesta_correcta: (correctaInput?.value || '').trim().toUpperCase(),
+                    descripcion_extra: pregEl.querySelector('[name="pregunta_descripcion[]"]')?.value || ''
+                });
             });
             return preguntas;
         }
@@ -545,6 +820,7 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
                     setTimeout(() => ocultarEstado(), 3000);
                 } else {
                     aplicarIdEvaluacionDesdeRespuesta(respText);
+                    guardarBorradorLocal();
                     mostrarEstado('✓ Guardado automático', '#10b981');
                     setTimeout(() => ocultarEstado(), 2000);
                 }
@@ -610,24 +886,35 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
             contenedorEl.appendChild(preguntaDiv);
             actualizarContador();
 
-            // Agregar listeners para auto-save
+            // Agregar listeners para auto-save y borrador local
             preguntaDiv.querySelectorAll('input, textarea').forEach(inputEl => {
-                inputEl.addEventListener('change', () => {
+                const onCampoChange = () => {
+                    sincronizarCampoPreguntasJson();
+                    programarBorradorLocal(500);
                     clearTimeout(timerAutoSave);
                     timerAutoSave = setTimeout(guardarAutomaticamente, 1500);
-                });
+                };
+                inputEl.addEventListener('change', onCampoChange);
+                inputEl.addEventListener('input', onCampoChange);
             });
         };
 
-        // Listeners para auto-save en campos principales
-        ['titulo', 'descripcion', 'nivel', 'modulo_numero', 'leccion', 'puntaje_minimo'].forEach(fieldName => {
-            const field = formEl.querySelector(`[name="${fieldName}"]`);
-            if (field) {
-                field.addEventListener('change', () => {
-                    clearTimeout(timerAutoSave);
-                    timerAutoSave = setTimeout(guardarAutomaticamente, 1500);
-                });
+        function enlazarAutoSaveCampo(field) {
+            if (!field) {
+                return;
             }
+            const onCampoChange = () => {
+                programarBorradorLocal(500);
+                clearTimeout(timerAutoSave);
+                timerAutoSave = setTimeout(guardarAutomaticamente, 1500);
+            };
+            field.addEventListener('change', onCampoChange);
+            field.addEventListener('input', onCampoChange);
+        }
+
+        // Listeners para auto-save en campos principales
+        ['titulo', 'descripcion', 'nivel', 'modulo_numero', 'leccion', 'puntaje_minimo', 'fecha_habilitacion_inicio', 'fecha_habilitacion_fin'].forEach(fieldName => {
+            enlazarAutoSaveCampo(formEl.querySelector(`[name="${fieldName}"]`));
         });
 
         function cargarPreguntaEnBloque(preguntaDiv, pregunta) {
@@ -636,14 +923,12 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
                 enunciado.value = pregunta.enunciado || '';
             }
             const opcionesInputs = preguntaDiv.querySelectorAll('[name="pregunta_opciones[]"]');
-            const opcionesRaw = pregunta.opciones || {};
-            const letras = ['a', 'b', 'c', 'd'];
-            letras.forEach(function(letra, idx) {
+            const opcionesNorm = normalizarOpcionesPregunta(pregunta);
+            ['a', 'b', 'c', 'd'].forEach(function(letra, idx) {
                 if (!opcionesInputs[idx]) {
                     return;
                 }
-                const valor = opcionesRaw[letra] ?? opcionesRaw[letra.toUpperCase()] ?? '';
-                opcionesInputs[idx].value = valor;
+                opcionesInputs[idx].value = opcionesNorm[letra] || '';
             });
             const correcta = preguntaDiv.querySelector('[name="pregunta_correcta[]"]');
             if (correcta) {
@@ -703,11 +988,46 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
         }
 
         const evaluacionEdicionInicial = <?= json_encode($evaluacionEdicion, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: 'null' ?>;
-        if (evaluacionEdicionInicial) {
+        const formularioRepostInicial = <?= json_encode($formularioRepost, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: 'null' ?>;
+        if (formularioRepostInicial) {
+            restaurarBorradorDesdeObjeto(formularioRepostInicial, true);
+            if (formEl) {
+                formEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            evaluarBannerBorrador();
+        } else if (evaluacionEdicionInicial) {
             cargarEvaluacionEnFormulario(evaluacionEdicionInicial);
+            evaluarBannerBorrador();
         } else if (contenedorEl.children.length === 0) {
             agregarPregunta();
+            evaluarBannerBorrador();
+        } else {
+            evaluarBannerBorrador();
         }
+
+        if (btnRestaurarBorrador) {
+            btnRestaurarBorrador.addEventListener('click', function() {
+                const data = leerBorradorLocal();
+                if (data) {
+                    restaurarBorradorDesdeObjeto(data);
+                }
+            });
+        }
+        if (btnDescartarBorrador) {
+            btnDescartarBorrador.addEventListener('click', descartarBorradorLocal);
+        }
+
+        window.addEventListener('beforeunload', function() {
+            guardarBorradorLocal();
+        });
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden') {
+                guardarBorradorLocal();
+                if (puedeAutoguardar() && !guardandoAhora && !enviandoFormulario) {
+                    guardarAutomaticamente();
+                }
+            }
+        });
 
         formEl.addEventListener('submit', function(event) {
             if (enviandoFormulario) {
@@ -716,15 +1036,19 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
             }
             enviandoFormulario = true;
 
-            let inputPreguntas = formEl.querySelector('input[name="preguntas"]');
-            if (!inputPreguntas) {
-                inputPreguntas = document.createElement('input');
-                inputPreguntas.type = 'hidden';
-                inputPreguntas.name = 'preguntas';
-                formEl.appendChild(inputPreguntas);
+            if (borradorCfg.modoEdicion && inputIdEdicion && inputIdEvaluacion) {
+                const idEd = parseInt(inputIdEdicion.value || '0', 10);
+                if (idEd > 0) {
+                    inputIdEvaluacion.value = String(idEd);
+                }
             }
-            inputPreguntas.value = JSON.stringify(obtenerDatos());
+
+            sincronizarCampoPreguntasJson();
         });
+
+        if (<?= json_encode($tipoFlash === 'success') ?>) {
+            descartarBorradorLocal();
+        }
     })();
     </script>
 </div>

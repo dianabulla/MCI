@@ -44,6 +44,19 @@ if (!(Test-Path $workerScript)) {
 
 Write-BootstrapLog ('Bootstrap iniciado. Node={0}' -f $nodeExe)
 
+$authRoot = Join-Path (Split-Path -Parent (Split-Path -Parent $scriptDir)) '.wwebjs_auth'
+$sessionDir = Join-Path $authRoot 'session-mcimadrid_server'
+$sessionOk = (Test-Path (Join-Path $sessionDir 'Default\Cookies')) -or
+    (Test-Path (Join-Path $sessionDir 'Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb'))
+
+if (-not $sessionOk) {
+    $msg = 'Sesion WhatsApp NO vinculada. NO ejecutar en segundo plano: abre 01_INICIAR_WHATSAPP.cmd, escanea el QR y luego reinicia el autostart.'
+    Write-BootstrapLog $msg
+    Write-Host $msg
+    Write-Host "Ruta esperada de sesion: $sessionDir"
+    exit 1
+}
+
 while ($true) {
     Write-BootstrapLog 'Lanzando worker.js'
     Add-Content -Path $workerLog -Value ('[{0}] Iniciando worker con {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $nodeExe)

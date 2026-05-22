@@ -462,6 +462,20 @@ class PermisosModulos {
 
             // --- Material ---
 
+            'ver_material' => [
+
+                'label' => 'Ver material',
+
+                'descripcion' => 'Consultar materiales existentes (células, Teens, Capacitación Destino y Universidad de la Vida). No incluye subir ni eliminar; para eso use los submódulos correspondientes.',
+
+                'grupo' => 'Material',
+
+                'solo_ver' => true,
+
+                'crud_labels' => ['puede_ver' => 'Ver materiales existentes'],
+
+            ],
+
             'material' => [
 
                 'label' => 'Centro de material (inicio)',

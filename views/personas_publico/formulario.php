@@ -324,6 +324,23 @@
                     </div>
 
                     <div class="field full">
+                    <?php if (!empty($soportaTratamientoDatos)): ?>
+                    <?php $tratamientoOld = strtolower(trim((string)($old['tratamiento_datos'] ?? ''))); ?>
+                    <div class="field-group" style="grid-column: 1 / -1;">
+                        <label>Tratamiento de datos <span style="color:#b42318;">*</span></label>
+                        <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px;">
+                            <label style="font-weight:500;display:flex;align-items:center;gap:8px;">
+                                <input type="radio" name="tratamiento_datos" value="acepta" <?= $tratamientoOld === 'acepta' ? 'checked' : '' ?> required>
+                                Acepto el tratamiento de mis datos personales
+                            </label>
+                            <label style="font-weight:500;display:flex;align-items:center;gap:8px;">
+                                <input type="radio" name="tratamiento_datos" value="no acepta" <?= $tratamientoOld === 'no acepta' ? 'checked' : '' ?> required>
+                                No acepto el tratamiento de mis datos personales
+                            </label>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
                         <label for="peticion">Petición</label>
                         <input type="text" id="peticion" name="peticion" value="<?= htmlspecialchars((string)($old['peticion'] ?? '')) ?>" placeholder="Petición de oración (opcional)">
                     </div>

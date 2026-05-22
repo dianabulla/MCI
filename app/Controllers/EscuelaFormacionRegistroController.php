@@ -1701,6 +1701,33 @@ class EscuelaFormacionRegistroController extends BaseController {
         })));
     }
 
+    private const UMBRAL_PAGO_COMPLETO_UV = 180000;
+
+    /**
+     * @return array{total_pagado:float,total_abonos:float,total_pago_completo:float,pago_completo_uv:bool}
+     */
+    private function normalizarTotalesPagoUv(float $totalPagado, float $totalAbonos, float $totalPagoCompleto): array {
+        if ($totalPagado >= self::UMBRAL_PAGO_COMPLETO_UV) {
+            return [
+                'total_pagado' => $totalPagado,
+                'total_abonos' => 0.0,
+                'total_pago_completo' => $totalPagado,
+                'pago_completo_uv' => true,
+            ];
+        }
+
+        if ($totalPagoCompleto <= 0 && $totalPagado > 0) {
+            $totalPagoCompleto = max(0, $totalPagado - $totalAbonos);
+        }
+
+        return [
+            'total_pagado' => $totalPagado,
+            'total_abonos' => $totalAbonos,
+            'total_pago_completo' => $totalPagoCompleto,
+            'pago_completo_uv' => false,
+        ];
+    }
+
     private function construirMapaPagosPorClave(array $resumenPagos): array {
         $mapa = [];
 
@@ -1711,10 +1738,13 @@ class EscuelaFormacionRegistroController extends BaseController {
                 ? (float)($filaPago['Total_Pago_Completo'] ?? 0)
                 : max(0, $totalPagado - $totalAbonos);
 
+            $normalizado = $this->normalizarTotalesPagoUv($totalPagado, $totalAbonos, $totalPagoCompleto);
+
             $entry = [
-                'total_pagado' => $totalPagado,
-                'total_abonos' => $totalAbonos,
-                'total_pago_completo' => $totalPagoCompleto,
+                'total_pagado' => $normalizado['total_pagado'],
+                'total_abonos' => $normalizado['total_abonos'],
+                'total_pago_completo' => $normalizado['total_pago_completo'],
+                'pago_completo_uv' => $normalizado['pago_completo_uv'],
                 'registros_pago' => (int)($filaPago['Registros_Pago'] ?? 0),
             ];
 
@@ -1813,9 +1843,11 @@ class EscuelaFormacionRegistroController extends BaseController {
         foreach ($personas as $persona) {
             $totalPagado = (float)($persona['total_pagado'] ?? 0);
             $totalAbonos = (float)($persona['total_abonos'] ?? 0);
+            $totalPagoCompleto = (float)($persona['total_pago_completo'] ?? 0);
+            $normalizado = $this->normalizarTotalesPagoUv($totalPagado, $totalAbonos, $totalPagoCompleto);
             $registrosPago = (int)($persona['registros_pago'] ?? 0);
             $tienePago = !empty($persona['tiene_pago_registrado'])
-                || $totalPagado > 0
+                || $normalizado['total_pagado'] > 0
                 || $registrosPago > 0;
 
             if ($tienePago) {
@@ -1824,12 +1856,10 @@ class EscuelaFormacionRegistroController extends BaseController {
                 $sinPago++;
             }
 
-            if ($totalAbonos > 0) {
-                $conAbono++;
-            }
-
-            if ($totalPagado >= 180000) {
+            if ($normalizado['pago_completo_uv']) {
                 $pagoCompletoUv++;
+            } elseif ($normalizado['total_abonos'] > 0) {
+                $conAbono++;
             }
         }
 
@@ -1840,6 +1870,72 @@ class EscuelaFormacionRegistroController extends BaseController {
             'con_abono' => $conAbono,
             'pago_completo_uv' => $pagoCompletoUv,
         ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $inscripciones
+     * @param array<string, array<string, mixed>> $mapaPagos
+     */
+    private function calcularEstadisticasInscripcionesUv(
+        array $inscripciones,
+        string $filtroGenero,
+        string $filtroMinisterio,
+        array $mapaPagos
+    ): array {
+        $stats = [
+            'inscritas' => 0,
+            'con_pago_registrado' => 0,
+            'pago_completo' => 0,
+            'solo_abono' => 0,
+            'sin_pago' => 0,
+        ];
+
+        foreach ($inscripciones as $inscripcion) {
+            if (trim((string)($inscripcion['Programa'] ?? '')) !== 'universidad_vida') {
+                continue;
+            }
+
+            $genero = trim((string)($inscripcion['Genero'] ?? ''));
+            $edad = (int)($inscripcion['Edad'] ?? 0);
+            $segmentoPreferido = trim((string)($inscripcion['Segmento_Preferido'] ?? ''));
+            if (!$this->coincideFiltroGeneroEscuela($filtroGenero, $genero, $edad, $segmentoPreferido)) {
+                continue;
+            }
+
+            $nombreMinisterio = trim((string)($inscripcion['Nombre_Ministerio'] ?? ''));
+            $idMinisterio = (int)($inscripcion['Id_Ministerio'] ?? 0);
+            if ($filtroMinisterio !== '' && !($nombreMinisterio === $filtroMinisterio || (string)$idMinisterio === $filtroMinisterio)) {
+                continue;
+            }
+
+            $stats['inscritas']++;
+
+            $personaTmp = [
+                'Cedula' => (string)($inscripcion['Cedula'] ?? ''),
+                'Id_Persona' => (int)($inscripcion['Id_Persona'] ?? 0),
+            ];
+            $pago = $this->buscarPagoEnMapa($mapaPagos, $personaTmp);
+            $normalizado = $this->normalizarTotalesPagoUv(
+                (float)$pago['total_pagado'],
+                (float)$pago['total_abonos'],
+                (float)$pago['total_pago_completo']
+            );
+
+            $tienePago = $normalizado['total_pagado'] > 0 || (int)$pago['registros_pago'] > 0;
+            if (!$tienePago) {
+                $stats['sin_pago']++;
+                continue;
+            }
+
+            $stats['con_pago_registrado']++;
+            if ($normalizado['pago_completo_uv']) {
+                $stats['pago_completo']++;
+            } elseif ($normalizado['total_abonos'] > 0) {
+                $stats['solo_abono']++;
+            }
+        }
+
+        return $stats;
     }
 
     private function clasificarGeneroBaseEscuela(string $genero): string {
@@ -1899,16 +1995,15 @@ class EscuelaFormacionRegistroController extends BaseController {
             return true;
         }
 
-        $segmento = $this->resolverSegmentoEscuela($genero, $edad, $segmentoPreferido);
-
         if ($filtroGenero === 'hombres' || $filtroGenero === 'hombre') {
-            return $segmento === 'hombres_adultos';
+            return $this->clasificarGeneroBaseEscuela($genero) === 'hombre';
         }
 
         if ($filtroGenero === 'mujeres' || $filtroGenero === 'mujer') {
-            return $segmento === 'mujeres_adultas';
+            return $this->clasificarGeneroBaseEscuela($genero) === 'mujer';
         }
 
+        $segmento = $this->resolverSegmentoEscuela($genero, $edad, $segmentoPreferido);
         if ($filtroGenero === 'jovenes' || $filtroGenero === 'joven') {
             return in_array($segmento, ['jovenes', 'teens'], true);
         }
@@ -1928,7 +2023,12 @@ class EscuelaFormacionRegistroController extends BaseController {
         $modulo = $this->moduloSegunProgramaEscuela($programa);
         $nivelCapDestino = $this->nivelSegunProgramaCapDestino($programa);
 
+        if ($programa === 'universidad_vida') {
+            $this->inscripcionModel->sincronizarTiposPagoAcumuladoCompleto($programa, self::UMBRAL_PAGO_COMPLETO_UV);
+        }
+
         $resumenPagos = $this->inscripcionModel->getResumenPagosAbonos($buscar, 2500, $programa);
+        $mapaPagos = $this->construirMapaPagosPorClave((array)$resumenPagos);
         $inscripciones = $this->inscripcionModel->getListado($programa, $buscar, 2500);
         $inscripcionesPorClave = $this->indexarInscripcionesPorClave((array)$inscripciones);
         $idsPersonas = [];
@@ -2059,7 +2159,16 @@ class EscuelaFormacionRegistroController extends BaseController {
                 ? (float)($filaPago['Total_Pago_Completo'] ?? 0)
                 : max(0, $totalPagadoFila - $totalAbonosFila);
 
-            $pagoCompleto = $totalPagoCompletoFila > 0;
+            if ($programa === 'universidad_vida') {
+                $normalizadoFila = $this->normalizarTotalesPagoUv($totalPagadoFila, $totalAbonosFila, $totalPagoCompletoFila);
+                $totalPagadoFila = $normalizadoFila['total_pagado'];
+                $totalAbonosFila = $normalizadoFila['total_abonos'];
+                $totalPagoCompletoFila = $normalizadoFila['total_pago_completo'];
+            }
+
+            $pagoCompleto = $programa === 'universidad_vida'
+                ? ($totalPagadoFila >= self::UMBRAL_PAGO_COMPLETO_UV)
+                : ($totalPagoCompletoFila > 0);
             $semaforo = $this->calcularSemaforoEscuela($programa, $pagoCompleto, $asistenciaPct, $notaFinal);
 
             $filas[] = [
@@ -2105,6 +2214,16 @@ class EscuelaFormacionRegistroController extends BaseController {
             ];
         }, $filas));
 
+        $statsInscripciones = [];
+        if ($programa === 'universidad_vida') {
+            $statsInscripciones = $this->calcularEstadisticasInscripcionesUv(
+                (array)$inscripciones,
+                $filtroGenero,
+                $filtroMinisterio,
+                $mapaPagos
+            );
+        }
+
         return [
             'programa' => $programa,
             'programa_label' => $programaLabel,
@@ -2119,6 +2238,8 @@ class EscuelaFormacionRegistroController extends BaseController {
             'filtro_genero' => $filtroGenero,
             'filtro_ministerio' => $filtroMinisterio,
             'stats' => $stats,
+            'stats_inscripciones' => $statsInscripciones,
+            'umbral_pago_completo_uv' => self::UMBRAL_PAGO_COMPLETO_UV,
         ];
     }
 

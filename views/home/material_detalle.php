@@ -29,6 +29,10 @@ $esDiscipuloCapDestino = !empty($es_discipulo_cap_destino) && $esCapacitacionDes
 $accesosDiscipuloCapDestino = (array)($accesos_discipulo_cap_destino ?? []);
 $inscritosCapNivel = (array)($inscritos_cap_nivel ?? []);
 $asistenciasPorPersona = (array)($asistencias_por_persona ?? []);
+$totalesAsistenciaPorClase = (array)($totales_asistencia_por_clase ?? []);
+if (count($totalesAsistenciaPorClase) < 10) {
+    $totalesAsistenciaPorClase = array_replace(array_fill(1, 10, 0), $totalesAsistenciaPorClase);
+}
 $tareasCapNivel = (array)($tareas_cap_nivel ?? []);
 $entregasTareasCap = (array)($entregas_tareas_cap ?? []);
 $tareasDiscipuloCap = (array)($tareas_discipulo_cap ?? []);
@@ -1495,16 +1499,32 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                                                     data-id-persona="<?= $idPersona ?>" 
                                                     data-clase="<?= $clase ?>"
                                                     data-nivel="<?= (int)$capNivelVista ?>"
-                                                    data-modulo="<?= (int)$capModuloVistaActual ?>"
-                                                    <?= in_array($clase, $asistenciasPersona) ? 'checked' : '' ?>
-                                                    style="width:20px; height:20px; cursor:pointer;">
+                                                    <?= in_array($clase, $asistenciasPersona, true) ? 'checked' : '' ?>
+                                                    disabled
+                                                    title="Se marca al presentar la evaluación de la lección correspondiente (Clase <?= $clase ?>)"
+                                                    style="width:20px; height:20px; cursor:default;">
                                             </td>
                                         <?php endfor; ?>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
+                            <tfoot>
+                                <tr class="cap-asistencia-totales-row">
+                                    <td colspan="4" style="position: sticky; left: 0; background: #e8f0f8; font-weight: 700; color: #2b4f79; z-index: 6;">
+                                        Total asistencias
+                                    </td>
+                                    <?php for ($clase = 1; $clase <= 10; $clase++): ?>
+                                        <td class="cap-asistencia-total" data-clase="<?= $clase ?>" style="text-align:center; background:#e8f0f8; font-weight:700; color:#1e5631; padding:8px 3px;">
+                                            <?= (int)($totalesAsistenciaPorClase[$clase] ?? 0) ?>
+                                        </td>
+                                    <?php endfor; ?>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
+                    <p style="margin:8px 0 0; font-size:12px; color:#5a6f8d;">
+                        La asistencia de cada clase se registra automáticamente cuando el estudiante presenta la evaluación de esa lección (Lección 3 → Clase 3).
+                    </p>
                     
                     <style>
                         .cap-inscritos-table {
@@ -1529,73 +1549,13 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                         .cap-inscritos-table tbody tr:hover {
                             background-color: #f0f0f0;
                         }
+                        .cap-inscritos-table tfoot .cap-asistencia-totales-row td {
+                            border-top: 2px solid #9eb4cc;
+                        }
                         .asistencia-check:checked {
                             accent-color: #28a745;
                         }
                     </style>
-
-                    <script>
-                    document.querySelectorAll('.asistencia-check').forEach(checkbox => {
-                        checkbox.addEventListener('change', function() {
-                            const idPersona = this.dataset.idPersona;
-                            const clase = this.dataset.clase;
-                            const nivel = this.dataset.nivel;
-                            const checked = this.checked;
-                            
-                            const datosEnvio = {
-                                id_persona: idPersona,
-                                clase: clase,
-                                nivel: nivel,
-                                marcar: checked ? '1' : '0'
-                            };
-                            
-                            console.log('📝 Guardando asistencia:', datosEnvio);
-                            
-                            // Construir body manualmente
-                            let body = '';
-                            for (let key in datosEnvio) {
-                                if (body) body += '&';
-                                body += encodeURIComponent(key) + '=' + encodeURIComponent(datosEnvio[key]);
-                            }
-                            
-                            console.log('📤 Body enviado:', body);
-                            
-                            fetch('<?= PUBLIC_URL ?>?url=home/guardar-asistencia-clase', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                                },
-                                body: body
-                            })
-                            .then(response => {
-                                console.log('📨 Status respuesta:', response.status);
-                                return response.text().then(text => {
-                                    console.log('📄 Respuesta texto:', text);
-                                    try {
-                                        return JSON.parse(text);
-                                    } catch (e) {
-                                        throw new Error('No es JSON válido: ' + text.substring(0, 100));
-                                    }
-                                });
-                            })
-                            .then(data => {
-                                console.log('✅ Datos parseados:', data);
-                                if (data && data.success) {
-                                    console.log('✔️ Asistencia guardada exitosamente');
-                                } else {
-                                    this.checked = !checked;
-                                    console.error('❌ Error respuesta:', data?.error);
-                                    alert('Error al guardar: ' + (data?.error || 'Desconocido'));
-                                }
-                            })
-                            .catch(error => {
-                                this.checked = !checked;
-                                console.error('❌ Error fetch:', error);
-                                alert('Error al guardar asistencia: ' + error.message);
-                            });
-                        });
-                    });
-                    </script>
                 <?php else: ?>
                     <div class="alert alert-info" style="margin:0;">No hay inscritos registrados para este nivel.</div>
                 <?php endif; ?>

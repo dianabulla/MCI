@@ -183,7 +183,9 @@ $esPendienteUbicacionRed = static function(array $persona) {
         || strpos($rolNormalizado, 'lider celula') !== false
     );
 
-    return $idCelula <= 0 && !$esRolLiderazgo;
+    $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
+
+    return $idMinisterio > 0 && $idCelula <= 0 && !$esRolLiderazgo;
 };
 
 if (!isset($totalPendientesConectarContexto)) {
@@ -197,7 +199,7 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
         <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px;justify-content:space-between;">
             <div>
                 <strong style="font-size:1.05rem;color:#1e3a5f;">Por conectar a célula</strong>
-                <div style="color:#5b6d88;font-size:13px;margin-top:4px;">Personas activas sin célula asignada: nuevas, antiguas, inscripciones de Universidad de la Vida y demás registros del padrón (según filtros de arriba).</div>
+                <div style="color:#5b6d88;font-size:13px;margin-top:4px;">Con ministerio asignado y sin célula (nuevas, antiguas, UV, etc.). Sin ministerio no aparecen aquí.</div>
             </div>
             <div style="font-size:1.6rem;font-weight:800;color:#2563eb;line-height:1;"><?= $totalPendientesBanner ?></div>
         </div>
@@ -379,7 +381,7 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
             <?php else: ?>
                 <tr>
                     <?php $columnasBase = 3 + ($mostrarEscaleraRapida ? 1 : 0) + ($mostrarAcciones ? 1 : 0); ?>
-                    <td colspan="<?= (string)$columnasBase ?>" class="text-center">No hay personas sin célula asignada con los filtros actuales.</td>
+                    <td colspan="<?= (string)$columnasBase ?>" class="text-center">No hay personas con ministerio y sin célula con los filtros actuales.</td>
                 </tr>
             <?php endif; ?>
         </tbody>

@@ -51,6 +51,10 @@ class EscuelaFormacionResumenHelper {
             }
 
             $ministerioNombre = trim((string)($inscripcion['Nombre_Ministerio'] ?? ''));
+            $ministerioPersona = trim((string)($inscripcion['Nombre_Ministerio_Persona_Actual'] ?? ''));
+            if ($ministerioPersona !== '') {
+                $ministerioNombre = $ministerioPersona;
+            }
             if ($ministerioNombre === '') {
                 $ministerioNombre = 'Sin ministerio';
             }

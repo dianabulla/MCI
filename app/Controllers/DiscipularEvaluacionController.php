@@ -255,9 +255,17 @@ class DiscipularEvaluacionController extends BaseController {
             }
         }
 
+        $formularioRepost = null;
+        if (trim((string)($_GET['tipo'] ?? '')) === 'error') {
+            $formularioRepost = $this->consumirRepostFormularioEvaluacionSesion();
+        }
+
         $evaluacionEdicion = null;
         $idEditarEvaluacion = (int)($_GET['editar'] ?? 0);
-        if ($idEditarEvaluacion > 0 && $puedeGestionar) {
+        if ($formularioRepost !== null && !empty($formularioRepost['modo_edicion'])) {
+            $idEditarEvaluacion = (int)($formularioRepost['id_evaluacion_edicion'] ?? $formularioRepost['id_evaluacion'] ?? $idEditarEvaluacion);
+        }
+        if ($idEditarEvaluacion > 0 && $puedeGestionar && $formularioRepost === null) {
             $evalTmp = $this->model->obtenerEvaluacion($idEditarEvaluacion);
             if ($evalTmp && $this->puedeModificarEvaluacion((array)$evalTmp)) {
                 if ($filtroNivelContexto > 0 && $filtroModuloContexto > 0) {
@@ -280,6 +288,7 @@ class DiscipularEvaluacionController extends BaseController {
             'puede_editar' => $puedeEditar,
             'puede_eliminar' => $puedeEliminar,
             'evaluacion_edicion' => $evaluacionEdicion,
+            'formulario_repost' => $formularioRepost,
             'evaluaciones' => $evaluaciones,
             'evaluacion_seleccionada' => $evaluacionSeleccionada,
             'resultados_usuario' => $resultadosUsuario,
@@ -552,7 +561,7 @@ class DiscipularEvaluacionController extends BaseController {
                     echo 'error: La fecha inicial no puede ser mayor que la final.';
                     return;
                 }
-                $this->redirigirConMensaje('La fecha inicial no puede ser mayor que la final.', 'error');
+                $this->redirigirErrorFormularioEvaluacion('La fecha inicial no puede ser mayor que la final.');
             }
         }
 
@@ -573,7 +582,7 @@ class DiscipularEvaluacionController extends BaseController {
                 echo 'error: Completa título, nivel y módulo.';
                 return;
             }
-            $this->redirigirConMensaje('Completa título, nivel y módulo.', 'error');
+            $this->redirigirErrorFormularioEvaluacion('Completa título, nivel y módulo.');
         }
 
         $mapaLecciones = $this->obtenerMapaLeccionesMaterial();
@@ -583,7 +592,7 @@ class DiscipularEvaluacionController extends BaseController {
                 echo 'error: Selecciona una lección válida del material cargado para ese nivel y módulo.';
                 return;
             }
-            $this->redirigirConMensaje('Selecciona una lección válida del material cargado para ese nivel y módulo.', 'error');
+            $this->redirigirErrorFormularioEvaluacion('Selecciona una lección válida del material cargado para ese nivel y módulo.');
         }
 
         $preguntas = $this->normalizarPreguntas((array)$preguntasRaw, $modoRespuestas);
@@ -593,7 +602,7 @@ class DiscipularEvaluacionController extends BaseController {
                 echo 'error: La evaluación debe tener al menos 1 pregunta cerrada.';
                 return;
             }
-            $this->redirigirConMensaje('La evaluación debe tener al menos 1 pregunta cerrada.', 'error');
+            $this->redirigirErrorFormularioEvaluacion('La evaluación debe tener al menos 1 pregunta cerrada.');
         }
 
         if ($modoRespuestas === 'mixta') {
@@ -614,7 +623,7 @@ class DiscipularEvaluacionController extends BaseController {
                     echo 'error: En modo mixto debes incluir al menos una pregunta abierta y una cerrada.';
                     return;
                 }
-                $this->redirigirConMensaje('En modo mixto debes incluir al menos una pregunta abierta y una cerrada.', 'error');
+                $this->redirigirErrorFormularioEvaluacion('En modo mixto debes incluir al menos una pregunta abierta y una cerrada.');
             }
         }
 
@@ -631,8 +640,24 @@ class DiscipularEvaluacionController extends BaseController {
             'creado_por' => (int)($_SESSION['usuario_id'] ?? 0),
         ];
 
+        $modoEdicion = !empty($_POST['modo_edicion']);
+        $idEdicionForzado = (int)($_POST['id_evaluacion_edicion'] ?? 0);
         $idEvaluacion = (int)($_POST['id_evaluacion'] ?? 0);
-        $idEvaluacion = $this->resolverIdEvaluacionParaGuardar($idEvaluacion, $nivel, $moduloNumero, $leccion, (int)$payload['creado_por']);
+
+        if ($modoEdicion) {
+            if ($idEdicionForzado > 0) {
+                $idEvaluacion = $idEdicionForzado;
+            }
+            if ($idEvaluacion <= 0) {
+                if ($esAutoSave) {
+                    echo 'error: No se pudo identificar la evaluación a editar.';
+                    return;
+                }
+                $this->redirigirErrorFormularioEvaluacion('No se pudo identificar la evaluación a editar.');
+            }
+        } elseif ($idEvaluacion <= 0) {
+            $idEvaluacion = $this->resolverIdEvaluacionParaGuardar($idEvaluacion, $nivel, $moduloNumero, $leccion, (int)$payload['creado_por']);
+        }
 
         if ($idEvaluacion > 0) {
             $existente = $this->model->obtenerEvaluacion($idEvaluacion);
@@ -641,7 +666,7 @@ class DiscipularEvaluacionController extends BaseController {
                     echo 'error: La evaluación ya no está disponible para editar.';
                     return;
                 }
-                $this->redirigirConMensaje('La evaluación ya no está disponible para editar.', 'error');
+                $this->redirigirErrorFormularioEvaluacion('La evaluación ya no está disponible para editar.');
             }
 
             if (!$this->puedeModificarEvaluacion((array)$existente)) {
@@ -649,7 +674,7 @@ class DiscipularEvaluacionController extends BaseController {
                     echo 'error: No tienes permiso para editar esta evaluación.';
                     return;
                 }
-                $this->redirigirConMensaje('No tienes permiso para editar esta evaluación.', 'error');
+                $this->redirigirErrorFormularioEvaluacion('No tienes permiso para editar esta evaluación.');
             }
 
             $this->model->actualizarEvaluacion($idEvaluacion, $payload);
@@ -659,7 +684,16 @@ class DiscipularEvaluacionController extends BaseController {
                 return;
             }
 
-            $this->redirigirConMensaje('Evaluación actualizada correctamente.', 'success');
+            $this->redirigirConMensaje('Evaluación actualizada correctamente.', 'success', 0, 0, $idEvaluacion);
+            return;
+        }
+
+        if ($modoEdicion) {
+            if ($esAutoSave) {
+                echo 'error: No se pudo actualizar la evaluación en edición.';
+                return;
+            }
+            $this->redirigirErrorFormularioEvaluacion('No se pudo actualizar la evaluación.');
             return;
         }
 
@@ -990,7 +1024,8 @@ class DiscipularEvaluacionController extends BaseController {
         $nivelEvaluacion = (int)($evaluacion['Nivel'] ?? 0);
         $moduloEvaluacion = (int)($evaluacion['Modulo_Numero'] ?? 0);
         if ($idResultado > 0 && $nivelEvaluacion > 0) {
-            $this->registrarAsistenciaClaseDiscipulo($idPersona, $nivelEvaluacion, $moduloEvaluacion);
+            $leccionEvaluacion = $this->normalizarLeccionTexto($evaluacion['Leccion'] ?? '');
+            $this->registrarAsistenciaClaseDiscipulo($idPersona, $nivelEvaluacion, $moduloEvaluacion, $leccionEvaluacion);
         }
 
         $this->model->eliminarIntentoActivo($idEvaluacion, $idPersona, $intentoEsperado);
@@ -1177,12 +1212,172 @@ class DiscipularEvaluacionController extends BaseController {
         return $filas;
     }
 
-    private function redirigirConMensaje(string $mensaje, string $tipo, int $idEvaluacion = 0, int $idResultado = 0): void {
+    private function redirigirConMensaje(
+        string $mensaje,
+        string $tipo,
+        int $idEvaluacion = 0,
+        int $idResultado = 0,
+        int $idEditar = 0,
+        bool $preservarFormulario = false
+    ): void {
+        if ($preservarFormulario) {
+            $this->guardarRepostFormularioEvaluacionEnSesion();
+            if ($idEditar <= 0) {
+                $idEditar = (int)($_POST['id_evaluacion_edicion'] ?? $_POST['id_evaluacion'] ?? 0);
+            }
+        }
+
         $contexto = $this->obtenerContextoMaterialDesdeRequest();
         $queryContexto = $this->construirQueryContextoMaterial($contexto);
         $queryEvaluacion = $idEvaluacion > 0 ? '&evaluacion=' . $idEvaluacion : '';
         $queryResultado = $idResultado > 0 ? '&resultado=' . $idResultado : '';
-        $this->redirect('programas/evaluaciones' . $queryContexto . $queryEvaluacion . $queryResultado . '&mensaje=' . urlencode($mensaje) . '&tipo=' . urlencode($tipo));
+        $queryEditar = $idEditar > 0 ? '&editar=' . $idEditar : '';
+        $this->redirect('programas/evaluaciones' . $queryContexto . $queryEditar . $queryEvaluacion . $queryResultado . '&mensaje=' . urlencode($mensaje) . '&tipo=' . urlencode($tipo));
+    }
+
+    private function redirigirErrorFormularioEvaluacion(string $mensaje): void {
+        $idEditar = (int)($_POST['id_evaluacion_edicion'] ?? $_POST['id_evaluacion'] ?? 0);
+        $this->redirigirConMensaje($mensaje, 'error', 0, 0, $idEditar, true);
+    }
+
+    private function construirRepostFormularioEvaluacionDesdePost(): array {
+        $preguntasParalelo = $this->extraerPreguntasRepostDesdePostParalelo();
+        if (!empty($preguntasParalelo)) {
+            $preguntasFormulario = $preguntasParalelo;
+        } else {
+            $preguntasFormulario = $this->extraerPreguntasRepostDesdePostJson();
+        }
+
+        return [
+            'id_evaluacion' => (int)($_POST['id_evaluacion'] ?? 0),
+            'modo_edicion' => !empty($_POST['modo_edicion']),
+            'id_evaluacion_edicion' => (int)($_POST['id_evaluacion_edicion'] ?? 0),
+            'titulo' => trim((string)($_POST['titulo'] ?? '')),
+            'descripcion' => trim((string)($_POST['descripcion'] ?? '')),
+            'nivel' => (string)($_POST['nivel'] ?? ''),
+            'modulo_numero' => (string)($_POST['modulo_numero'] ?? ''),
+            'leccion' => (string)($_POST['leccion'] ?? ''),
+            'puntaje_minimo' => (string)($_POST['puntaje_minimo'] ?? ''),
+            'fecha_habilitacion_inicio' => (string)($_POST['fecha_habilitacion_inicio'] ?? ''),
+            'fecha_habilitacion_fin' => (string)($_POST['fecha_habilitacion_fin'] ?? ''),
+            'preguntas' => $preguntasFormulario,
+        ];
+    }
+
+    /**
+     * Repost desde los campos visibles del formulario (arrays paralelos).
+     * Más fiable que el JSON oculto para conservar opciones y respuesta correcta.
+     */
+    private function extraerPreguntasRepostDesdePostParalelo(): array {
+        $enunciados = (array)($_POST['pregunta_enunciado'] ?? []);
+        if ($enunciados === []) {
+            return [];
+        }
+
+        $opcionesPlanas = (array)($_POST['pregunta_opciones'] ?? []);
+        $respuestas = (array)($_POST['pregunta_correcta'] ?? []);
+        $salida = [];
+
+        foreach ($enunciados as $i => $enunciadoRaw) {
+            $base = ((int)$i) * 4;
+            $opciones = [];
+            foreach (['a', 'b', 'c', 'd'] as $idx => $clave) {
+                $opciones[$clave] = trim((string)($opcionesPlanas[$base + $idx] ?? ''));
+            }
+
+            $salida[] = [
+                'tipo' => 'cerrada',
+                'enunciado' => trim((string)$enunciadoRaw),
+                'opciones' => $opciones,
+                'respuesta_correcta' => strtoupper(trim((string)($respuestas[$i] ?? ''))),
+            ];
+        }
+
+        return $salida;
+    }
+
+    private function extraerPreguntasRepostDesdePostJson(): array {
+        $preguntasRaw = $_POST['preguntas'] ?? [];
+        if (is_string($preguntasRaw) && trim($preguntasRaw) !== '') {
+            $decodificado = json_decode($preguntasRaw, true);
+            $preguntasLista = is_array($decodificado) ? $decodificado : [];
+        } elseif (is_array($preguntasRaw) && $preguntasRaw !== []) {
+            $preguntasLista = $preguntasRaw;
+        } else {
+            $preguntasLista = $this->extraerPreguntasDesdeRequest();
+        }
+
+        $preguntasFormulario = [];
+        foreach ($preguntasLista as $indice => $pregunta) {
+            if (!is_array($pregunta)) {
+                continue;
+            }
+
+            $opciones = $this->normalizarOpcionesPreguntaRepost($pregunta, (int)$indice);
+
+            $preguntasFormulario[] = [
+                'tipo' => (string)($pregunta['tipo'] ?? 'cerrada'),
+                'enunciado' => (string)($pregunta['enunciado'] ?? ''),
+                'opciones' => $opciones,
+                'respuesta_correcta' => strtoupper((string)($pregunta['respuesta_correcta'] ?? '')),
+            ];
+        }
+
+        return $preguntasFormulario;
+    }
+
+    private function normalizarOpcionesPreguntaRepost(array $pregunta, int $indiceLista = 0): array {
+        $opciones = ['a' => '', 'b' => '', 'c' => '', 'd' => ''];
+
+        if (!empty($pregunta['opciones']) && is_array($pregunta['opciones'])) {
+            $esLista = array_keys($pregunta['opciones']) === range(0, count($pregunta['opciones']) - 1);
+            foreach ($pregunta['opciones'] as $clave => $valor) {
+                $letra = '';
+                $texto = '';
+
+                if (is_array($valor)) {
+                    $letra = strtolower(trim((string)($valor['clave'] ?? '')));
+                    $texto = trim((string)($valor['opcion'] ?? $valor['texto'] ?? ''));
+                    if ($letra === '' && $esLista) {
+                        $letra = chr(97 + (int)$clave);
+                    }
+                } else {
+                    $letra = strtolower(trim((string)$clave));
+                    $texto = trim((string)$valor);
+                    if ($letra === '' && $esLista) {
+                        $letra = chr(97 + (int)$clave);
+                    }
+                }
+
+                if (in_array($letra, ['a', 'b', 'c', 'd'], true)) {
+                    $opciones[$letra] = $texto;
+                }
+            }
+        }
+
+        foreach (['a', 'b', 'c', 'd'] as $clave) {
+            $texto = trim((string)($pregunta['opcion_' . $clave] ?? ''));
+            if ($texto !== '') {
+                $opciones[$clave] = $texto;
+            }
+        }
+
+        return $opciones;
+    }
+
+    private function guardarRepostFormularioEvaluacionEnSesion(): void {
+        $_SESSION['evaluacion_cap_form_repost'] = $this->construirRepostFormularioEvaluacionDesdePost();
+    }
+
+    private function consumirRepostFormularioEvaluacionSesion(): ?array {
+        if (empty($_SESSION['evaluacion_cap_form_repost']) || !is_array($_SESSION['evaluacion_cap_form_repost'])) {
+            return null;
+        }
+
+        $data = $_SESSION['evaluacion_cap_form_repost'];
+        unset($_SESSION['evaluacion_cap_form_repost']);
+
+        return $data;
     }
 
     private function esRetornoListadoPresentacion(): bool {
@@ -1317,7 +1512,55 @@ class DiscipularEvaluacionController extends BaseController {
         return '';
     }
 
-    private function registrarAsistenciaClaseDiscipulo(int $idPersona, int $nivel, int $moduloNumero = 0): void {
+    /**
+     * Obtiene el número de clase (1–10) a partir del texto de lección de la evaluación.
+     */
+    private function resolverNumeroClaseDesdeLeccion(int $nivel, string $leccion, int $moduloNumero = 0): int {
+        $leccion = trim($leccion);
+        if ($leccion !== '' && preg_match('/(\d{1,2})/', $leccion, $coincidencias) === 1) {
+            $numero = (int)($coincidencias[1] ?? 0);
+            if ($numero >= 1 && $numero <= 10) {
+                return $numero;
+            }
+        }
+
+        if ($leccion !== '' && $nivel > 0) {
+            $mapa = $this->obtenerMapaLeccionesMaterial();
+            $leccionesNivel = [];
+            $modulosOrdenados = array_keys((array)($mapa[$nivel] ?? []));
+            sort($modulosOrdenados, SORT_NUMERIC);
+            foreach ($modulosOrdenados as $modulo) {
+                $lista = (array)($mapa[$nivel][$modulo] ?? []);
+                sort($lista);
+                foreach ($lista as $nombreLeccion) {
+                    $nombre = $this->normalizarLeccionTexto((string)$nombreLeccion);
+                    if ($nombre !== '' && !in_array($nombre, $leccionesNivel, true)) {
+                        $leccionesNivel[] = $nombre;
+                    }
+                }
+            }
+            $leccionNorm = $this->normalizarLeccionTexto($leccion);
+            $indice = array_search($leccionNorm, $leccionesNivel, true);
+            if ($indice !== false) {
+                $numero = (int)$indice + 1;
+                if ($numero >= 1 && $numero <= 10) {
+                    return $numero;
+                }
+            }
+        }
+
+        if ($moduloNumero > 0) {
+            $permitidos = self::CONFIG_CAP_DESTINO[$nivel] ?? [];
+            $idx = array_search($moduloNumero, $permitidos, true);
+            if ($idx !== false) {
+                return (int)$idx + 1;
+            }
+        }
+
+        return 0;
+    }
+
+    private function registrarAsistenciaClaseDiscipulo(int $idPersona, int $nivel, int $moduloNumero = 0, string $leccion = ''): void {
         $idPersona = (int)$idPersona;
         $programaLinea = $this->resolverProgramaCapDestinoPorNivel($nivel);
         if ($idPersona <= 0 || $programaLinea === '') {
@@ -1362,24 +1605,13 @@ class DiscipularEvaluacionController extends BaseController {
         $programaMaterial = 'capacitacion_destino';
         $moduloPagos = 'discipular';
 
-        $numeroClase = 0;
-        if ($moduloNumero > 0) {
-            $permitidos = self::CONFIG_CAP_DESTINO[$nivel] ?? [];
-            $idx = array_search($moduloNumero, $permitidos, true);
-            if ($idx !== false) {
-                $numeroClase = $idx + 1;
-            }
-        }
+        $numeroClase = $this->resolverNumeroClaseDesdeLeccion($nivel, $leccion, $moduloNumero);
 
         if ($numeroClase <= 0) {
             $numeroClase = $asistenciaModel->getNumeroClasePorFecha($moduloMaterial, $programaMaterial, date('Y-m-d'));
         }
         if ($numeroClase <= 0) {
             $numeroClase = $asistenciaModel->getNumeroClasePorFecha($moduloPagos, $programaLinea, date('Y-m-d'));
-        }
-
-        if ($numeroClase <= 0 && $moduloNumero > 0) {
-            $numeroClase = (($moduloNumero - 1) % 2) + 1;
         }
 
         if ($numeroClase <= 0) {

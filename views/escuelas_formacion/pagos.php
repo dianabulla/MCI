@@ -122,10 +122,11 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
                     <label for="filtro-genero">Género</label>
                     <select id="filtro-genero" class="form-control">
                         <option value="">Todos</option>
-                        <option value="hombres" <?= $filtroGenero === 'hombres' ? 'selected' : '' ?>>Hombres</option>
-                        <option value="mujeres" <?= $filtroGenero === 'mujeres' ? 'selected' : '' ?>>Mujeres</option>
-                        <option value="jovenes" <?= $filtroGenero === 'jovenes' ? 'selected' : '' ?>>Jóvenes</option>
+                        <option value="hombres" <?= $filtroGenero === 'hombres' ? 'selected' : '' ?>>Hombres (todas las edades)</option>
+                        <option value="mujeres" <?= $filtroGenero === 'mujeres' ? 'selected' : '' ?>>Mujeres (todas las edades)</option>
+                        <option value="jovenes" <?= $filtroGenero === 'jovenes' ? 'selected' : '' ?>>Jóvenes (por edad)</option>
                     </select>
+                    <small class="mini-muted" style="display:block;margin-top:4px;">H/M por género (incluye jóvenes). Jóvenes = edad 14–28 y teens 9–13.</small>
                 </div>
                 <div class="filtro-group">
                     <label for="buscar">Buscar</label>
@@ -383,26 +384,43 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
     }
 
     function getSegmento(rowOrGenero) {
-        const segmento = typeof rowOrGenero === 'object'
-            ? resolverSegmento(rowOrGenero)
-            : resolverSegmento({ genero: rowOrGenero });
-        if (segmento === 'jovenes' || segmento === 'teens') return 'Joven';
-        if (segmento === 'mujeres_adultas') return 'Adulta';
-        if (segmento === 'hombres_adultos') return 'Adulto';
-        return '-';
+        if (typeof rowOrGenero !== 'object') {
+            const gc = clasificarGeneroBase(rowOrGenero);
+            if (gc === 'hombre') return 'Hombre';
+            if (gc === 'mujer') return 'Mujer';
+            return '-';
+        }
+        const partes = [];
+        const gc = clasificarGeneroBase(rowOrGenero.genero || rowOrGenero.Genero);
+        if (gc === 'hombre') partes.push('Hombre');
+        if (gc === 'mujer') partes.push('Mujer');
+        const edad = Number(rowOrGenero.edad || rowOrGenero.Edad || 0);
+        if (edad >= 9 && edad <= 13) {
+            partes.push('Teen');
+        } else if (edad >= 14 && edad <= 28) {
+            partes.push('Joven');
+        }
+        return partes.length ? partes.join(' · ') : '-';
     }
 
     function esGeneroHombre(row) {
-        return resolverSegmento(row) === 'hombres_adultos';
+        return clasificarGeneroBase(row.genero || row.Genero) === 'hombre';
     }
 
     function esGeneroMujer(row) {
-        return resolverSegmento(row) === 'mujeres_adultas';
+        return clasificarGeneroBase(row.genero || row.Genero) === 'mujer';
     }
 
     function esGeneroJoven(row) {
-        const segmento = resolverSegmento(row);
-        return segmento === 'jovenes' || segmento === 'teens';
+        const edad = Number(row.edad || row.Edad || 0);
+        if (edad >= 9 && edad <= 13) {
+            return true;
+        }
+        if (edad >= 14 && edad <= 28) {
+            return true;
+        }
+        const segPref = String(row.segmento_preferido || row.Segmento_Preferido || '').trim().toLowerCase();
+        return segPref === 'jovenes' || segPref === 'teens';
     }
 
     function calcularTotales(rows) {
@@ -445,15 +463,16 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         wrap.id = 'pagos-resumen-personas';
         wrap.className = 'unified-pagos-summary';
         wrap.innerHTML = ''
-            + '<div class="unified-pagos-summary-card"><strong>Personas en tabla</strong>'
-            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-personas">0</span><small>registros</small></div></div>'
+            + '<div class="unified-pagos-summary-card"><strong id="pagos-label-inscritas">Inscritas UV</strong>'
+            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-inscritas">0</span><small>inscritas</small></div>'
+            + '<p id="pagos-sub-inscritas" style="margin:0;font-size:0.78rem;color:#52657d;">Con movimiento en tabla: <span id="pagos-total-personas">0</span></p></div>'
             + '<div class="unified-pagos-summary-card unified-pagos-summary-card--ok"><strong id="pagos-label-con-pago">Con pago registrado</strong>'
             + '<div class="unified-pagos-summary-metric"><span id="pagos-total-con-pago">0</span><small>personas</small></div>'
             + '<p id="pagos-sub-con-pago" style="margin:0;font-size:0.78rem;color:#52657d;" hidden></p></div>'
-            + '<div class="unified-pagos-summary-card unified-pagos-summary-card--warn"><strong>Con abono</strong>'
-            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-abonos">0</span><small>personas</small></div></div>'
             + '<div class="unified-pagos-summary-card"><strong>Pago completo UV (&ge; $180.000)</strong>'
-            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-pago-completo">0</span><small>personas</small></div></div>';
+            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-pago-completo">0</span><small>personas</small></div></div>'
+            + '<div class="unified-pagos-summary-card unified-pagos-summary-card--warn"><strong>Solo abono (sin completar)</strong>'
+            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-abonos">0</span><small>personas</small></div></div>';
 
         const filtro = document.createElement('p');
         filtro.id = 'pagos-resumen-filtro';
@@ -467,26 +486,43 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
     function actualizarResumenPersonasPagos(programa, rows) {
         ensurePagosResumenPersonasDom();
 
-        const total = (rows || []).length;
-        const conPago = (rows || []).filter((row) => tienePagoRegistradoRow(row)).length;
-        const conAbono = (rows || []).filter((row) => Number(row.total_abonos || 0) > 0).length;
-        const pagoCompleto = (rows || []).filter((row) => tienePagoTotalUv(row)).length;
+        const esUv = String(programa) === 'universidad_vida';
+        const filasNorm = esUv ? (rows || []).map((row) => normalizarFilaPagoUv(row)) : (rows || []);
+        const statsIns = (datosActuales && datosActuales.stats_inscripciones) ? datosActuales.stats_inscripciones : null;
+
+        const total = filasNorm.length;
+        const conPago = filasNorm.filter((row) => tienePagoRegistradoRow(row)).length;
+        const pagoCompleto = filasNorm.filter((row) => tienePagoTotalUv(row)).length;
+        const conAbono = filasNorm.filter((row) => tieneSoloAbonoUv(row)).length;
         const filtrosActivos = hayFiltrosPagosActivos();
         const rowsGlobal = (datosActuales && datosActuales.resumen) ? datosActuales.resumen : rows;
         const totalGlobal = rowsGlobal.length;
         const conPagoGlobal = rowsGlobal.filter((row) => tienePagoRegistradoRow(row)).length;
 
+        const inscritas = statsIns ? Number(statsIns.inscritas || 0) : total;
+        const conPagoIns = statsIns ? Number(statsIns.con_pago_registrado || 0) : conPago;
+        const completoIns = statsIns ? Number(statsIns.pago_completo || 0) : pagoCompleto;
+        const abonoIns = statsIns ? Number(statsIns.solo_abono || 0) : conAbono;
+
         const elTotal = document.getElementById('pagos-total-personas');
+        const elInscritas = document.getElementById('pagos-total-inscritas');
         const elConPago = document.getElementById('pagos-total-con-pago');
         const elAbonos = document.getElementById('pagos-total-abonos');
         const elCompleto = document.getElementById('pagos-total-pago-completo');
         const elSubConPago = document.getElementById('pagos-sub-con-pago');
         const elFiltro = document.getElementById('pagos-resumen-filtro');
+        const elLabelInscritas = document.getElementById('pagos-label-inscritas');
 
+        if (elInscritas) elInscritas.textContent = String(inscritas);
         if (elTotal) elTotal.textContent = String(total);
-        if (elConPago) elConPago.textContent = String(conPago);
-        if (elAbonos) elAbonos.textContent = String(conAbono);
-        if (elCompleto) elCompleto.textContent = String(pagoCompleto);
+        if (elConPago) elConPago.textContent = String(esUv && statsIns ? conPagoIns : conPago);
+        if (elAbonos) elAbonos.textContent = String(esUv && statsIns ? abonoIns : conAbono);
+        if (elCompleto) elCompleto.textContent = String(esUv && statsIns ? completoIns : pagoCompleto);
+        if (elLabelInscritas && filtrosActivos && filtroGeneroInput && filtroGeneroInput.value) {
+            elLabelInscritas.textContent = 'Inscritas (' + getEtiquetaFiltroGenero(filtroGeneroInput.value) + ')';
+        } else if (elLabelInscritas) {
+            elLabelInscritas.textContent = 'Inscritas UV';
+        }
 
         if (conPago > total) {
             console.warn('Conteo de pagos: con pago supera filas visibles', { total, conPago });
@@ -513,10 +549,10 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
                 if (filtroMinisterioInput && filtroMinisterioInput.value !== '') {
                     partes.push('Ministerio: ' + filtroMinisterioInput.value);
                 }
-                elFiltro.textContent = 'Filtro activo: ' + partes.join(' · ')
-                    + ' — ' + total + ' persona' + (total === 1 ? '' : 's') + ' en tabla'
-                    + (total !== totalGlobal ? (' (de ' + totalGlobal + ' con movimiento de pago)') : '')
-                    + ' · ' + conPago + ' con pago';
+                const detalleFiltro = esUv && statsIns
+                    ? (' — ' + inscritas + ' inscritas · ' + completoIns + ' pago completo · ' + abonoIns + ' solo abono · ' + conPagoIns + ' con pago')
+                    : (' — ' + total + ' en tabla · ' + conPago + ' con pago');
+                elFiltro.textContent = 'Filtro activo: ' + partes.join(' · ') + detalleFiltro;
                 elFiltro.hidden = false;
             } else {
                 elFiltro.hidden = true;
@@ -536,6 +572,28 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
 
     function tienePagoTotalUv(row) {
         return Number(row && row.total_pagado ? row.total_pagado : 0) >= UMBRAL_PAGO_COMPLETO_UV;
+    }
+
+    function tieneSoloAbonoUv(row) {
+        if (!row || tienePagoTotalUv(row)) {
+            return false;
+        }
+        return Number(row.total_abonos || 0) > 0;
+    }
+
+    function normalizarFilaPagoUv(row) {
+        if (!row) {
+            return row;
+        }
+        const totalPagado = Number(row.total_pagado || 0);
+        if (totalPagado >= UMBRAL_PAGO_COMPLETO_UV) {
+            return Object.assign({}, row, {
+                total_abonos: 0,
+                total_pago_completo: totalPagado,
+                pago_completo: true,
+            });
+        }
+        return row;
     }
 
     function renderFooter(programa, rows, tabId = 'unificada') {
@@ -625,20 +683,12 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         }
 
         const etiqueta = getEtiquetaFiltroGenero(filtroGenero);
-        const filasBase = filtrarResumenPorGenero(rows, filtroGenero);
-        const personasConPagoTotal = filasBase.filter((row) => {
-            return tienePagoTotalUv(row);
-        });
+        const filasBase = filtrarResumenPorGenero(rows, filtroGenero).map((row) => normalizarFilaPagoUv(row));
+        const personasConPagoTotal = filasBase.filter((row) => tienePagoTotalUv(row));
 
         const totalPersonas = personasConPagoTotal.length;
-        // Solo sumar los pagos completos (>= UMBRAL)
-        const valorTotal = personasConPagoTotal.reduce((acc, row) => {
-            const totalPagado = Number(row.total_pagado || 0);
-            return acc + (totalPagado >= UMBRAL_PAGO_COMPLETO_UV ? totalPagado : 0);
-        }, 0);
-        const personasConAbono = filasBase.filter((row) => {
-            return Number(row.total_abonos || 0) > 0;
-        });
+        const valorTotal = personasConPagoTotal.reduce((acc, row) => acc + Number(row.total_pagado || 0), 0);
+        const personasConAbono = filasBase.filter((row) => tieneSoloAbonoUv(row));
         const totalAbonosPersonas = personasConAbono.length;
         const valorAbonos = personasConAbono.reduce((acc, row) => acc + Number(row.total_abonos || 0), 0);
 
@@ -694,6 +744,9 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         }
 
         if (bodyElement) {
+            if (isUv) {
+                rowsFiltradas = rowsFiltradas.map((row) => normalizarFilaPagoUv(row));
+            }
             bodyElement.innerHTML = rowsFiltradas.map((row) => {
                 const detalleClave = escapeHtml(row.cedula_clave || row.cedula || '');
                 const segmento = getSegmento(row);
@@ -805,7 +858,9 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
             renderHead(data.programa, 'mujeres');
             renderRows(data.programa, data.resumen || [], 'mujeres', 'mujeres');
 
-            const filasActivas = data.resumen || [];
+            const filasActivas = String(data.programa) === 'universidad_vida'
+                ? (data.resumen || []).map((row) => normalizarFilaPagoUv(row))
+                : (data.resumen || []);
             actualizarResumenRecaudo(data.programa, filasActivas);
             actualizarResumenPersonasPagos(data.programa, filasActivas);
             actualizarResumenGeneroUv(data.programa, filasActivas, filtroGeneroInput ? filtroGeneroInput.value : '');

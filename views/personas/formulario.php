@@ -462,6 +462,30 @@ $urlVolver = $returnUrl !== ''
             <?php endif; ?>
         </div>
 
+        <?php if (!empty($soportaTratamientoDatos)): ?>
+        <?php
+            $tratamientoSeleccionado = strtolower(trim((string)($post_data['tratamiento_datos'] ?? '')));
+            if ($tratamientoSeleccionado === '' && !empty($persona['Tratamiento_Datos'])) {
+                $tratamientoSeleccionado = strtolower((string)$persona['Tratamiento_Datos']) === 'acepta' ? 'acepta' : 'no acepta';
+            }
+        ?>
+        <div class="form-section">
+            <h3 class="section-title">🔒 Tratamiento de datos</h3>
+            <p class="form-text text-muted mb-3">Indique si la persona autoriza el tratamiento de sus datos personales conforme a la política de la iglesia.</p>
+            <div class="form-group">
+                <label class="d-block mb-2">Consentimiento <span class="text-danger">*</span></label>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="tratamiento_datos" id="tratamiento_acepta" value="acepta" <?= $tratamientoSeleccionado === 'acepta' ? 'checked' : '' ?> required>
+                    <label class="form-check-label" for="tratamiento_acepta">Acepta el tratamiento de datos</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="tratamiento_datos" id="tratamiento_no_acepta" value="no acepta" <?= $tratamientoSeleccionado === 'no acepta' ? 'checked' : '' ?> required>
+                    <label class="form-check-label" for="tratamiento_no_acepta">No acepta el tratamiento de datos</label>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Sección: Petición de Oración -->
         <div class="form-section">
             <h3 class="section-title">🙏 Petición de Oración</h3>

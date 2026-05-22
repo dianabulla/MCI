@@ -45,7 +45,7 @@ $puedeVerObsequios = $puedeVer('entrega_obsequio');
 $puedeVerNehemias = $puedeVer('nehemias');
 $puedeVerReportes = $puedeVer('reportes');
 $puedeVerRoles = $puedeVer('roles');
-$puedeVerMaterialCelulasEnEnviar = $puedeVerEnviar && (AuthController::esAdministrador() || AuthController::puede('materiales_celulas:ver'));
+$puedeVerMaterialCelulasEnEnviar = $puedeVerEnviar && (AuthController::esAdministrador() || AuthController::puedeVerMaterialCelulas());
 $puedeVerAsistenciasEnEnviar = $puedeVerEnviar && $puedeVerAsistencias;
 
 $puedeVerPendientesGanar = $puedeVerGanarAlmas;
@@ -114,6 +114,9 @@ if ($puedeVerPendientesGanar) {
             if (!empty($personaTmpPendiente['Seguimiento_No_Disponible'])) {
                 continue;
             }
+            if ((int)($personaTmpPendiente['Id_Ministerio'] ?? 0) <= 0) {
+                continue;
+            }
             if ((int)($personaTmpPendiente['Id_Celula'] ?? 0) > 0) {
                 continue;
             }
@@ -148,6 +151,9 @@ if ($puedeVerPendientesGanar) {
         foreach ((array)$personasUniversidad as $personaUvTmp) {
             $rolUv = (string)($personaUvTmp['Nombre_Rol'] ?? '');
             if ($esRolLiderazgo($rolUv) || !empty($personaUvTmp['Seguimiento_No_Disponible'])) {
+                continue;
+            }
+            if ((int)($personaUvTmp['Id_Ministerio'] ?? 0) <= 0) {
                 continue;
             }
             if ((int)($personaUvTmp['Id_Celula'] ?? 0) > 0) {
@@ -266,6 +272,10 @@ $sidebarMenu = $useDynamicSidebar ? (array)$_SESSION['sidebar_menu'] : [];
         <nav class="sidebar-nav">
             <?php if ($useDynamicSidebar): ?>
                 <?php include VIEWS . '/layout/_sidebar_nav_dynamic.php'; ?>
+            <?php elseif ($esMenuMaestro && AuthController::puedeAccederHubMaterialCompleto()): ?>
+            <a class="sidebar-link <?= $isActive(['home/material', 'celulas/materiales', 'teen']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home/material">
+                <span class="sidebar-link-icon"><i class="bi bi-folder2-open"></i></span><span class="sidebar-link-text">Material</span>
+            </a>
             <?php elseif ($esMenuMaestro && $puedeVerMaterialCapDestino): ?>
             <a class="sidebar-link <?= $isActive(['home/material/capacitacion-destino', 'home/material']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home/material/capacitacion-destino">
                 <span class="sidebar-link-icon"><i class="bi bi-signpost-split-fill"></i></span><span class="sidebar-link-text">Material Cap. Destino</span>

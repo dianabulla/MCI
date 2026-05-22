@@ -424,10 +424,15 @@ $puedeEliminar      = !empty($puede_eliminar);
 
   function coincideFiltroSegmento(p, filtroGenero) {
     if (filtroGenero === 'todos' || filtroGenero === '') return true;
-    const segmento = resolverSegmento(p);
-    if (filtroGenero === 'hombre') return segmento === 'hombres_adultos';
-    if (filtroGenero === 'mujer') return segmento === 'mujeres_adultas';
-    if (filtroGenero === 'joven') return segmento === 'jovenes' || segmento === 'teens';
+    if (filtroGenero === 'hombre') return clasificarGeneroBase(p.Genero) === 'hombre';
+    if (filtroGenero === 'mujer') return clasificarGeneroBase(p.Genero) === 'mujer';
+    if (filtroGenero === 'joven') {
+      const edad = Number(p.Edad || 0);
+      if (edad >= 9 && edad <= 13) return true;
+      if (edad >= 14 && edad <= 28) return true;
+      const segPref = normalizar(p.Segmento_Preferido || '');
+      return segPref === 'jovenes' || segPref === 'teens';
+    }
     return true;
   }
 
@@ -469,9 +474,9 @@ $puedeEliminar      = !empty($puede_eliminar);
   }
 
   function etiquetaFiltroGenero(valor) {
-    if (valor === 'hombre') return 'Hombres adultos';
-    if (valor === 'mujer') return 'Mujeres adultas';
-    if (valor === 'joven') return 'Jóvenes y teens';
+    if (valor === 'hombre') return 'Hombres (todas las edades)';
+    if (valor === 'mujer') return 'Mujeres (todas las edades)';
+    if (valor === 'joven') return 'Jóvenes y teens (por edad)';
     return '';
   }
 

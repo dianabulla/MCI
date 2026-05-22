@@ -107,11 +107,11 @@ class PermisosProgramasAccess {
     }
 
     public static function puedeVerMaterialUniversidadVida(): bool {
-        return AuthController::esAdministrador() || AuthController::puede('material_universidad_vida:ver');
+        return AuthController::puedeVerMaterialUniversidadVida();
     }
 
     public static function puedeVerMaterialCapacitacionDestino(): bool {
-        return AuthController::esAdministrador() || AuthController::puede('material_capacitacion_destino:ver');
+        return AuthController::puedeVerMaterialCapacitacionDestino();
     }
 
     /**

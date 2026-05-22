@@ -19,12 +19,18 @@ class AuthController extends BaseController {
     private $rolModel;
 
     private const ROL_ADMINISTRADOR_ID = 6;
+    /** Versión del texto del acuerdo; al cambiar el texto, incrementar para exigir nueva aceptación. */
+    public const ACUERDO_CONFIDENCIALIDAD_VERSION = '2026-05-19';
 
     public function __construct() {
         $this->personaModel = new Persona();
         $this->usuarioAccesoModel = new UsuarioAcceso();
         $this->userRoleModel = new UserRole();
         $this->rolModel = new Rol();
+
+        $this->personaModel->ensureTratamientoDatosColumnExists();
+        $this->personaModel->ensureAcuerdoConfidencialidadColumnsExist();
+        $this->usuarioAccesoModel->ensureAcuerdoConfidencialidadColumnsExist();
     }
 
     /**
@@ -33,9 +39,10 @@ class AuthController extends BaseController {
     public function login() {
         $modoAgregarCuenta = (($_GET['modo'] ?? ($_POST['modo'] ?? '')) === 'agregar');
 
-        // Si ya está logueado, redirigir al home
-        if (isset($_SESSION['usuario_id']) && !$modoAgregarCuenta) {
-            $this->redirect('home');
+        // Si ya está logueado, redirigir según flujo post-login
+        if (self::estaAutenticado() && !$modoAgregarCuenta) {
+            $this->redirigirPostLogin();
+            return;
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -217,7 +224,64 @@ class AuthController extends BaseController {
 
         $this->aplicarContextoActivo((int)$seleccion['id_rol'], (string)($seleccion['context_key'] ?? ''));
         $_SESSION['require_context_selection'] = false;
-        $this->redirect(self::obtenerUrlInicioSesion());
+        $this->redirigirPostLogin();
+    }
+
+    /**
+     * Acuerdo de confidencialidad para administradores y líderes con acceso a datos personales.
+     */
+    public function acuerdoConfidencialidad() {
+        if (!self::estaAutenticado()) {
+            $this->redirect('auth/login');
+            return;
+        }
+
+        if (!self::requiereAcuerdoConfidencialidad()) {
+            $this->redirect('home');
+            return;
+        }
+
+        if (!self::debeAceptarAcuerdoConfidencialidad()) {
+            $this->redirigirPostLogin();
+            return;
+        }
+
+        $this->view('auth/acuerdo_confidencialidad', [
+            'usuario_nombre' => (string)($_SESSION['usuario_nombre'] ?? 'Usuario'),
+            'version' => self::ACUERDO_CONFIDENCIALIDAD_VERSION,
+            'error' => (string)($_GET['error'] ?? ''),
+        ]);
+    }
+
+    public function aceptarAcuerdoConfidencialidad() {
+        if (!self::estaAutenticado()) {
+            $this->redirect('auth/login');
+            return;
+        }
+
+        if (!self::requiereAcuerdoConfidencialidad()) {
+            $this->redirect('home');
+            return;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('auth/acuerdo-confidencialidad');
+            return;
+        }
+
+        $acepta = !empty($_POST['acepta_acuerdo']) && (string)$_POST['acepta_acuerdo'] === '1';
+        if (!$acepta) {
+            $this->redirect('auth/acuerdo-confidencialidad&error=' . urlencode('Debes marcar que has leído y aceptas el acuerdo para continuar.'));
+            return;
+        }
+
+        if (!self::registrarAceptacionAcuerdoConfidencialidad()) {
+            $this->redirect('auth/acuerdo-confidencialidad&error=' . urlencode('No se pudo guardar la aceptación. Inténtalo de nuevo o contacta al administrador.'));
+            return;
+        }
+
+        $_SESSION['flash_info'] = 'Acuerdo de confidencialidad registrado correctamente.';
+        $this->redirigirPostLogin();
     }
 
     /**
@@ -451,10 +515,73 @@ class AuthController extends BaseController {
     }
 
     /**
+     * Permiso transversal: ver bibliotecas de material (solo lectura).
+     */
+    public static function puedeVerMaterialExistente(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+
+        self::sincronizarPermisosSesionActual();
+
+        return self::tienePermiso('ver_material', 'ver');
+    }
+
+    public static function puedeVerMaterialCelulas(): bool {
+        return self::esAdministrador()
+            || self::puede('materiales_celulas:ver')
+            || self::puedeVerMaterialExistente();
+    }
+
+    public static function puedeVerMaterialTeens(): bool {
+        return self::esAdministrador()
+            || self::puede('teen:ver')
+            || self::puedeVerMaterialExistente();
+    }
+
+    public static function puedeVerMaterialUniversidadVida(): bool {
+        return self::esAdministrador()
+            || self::puede('material_universidad_vida:ver')
+            || self::puedeVerMaterialExistente();
+    }
+
+    /**
+     * Hub con tarjetas de todas las bibliotecas (home/material).
+     * Maestro con solo Cap. Destino sigue yendo directo a esa biblioteca.
+     */
+    public static function puedeAccederHubMaterialCompleto(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+
+        self::sincronizarPermisosSesionActual();
+
+        if (self::puedeVerMaterialExistente()) {
+            return true;
+        }
+
+        if (self::tienePermiso('material', 'ver')) {
+            return true;
+        }
+
+        if (self::puede('materiales_celulas:ver')
+            || self::puede('teen:ver')
+            || self::puede('material_universidad_vida:ver')) {
+            return true;
+        }
+
+        $bibliotecas = 0;
+        foreach (['materiales_celulas', 'teen', 'material_universidad_vida', 'material_capacitacion_destino'] as $modulo) {
+            if (self::puede($modulo . ':ver')) {
+                $bibliotecas++;
+            }
+        }
+
+        return $bibliotecas >= 2;
+    }
+
+    /**
      * Centro de materiales: tarjeta del inicio y ruta home/material.
-     * El módulo "material" en permisos manda cuando existe configuración explícita.
-     * Si no hay fila "material" para el rol, se mantiene compatibilidad con los submódulos
-     * de Células, Teens y Capacitación Destino (no con Material UV: ese acceso es aparte).
      */
     public static function puedeVerCentroMaterial(): bool {
         if (self::esAdministrador()) {
@@ -463,16 +590,16 @@ class AuthController extends BaseController {
 
         self::sincronizarPermisosSesionActual();
 
-        if (self::tienePermiso('material', 'ver')) {
+        if (self::puedeAccederHubMaterialCompleto()) {
             return true;
         }
 
-        $permisos = (array)($_SESSION['permisos'] ?? []);
-        if (!array_key_exists('material', $permisos)) {
-            return self::tienePermiso('materiales_celulas', 'ver')
-                || self::tienePermiso('material_capacitacion_destino', 'ver')
-                || self::tienePermiso('teen', 'ver')
-                || !empty(self::obtenerNivelesCapacitacionDestinoInscripcion());
+        if (self::puede('material_capacitacion_destino:ver')) {
+            return true;
+        }
+
+        if (!array_key_exists('material', (array)($_SESSION['permisos'] ?? []))) {
+            return !empty(self::obtenerNivelesCapacitacionDestinoInscripcion());
         }
 
         return false;
@@ -571,6 +698,10 @@ class AuthController extends BaseController {
         self::sincronizarPermisosSesionActual();
 
         if (self::tienePermiso('material_capacitacion_destino', 'ver')) {
+            return true;
+        }
+
+        if (self::puedeVerMaterialExistente()) {
             return true;
         }
 
@@ -1215,7 +1346,9 @@ class AuthController extends BaseController {
      */
     public static function obtenerUrlInicioSesion(): string {
         if (self::esContextoMaestro()) {
-            return 'home/material/capacitacion-destino';
+            return self::puedeAccederHubMaterialCompleto()
+                ? 'home/material'
+                : 'home/material/capacitacion-destino';
         }
 
         if (self::usaVistaDiscipuloCapacitacionDestino()) {
@@ -1226,12 +1359,112 @@ class AuthController extends BaseController {
     }
 
     private function redirigirPostLogin(): void {
+        if (self::debeAceptarAcuerdoConfidencialidad()) {
+            $this->redirect('auth/acuerdo-confidencialidad');
+            return;
+        }
+
         if ($this->debeMostrarSelectorContexto()) {
             $this->redirect('auth/selector-contexto');
             return;
         }
 
         $this->redirect(self::obtenerUrlInicioSesion());
+    }
+
+    /**
+     * Perfiles que deben firmar el acuerdo de confidencialidad al acceder a la plataforma.
+     */
+    public static function requiereAcuerdoConfidencialidad(): bool {
+        if (!self::estaAutenticado()) {
+            return false;
+        }
+
+        if (self::esAdministrador()) {
+            return true;
+        }
+
+        $rolNombre = self::normalizarTexto((string)($_SESSION['usuario_rol_nombre'] ?? ''));
+        if ($rolNombre === '') {
+            return false;
+        }
+
+        if (self::rolNombreEsLider12($rolNombre) || self::rolNombreEsLiderCelula($rolNombre) || self::rolNombreEsLider144($rolNombre)) {
+            return true;
+        }
+
+        $rolesDisponibles = (array)($_SESSION['available_roles'] ?? []);
+        foreach ($rolesDisponibles as $rol) {
+            $nombre = self::normalizarTexto((string)($rol['nombre_rol'] ?? ''));
+            if (self::rolNombreEsLider12($nombre) || self::rolNombreEsLiderCelula($nombre) || self::rolNombreEsLider144($nombre)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static function debeAceptarAcuerdoConfidencialidad(): bool {
+        if (!self::requiereAcuerdoConfidencialidad()) {
+            return false;
+        }
+
+        $version = self::ACUERDO_CONFIDENCIALIDAD_VERSION;
+        $origen = (string)($_SESSION['auth_user_source'] ?? 'persona');
+        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+        $idAuth = (int)($_SESSION['auth_user_id'] ?? 0);
+
+        if ($origen === 'acceso' && $idPersona <= 0 && $idAuth > 0) {
+            $model = new UsuarioAcceso();
+            $model->ensureAcuerdoConfidencialidadColumnsExist();
+            return !$model->tieneAcuerdoConfidencialidadVigente($idAuth, $version);
+        }
+
+        if ($idPersona > 0) {
+            $model = new Persona();
+            $model->ensureAcuerdoConfidencialidadColumnsExist();
+            return !$model->tieneAcuerdoConfidencialidadVigente($idPersona, $version);
+        }
+
+        return true;
+    }
+
+    public static function registrarAceptacionAcuerdoConfidencialidad(): bool {
+        $version = self::ACUERDO_CONFIDENCIALIDAD_VERSION;
+        $origen = (string)($_SESSION['auth_user_source'] ?? 'persona');
+        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+        $idAuth = (int)($_SESSION['auth_user_id'] ?? 0);
+
+        if ($origen === 'acceso' && $idPersona <= 0 && $idAuth > 0) {
+            $model = new UsuarioAcceso();
+            $model->ensureAcuerdoConfidencialidadColumnsExist();
+            return $model->registrarAcuerdoConfidencialidad($idAuth, $version);
+        }
+
+        if ($idPersona > 0) {
+            $model = new Persona();
+            $model->ensureAcuerdoConfidencialidadColumnsExist();
+            return $model->registrarAcuerdoConfidencialidadPersona($idPersona, $version);
+        }
+
+        return false;
+    }
+
+    private static function rolNombreEsLider12(string $rolNombre): bool {
+        return strpos($rolNombre, 'lider de 12') !== false
+            || strpos($rolNombre, 'lider 12') !== false
+            || strpos($rolNombre, 'lideres de 12') !== false;
+    }
+
+    private static function rolNombreEsLiderCelula(string $rolNombre): bool {
+        return strpos($rolNombre, 'lider de celula') !== false
+            || strpos($rolNombre, 'lider celula') !== false;
+    }
+
+    private static function rolNombreEsLider144(string $rolNombre): bool {
+        return strpos($rolNombre, 'lider de 144') !== false
+            || strpos($rolNombre, 'lider 144') !== false
+            || strpos($rolNombre, 'lideres de 144') !== false;
     }
 
     private function debeMostrarSelectorContexto(): bool {

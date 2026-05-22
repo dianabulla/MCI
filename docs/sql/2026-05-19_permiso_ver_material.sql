@@ -1,0 +1,6 @@
+-- Módulo "ver_material" (catálogo en PermisosModulos.php).
+-- No requiere ALTER: al guardar permisos en la pantalla de Roles/Permisos
+-- se crea la fila en tabla `permisos` con Puede_Ver = 1.
+--
+-- Uso: asignar "Ver materiales existentes" a roles que solo deben consultar
+-- PDFs de células, Teens, Cap. Destino y Universidad de la Vida sin subir ni borrar.

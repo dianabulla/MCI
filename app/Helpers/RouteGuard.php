@@ -79,8 +79,9 @@ class RouteGuard {
      */
     private static function prefijosMaestro(): array {
         return [
-            'home/material/capacitacion-destino',
             'home/material',
+            'celulas/materiales',
+            'teen',
             'programas/evaluaciones',
             'auth/',
             'home',

@@ -29,6 +29,7 @@ class PersonaController extends BaseController {
     private $soportaObservacionGanadoEn = false;
     private $soportaCreadoPor = false;
     private $soportaCanalCreacion = false;
+    private $soportaTratamientoDatos = false;
     private $idRolAsistenteCache = null;
 
     public function __construct() {
@@ -50,6 +51,7 @@ class PersonaController extends BaseController {
         $this->personaModel->ensureCreadoPorColumnExists();
         $this->personaModel->ensureCanalCreacionColumnExists();
         $this->personaModel->ensureEsAntiguoColumnExists();
+        $this->personaModel->ensureTratamientoDatosColumnExists();
         $this->soportaProceso = $this->personaModel->tieneColumna('Proceso');
         $this->soportaChecklistEscalera = $this->personaModel->tieneColumna('Escalera_Checklist');
         $this->soportaConvencion = $this->personaModel->tieneColumna('Convencion');
@@ -57,6 +59,23 @@ class PersonaController extends BaseController {
         $this->soportaObservacionGanadoEn = $this->personaModel->tieneColumna('Observacion_Ganado_En');
         $this->soportaCreadoPor = $this->personaModel->tieneColumna('Creado_Por');
         $this->soportaCanalCreacion = $this->personaModel->tieneColumna('Canal_Creacion');
+        $this->soportaTratamientoDatos = $this->personaModel->tieneColumna('Tratamiento_Datos');
+    }
+
+    private function enriquecerViewDataFormulario(array $viewData): array {
+        $viewData['soportaTratamientoDatos'] = $this->soportaTratamientoDatos;
+        return $viewData;
+    }
+
+    private function normalizarTratamientoDatosInput($valor): ?string {
+        $texto = strtolower(trim((string)$valor));
+        if (in_array($texto, ['acepta', 'si', 'sí', '1', 'yes'], true)) {
+            return 'Acepta';
+        }
+        if (in_array($texto, ['no acepta', 'no_acepta', 'no', '0'], true)) {
+            return 'No acepta';
+        }
+        return null;
     }
 
     /**
@@ -1221,8 +1240,8 @@ class PersonaController extends BaseController {
     }
 
     /**
-     * Listado Discípulos (por conectar a célula): sin Id_Celula, nuevas o antiguas, UV incluida.
-     * Excluye roles de liderazgo y casos marcados como "No se dispone".
+     * Listado Discípulos: con ministerio asignado y sin célula (nuevas, antiguas, UV, etc.).
+     * Sin ministerio no aparecen aquí (siguen en Almas ganadas / otros flujos).
      */
     private function esPersonaVisibleEnDiscipulosSinCelula(array $persona): bool {
         if ($this->esRolLiderazgoPorIdRol((int)($persona['Id_Rol'] ?? 0))) {
@@ -1230,6 +1249,10 @@ class PersonaController extends BaseController {
         }
 
         if (!empty($persona['Seguimiento_No_Disponible'])) {
+            return false;
+        }
+
+        if ((int)($persona['Id_Ministerio'] ?? 0) <= 0) {
             return false;
         }
 
@@ -3285,7 +3308,7 @@ class PersonaController extends BaseController {
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
                 return;
             }
 
@@ -3305,7 +3328,7 @@ class PersonaController extends BaseController {
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
                 return;
             }
             $_POST['tipo_documento'] = $this->normalizarTipoDocumentoInput($_POST['tipo_documento'] ?? null);
@@ -3325,7 +3348,7 @@ class PersonaController extends BaseController {
                     'return_url' => $returnUrl,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
                 return;
             }
 
@@ -3344,7 +3367,7 @@ class PersonaController extends BaseController {
                     'return_url' => $returnUrl,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
                 return;
             }
 
@@ -3392,8 +3415,29 @@ class PersonaController extends BaseController {
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
                 return;
+            }
+
+            if ($this->soportaTratamientoDatos) {
+                $tratamientoDatosCrear = $this->normalizarTratamientoDatosInput($_POST['tratamiento_datos'] ?? '');
+                if ($tratamientoDatosCrear === null) {
+                    $viewData = [
+                        'celulas' => $this->celulaModel->getAll(),
+                        'ministerios' => $this->ministerioModel->getAll(),
+                        'roles' => $this->rolModel->getAll(),
+                        'personas_invitadores' => $this->personaModel->getAll(),
+                        'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                        'error' => 'Debe indicar si la persona acepta o no el tratamiento de datos.',
+                        'post_data' => $_POST,
+                        'soportaConvencion' => $this->soportaConvencion,
+                        'soportaProceso' => $this->soportaProceso,
+                        'return_to' => $returnTo,
+                        'celula_retorno' => $celulaRetorno
+                    ];
+                    $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
+                    return;
+                }
             }
 
             $duplicadoPersona = $this->personaModel->findDuplicateByCedulaOrTelefono(
@@ -3416,11 +3460,14 @@ class PersonaController extends BaseController {
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
                 return;
             }
 
             $usuarioIdCreador = isset($_SESSION['usuario_id']) ? (int)$_SESSION['usuario_id'] : 0;
+            $tratamientoDatosCrear = $this->soportaTratamientoDatos
+                ? $this->normalizarTratamientoDatosInput($_POST['tratamiento_datos'] ?? '')
+                : null;
             $data = [
                 'Nombre' => $_POST['nombre'],
                 'Apellido' => $_POST['apellido'],
@@ -3443,6 +3490,10 @@ class PersonaController extends BaseController {
                 'Fecha_Registro' => date('Y-m-d H:i:s'),
                 'Fecha_Registro_Unix' => time()
             ];
+
+            if ($this->soportaTratamientoDatos && $tratamientoDatosCrear !== null) {
+                $data['Tratamiento_Datos'] = $tratamientoDatosCrear;
+            }
 
             $data['Es_Antiguo'] = in_array($tipoPersonaInput, ['antigua', 'antiguo', '1'], true) ? 1 : 0;
 
@@ -3472,7 +3523,7 @@ class PersonaController extends BaseController {
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
                 return;
             }
 
@@ -3521,7 +3572,7 @@ class PersonaController extends BaseController {
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
                 return;
             }
 
@@ -3550,7 +3601,7 @@ class PersonaController extends BaseController {
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
                 return;
             }
             
@@ -3621,7 +3672,7 @@ class PersonaController extends BaseController {
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
             }
         } else {
             $data = [
@@ -3636,7 +3687,7 @@ class PersonaController extends BaseController {
                 'return_url' => $returnUrl,
                 'celula_retorno' => $celulaRetorno
             ];
-            $this->view('personas/formulario', $data);
+            $this->view('personas/formulario', $this->enriquecerViewDataFormulario($data));
         }
     }
 
@@ -3707,11 +3758,34 @@ class PersonaController extends BaseController {
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
                 return;
             }
 
             // Regla de negocio: validación de duplicado por cédula/teléfono solo aplica en creación.
+
+            $tratamientoDatosEditar = $this->soportaTratamientoDatos
+                ? $this->normalizarTratamientoDatosInput($_POST['tratamiento_datos'] ?? '')
+                : null;
+            if ($this->soportaTratamientoDatos && $tratamientoDatosEditar === null) {
+                $persona = $this->personaModel->getById($id);
+                $viewData = [
+                    'persona' => $persona,
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => 'Debe indicar si la persona acepta o no el tratamiento de datos.',
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'return_to' => $returnTo,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
+                return;
+            }
 
             $data = [
                 'Nombre' => $_POST['nombre'],
@@ -3733,6 +3807,10 @@ class PersonaController extends BaseController {
                 'Id_Rol' => $idRolSeleccionado,
                 'Id_Ministerio' => $idMinisterioNormalizado
             ];
+
+            if ($this->soportaTratamientoDatos && $tratamientoDatosEditar !== null) {
+                $data['Tratamiento_Datos'] = $tratamientoDatosEditar;
+            }
 
             if ($tipoPersonaInput !== '') {
                 $data['Es_Antiguo'] = in_array($tipoPersonaInput, ['antigua', 'antiguo', '1'], true) ? 1 : 0;
@@ -3760,7 +3838,7 @@ class PersonaController extends BaseController {
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
                 return;
             }
 
@@ -3809,7 +3887,7 @@ class PersonaController extends BaseController {
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
                 return;
             }
 
@@ -3861,7 +3939,7 @@ class PersonaController extends BaseController {
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
                 return;
             }
             
@@ -3972,7 +4050,7 @@ class PersonaController extends BaseController {
                     'return_to' => $returnTo,
                     'celula_retorno' => $celulaRetorno
                 ];
-                $this->view('personas/formulario', $viewData);
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
             }
         } else {
             $persona = $this->personaModel->getById($id);
@@ -3988,7 +4066,7 @@ class PersonaController extends BaseController {
                 'return_to' => $returnTo,
                 'celula_retorno' => $celulaRetorno
             ];
-            $this->view('personas/formulario', $data);
+            $this->view('personas/formulario', $this->enriquecerViewDataFormulario($data));
         }
     }
 

@@ -30,11 +30,11 @@ return [
 
     'celulas/eliminar' => 'celulas:eliminar',
 
-    'celulas/materiales' => 'materiales_celulas:ver',
+    'celulas/materiales' => ['checker' => 'puedeVerMaterialCelulas'],
 
-    'celulas/materiales/ver' => 'materiales_celulas:ver',
+    'celulas/materiales/ver' => ['checker' => 'puedeVerMaterialCelulas'],
 
-    'celulas/detalleVistasMaterial' => 'materiales_celulas:ver',
+    'celulas/detalleVistasMaterial' => ['checker' => 'puedeVerMaterialCelulas'],
 
     'celulas/buscarLideres' => 'celulas:ver',
 
@@ -138,15 +138,15 @@ return [
 
     'home/material' => ['checker' => 'puedeVerCentroMaterial'],
 
-    'home/material/celulas' => 'materiales_celulas:ver',
+    'home/material/celulas' => ['checker' => 'puedeVerMaterialCelulas'],
 
-    'home/material/teens' => 'teen:ver',
+    'home/material/teens' => ['checker' => 'puedeVerMaterialTeens'],
 
-    'home/material/universidad-vida' => 'material_universidad_vida:ver',
+    'home/material/universidad-vida' => ['checker' => 'puedeVerMaterialUniversidadVida'],
 
     'home/material/capacitacion-destino' => [
 
-        'permiso' => 'material_capacitacion_destino:ver',
+        'checker' => 'puedeVerMaterialCapacitacionDestino',
 
         'layout_maestro' => true,
 
@@ -190,7 +190,7 @@ return [
 
     'teen/buscarAcudientes' => 'teen:ver',
 
-    'teen/verPdf' => 'teen:ver',
+    'teen/verPdf' => ['checker' => 'puedeVerMaterialTeens'],
 
     'teen/recuperar-archivos' => 'teen:editar',
 
@@ -198,7 +198,7 @@ return [
 
     'teen/eliminar' => 'teen:eliminar',
 
-    'teen/detalleVistas' => 'teen:ver',
+    'teen/detalleVistas' => ['checker' => 'puedeVerMaterialTeens'],
 
     'teen/qr-registro' => ['allow' => true],
 

@@ -11,6 +11,7 @@ require_once APP . '/Models/BaseModel.php';
 class UsuarioAcceso extends BaseModel {
     protected $table = 'usuario_acceso';
     protected $primaryKey = 'Id_Usuario_Acceso';
+    private $columnasCache = [];
 
     public function existeTabla() {
         try {
@@ -66,6 +67,82 @@ class UsuarioAcceso extends BaseModel {
 
         $sql = "UPDATE {$this->table} SET Ultimo_Acceso = NOW() WHERE {$this->primaryKey} = ?";
         return $this->execute($sql, [$idUsuarioAcceso]);
+    }
+
+    public function tieneColumna($nombreColumna) {
+        $nombreColumna = trim((string)$nombreColumna);
+        if ($nombreColumna === '' || !$this->existeTabla()) {
+            return false;
+        }
+        if (array_key_exists($nombreColumna, $this->columnasCache)) {
+            return (bool)$this->columnasCache[$nombreColumna];
+        }
+        try {
+            $stmt = $this->db->prepare("SHOW COLUMNS FROM {$this->table} LIKE ?");
+            $stmt->execute([$nombreColumna]);
+            $this->columnasCache[$nombreColumna] = (bool)$stmt->fetch();
+            return $this->columnasCache[$nombreColumna];
+        } catch (Exception $e) {
+            $this->columnasCache[$nombreColumna] = false;
+            return false;
+        }
+    }
+
+    public function ensureAcuerdoConfidencialidadColumnsExist() {
+        if (!$this->existeTabla()) {
+            return false;
+        }
+        $ok = true;
+        if (!$this->tieneColumna('Acuerdo_Confidencialidad_At')) {
+            try {
+                $this->db->exec("ALTER TABLE {$this->table} ADD COLUMN Acuerdo_Confidencialidad_At DATETIME NULL AFTER Ultimo_Acceso");
+                $this->columnasCache['Acuerdo_Confidencialidad_At'] = true;
+            } catch (Exception $e) {
+                error_log('No se pudo crear Acuerdo_Confidencialidad_At en usuario_acceso: ' . $e->getMessage());
+                $ok = false;
+            }
+        }
+        if (!$this->tieneColumna('Acuerdo_Confidencialidad_Version')) {
+            try {
+                $this->db->exec("ALTER TABLE {$this->table} ADD COLUMN Acuerdo_Confidencialidad_Version VARCHAR(32) NULL AFTER Acuerdo_Confidencialidad_At");
+                $this->columnasCache['Acuerdo_Confidencialidad_Version'] = true;
+            } catch (Exception $e) {
+                error_log('No se pudo crear Acuerdo_Confidencialidad_Version en usuario_acceso: ' . $e->getMessage());
+                $ok = false;
+            }
+        }
+        return $ok;
+    }
+
+    public function registrarAcuerdoConfidencialidad(int $idUsuarioAcceso, string $version): bool {
+        $idUsuarioAcceso = (int)$idUsuarioAcceso;
+        if ($idUsuarioAcceso <= 0 || !$this->tieneColumna('Acuerdo_Confidencialidad_At')) {
+            return false;
+        }
+        $data = ['Acuerdo_Confidencialidad_At' => date('Y-m-d H:i:s')];
+        if ($this->tieneColumna('Acuerdo_Confidencialidad_Version')) {
+            $data['Acuerdo_Confidencialidad_Version'] = $version;
+        }
+        return $this->update($idUsuarioAcceso, $data);
+    }
+
+    public function tieneAcuerdoConfidencialidadVigente(int $idUsuarioAcceso, string $versionActual): bool {
+        $idUsuarioAcceso = (int)$idUsuarioAcceso;
+        if ($idUsuarioAcceso <= 0 || !$this->tieneColumna('Acuerdo_Confidencialidad_At')) {
+            return true;
+        }
+        $cuenta = $this->getById($idUsuarioAcceso);
+        if (empty($cuenta)) {
+            return false;
+        }
+        $fecha = trim((string)($cuenta['Acuerdo_Confidencialidad_At'] ?? ''));
+        if ($fecha === '') {
+            return false;
+        }
+        if ($this->tieneColumna('Acuerdo_Confidencialidad_Version')) {
+            return trim((string)($cuenta['Acuerdo_Confidencialidad_Version'] ?? '')) === $versionActual;
+        }
+        return true;
     }
 
     public function getAllWithRelations() {

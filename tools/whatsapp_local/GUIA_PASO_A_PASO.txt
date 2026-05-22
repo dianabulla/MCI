@@ -35,19 +35,27 @@ PASO 2 - Probar que la PC llega a la base de datos
   en MySQL remoto (Whitelist remota).
 
 
-PASO 3 - Iniciar el worker de WhatsApp
-----------------------------------------
-  Opción fácil:
-     Doble clic en el archivo:   01_INICIAR_WHATSAPP.cmd
+PASO 3 - Iniciar el worker de WhatsApp (vincular QR)
+----------------------------------------------------
+  Opción fácil (SIEMPRE para escanear QR):
+     Doble clic en:   01_INICIAR_WHATSAPP.cmd
 
-  Se abrirá una ventana negra (consola):
-     1) Espera a que salga un código QR (texto o cuadrado en la consola)
-     2) En el celular: WhatsApp → Dispositivos vinculados → Vincular dispositivo
-     3) Escanea el QR
-     4) Cuando conecte verás algo como: "WhatsApp conectado. Worker activo."
+  Qué debe pasar:
+     1) Se abre una ventana negra que NO se cierra sola
+     2) Se abre Chrome con WhatsApp Web O se abre logs\whatsapp-qr.html
+     3) También puede salir el QR en texto en la consola
+     4) En el celular: WhatsApp → Dispositivos vinculados → Vincular dispositivo
+     5) Cuando conecte verás: "WhatsApp conectado. Worker activo."
 
-  IMPORTANTE: No cierres esa ventana mientras quieras enviar mensajes.
-  Si la cierras, el worker deja de funcionar hasta que lo vuelvas a abrir.
+  NO uses el autostart (tarea programada) hasta haber escaneado el QR una vez.
+  El autostart corre OCULTO: si no hay sesión vinculada, la ventana se cierra
+  y no podrás escanear.
+
+  Si ya tenías autostart y falla:
+     powershell -ExecutionPolicy Bypass -File .\restart_worker.ps1
+     Luego ejecuta 01_INICIAR_WHATSAPP.cmd y escanea el QR.
+
+  IMPORTANTE: No cierres la ventana de 01_INICIAR_WHATSAPP.cmd mientras envías mensajes.
 
 
 PASO 4 (opcional) - Que arranque solo al encender el PC

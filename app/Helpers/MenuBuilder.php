@@ -86,17 +86,32 @@ class MenuBuilder {
      * @return array<int, array<string, mixed>>
      */
     private static function menuMaestro(): array {
-        if (!AuthController::puedeVerMaterialCapacitacionDestino()) {
+        if (!AuthController::puedeVerMaterialCapacitacionDestino() && !AuthController::puedeVerCentroMaterial()) {
             return [];
         }
 
-        $items = [[
-            'id' => 'material_cap_destino',
-            'label' => 'Material Cap. Destino',
-            'ruta' => 'home/material/capacitacion-destino',
-            'icon' => 'bi-signpost-split-fill',
-            'active_prefixes' => ['home/material/capacitacion-destino', 'home/material'],
-        ]];
+        $items = [];
+        if (AuthController::puedeAccederHubMaterialCompleto()) {
+            $items[] = [
+                'id' => 'material_hub',
+                'label' => 'Material',
+                'ruta' => 'home/material',
+                'icon' => 'bi-folder2-open',
+                'active_prefixes' => [
+                    'home/material',
+                    'celulas/materiales',
+                    'teen',
+                ],
+            ];
+        } elseif (AuthController::puedeVerMaterialCapacitacionDestino()) {
+            $items[] = [
+                'id' => 'material_cap_destino',
+                'label' => 'Material Cap. Destino',
+                'ruta' => 'home/material/capacitacion-destino',
+                'icon' => 'bi-signpost-split-fill',
+                'active_prefixes' => ['home/material/capacitacion-destino', 'home/material'],
+            ];
+        }
 
         if (AuthController::puedeAccederEvaluacionesDiscipular()) {
             $items[] = [
@@ -243,16 +258,16 @@ class MenuBuilder {
         if (self::puedeVerCentroMaterialEnMenu()) {
             $material[] = ['id' => 'material_centro', 'label' => 'Centro de material', 'ruta' => 'home/material', 'icon' => 'bi-folder2-open'];
         }
-        if (AuthController::puedeVerModulo('materiales_celulas')) {
+        if (AuthController::puedeVerMaterialCelulas()) {
             $material[] = ['id' => 'material_celulas', 'label' => 'Material células', 'ruta' => 'home/material/celulas', 'icon' => 'bi-send-check'];
         }
-        if (AuthController::puedeVerModulo('teen')) {
+        if (AuthController::puedeVerMaterialTeens()) {
             $material[] = ['id' => 'material_teens', 'label' => 'Teens', 'ruta' => 'home/material/teens', 'icon' => 'bi-balloon-heart'];
         }
-        if (AuthController::puedeVerModulo('material_universidad_vida')) {
+        if (AuthController::puedeVerMaterialUniversidadVida()) {
             $material[] = ['id' => 'material_uv', 'label' => 'Material U.V.', 'ruta' => 'home/material/universidad-vida', 'icon' => 'bi-mortarboard'];
         }
-        if (AuthController::puede('material_capacitacion_destino:ver')) {
+        if (AuthController::puedeVerMaterialCapacitacionDestino()) {
             $material[] = ['id' => 'material_cap', 'label' => 'Material Cap. Destino', 'ruta' => 'home/material/capacitacion-destino', 'icon' => 'bi-signpost-split-fill'];
         }
 
@@ -269,19 +284,7 @@ class MenuBuilder {
      * Centro de material en menú sin consultar inscripciones en BD (evita fallos en CLI/tests).
      */
     private static function puedeVerCentroMaterialEnMenu(): bool {
-        if (AuthController::esAdministrador()) {
-            return true;
-        }
-        if (AuthController::puede('material:ver')) {
-            return true;
-        }
-        $permisos = (array)($_SESSION['permisos'] ?? []);
-        if (!array_key_exists('material', $permisos)) {
-            return AuthController::puede('materiales_celulas:ver')
-                || AuthController::puede('material_capacitacion_destino:ver')
-                || AuthController::puede('teen:ver');
-        }
-        return false;
+        return AuthController::puedeVerCentroMaterial();
     }
 
     /**

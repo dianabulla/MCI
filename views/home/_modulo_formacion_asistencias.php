@@ -246,15 +246,21 @@ if ($moduloFormacionActual === 'discipular') {
             || strpos($generoRegistro, 'mascul') !== false
             || in_array($generoRegistro, ['m', 'masc', 'male', 'h'], true);
 
+        if ($edadTmp >= 9 && $edadTmp <= 13) {
+            $rowsAsistenciaTeens[] = $rowTmp;
+        }
         if ($edadTmp >= 14 && $edadTmp <= 28) {
             $rowsAsistenciaJovenes[] = $rowTmp;
-        } elseif ($edadTmp >= 9 && $edadTmp <= 13) {
-            $rowsAsistenciaTeens[] = $rowTmp;
-        } elseif (($edadTmp >= 29 || $edadTmp <= 0) && $esHombre) {
+        }
+        if ($esHombre && !$esMujer) {
             $rowsAsistenciaHombresAdultos[] = $rowTmp;
-        } elseif (($edadTmp >= 29 || $edadTmp <= 0) && $esMujer) {
+        } elseif ($esMujer && !$esHombre) {
             $rowsAsistenciaMujeresAdultas[] = $rowTmp;
-        } else {
+        } elseif (
+            $edadTmp < 9
+            || ($edadTmp > 13 && $edadTmp < 14)
+            || $edadTmp > 28
+        ) {
             $rowsAsistenciaOtros[] = $rowTmp;
         }
     }
@@ -367,7 +373,7 @@ if ($moduloFormacionActual === 'discipular') {
             <button type="button" class="gender-card-toggle js-gender-view-btn" data-view-target="asistencia_view_hombres_adultos">
                 <span class="gender-card-title-wrap">
                     <span class="gender-avatar gender-avatar-male" aria-hidden="true">👨</span>
-                    <span>Hombres <small style="font-weight:400;color:#637087;">(29+ años)</small></span>
+                    <span>Hombres <small style="font-weight:400;color:#637087;">(por género, incluye jóvenes)</small></span>
                 </span>
                 <span class="gender-card-icon">Ver</span>
             </button>
@@ -393,7 +399,7 @@ if ($moduloFormacionActual === 'discipular') {
             <button type="button" class="gender-card-toggle js-gender-view-btn" data-view-target="asistencia_view_mujeres_adultas">
                 <span class="gender-card-title-wrap">
                     <span class="gender-avatar gender-avatar-female" aria-hidden="true">👩</span>
-                    <span>Mujeres <small style="font-weight:400;color:#637087;">(29+ años)</small></span>
+                    <span>Mujeres <small style="font-weight:400;color:#637087;">(por género, incluye jóvenes)</small></span>
                 </span>
                 <span class="gender-card-icon">Ver</span>
             </button>
@@ -606,7 +612,7 @@ if ($moduloFormacionActual === 'discipular') {
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="<?= 4 + $totalClases ?>" class="text-center">No hay hombres de 29+ años para este programa con los filtros seleccionados.</td>
+                            <td colspan="<?= 4 + $totalClases ?>" class="text-center">No hay hombres registrados para este programa con los filtros seleccionados.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -672,7 +678,7 @@ if ($moduloFormacionActual === 'discipular') {
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="<?= 4 + $totalClases ?>" class="text-center">No hay mujeres de 29+ años para este programa con los filtros seleccionados.</td>
+                            <td colspan="<?= 4 + $totalClases ?>" class="text-center">No hay mujeres registradas para este programa con los filtros seleccionados.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>

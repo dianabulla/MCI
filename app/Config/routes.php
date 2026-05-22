@@ -14,6 +14,8 @@ return [
     'auth/mi-cuenta' => 'AuthController@miCuenta',
     'auth/selector-contexto' => 'AuthController@selectorContexto',
     'auth/seleccionar-contexto' => 'AuthController@seleccionarContexto',
+    'auth/acuerdo-confidencialidad' => 'AuthController@acuerdoConfidencialidad',
+    'auth/aceptar-acuerdo-confidencialidad' => 'AuthController@aceptarAcuerdoConfidencialidad',
     'auth/acceso-denegado' => 'AuthController@accesoDenegado',
     
     // Home

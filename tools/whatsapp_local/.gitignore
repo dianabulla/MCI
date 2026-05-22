@@ -2,4 +2,6 @@
 .wwebjs_auth/
 .wwebjs_cache/
 node_modules/
+logs/worker.lock
+logs/whatsapp-qr.html
 npm-debug.log*

@@ -6,13 +6,29 @@ FROM whatsapp_local_queue
 GROUP BY estado
 ORDER BY FIELD(estado, 'pendiente', 'procesando', 'enviado', 'fallido');
 
--- Ultimos pendientes (los que el worker deberia procesar cuando toque)
+-- Pendientes que el worker enviaria HOY (misma logica que worker.js con WA_ONLY_TODAY=1)
+-- Ajusta @fecha_hoy si revisas otro dia; en MySQL con time_zone -05:00 puede usarse CURDATE().
+SET @fecha_hoy = CURDATE();
+
 SELECT id, telefono, tipo_evento, estado, intentos,
-       programado_en, creado_en, LEFT(COALESCE(ultimo_error,''), 120) AS error_corto
+       programado_en, creado_en, referencia, LEFT(COALESCE(ultimo_error,''), 120) AS error_corto
 FROM whatsapp_local_queue
 WHERE estado = 'pendiente'
+  AND (
+    (programado_en IS NULL AND DATE(creado_en) = @fecha_hoy
+     AND (tipo_evento <> 'felicitacion_cumpleanos' OR referencia LIKE CONCAT('cumpleanos:', @fecha_hoy, ':%')))
+    OR (programado_en IS NOT NULL AND DATE(programado_en) = @fecha_hoy AND programado_en <= NOW())
+  )
 ORDER BY id ASC
 LIMIT 50;
+
+-- Ultimos pendientes (todos, sin filtro de hoy)
+-- SELECT id, telefono, tipo_evento, estado, intentos,
+--        programado_en, creado_en, LEFT(COALESCE(ultimo_error,''), 120) AS error_corto
+-- FROM whatsapp_local_queue
+-- WHERE estado = 'pendiente'
+-- ORDER BY id ASC
+-- LIMIT 50;
 
 -- Ultimos fallidos (revisar ultimo_error)
 SELECT id, telefono, tipo_evento, intentos, programado_en, creado_en, procesado_en, ultimo_error

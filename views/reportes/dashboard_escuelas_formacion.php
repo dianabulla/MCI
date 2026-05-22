@@ -23,8 +23,13 @@ $diasMes = (int)($dias_mes ?? date('t'));
 $dashboardMetasMinisterio = (array)($dashboard_metas_ministerio ?? ['items' => []]);
 $reporteUvMinisterios = (array)($reporte_uv_ministerios ?? []);
 $tablaPagosUv = (array)($tabla_pagos_uv ?? []);
+$tablaPagosUvLiderCelula = (array)($tabla_pagos_uv_lider_celula ?? []);
 $tablaPagosUvModo = (string)($tabla_pagos_uv_modo ?? 'mensual');
 $tablaUvModoConsolidar = (array)($tabla_uv_modo_consolidar ?? []);
+$tablaCapModoConsolidar = (array)($tabla_cap_modo_consolidar ?? []);
+$tablaPagosCap = (array)($tabla_pagos_cap ?? []);
+$totalInscripcionesCapPeriodo = (int)($total_inscripciones_cap_periodo ?? 0);
+$totalAsistenciasCap = (int)($total_asistencias_cap ?? 0);
 $detalleLideresMinisterioUv = (array)($detalle_lideres_ministerio_uv ?? []);
 $nombreMinisterioFiltrado = trim((string)($nombre_ministerio_filtrado ?? ''));
 
@@ -151,10 +156,15 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
     flex-direction: column;
     gap: 2px;
 }
-.dash-inline-filters label {
+.dash-inline-filters label,
+.dash-inline-filters .dash-group-label {
     font-size: 0.72rem;
     font-weight: 600;
     color: #64748b;
+}
+.dash-inline-filters .dash-group-label {
+    display: block;
+    margin-bottom: 2px;
 }
 .dash-inline-filters select {
     min-width: 118px;
@@ -248,35 +258,30 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
 .uv-dash-tables-grid {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     width: 100%;
-}
-@media (min-width: 1100px) {
-    .uv-dash-tables-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-        align-items: start;
-    }
 }
 .uv-dash-table-card {
     margin-bottom: 0;
-    padding: 12px 14px;
+    padding: 10px 12px;
     width: 100%;
     min-width: 0;
 }
-.uv-dash-table-note { color: #64748b; display: block; margin-bottom: 6px; font-size: 0.78rem; }
-.uv-dash-table-card .section-title { margin-bottom: 6px; }
+.uv-dash-table-note { color: #64748b; display: block; margin-bottom: 4px; font-size: 0.75rem; }
+.uv-dash-table-card .section-title { margin-bottom: 4px; font-size: 0.9rem; }
 .uv-dash-table-card .table-wrap {
     width: 100%;
+    overflow-x: auto;
 }
 .uv-simple-table.leader-table {
     width: 100%;
     min-width: 0;
+    max-width: 100%;
     table-layout: fixed;
 }
-.uv-simple-table col.uv-col-num { width: 4.1rem; }
-.uv-simple-table col.uv-col-num-wide { width: 5.1rem; }
+.uv-simple-table col.uv-col-min { width: 28%; }
+.uv-simple-table col.uv-col-num { width: 8.5%; }
+.uv-simple-table col.uv-col-num-wide { width: 11%; }
 .uv-simple-table.leader-table th:nth-child(1),
 .uv-simple-table.leader-table td:nth-child(1) {
     text-align: left;
@@ -286,20 +291,24 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
 .uv-simple-table.leader-table th:nth-child(n+2),
 .uv-simple-table.leader-table td:nth-child(n+2) {
     text-align: center;
-    padding-left: 4px;
-    padding-right: 4px;
+    padding-left: 2px;
+    padding-right: 2px;
 }
 .uv-simple-table.leader-table th,
 .uv-simple-table.leader-table td {
-    padding: 5px 8px;
+    padding: 3px 5px;
     vertical-align: middle;
+    font-size: 0.76rem;
+    line-height: 1.15;
 }
 .uv-simple-table.leader-table thead th {
     text-align: center;
-    line-height: 1.2;
-    white-space: normal;
-    word-break: break-word;
-    hyphens: auto;
+    line-height: 1.1;
+    font-size: 0.66rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    word-break: normal;
+    hyphens: none;
 }
 .uv-simple-table.leader-table thead th:first-child {
     text-align: left;
@@ -347,19 +356,28 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
     .filters-form .group label { font-size: 0.78rem; }
     .filters-form select { min-width: 0; width: 100%; font-size: 0.82rem; padding: 5px 8px; }
     .leader-table { min-width: 560px; }
-    .uv-dash-tables-grid { grid-template-columns: 1fr; }
+    .uv-dash-tables-grid { max-width: 100%; }
     .uv-simple-table.leader-table { min-width: 0; }
-    .uv-simple-table col.uv-col-num { width: 3.2rem; }
-    .uv-simple-table col.uv-col-num-wide { width: 4.2rem; }
-    .leader-table th, .leader-table td { padding: 5px 6px; font-size: 0.74rem; }
-    .leader-table th { font-size: 0.66rem; }
+    .uv-simple-table.leader-table th,
+    .uv-simple-table.leader-table td {
+        padding: 2px 4px;
+        font-size: 0.72rem;
+    }
+    .uv-simple-table.leader-table thead th { font-size: 0.62rem; }
 }
 .uv-dash-table-card .dash-table-tool-row {
-    margin-bottom: 6px;
-    gap: 8px;
+    margin-bottom: 4px;
+    gap: 6px;
 }
 .uv-dash-table-card .dash-inline-filters {
-    gap: 6px;
+    gap: 4px;
+}
+.uv-dash-table-card .dash-filter-hint {
+    margin-bottom: 4px;
+}
+.uv-dash-table-card .dash-segment-checks {
+    max-width: none;
+    gap: 4px 10px;
 }
 </style>
 
@@ -514,7 +532,7 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
                 keys: ['a', 'j', 't'],
                 segments: [['a', 'Adultos'], ['j', 'Jóvenes'], ['t', 'Teens']],
                 label: 'Segmento',
-                hintUv: 'Sin marcar = todos. Si marcas segmentos, se suman (ej. mujeres + jóvenes) y Total / Asistencias / Pagos usan solo esos segmentos.',
+                hintUv: 'H y M = por género (incluye jóvenes del mismo sexo). J y Teens = por edad. Sin marcar = todos. Si marcas varios, se suman las columnas elegidas.',
                 hintDefault: 'Sin marcar = todas las columnas. Si marcas segmentos, se muestran esas columnas y filas con al menos uno de los marcados.'
             };
         }
@@ -531,7 +549,7 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
             keys: ['h', 'm', 'j', 't'],
             segments: [['h', 'Hombres'], ['m', 'Mujeres'], ['j', 'Jóvenes'], ['t', 'Teens']],
             label: 'Segmento',
-            hintUv: 'Sin marcar = todos. Si marcas segmentos, se suman (ej. mujeres + jóvenes) y Total / Asistencias / Pagos usan solo esos segmentos.',
+            hintUv: 'H y M = por género (incluye jóvenes del mismo sexo). J y Teens = por edad. Sin marcar = todos. Si marcas varios, se suman las columnas elegidas.',
             hintDefault: 'Sin marcar = todas las columnas. Si marcas segmentos, se muestran esas columnas y filas con al menos uno de los marcados.'
         };
     }
@@ -702,7 +720,7 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
         const filt = table._dashFiltro || {};
         const genActivo = filt.gen !== 'all' && Array.isArray(filt.gen) && filt.gen.length > 0;
         const keys = obtenerSegmentosActivosTabla(table);
-        const esPagos = table.id === 'tablaUvPagos' || table.id === 'tablaCapPagos';
+        const esPagos = table.id === 'tablaUvPagos' || table.id === 'tablaCapPagos' || table.id === 'tablaUvPagosLider';
         const esCapInscritos = table.id === 'tablaCapInscripciones';
         const prefExtra = esPagos ? 'pag-' : 'asist-';
 
@@ -742,7 +760,7 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
         const filt = table._dashFiltro || {};
         const genActivo = filt.gen !== 'all' && Array.isArray(filt.gen) && filt.gen.length > 0;
         const keys = obtenerSegmentosActivosTabla(table);
-        const esPagos = table.id === 'tablaUvPagos' || table.id === 'tablaCapPagos';
+        const esPagos = table.id === 'tablaUvPagos' || table.id === 'tablaCapPagos' || table.id === 'tablaUvPagosLider';
         const esCapInscritos = table.id === 'tablaCapInscripciones';
         const prefExtra = esPagos ? 'pag-' : 'asist-';
         const sums = { h: 0, m: 0, j: 0, t: 0, a: 0, total: 0, extra: 0 };
@@ -820,8 +838,104 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
         }
     }
 
+    function conectarFiltrosTablaEstatica(table, toolRow) {
+        const genMode = table.getAttribute('data-dash-gen-mode') || 'hmjt';
+        const genCfg = dashGenConfig(genMode);
+        const enablePago = table.getAttribute('data-dash-enable-pago') === '1';
+        const tableId = table.id || '';
+
+        let selMin = toolRow.querySelector('.js-dash-sel-min[data-dash-table="' + tableId + '"]');
+        if (!selMin) {
+            selMin = toolRow.querySelector('.js-dash-sel-min');
+        }
+        let selPago = toolRow.querySelector('.js-dash-sel-pago[data-dash-table="' + tableId + '"]');
+        if (!selPago) {
+            selPago = toolRow.querySelector('.js-dash-sel-pago');
+        }
+        let btnClear = toolRow.querySelector('.js-dash-btn-limpiar[data-dash-table="' + tableId + '"]');
+        if (!btnClear) {
+            btnClear = toolRow.querySelector('.js-dash-btn-limpiar');
+        }
+        let segmentInputs = Array.from(toolRow.querySelectorAll('.js-dash-seg[data-dash-table="' + tableId + '"]'));
+        if (!segmentInputs.length) {
+            segmentInputs = Array.from(toolRow.querySelectorAll('.js-dash-seg'));
+        }
+
+        if (!selMin || !segmentInputs.length) {
+            return false;
+        }
+
+        const { map: labMap, slugs } = construirOpcionesMinisterio(table);
+        selMin.innerHTML = '<option value="">Todos los ministerios</option>';
+        slugs.forEach(function(sl) {
+            const opt = document.createElement('option');
+            opt.value = sl;
+            opt.textContent = labMap[sl] || sl;
+            selMin.appendChild(opt);
+        });
+
+        let tieneDesgloseGen = false;
+        table.querySelectorAll('tbody tr[data-dash-row]').forEach(function(tr) {
+            genCfg.keys.forEach(function(k) {
+                if ((parseInt(tr.getAttribute('data-dash-' + k) || '0', 10) || 0) > 0) {
+                    tieneDesgloseGen = true;
+                }
+            });
+        });
+        if (!tieneDesgloseGen) {
+            segmentInputs.forEach(function(inp) {
+                inp.disabled = true;
+            });
+        }
+
+        table._dashFiltro = { min: '', gen: 'all', pago: 'all' };
+
+        function syncAndApply() {
+            let genVal = 'all';
+            if (tieneDesgloseGen) {
+                const keys = [];
+                segmentInputs.forEach(function(inp) {
+                    if (inp.checked) {
+                        keys.push(inp.value);
+                    }
+                });
+                genVal = keys.length ? keys : 'all';
+            }
+            table._dashFiltro = {
+                min: selMin.value || '',
+                gen: genVal,
+                pago: (!selPago || selPago.disabled) ? 'all' : (selPago.value || 'all')
+            };
+            aplicarFiltrosTabla(table);
+        }
+
+        selMin.addEventListener('change', syncAndApply);
+        segmentInputs.forEach(function(inp) {
+            inp.addEventListener('change', syncAndApply);
+        });
+        if (selPago) {
+            selPago.addEventListener('change', syncAndApply);
+        }
+        if (btnClear) {
+            btnClear.addEventListener('click', function() {
+                selMin.value = '';
+                segmentInputs.forEach(function(inp) {
+                    inp.checked = false;
+                });
+                if (selPago && !selPago.disabled) {
+                    selPago.value = 'all';
+                }
+                syncAndApply();
+            });
+        }
+
+        aplicarFiltroMinisterioGlobalEnTabla(table);
+        return true;
+    }
+
     function crearBarraFiltros(table, wrap) {
         const genMode = table.getAttribute('data-dash-gen-mode') || 'hmjt';
+        const genCfg = dashGenConfig(genMode);
         const enablePago = table.getAttribute('data-dash-enable-pago') === '1';
 
         const bar = document.createElement('div');
@@ -1023,6 +1137,9 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
     }
 
     function aplicarFiltroMinisterioGlobalEnTabla(table) {
+        if (table.getAttribute('data-dash-skip-global-ministerio') === '1') {
+            return;
+        }
         const globalMinId = String(table.getAttribute('data-dash-global-ministerio-id') || '').trim();
         if (!globalMinId) {
             return;
@@ -1059,19 +1176,36 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
         }
     }
 
-    if (contenedorDashboard && typeof html2canvas !== 'undefined') {
-        const tableWraps = Array.from(document.querySelectorAll('.dash-card .table-wrap')).filter(function(wrap) {
+    function initHerramientasTablasDashboard() {
+        if (!contenedorDashboard) {
+            return;
+        }
+        const tableWraps = Array.from(contenedorDashboard.querySelectorAll('.dash-card .table-wrap')).filter(function(wrap) {
             return wrap.querySelector('table') !== null;
         });
 
         tableWraps.forEach(function(wrap, idx) {
             const table = wrap.querySelector('table');
+            if (!table) {
+                return;
+            }
             const tituloTabla = obtenerTituloDeTabla(wrap, idx + 1);
+            const staticToolRow = wrap.parentNode.querySelector(
+                '.js-dash-filtros-estaticos[data-dash-table-id="' + (table.id || '') + '"]'
+            );
 
-            const toolRow = document.createElement('div');
-            toolRow.className = 'dash-table-tool-row';
+            let toolRow = staticToolRow;
+            if (!toolRow) {
+                const prev = wrap.previousElementSibling;
+                if (prev && prev.classList && prev.classList.contains('dash-table-tool-row')) {
+                    toolRow = prev;
+                }
+            }
 
-            if (table && table.classList.contains('js-dash-filterable')) {
+            if (!toolRow && table.classList.contains('js-dash-filterable')) {
+                toolRow = document.createElement('div');
+                toolRow.className = 'dash-table-tool-row';
+
                 const leftCol = document.createElement('div');
                 leftCol.style.flex = '1';
                 leftCol.style.minWidth = '220px';
@@ -1092,36 +1226,60 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
                 const filtros = crearBarraFiltros(table, wrap);
                 leftCol.appendChild(filtros);
                 toolRow.appendChild(leftCol);
+                wrap.parentNode.insertBefore(toolRow, wrap);
+            }
+
+            if (staticToolRow && !staticToolRow.dataset.wired && table.classList.contains('js-dash-filterable')) {
+                conectarFiltrosTablaEstatica(table, staticToolRow);
+                staticToolRow.dataset.wired = '1';
+                if (table.getAttribute('data-dash-skip-global-ministerio') !== '1') {
+                    aplicarFiltroMinisterioGlobalEnTabla(table);
+                }
+            } else if (toolRow && !staticToolRow && table.classList.contains('js-dash-filterable')) {
                 aplicarFiltroMinisterioGlobalEnTabla(table);
             }
 
-            const actions = document.createElement('div');
-            actions.className = 'table-actions';
-            actions.style.marginBottom = '0';
-            actions.style.marginLeft = 'auto';
-
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'btn btn-success btn-tabla-export';
-            btn.textContent = 'Descargar PNG';
-
-            btn.addEventListener('click', async function() {
-                try {
-                    btn.disabled = true;
-                    btn.textContent = 'Generando...';
-                    await exportarTablaComoPng(wrap, idx + 1, tituloTabla);
-                } catch (e) {
-                    alert('No se pudo generar la imagen de esta tabla.');
-                } finally {
-                    btn.disabled = false;
-                    btn.textContent = 'Descargar PNG';
+            if (toolRow && typeof html2canvas !== 'undefined' && !toolRow.querySelector('.btn-tabla-export')) {
+                const actions = document.createElement('div');
+                actions.className = 'table-actions';
+                actions.style.marginBottom = '0';
+                actions.style.marginLeft = toolRow.classList.contains('js-dash-filtros-estaticos') ? '0' : 'auto';
+                if (toolRow.classList.contains('js-dash-filtros-estaticos')) {
+                    toolRow.style.display = 'flex';
+                    toolRow.style.flexWrap = 'wrap';
+                    toolRow.style.alignItems = 'flex-end';
+                    toolRow.style.justifyContent = 'space-between';
+                    toolRow.style.gap = '10px';
                 }
-            });
 
-            actions.appendChild(btn);
-            toolRow.appendChild(actions);
-            wrap.parentNode.insertBefore(toolRow, wrap);
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-success btn-tabla-export';
+                btn.textContent = 'Descargar PNG';
+
+                btn.addEventListener('click', async function() {
+                    try {
+                        btn.disabled = true;
+                        btn.textContent = 'Generando...';
+                        await exportarTablaComoPng(wrap, idx + 1, tituloTabla);
+                    } catch (e) {
+                        alert('No se pudo generar la imagen de esta tabla.');
+                    } finally {
+                        btn.disabled = false;
+                        btn.textContent = 'Descargar PNG';
+                    }
+                });
+
+                actions.appendChild(btn);
+                toolRow.appendChild(actions);
+            }
         });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initHerramientasTablasDashboard);
+    } else {
+        initHerramientasTablasDashboard();
     }
 
     if (window.UV_DASH_DETALLE && window.UV_DASH_DETALLE.route) {
@@ -1133,7 +1291,7 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
         const uvLoading = document.getElementById('uvDetalleLoading');
         const uvAlineacion = document.getElementById('uvDetalleAlineacion');
         const uvCfg = window.UV_DASH_DETALLE;
-        let uvEstado = { slug: '', nombre: '', vista: 'todas', gen: [] };
+        let uvEstado = { slug: '', nombre: '', vista: 'todas', gen: [], tipo: 'ministerio' };
 
         function uvGenDesdeTabla(table) {
             const filt = table && table._dashFiltro ? table._dashFiltro : {};
@@ -1223,13 +1381,17 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
                 uvVacio.textContent = 'No hay personas para este criterio.';
             }
             const query = {
-                ministerio: uvEstado.slug,
                 anio: String(uvCfg.anio || ''),
                 semestre: String(uvCfg.semestre || ''),
                 vista: uvEstado.vista || 'todas',
                 filtro_ministerio: uvCfg.filtroMinisterio || '',
                 filtro_lider: uvCfg.filtroLider || ''
             };
+            if (uvEstado.tipo === 'lider') {
+                query.lider = uvEstado.slug;
+            } else {
+                query.ministerio = uvEstado.slug;
+            }
             if (uvEstado.gen.length) {
                 query.gen = uvEstado.gen.join(',');
             }
@@ -1252,7 +1414,8 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
                     throw new Error(data.mensaje || ('Error al cargar (' + res.status + ')'));
                 }
                 if (uvTitulo) {
-                    uvTitulo.textContent = data.ministerio || uvEstado.nombre;
+                    const prefijo = (data.tipo === 'lider' || uvEstado.tipo === 'lider') ? 'Líder: ' : '';
+                    uvTitulo.textContent = prefijo + (data.ministerio || uvEstado.nombre);
                 }
                 if (uvSub && data.periodo) {
                     const etq = data.periodo.etiqueta ? (data.periodo.etiqueta + ' ' + data.periodo.anio + ' · ') : '';
@@ -1294,6 +1457,7 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
                     }
                     uvEstado.slug = slug;
                     uvEstado.nombre = nombre;
+                    uvEstado.tipo = table.getAttribute('data-uv-detalle-tipo') === 'lider' ? 'lider' : 'ministerio';
                     uvEstado.gen = uvGenDesdeTabla(table);
                     const vistaIni = table.getAttribute('data-uv-vista-inicial') || 'todas';
                     uvEstado.vista = vistaIni;

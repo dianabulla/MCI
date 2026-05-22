@@ -1251,9 +1251,22 @@ class HomeController extends BaseController {
             return true;
         }
 
+        if (AuthController::puedeVerMaterialExistente()) {
+            return true;
+        }
+
         $clave = (string)($modulo['clave'] ?? '');
         if ($clave === 'capacitacion_destino') {
             return AuthController::puedeVerMaterialCapacitacionDestino();
+        }
+        if ($clave === 'celulas') {
+            return AuthController::puedeVerMaterialCelulas();
+        }
+        if ($clave === 'teens') {
+            return AuthController::puedeVerMaterialTeens();
+        }
+        if ($clave === 'universidad_vida') {
+            return AuthController::puedeVerMaterialUniversidadVida();
         }
 
         return AuthController::puede((string)$modulo['permiso'] . ':ver');
@@ -3453,11 +3466,24 @@ class HomeController extends BaseController {
                     $asistenciasPorPersona[$idPersona] = [];
                     foreach ($clasesMap as $numeroClase => $asistio) {
                         if ($asistio === true) {
-                            $asistenciasPorPersona[$idPersona][] = $numeroClase;
+                            $asistenciasPorPersona[$idPersona][] = (int)$numeroClase;
                         }
                     }
                 }
             }
+
+            $totalesAsistenciaPorClase = array_fill(1, 10, 0);
+            foreach ($inscritosCapNivel as $inscritoTmp) {
+                $idPersonaTmp = (int)($inscritoTmp['id_persona'] ?? 0);
+                $clasesMarcadas = (array)($asistenciasPorPersona[$idPersonaTmp] ?? []);
+                for ($claseTmp = 1; $claseTmp <= 10; $claseTmp++) {
+                    if (in_array($claseTmp, $clasesMarcadas, true)) {
+                        $totalesAsistenciaPorClase[$claseTmp]++;
+                    }
+                }
+            }
+        } else {
+            $totalesAsistenciaPorClase = array_fill(1, 10, 0);
         }
 
         if ($esDiscipuloCapDestino && !empty($accesosDiscipuloCapDestino)) {
@@ -3498,6 +3524,7 @@ class HomeController extends BaseController {
             'accesos_discipulo_cap_destino' => $accesosDiscipuloCapDestino,
             'inscritos_cap_nivel' => $inscritosCapNivel,
             'asistencias_por_persona' => $asistenciasPorPersona,
+            'totales_asistencia_por_clase' => $totalesAsistenciaPorClase ?? array_fill(1, 10, 0),
             'tareas_cap_nivel' => $tareasCapNivel,
             'entregas_tareas_cap' => $entregasTareasCap,
             'tareas_discipulo_cap' => $tareasDiscipuloCap,
@@ -3595,7 +3622,7 @@ class HomeController extends BaseController {
     }
 
     public function material() {
-        if (AuthController::esContextoMaestro()) {
+        if (AuthController::esContextoMaestro() && !AuthController::puedeAccederHubMaterialCompleto()) {
             $this->redirect('home/material/capacitacion-destino');
         }
 
