@@ -8,6 +8,11 @@ $tareasPorModuloDiscipulo = (array)($tareas_por_modulo_discipulo ?? []);
 $filtroNivel = (int)($filtro_nivel ?? 0);
 $filtroModulo = (int)($filtro_modulo ?? 0);
 $totalTarjetasTareas = count($accesosDirectosDiscipulo);
+$urlInicioDiscipulo = PUBLIC_URL . '?url=programas/evaluaciones';
+$urlAtrasDiscipulo = PUBLIC_URL . '?url=programas/evaluaciones';
+if ($filtroNivel > 0 && $filtroModulo > 0) {
+    $urlAtrasDiscipulo .= '&from_material=1&nivel=' . $filtroNivel . '&modulo=' . $filtroModulo;
+}
 ?>
 
 <style>
@@ -170,6 +175,15 @@ $totalTarjetasTareas = count($accesosDirectosDiscipulo);
             grid-template-columns: 1fr;
         }
     }
+
+    .disc-nav-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-disc-nav {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 8px 14px; border-radius: 8px; font-size: 0.84rem; font-weight: 700;
+        text-decoration: none; border: 1px solid transparent;
+    }
+    .btn-disc-nav--back { background: #fff; color: #1e40af; border-color: #bfdbfe; }
+    .btn-disc-nav--home { background: #1f4f93; color: #fff; border-color: #1f4f93; }
 </style>
 
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
@@ -177,13 +191,15 @@ $totalTarjetasTareas = count($accesosDirectosDiscipulo);
         <h2 style="margin:0;">Discipular - Tareas</h2>
         <small style="color:#637087;">Vista separada para entregar tareas de tus módulos inscritos.</small>
     </div>
-    <div class="header-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
-        <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones">
-            <i class="bi bi-arrow-left-short"></i> Volver a Evaluaciones
-        </a>
-        <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas">
-            <i class="bi bi-arrow-left-short"></i> Volver a Programas
-        </a>
+    <div class="header-actions">
+        <div class="disc-nav-actions">
+            <a class="btn-disc-nav btn-disc-nav--back" href="<?= htmlspecialchars($urlAtrasDiscipulo, ENT_QUOTES, 'UTF-8') ?>">
+                <i class="bi bi-arrow-left" aria-hidden="true"></i> Atrás
+            </a>
+            <a class="btn-disc-nav btn-disc-nav--home" href="<?= htmlspecialchars($urlInicioDiscipulo, ENT_QUOTES, 'UTF-8') ?>">
+                <i class="bi bi-house-door" aria-hidden="true"></i> Inicio
+            </a>
+        </div>
     </div>
 </div>
 
@@ -321,7 +337,8 @@ $totalTarjetasTareas = count($accesosDirectosDiscipulo);
                                             <input type="hidden" name="nivel" value="<?= $nivelAcceso ?>">
                                             <input type="hidden" name="modulo_numero" value="<?= $moduloAcceso ?>">
                                             <input type="text" name="comentario_entrega" class="form-control" maxlength="500" placeholder="Comentario opcional">
-                                            <input type="file" name="tarea_archivos[]" class="form-control" multiple required>
+                                            <input type="file" name="tarea_archivos[]" class="form-control" multiple required accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.txt,.mp3,.mp4,.mov,.avi,.mkv,.webm,.wav,.m4a,.ogg,.heic,.heif,.jpeg,.jpg,.png,.gif,.webp">
+                                            <small style="display:block;margin-top:4px;color:#637087;font-size:11px;">Varios archivos a la vez · imágenes, audio, video, PDF, etc. · máx. 100MB c/u</small>
                                             <button type="submit" class="btn btn-sm" style="background:#10b981;color:#fff;">Subir tarea</button>
                                         </form>
                                     </div>

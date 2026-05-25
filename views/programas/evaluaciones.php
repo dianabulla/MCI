@@ -94,16 +94,51 @@ usort($grupos, static function($a, $b) {
     return ((int)$a['modulo']) <=> ((int)$b['modulo']);
 });
 
-$evaluacionesOcultasSinFechas = [];
-if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
-    foreach ($evaluacionesLista as $evaluacionTmpFechas) {
-        $fechaInicioTmp = trim((string)($evaluacionTmpFechas['Fecha_Habilitacion_Inicio'] ?? ''));
-        $fechaFinTmp = trim((string)($evaluacionTmpFechas['Fecha_Habilitacion_Fin'] ?? ''));
-        if ($fechaInicioTmp === '' || $fechaFinTmp === '') {
-            $evaluacionesOcultasSinFechas[] = $evaluacionTmpFechas;
+$evaluacionesOcultasSinFechas = (array)($evaluaciones_ocultas_sin_fechas ?? []);
+$totalEvaluacionesFueraVigencia = (int)($total_evaluaciones_fuera_vigencia ?? 0);
+$evaluacionesModuloTodas = (array)($evaluaciones_modulo_todas ?? $evaluacionesLista);
+$gruposHistoricoEval = [];
+foreach ($evaluacionesModuloTodas as $evaluacionHistTmp) {
+    $nivelHistTmp = (int)($evaluacionHistTmp['Nivel'] ?? 0);
+    $moduloHistTmp = (int)($evaluacionHistTmp['Modulo_Numero'] ?? 0);
+    if ($filtroNivelContexto > 0 && $filtroModuloContexto > 0) {
+        if ($nivelHistTmp !== $filtroNivelContexto || $moduloHistTmp !== $filtroModuloContexto) {
+            continue;
         }
     }
+    $claveGrupoHist = 'N' . $nivelHistTmp . 'M' . $moduloHistTmp;
+    if (!isset($gruposHistoricoEval[$claveGrupoHist])) {
+        $gruposHistoricoEval[$claveGrupoHist] = [
+            'nivel' => $nivelHistTmp,
+            'modulo' => $moduloHistTmp,
+            'items' => [],
+        ];
+    }
+    $gruposHistoricoEval[$claveGrupoHist]['items'][] = $evaluacionHistTmp;
 }
+$gruposHistoricoEval = array_values($gruposHistoricoEval);
+
+$esMaestroCapEval = class_exists('AuthController') && AuthController::puedeGestionarCapDestinoComoMaestro();
+$discipuloConModuloSeleccionado = $esDiscipuloRol && $filtroNivelContexto > 0 && $filtroModuloContexto > 0;
+$mostrarNavCapDestino = ($filtroNivelContexto > 0 && $filtroModuloContexto > 0)
+    && ($contextoDesdeMaterial || $esMaestroCapEval || $discipuloConModuloSeleccionado);
+$urlVolverNivelCap = $filtroNivelContexto > 0
+    ? PUBLIC_URL . '?url=home/material/capacitacion-destino&cap_nivel=' . $filtroNivelContexto
+    : PUBLIC_URL . '?url=home/material/capacitacion-destino';
+$urlVolverModuloCap = ($filtroNivelContexto > 0 && $filtroModuloContexto > 0)
+    ? PUBLIC_URL . '?url=home/material/capacitacion-destino&cap_nivel=' . $filtroNivelContexto . '&cap_modulo=' . $filtroModuloContexto
+    : $urlVolverNivelCap;
+$urlTareasModuloCap = ($filtroNivelContexto > 0 && $filtroModuloContexto > 0)
+    ? $urlVolverModuloCap . '&cap_seccion=tareas'
+    : '';
+$urlInicioCap = PUBLIC_URL . '?url=home/material/capacitacion-destino';
+$mostrarSelectorModulosDiscipulo = $esDiscipuloRol && !$discipuloConModuloSeleccionado;
+$bloquearClasificacionEval = $mostrarNavCapDestino;
+$vistaHistorico = !empty($vista_historico) || (int)($_GET['historico'] ?? 0) === 1;
+$urlEvaluacionesPrincipal = PUBLIC_URL . '?url=programas/evaluaciones' . $contextoQuery;
+$urlHistoricoPresentaciones = $urlEvaluacionesPrincipal . '&historico=1';
+$vistaGestionPrincipal = $puedeGestionarEval && !$vistaHistorico && !$esVistaDiscipuloSimplificada;
+$vistaGestionHistorico = $puedeGestionarEval && $vistaHistorico && !$esVistaDiscipuloSimplificada;
 ?>
 
 <style>
@@ -157,44 +192,147 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
             grid-template-columns: 1fr;
         }
     }
+
+    .disc-nav-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .btn-disc-nav {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-size: 0.84rem;
+        font-weight: 700;
+        text-decoration: none;
+        border: 1px solid transparent;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    .btn-disc-nav--back {
+        background: #fff;
+        color: #1e40af;
+        border-color: #bfdbfe;
+    }
+
+    .btn-disc-nav--back:hover {
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+
+    .btn-disc-nav--home {
+        background: #1f4f93;
+        color: #fff;
+        border-color: #1f4f93;
+    }
+
+    .btn-disc-nav--home:hover {
+        background: #1a4380;
+        color: #fff;
+    }
 </style>
+
+<?php
+$urlMaterialCapDestino = PUBLIC_URL . '?url=home/material/capacitacion-destino';
+$urlInicioDiscipulo = $urlMaterialCapDestino;
+$urlAtrasDiscipulo = $urlMaterialCapDestino;
+if (!empty($evaluacionActiva) || !empty($resultadoDetalle)) {
+    $urlAtrasDiscipulo = PUBLIC_URL . '?url=programas/evaluaciones' . $contextoQuery;
+} elseif ($discipuloConModuloSeleccionado || ($contextoDesdeMaterial && $filtroNivelContexto > 0 && $filtroModuloContexto > 0)) {
+    $urlAtrasDiscipulo = $urlVolverModuloCap;
+}
+?>
 
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
     <div>
-        <h2 style="margin:0;">Discipular - Evaluaciones</h2>
-        <small style="color:#637087;">Solo preguntas cerradas. Se aprueba con 80%.</small>
+        <h2 style="margin:0;"><?= ($filtroModuloContexto > 0 && ($discipuloConModuloSeleccionado || $mostrarNavCapDestino)) ? 'Evaluaciones módulo ' . (int)$filtroModuloContexto : 'Discipular - Evaluaciones' ?></h2>
+        <small style="color:#637087;">
+            <?php if ($vistaGestionHistorico): ?>
+                Historial de evaluaciones presentadas
+            <?php else: ?>
+                Solo preguntas cerradas. Se aprueba con 80%.
+            <?php endif; ?>
+        </small>
         <?php if ($esVistaDiscipuloSimplificada): ?>
             <p style="margin:8px 0 0 0;color:#637087;max-width:720px;">
                 Al pulsar <strong>Responder</strong> entrarás a la evaluación en esta misma página. El tiempo de 20 minutos empieza al entrar; si no estás listo, no la abras todavía.
             </p>
         <?php endif; ?>
     </div>
-    <div class="header-actions" style="display:flex;gap:8px;flex-wrap:wrap;">
-        <?php if ($contextoDesdeMaterial): ?>
-            <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=home/material/capacitacion-destino">
-                <i class="bi bi-folder"></i> Volver a Material Capacitacion Destino
-            </a>
-        <?php endif; ?>
-        <?php if (!$esVistaDiscipuloSimplificada): ?>
-            <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas">
-                <i class="bi bi-arrow-left-short"></i> Volver a Programas
-            </a>
-        <?php elseif ($contextoDesdeMaterial): ?>
-            <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones">
-                <i class="bi bi-arrow-left-short"></i> Volver a mis módulos
-            </a>
+    <div class="header-actions">
+        <?php if ($esVistaDiscipuloSimplificada && $discipuloConModuloSeleccionado): ?>
+            <div class="disc-nav-actions" data-tour="disc-nav-modulo">
+                <a class="btn-disc-nav btn-disc-nav--back" href="<?= htmlspecialchars($urlVolverModuloCap, ENT_QUOTES, 'UTF-8') ?>">
+                    <i class="bi bi-arrow-left" aria-hidden="true"></i> Volver al módulo
+                </a>
+                <a class="btn-disc-nav btn-disc-nav--back" href="<?= htmlspecialchars($urlVolverNivelCap, ENT_QUOTES, 'UTF-8') ?>">
+                    <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i> Módulos
+                </a>
+                <?php if ($urlTareasModuloCap !== ''): ?>
+                    <a class="btn-disc-nav btn-disc-nav--back" href="<?= htmlspecialchars($urlTareasModuloCap, ENT_QUOTES, 'UTF-8') ?>">
+                        <i class="bi bi-journal-text" aria-hidden="true"></i> Tareas
+                    </a>
+                <?php endif; ?>
+                <a class="btn-disc-nav btn-disc-nav--home" href="<?= htmlspecialchars($urlInicioDiscipulo, ENT_QUOTES, 'UTF-8') ?>">
+                    <i class="bi bi-house-door" aria-hidden="true"></i> Inicio
+                </a>
+            </div>
+        <?php elseif ($esVistaDiscipuloSimplificada): ?>
+            <div class="disc-nav-actions">
+                <a class="btn-disc-nav btn-disc-nav--back" href="<?= htmlspecialchars($urlAtrasDiscipulo, ENT_QUOTES, 'UTF-8') ?>">
+                    <i class="bi bi-arrow-left" aria-hidden="true"></i> Atrás
+                </a>
+                <a class="btn-disc-nav btn-disc-nav--home" href="<?= htmlspecialchars($urlInicioDiscipulo, ENT_QUOTES, 'UTF-8') ?>">
+                    <i class="bi bi-house-door" aria-hidden="true"></i> Inicio
+                </a>
+            </div>
+        <?php elseif ($mostrarNavCapDestino): ?>
+            <div class="disc-nav-actions" data-tour="maestro-nav-eval">
+                <?php if ($vistaGestionHistorico): ?>
+                    <a class="btn-disc-nav btn-disc-nav--back" href="<?= htmlspecialchars($urlEvaluacionesPrincipal, ENT_QUOTES, 'UTF-8') ?>">
+                        <i class="bi bi-journal-check" aria-hidden="true"></i> Volver a evaluaciones
+                    </a>
+                <?php elseif ($vistaGestionPrincipal): ?>
+                    <a class="btn-disc-nav btn-disc-nav--back" href="<?= htmlspecialchars($urlHistoricoPresentaciones, ENT_QUOTES, 'UTF-8') ?>" data-tour="maestro-historial-eval">
+                        <i class="bi bi-clock-history" aria-hidden="true"></i> Historial presentadas
+                    </a>
+                <?php endif; ?>
+                <a class="btn-disc-nav btn-disc-nav--back" href="<?= htmlspecialchars($urlVolverModuloCap, ENT_QUOTES, 'UTF-8') ?>">
+                    <i class="bi bi-arrow-left" aria-hidden="true"></i> Volver al módulo
+                </a>
+                <a class="btn-disc-nav btn-disc-nav--back" href="<?= htmlspecialchars($urlVolverNivelCap, ENT_QUOTES, 'UTF-8') ?>">
+                    <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i> Módulos
+                </a>
+                <a class="btn-disc-nav btn-disc-nav--home" href="<?= htmlspecialchars($urlInicioCap, ENT_QUOTES, 'UTF-8') ?>">
+                    <i class="bi bi-house-door" aria-hidden="true"></i> Inicio
+                </a>
+            </div>
+        <?php else: ?>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas">
+                    <i class="bi bi-arrow-left-short"></i> Volver a Programas
+                </a>
+            </div>
         <?php endif; ?>
     </div>
 </div>
 
-<?php if ($filtroNivelContexto > 0 && $filtroModuloContexto > 0 && !$esVistaDiscipuloSimplificada): ?>
+<?php if ($vistaGestionHistorico && $filtroNivelContexto > 0 && $filtroModuloContexto > 0): ?>
+    <div class="alert alert-info" style="margin:12px 0;">
+        Historial de presentaciones · Nivel <?= (int)$filtroNivelContexto ?> · Módulo <?= (int)$filtroModuloContexto ?>
+    </div>
+<?php elseif ($vistaGestionPrincipal && $filtroNivelContexto > 0 && $filtroModuloContexto > 0): ?>
+    <div class="alert alert-info" style="margin:12px 0;">
+        Nivel <?= (int)$filtroNivelContexto ?> · Módulo <?= (int)$filtroModuloContexto ?> — crea evaluaciones y gestiona las de este módulo.
+    </div>
+<?php elseif ($filtroNivelContexto > 0 && $filtroModuloContexto > 0 && !$esVistaDiscipuloSimplificada): ?>
     <div class="alert alert-info" style="margin:12px 0;">
         Contexto carpeta activo: Nivel <?= $filtroNivelContexto ?> / Modulo <?= $filtroModuloContexto ?> / Lección <?= htmlspecialchars($filtroLeccionContexto) ?>.
         Las evaluaciones mostradas y nuevas se manejan en este modulo.
-    </div>
-<?php elseif ($esVistaDiscipuloSimplificada && $contextoDesdeMaterial): ?>
-    <div class="alert alert-info" style="margin:12px 0;">
-        Nivel <?= $filtroNivelContexto ?> · Módulo <?= $filtroModuloContexto ?> — elige una evaluación y pulsa <strong>Responder</strong> cuando estés listo.
     </div>
 <?php endif; ?>
 
@@ -227,7 +365,7 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
     </div>
 <?php endif; ?>
 
-<?php if (!empty($resultadoDetalle)): ?>
+<?php if (!empty($resultadoDetalle) && ($vistaHistorico || !$puedeGestionarEval)): ?>
     <?php
     $detalleRespuestas = json_decode((string)($resultadoDetalle['Respuestas_JSON'] ?? '[]'), true);
     if (!is_array($detalleRespuestas)) {
@@ -279,9 +417,16 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
     </div>
 <?php endif; ?>
 
-<?php if ($puedeGestionarEval && !empty($evaluacionesOcultasSinFechas)): ?>
+<?php if ($vistaGestionPrincipal && $totalEvaluacionesFueraVigencia > 0): ?>
+    <div class="alert alert-secondary" style="margin:12px 0;">
+        <?= (int)$totalEvaluacionesFueraVigencia ?> evaluación(es) de este módulo no se muestran aquí porque ya vencieron o aún no inician.
+        Consúltalas en <a href="<?= htmlspecialchars($urlHistoricoPresentaciones, ENT_QUOTES, 'UTF-8') ?>"><strong>Historial presentadas</strong></a>.
+    </div>
+<?php endif; ?>
+
+<?php if ($vistaGestionPrincipal && !empty($evaluacionesOcultasSinFechas)): ?>
     <div class="alert alert-danger" style="margin:12px 0;">
-        <div><strong>Evaluaciones ocultas por falta de fechas:</strong> estas evaluaciones no son visibles para discípulos hasta definir inicio y fin.</div>
+        <div><strong>Evaluaciones sin fechas completas:</strong> no aparecen en el listado hasta definir inicio y fin.</div>
         <ul style="margin:8px 0 0 18px;padding:0;">
             <?php foreach ($evaluacionesOcultasSinFechas as $evaluacionOculta): ?>
                 <li>
@@ -294,49 +439,15 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
     </div>
 <?php endif; ?>
 
-<?php if ($esDiscipuloRol && !empty($accesosDirectosDiscipulo)): ?>
+<?php if (!$vistaHistorico && $mostrarSelectorModulosDiscipulo && !empty($accesosDirectosDiscipulo)): ?>
 <div class="card report-card" style="padding:14px; margin-bottom:14px;">
-    <h3 style="margin:0 0 4px 0;">Acceso a clase</h3>
-    <small style="color:#637087;">Link único de clase para hoy.</small>
+    <h3 style="margin:0 0 4px 0;">Selecciona un módulo</h3>
+    <small style="color:#637087;">Elige primero el módulo activo de hoy en Capacitación Destino.</small>
     <div style="margin-top:10px;">
-        <?php if ($urlClaseUnicaDiscipulo !== ''): ?>
-            <a class="btn btn-sm" style="background:#10b981;color:#fff;" href="<?= htmlspecialchars($urlClaseUnicaDiscipulo, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">Ir a clase</a>
-        <?php else: ?>
-            <button type="button" class="btn btn-sm" style="background:#94a3b8;color:#fff;" disabled title="Aún no hay link de clase configurado">Ir a clase</button>
-        <?php endif; ?>
+        <a class="btn btn-sm btn-primary" href="<?= htmlspecialchars($urlMaterialCapDestino, ENT_QUOTES, 'UTF-8') ?>">Ir a Cap. Destino</a>
     </div>
 </div>
-
-<div class="card report-card" style="padding:14px; margin-bottom:14px;">
-    <h3 style="margin:0 0 4px 0;">Módulos de evaluaciones</h3>
-    <small style="color:#637087;">Modo discípulo: aquí solo ves tus evaluaciones activas de hoy.</small>
-    <div class="disc-eval-grid">
-        <?php foreach ($accesosDirectosDiscipulo as $accesoDirecto): ?>
-            <?php
-                $nivelAcceso = (int)($accesoDirecto['nivel'] ?? 0);
-                $moduloAcceso = (int)($accesoDirecto['modulo'] ?? 0);
-                $keyTareaAcceso = $nivelAcceso . '_' . $moduloAcceso;
-                $tareasModulo = (array)($tareasPorModuloDiscipulo[$keyTareaAcceso] ?? []);
-                $tareasPanelId = 'disc-tareas-' . $nivelAcceso . '-' . $moduloAcceso;
-            ?>
-            <div class="disc-eval-card">
-                <div style="font-weight:700;color:#1f4f93;">Nivel <?= $nivelAcceso ?> · Módulo <?= $moduloAcceso ?></div>
-                <div><small style="color:#637087;">Lección: <?= htmlspecialchars((string)($accesoDirecto['leccion'] ?? 'Sin lección activa')) ?></small></div>
-                <div class="disc-card-actions">
-                    <?php if (!empty($accesoDirecto['url_evaluacion'])): ?>
-                        <a class="btn btn-sm btn-primary" href="<?= htmlspecialchars((string)$accesoDirecto['url_evaluacion'], ENT_QUOTES, 'UTF-8') ?>">Ir a evaluación</a>
-                    <?php else: ?>
-                        <button type="button" class="btn btn-sm" style="background:#94a3b8;color:#fff;" disabled title="No hay evaluación activa para este nivel/módulo">Ir a evaluación</button>
-                    <?php endif; ?>
-                    <a class="btn btn-sm btn-secondary" href="<?= PUBLIC_URL ?>?url=programas/tareas&nivel=<?= $nivelAcceso ?>&modulo=<?= $moduloAcceso ?>">
-                        Ver tareas (<?= count($tareasModulo) ?>)
-                    </a>
-                </div>
-            </div>
-        <?php endforeach; ?>
-    </div>
-</div>
-<?php elseif (!$esDiscipuloRol && !$puedeGestionarEval && !empty($clasesLinks)): ?>
+<?php elseif (!$vistaHistorico && !$esDiscipuloRol && !$puedeGestionarEval && !empty($clasesLinks)): ?>
 <div class="card report-card" style="padding:14px; margin-bottom:14px;">
     <h3 style="margin:0 0 8px 0;">Mis clases</h3>
     <small style="color:#637087;">Accesos directos de clases para tus niveles inscritos.</small>
@@ -348,14 +459,14 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
         <?php endforeach; ?>
     </div>
 </div>
-<?php elseif ($esDiscipuloRol && $avisoAccesoDiscipulo === ''): ?>
+<?php elseif (!$vistaHistorico && $esDiscipuloRol && $mostrarSelectorModulosDiscipulo && $avisoAccesoDiscipulo === '' && empty($accesosDirectosDiscipulo)): ?>
     <div class="card report-card" style="padding:14px; margin-bottom:14px;">
         <small style="color:#637087;">No hay módulos disponibles en este momento. Si crees que es un error, contacta a tu líder.</small>
     </div>
 <?php endif; ?>
 
-<?php if ($puedeGestionarEval): ?>
-<div class="card report-card" style="padding:0; margin-bottom:20px; overflow:hidden; box-shadow:0 2px 8px rgba(31,79,147,0.1);">
+<?php if ($vistaGestionPrincipal): ?>
+<div class="card report-card" style="padding:0; margin-bottom:20px; overflow:hidden; box-shadow:0 2px 8px rgba(31,79,147,0.1);" data-tour="maestro-crear-eval-form">
     <!-- Header -->
     <div style="background:linear-gradient(135deg, #1f4f93 0%, #2d5fa3 100%); padding:18px 20px; color:white;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -407,11 +518,21 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;">
                 <div>
                     <label style="font-weight:600;color:#1f4f93;font-size:13px;display:block;margin-bottom:6px;">Nivel *</label>
-                    <input type="number" name="nivel" class="form-control" min="1" max="10" placeholder="1" required style="border:1px solid #d1d5db;border-radius:6px;padding:10px 12px;">
+                    <?php if ($bloquearClasificacionEval): ?>
+                        <input type="hidden" name="nivel" value="<?= (int)$filtroNivelContexto ?>">
+                        <input type="text" class="form-control" value="<?= (int)$filtroNivelContexto ?>" readonly style="border:1px solid #d1d5db;border-radius:6px;padding:10px 12px;background:#f8fafc;">
+                    <?php else: ?>
+                        <input type="number" name="nivel" class="form-control" min="1" max="10" placeholder="1" required style="border:1px solid #d1d5db;border-radius:6px;padding:10px 12px;">
+                    <?php endif; ?>
                 </div>
                 <div>
                     <label style="font-weight:600;color:#1f4f93;font-size:13px;display:block;margin-bottom:6px;">Módulo *</label>
-                    <input type="number" name="modulo_numero" class="form-control" min="1" max="10" placeholder="1" required style="border:1px solid #d1d5db;border-radius:6px;padding:10px 12px;">
+                    <?php if ($bloquearClasificacionEval): ?>
+                        <input type="hidden" name="modulo_numero" value="<?= (int)$filtroModuloContexto ?>">
+                        <input type="text" class="form-control" value="<?= (int)$filtroModuloContexto ?>" readonly style="border:1px solid #d1d5db;border-radius:6px;padding:10px 12px;background:#f8fafc;">
+                    <?php else: ?>
+                        <input type="number" name="modulo_numero" class="form-control" min="1" max="10" placeholder="1" required style="border:1px solid #d1d5db;border-radius:6px;padding:10px 12px;">
+                    <?php endif; ?>
                 </div>
                 <div>
                     <label style="font-weight:600;color:#1f4f93;font-size:13px;display:block;margin-bottom:6px;">Lección</label>
@@ -431,7 +552,7 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
 
         <?php if ($puedeConfigurarFechasEval): ?>
         <!-- Sección: Fechas de habilitación -->
-        <div style="margin-bottom:24px;">
+        <div style="margin-bottom:24px;" data-tour="maestro-eval-fechas">
             <h4 style="color:#1f4f93;font-size:14px;font-weight:600;margin:0 0 14px 0;padding-bottom:8px;border-bottom:2px solid #e5ebf7;">Disponibilidad (opcional)</h4>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;background:#f8fbff;padding:14px;border-radius:8px;border:1px solid #e5ebf7;">
                 <div>
@@ -447,7 +568,7 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
         <?php endif; ?>
 
         <!-- Sección: Preguntas -->
-        <div style="margin-bottom:24px;">
+        <div style="margin-bottom:24px;" data-tour="maestro-eval-preguntas">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #e5ebf7;">
                 <h4 style="color:#1f4f93;font-size:14px;font-weight:600;margin:0;">Preguntas de opción múltiple</h4>
                 <span id="contadorPreguntasUI" style="background:#1f4f93;color:white;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;">0 preguntas</span>
@@ -460,7 +581,7 @@ if ($puedeGestionarEval && !$esVistaDiscipuloSimplificada) {
         </div>
 
         <!-- Sección: Acciones -->
-        <div style="display:flex;gap:10px;padding-top:14px;border-top:1px solid #e5ebf7;">
+        <div style="display:flex;gap:10px;padding-top:14px;border-top:1px solid #e5ebf7;" data-tour="maestro-eval-guardar">
             <button type="submit" class="btn btn-primary" style="padding:11px 20px;border-radius:6px;font-weight:600;background:#1f4f93;border:none;">
                 <i class="bi bi-save"></i> Guardar evaluación
             </button>
@@ -1059,11 +1180,26 @@ $mostrarListadoEvaluacionesDiscipulo = $esDiscipuloRol
     ? $contextoDesdeMaterial
     : true;
 ?>
-<?php if ($mostrarListadoEvaluacionesDiscipulo): ?>
-<div class="dashboard-grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin-bottom:14px;">
+<?php if ($mostrarListadoEvaluacionesDiscipulo && !$vistaHistorico): ?>
+<?php $ocultarEncabezadoListadoDiscipulo = $discipuloConModuloSeleccionado && $esVistaDiscipuloSimplificada; ?>
+<?php if (!$ocultarEncabezadoListadoDiscipulo): ?>
+<div class="card report-card" style="padding:14px;margin-bottom:14px;">
+    <h3 style="margin:0 0 6px 0;color:#1e4a89;">
+        <?php if ($puedeGestionarEval && $filtroNivelContexto > 0 && $filtroModuloContexto > 0): ?>
+            Evaluaciones vigentes del módulo <?= (int)$filtroModuloContexto ?>
+        <?php else: ?>
+            Evaluaciones disponibles
+        <?php endif; ?>
+    </h3>
+    <small style="color:#637087;">Solo evaluaciones activas hoy según su fecha de inicio y fin.</small>
+</div>
+<?php endif; ?>
+<div class="dashboard-grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin-bottom:14px;" data-tour="<?= $esDiscipuloRol ? 'lista-evaluaciones-discipulo' : 'maestro-lista-eval-vigentes' ?>">
     <?php foreach ($grupos as $grupo): ?>
         <div class="card report-card" style="padding:12px;">
+            <?php if (!$ocultarEncabezadoListadoDiscipulo): ?>
             <h3 style="margin:0 0 8px 0;">Nivel <?= (int)$grupo['nivel'] ?> - Módulo <?= (int)$grupo['modulo'] ?></h3>
+            <?php endif; ?>
             <?php foreach ($grupo['items'] as $ev): ?>
                 <?php $idEv = (int)($ev['Id_Evaluacion'] ?? 0); ?>
                 <?php
@@ -1077,6 +1213,7 @@ $mostrarListadoEvaluacionesDiscipulo = $esDiscipuloRol
                     $urlPresentarEval .= $contextoQuery;
                 }
                 $urlEditarEval = PUBLIC_URL . '?url=programas/evaluaciones' . $contextoQuery . '&editar=' . $idEv;
+                $urlNotasEval = PUBLIC_URL . '?url=programas/evaluaciones' . $contextoQuery . '&historico=1&evaluacion=' . $idEv;
 
                 $preguntasEvalTmp = json_decode((string)($ev['Preguntas_JSON'] ?? '[]'), true);
                 if (!is_array($preguntasEvalTmp)) {
@@ -1139,7 +1276,7 @@ $mostrarListadoEvaluacionesDiscipulo = $esDiscipuloRol
                             <?php endif; ?>
                         <?php elseif ($puedeGestionarEval): ?>
                             <a class="btn btn-primary btn-sm" href="<?= htmlspecialchars($urlEditarEval, ENT_QUOTES, 'UTF-8') ?>">Editar</a>
-                            <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEv ?>">Notas</a>
+                            <a class="btn btn-secondary btn-sm" href="<?= htmlspecialchars($urlNotasEval, ENT_QUOTES, 'UTF-8') ?>">Notas</a>
                             <?php if ((int)($ev['Activa'] ?? 0) !== 1 && ($puedeEditarEval || $puedeEliminarEval)): ?>
                                 <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>" style="margin:0;">
                                     <input type="hidden" name="accion" value="activar_evaluacion">
@@ -1187,7 +1324,7 @@ $mostrarListadoEvaluacionesDiscipulo = $esDiscipuloRol
             <?php if ($esDiscipuloRol): ?>
                 <small style="color:#637087;">No hay evaluaciones activas con fechas vigentes para hoy en este módulo. Entra desde la tarjeta de tu nivel cuando tu líder las habilite.</small>
             <?php else: ?>
-                <small style="color:#637087;">No hay evaluaciones creadas todavía.</small>
+                <small style="color:#637087;">No hay evaluaciones vigentes para hoy en este módulo. Si creaste evaluaciones con fechas pasadas, revisa el historial de presentaciones.</small>
             <?php endif; ?>
         </div>
     <?php endif; ?>
@@ -1275,8 +1412,9 @@ $mostrarListadoEvaluacionesDiscipulo = $esDiscipuloRol
     </div>
 <?php endif; ?>
 
+<?php if (!$puedeGestionarEval || $vistaHistorico): ?>
 <div class="card report-card" style="padding:14px;margin-bottom:16px;">
-    <h3 style="margin:0 0 10px 0;"><?= $esDiscipuloRol ? 'Mi historial de intentos' : ($puedeGestionarEval ? 'Historial personal de intentos' : 'Mis notas') ?></h3>
+    <h3 style="margin:0 0 10px 0;"><?= $esDiscipuloRol ? 'Mi historial de intentos' : 'Mis notas' ?></h3>
     <div class="table-container">
         <table class="data-table">
             <thead>
@@ -1313,7 +1451,7 @@ $mostrarListadoEvaluacionesDiscipulo = $esDiscipuloRol
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEvalHist ?>&resultado=<?= $idResultadoHist ?>">Ver detalle</a>
+                                <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&historico=1&evaluacion=<?= $idEvalHist ?>&resultado=<?= $idResultadoHist ?>">Ver detalle</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -1326,14 +1464,68 @@ $mostrarListadoEvaluacionesDiscipulo = $esDiscipuloRol
         </table>
     </div>
 </div>
+<?php endif; ?>
 
 <?php
 $resumenTodosResultados = (array)($resumen_todos_resultados ?? []);
 ?>
 
-<?php if ($puedeGestionarEval && empty($evaluacionActiva) && !empty($resumenTodosResultados)): ?>
+<?php if ($vistaGestionHistorico): ?>
 <div class="card report-card" style="padding:14px;margin-bottom:16px;">
-    <h3 style="margin:0 0 10px 0;">Últimos intentos · Nivel <?= (int)$filtroNivelContexto ?> / Módulo <?= (int)$filtroModuloContexto ?></h3>
+    <h3 style="margin:0 0 6px 0;color:#1e4a89;">Evaluaciones creadas del módulo <?= (int)$filtroModuloContexto ?></h3>
+    <small style="color:#637087;display:block;margin-bottom:12px;">Todas las evaluaciones de este módulo (vigentes, vencidas y próximas). Desde aquí puedes ver notas o editar.</small>
+    <?php if (!empty($gruposHistoricoEval)): ?>
+        <?php foreach ($gruposHistoricoEval as $grupoHist): ?>
+            <?php foreach ($grupoHist['items'] as $evHist): ?>
+                <?php
+                    $idEvHist = (int)($evHist['Id_Evaluacion'] ?? 0);
+                    $fechaIniHist = trim((string)($evHist['Fecha_Habilitacion_Inicio'] ?? ''));
+                    $fechaFinHist = trim((string)($evHist['Fecha_Habilitacion_Fin'] ?? ''));
+                    $hoyHist = date('Y-m-d');
+                    $estadoHist = 'Vigente';
+                    $estadoHistColor = '#065f46';
+                    $estadoHistBg = '#d1fae5';
+                    if ($fechaIniHist === '' || $fechaFinHist === '') {
+                        $estadoHist = 'Sin fechas';
+                        $estadoHistColor = '#92400e';
+                        $estadoHistBg = '#fef3c7';
+                    } elseif ($hoyHist < $fechaIniHist) {
+                        $estadoHist = 'Próxima';
+                        $estadoHistColor = '#1e40af';
+                        $estadoHistBg = '#dbeafe';
+                    } elseif ($hoyHist > $fechaFinHist) {
+                        $estadoHist = 'Vencida';
+                        $estadoHistColor = '#7f1d1d';
+                        $estadoHistBg = '#fee2e2';
+                    }
+                    $urlEditarHist = PUBLIC_URL . '?url=programas/evaluaciones' . $contextoQuery . '&editar=' . $idEvHist;
+                    $urlNotasHist = PUBLIC_URL . '?url=programas/evaluaciones' . $contextoQuery . '&historico=1&evaluacion=' . $idEvHist;
+                ?>
+                <div style="border:1px solid #e6e8ee;border-radius:10px;padding:12px;margin-bottom:10px;background:#fff;">
+                    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start;">
+                        <div>
+                            <strong><?= htmlspecialchars((string)($evHist['Titulo'] ?? 'Evaluación')) ?></strong>
+                            <div><small style="color:#637087;">Lección: <?= htmlspecialchars((string)($evHist['Leccion'] ?? 'Sin lección')) ?></small></div>
+                            <div><small style="color:#637087;">Ventana: <?= $fechaIniHist !== '' ? htmlspecialchars($fechaIniHist) : '—' ?> a <?= $fechaFinHist !== '' ? htmlspecialchars($fechaFinHist) : '—' ?></small></div>
+                        </div>
+                        <span class="badge" style="background:<?= $estadoHistBg ?>;color:<?= $estadoHistColor ?>;"><?= htmlspecialchars($estadoHist) ?></span>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                        <a class="btn btn-primary btn-sm" href="<?= htmlspecialchars($urlEditarHist, ENT_QUOTES, 'UTF-8') ?>">Editar</a>
+                        <a class="btn btn-secondary btn-sm" href="<?= htmlspecialchars($urlNotasHist, ENT_QUOTES, 'UTF-8') ?>">Notas</a>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        <?php endforeach; ?>
+    <?php else: ?>
+        <small style="color:#637087;">No hay evaluaciones registradas en este módulo.</small>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<?php if ($vistaGestionHistorico && !empty($resumenTodosResultados)): ?>
+<div class="card report-card" style="padding:14px;margin-bottom:16px;">
+    <h3 style="margin:0 0 10px 0;">Presentaciones de estudiantes · Nivel <?= (int)$filtroNivelContexto ?> / Módulo <?= (int)$filtroModuloContexto ?></h3>
     <small style="color:#637087;display:block;margin-bottom:10px;">Solo se muestra el último intento por persona y por evaluación en esta carpeta de material.</small>
     <div class="table-container">
         <table class="data-table">
@@ -1388,7 +1580,7 @@ $resumenTodosResultados = (array)($resumen_todos_resultados ?? []);
                         <td><span style="font-weight:bold;color:<?= $aprobado ? '#065f46' : '#b91c1c' ?>"><?= $resultadoText ?></span></td>
                         <td>
                             <?php if ($idEvalRes > 0 && $idResultadoRes > 0): ?>
-                                <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEvalRes ?>&resultado=<?= $idResultadoRes ?>">Ver</a>
+                                <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&historico=1&evaluacion=<?= $idEvalRes ?>&resultado=<?= $idResultadoRes ?>">Ver</a>
                             <?php else: ?>
                                 —
                             <?php endif; ?>
@@ -1396,8 +1588,9 @@ $resumenTodosResultados = (array)($resumen_todos_resultados ?? []);
                         <?php if ($puedeEditarEval): ?>
                             <td>
                                 <?php if ($idEvalRes > 0 && $idPersonaRes > 0): ?>
-                                    <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>" style="display:inline;margin:0;" onsubmit="return confirm(<?= json_encode($confirmarReactivarIntentos, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>);">
+                                    <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&historico=1" style="display:inline;margin:0;" onsubmit="return confirm(<?= json_encode($confirmarReactivarIntentos, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>);">
                                         <input type="hidden" name="accion" value="reactivar_intentos">
+                                        <input type="hidden" name="vista_historico" value="1">
                                         <input type="hidden" name="id_evaluacion" value="<?= $idEvalRes ?>">
                                         <input type="hidden" name="id_persona" value="<?= $idPersonaRes ?>">
                                         <?= $contextoHiddenHtml ?>
@@ -1414,17 +1607,17 @@ $resumenTodosResultados = (array)($resumen_todos_resultados ?? []);
         </table>
     </div>
 </div>
-<?php elseif ($puedeGestionarEval && empty($evaluacionActiva) && empty($resumenTodosResultados)): ?>
+<?php elseif ($vistaGestionHistorico && empty($resumenTodosResultados) && empty($historialEvaluacion)): ?>
 <div class="card report-card" style="padding:14px;margin-bottom:16px;">
     <?php if ($filtroNivelContexto > 0 && $filtroModuloContexto > 0): ?>
-        <small style="color:#637087;">No hay presentaciones registradas para Nivel <?= (int)$filtroNivelContexto ?> · Módulo <?= (int)$filtroModuloContexto ?> (último intento por evaluación).</small>
+        <small style="color:#637087;">Aún no hay presentaciones de estudiantes en este módulo. Arriba puedes ver las evaluaciones creadas.</small>
     <?php else: ?>
         <small style="color:#637087;">Abre <strong>Evaluaciones</strong> desde el material del nivel y módulo correspondiente para ver el resumen filtrado.</small>
     <?php endif; ?>
 </div>
 <?php endif; ?>
 
-<?php if ($puedeGestionarEval && !empty($historialEvaluacion) && !empty($evaluacionActiva)): ?>
+<?php if ($vistaGestionHistorico && !empty($historialEvaluacion) && !empty($evaluacionActiva)): ?>
 <div class="card report-card" style="padding:14px;margin-bottom:16px;">
     <h3 style="margin:0 0 10px 0;">Resultados de la evaluación seleccionada</h3>
     <small style="color:#637087;display:block;margin-bottom:10px;">Último intento por persona en esta evaluación.</small>
@@ -1465,13 +1658,14 @@ $resumenTodosResultados = (array)($resumen_todos_resultados ?? []);
                         <td><?= (float)($resultadoAdmin['Puntaje'] ?? 0) ?>%</td>
                         <td><?= !empty($resultadoAdmin['Aprobado']) ? 'Aprobado' : 'Reprobado' ?></td>
                         <td>
-                            <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEvalAdmin ?>&resultado=<?= $idResultadoAdmin ?>">Ver detalle</a>
+                            <a class="btn btn-secondary btn-sm" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&historico=1&evaluacion=<?= $idEvalAdmin ?>&resultado=<?= $idResultadoAdmin ?>">Ver detalle</a>
                         </td>
                         <?php if ($puedeEditarEval): ?>
                             <td>
                                 <?php if ($idEvalAdmin > 0 && $idPersonaAdmin > 0): ?>
-                                    <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&evaluacion=<?= $idEvalAdmin ?>" style="display:inline;margin:0;" onsubmit="return confirm(<?= json_encode($confirmarReactivarIntentos, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>);">
+                                    <form method="POST" action="<?= PUBLIC_URL ?>?url=programas/evaluaciones<?= $contextoQuery ?>&historico=1&evaluacion=<?= $idEvalAdmin ?>" style="display:inline;margin:0;" onsubmit="return confirm(<?= json_encode($confirmarReactivarIntentos, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>);">
                                         <input type="hidden" name="accion" value="reactivar_intentos">
+                                        <input type="hidden" name="vista_historico" value="1">
                                         <input type="hidden" name="id_evaluacion" value="<?= $idEvalAdmin ?>">
                                         <input type="hidden" name="id_persona" value="<?= $idPersonaAdmin ?>">
                                         <?= $contextoHiddenHtml ?>

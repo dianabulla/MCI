@@ -38,6 +38,14 @@ foreach ($sidebarMenu as $itemNav):
     if (!is_array($itemNav)) {
         continue;
     }
+    if (
+        class_exists('AuthController')
+        && AuthController::esContextoMaestro()
+        && !AuthController::esAdministrador()
+        && (string)($itemNav['id'] ?? '') === 'evaluaciones_maestro'
+    ) {
+        continue;
+    }
     $rutaNav = trim((string)($itemNav['ruta'] ?? ''));
     if ($rutaNav === '') {
         continue;
@@ -45,8 +53,13 @@ foreach ($sidebarMenu as $itemNav):
     $activoNav = sidebar_nav_item_activo($itemNav, (string)$currentUrl, $isActive);
     $iconoNav = trim((string)($itemNav['icon'] ?? 'bi-circle'));
     $labelNav = (string)($itemNav['label'] ?? 'Enlace');
+    $idNav = (string)($itemNav['id'] ?? '');
+    $dataTourNav = '';
+    if (in_array($idNav, ['material_cap_destino', 'capacitacion_destino'], true)) {
+        $dataTourNav = 'sidebar-cap-destino';
+    }
 ?>
-    <a class="sidebar-link <?= $activoNav ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($rutaNav, ENT_QUOTES, 'UTF-8') ?>">
+    <a class="sidebar-link <?= $activoNav ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($rutaNav, ENT_QUOTES, 'UTF-8') ?>"<?= $dataTourNav !== '' ? ' data-tour="' . htmlspecialchars($dataTourNav, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
         <span class="sidebar-link-icon"><i class="bi <?= htmlspecialchars($iconoNav, ENT_QUOTES, 'UTF-8') ?>"></i></span>
         <span class="sidebar-link-text"><?= htmlspecialchars($labelNav) ?></span>
     </a>

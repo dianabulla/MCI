@@ -8,6 +8,8 @@ require_once APP . '/Models/EscuelaFormacionAsistenciaClase.php';
 
 class HomeController extends BaseController {
 
+    private const TAREA_ENTREGA_MAX_BYTES = 104857600;
+
     private function getProgramaEscuelaLabel($programa) {
         $map = [
             'universidad_vida' => 'Universidad de la Vida',
@@ -1318,6 +1320,166 @@ class HomeController extends BaseController {
         return $this->puedeGestionarModuloMaterial($modulo);
     }
 
+    private function usaFlujoHubCapacitacionDestino(string $moduloClave): bool {
+        return trim($moduloClave) === 'capacitacion_destino';
+    }
+
+    /**
+     * Permisos por sección del hub (nivel → módulo → tarjetas).
+     *
+     * @return array{ver_material:bool,ver_evaluaciones:bool,ver_inscritos:bool,gestionar_tareas:bool,entregar_tareas:bool,subir_material:bool}
+     */
+    private function obtenerPermisosHubCapacitacionDestino(array $modulo, bool $esDiscipuloCapDestino): array {
+        if ((string)($modulo['clave'] ?? '') !== 'capacitacion_destino') {
+            return [
+                'ver_material' => false,
+                'ver_evaluaciones' => false,
+                'ver_inscritos' => false,
+                'gestionar_tareas' => false,
+                'entregar_tareas' => false,
+                'subir_material' => false,
+            ];
+        }
+
+        if ($esDiscipuloCapDestino) {
+            return [
+                'ver_material' => false,
+                'ver_evaluaciones' => AuthController::puedeAccederEvaluacionesDiscipular(),
+                'ver_inscritos' => false,
+                'gestionar_tareas' => false,
+                'entregar_tareas' => true,
+                'subir_material' => false,
+            ];
+        }
+
+        if (AuthController::esContextoMaestro()) {
+            return [
+                'ver_material' => true,
+                'ver_evaluaciones' => AuthController::puedeAccederEvaluacionesDiscipular(),
+                'ver_inscritos' => AuthController::puedeGestionarCapDestinoComoMaestro(),
+                'gestionar_tareas' => AuthController::puedeGestionarCapDestinoComoMaestro(),
+                'entregar_tareas' => false,
+                'subir_material' => false,
+            ];
+        }
+
+        $puedeGestionar = $this->puedeGestionarModuloMaterial($modulo);
+
+        return [
+            'ver_material' => AuthController::puedeVerMaterialCapacitacionDestino(),
+            'ver_evaluaciones' => AuthController::puedeAccederEvaluacionesDiscipular(),
+            'ver_inscritos' => $puedeGestionar,
+            'gestionar_tareas' => $puedeGestionar,
+            'entregar_tareas' => false,
+            'subir_material' => $this->puedeSubirEnModuloMaterial($modulo),
+        ];
+    }
+
+    private function evaluacionCapDestinoVigenteHoy(array $evaluacion): bool {
+        $hoy = date('Y-m-d');
+        $inicio = $this->normalizarFechaYmdMaterial($evaluacion['Fecha_Habilitacion_Inicio'] ?? '');
+        $fin = $this->normalizarFechaYmdMaterial($evaluacion['Fecha_Habilitacion_Fin'] ?? '');
+
+        if ($inicio === '' && $fin === '') {
+            return true;
+        }
+
+        if ($inicio === '' || $fin === '') {
+            return false;
+        }
+
+        if (strcmp($inicio, $fin) > 0) {
+            return false;
+        }
+
+        if ($hoy < $inicio || $hoy > $fin) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function normalizarFechaYmdMaterial($valor): string {
+        $texto = trim((string)$valor);
+        if ($texto === '') {
+            return '';
+        }
+
+        $dt = \DateTime::createFromFormat('Y-m-d', substr($texto, 0, 10));
+        if ($dt instanceof \DateTime) {
+            return $dt->format('Y-m-d');
+        }
+
+        $dt = \DateTime::createFromFormat('d/m/Y', substr($texto, 0, 10));
+        if ($dt instanceof \DateTime) {
+            return $dt->format('Y-m-d');
+        }
+
+        return '';
+    }
+
+    private function contarEvaluacionesVigentesCapDestinoModulo(int $nivel, int $modulo): int {
+        if ($nivel <= 0 || $modulo <= 0) {
+            return 0;
+        }
+
+        require_once APP . '/Models/DiscipularEvaluacion.php';
+        $modelo = new DiscipularEvaluacion();
+        $total = 0;
+        foreach ($modelo->listarEvaluacionesActivas() as $evaluacion) {
+            if ((int)($evaluacion['Nivel'] ?? 0) !== $nivel) {
+                continue;
+            }
+            if ((int)($evaluacion['Modulo_Numero'] ?? 0) !== $modulo) {
+                continue;
+            }
+            if ($this->evaluacionCapDestinoVigenteHoy($evaluacion)) {
+                $total++;
+            }
+        }
+
+        return $total;
+    }
+
+    /**
+     * @return array<string, array{evaluaciones:int, tareas:int}>
+     */
+    private function obtenerActividadHubCapDestinoPorModulo(int $nivel, array $modulos): array {
+        $mapa = [];
+        if ($nivel <= 0) {
+            return $mapa;
+        }
+
+        $claveModulo = 'capacitacion_destino';
+        foreach ($modulos as $moduloNum) {
+            $moduloNum = (int)$moduloNum;
+            if ($moduloNum <= 0) {
+                continue;
+            }
+            $key = $nivel . '_' . $moduloNum;
+            $mapa[$key] = [
+                'evaluaciones' => $this->contarEvaluacionesVigentesCapDestinoModulo($nivel, $moduloNum),
+                'tareas' => count($this->listarTareasMaterialHub($claveModulo, $nivel, 0, $moduloNum)),
+            ];
+        }
+
+        return $mapa;
+    }
+
+    private function obtenerEtiquetaRolHubCapacitacionDestino(bool $esDiscipuloCapDestino): string {
+        if ($esDiscipuloCapDestino) {
+            return 'discípulo';
+        }
+        if (AuthController::esContextoMaestro()) {
+            return 'maestro';
+        }
+        if (AuthController::esAdministrador()) {
+            return 'administrador';
+        }
+
+        return 'usuario';
+    }
+
     private function obtenerDirectorioModuloMaterial(array $modulo): string {
         return ROOT . '/public/uploads/material_hub/' . trim((string)$modulo['clave']);
     }
@@ -1810,24 +1972,7 @@ class HomeController extends BaseController {
             return true;
         }
 
-        $modulos = $this->obtenerModulosMaterial();
-        if (!isset($modulos[$moduloClave])) {
-            return false;
-        }
-
-        $temas = $this->listarTemasModuloMaterial($modulos[$moduloClave]);
-        $filtrado = $this->filtrarTemasMaterialParaDiscipulo($moduloClave, $temas);
-        $temasPermitidos = (array)($filtrado['temas'] ?? []);
-
-        foreach ($temasPermitidos as $tema) {
-            foreach ((array)($tema['archivos'] ?? []) as $archivoTema) {
-                $nombreArchivo = basename((string)($archivoTema['nombre'] ?? ''));
-                if ($nombreArchivo !== '' && $nombreArchivo === $archivo) {
-                    return true;
-                }
-            }
-        }
-
+        // Discípulo: sin acceso a archivos de material (solo evaluaciones y tareas en el hub).
         return false;
     }
 
@@ -2123,12 +2268,15 @@ class HomeController extends BaseController {
                     COALESCE(NULLIF(p.Telefono, ''), efi.Telefono, '') AS telefono,
                     MAX(efi.Fecha_Registro) AS fecha_registro,
                     MAX(CASE WHEN efi.Asistio_Clase = 1 THEN 1 ELSE 0 END) AS asistio_clase,
-                    COALESCE(p.Id_Persona, efi.Id_Persona, 0) AS id_persona
+                    COALESCE(p.Id_Persona, efi.Id_Persona, 0) AS id_persona,
+                    COALESCE(NULLIF(TRIM(m.Nombre_Ministerio), ''), 'Sin ministerio') AS ministerio,
+                    COALESCE(p.Id_Ministerio, 0) AS id_ministerio
                 FROM escuela_formacion_inscripcion efi
                 LEFT JOIN persona p ON p.Id_Persona = efi.Id_Persona
+                LEFT JOIN ministerio m ON m.Id_Ministerio = p.Id_Ministerio
                 WHERE efi.Programa IN ({$placeholders})
-                GROUP BY id_persona, nombre, cedula, telefono
-                ORDER BY nombre ASC";
+                GROUP BY id_persona, nombre, cedula, telefono, ministerio, id_ministerio
+                ORDER BY ministerio ASC, nombre ASC";
 
         $rows = $inscripcionModel->query($sql, $programas);
         if (!is_array($rows)) {
@@ -2148,6 +2296,8 @@ class HomeController extends BaseController {
                 'telefono' => trim((string)($row['telefono'] ?? '')),
                 'fecha_registro' => (string)($row['fecha_registro'] ?? ''),
                 'asistio_clase' => (int)($row['asistio_clase'] ?? 0) === 1,
+                'ministerio' => trim((string)($row['ministerio'] ?? 'Sin ministerio')),
+                'id_ministerio' => (int)($row['id_ministerio'] ?? 0),
             ];
         }, $rows)));
     }
@@ -2166,8 +2316,8 @@ class HomeController extends BaseController {
         if ($tamano <= 0) {
             throw new Exception('Archivo de tarea vacío o inválido.');
         }
-        if ($tamano > 20 * 1024 * 1024) {
-            throw new Exception('Cada archivo de tarea debe pesar máximo 20MB.');
+        if ($tamano > self::TAREA_ENTREGA_MAX_BYTES) {
+            throw new Exception('Cada archivo de tarea debe pesar máximo 100MB.');
         }
 
         $nombreOriginal = trim((string)($archivo['name'] ?? 'tarea.bin'));
@@ -2176,7 +2326,7 @@ class HomeController extends BaseController {
         if ($extension === '') {
             $extension = 'bin';
         }
-        $extension = substr($extension, 0, 10);
+        $extension = substr($extension, 0, 12);
 
         $directorio = $this->obtenerDirectorioTareasMaterialHub($modulo);
         if (!is_dir($directorio) && !@mkdir($directorio, 0775, true) && !is_dir($directorio)) {
@@ -2349,6 +2499,81 @@ class HomeController extends BaseController {
         $stmt = $pdo->prepare($sql);
                 $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    private function listarEntregasUsuarioPorTareasMaterialHub(int $idPersona, array $idsTarea): array {
+        $idPersona = (int)$idPersona;
+        $idsTarea = array_values(array_filter(array_map('intval', $idsTarea), static function ($id) {
+            return $id > 0;
+        }));
+
+        if ($idPersona <= 0 || empty($idsTarea)) {
+            return [];
+        }
+
+        $this->asegurarTablasTareasMaterialHub();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsTarea), '?'));
+        $sql = "SELECT
+                    e.Id_Entrega,
+                    e.Id_Tarea,
+                    e.Nombre_Archivo,
+                    e.Nombre_Original,
+                    e.Comentario,
+                    e.Nota,
+                    e.Retroalimentacion,
+                    e.Estado_Calificacion,
+                    e.Fecha_Entrega,
+                    e.Fecha_Calificacion
+                FROM material_hub_tarea_entrega e
+                WHERE e.Id_Persona = ?
+                  AND e.Id_Tarea IN ({$placeholders})
+                ORDER BY e.Fecha_Entrega DESC, e.Id_Entrega DESC";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(array_merge([$idPersona], $idsTarea));
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $map = [];
+        foreach ($rows as $row) {
+            $idTarea = (int)($row['Id_Tarea'] ?? 0);
+            if ($idTarea <= 0) {
+                continue;
+            }
+            if (!isset($map[$idTarea])) {
+                $map[$idTarea] = [];
+            }
+            $map[$idTarea][] = $row;
+        }
+
+        return $map;
+    }
+
+    private function enriquecerTareasConEntregasUsuario(array $tareas, int $idPersona): array {
+        if ($idPersona <= 0 || empty($tareas)) {
+            return $tareas;
+        }
+
+        $idsTarea = [];
+        foreach ($tareas as $tareaTmp) {
+            $idTareaTmp = (int)($tareaTmp['Id_Tarea'] ?? 0);
+            if ($idTareaTmp > 0) {
+                $idsTarea[] = $idTareaTmp;
+            }
+        }
+
+        $entregasPorTarea = $this->listarEntregasUsuarioPorTareasMaterialHub($idPersona, $idsTarea);
+        foreach ($tareas as $idx => $tareaTmp) {
+            $idTareaTmp = (int)($tareaTmp['Id_Tarea'] ?? 0);
+            $tareas[$idx]['entregas_usuario'] = (array)($entregasPorTarea[$idTareaTmp] ?? []);
+        }
+
+        return $tareas;
     }
 
         private function listarEntregasTareasMaterialHub(string $modulo, int $nivel, int $moduloNumero = 0): array {
@@ -3033,7 +3258,7 @@ class HomeController extends BaseController {
                 $rutaBase .= '&cap_open_panel=' . rawurlencode($openPanel);
             }
             if (in_array($academico, ['inscritos', 'tareas'], true)) {
-                $rutaBase .= '&cap_academico=' . rawurlencode($academico);
+                $rutaBase .= '&cap_seccion=' . rawurlencode($academico);
             }
         }
 
@@ -3084,7 +3309,7 @@ class HomeController extends BaseController {
                 'leccion' => trim((string)($_POST['contexto_leccion'] ?? $_POST['leccion'] ?? '')),
                 'open_lote' => trim((string)($_POST['contexto_open_lote'] ?? '')),
                 'open_panel' => trim((string)($_POST['contexto_open_panel'] ?? '')),
-                'academico' => trim((string)($_POST['contexto_academico'] ?? $_GET['cap_academico'] ?? '')),
+                'academico' => trim((string)($_POST['contexto_academico'] ?? $_GET['cap_seccion'] ?? $_GET['cap_academico'] ?? '')),
             ];
 
             $accionesPermitidasDiscipulo = ['subir_tarea_entrega'];
@@ -3417,6 +3642,8 @@ class HomeController extends BaseController {
         $accesosDiscipuloCapDestino = $esDiscipuloCapDestino
             ? $this->construirAccesosDiscipuloCapDestino($restriccionDiscipuloMaterial, $profesoresModulos)
             : [];
+        $usaFlujoCapHub = $this->usaFlujoHubCapacitacionDestino((string)($modulo['clave'] ?? ''));
+        $permisosHubCap = $this->obtenerPermisosHubCapacitacionDestino($modulo, $esDiscipuloCapDestino);
         $capNivelVista = (int)($_GET['cap_nivel'] ?? 0);
         $configNivelesCap = $this->obtenerConfiguracionNivelesCapacitacionDestino();
         if (!isset($configNivelesCap[$capNivelVista])) {
@@ -3425,7 +3652,11 @@ class HomeController extends BaseController {
         $capModuloVista = (int)($_GET['cap_modulo'] ?? 0);
         if ($capNivelVista > 0) {
             $modulosNivelVista = array_values(array_map('intval', (array)($configNivelesCap[$capNivelVista] ?? [])));
-            if (!in_array($capModuloVista, $modulosNivelVista, true)) {
+            if ($capModuloVista > 0 && !in_array($capModuloVista, $modulosNivelVista, true)) {
+                $capModuloVista = 0;
+            }
+            // Hub Cap. Destino: sin cap_modulo → pantalla de selección (no auto-elegir el primero).
+            if ($capModuloVista <= 0 && !$usaFlujoCapHub) {
                 $capModuloVista = (int)($modulosNivelVista[0] ?? 0);
             }
         } else {
@@ -3449,7 +3680,11 @@ class HomeController extends BaseController {
                 );
             });
             
-            $tareasCapNivel = $this->listarTareasMaterialHub((string)($modulo['clave'] ?? ''), $capNivelVista, (int)($_SESSION['usuario_id'] ?? 0), $capModuloVista);
+            $idPersonaHubTareas = (int)($_SESSION['usuario_id'] ?? 0);
+            $tareasCapNivel = $this->listarTareasMaterialHub((string)($modulo['clave'] ?? ''), $capNivelVista, $idPersonaHubTareas, $capModuloVista);
+            if (!empty($permisosHubCap['entregar_tareas']) && $idPersonaHubTareas > 0) {
+                $tareasCapNivel = $this->enriquecerTareasConEntregasUsuario($tareasCapNivel, $idPersonaHubTareas);
+            }
 
             if ($this->puedeGestionarModuloMaterial($modulo)) {
                 $entregasTareasCap = $this->listarEntregasTareasMaterialHub((string)($modulo['clave'] ?? ''), $capNivelVista, $capModuloVista);
@@ -3494,12 +3729,17 @@ class HomeController extends BaseController {
                     continue;
                 }
 
-                $tareasDiscipuloCap[$nivelTmp . '_' . $moduloTmp] = $this->listarTareasMaterialHub(
+                $idPersonaDiscTareas = (int)($_SESSION['usuario_id'] ?? 0);
+                $tareasModTmp = $this->listarTareasMaterialHub(
                     (string)($modulo['clave'] ?? ''),
                     (int)$nivelTmp,
-                    (int)($_SESSION['usuario_id'] ?? 0),
+                    $idPersonaDiscTareas,
                     (int)$moduloTmp
                 );
+                if ($idPersonaDiscTareas > 0) {
+                    $tareasModTmp = $this->enriquecerTareasConEntregasUsuario($tareasModTmp, $idPersonaDiscTareas);
+                }
+                $tareasDiscipuloCap[$nivelTmp . '_' . $moduloTmp] = $tareasModTmp;
             }
         }
 
@@ -3508,10 +3748,38 @@ class HomeController extends BaseController {
             $totalArchivos += (int)($tema['total_archivos'] ?? 0);
         }
 
+        $hubActividadPorModulo = [];
+        $hubEvaluacionesActivas = 0;
+        $hubTareasActivas = 0;
+        if ($usaFlujoCapHub && $capNivelVista > 0) {
+            $modulosHubNivel = array_values(array_map('intval', (array)($configNivelesCap[$capNivelVista] ?? [])));
+            $hubActividadPorModulo = $this->obtenerActividadHubCapDestinoPorModulo($capNivelVista, $modulosHubNivel);
+            if ($capModuloVista > 0) {
+                $keyHubActual = $capNivelVista . '_' . $capModuloVista;
+                $actividadHubActual = (array)($hubActividadPorModulo[$keyHubActual] ?? []);
+                $hubEvaluacionesActivas = (int)($actividadHubActual['evaluaciones'] ?? 0);
+                $hubTareasActivas = (int)($actividadHubActual['tareas'] ?? 0);
+            }
+        }
+
+        $pageTitleMaterialVista = (string)($modulo['titulo'] ?? 'Material');
+        if ($usaFlujoCapHub) {
+            $capSeccionTituloPagina = strtolower(trim((string)($_GET['cap_seccion'] ?? $_GET['cap_academico'] ?? '')));
+            if ($capModuloVista > 0 && $capSeccionTituloPagina === 'tareas') {
+                $pageTitleMaterialVista = 'Tareas módulo ' . $capModuloVista;
+            } elseif ($capModuloVista > 0 && $capSeccionTituloPagina === 'inscritos') {
+                $pageTitleMaterialVista = 'Inscritos módulo ' . $capModuloVista;
+            } elseif ($capModuloVista > 0 && $capSeccionTituloPagina === 'material') {
+                $pageTitleMaterialVista = 'Material módulo ' . $capModuloVista;
+            } elseif (AuthController::esContextoMaestro()) {
+                $pageTitleMaterialVista = 'Material Capacitación Destino';
+            }
+        } elseif (AuthController::esContextoMaestro()) {
+            $pageTitleMaterialVista = 'Material Capacitación Destino';
+        }
+
         $this->view('home/material_detalle', [
-            'pageTitle' => AuthController::esContextoMaestro()
-                ? 'Material Capacitación Destino'
-                : ((string)($modulo['titulo'] ?? 'Material')),
+            'pageTitle' => $pageTitleMaterialVista,
             'es_vista_maestro' => AuthController::esContextoMaestro(),
             'modulo' => $modulo,
             'temas' => $temas,
@@ -3532,7 +3800,13 @@ class HomeController extends BaseController {
             'id_persona_actual' => (int)($_SESSION['usuario_id'] ?? 0),
             'puede_gestionar' => !$esDiscipuloCapDestino && $this->puedeGestionarModuloMaterial($modulo),
             'puede_subir_material' => !$esDiscipuloCapDestino && $this->puedeSubirEnModuloMaterial($modulo),
-            'puede_subir_tareas' => AuthController::usaVistaDiscipuloCapacitacionDestino() && (string)($modulo['clave'] ?? '') === 'capacitacion_destino',
+            'puede_subir_tareas' => !empty($permisosHubCap['entregar_tareas']),
+            'usa_flujo_cap_hub' => $usaFlujoCapHub,
+            'cap_hub_permisos' => $permisosHubCap,
+            'rol_hub_cap_etiqueta' => $this->obtenerEtiquetaRolHubCapacitacionDestino($esDiscipuloCapDestino),
+            'hub_actividad_por_modulo' => $hubActividadPorModulo,
+            'hub_evaluaciones_activas' => $hubEvaluacionesActivas,
+            'hub_tareas_activas' => $hubTareasActivas,
             'mensaje' => (string)($_GET['mensaje'] ?? ''),
             'tipo' => (string)($_GET['tipo'] ?? ''),
         ]);

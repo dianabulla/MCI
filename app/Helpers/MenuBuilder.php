@@ -4,6 +4,8 @@
  * Requiere AuthController cargado antes de usar.
  */
 class MenuBuilder {
+    /** Incrementar al cambiar estructura del menú lateral (invalida caché en sesión). */
+    public const SIDEBAR_MENU_VERSION = 3;
 
     /**
      * Sincroniza permisos planos y menú en $_SESSION.
@@ -14,8 +16,25 @@ class MenuBuilder {
         }
 
         $_SESSION['permisos_planos'] = self::construirPermisosPlanos();
-        $_SESSION['sidebar_menu'] = self::construirMenu();
+        $_SESSION['sidebar_menu'] = self::filtrarMenuMaestro(self::construirMenu());
+        $_SESSION['sidebar_menu_version'] = self::SIDEBAR_MENU_VERSION;
         $_SESSION['sidebar_quick_access'] = self::construirAccesosRapidos();
+    }
+
+    /**
+     * El maestro no lleva enlace global a Evaluaciones en el sidebar.
+     *
+     * @param array<int, array<string, mixed>> $items
+     * @return array<int, array<string, mixed>>
+     */
+    private static function filtrarMenuMaestro(array $items): array {
+        if (!AuthController::esContextoMaestro() || AuthController::esAdministrador()) {
+            return $items;
+        }
+
+        return array_values(array_filter($items, static function ($item) {
+            return is_array($item) && (string)($item['id'] ?? '') !== 'evaluaciones_maestro';
+        }));
     }
 
     /**
@@ -101,6 +120,8 @@ class MenuBuilder {
                     'home/material',
                     'celulas/materiales',
                     'teen',
+                    'programas/evaluaciones',
+                    'programas/tareas',
                 ],
             ];
         } elseif (AuthController::puedeVerMaterialCapacitacionDestino()) {
@@ -109,19 +130,16 @@ class MenuBuilder {
                 'label' => 'Material Cap. Destino',
                 'ruta' => 'home/material/capacitacion-destino',
                 'icon' => 'bi-signpost-split-fill',
-                'active_prefixes' => ['home/material/capacitacion-destino', 'home/material'],
+                'active_prefixes' => [
+                    'home/material/capacitacion-destino',
+                    'home/material',
+                    'programas/evaluaciones',
+                    'programas/tareas',
+                ],
             ];
         }
 
-        if (AuthController::puedeAccederEvaluacionesDiscipular()) {
-            $items[] = [
-                'id' => 'evaluaciones_maestro',
-                'label' => 'Evaluaciones',
-                'ruta' => 'programas/evaluaciones',
-                'icon' => 'bi-journal-check',
-                'active_prefixes' => ['programas/evaluaciones'],
-            ];
-        }
+        // Evaluaciones: el maestro entra desde cada módulo en Material (no enlace global en sidebar).
 
         return $items;
     }
@@ -131,11 +149,15 @@ class MenuBuilder {
      */
     private static function menuDiscipulo(): array {
         return [[
-            'id' => 'evaluaciones',
-            'label' => 'Evaluaciones',
-            'ruta' => 'programas/evaluaciones',
-            'icon' => 'bi-journal-check',
-            'active_prefixes' => ['programas/evaluaciones', 'programas/tareas'],
+            'id' => 'capacitacion_destino',
+            'label' => 'Cap. Destino',
+            'ruta' => 'home/material/capacitacion-destino',
+            'icon' => 'bi-signpost-split-fill',
+            'active_prefixes' => [
+                'home/material/capacitacion-destino',
+                'programas/evaluaciones',
+                'programas/tareas',
+            ],
         ]];
     }
 

@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const icon = sidebarArrowToggle.querySelector('i');
-        const isMobileTopMenu = window.matchMedia('(max-width: 980px)').matches;
+        const isMobileTopMenu = window.matchMedia('(max-width: 1024px)').matches;
         if (icon) {
             if (isMobileTopMenu) {
                 icon.className = collapsed ? 'bi bi-list' : 'bi bi-x-lg';
@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function isMobileTopMenu() {
-        return window.matchMedia('(max-width: 980px)').matches;
+        return window.matchMedia('(max-width: 1024px)').matches;
     }
 
     const initialCollapsed = getStoredSidebarState();
@@ -124,6 +124,22 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         syncSidebarToggleUi(collapsed);
+    });
+
+    document.addEventListener('click', function(event) {
+        if (!isMobileTopMenu() || document.body.classList.contains('sidebar-collapsed')) {
+            return;
+        }
+        const sidebar = document.getElementById('appSidebar');
+        const target = event.target;
+        if (!sidebar || !sidebarArrowToggle) {
+            return;
+        }
+        if (sidebar.contains(target) || sidebarArrowToggle.contains(target)) {
+            return;
+        }
+        setSidebarCollapsed(true);
+        saveSidebarState(true);
     });
 
     const sidebarLinks = document.querySelectorAll('.sidebar-nav .sidebar-link');
@@ -241,7 +257,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Vista compacta en móvil para listas de Personas/Ganar (Nombre + Ver + Flecha)
-    if (window.matchMedia('(max-width: 980px)').matches) {
+    if (window.matchMedia('(max-width: 1024px)').matches) {
         const personaTables = document.querySelectorAll('.mobile-persona-accordion');
 
         personaTables.forEach(table => {

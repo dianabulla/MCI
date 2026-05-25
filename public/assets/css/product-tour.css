@@ -1,0 +1,79 @@
+.mci-tour-launcher {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 1040;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    border: 1px solid #b9d0ec;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #1f5ea8 0%, #1a518f 100%);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 8px 22px rgba(23, 62, 110, 0.28);
+    cursor: pointer;
+    transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.mci-tour-launcher:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 26px rgba(23, 62, 110, 0.34);
+}
+
+.mci-tour-launcher i {
+    font-size: 16px;
+}
+
+.driver-popover.mci-driver-popover {
+    background: #fff;
+    color: #1e2f48;
+    border-radius: 12px;
+    box-shadow: 0 14px 36px rgba(30, 56, 98, 0.22);
+    max-width: min(360px, calc(100vw - 32px));
+}
+
+.driver-popover.mci-driver-popover .driver-popover-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1f4f93;
+}
+
+.driver-popover.mci-driver-popover .driver-popover-description {
+    font-size: 13px;
+    line-height: 1.45;
+    color: #4f647f;
+}
+
+.driver-popover.mci-driver-popover .driver-popover-progress-text {
+    font-size: 12px;
+    color: #637087;
+}
+
+.driver-popover.mci-driver-popover button {
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    text-shadow: none;
+}
+
+.driver-popover.mci-driver-popover .driver-popover-next-btn,
+.driver-popover.mci-driver-popover .driver-popover-done-btn {
+    background: #1f5ea8;
+    color: #fff;
+}
+
+@media (max-width: 768px) {
+    .mci-tour-launcher {
+        right: 12px;
+        bottom: 12px;
+        padding: 9px 12px;
+        font-size: 12px;
+    }
+
+    .mci-tour-launcher span {
+        display: none;
+    }
+}

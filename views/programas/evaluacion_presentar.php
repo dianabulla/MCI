@@ -18,6 +18,9 @@ $puedeResponder = !$preview
     && !empty($estadoIntento['puede_responder'])
     && !empty($estadoIntento['intento_iniciado']);
 $intentosAgotados = !$preview && empty($estadoIntento['puede_responder']);
+$esVistaDiscipuloPresentar = class_exists('AuthController') && AuthController::esVistaDiscipuloSimplificada();
+$urlInicioDiscipuloPresentar = PUBLIC_URL . '?url=programas/evaluaciones';
+$urlAtrasDiscipuloPresentar = $urlListado !== '' ? $urlListado : $urlInicioDiscipuloPresentar;
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -100,6 +103,31 @@ $intentosAgotados = !$preview && empty($estadoIntento['puede_responder']);
             .eval-presentar-shell { padding: 18px 20px 32px; }
             .eval-presentar-top h1 { font-size: 1.35rem; }
         }
+        .disc-nav-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .btn-disc-nav {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.84rem;
+            font-weight: 700;
+            text-decoration: none;
+            border: 1px solid transparent;
+        }
+        .btn-disc-nav--back {
+            background: #fff;
+            color: #1e40af;
+            border-color: #bfdbfe;
+        }
+        .btn-disc-nav--home {
+            background: #1f4f93;
+            color: #fff;
+        }
     </style>
 </head>
 <body class="eval-presentar-body">
@@ -122,7 +150,18 @@ $intentosAgotados = !$preview && empty($estadoIntento['puede_responder']);
         </div>
         <?php if ($urlListado !== ''): ?>
             <div style="margin-top:10px;">
-                <a class="btn btn-secondary btn-sm" href="<?= htmlspecialchars($urlListado, ENT_QUOTES, 'UTF-8') ?>">Volver al listado</a>
+                <?php if ($esVistaDiscipuloPresentar): ?>
+                    <div class="disc-nav-actions">
+                        <a class="btn-disc-nav btn-disc-nav--back" href="<?= htmlspecialchars($urlAtrasDiscipuloPresentar, ENT_QUOTES, 'UTF-8') ?>">
+                            <i class="bi bi-arrow-left" aria-hidden="true"></i> Atrás
+                        </a>
+                        <a class="btn-disc-nav btn-disc-nav--home" href="<?= htmlspecialchars($urlInicioDiscipuloPresentar, ENT_QUOTES, 'UTF-8') ?>">
+                            <i class="bi bi-house-door" aria-hidden="true"></i> Inicio
+                        </a>
+                    </div>
+                <?php else: ?>
+                    <a class="btn btn-secondary btn-sm" href="<?= htmlspecialchars($urlListado, ENT_QUOTES, 'UTF-8') ?>">Volver al listado</a>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
     </div>

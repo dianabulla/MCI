@@ -105,6 +105,96 @@ $puedeEliminar      = !empty($puede_eliminar);
 .li-table td.t-left { text-align:left; }
 .li-table tbody tr:hover { background:#f7faff; }
 
+/* Vista compacta al ocultar columnas: menos scroll, celdas más estrechas */
+.li-table-wrap--compact { overflow-x: visible; }
+.li-table.li-table--compact {
+  white-space: normal;
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+}
+.li-table.li-table--compact th,
+.li-table.li-table--compact td {
+  padding: 5px 6px;
+  font-size: 0.74rem;
+  line-height: 1.25;
+}
+.li-table.li-table--compact th.col-nombre,
+.li-table.li-table--compact td.col-nombre {
+  min-width: 0 !important;
+  width: 18%;
+  white-space: normal;
+  word-break: break-word;
+}
+.li-table.li-table--compact th.col-lider,
+.li-table.li-table--compact td.col-lider {
+  min-width: 0 !important;
+  width: 14%;
+  white-space: normal;
+  word-break: break-word;
+}
+.li-table.li-table--compact th.col-cedula,
+.li-table.li-table--compact td.col-cedula { width: 9%; }
+.li-table.li-table--compact th.col-telefono,
+.li-table.li-table--compact td.col-telefono { width: 8%; }
+.li-table.li-table--compact th.col-genero,
+.li-table.li-table--compact td.col-genero,
+.li-table.li-table--compact th.col-edad,
+.li-table.li-table--compact td.col-edad { width: 4%; }
+.li-table.li-table--compact th.col-pago,
+.li-table.li-table--compact td.col-pago { width: 10%; }
+.li-table.li-table--compact th.col-acciones,
+.li-table.li-table--compact td.col-acciones { width: 56px; }
+.li-table.li-table--compact th[class*="col-pre-"],
+.li-table.li-table--compact th[class*="col-enc-"],
+.li-table.li-table--compact th[class*="col-post-"],
+.li-table.li-table--compact td[class*="col-pre-"],
+.li-table.li-table--compact td[class*="col-enc-"],
+.li-table.li-table--compact td[class*="col-post-"] {
+  width: 36px;
+  min-width: 36px;
+  max-width: 40px;
+  padding: 4px 2px;
+}
+.li-table.li-table--compact .check-asist {
+  width: 17px;
+  height: 17px;
+}
+.li-table.li-table--compact .btn-pago {
+  padding: 3px 8px;
+  font-size: 0.68rem;
+}
+.li-table.li-table--compact .pago-status { font-size: 0.62rem; padding: 1px 5px; }
+.li-table.li-table--compact .li-acc-btn { width: 22px; height: 22px; }
+.li-table.li-table--compact .li-acc-btn i { font-size: 11px; }
+/* Pocas columnas visibles: aún más densidad */
+.li-table.li-table--compact[data-visibles="10"] th,
+.li-table.li-table--compact[data-visibles="10"] td,
+.li-table.li-table--compact[data-visibles="9"] th,
+.li-table.li-table--compact[data-visibles="9"] td,
+.li-table.li-table--compact[data-visibles="8"] th,
+.li-table.li-table--compact[data-visibles="8"] td {
+  padding: 4px 5px;
+  font-size: 0.72rem;
+}
+.li-table.li-table--compact[data-visibles="7"] th,
+.li-table.li-table--compact[data-visibles="7"] td,
+.li-table.li-table--compact[data-visibles="6"] th,
+.li-table.li-table--compact[data-visibles="6"] td,
+.li-table.li-table--compact[data-visibles="5"] th,
+.li-table.li-table--compact[data-visibles="5"] td,
+.li-table.li-table--compact[data-visibles="4"] th,
+.li-table.li-table--compact[data-visibles="4"] td {
+  padding: 3px 4px;
+  font-size: 0.70rem;
+}
+.li-table.li-table--compact[data-visibles="7"] th.col-nombre,
+.li-table.li-table--compact[data-visibles="7"] td.col-nombre,
+.li-table.li-table--compact[data-visibles="6"] th.col-nombre,
+.li-table.li-table--compact[data-visibles="6"] td.col-nombre {
+  width: 22%;
+}
+
 /* ── Grupos de asistencia (encabezados de sección) ──────────────── */
 .th-group { background:#eef4fc !important; color:#1e40af !important; font-size:0.70rem !important; border-bottom:1px solid #bfdbfe !important; }
 .th-pre   { background:#fef3c7 !important; color:#92400e !important; }
@@ -218,6 +308,59 @@ $puedeEliminar      = !empty($puede_eliminar);
 }
 .li-save-indicator.show { opacity:1; }
 .li-save-indicator.error { background:#991b1b; }
+
+/* Columnas ocultas (data-oculta = ids separados por espacio) */
+.li-table[data-oculta~="nombre"] .col-nombre,
+.li-table[data-oculta~="genero"] .col-genero,
+.li-table[data-oculta~="edad"] .col-edad,
+.li-table[data-oculta~="cedula"] .col-cedula,
+.li-table[data-oculta~="telefono"] .col-telefono,
+.li-table[data-oculta~="lider"] .col-lider,
+.li-table[data-oculta~="pago"] .col-pago,
+.li-table[data-oculta~="acciones"] .col-acciones,
+.li-table[data-oculta~="pre-1"] .col-pre-1,
+.li-table[data-oculta~="pre-2"] .col-pre-2,
+.li-table[data-oculta~="pre-3"] .col-pre-3,
+.li-table[data-oculta~="pre-4"] .col-pre-4,
+.li-table[data-oculta~="enc-1"] .col-enc-1,
+.li-table[data-oculta~="enc-2"] .col-enc-2,
+.li-table[data-oculta~="post-1"] .col-post-1,
+.li-table[data-oculta~="post-2"] .col-post-2,
+.li-table[data-oculta~="post-3"] .col-post-3,
+.li-table[data-oculta~="post-4"] .col-post-4 { display: none !important; }
+
+.li-col-picker { position: relative; align-self: flex-end; }
+.li-col-picker__btn { min-width: 140px; }
+.li-col-picker__panel {
+  display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 50;
+  min-width: 280px; max-width: 320px; max-height: 70vh; overflow: auto;
+  background: #fff; border: 1px solid #c5d5e8; border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14); padding: 10px 12px;
+}
+.li-col-picker.is-open .li-col-picker__panel { display: block; }
+.li-col-picker__head {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;
+}
+.li-col-picker__head strong { font-size: 0.82rem; color: #1e3a5f; }
+.li-col-picker__actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.li-col-picker__actions button {
+  border: none; background: #eff6ff; color: #1d4ed8; font-size: 0.72rem;
+  font-weight: 700; padding: 4px 8px; border-radius: 6px; cursor: pointer;
+}
+.li-col-picker__actions button:hover { background: #dbeafe; }
+.li-col-picker__grupo {
+  font-size: 0.68rem; font-weight: 800; color: #64748b; text-transform: uppercase;
+  letter-spacing: 0.05em; margin: 10px 0 6px;
+}
+.li-col-picker__grupo:first-of-type { margin-top: 0; }
+.li-col-picker__item {
+  display: flex; align-items: center; gap: 8px; padding: 5px 4px;
+  font-size: 0.82rem; color: #1e293b; cursor: pointer; border-radius: 6px;
+}
+.li-col-picker__item:hover { background: #f8fafc; }
+.li-col-picker__item input { width: 16px; height: 16px; accent-color: #2563eb; cursor: pointer; }
+.li-toolbar #li-lider { min-width: 200px; max-width: 280px; }
 </style>
 
 <div class="li-shell">
@@ -256,8 +399,30 @@ $puedeEliminar      = !empty($puede_eliminar);
         <option value="sin_pago">Sin pago</option>
       </select>
     </div>
+    <div>
+      <label for="li-lider">Líder</label>
+      <select id="li-lider">
+        <option value="">Todos los líderes</option>
+      </select>
+    </div>
     <div style="align-self:flex-end;">
-      <button class="btn-pago" style="background:#475569;" onclick="cargarDatos()">↻ Actualizar</button>
+      <button type="button" class="btn-pago" style="background:#475569;" onclick="cargarDatos()">↻ Actualizar</button>
+    </div>
+    <div class="li-col-picker" id="li-col-picker">
+      <label class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;" for="li-col-picker-btn">Columnas visibles</label>
+      <button type="button" class="btn-pago li-col-picker__btn" id="li-col-picker-btn" style="background:#7c3aed;" aria-expanded="false" aria-haspopup="true">
+        ⊞ Columnas
+      </button>
+      <div class="li-col-picker__panel" id="li-col-picker-panel" role="dialog" aria-label="Mostrar u ocultar columnas">
+        <div class="li-col-picker__head">
+          <strong>Columnas visibles</strong>
+          <div class="li-col-picker__actions">
+            <button type="button" id="li-col-ver-todas">Ver todas</button>
+            <button type="button" id="li-col-solo-encuentro">Solo encuentro</button>
+          </div>
+        </div>
+        <div id="li-col-checkboxes"></div>
+      </div>
     </div>
   </div>
 
@@ -297,34 +462,29 @@ $puedeEliminar      = !empty($puede_eliminar);
         <thead>
           <tr>
             <!-- Datos básicos -->
-            <th class="t-left" rowspan="2" style="min-width:160px;">Nombre</th>
-            <th rowspan="2">Género</th>
-            <th rowspan="2">Edad</th>
-            <th rowspan="2">Cédula</th>
-            <th rowspan="2">Teléfono</th>
-            <th class="t-left" rowspan="2" style="min-width:120px;">Líder</th>
-            <!-- Pago -->
-            <th rowspan="2">Pago / Abono</th>
-            <th rowspan="2" style="min-width:64px;">Acciones</th>
-            <!-- Grupos asistencia -->
-            <th colspan="4" class="th-pre">Clases Pre-Encuentro</th>
-            <th colspan="2" class="th-enc">Encuentro</th>
-            <th colspan="4" class="th-post">Clases Post-Encuentro</th>
+            <th class="t-left col-nombre" rowspan="2" style="min-width:160px;">Nombre</th>
+            <th class="col-genero" rowspan="2">Género</th>
+            <th class="col-edad" rowspan="2">Edad</th>
+            <th class="col-cedula" rowspan="2">Cédula</th>
+            <th class="col-telefono" rowspan="2">Teléfono</th>
+            <th class="t-left col-lider" rowspan="2" style="min-width:120px;">Líder</th>
+            <th class="col-pago" rowspan="2">Pago / Abono</th>
+            <th class="col-acciones" rowspan="2" style="min-width:64px;">Acciones</th>
+            <th colspan="4" class="th-pre col-pre-group col-pre-1 col-pre-2 col-pre-3 col-pre-4" data-col-group="pre">Clases Pre-Encuentro</th>
+            <th colspan="2" class="th-enc col-enc-group col-enc-1 col-enc-2" data-col-group="enc">Encuentro</th>
+            <th colspan="4" class="th-post col-post-group col-post-1 col-post-2 col-post-3 col-post-4" data-col-group="post">Clases Post-Encuentro</th>
           </tr>
           <tr>
-            <!-- Pre-encuentro clases 1-4 -->
-            <th class="th-pre">C1</th>
-            <th class="th-pre">C2</th>
-            <th class="th-pre">C3</th>
-            <th class="th-pre">C4</th>
-            <!-- Encuentro días 1-2 -->
-            <th class="th-enc">Día 1</th>
-            <th class="th-enc">Día 2</th>
-            <!-- Post-encuentro clases 1-4 (7-10) -->
-            <th class="th-post">C1</th>
-            <th class="th-post">C2</th>
-            <th class="th-post">C3</th>
-            <th class="th-post">C4</th>
+            <th class="th-pre col-pre-1">C1</th>
+            <th class="th-pre col-pre-2">C2</th>
+            <th class="th-pre col-pre-3">C3</th>
+            <th class="th-pre col-pre-4">C4</th>
+            <th class="th-enc col-enc-1">Día 1</th>
+            <th class="th-enc col-enc-2">Día 2</th>
+            <th class="th-post col-post-1">C1</th>
+            <th class="th-post col-post-2">C2</th>
+            <th class="th-post col-post-3">C3</th>
+            <th class="th-post col-post-4">C4</th>
           </tr>
         </thead>
         <tbody id="li-tbody">
@@ -375,6 +535,7 @@ $puedeEliminar      = !empty($puede_eliminar);
       const json = await resp.json();
       if (!json.success) throw new Error('Respuesta errónea del servidor');
       todosLosDatos = json.datos || [];
+      poblarFiltroLideres();
       renderTabla();
       if (json.limite && todosLosDatos.length >= json.limite) {
         setEstado(document.getElementById('li-estado').textContent + ' (límite ' + json.limite + ')');
@@ -441,6 +602,7 @@ $puedeEliminar      = !empty($puede_eliminar);
     const buscar = document.getElementById('li-buscar').value.trim().toLowerCase();
     const genero = document.getElementById('li-genero').value;
     const filtroPago = document.getElementById('li-pago').value;
+    const filtroLider = (document.getElementById('li-lider')?.value || '').trim();
 
     const terminoBuscar = normalizar(buscar);
 
@@ -448,6 +610,11 @@ $puedeEliminar      = !empty($puede_eliminar);
       const pagado = tienePagoRegistrado(p);
       if (filtroPago === 'pagados' && !pagado) return false;
       if (filtroPago === 'sin_pago' && pagado) return false;
+
+      if (filtroLider !== '') {
+        const liderFila = (p.Lider || '').trim();
+        if (liderFila !== filtroLider) return false;
+      }
 
       if (terminoBuscar !== '') {
         const coincideBuscar =
@@ -470,7 +637,8 @@ $puedeEliminar      = !empty($puede_eliminar);
     const buscar = document.getElementById('li-buscar').value.trim();
     const genero = document.getElementById('li-genero').value;
     const pago = document.getElementById('li-pago').value;
-    return buscar !== '' || genero !== 'todos' || pago !== 'todos';
+    const lider = (document.getElementById('li-lider')?.value || '').trim();
+    return buscar !== '' || genero !== 'todos' || pago !== 'todos' || lider !== '';
   }
 
   function etiquetaFiltroGenero(valor) {
@@ -491,12 +659,40 @@ $puedeEliminar      = !empty($puede_eliminar);
     const buscar = document.getElementById('li-buscar').value.trim();
     const genero = document.getElementById('li-genero').value;
     const pago = document.getElementById('li-pago').value;
+    const lider = (document.getElementById('li-lider')?.value || '').trim();
     if (buscar !== '') partes.push('Búsqueda: «' + buscar + '»');
     const eg = etiquetaFiltroGenero(genero);
     if (eg) partes.push(eg);
     const ep = etiquetaFiltroPago(pago);
     if (ep) partes.push(ep);
+    if (lider !== '') partes.push('Líder: «' + lider + '»');
     return partes.join(' · ');
+  }
+
+  function poblarFiltroLideres() {
+    const select = document.getElementById('li-lider');
+    if (!select) return;
+    const valorActual = select.value;
+    const lideres = new Set();
+    todosLosDatos.forEach(function (p) {
+      const nombre = (p.Lider || '').trim();
+      if (nombre !== '' && nombre !== '–') {
+        lideres.add(nombre);
+      }
+    });
+    const ordenados = Array.from(lideres).sort(function (a, b) {
+      return normalizar(a).localeCompare(normalizar(b), 'es');
+    });
+    select.innerHTML = '<option value="">Todos los líderes</option>';
+    ordenados.forEach(function (nombre) {
+      const opt = document.createElement('option');
+      opt.value = nombre;
+      opt.textContent = nombre;
+      select.appendChild(opt);
+    });
+    if (valorActual && ordenados.includes(valorActual)) {
+      select.value = valorActual;
+    }
   }
 
   function contarConPago(lista) {
@@ -638,19 +834,20 @@ $puedeEliminar      = !empty($puede_eliminar);
 
       // Datos básicos
       tr.innerHTML = `
-        <td class="t-left"><strong>${esc(p.Nombre)}</strong></td>
-        <td>${badgeGenero(p.Genero)}</td>
-        <td>${esc(p.Edad || '–')}</td>
-        <td><span style="font-family:monospace;font-size:0.78rem;">${esc(p.Cedula || '–')}</span></td>
-        <td>${esc(p.Telefono || '–')}</td>
-        <td class="t-left" style="color:#475569;">${esc(p.Lider || '–')}</td>
-        <td>${btnPago(p)}</td>
-        <td>${btnAcciones(p)}</td>
+        <td class="t-left col-nombre"><strong>${esc(p.Nombre)}</strong></td>
+        <td class="col-genero">${badgeGenero(p.Genero)}</td>
+        <td class="col-edad">${esc(p.Edad || '–')}</td>
+        <td class="col-cedula"><span style="font-family:monospace;font-size:0.78rem;">${esc(p.Cedula || '–')}</span></td>
+        <td class="col-telefono">${esc(p.Telefono || '–')}</td>
+        <td class="t-left col-lider" style="color:#475569;">${esc(p.Lider || '–')}</td>
+        <td class="col-pago">${btnPago(p)}</td>
+        <td class="col-acciones">${btnAcciones(p)}</td>
       `;
 
-      // Checkboxes de asistencia (10 en total)
+      const clasesAsist = ['col-pre-1', 'col-pre-2', 'col-pre-3', 'col-pre-4', 'col-enc-1', 'col-enc-2', 'col-post-1', 'col-post-2', 'col-post-3', 'col-post-4'];
       for (let c = 1; c <= 10; c++) {
         const td = document.createElement('td');
+        td.className = clasesAsist[c - 1];
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.className = 'check-asist';
@@ -863,6 +1060,200 @@ $puedeEliminar      = !empty($puede_eliminar);
   });
   document.getElementById('li-genero').addEventListener('change', renderTabla);
   document.getElementById('li-pago').addEventListener('change', renderTabla);
+  const selectLider = document.getElementById('li-lider');
+  if (selectLider) {
+    selectLider.addEventListener('change', renderTabla);
+  }
+
+  const STORAGE_COLUMNAS = 'mcimadrid_uv_asist_columnas_visibles';
+  const STORAGE_OCULTAR_PRE_POST_LEGACY = 'mcimadrid_uv_asist_ocultar_pre_post';
+  const tablaAsistencias = document.getElementById('li-table');
+  const colPicker = document.getElementById('li-col-picker');
+  const colPickerBtn = document.getElementById('li-col-picker-btn');
+  const colPickerPanel = document.getElementById('li-col-picker-panel');
+  const colCheckboxesHost = document.getElementById('li-col-checkboxes');
+
+  const COLUMNAS_DEF = [
+    { id: 'nombre', label: 'Nombre', grupo: 'Datos personales' },
+    { id: 'genero', label: 'Género', grupo: 'Datos personales' },
+    { id: 'edad', label: 'Edad', grupo: 'Datos personales' },
+    { id: 'cedula', label: 'Cédula', grupo: 'Datos personales' },
+    { id: 'telefono', label: 'Teléfono', grupo: 'Datos personales' },
+    { id: 'lider', label: 'Líder', grupo: 'Datos personales' },
+    { id: 'pago', label: 'Pago / Abono', grupo: 'Gestión' },
+    { id: 'acciones', label: 'Acciones', grupo: 'Gestión' },
+    { id: 'pre-1', label: 'Pre-encuentro — C1', grupo: 'Clases pre-encuentro' },
+    { id: 'pre-2', label: 'Pre-encuentro — C2', grupo: 'Clases pre-encuentro' },
+    { id: 'pre-3', label: 'Pre-encuentro — C3', grupo: 'Clases pre-encuentro' },
+    { id: 'pre-4', label: 'Pre-encuentro — C4', grupo: 'Clases pre-encuentro' },
+    { id: 'enc-1', label: 'Encuentro — Día 1', grupo: 'Encuentro' },
+    { id: 'enc-2', label: 'Encuentro — Día 2', grupo: 'Encuentro' },
+    { id: 'post-1', label: 'Post-encuentro — C1', grupo: 'Clases post-encuentro' },
+    { id: 'post-2', label: 'Post-encuentro — C2', grupo: 'Clases post-encuentro' },
+    { id: 'post-3', label: 'Post-encuentro — C3', grupo: 'Clases post-encuentro' },
+    { id: 'post-4', label: 'Post-encuentro — C4', grupo: 'Clases post-encuentro' }
+  ];
+
+  const columnasVisibles = {};
+  COLUMNAS_DEF.forEach(function (col) {
+    columnasVisibles[col.id] = true;
+  });
+
+  function idsOcultosDesdeEstado() {
+    return COLUMNAS_DEF.filter(function (col) {
+      return !columnasVisibles[col.id];
+    }).map(function (col) {
+      return col.id;
+    });
+  }
+
+  function actualizarEncabezadosGrupo() {
+    if (!tablaAsistencias) return;
+    const ocultas = new Set(idsOcultosDesdeEstado());
+    const grupos = {
+      pre: ['pre-1', 'pre-2', 'pre-3', 'pre-4'],
+      enc: ['enc-1', 'enc-2'],
+      post: ['post-1', 'post-2', 'post-3', 'post-4']
+    };
+    Object.keys(grupos).forEach(function (nombre) {
+      const ids = grupos[nombre];
+      const todasOcultas = ids.every(function (id) { return ocultas.has(id); });
+      const visibles = ids.filter(function (id) { return !ocultas.has(id); }).length;
+      tablaAsistencias.querySelectorAll('[data-col-group="' + nombre + '"]').forEach(function (th) {
+        th.style.display = todasOcultas ? 'none' : '';
+        if (!todasOcultas) {
+          th.colSpan = visibles;
+        }
+      });
+    });
+  }
+
+  function aplicarColumnasVisibles() {
+    if (!tablaAsistencias) return;
+    const ocultas = idsOcultosDesdeEstado();
+    const nVisibles = COLUMNAS_DEF.length - ocultas.length;
+    const modoCompacto = ocultas.length > 0;
+
+    tablaAsistencias.setAttribute('data-oculta', ocultas.join(' '));
+    tablaAsistencias.setAttribute('data-visibles', String(nVisibles));
+    tablaAsistencias.classList.toggle('li-table--compact', modoCompacto);
+
+    const wrap = tablaAsistencias.closest('.li-table-wrap');
+    if (wrap) {
+      wrap.classList.toggle('li-table-wrap--compact', modoCompacto);
+    }
+
+    actualizarEncabezadosGrupo();
+    try {
+      localStorage.setItem(STORAGE_COLUMNAS, JSON.stringify(columnasVisibles));
+    } catch (e) {}
+  }
+
+  function cargarColumnasGuardadas() {
+    try {
+      const legacy = localStorage.getItem(STORAGE_OCULTAR_PRE_POST_LEGACY);
+      const raw = localStorage.getItem(STORAGE_COLUMNAS);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          COLUMNAS_DEF.forEach(function (col) {
+            if (typeof parsed[col.id] === 'boolean') {
+              columnasVisibles[col.id] = parsed[col.id];
+            }
+          });
+          return;
+        }
+      }
+      if (legacy === '1') {
+        ['pre-1', 'pre-2', 'pre-3', 'pre-4', 'post-1', 'post-2', 'post-3', 'post-4'].forEach(function (id) {
+          columnasVisibles[id] = false;
+        });
+      }
+    } catch (e) {}
+  }
+
+  function renderColumnasCheckboxes() {
+    if (!colCheckboxesHost) return;
+    colCheckboxesHost.innerHTML = '';
+    let grupoActual = '';
+    COLUMNAS_DEF.forEach(function (col) {
+      if (col.grupo !== grupoActual) {
+        grupoActual = col.grupo;
+        const titulo = document.createElement('div');
+        titulo.className = 'li-col-picker__grupo';
+        titulo.textContent = grupoActual;
+        colCheckboxesHost.appendChild(titulo);
+      }
+      const label = document.createElement('label');
+      label.className = 'li-col-picker__item';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = !!columnasVisibles[col.id];
+      input.dataset.colId = col.id;
+      input.addEventListener('change', function () {
+        columnasVisibles[col.id] = input.checked;
+        aplicarColumnasVisibles();
+      });
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(col.label));
+      colCheckboxesHost.appendChild(label);
+    });
+  }
+
+  function setTodasColumnas(visible) {
+    COLUMNAS_DEF.forEach(function (col) {
+      columnasVisibles[col.id] = !!visible;
+    });
+    if (colCheckboxesHost) {
+      colCheckboxesHost.querySelectorAll('input[type=checkbox]').forEach(function (input) {
+        input.checked = !!visible;
+      });
+    }
+    aplicarColumnasVisibles();
+  }
+
+  function setSoloEncuentro() {
+    COLUMNAS_DEF.forEach(function (col) {
+      const esPrePost = col.id.indexOf('pre-') === 0 || col.id.indexOf('post-') === 0;
+      columnasVisibles[col.id] = !esPrePost;
+    });
+    if (colCheckboxesHost) {
+      colCheckboxesHost.querySelectorAll('input[type=checkbox]').forEach(function (input) {
+        const id = input.dataset.colId || '';
+        input.checked = !!(columnasVisibles[id]);
+      });
+    }
+    aplicarColumnasVisibles();
+  }
+
+  if (colPicker && colPickerBtn && colPickerPanel && tablaAsistencias) {
+    cargarColumnasGuardadas();
+    renderColumnasCheckboxes();
+    aplicarColumnasVisibles();
+
+    colPickerBtn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      const abierto = colPicker.classList.toggle('is-open');
+      colPickerBtn.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+    });
+
+    document.getElementById('li-col-ver-todas')?.addEventListener('click', function () {
+      setTodasColumnas(true);
+    });
+    document.getElementById('li-col-solo-encuentro')?.addEventListener('click', function () {
+      setSoloEncuentro();
+    });
+
+    document.addEventListener('click', function (ev) {
+      if (!colPicker.contains(ev.target)) {
+        colPicker.classList.remove('is-open');
+        colPickerBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+    colPickerPanel.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+    });
+  }
 
   document.getElementById('li-tbody').addEventListener('click', (ev) => {
     const btn = ev.target.closest('.js-li-eliminar');

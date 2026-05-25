@@ -44,6 +44,16 @@ class DiscipularEvaluacionController extends BaseController {
         }
 
         $contextoMaterial = $this->obtenerContextoMaterialDesdeRequest();
+        $fromMaterialFlag = !empty($_GET['from_material']) || !empty($_POST['from_material']);
+        if ($esDiscipulo && empty($contextoMaterial)) {
+            $this->redirect('home/material/capacitacion-destino');
+        }
+        if ($esMaestroCap && empty($contextoMaterial)) {
+            $this->redirect('home/material/capacitacion-destino');
+        }
+        if ($fromMaterialFlag && empty($contextoMaterial)) {
+            $this->redirect('home/material/capacitacion-destino');
+        }
         if (empty($contextoMaterial) && !$esDiscipulo && !$esMaestroCap) {
             $this->redirect('home/material/capacitacion-destino');
         }
@@ -88,13 +98,39 @@ class DiscipularEvaluacionController extends BaseController {
             }
         }
 
+        $vistaHistorico = (int)($_GET['historico'] ?? 0) === 1;
         $idEvaluacionSeleccionada = (int)($_GET['evaluacion'] ?? 0);
+        $idResultadoUrl = (int)($_GET['resultado'] ?? 0);
+        $idEditarUrl = (int)($_GET['editar'] ?? 0);
+
+        if (
+            $puedeGestionar
+            && !$esDiscipulo
+            && !$vistaHistorico
+            && $idEditarUrl <= 0
+            && ($idEvaluacionSeleccionada > 0 || $idResultadoUrl > 0)
+        ) {
+            $queryContextoHist = $this->construirQueryContextoMaterial($contextoMaterial);
+            $destinoHistorico = 'programas/evaluaciones' . $queryContextoHist . '&historico=1';
+            if ($idEvaluacionSeleccionada > 0) {
+                $destinoHistorico .= '&evaluacion=' . $idEvaluacionSeleccionada;
+            }
+            if ($idResultadoUrl > 0) {
+                $destinoHistorico .= '&resultado=' . $idResultadoUrl;
+            }
+            $mensajeGet = trim((string)($_GET['mensaje'] ?? ''));
+            $tipoGet = trim((string)($_GET['tipo'] ?? ''));
+            if ($mensajeGet !== '') {
+                $destinoHistorico .= '&mensaje=' . urlencode($mensajeGet) . '&tipo=' . urlencode($tipoGet);
+            }
+            $this->redirect($destinoHistorico);
+        }
 
         if (
             $_SERVER['REQUEST_METHOD'] === 'GET'
             && $idEvaluacionSeleccionada > 0
             && !$puedeGestionar
-            && (int)($_GET['resultado'] ?? 0) <= 0
+            && $idResultadoUrl <= 0
         ) {
             $queryContexto = $this->construirQueryContextoMaterial($contextoMaterial);
             $this->redirect('programas/evaluaciones/presentar&evaluacion=' . $idEvaluacionSeleccionada . $queryContexto);
@@ -103,6 +139,28 @@ class DiscipularEvaluacionController extends BaseController {
         $contextoDesdeMaterial = !empty($contextoMaterial);
         $filtroNivelContexto = (int)($contextoMaterial['nivel'] ?? 0);
         $filtroModuloContexto = (int)($contextoMaterial['modulo'] ?? 0);
+
+        if ($esDiscipulo && $filtroNivelContexto > 0 && $filtroModuloContexto > 0) {
+            $accesosValidacionDisc = $this->construirAccesosDirectosDiscipulo(
+                $nivelesInscripcionCap,
+                $this->model->listarEvaluacionesActivas()
+            );
+            $moduloPermitidoDisc = false;
+            foreach ($accesosValidacionDisc as $accesoVal) {
+                if ((int)($accesoVal['nivel'] ?? 0) === $filtroNivelContexto
+                    && (int)($accesoVal['modulo'] ?? 0) === $filtroModuloContexto) {
+                    $moduloPermitidoDisc = true;
+                    break;
+                }
+            }
+            if (!$moduloPermitidoDisc) {
+                $this->redirect(
+                    'home/material/capacitacion-destino&cap_nivel=' . $filtroNivelContexto
+                    . '&mensaje=' . urlencode('Selecciona un módulo activo para hoy.')
+                    . '&tipo=error'
+                );
+            }
+        }
         $mapaLecciones = $this->obtenerMapaLeccionesMaterial();
         $leccionesContexto = $this->obtenerLeccionesParaNivelModulo($mapaLecciones, $filtroNivelContexto, $filtroModuloContexto);
         $filtroLeccionContexto = $this->normalizarLeccionTexto($contextoMaterial['leccion'] ?? '');
@@ -131,6 +189,32 @@ class DiscipularEvaluacionController extends BaseController {
                 return (int)($evaluacion['Nivel'] ?? 0) === $filtroNivelContexto
                     && (int)($evaluacion['Modulo_Numero'] ?? 0) === $filtroModuloContexto;
             }));
+        }
+
+        $evaluacionesModuloTodas = $evaluaciones;
+        $evaluacionesOcultasSinFechas = [];
+        $totalEvaluacionesFueraVigencia = 0;
+        if ($puedeGestionar && $filtroNivelContexto > 0 && $filtroModuloContexto > 0) {
+            foreach ($evaluacionesModuloTodas as $evaluacionModuloTmp) {
+                $inicioModuloTmp = $this->normalizarFechaYmd($evaluacionModuloTmp['Fecha_Habilitacion_Inicio'] ?? '');
+                $finModuloTmp = $this->normalizarFechaYmd($evaluacionModuloTmp['Fecha_Habilitacion_Fin'] ?? '');
+                if ($inicioModuloTmp === '' || $finModuloTmp === '') {
+                    $evaluacionesOcultasSinFechas[] = $evaluacionModuloTmp;
+                    continue;
+                }
+                if (!$this->esEvaluacionVigenteEnListadoMaestro($evaluacionModuloTmp)) {
+                    $totalEvaluacionesFueraVigencia++;
+                }
+            }
+
+            if (!$vistaHistorico) {
+                $evaluaciones = array_values(array_filter(
+                    $evaluacionesModuloTodas,
+                    fn(array $evaluacion): bool => $this->esEvaluacionVigenteEnListadoMaestro($evaluacion)
+                ));
+            } else {
+                $evaluaciones = $evaluacionesModuloTodas;
+            }
         }
 
         $intentosPorEvaluacion = [];
@@ -215,6 +299,16 @@ class DiscipularEvaluacionController extends BaseController {
             ? $this->construirAccesosDirectosDiscipulo($nivelesPermitidos, $evaluaciones)
             : [];
 
+        if ($esDiscipulo && $filtroNivelContexto > 0 && $filtroModuloContexto > 0) {
+            $accesosDirectosDiscipulo = array_values(array_filter(
+                $accesosDirectosDiscipulo,
+                static function (array $acceso) use ($filtroNivelContexto, $filtroModuloContexto): bool {
+                    return (int)($acceso['nivel'] ?? 0) === $filtroNivelContexto
+                        && (int)($acceso['modulo'] ?? 0) === $filtroModuloContexto;
+                }
+            ));
+        }
+
         $tareasPorModuloDiscipulo = [];
         if ($esDiscipulo && $idPersona > 0 && !empty($accesosDirectosDiscipulo)) {
             $modulosPermitidos = [];
@@ -280,8 +374,13 @@ class DiscipularEvaluacionController extends BaseController {
             }
         }
 
+        $pageTitleEvaluaciones = 'Discipular - Evaluaciones';
+        if ($filtroModuloContexto > 0 && ($contextoDesdeMaterial || $esDiscipulo || $esMaestroCap)) {
+            $pageTitleEvaluaciones = 'Evaluaciones módulo ' . $filtroModuloContexto;
+        }
+
         $this->view('programas/evaluaciones', [
-            'pageTitle' => 'Discipular - Evaluaciones',
+            'pageTitle' => $pageTitleEvaluaciones,
             'es_admin' => $esAdmin,
             'es_discipulo' => $esDiscipulo,
             'puede_gestionar' => $puedeGestionar,
@@ -313,6 +412,10 @@ class DiscipularEvaluacionController extends BaseController {
             'mensaje' => (string)($_GET['mensaje'] ?? ''),
             'tipo' => (string)($_GET['tipo'] ?? ''),
             'presentacion_ok' => !empty($_GET['presentacion_ok']),
+            'vista_historico' => $vistaHistorico,
+            'evaluaciones_ocultas_sin_fechas' => $evaluacionesOcultasSinFechas,
+            'total_evaluaciones_fuera_vigencia' => $totalEvaluacionesFueraVigencia,
+            'evaluaciones_modulo_todas' => $evaluacionesModuloTodas,
         ]);
     }
 
@@ -448,21 +551,15 @@ class DiscipularEvaluacionController extends BaseController {
 
         $filtroNivel = (int)($_GET['nivel'] ?? 0);
         $filtroModulo = (int)($_GET['modulo'] ?? 0);
-        if ($filtroNivel > 0 && $filtroModulo > 0) {
-            $accesosDirectosDiscipulo = array_values(array_filter($accesosDirectosDiscipulo, static function($acceso) use ($filtroNivel, $filtroModulo) {
-                return (int)($acceso['nivel'] ?? 0) === $filtroNivel && (int)($acceso['modulo'] ?? 0) === $filtroModulo;
-            }));
+        if ($filtroNivel <= 0 || $filtroModulo <= 0) {
+            $this->redirect('home/material/capacitacion-destino');
         }
 
-        $this->view('programas/tareas', [
-            'pageTitle' => 'Discipular - Tareas',
-            'accesos_directos_discipulo' => $accesosDirectosDiscipulo,
-            'tareas_por_modulo_discipulo' => $tareasPorModuloDiscipulo,
-            'mensaje' => (string)($_GET['mensaje'] ?? ''),
-            'tipo' => (string)($_GET['tipo'] ?? ''),
-            'filtro_nivel' => $filtroNivel,
-            'filtro_modulo' => $filtroModulo,
-        ]);
+        $this->redirect(
+            'home/material/capacitacion-destino&cap_nivel=' . $filtroNivel
+            . '&cap_modulo=' . $filtroModulo
+            . '&cap_seccion=tareas'
+        );
     }
 
     public function irClase(): void {
@@ -540,8 +637,13 @@ class DiscipularEvaluacionController extends BaseController {
     private function procesarCrearEvaluacion(): void {
         $titulo = trim((string)($_POST['titulo'] ?? ''));
         $descripcion = trim((string)($_POST['descripcion'] ?? ''));
+        $contextoMaterial = $this->obtenerContextoMaterialDesdeRequest();
         $nivel = (int)($_POST['nivel'] ?? 0);
         $moduloNumero = (int)($_POST['modulo_numero'] ?? 0);
+        if (!empty($contextoMaterial)) {
+            $nivel = (int)($contextoMaterial['nivel'] ?? 0);
+            $moduloNumero = (int)($contextoMaterial['modulo'] ?? 0);
+        }
         $leccion = $this->normalizarLeccionTexto($_POST['leccion'] ?? '');
         $puntajeMinimo = max(80.0, (float)($_POST['puntaje_minimo'] ?? 80));
         $esAutoSave = !empty($_POST['auto_save']);
@@ -1135,6 +1237,16 @@ class DiscipularEvaluacionController extends BaseController {
         return $fecha ? $fecha->format('Y-m-d') : '';
     }
 
+    private function esEvaluacionVigenteEnListadoMaestro(array $evaluacion): bool {
+        $inicio = $this->normalizarFechaYmd($evaluacion['Fecha_Habilitacion_Inicio'] ?? '');
+        $fin = $this->normalizarFechaYmd($evaluacion['Fecha_Habilitacion_Fin'] ?? '');
+        if ($inicio === '' || $fin === '') {
+            return false;
+        }
+
+        return $this->estaDisponiblePorFecha($evaluacion);
+    }
+
     private function estaDisponiblePorFecha(array $evaluacion): bool {
         $hoy = date('Y-m-d');
         $inicio = $this->normalizarFechaYmd($evaluacion['Fecha_Habilitacion_Inicio'] ?? '');
@@ -1229,10 +1341,12 @@ class DiscipularEvaluacionController extends BaseController {
 
         $contexto = $this->obtenerContextoMaterialDesdeRequest();
         $queryContexto = $this->construirQueryContextoMaterial($contexto);
+        $volverHistorico = !empty($_POST['vista_historico']) || (int)($_GET['historico'] ?? 0) === 1;
+        $queryHistorico = $volverHistorico ? '&historico=1' : '';
         $queryEvaluacion = $idEvaluacion > 0 ? '&evaluacion=' . $idEvaluacion : '';
         $queryResultado = $idResultado > 0 ? '&resultado=' . $idResultado : '';
         $queryEditar = $idEditar > 0 ? '&editar=' . $idEditar : '';
-        $this->redirect('programas/evaluaciones' . $queryContexto . $queryEditar . $queryEvaluacion . $queryResultado . '&mensaje=' . urlencode($mensaje) . '&tipo=' . urlencode($tipo));
+        $this->redirect('programas/evaluaciones' . $queryContexto . $queryHistorico . $queryEditar . $queryEvaluacion . $queryResultado . '&mensaje=' . urlencode($mensaje) . '&tipo=' . urlencode($tipo));
     }
 
     private function redirigirErrorFormularioEvaluacion(string $mensaje): void {
@@ -1913,8 +2027,8 @@ class DiscipularEvaluacionController extends BaseController {
         if ($tamano <= 0) {
             throw new Exception('Archivo de tarea vacío o inválido.');
         }
-        if ($tamano > 20 * 1024 * 1024) {
-            throw new Exception('Cada archivo de tarea debe pesar máximo 20MB.');
+        if ($tamano > 104857600) {
+            throw new Exception('Cada archivo de tarea debe pesar máximo 100MB.');
         }
 
         $nombreOriginal = trim((string)($archivo['name'] ?? 'tarea.bin'));

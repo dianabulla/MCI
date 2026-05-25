@@ -5,9 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $pageTitle ?? 'MCI Madrid Colombia' ?></title>
     <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/styles.css?v=20260515-sidebar-quick-1">
+    <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/notificaciones-topbar.css?v=20260519-chrome-mobile-1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
 </head>
-<body>
+<?php
+$productTourRole = '';
+if (class_exists('AuthController') && AuthController::estaAutenticado()) {
+    $esMenuMaestroTour = AuthController::esContextoMaestro() && !AuthController::esAdministrador();
+    $esMenuDiscipuloTour = AuthController::esVistaDiscipuloSimplificada();
+    if ($esMenuMaestroTour && AuthController::puedeVerMaterialCapacitacionDestino()) {
+        $productTourRole = 'maestro';
+    } elseif ($esMenuDiscipuloTour) {
+        $productTourRole = 'discipulo';
+    }
+}
+?>
+<body<?= $productTourRole !== '' ? ' data-product-tour-role="' . htmlspecialchars($productTourRole, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
 <?php
 $currentUrl = $_GET['url'] ?? 'home';
 $isActive = function(array $prefixes) use ($currentUrl) {
@@ -175,8 +188,15 @@ if ($puedeVerPendientesGanar) {
     }
 }
 
-if (class_exists('AuthController') && AuthController::estaAutenticado() && empty($_SESSION['sidebar_menu'])) {
-    AuthController::reconstruirMenuYSesion();
+if (class_exists('AuthController') && AuthController::estaAutenticado()) {
+    $menuVersionActual = (int)($_SESSION['sidebar_menu_version'] ?? 0);
+    $menuVersionEsperada = class_exists('MenuBuilder') ? MenuBuilder::SIDEBAR_MENU_VERSION : 0;
+    if (
+        empty($_SESSION['sidebar_menu'])
+        || ($menuVersionEsperada > 0 && $menuVersionActual < $menuVersionEsperada)
+    ) {
+        AuthController::reconstruirMenuYSesion();
+    }
 }
 
 $useDynamicSidebar = !empty($_SESSION['sidebar_menu']) && is_array($_SESSION['sidebar_menu']);
@@ -184,7 +204,7 @@ $sidebarMenu = $useDynamicSidebar ? (array)$_SESSION['sidebar_menu'] : [];
 ?>
 
 <div class="app-shell">
-    <aside class="app-sidebar">
+    <aside class="app-sidebar" id="appSidebar">
         <div class="sidebar-brand">
             <div class="sidebar-brand-main">
                 <img src="<?= ASSETS_URL ?>/img/logo-mci-madrid.svg" alt="Logo MCI Madrid" class="sidebar-brand-logo">
@@ -277,12 +297,12 @@ $sidebarMenu = $useDynamicSidebar ? (array)$_SESSION['sidebar_menu'] : [];
                 <span class="sidebar-link-icon"><i class="bi bi-folder2-open"></i></span><span class="sidebar-link-text">Material</span>
             </a>
             <?php elseif ($esMenuMaestro && $puedeVerMaterialCapDestino): ?>
-            <a class="sidebar-link <?= $isActive(['home/material/capacitacion-destino', 'home/material']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home/material/capacitacion-destino">
+            <a class="sidebar-link <?= $isActive(['home/material/capacitacion-destino', 'home/material']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home/material/capacitacion-destino" data-tour="sidebar-cap-destino">
                 <span class="sidebar-link-icon"><i class="bi bi-signpost-split-fill"></i></span><span class="sidebar-link-text">Material Cap. Destino</span>
             </a>
             <?php elseif ($esMenuDiscipulo): ?>
-            <a class="sidebar-link <?= $isActive(['programas/evaluaciones', 'programas/tareas']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=programas/evaluaciones">
-                <span class="sidebar-link-icon"><i class="bi bi-journal-check"></i></span><span class="sidebar-link-text">Evaluaciones</span>
+            <a class="sidebar-link <?= $isActive(['home/material/capacitacion-destino', 'programas/evaluaciones', 'programas/tareas']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home/material/capacitacion-destino" data-tour="sidebar-cap-destino">
+                <span class="sidebar-link-icon"><i class="bi bi-signpost-split-fill"></i></span><span class="sidebar-link-text">Cap. Destino</span>
             </a>
             <?php else: ?>
             <a class="sidebar-link <?= $isActive(['home']) && !$isActive(['home/material']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home">
@@ -401,10 +421,11 @@ $sidebarMenu = $useDynamicSidebar ? (array)$_SESSION['sidebar_menu'] : [];
     </aside>
 
     <div class="app-main">
-        <button type="button" id="sidebarArrowToggle" class="sidebar-arrow-toggle" aria-label="Ocultar menú lateral">
-            <i class="bi bi-chevron-left"></i>
-        </button>
+        <div class="app-chrome-bar">
+            <button type="button" id="sidebarArrowToggle" class="sidebar-arrow-toggle" aria-label="Menú" aria-controls="appSidebar" aria-expanded="false">
+                <i class="bi bi-list" aria-hidden="true"></i>
+            </button>
+            <?php include VIEWS . '/layout/_topbar_notificaciones.php'; ?>
+        </div>
 
-        <!-- Notificaciones eliminadas: campana/resumen removidos -->
-
-        <main class="main-content">
+        <main class="main-content<?= !empty($puedeVerPendientesGanar) || !empty($puedeVerGanarArea) ? ' main-content--with-topbar' : '' ?>">

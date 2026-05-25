@@ -1,0 +1,313 @@
+/* Escritorio: la barra no altera el flujo (hijos directos de .app-main) */
+.app-chrome-bar {
+    display: contents;
+}
+
+.main-content--with-topbar {
+    margin-top: 0;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+.app-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 120;
+    margin: 0 12px;
+    padding: 8px 12px;
+    background: #ffffff;
+    border: 1px solid #d7e2f2;
+    border-bottom: 0;
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 4px 14px rgba(15, 38, 79, 0.06);
+}
+
+.app-topbar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    min-height: 44px;
+}
+
+.app-topbar-title {
+    margin-right: auto;
+    display: none;
+}
+
+.fb-notif {
+    position: relative;
+}
+
+.fb-notif-bell {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    border: none;
+    border-radius: 50%;
+    background: #eef4ff;
+    color: #1f4f93;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.fb-notif-bell:hover,
+.fb-notif-bell[aria-expanded="true"] {
+    background: #dbeafe;
+    transform: translateY(-1px);
+}
+
+.fb-notif-bell i {
+    font-size: 18px;
+}
+
+.fb-notif-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #e41e3f;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 6px rgba(228, 30, 63, 0.35);
+}
+
+.fb-notif-panel {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: min(380px, calc(100vw - 28px));
+    background: #fff;
+    border: 1px solid #d7e2f2;
+    border-radius: 14px;
+    box-shadow: 0 16px 40px rgba(15, 38, 79, 0.18);
+    overflow: hidden;
+    z-index: 130;
+}
+
+.fb-notif-panel[hidden] {
+    display: none !important;
+}
+
+.fb-notif-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid #e8eef7;
+    background: #f8fbff;
+}
+
+.fb-notif-panel-head strong {
+    font-size: 16px;
+    color: #1c2b44;
+}
+
+.fb-notif-panel-link {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1877f2;
+    text-decoration: none;
+}
+
+.fb-notif-panel-link:hover {
+    text-decoration: underline;
+}
+
+.fb-notif-item {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 12px 14px;
+    text-decoration: none;
+    color: inherit;
+    border-bottom: 1px solid #eef2f8;
+    transition: background 0.12s ease;
+}
+
+.fb-notif-item:last-of-type {
+    border-bottom: 0;
+}
+
+.fb-notif-item:hover {
+    background: #f4f8ff;
+}
+
+.fb-notif-item-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-size: 18px;
+}
+
+.fb-notif-item-icon--almas {
+    background: linear-gradient(135deg, #00a884, #0d8f6f);
+}
+
+.fb-notif-item-icon--discipulos {
+    background: linear-gradient(135deg, #1877f2, #3b82f6);
+}
+
+.fb-notif-item-title {
+    display: block;
+    font-size: 14px;
+    font-weight: 700;
+    color: #1d2e4b;
+    line-height: 1.25;
+}
+
+.fb-notif-item-desc {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    color: #60728f;
+    line-height: 1.35;
+}
+
+.fb-notif-item-count {
+    min-width: 26px;
+    height: 22px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: #e41e3f;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fb-notif-empty {
+    padding: 14px;
+    text-align: center;
+    font-size: 13px;
+    color: #60728f;
+    background: #fafbfd;
+}
+
+/* Móvil y tablet: barra superior unificada (menú + campana) */
+@media (max-width: 1024px) {
+    .app-chrome-bar:only-child .sidebar-arrow-toggle,
+    .app-chrome-bar .sidebar-arrow-toggle:only-child {
+        margin-right: auto;
+    }
+
+    .app-chrome-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        position: sticky;
+        top: 0;
+        z-index: 350;
+        margin: 0 10px;
+        padding: 8px 10px;
+        min-height: 56px;
+        background: #ffffff;
+        border: 1px solid #d7e2f2;
+        border-radius: 12px 12px 0 0;
+        box-shadow: 0 4px 14px rgba(15, 38, 79, 0.08);
+    }
+
+    .app-chrome-bar .sidebar-arrow-toggle {
+        position: static;
+        left: auto;
+        right: auto;
+        top: auto;
+        bottom: auto;
+        flex: 0 0 44px;
+        width: 44px;
+        height: 44px;
+        margin: 0;
+        border-radius: 12px;
+        box-shadow: none;
+        background: #eef4ff;
+        border: 1px solid #c8d7ee;
+    }
+
+    .app-chrome-bar .sidebar-arrow-toggle:hover {
+        background: #dbeafe;
+        transform: none;
+    }
+
+    .app-chrome-bar .app-topbar {
+        position: static;
+        flex: 1 1 auto;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        background: transparent;
+    }
+
+    .app-chrome-bar .app-topbar-inner {
+        justify-content: flex-end;
+        min-height: 44px;
+    }
+
+    .app-chrome-bar .app-topbar-title {
+        display: none;
+    }
+
+    .main-content--with-topbar {
+        margin-top: 0;
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+    }
+
+    body:not(.sidebar-collapsed) .app-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 400;
+        width: min(300px, 88vw);
+        max-height: 100vh;
+        overflow-y: auto;
+        display: flex !important;
+        flex-direction: column;
+        height: 100vh !important;
+        margin: 0;
+        border-right: 1px solid #c9d8ee;
+        border-bottom: 0;
+        box-shadow: 8px 0 28px rgba(15, 38, 79, 0.18);
+    }
+
+    body:not(.sidebar-collapsed)::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 30, 55, 0.45);
+        z-index: 390;
+        pointer-events: auto;
+    }
+
+    body.sidebar-collapsed::before {
+        display: none;
+    }
+}
+
+@media (max-width: 1024px) {
+    .fb-notif-panel {
+        right: 0;
+        width: min(360px, calc(100vw - 24px));
+    }
+}

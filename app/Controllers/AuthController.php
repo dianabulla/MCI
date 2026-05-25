@@ -1352,7 +1352,7 @@ class AuthController extends BaseController {
         }
 
         if (self::usaVistaDiscipuloCapacitacionDestino()) {
-            return 'programas/evaluaciones';
+            return 'home/material/capacitacion-destino';
         }
 
         return 'home';

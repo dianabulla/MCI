@@ -120,7 +120,7 @@
                     subtitulo = resumenFiltrosDesdeForm(formFiltrosId);
                 }
 
-                const filas = sourceEl.querySelectorAll('tbody tr');
+                const filas = sourceEl.querySelectorAll('tbody tr:not(.cap-inscrito-row--oculta)');
                 if (!filas.length) {
                     alert('No hay filas para exportar con los filtros actuales.');
                     return;
