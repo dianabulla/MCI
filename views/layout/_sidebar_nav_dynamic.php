@@ -34,18 +34,38 @@ if (!function_exists('sidebar_nav_item_activo')) {
 }
 
 $sidebarMenu = (array)($sidebarMenu ?? ($_SESSION['sidebar_menu'] ?? []));
+$idsMenuMaterial = ['material_hub', 'material_cap_destino', 'capacitacion_destino'];
+$menuSoloMaterial = class_exists('AuthController')
+    && AuthController::estaAutenticado()
+    && AuthController::debeUsarMenuLateralSoloMaterial();
 foreach ($sidebarMenu as $itemNav):
     if (!is_array($itemNav)) {
         continue;
     }
+    if ($menuSoloMaterial) {
+        $idItem = (string)($itemNav['id'] ?? '');
+        if ($idItem === '' || !in_array($idItem, $idsMenuMaterial, true)) {
+            continue;
+        }
+    }
     if (
         class_exists('AuthController')
-        && AuthController::esContextoMaestro()
+        && AuthController::debeUsarMenuLateralSoloMaterial()
         && !AuthController::esAdministrador()
         && (string)($itemNav['id'] ?? '') === 'evaluaciones_maestro'
     ) {
         continue;
     }
+    $permisoNav = trim((string)($itemNav['permiso'] ?? ''));
+    if (
+        $permisoNav !== ''
+        && class_exists('AuthController')
+        && !AuthController::esAdministrador()
+        && !AuthController::puede($permisoNav)
+    ) {
+        continue;
+    }
+
     $rutaNav = trim((string)($itemNav['ruta'] ?? ''));
     if ($rutaNav === '') {
         continue;

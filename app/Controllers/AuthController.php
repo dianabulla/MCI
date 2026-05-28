@@ -18,7 +18,8 @@ class AuthController extends BaseController {
     private $userRoleModel;
     private $rolModel;
 
-    private const ROL_ADMINISTRADOR_ID = 6;
+    /** @see PermisosCatalogo::ID_ROL_ADMINISTRADOR_PERSONA */
+    private const ROL_ADMINISTRADOR_ID = 1;
     /** Versión del texto del acuerdo; al cambiar el texto, incrementar para exigir nueva aceptación. */
     public const ACUERDO_CONFIDENCIALIDAD_VERSION = '2026-05-19';
 
@@ -463,6 +464,13 @@ class AuthController extends BaseController {
         $rolActivo = $this->resolverRolActivoInicial($rolesDisponibles, $idRol);
         $idRolActivo = (int)($rolActivo['id_rol'] ?? $idRol);
         $permisos = $this->obtenerPermisosNormalizados($idRolActivo);
+        $nombreRolActivo = trim((string)($rolActivo['nombre_rol'] ?? ($user['Nombre_Rol'] ?? '')));
+        if ($nombreRolActivo === '' && $idRolActivo > 0) {
+            $rolActivoDb = $this->rolModel->getById($idRolActivo);
+            if (!empty($rolActivoDb)) {
+                $nombreRolActivo = trim((string)($rolActivoDb['Nombre_Rol'] ?? ''));
+            }
+        }
 
         $nombreSesion = trim((string)($user['Nombre'] ?? '') . ' ' . (string)($user['Apellido'] ?? ''));
         if ($nombreSesion === '') {
@@ -483,7 +491,7 @@ class AuthController extends BaseController {
         $_SESSION['usuario_persona_id'] = $idUsuario > 0 ? $idUsuario : null;
         $_SESSION['usuario_nombre'] = $nombreSesion;
         $_SESSION['usuario_rol'] = $idRolActivo;
-        $_SESSION['usuario_rol_nombre'] = (string)($rolActivo['nombre_rol'] ?? ($user['Nombre_Rol'] ?? ''));
+        $_SESSION['usuario_rol_nombre'] = $nombreRolActivo;
         $_SESSION['available_roles'] = $rolesDisponibles;
         $_SESSION['active_context'] = (string)($rolActivo['context_key'] ?? $this->resolverContextoPorRolNombre((string)($rolActivo['nombre_rol'] ?? '')));
         $_SESSION['active_context_role_id'] = $idRolActivo;
@@ -1040,6 +1048,28 @@ class AuthController extends BaseController {
     }
 
     /**
+     * Atajo para vistas: ocultar botones/secciones si el rol no tiene la acción (crear, editar, etc.).
+     */
+    public static function puedeMostrarAccionModulo(string $modulo, string $accion = 'ver'): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+        $modulo = strtolower(trim($modulo));
+        $accion = strtolower(trim($accion));
+        if ($modulo === '' || $accion === '') {
+            return false;
+        }
+        return self::puede($modulo . ':' . $accion);
+    }
+
+    /**
+     * Maestro o discípulo: menú lateral y panel de inicio reducidos.
+     */
+    public static function esPerfilMenuLateralReducido(): bool {
+        return self::debeUsarMenuLateralSoloMaterial() || self::esVistaDiscipuloSimplificada();
+    }
+
+    /**
      * Lista plana de permisos activos en sesión (para vistas / JS).
      *
      * @return array<int, string>
@@ -1115,9 +1145,9 @@ class AuthController extends BaseController {
             return false;
         }
 
-        // Compatibilidad: para roles con acceso total de datos, permitir acceso
-        // cuando aun no exista configuracion explicita del modulo.
-        if (DataIsolation::tieneAccesoTotal()) {
+        // Compatibilidad: acceso total de datos sin matriz (ganar, células…).
+        // Pastor: datos amplios vía DataIsolation, pero menús según permisos configurados.
+        if (DataIsolation::tieneAccesoTotal() && !DataIsolation::esPastor()) {
             return true;
         }
 
@@ -1168,11 +1198,27 @@ class AuthController extends BaseController {
      * Verificar si es administrador
      */
     public static function esAdministrador() {
+        if (self::esCuentaUsuarioAccesoAdministrativaPura()) {
+            return true;
+        }
+
         $rolId = isset($_SESSION['usuario_rol']) ? (int) $_SESSION['usuario_rol'] : 0;
         $rolNombre = trim((string)($_SESSION['usuario_rol_nombre'] ?? ''));
-        // Misma regla que "rol protegido" en Permisos: NO usar substr "admin"
-        // (p. ej. "Administrativo" no es administrador global).
-        return PermisosCatalogo::esRolProtegidoPermisos($rolId, $rolNombre);
+        if ($rolNombre === '' && $rolId > 0) {
+            $rolesDisponibles = (array)($_SESSION['available_roles'] ?? []);
+            foreach ($rolesDisponibles as $rolDisponible) {
+                if ((int)($rolDisponible['id_rol'] ?? 0) !== $rolId) {
+                    continue;
+                }
+                $rolNombre = trim((string)($rolDisponible['nombre_rol'] ?? ''));
+                if ($rolNombre !== '') {
+                    $_SESSION['usuario_rol_nombre'] = $rolNombre;
+                }
+                break;
+            }
+        }
+
+        return PermisosCatalogo::esRolAdministradorGlobal($rolId, $rolNombre);
     }
 
     /**
@@ -1184,7 +1230,25 @@ class AuthController extends BaseController {
         }
         $src = (string)$_SESSION['auth_user_source'];
         $uid = (int)($_SESSION['usuario_id'] ?? 0);
-        return $src === 'acceso' && $uid === 0;
+        if (!($src === 'acceso' && $uid === 0)) {
+            return false;
+        }
+
+        $rolId = (int)($_SESSION['usuario_rol'] ?? 0);
+        $rolNombre = trim((string)($_SESSION['usuario_rol_nombre'] ?? ''));
+        if ($rolNombre === '' && $rolId > 0) {
+            $rolesDisponibles = (array)($_SESSION['available_roles'] ?? []);
+            foreach ($rolesDisponibles as $rolDisponible) {
+                if ((int)($rolDisponible['id_rol'] ?? 0) !== $rolId) {
+                    continue;
+                }
+                $rolNombre = trim((string)($rolDisponible['nombre_rol'] ?? ''));
+                break;
+            }
+        }
+
+        // Solo cuentas de acceso con rol ADMIN se consideran administrativas puras.
+        return PermisosCatalogo::esRolAdministradorGlobal($rolId, $rolNombre);
     }
 
     /**
@@ -1288,8 +1352,87 @@ class AuthController extends BaseController {
             return false;
         }
 
-        $nombreRol = self::normalizarTexto((string)($_SESSION['usuario_rol_nombre'] ?? ''));
-        return strpos($nombreRol, 'maestro') !== false || strpos($nombreRol, 'teacher') !== false;
+        $nombreRol = (string)($_SESSION['usuario_rol_nombre'] ?? '');
+        if (PermisosCatalogo::esNombreRolMaestro($nombreRol)) {
+            return true;
+        }
+
+        $idRolActivo = (int)($_SESSION['usuario_rol'] ?? 0);
+        if ($idRolActivo > 0) {
+            require_once APP . '/Models/UserRole.php';
+            $userRoleModel = new UserRole();
+            $idRolMaestro = (int)$userRoleModel->buscarRolPorAlias('maestro');
+            if ($idRolMaestro > 0 && $idRolActivo === $idRolMaestro) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Menú lateral: solo Material / Cap. Destino (maestro o permisos acotados a material).
+     */
+    public static function debeUsarMenuLateralSoloMaterial(): bool {
+        if (self::esAdministrador()) {
+            return false;
+        }
+
+        if (self::getActiveContext() === 'maestro' || self::esRolMaestroUsuario()) {
+            return true;
+        }
+
+        return self::sesionSoloTienePermisoVerMaterial();
+    }
+
+    /**
+     * Rol con acceso únicamente a bibliotecas de material (sin Ganar, Células, etc.).
+     */
+    public static function sesionSoloTienePermisoVerMaterial(): bool {
+        self::sincronizarPermisosSesionActual();
+
+        $permisos = (array)($_SESSION['permisos'] ?? []);
+        if ($permisos === []) {
+            return false;
+        }
+
+        $modulosMaterial = [
+            'material',
+            'material_capacitacion_destino',
+            'material_capacitacion_destino_subir',
+            'ver_material',
+            'materiales_celulas',
+        ];
+
+        $tieneVerMaterial = false;
+
+        foreach ($permisos as $modulo => $acciones) {
+            if (!is_array($acciones) || empty($acciones['ver'])) {
+                continue;
+            }
+
+            $mod = strtolower(trim((string)$modulo));
+            if ($mod === '') {
+                continue;
+            }
+
+            if (strpos($mod, 'acceso_rapido_') === 0) {
+                continue;
+            }
+
+            $esMaterial = in_array($mod, $modulosMaterial, true)
+                || strpos($mod, 'material') === 0
+                || $mod === 'ver_material';
+
+            if ($esMaterial) {
+                $tieneVerMaterial = true;
+                continue;
+            }
+
+            return false;
+        }
+
+        return $tieneVerMaterial;
     }
 
     /**
@@ -1578,7 +1721,7 @@ class AuthController extends BaseController {
             return 'lider';
         }
 
-        if (strpos($rol, 'maestro') !== false || strpos($rol, 'teacher') !== false) {
+        if (PermisosCatalogo::esNombreRolMaestro($nombreRol)) {
             return 'maestro';
         }
 

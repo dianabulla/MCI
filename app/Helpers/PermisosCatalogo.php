@@ -240,23 +240,79 @@ class PermisosCatalogo {
         return $json !== false ? $json : '{}';
     }
 
-    /**
-     * Roles cuyos permisos no se editan desde esta pantalla (solo lectura / bloqueado).
-     * Importante: NO usar substr "admin" suelto: palabras como "Administrativo" activaban
-     * falsos positivos y bloqueaban roles de UV u otros.
-     */
-    public static function esRolProtegidoPermisos(int $idRol, string $nombreRol = ''): bool {
-        if ($idRol === 6) {
-            return true;
-        }
-        $nombreRol = trim($nombreRol);
-        if ($nombreRol === '') {
+    /** Id habitual de Administrador en catálogo persona (no confundir con Pastores = 6). */
+    public const ID_ROL_ADMINISTRADOR_PERSONA = 1;
+
+    /** Id usado en semillas antiguas de permisos (sistema_autenticacion.sql). */
+    public const ID_ROL_ADMINISTRADOR_LEGACY = 6;
+
+    private static function normalizarNombreRol(string $nombreRol): string {
+        return mb_strtolower(trim($nombreRol), 'UTF-8');
+    }
+
+    /** Maestro / Teacher (Capacitación Destino y material). */
+    public static function esNombreRolMaestro(string $nombreRol): bool {
+        $norm = self::normalizarNombreRol($nombreRol);
+        if ($norm === '') {
             return false;
         }
-        $norm = mb_strtolower($nombreRol, 'UTF-8');
-        if ($norm === 'admin') {
+
+        return strpos($norm, 'maestro') !== false
+            || strpos($norm, 'teacher') !== false
+            || strpos($norm, 'docente') !== false
+            || strpos($norm, 'profesor') !== false;
+    }
+
+    /** Pastor / Pastores / Pastora — nunca administrador global. */
+    public static function esNombreRolPastoral(string $nombreRol): bool {
+        $norm = self::normalizarNombreRol($nombreRol);
+        if ($norm === '') {
+            return false;
+        }
+
+        return (bool)preg_match('/\bpastor(a|es)?\b/u', $norm);
+    }
+
+    /** Administrador del sistema por nombre (no usar substr "admin" suelto). */
+    public static function esNombreRolAdministrador(string $nombreRol): bool {
+        $norm = self::normalizarNombreRol($nombreRol);
+        if ($norm === '') {
+            return false;
+        }
+        if ($norm === 'admin' || $norm === 'administrador') {
             return true;
         }
+
         return (bool)preg_match('/\badministrador\b/u', $norm);
+    }
+
+    /**
+     * Rol administrador global (acceso total, matriz de permisos bloqueada).
+     * Hay dos esquemas en BD: Admin en Id 1 (persona) o Admin en Id 6 (semilla antigua).
+     * Pastores suele ser Id 6 en catálogo persona — se excluye por nombre.
+     */
+    public static function esRolAdministradorGlobal(int $idRol, string $nombreRol = ''): bool {
+        if (self::esNombreRolPastoral($nombreRol)) {
+            return false;
+        }
+
+        if (self::esNombreRolAdministrador($nombreRol)) {
+            return true;
+        }
+
+        $norm = self::normalizarNombreRol($nombreRol);
+        if ($norm !== '') {
+            return false;
+        }
+
+        // Sin nombre en sesión: compatibilidad con ambos IDs históricos (no pastoral).
+        return in_array($idRol, [self::ID_ROL_ADMINISTRADOR_PERSONA, self::ID_ROL_ADMINISTRADOR_LEGACY], true);
+    }
+
+    /**
+     * Roles cuyos permisos no se editan desde la pantalla de permisos.
+     */
+    public static function esRolProtegidoPermisos(int $idRol, string $nombreRol = ''): bool {
+        return self::esRolAdministradorGlobal($idRol, $nombreRol);
     }
 }

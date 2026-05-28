@@ -11,7 +11,7 @@
 <?php
 $productTourRole = '';
 if (class_exists('AuthController') && AuthController::estaAutenticado()) {
-    $esMenuMaestroTour = AuthController::esContextoMaestro() && !AuthController::esAdministrador();
+    $esMenuMaestroTour = AuthController::debeUsarMenuLateralSoloMaterial();
     $esMenuDiscipuloTour = AuthController::esVistaDiscipuloSimplificada();
     if ($esMenuMaestroTour && AuthController::puedeVerMaterialCapacitacionDestino()) {
         $productTourRole = 'maestro';
@@ -37,7 +37,7 @@ $puedeVer = static function (string $modulo) {
 };
 
 $esDiscipuloMenuDirecto = AuthController::esRolDiscipuloUsuario() && !AuthController::esAdministrador();
-$esMenuMaestro = AuthController::esContextoMaestro() && !AuthController::esAdministrador();
+$esMenuMaestro = AuthController::debeUsarMenuLateralSoloMaterial();
 $esMenuDiscipulo = AuthController::esVistaDiscipuloSimplificada();
 $puedeVerMaterialCapDestino = AuthController::puedeVerMaterialCapacitacionDestino();
 
@@ -189,18 +189,36 @@ if ($puedeVerPendientesGanar) {
 }
 
 if (class_exists('AuthController') && AuthController::estaAutenticado()) {
+    require_once APP . '/Helpers/MenuBuilder.php';
     $menuVersionActual = (int)($_SESSION['sidebar_menu_version'] ?? 0);
-    $menuVersionEsperada = class_exists('MenuBuilder') ? MenuBuilder::SIDEBAR_MENU_VERSION : 0;
-    if (
-        empty($_SESSION['sidebar_menu'])
-        || ($menuVersionEsperada > 0 && $menuVersionActual < $menuVersionEsperada)
-    ) {
+    $menuVersionEsperada = MenuBuilder::SIDEBAR_MENU_VERSION;
+    $sidebarMenuSesionTmp = is_array($_SESSION['sidebar_menu'] ?? null) ? $_SESSION['sidebar_menu'] : [];
+    $menuDesactualizado = empty($sidebarMenuSesionTmp)
+        || $menuVersionActual < $menuVersionEsperada
+        || ($esMenuMaestro && !MenuBuilder::menuSesionEsSoloMaterial($sidebarMenuSesionTmp))
+        || ($esMenuDiscipulo && !MenuBuilder::menuSesionEsSoloDiscipulo($sidebarMenuSesionTmp));
+
+    if ($menuDesactualizado) {
         AuthController::reconstruirMenuYSesion();
     }
 }
 
-$useDynamicSidebar = !empty($_SESSION['sidebar_menu']) && is_array($_SESSION['sidebar_menu']);
-$sidebarMenu = $useDynamicSidebar ? (array)$_SESSION['sidebar_menu'] : [];
+$menuLateralReducido = $esMenuMaestro || $esMenuDiscipulo;
+$sidebarMenuSesion = is_array($_SESSION['sidebar_menu'] ?? null) ? $_SESSION['sidebar_menu'] : [];
+if ($esMenuMaestro) {
+    $useDynamicSidebar = true;
+    $sidebarMenu = MenuBuilder::menuSesionEsSoloMaterial($sidebarMenuSesion)
+        ? $sidebarMenuSesion
+        : MenuBuilder::construirMenu();
+} elseif ($esMenuDiscipulo) {
+    $useDynamicSidebar = true;
+    $sidebarMenu = MenuBuilder::menuSesionEsSoloDiscipulo($sidebarMenuSesion)
+        ? $sidebarMenuSesion
+        : MenuBuilder::construirMenu();
+} else {
+    $useDynamicSidebar = !empty($sidebarMenuSesion);
+    $sidebarMenu = $useDynamicSidebar ? $sidebarMenuSesion : [];
+}
 ?>
 
 <div class="app-shell">
@@ -292,14 +310,16 @@ $sidebarMenu = $useDynamicSidebar ? (array)$_SESSION['sidebar_menu'] : [];
         <nav class="sidebar-nav">
             <?php if ($useDynamicSidebar): ?>
                 <?php include VIEWS . '/layout/_sidebar_nav_dynamic.php'; ?>
-            <?php elseif ($esMenuMaestro && AuthController::puedeAccederHubMaterialCompleto()): ?>
+            <?php elseif ($esMenuMaestro): ?>
+            <?php if (AuthController::puedeAccederHubMaterialCompleto()): ?>
             <a class="sidebar-link <?= $isActive(['home/material', 'celulas/materiales', 'teen']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home/material">
                 <span class="sidebar-link-icon"><i class="bi bi-folder2-open"></i></span><span class="sidebar-link-text">Material</span>
             </a>
-            <?php elseif ($esMenuMaestro && $puedeVerMaterialCapDestino): ?>
+            <?php elseif ($puedeVerMaterialCapDestino): ?>
             <a class="sidebar-link <?= $isActive(['home/material/capacitacion-destino', 'home/material']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home/material/capacitacion-destino" data-tour="sidebar-cap-destino">
                 <span class="sidebar-link-icon"><i class="bi bi-signpost-split-fill"></i></span><span class="sidebar-link-text">Material Cap. Destino</span>
             </a>
+            <?php endif; ?>
             <?php elseif ($esMenuDiscipulo): ?>
             <a class="sidebar-link <?= $isActive(['home/material/capacitacion-destino', 'programas/evaluaciones', 'programas/tareas']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home/material/capacitacion-destino" data-tour="sidebar-cap-destino">
                 <span class="sidebar-link-icon"><i class="bi bi-signpost-split-fill"></i></span><span class="sidebar-link-text">Cap. Destino</span>

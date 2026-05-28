@@ -5,7 +5,7 @@
  */
 class MenuBuilder {
     /** Incrementar al cambiar estructura del menú lateral (invalida caché en sesión). */
-    public const SIDEBAR_MENU_VERSION = 3;
+    public const SIDEBAR_MENU_VERSION = 5;
 
     /**
      * Sincroniza permisos planos y menú en $_SESSION.
@@ -28,12 +28,22 @@ class MenuBuilder {
      * @return array<int, array<string, mixed>>
      */
     private static function filtrarMenuMaestro(array $items): array {
-        if (!AuthController::esContextoMaestro() || AuthController::esAdministrador()) {
+        if (!self::debeUsarMenuMaestro()) {
             return $items;
         }
 
         return array_values(array_filter($items, static function ($item) {
-            return is_array($item) && (string)($item['id'] ?? '') !== 'evaluaciones_maestro';
+            if (!is_array($item)) {
+                return false;
+            }
+            if ((string)($item['id'] ?? '') === 'evaluaciones_maestro') {
+                return false;
+            }
+            $permiso = trim((string)($item['permiso'] ?? ''));
+            if ($permiso !== '' && !AuthController::puede($permiso)) {
+                return false;
+            }
+            return true;
         }));
     }
 
@@ -70,8 +80,8 @@ class MenuBuilder {
      * @return array<int, array<string, mixed>>
      */
     public static function construirMenu(): array {
-        if (AuthController::esContextoMaestro() && !AuthController::esAdministrador()) {
-            return self::menuMaestro();
+        if (self::debeUsarMenuMaestro()) {
+            return self::filtrarItems(self::menuMaestro());
         }
 
         if (self::debeUsarMenuDiscipulo()) {
@@ -82,10 +92,65 @@ class MenuBuilder {
     }
 
     /**
+     * Maestro (rol o contexto): menú lateral reducido según permisos de material.
+     */
+    private static function debeUsarMenuMaestro(): bool {
+        return AuthController::debeUsarMenuLateralSoloMaterial();
+    }
+
+    /**
+     * El menú en sesión corresponde al perfil material (no un menú estándar antiguo).
+     *
+     * @param array<int, array<string, mixed>>|null $menu
+     */
+    public static function menuSesionEsSoloMaterial(?array $menu = null): bool {
+        $menu = $menu ?? (array)($_SESSION['sidebar_menu'] ?? []);
+        if ($menu === []) {
+            return true;
+        }
+
+        $idsPermitidos = ['material_hub', 'material_cap_destino', 'capacitacion_destino'];
+        foreach ($menu as $item) {
+            if (!is_array($item)) {
+                return false;
+            }
+            $id = (string)($item['id'] ?? '');
+            if ($id === '' || !in_array($id, $idsPermitidos, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Menú en sesión del perfil discípulo (Cap. Destino).
+     *
+     * @param array<int, array<string, mixed>>|null $menu
+     */
+    public static function menuSesionEsSoloDiscipulo(?array $menu = null): bool {
+        $menu = $menu ?? (array)($_SESSION['sidebar_menu'] ?? []);
+        if ($menu === []) {
+            return true;
+        }
+
+        foreach ($menu as $item) {
+            if (!is_array($item)) {
+                return false;
+            }
+            if ((string)($item['id'] ?? '') !== 'capacitacion_destino') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Menú reducido discípulo: por contexto activo o rol (sin consultar inscripciones).
      */
     private static function debeUsarMenuDiscipulo(): bool {
-        if (AuthController::esAdministrador() || AuthController::esContextoMaestro()) {
+        if (AuthController::esAdministrador() || self::debeUsarMenuMaestro()) {
             return false;
         }
 
@@ -123,6 +188,9 @@ class MenuBuilder {
                     'programas/evaluaciones',
                     'programas/tareas',
                 ],
+                'visible' => static function () {
+                    return AuthController::puedeAccederHubMaterialCompleto();
+                },
             ];
         } elseif (AuthController::puedeVerMaterialCapacitacionDestino()) {
             $items[] = [
@@ -136,6 +204,9 @@ class MenuBuilder {
                     'programas/evaluaciones',
                     'programas/tareas',
                 ],
+                'visible' => static function () {
+                    return AuthController::puedeVerMaterialCapacitacionDestino();
+                },
             ];
         }
 
@@ -261,7 +332,7 @@ class MenuBuilder {
      * @return array<string, mixed>
      */
     public static function construirAccesosRapidos(): array {
-        if (AuthController::esContextoMaestro() || self::debeUsarMenuDiscipulo()) {
+        if (self::debeUsarMenuMaestro() || self::debeUsarMenuDiscipulo()) {
             return [];
         }
 
@@ -330,7 +401,7 @@ class MenuBuilder {
                 $item['ruta'] = (string)$item['ruta_resolver']();
             }
 
-            unset($item['visible'], $item['permiso'], $item['ruta_resolver']);
+            unset($item['visible'], $item['ruta_resolver']);
             $resultado[] = $item;
         }
 
