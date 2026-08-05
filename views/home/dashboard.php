@@ -4,7 +4,8 @@
 $cardsDashboard = [];
 $esDiscipuloSoloDiscipular = AuthController::usaVistaDiscipuloCapacitacionDestino()
     && !AuthController::esAdministrador();
-$esContextoMaestro = AuthController::getActiveContext() === 'maestro';
+$esContextoMaestro = AuthController::esContextoMaestro();
+$esPerfilMenuReducido = $esContextoMaestro || AuthController::esVistaDiscipuloSimplificada();
 
 if ($esDiscipuloSoloDiscipular) {
     $cardsDashboard[] = [
@@ -32,7 +33,8 @@ if (!$esDiscipuloSoloDiscipular && AuthController::puedeAccederAreaGanarConsolid
     ];
 }
 
-if (!$esDiscipuloSoloDiscipular
+if (!$esPerfilMenuReducido
+    && !$esDiscipuloSoloDiscipular
     && AuthController::puedeVerModuloPersonasGanar()
     && AuthController::puede('ministerios:ver')) {
     $cardsDashboard[] = [
@@ -46,8 +48,8 @@ if (!$esDiscipuloSoloDiscipular
     ];
 }
 
-if (!$esDiscipuloSoloDiscipular
-    && !$esContextoMaestro
+if (!$esPerfilMenuReducido
+    && !$esDiscipuloSoloDiscipular
     && !AuthController::esAdministrador()
     && !AuthController::puede('personas:ver')
     && AuthController::puede('discipular_evaluaciones:ver')) {
@@ -62,7 +64,7 @@ if (!$esDiscipuloSoloDiscipular
     ];
 }
 
-if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::puede('celulas:ver'))) {
+if (!$esPerfilMenuReducido && !$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::puede('celulas:ver'))) {
     $cardsDashboard[] = [
         'titulo' => 'Enviar',
         'subtitulo' => 'Celulas activas en mision',
@@ -74,7 +76,7 @@ if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthCon
     ];
 }
 
-if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::puede('teen:ver'))) {
+if (!$esPerfilMenuReducido && !$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::puede('teen:ver'))) {
     $cardsDashboard[] = [
         'titulo' => 'Teens',
         'subtitulo' => 'Acompanamiento de nuevas generaciones',
@@ -86,8 +88,8 @@ if (!$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthCon
     ];
 }
 
-if (!$esDiscipuloSoloDiscipular
-    && !$esContextoMaestro
+if (!$esPerfilMenuReducido
+    && !$esDiscipuloSoloDiscipular
     && (
         AuthController::esAdministrador()
         || AuthController::puede('programas:ver')

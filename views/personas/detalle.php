@@ -106,7 +106,7 @@ if ($returnTo === 'celulas') {
         <div class="detail-grid">
             <div class="detail-item">
                 <span class="detail-label">Célula:</span>
-                <span class="detail-value"><?= htmlspecialchars($persona['Nombre_Celula'] ?? 'Sin célula') ?></span>
+                <span class="detail-value"><?= htmlspecialchars($persona['Etiqueta_Celula'] ?? ($persona['Nombre_Celula'] ?? 'Sin célula')) ?></span>
             </div>
 
             <div class="detail-item">

@@ -224,7 +224,7 @@ class PeticionController extends BaseController {
     public function eliminar() {
         // Verificar permiso de eliminar
         if (!AuthController::puede('peticiones:eliminar')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         

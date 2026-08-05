@@ -204,6 +204,186 @@ class EscuelaFormacionInscripcion extends BaseModel {
         } catch (Exception $e) {
             error_log('No se pudo asegurar columna Entrego_Libro en escuela_formacion_pago_movimiento: ' . $e->getMessage());
         }
+
+        try {
+            $stmt = $this->db->prepare("SHOW COLUMNS FROM {$this->table} LIKE ?");
+            $stmt->execute(['Documentos']);
+            $col = $stmt->fetch();
+            if (empty($col)) {
+                $this->db->exec("ALTER TABLE {$this->table} ADD COLUMN Documentos TEXT NULL AFTER Fuente");
+            }
+        } catch (Exception $e) {
+            error_log('No se pudo asegurar columna Documentos en escuela_formacion_inscripcion: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * @return array<int, array{nombre:string, archivo:string, url:string, fecha:string}>
+     */
+    public function decodificarDocumentos(?string $json): array {
+        if ($json === null || trim($json) === '') {
+            return [];
+        }
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+        $out = [];
+        foreach ($decoded as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $archivo = trim((string)($item['archivo'] ?? ''));
+            $nombre = trim((string)($item['nombre'] ?? $archivo));
+            if ($archivo === '') {
+                continue;
+            }
+            $out[] = [
+                'nombre' => $nombre !== '' ? $nombre : $archivo,
+                'archivo' => $archivo,
+                'url' => trim((string)($item['url'] ?? '')),
+                'fecha' => trim((string)($item['fecha'] ?? '')),
+            ];
+        }
+        return $out;
+    }
+
+    public const EXTENSIONES_DOCUMENTOS_UV = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx'];
+    public const TAMANO_MAX_DOCUMENTO_UV = 8 * 1024 * 1024;
+
+    /**
+     * Guarda archivos subidos y los agrega al JSON Documentos de la inscripción.
+     *
+     * @param mixed $filesInput $_FILES['documentos_uv'] o null
+     * @return array{guardados:int, errores:array<int,string>}
+     */
+    public function adjuntarDocumentosDesdeUpload(int $idInscripcion, $filesInput): array {
+        $idInscripcion = (int)$idInscripcion;
+        if ($idInscripcion <= 0) {
+            return ['guardados' => 0, 'errores' => []];
+        }
+
+        $archivos = $this->normalizarArchivosMultiples(is_array($filesInput) ? $filesInput : []);
+        if ($archivos === []) {
+            return ['guardados' => 0, 'errores' => []];
+        }
+
+        $inscripcion = $this->getByIdInscripcion($idInscripcion);
+        if (empty($inscripcion)) {
+            throw new Exception('La inscripción no existe.');
+        }
+
+        $existentes = $this->decodificarDocumentos((string)($inscripcion['Documentos'] ?? ''));
+        $dir = $this->directorioDocumentosInscripcion($idInscripcion);
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            throw new Exception('No se pudo crear la carpeta de documentos.');
+        }
+
+        $basePublic = rtrim((string)(defined('PUBLIC_URL') ? PUBLIC_URL : ''), '/');
+        $guardados = 0;
+        $errores = [];
+
+        foreach ($archivos as $archivo) {
+            $nombreOriginal = trim((string)($archivo['name'] ?? ''));
+            $tmp = (string)($archivo['tmp_name'] ?? '');
+            $error = (int)($archivo['error'] ?? UPLOAD_ERR_NO_FILE);
+            $size = (int)($archivo['size'] ?? 0);
+
+            if ($error === UPLOAD_ERR_NO_FILE || $nombreOriginal === '' || $tmp === '') {
+                continue;
+            }
+            if ($error !== UPLOAD_ERR_OK) {
+                $errores[] = 'Error al subir «' . $nombreOriginal . '».';
+                continue;
+            }
+            if ($size <= 0 || $size > self::TAMANO_MAX_DOCUMENTO_UV) {
+                $errores[] = '«' . $nombreOriginal . '» supera el máximo de 8 MB.';
+                continue;
+            }
+
+            $ext = strtolower(pathinfo($nombreOriginal, PATHINFO_EXTENSION));
+            if (!in_array($ext, self::EXTENSIONES_DOCUMENTOS_UV, true)) {
+                $errores[] = 'Tipo no permitido: «' . $nombreOriginal . '».';
+                continue;
+            }
+
+            $slug = preg_replace('/[^a-zA-Z0-9._-]+/', '_', pathinfo($nombreOriginal, PATHINFO_FILENAME)) ?? 'documento';
+            $slug = trim(substr($slug, 0, 60), '_');
+            if ($slug === '') {
+                $slug = 'documento';
+            }
+
+            $nombreFinal = date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '_' . $slug . '.' . $ext;
+            $destino = $dir . DIRECTORY_SEPARATOR . $nombreFinal;
+
+            if (!is_uploaded_file($tmp) || !@move_uploaded_file($tmp, $destino)) {
+                $errores[] = 'No se pudo guardar «' . $nombreOriginal . '».';
+                continue;
+            }
+
+            $url = $basePublic . '/uploads/escuelas_uv/' . $idInscripcion . '/' . rawurlencode($nombreFinal);
+            $existentes[] = [
+                'nombre' => $nombreOriginal,
+                'archivo' => $nombreFinal,
+                'url' => $url,
+                'fecha' => date('Y-m-d H:i'),
+            ];
+            $guardados++;
+        }
+
+        if ($guardados === 0) {
+            return ['guardados' => 0, 'errores' => $errores];
+        }
+
+        $json = json_encode($existentes, JSON_UNESCAPED_UNICODE);
+        if ($json === false) {
+            throw new Exception('No se pudo registrar la lista de documentos.');
+        }
+
+        $this->execute(
+            "UPDATE {$this->table} SET Documentos = ? WHERE Id_Inscripcion = ?",
+            [$json, $idInscripcion]
+        );
+
+        return ['guardados' => $guardados, 'errores' => $errores];
+    }
+
+    private function directorioDocumentosInscripcion(int $idInscripcion): string {
+        $root = defined('ROOT') ? ROOT : dirname(__DIR__, 2);
+        return $root . '/public/uploads/escuelas_uv/' . $idInscripcion;
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizarArchivosMultiples(array $input): array {
+        if ($input === [] || !isset($input['name'])) {
+            return [];
+        }
+
+        if (!is_array($input['name'])) {
+            if ((int)($input['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                return [];
+            }
+            return [$input];
+        }
+
+        $out = [];
+        foreach ($input['name'] as $i => $name) {
+            if ((int)($input['error'][$i] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                continue;
+            }
+            $out[] = [
+                'name' => $name,
+                'type' => $input['type'][$i] ?? '',
+                'tmp_name' => $input['tmp_name'][$i] ?? '',
+                'error' => $input['error'][$i] ?? UPLOAD_ERR_NO_FILE,
+                'size' => $input['size'][$i] ?? 0,
+            ];
+        }
+
+        return $out;
     }
 
     public function actualizarPagoInscripcion($idInscripcion, $metodoPago, $tipoPago, $valorPago, $referenciaPago, $recibidoPor = '', $entregoLibro = null) {
@@ -584,8 +764,9 @@ class EscuelaFormacionInscripcion extends BaseModel {
             $this->agregarProgramasDesdeFilas(
                 $this->query(
                     "SELECT DISTINCT Programa FROM {$this->table}
-                     WHERE {$exprCedula} = ?",
-                    [$cedulaNorm]
+                     WHERE {$exprCedula} = ?
+                       AND (Id_Persona IS NULL OR Id_Persona = 0 OR Id_Persona = ?)",
+                    [$cedulaNorm, $idPersona]
                 ),
                 $programas
             );
@@ -596,8 +777,9 @@ class EscuelaFormacionInscripcion extends BaseModel {
             $this->agregarProgramasDesdeFilas(
                 $this->query(
                     "SELECT DISTINCT Programa FROM {$this->table}
-                     WHERE {$exprTelefono} = ?",
-                    [$telefonoNorm]
+                     WHERE {$exprTelefono} = ?
+                       AND (Id_Persona IS NULL OR Id_Persona = 0 OR Id_Persona = ?)",
+                    [$telefonoNorm, $idPersona]
                 ),
                 $programas
             );
@@ -1733,7 +1915,8 @@ class EscuelaFormacionInscripcion extends BaseModel {
                     COALESCE(p.Id_Ministerio, base.Id_Ministerio) AS Id_Ministerio,
                     COALESCE(mp.Nombre_Ministerio, base.Ministerio) AS Ministerio,
                     base.Programa,
-                    base.Fecha_Registro
+                    base.Fecha_Registro,
+                    base.Documentos
                 FROM (
                     SELECT
                         COALESCE(i.Id_Persona, 0) AS Id_Persona,
@@ -1749,7 +1932,8 @@ class EscuelaFormacionInscripcion extends BaseModel {
                         MAX(COALESCE(i.Id_Ministerio, 0))                              AS Id_Ministerio,
                         MAX(COALESCE(NULLIF(TRIM(i.Nombre_Ministerio),''), ''))        AS Ministerio,
                         MAX(i.Programa)                                                AS Programa,
-                        MAX(i.Fecha_Registro)                                          AS Fecha_Registro
+                        MAX(i.Fecha_Registro)                                          AS Fecha_Registro,
+                        MAX(COALESCE(i.Documentos, ''))                                AS Documentos
                     FROM {$this->table} i
                     WHERE {$innerWhereStr}
                     GROUP BY

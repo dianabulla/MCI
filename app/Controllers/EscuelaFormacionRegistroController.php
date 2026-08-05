@@ -13,6 +13,7 @@ require_once APP . '/Models/UsuarioAcceso.php';
 require_once APP . '/Models/UserRole.php';
 require_once APP . '/Controllers/AuthController.php';
 require_once APP . '/Helpers/PermisosCatalogo.php';
+require_once APP . '/Helpers/EscaleraAsistenciaSync.php';
 
 class EscuelaFormacionRegistroController extends BaseController {
     private $personaModel;
@@ -273,6 +274,36 @@ class EscuelaFormacionRegistroController extends BaseController {
         return [];
     }
 
+    private function enriquecerInscripcionesBusquedaPublica(array $inscripcionesRaw, array $programaLabels): array {
+        return array_map(function ($item) use ($programaLabels) {
+            $prog = (string)($item['Programa'] ?? '');
+            $idIns = (int)($item['Id_Inscripcion'] ?? 0);
+            $documentos = [];
+            if ($idIns > 0 && in_array($prog, ['universidad_vida', 'encuentro'], true)) {
+                $documentos = $this->inscripcionModel->decodificarDocumentos((string)($item['Documentos'] ?? ''));
+            }
+
+            return [
+                'id_inscripcion' => $idIns,
+                'programa' => $prog,
+                'programa_label' => $programaLabels[$prog] ?? $prog,
+                'asistio_clase' => isset($item['Asistio_Clase']) ? (bool)$item['Asistio_Clase'] : false,
+                'fecha_asistencia' => (string)($item['Fecha_Asistencia_Clase'] ?? ''),
+                'documentos' => $documentos,
+            ];
+        }, $inscripcionesRaw);
+    }
+
+    private function mensajePersonaInscritaUniversidadVida(array $inscripciones): ?string {
+        foreach ($inscripciones as $ins) {
+            if ((string)($ins['programa'] ?? '') === 'universidad_vida') {
+                return 'Persona ya inscrita en Universidad de la Vida. Puede subir documentos en la sección de abajo.';
+            }
+        }
+
+        return null;
+    }
+
     private function obtenerRutaRegistroPublico(string $programa) {
         $programa = trim((string)$programa);
         if ($programa === 'universidad_vida') {
@@ -488,6 +519,50 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         $proceso = $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklistNormalizado) : null;
         $this->personaModel->updateEscaleraChecklistYProceso($idPersona, $checklistJson, $proceso);
+    }
+
+    private function marcarBautismoEnAsistenciaUv(int $idPersona, int $idInscripcion = 0): bool {
+        $idPersona = (int)$idPersona;
+        $idInscripcion = (int)$idInscripcion;
+        if ($idPersona <= 0) {
+            return false;
+        }
+
+        $ok = $this->escuelaAsistenciaClaseModel->upsertAsistencia($idPersona, 'consolidar', 'bautismo', 1, true);
+        if ($ok) {
+            require_once APP . '/Helpers/EscaleraAsistenciaSync.php';
+            (new EscaleraAsistenciaSync())->afterGuardarAsistencia($idPersona, 'consolidar', 'bautismo');
+            if ($idInscripcion > 0) {
+                $this->inscripcionModel->actualizarAsistenciaClase($idInscripcion, true);
+            }
+        }
+
+        return (bool)$ok;
+    }
+
+    private function resolverIdInscripcionUniversidadVidaPersona(int $idPersona, array $programasInscritos = []): int {
+        $idPersona = (int)$idPersona;
+        if ($idPersona <= 0) {
+            return 0;
+        }
+
+        if (empty($programasInscritos)) {
+            $programasInscritos = $this->inscripcionModel->getProgramasInscritosPersona($idPersona);
+        }
+
+        foreach ($programasInscritos as $progInscrito) {
+            $progNorm = $this->normalizarProgramaInscripcion((string)$progInscrito);
+            if (!in_array($progNorm, ['universidad_vida', 'encuentro'], true)) {
+                continue;
+            }
+
+            $idInscripcion = (int)$this->inscripcionModel->getIdInscripcionPersonaPrograma($idPersona, (string)$progInscrito);
+            if ($idInscripcion > 0) {
+                return $idInscripcion;
+            }
+        }
+
+        return 0;
     }
 
     private function marcarNivelDiscipularEnEscalera($idPersona, $programa) {
@@ -897,6 +972,31 @@ class EscuelaFormacionRegistroController extends BaseController {
         return '';
     }
 
+    private function buildTicketWhatsappMensaje(array $data): string {
+        $lineas = [
+            'Ticket de inscripción - MCI Madrid',
+            '',
+            'Fecha: ' . trim((string)($data['fecha'] ?? date('Y-m-d H:i'))),
+            'Nombre: ' . trim((string)($data['nombre'] ?? '')),
+            'Cédula: ' . trim((string)($data['cedula'] ?? '')),
+            'Programa: ' . trim((string)($data['programa'] ?? '')),
+            'Método pago: ' . trim((string)($data['metodo_pago'] ?? '')),
+            'Recibido por: ' . trim((string)($data['recibido_por'] ?? '')),
+            'Tipo pago: ' . trim((string)($data['tipo_pago'] ?? '')),
+            'Valor pagado: $' . trim((string)($data['valor_pago'] ?? '')),
+            'Referencia: ' . trim((string)($data['referencia_pago'] ?? '')),
+        ];
+
+        return implode("\n", $lineas);
+    }
+
+    private function buildTicketWhatsappUrl(array $data): string {
+        $texto = rawurlencode($this->buildTicketWhatsappMensaje($data));
+
+        // Sin número: el usuario elige el contacto en WhatsApp.
+        return 'https://wa.me/?text=' . $texto;
+    }
+
     private function renderTicketHtml($data) {
         $nombre = htmlspecialchars((string)($data['nombre'] ?? ''));
         $cedula = htmlspecialchars((string)($data['cedula'] ?? ''));
@@ -907,8 +1007,37 @@ class EscuelaFormacionRegistroController extends BaseController {
         $valorPago = htmlspecialchars((string)($data['valor_pago'] ?? ''));
         $referencia = htmlspecialchars((string)($data['referencia_pago'] ?? ''));
         $fecha = htmlspecialchars((string)($data['fecha'] ?? date('Y-m-d H:i')));
+        $urlWhatsapp = htmlspecialchars($this->buildTicketWhatsappUrl((array)$data), ENT_QUOTES, 'UTF-8');
 
-        return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Ticket de inscripción</title><style>body{font-family:Arial,sans-serif;background:#f3f7f7;padding:20px}.ticket{max-width:520px;margin:0 auto;background:#fff;border:1px solid #dce8e7;border-radius:12px;padding:18px}.title{margin:0 0 10px;color:#0a6e6a}.row{margin:8px 0;font-size:14px}.ref{font-family:monospace;font-size:28px;font-weight:700;letter-spacing:2px;color:#0a6e6a;margin:12px 0}.actions{margin-top:16px}.btn{display:inline-block;background:#0a6e6a;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;border:none;cursor:pointer}</style></head><body><div class="ticket"><h2 class="title">Ticket de inscripción</h2><div class="row"><strong>Fecha:</strong> ' . $fecha . '</div><div class="row"><strong>Nombre:</strong> ' . $nombre . '</div><div class="row"><strong>Cédula:</strong> ' . $cedula . '</div><div class="row"><strong>Programa:</strong> ' . $programa . '</div><div class="row"><strong>Método pago:</strong> ' . $metodoPago . '</div><div class="row"><strong>Recibido por:</strong> ' . $recibidoPor . '</div><div class="row"><strong>Tipo pago:</strong> ' . $tipoPago . '</div><div class="row"><strong>Valor pagado:</strong> $' . $valorPago . '</div><div class="row"><strong>Referencia:</strong></div><div class="ref">' . $referencia . '</div><div class="actions"><button class="btn" onclick="window.print()">Imprimir ticket</button></div></div></body></html>';
+        return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">'
+            . '<title>Ticket de inscripción</title>'
+            . '<style>'
+            . 'body{font-family:Arial,sans-serif;background:#f3f7f7;padding:20px}'
+            . '.ticket{max-width:520px;margin:0 auto;background:#fff;border:1px solid #dce8e7;border-radius:12px;padding:18px}'
+            . '.title{margin:0 0 10px;color:#0a6e6a}'
+            . '.row{margin:8px 0;font-size:14px}'
+            . '.ref{font-family:monospace;font-size:28px;font-weight:700;letter-spacing:2px;color:#0a6e6a;margin:12px 0}'
+            . '.actions{margin-top:16px;display:flex;flex-wrap:wrap;gap:10px}'
+            . '.btn{display:inline-block;background:#0a6e6a;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;border:none;cursor:pointer;font-size:14px}'
+            . '.btn-wa{background:#25d366}'
+            . '</style></head><body>'
+            . '<div class="ticket">'
+            . '<h2 class="title">Ticket de inscripción</h2>'
+            . '<div class="row"><strong>Fecha:</strong> ' . $fecha . '</div>'
+            . '<div class="row"><strong>Nombre:</strong> ' . $nombre . '</div>'
+            . '<div class="row"><strong>Cédula:</strong> ' . $cedula . '</div>'
+            . '<div class="row"><strong>Programa:</strong> ' . $programa . '</div>'
+            . '<div class="row"><strong>Método pago:</strong> ' . $metodoPago . '</div>'
+            . '<div class="row"><strong>Recibido por:</strong> ' . $recibidoPor . '</div>'
+            . '<div class="row"><strong>Tipo pago:</strong> ' . $tipoPago . '</div>'
+            . '<div class="row"><strong>Valor pagado:</strong> $' . $valorPago . '</div>'
+            . '<div class="row"><strong>Referencia:</strong></div>'
+            . '<div class="ref">' . $referencia . '</div>'
+            . '<div class="actions">'
+            . '<button type="button" class="btn" onclick="window.print()">Imprimir ticket</button>'
+            . '<a class="btn btn-wa" href="' . $urlWhatsapp . '" target="_blank" rel="noopener noreferrer">Compartir por WhatsApp</a>'
+            . '</div>'
+            . '</div></body></html>';
     }
 
     private function marcarAsistenciaAutomaticaDesdeRegistroPublico($idInscripcion, $idPersona, $programa, $fechaAsistencia = null) {
@@ -1109,6 +1238,18 @@ class EscuelaFormacionRegistroController extends BaseController {
 
     public function index(string $programaActual = '') {
         $modoAbono = (string)($_GET['abono'] ?? '') === '1';
+        if ($modoAbono) {
+            $qsAbono = http_build_query(array_filter([
+                'url' => 'escuelas_formacion/abonos/universidad-vida',
+                'cedula' => trim((string)($_GET['cedula'] ?? '')),
+                'telefono' => trim((string)($_GET['telefono'] ?? '')),
+                'id_inscripcion' => (int)($_GET['id_inscripcion'] ?? 0) > 0 ? (int)($_GET['id_inscripcion'] ?? 0) : null,
+            ], static function ($v) {
+                return $v !== null && $v !== '';
+            }));
+            header('Location: ' . PUBLIC_URL . '/index.php?' . $qsAbono);
+            exit;
+        }
         $usuarioInternoLogueado = class_exists('AuthController') && AuthController::estaAutenticado();
 
         if ($usuarioInternoLogueado && class_exists('AuthController') && AuthController::puedeRecibirPagosEscuelasFormacion()) {
@@ -1300,16 +1441,7 @@ class EscuelaFormacionRegistroController extends BaseController {
 
                     $inscripcionReferencia = !empty($inscripcionesRawPrefill) ? (array)$inscripcionesRawPrefill[0] : [];
 
-                    $inscripcionesPrefill = array_map(static function($item) use ($programaLabels) {
-                        $prog = (string)($item['Programa'] ?? '');
-                        return [
-                            'id_inscripcion' => (int)($item['Id_Inscripcion'] ?? 0),
-                            'programa' => $prog,
-                            'programa_label' => $programaLabels[$prog] ?? $prog,
-                            'asistio_clase' => isset($item['Asistio_Clase']) ? (bool)$item['Asistio_Clase'] : false,
-                            'fecha_asistencia' => (string)($item['Fecha_Asistencia_Clase'] ?? ''),
-                        ];
-                    }, (array)$inscripcionesRawPrefill);
+                    $inscripcionesPrefill = $this->enriquecerInscripcionesBusquedaPublica((array)$inscripcionesRawPrefill, $programaLabels);
 
                     $prefillInicial = [
                         'encontrado' => true,
@@ -1341,6 +1473,7 @@ class EscuelaFormacionRegistroController extends BaseController {
             'mensaje' => $_GET['mensaje'] ?? null,
             'tipo_mensaje' => $_GET['tipo'] ?? null,
             'registro_exitoso' => isset($_GET['exito']) && $_GET['exito'] === '1',
+            'tipo_exito' => (string)($_GET['tipo_exito'] ?? ''),
             'referencia_pago' => (string)($_GET['referencia_pago'] ?? ''),
             'abono_auth' => $authAbono,
             'modo_abono' => $modoAbono,
@@ -1365,6 +1498,8 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'id_ministerio' => (string)($_GET['id_ministerio'] ?? ''),
                 'programa' => $programaActual !== '' ? $programaActual : (string)($_GET['programa'] ?? ''),
                 'programa_nivel' => (string)($_GET['programa_nivel'] ?? 'capacitacion_destino_nivel_1'),
+                'tipo_inscripcion_uv' => (string)($_GET['tipo_inscripcion_uv'] ?? 'universidad_vida'),
+                'segmento_preferido' => (string)($_GET['segmento_preferido'] ?? ''),
                 'metodo_pago' => (string)($_GET['metodo_pago'] ?? ''),
                 'tipo_pago' => (string)($_GET['tipo_pago'] ?? ''),
                 'valor_pago' => (string)($_GET['valor_pago'] ?? ''),
@@ -1375,14 +1510,32 @@ class EscuelaFormacionRegistroController extends BaseController {
     }
 
     public function abonosUniversidadVida() {
+        $this->renderAbonosEscuelas('universidad_vida');
+    }
+
+    public function abonosCapacitacionDestino() {
+        $programa = trim((string)($_GET['programa'] ?? ''));
+        if (!in_array($programa, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+            $nivel = max(1, min(3, (int)($_GET['nivel'] ?? 1)));
+            $programa = 'capacitacion_destino_nivel_' . $nivel;
+        }
+        if ($programa === 'capacitacion_destino') {
+            $programa = 'capacitacion_destino_nivel_1';
+        }
+        $this->renderAbonosEscuelas($programa);
+    }
+
+    private function renderAbonosEscuelas(string $programa): void {
         if (!class_exists('AuthController') || !AuthController::estaAutenticado()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/login');
+            header('Location: ' . public_app_url('auth/login'));
             exit;
         }
         if (!AuthController::puedeRecibirPagosEscuelasFormacion()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
+
+        $programa = $this->normalizarProgramaAbonosEscuelas($programa);
 
         $this->asegurarSesionAbono();
         $nombreAuth = trim((string)($_SESSION['usuario_nombre'] ?? ''));
@@ -1400,19 +1553,42 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         $cedula = $this->normalizarDocumento($_GET['cedula'] ?? '');
         $telefono = $this->normalizarTelefono($_GET['telefono'] ?? '');
+        $idInscripcionPreferida = (int)($_GET['id_inscripcion'] ?? 0);
         $inscripciones = [];
         $inscripcionActiva = null;
 
+        if ($idInscripcionPreferida > 0) {
+            $inscripcionActiva = $this->inscripcionModel->getByIdInscripcion($idInscripcionPreferida);
+        }
+
         if ($cedula !== '' || $telefono !== '') {
             $inscripciones = $this->inscripcionModel->buscarInscripcionesPorTelefonoOCedula($telefono, $cedula, 10);
-            if (!empty($inscripciones)) {
+            if (empty($inscripcionActiva) && !empty($inscripciones)) {
                 $inscripcionActiva = $inscripciones[0];
             }
         }
 
+        $referenciaPago = trim((string)($_GET['referencia_pago'] ?? ''));
+        $ticketWhatsappUrl = '';
+        if ($referenciaPago !== '') {
+            if (session_status() === PHP_SESSION_NONE) {
+                @session_start();
+            }
+            $ticket = $_SESSION['escuelas_ticket'] ?? null;
+            if (is_array($ticket) && (string)($ticket['referencia_pago'] ?? '') === $referenciaPago) {
+                $ticketWhatsappUrl = $this->buildTicketWhatsappUrl($ticket);
+            }
+        }
+
+        $programaLabel = $programa === 'universidad_vida'
+            ? 'Abonos - Universidad de la Vida'
+            : ('Abonos - ' . $this->etiquetaProgramaEscuela($programa));
+
         $this->view('escuelas_formacion_publico/abonos', [
-            'programa_actual' => 'universidad_vida',
-            'programa_label' => 'Abonos - Universidad de la Vida',
+            'programa_actual' => $programa,
+            'programa_label' => $programaLabel,
+            'abono_ruta' => $this->rutaAbonosEscuelas($programa),
+            'url_volver_pagos' => PUBLIC_URL . '?url=escuelas_formacion/pagos&programa=' . rawurlencode($programa),
             'abono_auth' => [
                 'autorizado' => true,
                 'nombre' => $this->normalizarTextoMayusculas($nombreAuth),
@@ -1425,21 +1601,53 @@ class EscuelaFormacionRegistroController extends BaseController {
             ],
             'mensaje' => (string)($_GET['mensaje'] ?? ''),
             'tipo_mensaje' => (string)($_GET['tipo'] ?? ''),
+            'referencia_pago' => $referenciaPago,
+            'ticket_whatsapp_url' => $ticketWhatsappUrl,
         ]);
+    }
+
+    private function normalizarProgramaAbonosEscuelas(string $programa): string {
+        $programa = trim($programa);
+        if ($programa === 'capacitacion_destino') {
+            return 'capacitacion_destino_nivel_1';
+        }
+        if (in_array($programa, ['universidad_vida', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+            return $programa;
+        }
+        return 'universidad_vida';
+    }
+
+    private function rutaAbonosEscuelas(string $programa): string {
+        $programa = $this->normalizarProgramaAbonosEscuelas($programa);
+        if ($programa === 'universidad_vida') {
+            return 'escuelas_formacion/abonos/universidad-vida';
+        }
+        return 'escuelas_formacion/abonos/capacitacion-destino';
+    }
+
+    private function urlAbonosEscuelasConParams(string $programa, array $params = []): string {
+        $programa = $this->normalizarProgramaAbonosEscuelas($programa);
+        $query = array_merge(['url' => $this->rutaAbonosEscuelas($programa)], $params);
+        if ($programa !== 'universidad_vida') {
+            $query['programa'] = $programa;
+        }
+        return PUBLIC_URL . '?' . http_build_query(array_filter($query, static function ($valor) {
+            return $valor !== null && $valor !== '';
+        }));
     }
 
     public function guardarAbonosUniversidadVida() {
         if (!class_exists('AuthController') || !AuthController::estaAutenticado()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/login');
+            header('Location: ' . public_app_url('auth/login'));
             exit;
         }
         if (!AuthController::puedeRecibirPagosEscuelasFormacion()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            header('Location: ' . PUBLIC_URL . '?url=escuelas_formacion/abonos/universidad-vida');
+            header('Location: ' . $this->urlAbonosEscuelasConParams('universidad_vida'));
             exit;
         }
 
@@ -1464,22 +1672,35 @@ class EscuelaFormacionRegistroController extends BaseController {
         $recibidoPor = $this->normalizarTextoMayusculas((string)($authAbono['nombre'] ?? ''));
 
         if ($idInscripcion <= 0) {
-            header('Location: ' . PUBLIC_URL . '?url=escuelas_formacion/abonos/universidad-vida&tipo=error&mensaje=' . urlencode('Debes seleccionar una inscripción válida.'));
+            header('Location: ' . $this->urlAbonosEscuelasConParams('universidad_vida', [
+                'tipo' => 'error',
+                'mensaje' => 'Debes seleccionar una inscripción válida.',
+            ]));
             exit;
         }
 
         $inscripcion = $this->inscripcionModel->getByIdInscripcion($idInscripcion);
         if (empty($inscripcion)) {
-            header('Location: ' . PUBLIC_URL . '?url=escuelas_formacion/abonos/universidad-vida&tipo=error&mensaje=' . urlencode('La inscripción seleccionada no existe.'));
+            header('Location: ' . $this->urlAbonosEscuelasConParams('universidad_vida', [
+                'tipo' => 'error',
+                'mensaje' => 'La inscripción seleccionada no existe.',
+            ]));
             exit;
         }
+
+        $programaInscripcion = $this->normalizarProgramaAbonosEscuelas((string)($inscripcion['Programa'] ?? 'universidad_vida'));
 
         if ($metodoPago === '' || $valorPago <= 0 || $recibidoPor === '') {
             $mensaje = $metodoPago === ''
                 ? 'Debes seleccionar método de pago.'
                 : ($valorPago <= 0 ? 'El valor del pago debe ser mayor a 0.' : 'No hay usuario autorizado para recibir el pago.');
 
-            header('Location: ' . PUBLIC_URL . '?url=escuelas_formacion/abonos/universidad-vida&cedula=' . urlencode((string)($inscripcion['Cedula'] ?? '')) . '&telefono=' . urlencode((string)($inscripcion['Telefono'] ?? '')) . '&tipo=error&mensaje=' . urlencode($mensaje));
+            header('Location: ' . $this->urlAbonosEscuelasConParams($programaInscripcion, [
+                'cedula' => (string)($inscripcion['Cedula'] ?? ''),
+                'telefono' => (string)($inscripcion['Telefono'] ?? ''),
+                'tipo' => 'error',
+                'mensaje' => $mensaje,
+            ]));
             exit;
         }
 
@@ -1494,6 +1715,7 @@ class EscuelaFormacionRegistroController extends BaseController {
             'fecha' => date('Y-m-d H:i'),
             'nombre' => (string)($inscripcion['Nombre'] ?? ''),
             'cedula' => (string)($inscripcion['Cedula'] ?? ''),
+            'telefono' => trim((string)($inscripcion['Telefono'] ?? '')),
             'programa' => $this->etiquetaProgramaEscuela((string)($inscripcion['Programa'] ?? 'universidad_vida')),
             'metodo_pago' => $metodoPago,
             'recibido_por' => $recibidoPor,
@@ -1503,7 +1725,13 @@ class EscuelaFormacionRegistroController extends BaseController {
             'referencia_pago' => $referenciaPago,
         ];
 
-        header('Location: ' . PUBLIC_URL . '?url=escuelas_formacion/abonos/universidad-vida&cedula=' . urlencode((string)($inscripcion['Cedula'] ?? '')) . '&telefono=' . urlencode((string)($inscripcion['Telefono'] ?? '')) . '&tipo=success&mensaje=' . urlencode('Abono registrado correctamente.') . '&referencia_pago=' . urlencode($referenciaPago));
+        header('Location: ' . $this->urlAbonosEscuelasConParams($programaInscripcion, [
+            'cedula' => (string)($inscripcion['Cedula'] ?? ''),
+            'telefono' => (string)($inscripcion['Telefono'] ?? ''),
+            'tipo' => 'success',
+            'mensaje' => 'Abono registrado correctamente.',
+            'referencia_pago' => $referenciaPago,
+        ]));
         exit;
     }
 
@@ -1526,7 +1754,7 @@ class EscuelaFormacionRegistroController extends BaseController {
 
     public function pagos() {
         if (!$this->usuarioPuedeVerPagos()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -1535,13 +1763,14 @@ class EscuelaFormacionRegistroController extends BaseController {
         $programa = trim((string)($_GET['programa'] ?? 'universidad_vida'));
         $filtroGenero = trim((string)($_GET['filtro_genero'] ?? ''));
         $filtroMinisterio = trim((string)($_GET['filtro_ministerio'] ?? ''));
+        $filtroEncuentro = trim((string)($_GET['filtro_encuentro'] ?? ''));
         
         if (!in_array($programa, ['universidad_vida', 'capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
             $programa = 'universidad_vida';
         }
 
         if ((string)($_GET['ajax'] ?? '') === '1' || strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest') {
-            $this->responderPagosUnificadosJson($programa, $buscar, $cedulaDetalle, $filtroGenero, $filtroMinisterio);
+            $this->responderPagosUnificadosJson($programa, $buscar, $cedulaDetalle, $filtroGenero, $filtroMinisterio, $filtroEncuentro);
         }
 
         $resumen = $this->inscripcionModel->getResumenPagosAbonos($buscar, 400, $programa);
@@ -1560,6 +1789,7 @@ class EscuelaFormacionRegistroController extends BaseController {
             'programa' => $programa,
             'filtro_genero' => $filtroGenero,
             'filtro_ministerio' => $filtroMinisterio,
+            'filtro_encuentro' => $filtroEncuentro,
             'bloquear_selector_programa' => false,
             'url_volver_pagos' => $volverProgramas['href'],
             'etiqueta_volver_pagos' => $volverProgramas['label'],
@@ -1568,7 +1798,7 @@ class EscuelaFormacionRegistroController extends BaseController {
 
     private function renderPagosPorPrograma($programa, $bloquearSelectorPrograma = true) {
         if (!$this->usuarioPuedeVerPagos()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -1581,9 +1811,10 @@ class EscuelaFormacionRegistroController extends BaseController {
         $cedulaDetalle = trim((string)($_GET['cedula'] ?? ''));
         $filtroGenero = trim((string)($_GET['filtro_genero'] ?? ''));
         $filtroMinisterio = trim((string)($_GET['filtro_ministerio'] ?? ''));
+        $filtroEncuentro = trim((string)($_GET['filtro_encuentro'] ?? ''));
         
         if ((string)($_GET['ajax'] ?? '') === '1' || strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest') {
-            $this->responderPagosUnificadosJson($programa, $buscar, $cedulaDetalle, $filtroGenero, $filtroMinisterio);
+            $this->responderPagosUnificadosJson($programa, $buscar, $cedulaDetalle, $filtroGenero, $filtroMinisterio, $filtroEncuentro);
         }
 
         $resumen = $this->inscripcionModel->getResumenPagosAbonos($buscar, 400, $programa);
@@ -1602,6 +1833,7 @@ class EscuelaFormacionRegistroController extends BaseController {
             'programa' => $programa,
             'filtro_genero' => $filtroGenero,
             'filtro_ministerio' => $filtroMinisterio,
+            'filtro_encuentro' => $filtroEncuentro,
             'bloquear_selector_programa' => (bool)$bloquearSelectorPrograma,
             'url_volver_pagos' => $volverProgramas['href'],
             'etiqueta_volver_pagos' => $volverProgramas['label'],
@@ -1873,6 +2105,115 @@ class EscuelaFormacionRegistroController extends BaseController {
     }
 
     /**
+     * @return array{semestre: int, fecha_inicio: string, fecha_fin: string, etiqueta: string}
+     */
+    private function esMinisterioPastoralUv(string $nombreMinisterio): bool {
+        $nombre = strtolower(trim($nombreMinisterio));
+        if ($nombre === '') {
+            return false;
+        }
+
+        $nombre = strtr($nombre, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        ]);
+
+        return $nombre === 'pastoral' || strpos($nombre, 'ministerio pastoral') !== false;
+    }
+
+    /**
+     * @return array{semestre: int, fecha_inicio: string, fecha_fin: string, etiqueta: string}
+     */
+    private function resolverRangoSemestreUvPagos(int $anio, $semestreInput = null): array {
+        $semestre = (int)$semestreInput;
+        if ($semestre !== 1 && $semestre !== 2) {
+            $semestre = ((int)date('n')) <= 6 ? 1 : 2;
+        }
+
+        if ($semestre === 1) {
+            return [
+                'semestre' => 1,
+                'fecha_inicio' => sprintf('%04d-01-01', $anio),
+                'fecha_fin' => sprintf('%04d-06-30', $anio),
+                'etiqueta' => 'Semestre 1 (Enero – Junio)',
+            ];
+        }
+
+        return [
+            'semestre' => 2,
+            'fecha_inicio' => sprintf('%04d-07-01', $anio),
+            'fecha_fin' => sprintf('%04d-12-31', $anio),
+            'etiqueta' => 'Semestre 2 (Julio – Diciembre)',
+        ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $inscripciones
+     */
+    private function filtrarInscripcionesUvPorRangoFecha(array $inscripciones, string $fechaInicio, string $fechaFin): array {
+        $fechaInicio = trim($fechaInicio);
+        $fechaFin = trim($fechaFin);
+        if ($fechaInicio === '' || $fechaFin === '') {
+            return $inscripciones;
+        }
+
+        return array_values(array_filter($inscripciones, static function ($inscripcion) use ($fechaInicio, $fechaFin) {
+            $fechaRegistro = substr(trim((string)($inscripcion['Fecha_Registro'] ?? '')), 0, 10);
+            if ($fechaRegistro === '' || $fechaRegistro === '0000-00-00') {
+                return false;
+            }
+
+            return $fechaRegistro >= $fechaInicio && $fechaRegistro <= $fechaFin;
+        }));
+    }
+
+    /**
+     * Una fila por persona (como el dashboard UV en modo Consolidar).
+     *
+     * @param array<int, array<string, mixed>> $inscripciones
+     * @return array<int, array<string, mixed>>
+     */
+    private function deduplicarInscripcionesUvPorPersona(array $inscripciones): array {
+        $porClave = [];
+
+        foreach ($inscripciones as $inscripcion) {
+            if (trim((string)($inscripcion['Programa'] ?? '')) !== 'universidad_vida') {
+                continue;
+            }
+
+            $idPersona = (int)($inscripcion['Id_Persona'] ?? 0);
+            $cedula = preg_replace('/\D+/', '', (string)($inscripcion['Cedula'] ?? ''));
+            if ($idPersona > 0) {
+                $clave = 'id:' . $idPersona;
+            } elseif ($cedula !== '') {
+                $clave = 'cc:' . $cedula;
+            } else {
+                $clave = 'ins:' . (int)($inscripcion['Id_Inscripcion'] ?? 0);
+            }
+
+            if (!isset($porClave[$clave])) {
+                $porClave[$clave] = [];
+            }
+            $porClave[$clave][] = $inscripcion;
+        }
+
+        $deduplicadas = [];
+        foreach ($porClave as $grupo) {
+            usort($grupo, static function ($a, $b) {
+                $fa = (string)($a['Fecha_Registro'] ?? '');
+                $fb = (string)($b['Fecha_Registro'] ?? '');
+                if ($fa === $fb) {
+                    return (int)($b['Id_Inscripcion'] ?? 0) <=> (int)($a['Id_Inscripcion'] ?? 0);
+                }
+
+                return strcmp($fb, $fa);
+            });
+            $deduplicadas[] = $grupo[0];
+        }
+
+        return $deduplicadas;
+    }
+
+    /**
      * @param array<int, array<string, mixed>> $inscripciones
      * @param array<string, array<string, mixed>> $mapaPagos
      */
@@ -1880,7 +2221,9 @@ class EscuelaFormacionRegistroController extends BaseController {
         array $inscripciones,
         string $filtroGenero,
         string $filtroMinisterio,
-        array $mapaPagos
+        array $mapaPagos,
+        string $filtroEncuentro = '',
+        array $asistenciasPorPersona = []
     ): array {
         $stats = [
             'inscritas' => 0,
@@ -1891,10 +2234,6 @@ class EscuelaFormacionRegistroController extends BaseController {
         ];
 
         foreach ($inscripciones as $inscripcion) {
-            if (trim((string)($inscripcion['Programa'] ?? '')) !== 'universidad_vida') {
-                continue;
-            }
-
             $genero = trim((string)($inscripcion['Genero'] ?? ''));
             $edad = (int)($inscripcion['Edad'] ?? 0);
             $segmentoPreferido = trim((string)($inscripcion['Segmento_Preferido'] ?? ''));
@@ -1904,15 +2243,28 @@ class EscuelaFormacionRegistroController extends BaseController {
 
             $nombreMinisterio = trim((string)($inscripcion['Nombre_Ministerio'] ?? ''));
             $idMinisterio = (int)($inscripcion['Id_Ministerio'] ?? 0);
+            if ($this->esMinisterioPastoralUv($nombreMinisterio)) {
+                continue;
+            }
             if ($filtroMinisterio !== '' && !($nombreMinisterio === $filtroMinisterio || (string)$idMinisterio === $filtroMinisterio)) {
                 continue;
+            }
+
+            $idPersona = (int)($inscripcion['Id_Persona'] ?? 0);
+            if ($filtroEncuentro !== '' && $filtroEncuentro !== 'todos') {
+                $mapClase = ($idPersona > 0 && isset($asistenciasPorPersona[$idPersona]))
+                    ? (array)$asistenciasPorPersona[$idPersona]
+                    : [];
+                if (!$this->coincideFiltroEncuentroEscuela($filtroEncuentro, $mapClase)) {
+                    continue;
+                }
             }
 
             $stats['inscritas']++;
 
             $personaTmp = [
                 'Cedula' => (string)($inscripcion['Cedula'] ?? ''),
-                'Id_Persona' => (int)($inscripcion['Id_Persona'] ?? 0),
+                'Id_Persona' => $idPersona,
             ];
             $pago = $this->buscarPagoEnMapa($mapaPagos, $personaTmp);
             $normalizado = $this->normalizarTotalesPagoUv(
@@ -2005,18 +2357,60 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         $segmento = $this->resolverSegmentoEscuela($genero, $edad, $segmentoPreferido);
         if ($filtroGenero === 'jovenes' || $filtroGenero === 'joven') {
-            return in_array($segmento, ['jovenes', 'teens'], true);
+            // Misma regla que el dashboard UV (columna Jov.): 14–28 o segmento «jóvenes», sin teens.
+            return $segmento === 'jovenes';
+        }
+
+        if ($filtroGenero === 'teens') {
+            return $segmento === 'teens';
         }
 
         return true;
     }
 
-    private function construirDatosPagosEscuelasUnificados(string $programa, string $buscar, string $cedulaDetalle = '', string $filtroGenero = '', string $filtroMinisterio = ''): array {
+    /**
+     * Filtro de asistencia al encuentro UV (clase 5 = día 1, clase 6 = día 2).
+     * Datos desde escuela_formacion_asistencia_clase (módulo consolidar).
+     *
+     * @param array<int, bool> $mapAsistenciasPorClase
+     */
+    private function coincideFiltroEncuentroEscuela(string $filtroEncuentro, array $mapAsistenciasPorClase): bool {
+        $filtroEncuentro = trim($filtroEncuentro);
+        if ($filtroEncuentro === '' || $filtroEncuentro === 'todos') {
+            return true;
+        }
+
+        $d1 = !empty($mapAsistenciasPorClase[5]);
+        $d2 = !empty($mapAsistenciasPorClase[6]);
+
+        switch ($filtroEncuentro) {
+            case 'excluir_asistieron':
+            case 'sin_encuentro':
+                return !$d1 && !$d2;
+            case 'sin_dia1':
+                return !$d1;
+            case 'sin_dia2':
+                return !$d2;
+            case 'con_dia1':
+                return $d1;
+            case 'con_dia2':
+                return $d2;
+            case 'con_ambos':
+                return $d1 && $d2;
+            case 'con_al_menos_uno':
+                return $d1 || $d2;
+            default:
+                return true;
+        }
+    }
+
+    private function construirDatosPagosEscuelasUnificados(string $programa, string $buscar, string $cedulaDetalle = '', string $filtroGenero = '', string $filtroMinisterio = '', string $filtroEncuentro = ''): array {
         $programa = $this->normalizarProgramaPagosEscuelas($programa);
         $buscar = trim($buscar);
         $cedulaDetalle = trim($cedulaDetalle);
         $filtroGenero = trim((string)$filtroGenero);
         $filtroMinisterio = trim((string)$filtroMinisterio);
+        $filtroEncuentro = trim((string)$filtroEncuentro);
 
         $evaluacionModel = null;
         $programaLabel = $this->etiquetaProgramaEscuela($programa);
@@ -2134,10 +2528,18 @@ class EscuelaFormacionRegistroController extends BaseController {
                 continue;
             }
 
+            $mapAsistenciasPersona = ($idPersona > 0 && isset($asistenciasPorPersona[$idPersona]))
+                ? (array)$asistenciasPorPersona[$idPersona]
+                : [];
+
+            if ($programa === 'universidad_vida' && !$this->coincideFiltroEncuentroEscuela($filtroEncuentro, $mapAsistenciasPersona)) {
+                continue;
+            }
+
             $asistencias = 0;
             $asistenciaPct = 0.0;
-            if ($idPersona > 0 && isset($asistenciasPorPersona[$idPersona])) {
-                $asistencias = count(array_filter((array)$asistenciasPorPersona[$idPersona], static function($asistio) {
+            if ($idPersona > 0 && $mapAsistenciasPersona !== []) {
+                $asistencias = count(array_filter($mapAsistenciasPersona, static function($asistio) {
                     return !empty($asistio);
                 }));
                 $asistenciaPct = $totalClases > 0 ? round(($asistencias / $totalClases) * 100, 1) : 0.0;
@@ -2192,6 +2594,8 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'asistencias' => $asistencias,
                 'total_clases' => $totalClases,
                 'asistencia_pct' => $asistenciaPct,
+                'clase_5' => !empty($mapAsistenciasPersona[5]),
+                'clase_6' => !empty($mapAsistenciasPersona[6]),
                 'nota_final' => $notaFinal,
                 'correctas' => $correctas,
                 'total_preguntas' => $totalPreguntas,
@@ -2215,12 +2619,29 @@ class EscuelaFormacionRegistroController extends BaseController {
         }, $filas));
 
         $statsInscripciones = [];
+        $rangoSemestreUv = null;
         if ($programa === 'universidad_vida') {
-            $statsInscripciones = $this->calcularEstadisticasInscripcionesUv(
+            $anioUv = (int)($_GET['anio'] ?? date('Y'));
+            if ($anioUv < 2020 || $anioUv > ((int)date('Y') + 2)) {
+                $anioUv = (int)date('Y');
+            }
+            $semestreUvInput = (int)($_GET['semestre'] ?? 0);
+            $rangoSemestreUv = $this->resolverRangoSemestreUvPagos($anioUv, $semestreUvInput > 0 ? $semestreUvInput : null);
+
+            $inscripcionesUvStats = $this->filtrarInscripcionesUvPorRangoFecha(
                 (array)$inscripciones,
+                (string)$rangoSemestreUv['fecha_inicio'],
+                (string)$rangoSemestreUv['fecha_fin']
+            );
+            $inscripcionesUvStats = $this->deduplicarInscripcionesUvPorPersona($inscripcionesUvStats);
+
+            $statsInscripciones = $this->calcularEstadisticasInscripcionesUv(
+                $inscripcionesUvStats,
                 $filtroGenero,
                 $filtroMinisterio,
-                $mapaPagos
+                $mapaPagos,
+                $filtroEncuentro,
+                $asistenciasPorPersona
             );
         }
 
@@ -2237,13 +2658,15 @@ class EscuelaFormacionRegistroController extends BaseController {
             }, $ministerios)),
             'filtro_genero' => $filtroGenero,
             'filtro_ministerio' => $filtroMinisterio,
+            'filtro_encuentro' => $filtroEncuentro,
             'stats' => $stats,
             'stats_inscripciones' => $statsInscripciones,
+            'rango_semestre_uv' => $rangoSemestreUv,
             'umbral_pago_completo_uv' => self::UMBRAL_PAGO_COMPLETO_UV,
         ];
     }
 
-    private function responderPagosUnificadosJson(string $programa, string $buscar, string $cedulaDetalle = '', string $filtroGenero = '', string $filtroMinisterio = ''): void {
+    private function responderPagosUnificadosJson(string $programa, string $buscar, string $cedulaDetalle = '', string $filtroGenero = '', string $filtroMinisterio = '', string $filtroEncuentro = ''): void {
         $baseBufferLevel = ob_get_level();
         ob_start();
 
@@ -2252,7 +2675,7 @@ class EscuelaFormacionRegistroController extends BaseController {
         });
 
         try {
-            $data = $this->construirDatosPagosEscuelasUnificados($programa, $buscar, $cedulaDetalle, $filtroGenero, $filtroMinisterio);
+            $data = $this->construirDatosPagosEscuelasUnificados($programa, $buscar, $cedulaDetalle, $filtroGenero, $filtroMinisterio, $filtroEncuentro);
             $strayOutput = trim((string)ob_get_clean());
 
             restore_error_handler();
@@ -2270,7 +2693,10 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'ministerios' => $data['ministerios'] ?? [],
                 'filtro_genero' => $data['filtro_genero'] ?? '',
                 'filtro_ministerio' => $data['filtro_ministerio'] ?? '',
+                'filtro_encuentro' => $data['filtro_encuentro'] ?? '',
                 'stats' => $data['stats'] ?? [],
+                'stats_inscripciones' => $data['stats_inscripciones'] ?? [],
+                'rango_semestre_uv' => $data['rango_semestre_uv'] ?? null,
             ]);
         } catch (Throwable $e) {
             while (ob_get_level() > $baseBufferLevel) {
@@ -2619,16 +3045,7 @@ class EscuelaFormacionRegistroController extends BaseController {
             'capacitacion_destino_nivel_3' => 'Capacitación Destino - Nivel 3',
         ];
 
-        $inscripcionesBusqueda = array_map(static function($item) use ($programaLabels) {
-            $prog = (string)($item['Programa'] ?? '');
-            return [
-                'id_inscripcion' => (int)($item['Id_Inscripcion'] ?? 0),
-                'programa' => $prog,
-                'programa_label' => $programaLabels[$prog] ?? $prog,
-                'asistio_clase' => isset($item['Asistio_Clase']) ? (bool)$item['Asistio_Clase'] : false,
-                'fecha_asistencia' => (string)($item['Fecha_Asistencia_Clase'] ?? ''),
-            ];
-        }, (array)$inscripcionesRawBusqueda);
+        $inscripcionesBusqueda = $this->enriquecerInscripcionesBusquedaPublica((array)$inscripcionesRawBusqueda, $programaLabels);
 
         $persona = $this->personaModel->buscarParaInscripcionEscuela($cedula, '', '');
 
@@ -2718,7 +3135,8 @@ class EscuelaFormacionRegistroController extends BaseController {
                     'lider' => false,
                     'ministerio' => false
                 ],
-                'mensaje' => 'Encontramos inscripción en Escuelas de Formación. Puedes marcar asistencia y/o registrar abonos.',
+                'mensaje' => $this->mensajePersonaInscritaUniversidadVida($inscripcionesBusqueda)
+                    ?? 'Encontramos inscripción en Escuelas de Formación. Puede subir documentos si aplica.',
                 'busqueda' => [
                     'por' => 'inscripcion_cedula'
                 ]
@@ -2777,16 +3195,8 @@ class EscuelaFormacionRegistroController extends BaseController {
             }));
         }
 
-        $inscripciones = array_map(static function($item) use ($programaLabels) {
-            $prog = (string)($item['Programa'] ?? '');
-            return [
-                'id_inscripcion' => (int)($item['Id_Inscripcion'] ?? 0),
-                'programa' => $prog,
-                'programa_label' => $programaLabels[$prog] ?? $prog,
-                'asistio_clase' => isset($item['Asistio_Clase']) ? (bool)$item['Asistio_Clase'] : false,
-                'fecha_asistencia' => (string)($item['Fecha_Asistencia_Clase'] ?? ''),
-            ];
-        }, (array)$inscripcionesRaw);
+        $inscripciones = $this->enriquecerInscripcionesBusquedaPublica((array)$inscripcionesRaw, $programaLabels);
+        $mensajeUvDocumentos = $this->mensajePersonaInscritaUniversidadVida($inscripciones);
 
         $this->json([
             'encontrado' => true,
@@ -2812,9 +3222,10 @@ class EscuelaFormacionRegistroController extends BaseController {
             ],
             'mensaje' => ($faltaLider || $faltaMinisterio)
                 ? 'Persona encontrada, pero no tiene asignado líder y/o ministerio. Debes completarlos antes de guardar.'
-                : (!empty($inscripciones)
-                    ? 'Persona encontrada. Puedes registrar pagos/abonos desde la inscripción existente.'
-                    : 'Hola, ' . trim((string)($persona['Nombre'] ?? '')) . '. Encontramos tus datos y ya puedes seleccionar el programa.'),
+                : ($mensajeUvDocumentos
+                    ?? (!empty($inscripciones)
+                        ? 'Persona encontrada. Revisa sus inscripciones y completa los datos que falten.'
+                        : 'Hola, ' . trim((string)($persona['Nombre'] ?? '')) . '. Encontramos tus datos y ya puedes seleccionar el programa.')),
             'busqueda' => [
                 'por' => 'cedula'
             ]
@@ -2828,7 +3239,10 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         $programaFormulario = trim((string)($_POST['programa'] ?? ''));
-        if (!in_array($programaFormulario, ['universidad_vida', 'capacitacion_destino'], true)) {
+        $tipoInscripcionUvFormulario = trim((string)($_POST['tipo_inscripcion_uv'] ?? ''));
+        if ($tipoInscripcionUvFormulario === 'bautismo') {
+            $programaFormulario = 'universidad_vida';
+        } elseif (!in_array($programaFormulario, ['universidad_vida', 'capacitacion_destino'], true)) {
             $programaFormulario = '';
         }
         $rutaFormulario = $this->obtenerRutaRegistroPublico($programaFormulario);
@@ -2953,6 +3367,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                     'fecha' => date('Y-m-d H:i'),
                     'nombre' => (string)($inscripcion['Nombre'] ?? ''),
                     'cedula' => (string)($inscripcion['Cedula'] ?? ''),
+                    'telefono' => trim((string)($inscripcion['Telefono'] ?? '')),
                     'programa' => $this->etiquetaProgramaEscuela((string)($inscripcion['Programa'] ?? '')),
                     'metodo_pago' => $metodoPago,
                     'recibido_por' => $recibidoPor,
@@ -2965,14 +3380,17 @@ class EscuelaFormacionRegistroController extends BaseController {
                 $partesMensaje[] = $tipoPago === 'completo' ? 'Pago total registrado.' : 'Abono registrado.';
             }
 
-            $query = http_build_query([
+            $paramsExito = [
                 'url' => $rutaFormulario,
                 'mensaje' => implode(' ', $partesMensaje),
                 'tipo' => 'success',
-                'exito' => '1',
-                'referencia_pago' => $referenciaPago
-            ]);
-            header('Location: ' . PUBLIC_URL . '?' . $query);
+            ];
+            if ($referenciaPago !== '') {
+                $paramsExito['exito'] = '1';
+                $paramsExito['tipo_exito'] = 'pago';
+                $paramsExito['referencia_pago'] = $referenciaPago;
+            }
+            header('Location: ' . PUBLIC_URL . '?' . http_build_query($paramsExito));
             exit;
         }
 
@@ -3033,6 +3451,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'fecha' => date('Y-m-d H:i'),
                 'nombre' => (string)($inscripcion['Nombre'] ?? ''),
                 'cedula' => (string)($inscripcion['Cedula'] ?? ''),
+                'telefono' => trim((string)($inscripcion['Telefono'] ?? '')),
                 'programa' => $this->etiquetaProgramaEscuela((string)($inscripcion['Programa'] ?? '')),
                 'metodo_pago' => $metodoPago,
                 'recibido_por' => $recibidoPor,
@@ -3047,6 +3466,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'mensaje' => 'Pago/abono registrado correctamente.',
                 'tipo' => 'success',
                 'exito' => '1',
+                'tipo_exito' => 'pago',
                 'referencia_pago' => $referenciaPago
             ]);
             header('Location: ' . PUBLIC_URL . '?' . $query);
@@ -3090,7 +3510,6 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'url' => $rutaFormulario,
                 'mensaje' => 'Asistencia registrada correctamente en ' . $programaLabel . '.',
                 'tipo' => 'success',
-                'exito' => '1'
             ]);
             header('Location: ' . PUBLIC_URL . '?' . $query);
             exit;
@@ -3115,6 +3534,8 @@ class EscuelaFormacionRegistroController extends BaseController {
         $idMinisterio = ctype_digit($idMinisterioRaw) ? (int)$idMinisterioRaw : 0;
         $programa = trim((string)($_POST['programa'] ?? ''));
         $programaNivel = trim((string)($_POST['programa_nivel'] ?? ''));
+        $tipoInscripcionUv = trim((string)($_POST['tipo_inscripcion_uv'] ?? ''));
+        $segmentoPreferido = trim((string)($_POST['segmento_preferido'] ?? ''));
         $metodoPago = trim((string)($_POST['metodo_pago'] ?? '')) !== '' ? 'efectivo' : '';
         $tipoPagoRecibido = trim((string)($_POST['tipo_pago'] ?? ''));
         $tipoPago = $this->normalizarTipoPago($tipoPagoRecibido);
@@ -3173,7 +3594,13 @@ class EscuelaFormacionRegistroController extends BaseController {
             $errores[] = 'Debes indicar quién recibió el pago.';
         }
 
-        if (!in_array($programa, ['universidad_vida', 'capacitacion_destino'], true)) {
+        if (!in_array($programa, ['universidad_vida', 'capacitacion_destino', 'bautismo'], true)) {
+            $programa = 'universidad_vida';
+        }
+
+        if ($tipoInscripcionUv === 'bautismo') {
+            $programa = 'bautismo';
+        } elseif (in_array($programa, ['universidad_vida', 'encuentro', 'bautismo'], true) && $tipoInscripcionUv === 'universidad_vida') {
             $programa = 'universidad_vida';
         }
 
@@ -3185,9 +3612,18 @@ class EscuelaFormacionRegistroController extends BaseController {
             }
         }
 
+        if ($programa === 'universidad_vida' && $tipoInscripcionUv === 'universidad_vida') {
+            $segmentosUvValidos = ['jovenes', 'teens', 'hombres_adultos', 'mujeres_adultas'];
+            if (!in_array($segmentoPreferido, $segmentosUvValidos, true)) {
+                $errores[] = 'Seleccione el encuentro al que asistirá (jóvenes, mujeres, hombres o teens).';
+            }
+        }
+
         $generosValidos = ['Hombre', 'Mujer'];
 
-        $persona = $this->personaModel->buscarParaInscripcionEscuela($cedula, $telefono, $nombre);
+        // Para registro publico solo vinculamos personas existentes por documento/telefono.
+        // Evita enlazar por nombre y tocar fichas de terceros por coincidencias superficiales.
+        $persona = $this->personaModel->buscarParaInscripcionEscuela($cedula, $telefono, '');
         $idPersona = (int)($persona['Id_Persona'] ?? 0);
         $esPersonaNueva = $idPersona <= 0;
 
@@ -3249,40 +3685,6 @@ class EscuelaFormacionRegistroController extends BaseController {
                 $idMinisterio = (int)$persona['Id_Ministerio'];
                 $idMinisterioRaw = (string)$idMinisterio;
             }
-
-            $actualizarPersona = [];
-            if ((int)($persona['Id_Ministerio'] ?? 0) <= 0 && $idMinisterio > 0) {
-                $actualizarPersona['Id_Ministerio'] = $idMinisterio;
-            }
-            if ((int)($persona['Id_Lider'] ?? 0) <= 0 && $idLider > 0) {
-                $actualizarPersona['Id_Lider'] = $idLider;
-            }
-            if ($telefono !== '' && $this->normalizarTelefono((string)($persona['Telefono'] ?? '')) !== $telefono) {
-                $actualizarPersona['Telefono'] = $telefono;
-            }
-            if (trim((string)($persona['Genero'] ?? '')) === '' && in_array($genero, $generosValidos, true)) {
-                $actualizarPersona['Genero'] = $genero;
-            }
-            if (trim((string)($persona['Numero_Documento'] ?? '')) === '' && $cedula !== '') {
-                $actualizarPersona['Tipo_Documento'] = $tipoDocumento;
-                $actualizarPersona['Numero_Documento'] = $cedula;
-            }
-            if ($this->soportaEmail && trim((string)($persona['Email'] ?? '')) === '' && $email !== '') {
-                $actualizarPersona['Email'] = $email;
-            }
-            if ($this->soportaDireccion && $direccion !== '' && trim((string)($persona['Direccion'] ?? '')) !== $direccion) {
-                $actualizarPersona['Direccion'] = $direccion;
-            }
-            if ($this->soportaFechaNacimiento && $fechaNacimiento !== '' && trim((string)($persona['Fecha_Nacimiento'] ?? '')) !== $fechaNacimiento) {
-                $actualizarPersona['Fecha_Nacimiento'] = $fechaNacimiento;
-            }
-            if ((int)($persona['Id_Rol'] ?? 0) <= 0 && $idRolAsistente > 0) {
-                $actualizarPersona['Id_Rol'] = $idRolAsistente;
-            }
-
-            if (!empty($actualizarPersona)) {
-                $this->personaModel->update($idPersona, $actualizarPersona);
-            }
         }
 
         $ministerio = null;
@@ -3318,6 +3720,8 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'id_ministerio' => (string)$idMinisterio,
                 'programa' => $programa,
                 'programa_nivel' => $programaNivel,
+                'tipo_inscripcion_uv' => $tipoInscripcionUv,
+                'segmento_preferido' => $segmentoPreferido,
                 'metodo_pago' => $metodoPago,
                 'tipo_pago' => $tipoPago,
                 'valor_pago' => $valorPago !== null ? (string)$valorPago : '',
@@ -3334,40 +3738,25 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         $programasInscritos = $this->inscripcionModel->getProgramasInscritosPersona($idPersona);
-        if (!empty($programasInscritos)) {
-            $programasEtiquetas = array_values(array_unique(array_map(function($prog) {
-                return $this->etiquetaProgramaEscuela((string)$prog);
-            }, $programasInscritos)));
-            $programasTexto = implode(', ', array_filter($programasEtiquetas, static function($p) {
-                return trim((string)$p) !== '';
-            }));
+        $programaObjetivo = $this->normalizarProgramaInscripcion($programa);
 
-            $celulaTexto = trim((string)($persona['Nombre_Celula'] ?? ''));
-            if ($celulaTexto === '') {
-                $idCelulaPersona = (int)($persona['Id_Celula'] ?? 0);
-                if ($idCelulaPersona > 0) {
-                    $celulaTexto = 'ID ' . $idCelulaPersona;
+        if ($accion === 'registro' && $idPersona > 0 && $programaObjetivo !== '') {
+            foreach ($programasInscritos as $progInscrito) {
+                if ($this->normalizarProgramaInscripcion((string)$progInscrito) === $programaObjetivo) {
+                    if (!in_array($programaObjetivo, ['universidad_vida', 'encuentro', 'bautismo'], true)) {
+                        $programaLabel = $this->etiquetaProgramaEscuela($programaObjetivo);
+                        $this->redirectRegistroConError(
+                            'Esta persona ya está inscrita en ' . $programaLabel . '. Cédula: ' . $cedula . '.',
+                            $programaFormulario,
+                            [
+                                'telefono' => $telefono,
+                                'cedula' => $cedula,
+                                'tipo_documento' => $tipoDocumento
+                            ]
+                        );
+                    }
+                    break;
                 }
-            }
-
-            $mensajeDuplicado = 'Esta persona ya está registrada. Cédula: ' . $cedula . '.';
-            // Solo mostrar error si es registro nuevo, no si es abono/pago
-            if ($accion === 'registro') {
-                if ($celulaTexto !== '') {
-                    $mensajeDuplicado .= ' Célula: ' . $celulaTexto . '.';
-                }
-                if ($programasTexto !== '') {
-                    $mensajeDuplicado .= ' Programa(s): ' . $programasTexto . '.';
-                }
-                $this->redirectRegistroConError(
-                    $mensajeDuplicado,
-                    $programaFormulario,
-                    [
-                        'telefono' => $telefono,
-                        'cedula' => $cedula,
-                        'tipo_documento' => $tipoDocumento
-                    ]
-                );
             }
         }
 
@@ -3399,6 +3788,27 @@ class EscuelaFormacionRegistroController extends BaseController {
             );
         }
 
+        if ($programa === 'bautismo' && $idPersona > 0) {
+            $idInscripcionUv = $this->resolverIdInscripcionUniversidadVidaPersona($idPersona, $programasInscritos);
+            if ($idInscripcionUv > 0) {
+                $this->marcarBautismoEnAsistenciaUv($idPersona, $idInscripcionUv);
+                $this->marcarProgramaConsolidarEnEscalera($idPersona, 'bautismo');
+
+                $query = http_build_query([
+                    'url' => $rutaFormulario,
+                    'mensaje' => 'Registro actualizado. Bautismo marcado correctamente.',
+                    'tipo' => 'success',
+                    'tipo_exito' => 'inscripcion',
+                    'cedula' => $cedula,
+                    'telefono' => $telefono,
+                    'tipo_documento' => $tipoDocumento,
+                    'tipo_inscripcion_uv' => 'bautismo',
+                ]);
+                header('Location: ' . PUBLIC_URL . '?' . $query);
+                exit;
+            }
+        }
+
         $data = [
             'Id_Persona' => $idPersona > 0 ? $idPersona : null,
             'Nombre' => $nombre,
@@ -3418,6 +3828,10 @@ class EscuelaFormacionRegistroController extends BaseController {
             'Entrego_Libro' => $metodoPago !== '' ? $entregoLibro : null
         ];
 
+        if ($programa === 'universidad_vida' && $segmentoPreferido !== '') {
+            $data['Segmento_Preferido'] = $segmentoPreferido;
+        }
+
         // Generar referencia corta automaticamente si hay pago registrado
         $referenciaPago = $metodoPago !== '' ? $this->generarReferenciaCorta() : '';
         if ($referenciaPago !== '') {
@@ -3430,21 +3844,77 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         if ($idInscripcionExistente > 0) {
+            $teniaArchivosDocumentos = $this->tieneArchivosDocumentosUvSubidos();
+            $resultadoDocumentos = $this->procesarDocumentosUvSubidos($idInscripcionExistente, $programa);
+            $documentosGuardados = (int)($resultadoDocumentos['guardados'] ?? 0);
+            $erroresDocumentos = (array)($resultadoDocumentos['errores'] ?? []);
+
+            if ($programa === 'bautismo') {
+                $this->marcarBautismoEnAsistenciaUv($idPersona, $idInscripcionExistente);
+                $this->marcarProgramaConsolidarEnEscalera($idPersona, 'bautismo');
+
+                $query = http_build_query([
+                    'url' => $rutaFormulario,
+                    'mensaje' => 'Registro actualizado. Bautismo marcado correctamente.',
+                    'tipo' => 'success',
+                    'tipo_exito' => 'inscripcion',
+                    'cedula' => $cedula,
+                    'telefono' => $telefono,
+                    'tipo_documento' => $tipoDocumento,
+                ]);
+                header('Location: ' . PUBLIC_URL . '?' . $query);
+                exit;
+            }
+
+            if (in_array($programaObjetivo, ['universidad_vida', 'encuentro'], true)) {
+                if ($documentosGuardados > 0) {
+                    $mensaje = 'Documentos cargados con éxito';
+                    if ($erroresDocumentos !== []) {
+                        $mensaje .= '. Algunos archivos no se guardaron.';
+                    }
+                } elseif ($teniaArchivosDocumentos && $erroresDocumentos !== []) {
+                    $mensaje = 'No se pudieron guardar los documentos: ' . implode(' ', $erroresDocumentos);
+                    $query = http_build_query([
+                        'url' => $rutaFormulario,
+                        'mensaje' => $mensaje,
+                        'tipo' => 'error',
+                        'cedula' => $cedula,
+                        'telefono' => $telefono,
+                        'tipo_documento' => $tipoDocumento,
+                    ]);
+                    header('Location: ' . PUBLIC_URL . '?' . $query);
+                    exit;
+                } else {
+                    $mensaje = $teniaArchivosDocumentos
+                        ? 'No se recibió ningún archivo válido.'
+                        : 'Persona ya inscrita en Universidad de la Vida. Seleccione archivos para subir documentos.';
+                }
+
+                $query = http_build_query([
+                    'url' => $rutaFormulario,
+                    'mensaje' => $mensaje,
+                    'tipo' => 'success',
+                    'tipo_exito' => 'documentos',
+                    'cedula' => $cedula,
+                    'telefono' => $telefono,
+                    'tipo_documento' => $tipoDocumento,
+                ]);
+                header('Location: ' . PUBLIC_URL . '?' . $query);
+                exit;
+            }
+
             $asistenciaMarcada = $this->marcarAsistenciaAutomaticaDesdeRegistroPublico($idInscripcionExistente, $idPersona, $programa);
 
-            $mensaje = 'Esta persona ya estaba inscrita en ese programa.';
-            if ($asistenciaMarcada) {
-                $mensaje .= ' Se marcó la asistencia automáticamente.';
-            } else {
-                $mensaje .= ' No se marcó asistencia automática porque no hay clase configurada para ese día.';
-            }
+            $mensaje = 'Inscrito satisfactoriamente.';
 
             $query = http_build_query([
                 'url' => $rutaFormulario,
                 'mensaje' => $mensaje,
                 'tipo' => 'success',
-                'exito' => '1',
-                'referencia_pago' => $referenciaPago
+                'tipo_exito' => 'inscripcion',
+                'cedula' => $cedula,
+                'telefono' => $telefono,
+                'tipo_documento' => $tipoDocumento,
             ]);
             header('Location: ' . PUBLIC_URL . '?' . $query);
             exit;
@@ -3467,9 +3937,15 @@ class EscuelaFormacionRegistroController extends BaseController {
                 throw new Exception('No se pudo confirmar la inscripción en Escuelas de Formación.');
             }
 
+            $this->procesarDocumentosUvSubidos($idInscripcionCreada, $programa);
+
             $this->encolarMensajeCapacitacionDestino($idPersona, $telefono, $nombre, $programa);
 
-            $asistenciaMarcada = $this->marcarAsistenciaAutomaticaDesdeRegistroPublico($idInscripcionCreada, $idPersona, $programa);
+            if ($programa === 'bautismo') {
+                $this->marcarBautismoEnAsistenciaUv($idPersona, $idInscripcionCreada);
+            } else {
+                $this->marcarAsistenciaAutomaticaDesdeRegistroPublico($idInscripcionCreada, $idPersona, $programa);
+            }
 
             if (in_array($programa, ['universidad_vida', 'encuentro', 'bautismo'], true)) {
                 $this->marcarProgramaConsolidarEnEscalera($idPersona, $programa);
@@ -3489,6 +3965,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'fecha' => date('Y-m-d H:i'),
                 'nombre' => $nombre,
                 'cedula' => $cedula,
+                'telefono' => trim((string)$telefono),
                 'programa' => $this->etiquetaProgramaEscuela($programa),
                 'metodo_pago' => $metodoPago,
                 'recibido_por' => $recibidoPor,
@@ -3505,20 +3982,24 @@ class EscuelaFormacionRegistroController extends BaseController {
                 }
             }
 
-            $mensajeExito = 'Inscripción registrada correctamente.';
-            if ($asistenciaMarcada) {
-                $mensajeExito .= ' Asistencia marcada automáticamente.';
+            $huboPagoRegistro = $metodoPago !== '' && $valorPago !== null && $valorPago > 0;
+            if ($huboPagoRegistro) {
+                $query = http_build_query([
+                    'url' => $rutaFormulario,
+                    'mensaje' => 'Pago registrado correctamente.',
+                    'tipo' => 'success',
+                    'exito' => '1',
+                    'tipo_exito' => 'pago',
+                    'referencia_pago' => $referenciaPago,
+                ]);
             } else {
-                $mensajeExito .= ' No se marcó asistencia automática porque no hay clase configurada para ese día.';
+                $query = http_build_query([
+                    'url' => $rutaFormulario,
+                    'mensaje' => 'Inscrito satisfactoriamente.',
+                    'tipo' => 'success',
+                    'tipo_exito' => 'inscripcion',
+                ]);
             }
-
-            $query = http_build_query([
-                'url' => $rutaFormulario,
-                'mensaje' => $mensajeExito,
-                'tipo' => 'success',
-                'exito' => '1',
-                'referencia_pago' => $referenciaPago
-            ]);
             header('Location: ' . PUBLIC_URL . '?' . $query);
             exit;
         } catch (Exception $e) {
@@ -3611,10 +4092,16 @@ class EscuelaFormacionRegistroController extends BaseController {
 
             // 10 clases: 1-4 pre-encuentro, 5-6 encuentro, 7-10 post-encuentro
             $asistencias = [];
+            $asistenciasBautismo = [];
             if (!empty($ids)) {
                 $asistencias = $this->escuelaAsistenciaClaseModel
                     ->getAsistenciasPorPrograma($ids, 'consolidar', $programa);
+                $asistenciasBautismo = $this->escuelaAsistenciaClaseModel
+                    ->getAsistenciasPorPrograma($ids, 'consolidar', 'bautismo');
             }
+
+            $escaleraSync = new EscaleraAsistenciaSync();
+            $escaleraBautismo = !empty($ids) ? $escaleraSync->mapBautismoDesdeEscalera($ids) : [];
 
             // Agregar flags de asistencia a cada persona
             foreach ($personas as &$p) {
@@ -3623,6 +4110,12 @@ class EscuelaFormacionRegistroController extends BaseController {
                 for ($c = 1; $c <= 10; $c++) {
                     $p["clase_{$c}"] = isset($map[$c]) ? (bool)$map[$c] : false;
                 }
+
+                $p['clase_bautismo'] = $escaleraSync->resolverBautismoParaListado(
+                    $idP,
+                    $asistenciasBautismo,
+                    $escaleraBautismo
+                );
 
                 $this->aplicarResumenPagoAPersona($p, $pagosPorClave);
             }
@@ -3731,12 +4224,7 @@ class EscuelaFormacionRegistroController extends BaseController {
         $modulo      = trim((string)($_POST['modulo']      ?? 'consolidar'));
         $programa    = trim((string)($_POST['programa']    ?? 'universidad_vida'));
         $numeroClase = (int)($_POST['numero_clase']  ?? 0);
-        $asistio     = (int)($_POST['asistio']       ?? 0) === 1 ? 1 : 0;
-
-        if ($idPersona <= 0 || $numeroClase < 1 || $numeroClase > 10) {
-            $this->json(['success' => false, 'mensaje' => 'Parámetros inválidos'], 422);
-            return;
-        }
+        $asistio     = (int)($_POST['asistio']       ?? 0) === 1;
 
         // Sanitize modulo and programa
         $modulosPermitidos   = ['consolidar', 'pre_encuentro', 'encuentro', 'post_encuentro'];
@@ -3748,9 +4236,32 @@ class EscuelaFormacionRegistroController extends BaseController {
             $programa = 'universidad_vida';
         }
 
+        if ($idPersona <= 0) {
+            $this->json(['success' => false, 'mensaje' => 'Parámetros inválidos'], 422);
+            return;
+        }
+
+        if ($programa === 'bautismo') {
+            $modulo = 'consolidar';
+            $numeroClase = 1;
+        } elseif ($programa === 'universidad_vida') {
+            if ($numeroClase < 1 || $numeroClase > 10) {
+                $this->json(['success' => false, 'mensaje' => 'Parámetros inválidos'], 422);
+                return;
+            }
+        } else {
+            $this->json(['success' => false, 'mensaje' => 'Programa no permitido en este listado'], 422);
+            return;
+        }
+
         $ok = $this->escuelaAsistenciaClaseModel->upsertAsistencia(
             $idPersona, $modulo, $programa, $numeroClase, $asistio
         );
+
+        if ($ok) {
+            $sync = new EscaleraAsistenciaSync();
+            $sync->afterGuardarAsistencia($idPersona, $modulo, $programa);
+        }
 
         $this->json(['success' => (bool)$ok]);
     }
@@ -3784,38 +4295,141 @@ class EscuelaFormacionRegistroController extends BaseController {
             'via_credenciales' => false,
         ];
 
-        // Construir URL del formulario público con datos pre-llenados
+        // Redirigir a la vista interna de abonos (no al formulario público)
         $cedula   = trim((string)($_GET['cedula']   ?? ''));
-        $nombre   = trim((string)($_GET['nombre']   ?? ''));
         $telefono = trim((string)($_GET['telefono'] ?? ''));
-        $programa = trim((string)($_GET['programa'] ?? 'universidad_vida'));
-        $idPersona = (int)($_GET['id_persona'] ?? 0);
         $idInscripcion = (int)($_GET['id_inscripcion'] ?? 0);
-        $genero = trim((string)($_GET['genero'] ?? ''));
-        $edad = trim((string)($_GET['edad'] ?? ''));
-        $lider = trim((string)($_GET['lider'] ?? ''));
-        $idMinisterio = trim((string)($_GET['id_ministerio'] ?? ''));
-        $fechaNacimiento = trim((string)($_GET['fecha_nacimiento'] ?? ''));
-        $direccion = trim((string)($_GET['direccion'] ?? ''));
+        $programa = $this->normalizarProgramaAbonosEscuelas(trim((string)($_GET['programa'] ?? 'universidad_vida')));
 
-        $qs = http_build_query([
-            'url'      => 'escuelas_formacion/registro-publico/universidad-vida',
-            'id_persona' => $idPersona > 0 ? $idPersona : '',
-            'id_inscripcion' => $idInscripcion > 0 ? $idInscripcion : '',
-            'cedula'   => $cedula,
-            'nombre'   => $nombre,
+        $params = array_filter([
+            'cedula' => $cedula,
             'telefono' => $telefono,
-            'genero' => $genero,
-            'edad' => $edad,
-            'lider' => $lider,
-            'id_ministerio' => $idMinisterio,
-            'fecha_nacimiento' => $fechaNacimiento,
-            'direccion' => $direccion,
-            'programa' => $programa,
-            'abono'    => '1',
-        ]);
+            'id_inscripcion' => $idInscripcion > 0 ? $idInscripcion : null,
+            'tipo' => trim((string)($_GET['tipo'] ?? '')) !== '' ? trim((string)$_GET['tipo']) : null,
+            'mensaje' => trim((string)($_GET['mensaje'] ?? '')) !== '' ? trim((string)$_GET['mensaje']) : null,
+        ], static function ($v) {
+            return $v !== null && $v !== '';
+        });
 
-        header('Location: ' . PUBLIC_URL . '/index.php?' . $qs);
+        header('Location: ' . $this->urlAbonosEscuelasConParams($programa, $params));
         exit;
+    }
+
+    /**
+     * Subida AJAX de documentos desde el formulario público UV (persona ya inscrita).
+     */
+    public function subirDocumentosPublico(): void {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->json(['success' => false, 'mensaje' => 'Método no permitido'], 405);
+            return;
+        }
+
+        $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+        if ($contentLength > 0 && $_POST === [] && empty($_FILES)) {
+            $this->json([
+                'success' => false,
+                'mensaje' => 'Los archivos superan el límite del servidor. Suba menos archivos o reduzca el tamaño (máx. 8 MB por archivo).',
+            ], 413);
+            return;
+        }
+
+        $idInscripcion = (int)($_POST['id_inscripcion'] ?? 0);
+        if ($idInscripcion <= 0) {
+            $this->json(['success' => false, 'mensaje' => 'Seleccione una inscripción válida antes de subir documentos.'], 422);
+            return;
+        }
+
+        $inscripcion = $this->inscripcionModel->getByIdInscripcion($idInscripcion);
+        if (empty($inscripcion)) {
+            $this->json(['success' => false, 'mensaje' => 'La inscripción no existe.'], 404);
+            return;
+        }
+
+        $programa = trim((string)($inscripcion['Programa'] ?? ''));
+        if (!in_array($programa, ['universidad_vida', 'encuentro'], true)) {
+            $this->json(['success' => false, 'mensaje' => 'Los documentos solo aplican a Universidad de la Vida.'], 422);
+            return;
+        }
+
+        try {
+            $resultado = $this->inscripcionModel->adjuntarDocumentosDesdeUpload($idInscripcion, $_FILES['documentos_uv'] ?? null);
+            $guardados = (int)($resultado['guardados'] ?? 0);
+            $errores = (array)($resultado['errores'] ?? []);
+            if ($guardados <= 0) {
+                $mensaje = $errores !== []
+                    ? implode(' ', $errores)
+                    : 'No se recibió ningún archivo válido.';
+                $this->json(['success' => false, 'mensaje' => $mensaje], 422);
+                return;
+            }
+
+            $actualizada = $this->inscripcionModel->getByIdInscripcion($idInscripcion);
+            $documentos = $this->inscripcionModel->decodificarDocumentos((string)($actualizada['Documentos'] ?? ''));
+
+            $mensaje = 'Documentos cargados con éxito';
+            if ($errores !== []) {
+                $mensaje .= '. No se guardaron algunos archivos: ' . implode(' ', $errores);
+            }
+
+            $this->json([
+                'success' => true,
+                'mensaje' => $mensaje,
+                'documentos' => $documentos,
+                'errores' => $errores,
+            ]);
+        } catch (Throwable $e) {
+            $this->json(['success' => false, 'mensaje' => $e->getMessage()], 422);
+        }
+    }
+
+    private function tieneArchivosDocumentosUvSubidos(): bool {
+        if (empty($_FILES['documentos_uv']) || !is_array($_FILES['documentos_uv'])) {
+            return false;
+        }
+
+        $errores = $_FILES['documentos_uv']['error'] ?? null;
+        if ($errores === null) {
+            return false;
+        }
+
+        if (!is_array($errores)) {
+            return (int)$errores !== UPLOAD_ERR_NO_FILE;
+        }
+
+        foreach ($errores as $error) {
+            if ((int)$error !== UPLOAD_ERR_NO_FILE) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Procesa archivos del formulario UV y los vincula a la inscripción.
+     */
+    /**
+     * @return array{guardados:int, errores:array<int,string>}
+     */
+    private function procesarDocumentosUvSubidos(int $idInscripcion, string $programa = ''): array {
+        if ($idInscripcion <= 0) {
+            return ['guardados' => 0, 'errores' => []];
+        }
+
+        $programa = trim($programa);
+        if ($programa !== '' && !in_array($programa, ['universidad_vida', 'encuentro'], true)) {
+            return ['guardados' => 0, 'errores' => []];
+        }
+
+        if (empty($_FILES['documentos_uv'])) {
+            return ['guardados' => 0, 'errores' => []];
+        }
+
+        try {
+            return $this->inscripcionModel->adjuntarDocumentosDesdeUpload($idInscripcion, $_FILES['documentos_uv']);
+        } catch (Throwable $e) {
+            error_log('procesarDocumentosUvSubidos: ' . $e->getMessage());
+            return ['guardados' => 0, 'errores' => [$e->getMessage()]];
+        }
     }
 }

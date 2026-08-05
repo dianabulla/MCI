@@ -3,7 +3,7 @@
 
 <!-- html2canvas CDN para exportar tabla como imagen -->
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-<script src="<?= ASSETS_URL ?>/js/descargar_tabla_asistencia.js?v=20260515"></script>
+<script src="<?= ASSETS_URL ?>/js/descargar_tabla_asistencia.js?v=20260526"></script>
 
 <div class="page-header" id="top-asistencias">
     <h2>Reporte Semanal de Asistencias</h2>

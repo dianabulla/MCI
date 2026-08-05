@@ -25,7 +25,7 @@ class BaseController {
      * Redirigir a otra URL
      */
     protected function redirect($url) {
-        header("Location: " . PUBLIC_URL . "index.php?url=$url");
+        header('Location: ' . public_app_url($url));
         exit;
     }
 

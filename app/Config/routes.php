@@ -96,9 +96,13 @@ return [
     'teen/guardar-menor-publico' => 'TeenController@guardarMenorPublico',
     'teen/consulta-codigo' => 'TeenController@consultarCodigoPublico',
     'teen/buscar-menor-publico-telefono' => 'TeenController@buscarMenorPublicoPorTelefono',
+    'teen/buscar-menor-publico-documento' => 'TeenController@buscarMenorPublicoPorDocumento',
     'teen/buscarAcudientes' => 'TeenController@buscarAcudientes',
     'teen/verPdf' => 'TeenController@verPdf',
     'teen/recuperar-archivos' => 'TeenController@recuperarArchivos',
+    'teen/subir-mes' => 'TeenController@subirMes',
+    'teen/guardar-tema-mes' => 'TeenController@guardarTemaMes',
+    'teen/asignar-profesor' => 'TeenController@asignarProfesorSemana',
     'teen/editar' => 'TeenController@editar',
     'teen/eliminar' => 'TeenController@eliminar',
     'teen/detalleVistas' => 'TeenController@detalleVistas',
@@ -107,10 +111,12 @@ return [
     'discipular/ministerios' => 'MinisterioController@index',
     'discipular/ministerios/crear' => 'MinisterioController@crear',
     'discipular/ministerios/editar' => 'MinisterioController@editar',
+    'discipular/ministerios/guardar-metas' => 'MinisterioController@guardarMetas',
     'discipular/ministerios/actualizarMeta' => 'MinisterioController@actualizarMeta',
     'discipular/ministerios/actualizar-lideres-principales' => 'MinisterioController@actualizarLideresPrincipales',
     'discipular/ministerios/lideres' => 'MinisterioController@lideres',
     'discipular/ministerios/equipo-principal' => 'MinisterioController@equipoPrincipal',
+    'discipular/ministerios/personas-asignables' => 'MinisterioController@personasAsignablesJson',
     'discipular/ministerios/equipo-12' => 'MinisterioController@equipo12',
     'discipular/ministerios/lideres-celula' => 'MinisterioController@lideresCelula',
     'discipular/ministerios/validar-cupo-lider' => 'MinisterioController@validarCupoLider',
@@ -119,6 +125,10 @@ return [
     'discipular/ministerios/reasignar-cupo' => 'MinisterioController@reasignarCupo',
     'discipular/ministerios/eliminar' => 'MinisterioController@eliminar',
     'discipular/ministerios/exportarExcel' => 'MinisterioController@exportarExcel',
+
+    // Asistente / chatbot
+    'chatbot/consultar' => 'ChatbotController@consultar',
+    'chatbot/sugerencias' => 'ChatbotController@sugerencias',
 
     // Cuentas
     'cuentas' => 'CuentaController@index',
@@ -147,6 +157,7 @@ return [
     'eventos/capacitacion-destino' => 'EventoController@capacitacionDestino',
     'eventos/otros' => 'EventoController@otros',
     'eventos/modulo/guardar' => 'EventoController@guardarModuloContenido',
+    'eventos/modulo/guardar-masivo' => 'EventoController@guardarModuloContenidoMasivo',
     'eventos/modulo/duplicar' => 'EventoController@duplicarModuloContenido',
     'eventos/modulo/eliminar' => 'EventoController@eliminarModuloContenido',
     'eventos/universidad-vida/publico' => 'EventoController@universidadVidaPublico',
@@ -163,10 +174,46 @@ return [
     // Peticiones Públicas (No requiere autenticación)
     'peticiones_publica' => 'PeticionController@formularioPublico',
     'peticiones_publica/guardar' => 'PeticionController@guardarPublico',
+
+    // Talleres (formularios dinámicos)
+    'talleres' => 'TallerController@index',
+    'talleres/crear' => 'TallerController@crear',
+    'talleres/editar' => 'TallerController@editar',
+    'talleres/guardar' => 'TallerController@guardar',
+    'talleres/eliminar' => 'TallerController@eliminar',
+    'talleres/respuestas' => 'TallerController@respuestas',
+    'talleres/exportar' => 'TallerController@exportar',
+    'talleres/qr' => 'TallerController@qr',
+    'talleres/crear-presentacion-ninos' => 'TallerController@crearPresentacionNinos',
+    'talleres/crear-tour-levantate' => 'TallerController@crearTourLevantate',
+    'talleres/corregir-personas-tour' => 'TallerController@corregirPersonasTour',
+    'talleres/pago' => 'TallerController@pagoRespuesta',
+    'talleres/guardar-pago' => 'TallerController@guardarPago',
+    'talleres/ticket-pago' => 'TallerController@ticketPago',
+
+    // Talleres — Servicio Social (agendamiento)
+    'talleres/servicio-social' => 'TallerServicioSocialController@index',
+    'talleres/servicio-social/ver' => 'TallerServicioSocialController@ver',
+    'talleres/servicio-social/actualizar' => 'TallerServicioSocialController@actualizar',
+    'talleres/servicio-social/horarios' => 'TallerServicioSocialController@horariosSabado',
+    'talleres/servicio-social/horarios/guardar' => 'TallerServicioSocialController@guardarHorariosSabado',
+    'talleres/servicio-social/guardar-historia' => 'TallerServicioSocialController@guardarHistoriaClinica',
+    'talleres/servicio-social/exportar' => 'TallerServicioSocialController@exportar',
+
+    // Talleres — formulario público (sin autenticación)
+    'talleres_publico' => 'TallerController@formularioPublico',
+    'talleres_publico/guardar' => 'TallerController@guardarPublico',
+    'talleres_publico/buscar-persona' => 'TallerController@buscarPersonaPublico',
+    'talleres_publico/qr' => 'TallerController@qrPublico',
+    'talleres_publico/servicio-social' => 'TallerServicioSocialController@formularioPublico',
+    'talleres_publico/servicio-social/guardar' => 'TallerServicioSocialController@guardarPublico',
+    'talleres_publico/servicio-social/buscar-persona' => 'TallerServicioSocialController@buscarPersonaPublico',
+    'talleres_publico/servicio-social/disponibilidad' => 'TallerServicioSocialController@disponibilidadPublico',
     
     // Asistencias
     'asistencias' => 'AsistenciaController@index',
     'asistencias/registrar' => 'AsistenciaController@registrar',
+    'asistencias/miembros-celula' => 'AsistenciaController@miembrosCelula',
     'asistencias/porCelula' => 'AsistenciaController@porCelula',
     'asistencias/actualizarEntregoSobre' => 'AsistenciaController@actualizarEntregoSobre',
     'asistencias/marcarNoDisponible' => 'AsistenciaController@marcarNoDisponible',
@@ -188,6 +235,12 @@ return [
     'permisos/actualizar' => 'PermisosController@actualizar',
     'permisos/limpiar-obsoletos' => 'PermisosController@limpiarObsoletos',
     'permisos/exportarExcel' => 'PermisosController@exportarExcel',
+
+    // Herramientas (admin)
+    'herramientas/diagnostico-documento' => 'DiagnosticoDocumentoController@index',
+    'herramientas/diagnostico-documento/exportar' => 'DiagnosticoDocumentoController@exportar',
+    'herramientas/diagnostico-permisos-persona' => 'DiagnosticoPermisosPersonaController@index',
+    'herramientas/diagnostico-reporte-celulas' => 'DiagnosticoReporteCelulasController@index',
     
     // Entrega de Obsequios (Requiere autenticación)
     'entrega_obsequio' => 'EntregaObsequioController@index',
@@ -211,12 +264,15 @@ return [
     'escuelas_formacion/registro-publico/buscar-lideres' => 'EscuelaFormacionRegistroController@buscarLideres',
     'escuelas_formacion/registro-publico/validar-abono' => 'EscuelaFormacionRegistroController@validarAccesoAbono',
     'escuelas_formacion/registro-publico/guardar' => 'EscuelaFormacionRegistroController@guardar',
+    'escuelas_formacion/registro-publico/subir-documentos' => 'EscuelaFormacionRegistroController@subirDocumentosPublico',
     'escuelas_formacion/registro-publico/ticket' => 'EscuelaFormacionRegistroController@ticket',
     'escuelas_formacion/pagos' => 'EscuelaFormacionRegistroController@pagos',
     'escuelas_formacion/pagos/consolidar' => 'EscuelaFormacionRegistroController@pagosConsolidar',
     'escuelas_formacion/pagos/enviar' => 'EscuelaFormacionRegistroController@pagosEnviar',
     'escuelas_formacion/abonos/universidad-vida' => 'EscuelaFormacionRegistroController@abonosUniversidadVida',
     'escuelas_formacion/abonos/universidad-vida/guardar' => 'EscuelaFormacionRegistroController@guardarAbonosUniversidadVida',
+    'escuelas_formacion/abonos/capacitacion-destino' => 'EscuelaFormacionRegistroController@abonosCapacitacionDestino',
+    'escuelas_formacion/abonos/capacitacion-destino/guardar' => 'EscuelaFormacionRegistroController@guardarAbonosUniversidadVida',
     'escuelas_formacion/inscritos' => 'EscuelaFormacionRegistroController@listadoInscritos',
     'escuelas_formacion/inscritos/guardar-asistencia' => 'EscuelaFormacionRegistroController@guardarAsistenciaClase',
     'escuelas_formacion/inscritos/eliminar' => 'EscuelaFormacionRegistroController@eliminarInscripcionListado',

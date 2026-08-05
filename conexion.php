@@ -7,11 +7,8 @@
 // Configurar zona horaria de Colombia
 date_default_timezone_set('America/Bogota');
 
-// Cargar configuración global si existe
-$configFile = __DIR__ . '/app/Config/config.php';
-if (file_exists($configFile)) {
-    require_once $configFile;
-}
+// La configuración la carga public/index.php antes de este archivo.
+// No volver a cargar config aquí: require_once impediría aplicar actualizaciones nuevas.
 
 $host = defined('DB_HOST') ? DB_HOST : (getenv('DB_HOST') ?: 'localhost');
 $port = defined('DB_PORT') ? DB_PORT : (getenv('DB_PORT') ?: '3306');

@@ -46,8 +46,10 @@ $tarjetasResumen = $tarjetas_resumen ?? [];
 $vistaActual = (string)($vista_actual ?? 'registro');
 $registroActivo = $vistaActual !== 'asistencias';
 $asistenciasActivo = $vistaActual === 'asistencias';
-$mostrarAccesoAsistencias = $programaRutaActual === 'universidad_vida'
-    && PermisosProgramasAccess::puedeVerAsistenciasUniversidadVida();
+$mostrarAccesoAsistencias = ($programaRutaActual === 'universidad_vida'
+        && PermisosProgramasAccess::puedeVerAsistenciasUniversidadVida())
+    || (in_array($programaRutaActual, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)
+        && PermisosProgramasAccess::puedeVerAsistenciasCapacitacionDestino());
 $puedeEditarPersonaFormacion = class_exists('AuthController') && AuthController::puedeEditarPersonasConsulta();
 $moduloFormacionActual = strtolower(trim((string)($configModulo['modulo'] ?? '')));
 $puedeEditarRegistroFormacion = class_exists('AuthController')
@@ -83,6 +85,49 @@ if (!isset($parametrosRetornoFormacion['url']) || trim((string)$parametrosRetorn
     $parametrosRetornoFormacion['url'] = $rutaBase;
 }
 $returnUrlFormacion = '?' . http_build_query($parametrosRetornoFormacion);
+
+$puedeRecibirPagosEscuelas = class_exists('AuthController') && AuthController::puedeRecibirPagosEscuelasFormacion();
+$esLineaCapDestinoConsolidado = in_array($programaRutaActual, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true);
+$mostrarColumnaPagoCapConsolidado = $esModuloConsolidar && $puedeGestionarPagosCap && $esLineaCapDestinoConsolidado;
+$colspanInscCap = $mostrarColumnaPagoCapConsolidado ? 9 : 8;
+$urlAbonoAdminFormacion = PUBLIC_URL . '?url=escuelas_formacion/inscritos/abono-admin';
+
+$renderCeldaPagoConsolidadoCap = static function(array $ins) use ($puedeRecibirPagosEscuelas, $urlAbonoAdminFormacion) {
+    $idInscripcion = (int)($ins['Id_Inscripcion'] ?? 0);
+    $totalPagado = (float)($ins['total_pagado'] ?? 0);
+    $tienePago = !empty($ins['tiene_pago_registrado']);
+    $programaIns = trim((string)($ins['Programa'] ?? ''));
+    if ($programaIns === 'capacitacion_destino') {
+        $programaIns = 'capacitacion_destino_nivel_1';
+    }
+
+    ob_start();
+    ?>
+    <div class="insc-pago-cell">
+        <?php if ($puedeRecibirPagosEscuelas && $idInscripcion > 0): ?>
+            <?php
+                $hrefAbono = $urlAbonoAdminFormacion . '&' . http_build_query(array_filter([
+                    'id_inscripcion' => $idInscripcion,
+                    'cedula' => (string)($ins['Cedula'] ?? ''),
+                    'telefono' => (string)($ins['Telefono'] ?? ''),
+                    'programa' => $programaIns,
+                ], static function ($valor) {
+                    return $valor !== null && $valor !== '';
+                }));
+            ?>
+            <a class="insc-pago-btn" href="<?= htmlspecialchars($hrefAbono, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" title="Registrar pago/abono" aria-label="Registrar pago/abono">
+                <i class="bi bi-credit-card" aria-hidden="true"></i>
+            </a>
+        <?php endif; ?>
+        <?php if ($tienePago): ?>
+            <span class="insc-pago-status insc-pago-status--ok" title="Ya tiene pago registrado">$<?= number_format($totalPagado, 0, ',', '.') ?></span>
+        <?php else: ?>
+            <span class="insc-pago-status" title="Sin pago registrado">Sin pago</span>
+        <?php endif; ?>
+    </div>
+    <?php
+    return (string)ob_get_clean();
+};
 
 $renderAccionesRegistroFormacion = static function(array $ins, int $idPersonaIns, string $segmentoActual) use ($puedeEditarPersonaFormacion, $puedeEditarRegistroFormacion, $puedeEliminarInscripcionFormacion, $returnUrlFormacion, $moduloFormacionActual) {
     $idInscripcion = (int)($ins['Id_Inscripcion'] ?? 0);
@@ -179,7 +224,18 @@ if ($moduloFormacionActual === 'discipular') {
 }
 ?>
 
-<?php if (!empty($programasTabs)): ?>
+<?php
+$mostrarNavProgramasUnificada = $esFlujoProgramas;
+if ($mostrarNavProgramasUnificada) {
+    require_once APP . '/Helpers/ProgramasNavegacion.php';
+    ProgramasNavegacion::incluirPartial([
+        'linea' => $programaRutaActual,
+        'seccion' => $asistenciasActivo ? 'asistencias' : 'consolidado',
+    ]);
+}
+?>
+
+<?php if (!empty($programasTabs) && !$mostrarNavProgramasUnificada): ?>
 <div class="card report-card" style="margin-bottom:12px; padding:10px 12px;">
     <div class="action-group action-group-nav" style="display:flex; gap:8px; flex-wrap:wrap;">
         <?php foreach ($programasTabs as $tabPrograma): ?>
@@ -198,11 +254,22 @@ if ($moduloFormacionActual === 'discipular') {
         <h2 style="margin:0;"><?= htmlspecialchars($tituloModulo) ?></h2>
         <small style="color:#637087;">Vista Registro. Programa actual: <strong><?= htmlspecialchars($programaReporteLabel) ?></strong>.</small>
     </div>
+    <?php if (!$mostrarNavProgramasUnificada): ?>
     <div class="header-actions">
         <div class="action-group action-group-nav">
             <a href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($rutaBase) ?>" class="action-pill <?= $registroActivo ? 'is-active' : '' ?>" <?= $registroActivo ? 'aria-current="page"' : '' ?>>Registro</a>
             <?php if ($mostrarAccesoAsistencias): ?>
-                <a href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($rutaAsistencias) ?>" class="action-pill <?= $asistenciasActivo ? 'is-active' : '' ?>" <?= $asistenciasActivo ? 'aria-current="page"' : '' ?>>Asistencias</a>
+                <?php
+                $urlNavAsistencias = $rutaAsistencias;
+                if (in_array($programaRutaActual, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+                    $nivelNavCap = 1;
+                    if (preg_match('/capacitacion_destino_nivel_(\d+)/', $programaRutaActual, $mNivelNavCap)) {
+                        $nivelNavCap = max(1, min(3, (int)($mNivelNavCap[1] ?? 1)));
+                    }
+                    $urlNavAsistencias = 'home/material/capacitacion-destino&cap_nivel=' . $nivelNavCap . '&cap_seccion=inscritos';
+                }
+                ?>
+                <a href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($urlNavAsistencias) ?>" class="action-pill <?= $asistenciasActivo ? 'is-active' : '' ?>" <?= $asistenciasActivo ? 'aria-current="page"' : '' ?>>Asistencias</a>
             <?php endif; ?>
         </div>
         <div class="action-group">
@@ -236,6 +303,7 @@ if ($moduloFormacionActual === 'discipular') {
             <a href="<?= htmlspecialchars($urlVolverContextual, ENT_QUOTES, 'UTF-8') ?>" class="action-pill"><?= htmlspecialchars($etiquetaVolverContextual, ENT_QUOTES, 'UTF-8') ?></a>
         </div>
     </div>
+    <?php endif; ?>
 </div>
 
 <?php if (!empty($submodulosDiscipular) && !$mostrarDetalleDiscipular): ?>
@@ -711,6 +779,9 @@ if ($moduloFormacionActual === 'discipular') {
                         <th>Cedula</th>
                         <th>Telefono</th>
                         <th>Lider</th>
+                        <?php if ($mostrarColumnaPagoCapConsolidado): ?>
+                            <th class="col-pago-insc">Pago / Abono</th>
+                        <?php endif; ?>
                         <th class="col-acciones-insc">Acción</th>
                     </tr>
                 </thead>
@@ -726,6 +797,9 @@ if ($moduloFormacionActual === 'discipular') {
                                 <td data-label="Cedula"><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
                                 <td data-label="Telefono"><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
                                 <td data-label="Lider" class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
+                                <?php if ($mostrarColumnaPagoCapConsolidado): ?>
+                                    <td data-label="Pago / Abono" class="text-center col-pago-insc"><?= $renderCeldaPagoConsolidadoCap($ins) ?></td>
+                                <?php endif; ?>
                                 <td data-label="Acción" class="text-center">
                                     <?= $renderAccionesRegistroFormacion($ins, $idPersonaIns, 'nivel_1') ?>
                                 </td>
@@ -733,7 +807,7 @@ if ($moduloFormacionActual === 'discipular') {
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="8" class="text-center">No hay registros en Nivel 1 con estos filtros.</td>
+                            <td colspan="<?= (int)$colspanInscCap ?>" class="text-center">No hay registros en Nivel 1 con estos filtros.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -754,6 +828,9 @@ if ($moduloFormacionActual === 'discipular') {
                         <th>Cedula</th>
                         <th>Telefono</th>
                         <th>Lider</th>
+                        <?php if ($mostrarColumnaPagoCapConsolidado): ?>
+                            <th class="col-pago-insc">Pago / Abono</th>
+                        <?php endif; ?>
                         <th class="col-acciones-insc">Acción</th>
                     </tr>
                 </thead>
@@ -769,6 +846,9 @@ if ($moduloFormacionActual === 'discipular') {
                                 <td data-label="Cedula"><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
                                 <td data-label="Telefono"><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
                                 <td data-label="Lider" class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
+                                <?php if ($mostrarColumnaPagoCapConsolidado): ?>
+                                    <td data-label="Pago / Abono" class="text-center col-pago-insc"><?= $renderCeldaPagoConsolidadoCap($ins) ?></td>
+                                <?php endif; ?>
                                 <td data-label="Acción" class="text-center">
                                     <?= $renderAccionesRegistroFormacion($ins, $idPersonaIns, 'nivel_2') ?>
                                 </td>
@@ -776,7 +856,7 @@ if ($moduloFormacionActual === 'discipular') {
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="8" class="text-center">No hay registros en Nivel 2 con estos filtros.</td>
+                            <td colspan="<?= (int)$colspanInscCap ?>" class="text-center">No hay registros en Nivel 2 con estos filtros.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -797,6 +877,9 @@ if ($moduloFormacionActual === 'discipular') {
                         <th>Cedula</th>
                         <th>Telefono</th>
                         <th>Lider</th>
+                        <?php if ($mostrarColumnaPagoCapConsolidado): ?>
+                            <th class="col-pago-insc">Pago / Abono</th>
+                        <?php endif; ?>
                         <th class="col-acciones-insc">Acción</th>
                     </tr>
                 </thead>
@@ -812,6 +895,9 @@ if ($moduloFormacionActual === 'discipular') {
                                 <td data-label="Cedula"><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
                                 <td data-label="Telefono"><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
                                 <td data-label="Lider" class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
+                                <?php if ($mostrarColumnaPagoCapConsolidado): ?>
+                                    <td data-label="Pago / Abono" class="text-center col-pago-insc"><?= $renderCeldaPagoConsolidadoCap($ins) ?></td>
+                                <?php endif; ?>
                                 <td data-label="Acción" class="text-center">
                                     <?= $renderAccionesRegistroFormacion($ins, $idPersonaIns, 'nivel_3') ?>
                                 </td>
@@ -819,7 +905,7 @@ if ($moduloFormacionActual === 'discipular') {
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="8" class="text-center">No hay registros en Nivel 3 con estos filtros.</td>
+                            <td colspan="<?= (int)$colspanInscCap ?>" class="text-center">No hay registros en Nivel 3 con estos filtros.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -1828,6 +1914,60 @@ if ($moduloFormacionActual === 'discipular') {
 .insc-acciones .btn-insc-icon i {
     font-size: 14px;
     line-height: 1;
+}
+
+.insc-table-ordenada .col-pago-insc {
+    min-width: 118px;
+    width: 118px;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.insc-pago-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+
+.insc-pago-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: #2563eb;
+    color: #fff;
+    text-decoration: none;
+    border: 1px solid #1d4ed8;
+    flex-shrink: 0;
+}
+
+.insc-pago-btn:hover {
+    background: #1d4ed8;
+    color: #fff;
+}
+
+.insc-pago-status {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #f4c5c5;
+}
+
+.insc-pago-status--ok {
+    background: #dcfce7;
+    color: #166534;
+    border-color: #a7e3bd;
 }
 
 .gender-card {

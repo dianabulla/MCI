@@ -74,15 +74,34 @@ class Asistencia extends BaseModel {
      * Registrar asistencia
      */
     public function registrarAsistencia($idPersona, $idCelula, $fecha, $asistio, $tema = null, $tipoCelula = null, $observaciones = null) {
+        $idPersona = (int)$idPersona;
+        $idCelula = (int)$idCelula;
+        $fecha = trim((string)$fecha);
+
         $data = [
             'Id_Persona' => $idPersona,
             'Id_Celula' => $idCelula,
             'Fecha_Asistencia' => $fecha,
-            'Asistio' => $asistio,
+            'Asistio' => (int)$asistio,
             'Tema' => $tema,
             'Tipo_Celula' => $tipoCelula,
-            'Observaciones' => $observaciones
+            'Observaciones' => $observaciones,
         ];
+
+        if ($idPersona > 0 && $idCelula > 0 && $fecha !== '') {
+            $existente = $this->query(
+                "SELECT {$this->primaryKey} AS id
+                 FROM {$this->table}
+                 WHERE Id_Persona = ? AND Id_Celula = ? AND Fecha_Asistencia = ?
+                 ORDER BY {$this->primaryKey} DESC
+                 LIMIT 1",
+                [$idPersona, $idCelula, $fecha]
+            );
+            if (!empty($existente[0]['id'])) {
+                return $this->update((int)$existente[0]['id'], $data);
+            }
+        }
+
         return $this->create($data);
     }
 
@@ -208,6 +227,47 @@ class Asistencia extends BaseModel {
                 continue;
             }
 
+            $resultado[$idPersona] = (int)($row['Total'] ?? 0);
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * Reuniones asistidas (fechas distintas) por persona en una célula.
+     *
+     * @param array<int, int|string> $idsPersona
+     * @return array<int, int>
+     */
+    public function getConteoAsistenciasPorPersonaYCelula(array $idsPersona, int $idCelula): array {
+        $idsPersona = array_values(array_unique(array_filter(array_map('intval', $idsPersona), static function($id) {
+            return $id > 0;
+        })));
+        $idCelula = (int)$idCelula;
+
+        if ($idsPersona === [] || $idCelula <= 0) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsPersona), '?'));
+        $params = $idsPersona;
+        $params[] = $idCelula;
+
+        $sql = "SELECT Id_Persona,
+                       COUNT(DISTINCT CASE WHEN Asistio = 1 THEN Fecha_Asistencia END) AS Total
+                FROM {$this->table}
+                WHERE Id_Persona IN ({$placeholders})
+                  AND Id_Celula = ?
+                GROUP BY Id_Persona";
+
+        $rows = $this->query($sql, $params);
+        $resultado = [];
+
+        foreach ($rows as $row) {
+            $idPersona = (int)($row['Id_Persona'] ?? 0);
+            if ($idPersona <= 0) {
+                continue;
+            }
             $resultado[$idPersona] = (int)($row['Total'] ?? 0);
         }
 

@@ -1,5 +1,14 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 <?php
+$urlHtml2canvas = function_exists('asset_url')
+    ? asset_url('js/vendor/html2canvas.min.js')
+    : (rtrim(ASSETS_URL, '/') . '/js/vendor/html2canvas.min.js?v=' . date('Ymd'));
+?>
+<script src="<?= htmlspecialchars($urlHtml2canvas, ENT_QUOTES, 'UTF-8') ?>"></script>
+<?php
+require_once APP . '/Helpers/ProgramasNavegacion.php';
+ProgramasNavegacion::incluirPartial();
+
 $programa   = (string)($programa   ?? 'universidad_vida');
 $titulo     = (string)($titulo     ?? 'Inscritos Universidad de la Vida');
 $publicUrl  = rtrim((string)($public_url ?? PUBLIC_URL), '/');
@@ -22,7 +31,7 @@ if (!isset($puede_eliminar)) {
 }
 if (!isset($puede_editar_persona)) {
     $puede_editar_persona = $esAdminSesion
-        || (class_exists('AuthController') && AuthController::puede('personas:editar'));
+        || (class_exists('AuthController') && AuthController::puedeEditarPersonasConsulta());
 }
 
 // Administrador: siempre puede editar y eliminar en esta tabla.
@@ -82,6 +91,10 @@ $puedeEliminar      = !empty($puede_eliminar);
 }
 .li-stat--enc .li-enc-badge--d2 { background:#d1fae5; color:#047857; border-color:#6ee7b7; }
 .li-stat--enc .li-enc-badge small { font-weight:700; opacity:.9; font-size:0.72rem; text-transform:uppercase; }
+.li-stat--joven { background:#eff6ff; border-color:#93c5fd; }
+.li-stat--joven strong { color:#1d4ed8; }
+.li-stat--teens { background:#f5f3ff; border-color:#c4b5fd; }
+.li-stat--teens strong { color:#6d28d9; }
 .li-resumen-filtro {
   margin:-6px 0 0; padding:8px 12px; font-size:0.78rem; color:#1e40af;
   background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px;
@@ -133,6 +146,24 @@ $puedeEliminar      = !empty($puede_eliminar);
   white-space: normal;
   word-break: break-word;
 }
+.li-table.li-table--compact th.col-documentos,
+.li-table.li-table--compact td.col-documentos {
+  width: 9%;
+  white-space: normal;
+  min-width: 88px;
+}
+.li-doc-link {
+  display: inline-block;
+  font-size: 0.72rem;
+  color: #1d4ed8;
+  text-decoration: none;
+  margin: 1px 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.li-doc-link:hover { text-decoration: underline; }
 .li-table.li-table--compact th.col-cedula,
 .li-table.li-table--compact td.col-cedula { width: 9%; }
 .li-table.li-table--compact th.col-telefono,
@@ -200,6 +231,7 @@ $puedeEliminar      = !empty($puede_eliminar);
 .th-pre   { background:#fef3c7 !important; color:#92400e !important; }
 .th-enc   { background:#dcfce7 !important; color:#166534 !important; }
 .th-post  { background:#f3e8ff !important; color:#7e22ce !important; }
+.th-baut  { background:#e0f2fe !important; color:#0369a1 !important; }
 
 /* ── Checkboxes de asistencia ───────────────────────────────────── */
 .check-asist {
@@ -312,10 +344,12 @@ $puedeEliminar      = !empty($puede_eliminar);
 /* Columnas ocultas (data-oculta = ids separados por espacio) */
 .li-table[data-oculta~="nombre"] .col-nombre,
 .li-table[data-oculta~="genero"] .col-genero,
+.li-table[data-oculta~="segmento"] .col-segmento,
 .li-table[data-oculta~="edad"] .col-edad,
 .li-table[data-oculta~="cedula"] .col-cedula,
 .li-table[data-oculta~="telefono"] .col-telefono,
 .li-table[data-oculta~="lider"] .col-lider,
+.li-table[data-oculta~="documentos"] .col-documentos,
 .li-table[data-oculta~="pago"] .col-pago,
 .li-table[data-oculta~="acciones"] .col-acciones,
 .li-table[data-oculta~="pre-1"] .col-pre-1,
@@ -327,7 +361,8 @@ $puedeEliminar      = !empty($puede_eliminar);
 .li-table[data-oculta~="post-1"] .col-post-1,
 .li-table[data-oculta~="post-2"] .col-post-2,
 .li-table[data-oculta~="post-3"] .col-post-3,
-.li-table[data-oculta~="post-4"] .col-post-4 { display: none !important; }
+.li-table[data-oculta~="post-4"] .col-post-4,
+.li-table[data-oculta~="bautismo"] .col-bautismo { display: none !important; }
 
 .li-col-picker { position: relative; align-self: flex-end; }
 .li-col-picker__btn { min-width: 140px; }
@@ -361,6 +396,15 @@ $puedeEliminar      = !empty($puede_eliminar);
 .li-col-picker__item:hover { background: #f8fafc; }
 .li-col-picker__item input { width: 16px; height: 16px; accent-color: #2563eb; cursor: pointer; }
 .li-toolbar #li-lider { min-width: 200px; max-width: 280px; }
+.li-btn-export {
+  border: none; border-radius: 8px; padding: 8px 12px; font-size: 0.82rem;
+  font-weight: 700; cursor: pointer; color: #fff; white-space: nowrap;
+}
+.li-btn-export--excel { background: #15803d; }
+.li-btn-export--excel:hover { background: #166534; }
+.li-btn-export--img { background: #1d4ed8; }
+.li-btn-export--img:hover { background: #1e40af; }
+.li-btn-export:disabled { opacity: 0.65; cursor: wait; }
 </style>
 
 <div class="li-shell">
@@ -388,7 +432,8 @@ $puedeEliminar      = !empty($puede_eliminar);
         <option value="todos">Todos</option>
         <option value="hombre">Hombres</option>
         <option value="mujer">Mujeres</option>
-        <option value="joven">Jóvenes</option>
+        <option value="joven">Jóvenes (14–28 años)</option>
+        <option value="teens">Teens (9–13 años)</option>
       </select>
     </div>
     <div>
@@ -400,13 +445,37 @@ $puedeEliminar      = !empty($puede_eliminar);
       </select>
     </div>
     <div>
+      <label for="li-encuentro">Asistencia encuentro</label>
+      <select id="li-encuentro" title="Filtra por asistencia a los días del encuentro (clases 5 y 6)">
+        <option value="todos">Todos</option>
+        <option value="excluir_asistieron">Excluir quienes ya asistieron (día 1 y/o 2)</option>
+        <option value="sin_encuentro">No asistieron (ningún día)</option>
+        <option value="sin_dia1">No asistieron día 1</option>
+        <option value="sin_dia2">No asistieron día 2</option>
+        <option value="con_dia1">Asistieron día 1</option>
+        <option value="con_dia2">Asistieron día 2</option>
+        <option value="con_ambos">Asistieron ambos días</option>
+        <option value="con_al_menos_uno">Asistieron al menos un día</option>
+      </select>
+    </div>
+    <div>
+      <label for="li-bautismo">Bautismo</label>
+      <select id="li-bautismo" title="Filtra por casilla de bautismo marcada">
+        <option value="todos">Todos</option>
+        <option value="con_bautismo">Ver bautismo (marcados)</option>
+        <option value="sin_bautismo">Sin bautismo</option>
+      </select>
+    </div>
+    <div>
       <label for="li-lider">Líder</label>
       <select id="li-lider">
         <option value="">Todos los líderes</option>
       </select>
     </div>
-    <div style="align-self:flex-end;">
+    <div style="align-self:flex-end; display:flex; gap:8px; flex-wrap:wrap;">
       <button type="button" class="btn-pago" style="background:#475569;" onclick="cargarDatos()">↻ Actualizar</button>
+      <button type="button" class="li-btn-export li-btn-export--excel" id="li-btn-export-excel" title="Descargar filas visibles según filtros">⬇ Excel</button>
+      <button type="button" class="li-btn-export li-btn-export--img" id="li-btn-export-imagen" title="Descargar tabla visible como imagen">🖼 Imagen</button>
     </div>
     <div class="li-col-picker" id="li-col-picker">
       <label class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;" for="li-col-picker-btn">Columnas visibles</label>
@@ -442,6 +511,14 @@ $puedeEliminar      = !empty($puede_eliminar);
       <span id="li-label-pagados">Con pago</span>
       <small id="li-sub-pagados" class="li-stat-sub" hidden></small>
     </div>
+    <div class="li-stat li-stat--joven">
+      <strong id="li-seg-jovenes">–</strong>
+      <span>Jóvenes (14–28)</span>
+    </div>
+    <div class="li-stat li-stat--teens">
+      <strong id="li-seg-teens">–</strong>
+      <span>Teens (9–13)</span>
+    </div>
     <div class="li-stat li-stat--enc" style="min-width:180px;">
       <div class="li-encuentro-asist" id="li-encuentro-asist">
         <span class="li-enc-badge" title="Asistieron al día 1 del encuentro">
@@ -456,23 +533,26 @@ $puedeEliminar      = !empty($puede_eliminar);
   <p id="li-resumen-filtro" class="li-resumen-filtro" hidden></p>
 
   <!-- Tabla -->
-  <div class="li-card">
-    <div class="li-table-wrap">
+  <div class="li-card" id="li-export-zone">
+    <div class="li-table-wrap" id="li-table-wrap">
       <table class="li-table" id="li-table">
         <thead>
           <tr>
             <!-- Datos básicos -->
             <th class="t-left col-nombre" rowspan="2" style="min-width:160px;">Nombre</th>
             <th class="col-genero" rowspan="2">Género</th>
+            <th class="col-segmento" rowspan="2">Segmento</th>
             <th class="col-edad" rowspan="2">Edad</th>
             <th class="col-cedula" rowspan="2">Cédula</th>
             <th class="col-telefono" rowspan="2">Teléfono</th>
             <th class="t-left col-lider" rowspan="2" style="min-width:120px;">Líder</th>
+            <th class="col-documentos" rowspan="2">Documentos</th>
             <th class="col-pago" rowspan="2">Pago / Abono</th>
             <th class="col-acciones" rowspan="2" style="min-width:64px;">Acciones</th>
             <th colspan="4" class="th-pre col-pre-group col-pre-1 col-pre-2 col-pre-3 col-pre-4" data-col-group="pre">Clases Pre-Encuentro</th>
             <th colspan="2" class="th-enc col-enc-group col-enc-1 col-enc-2" data-col-group="enc">Encuentro</th>
             <th colspan="4" class="th-post col-post-group col-post-1 col-post-2 col-post-3 col-post-4" data-col-group="post">Clases Post-Encuentro</th>
+            <th rowspan="2" class="th-baut col-bautismo">Bautismo</th>
           </tr>
           <tr>
             <th class="th-pre col-pre-1">C1</th>
@@ -488,7 +568,7 @@ $puedeEliminar      = !empty($puede_eliminar);
           </tr>
         </thead>
         <tbody id="li-tbody">
-          <tr><td colspan="18" class="li-loading">Cargando datos…</td></tr>
+          <tr><td colspan="21" class="li-loading">Cargando datos…</td></tr>
         </tbody>
         <tfoot id="li-tfoot"></tfoot>
       </table>
@@ -505,7 +585,7 @@ $puedeEliminar      = !empty($puede_eliminar);
   'use strict';
 
   const PROGRAMA   = <?= json_encode($programa) ?>;
-  const BASE_URL   = <?= json_encode($publicUrl . '/index.php?url=') ?>;
+  const BASE_URL   = <?= json_encode(rtrim($publicUrl, '/') . '/?url=') ?>;
   const ABONO_URL    = BASE_URL + 'escuelas_formacion/inscritos/abono-admin';
   const ASIST_URL    = BASE_URL + 'escuelas_formacion/inscritos/guardar-asistencia';
   const ELIMINAR_URL = BASE_URL + 'escuelas_formacion/inscritos/eliminar';
@@ -543,7 +623,7 @@ $puedeEliminar      = !empty($puede_eliminar);
     } catch (e) {
       setEstado('Error al cargar datos');
       document.getElementById('li-tbody').innerHTML =
-        '<tr><td colspan="18" class="li-empty">No se pudieron cargar los datos. Intenta de nuevo.</td></tr>';
+        '<tr><td colspan="21" class="li-empty">No se pudieron cargar los datos. Intenta de nuevo.</td></tr>';
     }
   }
 
@@ -588,11 +668,10 @@ $puedeEliminar      = !empty($puede_eliminar);
     if (filtroGenero === 'hombre') return clasificarGeneroBase(p.Genero) === 'hombre';
     if (filtroGenero === 'mujer') return clasificarGeneroBase(p.Genero) === 'mujer';
     if (filtroGenero === 'joven') {
-      const edad = Number(p.Edad || 0);
-      if (edad >= 9 && edad <= 13) return true;
-      if (edad >= 14 && edad <= 28) return true;
-      const segPref = normalizar(p.Segmento_Preferido || '');
-      return segPref === 'jovenes' || segPref === 'teens';
+      return resolverSegmento(p) === 'jovenes';
+    }
+    if (filtroGenero === 'teens') {
+      return resolverSegmento(p) === 'teens';
     }
     return true;
   }
@@ -602,6 +681,8 @@ $puedeEliminar      = !empty($puede_eliminar);
     const buscar = document.getElementById('li-buscar').value.trim().toLowerCase();
     const genero = document.getElementById('li-genero').value;
     const filtroPago = document.getElementById('li-pago').value;
+    const filtroEncuentro = document.getElementById('li-encuentro')?.value || 'todos';
+    const filtroBautismo = document.getElementById('li-bautismo')?.value || 'todos';
     const filtroLider = (document.getElementById('li-lider')?.value || '').trim();
 
     const terminoBuscar = normalizar(buscar);
@@ -610,6 +691,11 @@ $puedeEliminar      = !empty($puede_eliminar);
       const pagado = tienePagoRegistrado(p);
       if (filtroPago === 'pagados' && !pagado) return false;
       if (filtroPago === 'sin_pago' && pagado) return false;
+
+      if (!coincideFiltroEncuentro(p, filtroEncuentro)) return false;
+
+      if (filtroBautismo === 'con_bautismo' && !p.clase_bautismo) return false;
+      if (filtroBautismo === 'sin_bautismo' && !!p.clase_bautismo) return false;
 
       if (filtroLider !== '') {
         const liderFila = (p.Lider || '').trim();
@@ -637,15 +723,24 @@ $puedeEliminar      = !empty($puede_eliminar);
     const buscar = document.getElementById('li-buscar').value.trim();
     const genero = document.getElementById('li-genero').value;
     const pago = document.getElementById('li-pago').value;
+    const encuentro = document.getElementById('li-encuentro')?.value || 'todos';
+    const bautismo = document.getElementById('li-bautismo')?.value || 'todos';
     const lider = (document.getElementById('li-lider')?.value || '').trim();
-    return buscar !== '' || genero !== 'todos' || pago !== 'todos' || lider !== '';
+    return buscar !== '' || genero !== 'todos' || pago !== 'todos' || encuentro !== 'todos' || bautismo !== 'todos' || lider !== '';
   }
 
   function etiquetaFiltroGenero(valor) {
     if (valor === 'hombre') return 'Hombres (todas las edades)';
     if (valor === 'mujer') return 'Mujeres (todas las edades)';
-    if (valor === 'joven') return 'Jóvenes y teens (por edad)';
+    if (valor === 'joven') return 'Jóvenes (14–28 años)';
+    if (valor === 'teens') return 'Teens (9–13 años)';
     return '';
+  }
+
+  function contarPorSegmento(lista, segmento) {
+    return (lista || []).filter(function (p) {
+      return resolverSegmento(p) === segmento;
+    }).length;
   }
 
   function etiquetaFiltroPago(valor) {
@@ -654,17 +749,43 @@ $puedeEliminar      = !empty($puede_eliminar);
     return '';
   }
 
+  function etiquetaFiltroEncuentro(valor) {
+    const mapa = {
+      excluir_asistieron: 'Excluir quienes ya asistieron al encuentro',
+      sin_encuentro: 'Sin asistir al encuentro (ningún día)',
+      sin_dia1: 'Sin asistir día 1',
+      sin_dia2: 'Sin asistir día 2',
+      con_dia1: 'Asistieron día 1',
+      con_dia2: 'Asistieron día 2',
+      con_ambos: 'Asistieron ambos días',
+      con_al_menos_uno: 'Asistieron al menos un día del encuentro'
+    };
+    return mapa[valor] || '';
+  }
+
+  function etiquetaFiltroBautismo(valor) {
+    if (valor === 'con_bautismo') return 'Ver bautismo (marcados)';
+    if (valor === 'sin_bautismo') return 'Sin bautismo';
+    return '';
+  }
+
   function describirFiltrosActivos() {
     const partes = [];
     const buscar = document.getElementById('li-buscar').value.trim();
     const genero = document.getElementById('li-genero').value;
     const pago = document.getElementById('li-pago').value;
+    const encuentro = document.getElementById('li-encuentro')?.value || 'todos';
+    const bautismo = document.getElementById('li-bautismo')?.value || 'todos';
     const lider = (document.getElementById('li-lider')?.value || '').trim();
     if (buscar !== '') partes.push('Búsqueda: «' + buscar + '»');
     const eg = etiquetaFiltroGenero(genero);
     if (eg) partes.push(eg);
     const ep = etiquetaFiltroPago(pago);
     if (ep) partes.push(ep);
+    const ee = etiquetaFiltroEncuentro(encuentro);
+    if (ee) partes.push(ee);
+    const eb = etiquetaFiltroBautismo(bautismo);
+    if (eb) partes.push(eb);
     if (lider !== '') partes.push('Líder: «' + lider + '»');
     return partes.join(' · ');
   }
@@ -706,6 +827,38 @@ $puedeEliminar      = !empty($puede_eliminar);
   /** Encuentro: clase 5 = día 1, clase 6 = día 2 */
   const CLASE_ENC_D1 = 5;
   const CLASE_ENC_D2 = 6;
+
+  function asistioEncuentroDia(p, dia) {
+    const clase = dia === 1 ? CLASE_ENC_D1 : CLASE_ENC_D2;
+    return !!p['clase_' + clase];
+  }
+
+  function coincideFiltroEncuentro(p, filtroEncuentro) {
+    if (!filtroEncuentro || filtroEncuentro === 'todos') return true;
+
+    const d1 = asistioEncuentroDia(p, 1);
+    const d2 = asistioEncuentroDia(p, 2);
+
+    switch (filtroEncuentro) {
+      case 'excluir_asistieron':
+      case 'sin_encuentro':
+        return !d1 && !d2;
+      case 'sin_dia1':
+        return !d1;
+      case 'sin_dia2':
+        return !d2;
+      case 'con_dia1':
+        return d1;
+      case 'con_dia2':
+        return d2;
+      case 'con_ambos':
+        return d1 && d2;
+      case 'con_al_menos_uno':
+        return d1 || d2;
+      default:
+        return true;
+    }
+  }
 
   function contarAsistenciaClase(lista, numeroClase) {
     const key = 'clase_' + numeroClase;
@@ -792,6 +945,15 @@ $puedeEliminar      = !empty($puede_eliminar);
 
     actualizarEncuentroCard(filas);
 
+    const elJovenes = document.getElementById('li-seg-jovenes');
+    const elTeens = document.getElementById('li-seg-teens');
+    if (elJovenes) {
+      elJovenes.textContent = String(contarPorSegmento(filas, 'jovenes'));
+    }
+    if (elTeens) {
+      elTeens.textContent = String(contarPorSegmento(filas, 'teens'));
+    }
+
     if (pagadosVista + sinPagoVista !== visibles) {
       console.warn('Conteo de pagos no coincide con personas visibles', {
         visibles,
@@ -823,7 +985,7 @@ $puedeEliminar      = !empty($puede_eliminar);
     actualizarEstadoCarga(filas);
 
     if (filas.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="18" class="li-empty">Sin resultados para este filtro.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="21" class="li-empty">Sin resultados para este filtro.</td></tr>';
       return;
     }
 
@@ -836,10 +998,12 @@ $puedeEliminar      = !empty($puede_eliminar);
       tr.innerHTML = `
         <td class="t-left col-nombre"><strong>${esc(p.Nombre)}</strong></td>
         <td class="col-genero">${badgeGenero(p.Genero)}</td>
+        <td class="col-segmento">${badgeSegmento(p)}</td>
         <td class="col-edad">${esc(p.Edad || '–')}</td>
         <td class="col-cedula"><span style="font-family:monospace;font-size:0.78rem;">${esc(p.Cedula || '–')}</span></td>
         <td class="col-telefono">${esc(p.Telefono || '–')}</td>
         <td class="t-left col-lider" style="color:#475569;">${esc(p.Lider || '–')}</td>
+        <td class="col-documentos">${celdaDocumentos(p)}</td>
         <td class="col-pago">${btnPago(p)}</td>
         <td class="col-acciones">${btnAcciones(p)}</td>
       `;
@@ -854,16 +1018,71 @@ $puedeEliminar      = !empty($puede_eliminar);
         cb.checked = !!p['clase_' + c];
         cb.dataset.idPersona = p.Id_Persona;
         cb.dataset.clase = c;
+        cb.dataset.tipo = 'uv';
         cb.addEventListener('change', onCheckChange);
         td.appendChild(cb);
         tr.appendChild(td);
       }
+
+      const tdBaut = document.createElement('td');
+      tdBaut.className = 'col-bautismo';
+      const cbBaut = document.createElement('input');
+      cbBaut.type = 'checkbox';
+      cbBaut.className = 'check-asist';
+      cbBaut.checked = !!p.clase_bautismo;
+      cbBaut.dataset.idPersona = p.Id_Persona;
+      cbBaut.dataset.tipo = 'bautismo';
+      cbBaut.addEventListener('change', onCheckChange);
+      tdBaut.appendChild(cbBaut);
+      tr.appendChild(tdBaut);
 
       fragment.appendChild(tr);
     });
 
     tbody.innerHTML = '';
     tbody.appendChild(fragment);
+  }
+
+  function parseDocumentos(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    try {
+      const parsed = JSON.parse(String(raw));
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function celdaDocumentos(p) {
+    const docs = parseDocumentos(p.Documentos);
+    if (!docs.length) {
+      return '<span style="color:#94a3b8;">–</span>';
+    }
+    return docs.map(function (doc) {
+      const nombre = esc(String(doc.nombre || doc.archivo || 'Documento'));
+      const url = String(doc.url || '').trim();
+      if (url) {
+        return '<a class="li-doc-link" href="' + esc(url) + '" target="_blank" rel="noopener" title="' + nombre + '">' + nombre + '</a>';
+      }
+      return '<span style="font-size:0.72rem;">' + nombre + '</span>';
+    }).join('<br>');
+  }
+
+  // ── Badge segmento (edad / preferencia) ─────────────────────────
+  function badgeSegmento(p) {
+    const seg = resolverSegmento(p);
+    const estilos = {
+      jovenes: { text: 'Jóvenes', bg: '#dbeafe', color: '#1e40af' },
+      teens: { text: 'Teens', bg: '#ede9fe', color: '#6d28d9' },
+      hombres_adultos: { text: 'H. adultos', bg: '#e0e7ff', color: '#3730a3' },
+      mujeres_adultas: { text: 'M. adultas', bg: '#fce7f3', color: '#9d174d' },
+      otros: { text: 'Otros', bg: '#f1f5f9', color: '#64748b' }
+    };
+    const s = estilos[seg] || estilos.otros;
+    return '<span style="background:' + s.bg + ';color:' + s.color
+      + ';padding:2px 7px;border-radius:99px;font-size:0.70rem;font-weight:700;white-space:nowrap;">'
+      + esc(s.text) + '</span>';
   }
 
   // ── Badge género ────────────────────────────────────────────────
@@ -997,19 +1216,26 @@ $puedeEliminar      = !empty($puede_eliminar);
     }
     cb.disabled = true;
     const idPersona = parseInt(cb.dataset.idPersona, 10);
+    const tipo      = cb.dataset.tipo || 'uv';
     const clase     = parseInt(cb.dataset.clase, 10);
     const asistio   = cb.checked ? 1 : 0;
 
     // Actualizar en memoria
     const p = todosLosDatos.find(x => x.Id_Persona == idPersona);
-    if (p) p['clase_' + clase] = !!cb.checked;
+    if (p) {
+      if (tipo === 'bautismo') {
+        p.clase_bautismo = !!cb.checked;
+      } else {
+        p['clase_' + clase] = !!cb.checked;
+      }
+    }
 
     try {
       const body = new FormData();
       body.append('id_persona',   idPersona);
       body.append('modulo',       'consolidar');
-      body.append('programa',     PROGRAMA);
-      body.append('numero_clase', clase);
+      body.append('programa',     tipo === 'bautismo' ? 'bautismo' : PROGRAMA);
+      body.append('numero_clase', tipo === 'bautismo' ? 1 : clase);
       body.append('asistio',      asistio);
 
       const resp = await fetch(ASIST_URL, {
@@ -1023,7 +1249,13 @@ $puedeEliminar      = !empty($puede_eliminar);
       renderTabla();
     } catch (err) {
       cb.checked = !cb.checked;  // revertir
-      if (p) p['clase_' + clase] = !!cb.checked;
+      if (p) {
+        if (tipo === 'bautismo') {
+          p.clase_bautismo = !!cb.checked;
+        } else {
+          p['clase_' + clase] = !!cb.checked;
+        }
+      }
       mostrarIndicador('✗ Error al guardar', true);
     } finally {
       cb.disabled = false;
@@ -1060,6 +1292,8 @@ $puedeEliminar      = !empty($puede_eliminar);
   });
   document.getElementById('li-genero').addEventListener('change', renderTabla);
   document.getElementById('li-pago').addEventListener('change', renderTabla);
+  document.getElementById('li-encuentro')?.addEventListener('change', renderTabla);
+  document.getElementById('li-bautismo')?.addEventListener('change', renderTabla);
   const selectLider = document.getElementById('li-lider');
   if (selectLider) {
     selectLider.addEventListener('change', renderTabla);
@@ -1076,10 +1310,12 @@ $puedeEliminar      = !empty($puede_eliminar);
   const COLUMNAS_DEF = [
     { id: 'nombre', label: 'Nombre', grupo: 'Datos personales' },
     { id: 'genero', label: 'Género', grupo: 'Datos personales' },
+    { id: 'segmento', label: 'Segmento', grupo: 'Datos personales' },
     { id: 'edad', label: 'Edad', grupo: 'Datos personales' },
     { id: 'cedula', label: 'Cédula', grupo: 'Datos personales' },
     { id: 'telefono', label: 'Teléfono', grupo: 'Datos personales' },
     { id: 'lider', label: 'Líder', grupo: 'Datos personales' },
+    { id: 'documentos', label: 'Documentos', grupo: 'Gestión' },
     { id: 'pago', label: 'Pago / Abono', grupo: 'Gestión' },
     { id: 'acciones', label: 'Acciones', grupo: 'Gestión' },
     { id: 'pre-1', label: 'Pre-encuentro — C1', grupo: 'Clases pre-encuentro' },
@@ -1091,7 +1327,8 @@ $puedeEliminar      = !empty($puede_eliminar);
     { id: 'post-1', label: 'Post-encuentro — C1', grupo: 'Clases post-encuentro' },
     { id: 'post-2', label: 'Post-encuentro — C2', grupo: 'Clases post-encuentro' },
     { id: 'post-3', label: 'Post-encuentro — C3', grupo: 'Clases post-encuentro' },
-    { id: 'post-4', label: 'Post-encuentro — C4', grupo: 'Clases post-encuentro' }
+    { id: 'post-4', label: 'Post-encuentro — C4', grupo: 'Clases post-encuentro' },
+    { id: 'bautismo', label: 'Bautismo', grupo: 'Consolidar' }
   ];
 
   const columnasVisibles = {};
@@ -1263,6 +1500,222 @@ $puedeEliminar      = !empty($puede_eliminar);
     if (idInscripcion > 0) {
       eliminarInscripcion(idInscripcion, nombre);
     }
+  });
+
+  function etiquetaSegmentoExport(p) {
+    const seg = resolverSegmento(p);
+    const mapa = {
+      jovenes: 'Jóvenes',
+      teens: 'Teens',
+      hombres_adultos: 'H. adultos',
+      mujeres_adultas: 'M. adultas',
+      otros: 'Otros'
+    };
+    return mapa[seg] || 'Otros';
+  }
+
+  function columnasExportables() {
+    return COLUMNAS_DEF.filter(function (col) {
+      return col.id !== 'acciones' && columnasVisibles[col.id];
+    });
+  }
+
+  function textoDocumentosExport(p) {
+    const docs = parseDocumentos(p.Documentos);
+    if (!docs.length) return '';
+    return docs.map(function (doc) {
+      return String(doc.nombre || doc.archivo || 'Documento').trim();
+    }).filter(Boolean).join('; ');
+  }
+
+  function textoPagoExport(p) {
+    const pagado = tienePagoRegistrado(p);
+    if (!pagado) return 'No';
+    const total = Number(p.total_pagado || 0);
+    if (total > 0) {
+      return 'Sí ($' + total.toLocaleString('es-CO') + ')';
+    }
+    return 'Sí';
+  }
+
+  function valorCeldaExport(p, colId) {
+    switch (colId) {
+      case 'nombre': return p.Nombre || '';
+      case 'genero': return p.Genero || '';
+      case 'segmento': return etiquetaSegmentoExport(p);
+      case 'edad': return p.Edad || '';
+      case 'cedula': return p.Cedula || '';
+      case 'telefono': return p.Telefono || '';
+      case 'lider': return p.Lider || '';
+      case 'documentos': return textoDocumentosExport(p);
+      case 'pago': return textoPagoExport(p);
+      case 'pre-1': return p.clase_1 ? 'X' : '';
+      case 'pre-2': return p.clase_2 ? 'X' : '';
+      case 'pre-3': return p.clase_3 ? 'X' : '';
+      case 'pre-4': return p.clase_4 ? 'X' : '';
+      case 'enc-1': return p.clase_5 ? 'X' : '';
+      case 'enc-2': return p.clase_6 ? 'X' : '';
+      case 'post-1': return p.clase_7 ? 'X' : '';
+      case 'post-2': return p.clase_8 ? 'X' : '';
+      case 'post-3': return p.clase_9 ? 'X' : '';
+      case 'post-4': return p.clase_10 ? 'X' : '';
+      case 'bautismo': return p.clase_bautismo ? 'X' : '';
+      default: return '';
+    }
+  }
+
+  function escaparCsv(valor) {
+    const texto = String(valor ?? '');
+    if (/[",;\r\n]/.test(texto)) {
+      return '"' + texto.replace(/"/g, '""') + '"';
+    }
+    return texto;
+  }
+
+  function nombreArchivoExport(prefijo) {
+    const hoy = new Date();
+    const fecha = hoy.getFullYear()
+      + String(hoy.getMonth() + 1).padStart(2, '0')
+      + String(hoy.getDate()).padStart(2, '0');
+    return prefijo + '-' + fecha;
+  }
+
+  function resumenExportacion() {
+    const filas = filasPorFiltro();
+    const detalleFiltro = hayFiltrosActivos()
+      ? describirFiltrosActivos()
+      : 'Sin filtros (todas las personas cargadas)';
+    return {
+      filas: filas,
+      detalleFiltro: detalleFiltro,
+      total: filas.length
+    };
+  }
+
+  function exportarExcelFiltrado() {
+    const resumen = resumenExportacion();
+    if (!resumen.filas.length) {
+      alert('No hay datos para exportar con el filtro actual.');
+      return;
+    }
+
+    const cols = columnasExportables();
+    const lineas = [];
+    lineas.push(['Reporte', 'Universidad de la Vida — Asistencias'].map(escaparCsv).join(';'));
+    lineas.push(['Filtros', resumen.detalleFiltro].map(escaparCsv).join(';'));
+    lineas.push(['Personas exportadas', String(resumen.total)].map(escaparCsv).join(';'));
+    lineas.push(['Generado', new Date().toLocaleString('es-CO')].map(escaparCsv).join(';'));
+    lineas.push('');
+    lineas.push(cols.map(function (col) { return escaparCsv(col.label); }).join(';'));
+    resumen.filas.forEach(function (p) {
+      lineas.push(cols.map(function (col) {
+        return escaparCsv(valorCeldaExport(p, col.id));
+      }).join(';'));
+    });
+
+    const blob = new Blob(['\uFEFF' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const enlace = document.createElement('a');
+    enlace.href = url;
+    enlace.download = nombreArchivoExport('asistencias-uv') + '.csv';
+    document.body.appendChild(enlace);
+    enlace.click();
+    document.body.removeChild(enlace);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 500);
+  }
+
+  function prepararTablaParaImagen(nodo) {
+    nodo.querySelectorAll('.col-acciones').forEach(function (celda) {
+      celda.style.display = 'none';
+    });
+    nodo.querySelectorAll('input.check-asist').forEach(function (input) {
+      const marcador = document.createElement('span');
+      marcador.textContent = input.checked ? 'X' : '';
+      marcador.style.display = 'inline-block';
+      marcador.style.minWidth = '18px';
+      marcador.style.fontWeight = '700';
+      marcador.style.color = input.checked ? '#166534' : '#94a3b8';
+      input.replaceWith(marcador);
+    });
+    nodo.querySelectorAll('a, button').forEach(function (el) {
+      if (el.classList.contains('js-li-eliminar') || el.classList.contains('btn-pago')) {
+        el.remove();
+      }
+    });
+  }
+
+  async function exportarImagenFiltrada() {
+    const resumen = resumenExportacion();
+    if (!resumen.filas.length) {
+      alert('No hay datos para exportar con el filtro actual.');
+      return;
+    }
+    if (typeof html2canvas !== 'function') {
+      alert('No se pudo cargar el generador de imagen. Recargue la página.');
+      return;
+    }
+
+    const origen = document.getElementById('li-export-zone');
+    if (!origen) {
+      alert('No se encontró la tabla para exportar.');
+      return;
+    }
+
+    const btn = document.getElementById('li-btn-export-imagen');
+    if (btn) btn.disabled = true;
+
+    const contenedor = document.createElement('div');
+    contenedor.style.cssText = 'position:fixed;left:0;top:0;z-index:-1;background:#fff;padding:16px 18px;max-width:96vw;';
+
+    const titulo = document.createElement('h3');
+    titulo.textContent = 'Asistencias — Universidad de la Vida';
+    titulo.style.cssText = 'margin:0 0 6px;font-size:18px;color:#1e3a5f;';
+    contenedor.appendChild(titulo);
+
+    const subtitulo = document.createElement('p');
+    subtitulo.textContent = resumen.detalleFiltro + ' · ' + resumen.total + ' persona(s)';
+    subtitulo.style.cssText = 'margin:0 0 10px;font-size:12px;color:#64748b;';
+    contenedor.appendChild(subtitulo);
+
+    const fecha = document.createElement('p');
+    fecha.textContent = 'Generado: ' + new Date().toLocaleString('es-CO');
+    fecha.style.cssText = 'margin:0 0 12px;font-size:11px;color:#94a3b8;';
+    contenedor.appendChild(fecha);
+
+    const clon = origen.cloneNode(true);
+    clon.removeAttribute('id');
+    prepararTablaParaImagen(clon);
+    contenedor.appendChild(clon);
+    document.body.appendChild(contenedor);
+
+    try {
+      const canvas = await html2canvas(contenedor, {
+        backgroundColor: '#ffffff',
+        scale: Math.min(2, window.devicePixelRatio || 2),
+        useCORS: true,
+        logging: false,
+        windowWidth: contenedor.scrollWidth,
+        windowHeight: contenedor.scrollHeight
+      });
+      const enlace = document.createElement('a');
+      enlace.download = nombreArchivoExport('asistencias-uv') + '.png';
+      enlace.href = canvas.toDataURL('image/png');
+      enlace.click();
+    } catch (err) {
+      console.error(err);
+      alert('No se pudo generar la imagen. Intente ocultar columnas o reducir filtros.');
+    } finally {
+      document.body.removeChild(contenedor);
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  document.getElementById('li-btn-export-excel')?.addEventListener('click', exportarExcelFiltrado);
+  document.getElementById('li-btn-export-imagen')?.addEventListener('click', function () {
+    exportarImagenFiltrada().catch(function (err) {
+      console.error(err);
+      alert('Error al exportar imagen.');
+    });
   });
 
   // ── Carga inicial ───────────────────────────────────────────────

@@ -133,6 +133,91 @@ class Ministerio extends BaseModel {
     }
 
     /**
+     * Corrige lectura de metas legacy y datos duplicados por semestre.
+     */
+    private function normalizarMetasDetalleDesdeFila(array $metas, $metaLegacy) {
+        $metaLegacy = max(0, (int)$metaLegacy);
+        $metaAnual = max(0, (int)($metas['meta_anual'] ?? 0));
+        $metaS1 = max(0, (int)($metas['meta_ganados_s1'] ?? 0));
+        $metaS2 = max(0, (int)($metas['meta_ganados_s2'] ?? 0));
+
+        // Meta anual guardada al doble de Meta_Ganados legacy (ej. 10300 vs 5150).
+        if ($metaAnual > 0 && $metaLegacy > 0 && $metaAnual === ($metaLegacy * 2)) {
+            $metaAnual = $metaLegacy;
+            $metaS1 = (int)round($metaAnual / 2);
+            $metaS2 = max(0, $metaAnual - $metaS1);
+        } elseif (
+            // Bug histórico: Meta_Ganados se copiaba a S1 y S2 y luego se sumaba como anual (×2).
+            $metaLegacy > 0
+            && $metaS1 === $metaLegacy
+            && $metaS2 === $metaLegacy
+            && ($metaAnual === 0 || $metaAnual === ($metaS1 + $metaS2))
+        ) {
+            $metaAnual = $metaLegacy;
+            $metaS1 = (int)round($metaLegacy / 2);
+            $metaS2 = max(0, $metaLegacy - $metaS1);
+        } elseif ($metaS1 === 0 && $metaS2 === 0 && $metaLegacy > 0 && $metaAnual === 0) {
+            // Solo existía la columna legacy: Meta_Ganados era la meta anual completa.
+            $metaAnual = $metaLegacy;
+            $metaS1 = (int)round($metaLegacy / 2);
+            $metaS2 = max(0, $metaLegacy - $metaS1);
+        } elseif ($metaAnual === 0 && ($metaS1 > 0 || $metaS2 > 0)) {
+            $metaAnual = max(0, $metaS1 + $metaS2);
+        }
+
+        $metas['meta_anual'] = $metaAnual;
+        $metas['meta_ganados_s1'] = $metaS1;
+        $metas['meta_ganados_s2'] = $metaS2;
+
+        // La meta anual configurada debe repartirse en los dos semestres (S1 + S2 = anual).
+        if ($metaAnual > 0 && ($metaS1 + $metaS2) !== $metaAnual) {
+            $anioDistribucion = (int)($metas['anio_meta'] ?? 0);
+            [$metaS1, $metaS2] = self::distribuirMetaAnualEnSemestres($metaAnual, $anioDistribucion);
+            $metas['meta_ganados_s1'] = $metaS1;
+            $metas['meta_ganados_s2'] = $metaS2;
+        }
+
+        return $metas;
+    }
+
+    /**
+     * Reparte la meta anual en S1 (ene-jun) y S2 (jul-dic) según días del calendario.
+     *
+     * @return array{0:int,1:int} [meta_s1, meta_s2]
+     */
+    public static function distribuirMetaAnualEnSemestres($metaAnual, $anioMeta) {
+        $metaAnual = max(0, (int)$metaAnual);
+        $anioMeta = (int)$anioMeta;
+        if ($anioMeta < 2000 || $anioMeta > 2100) {
+            $anioMeta = (int)date('Y');
+        }
+
+        if ($metaAnual <= 0) {
+            return [0, 0];
+        }
+
+        $inicio = new DateTime($anioMeta . '-01-01');
+        $fin = new DateTime($anioMeta . '-12-31');
+        $dias = (int)$inicio->diff($fin)->days + 1;
+        $diasS1 = (int)(new DateTime($anioMeta . '-01-01'))->diff(new DateTime($anioMeta . '-06-30'))->days + 1;
+        $metaS1 = (int)round($metaAnual * ($diasS1 / $dias));
+        $metaS2 = max(0, $metaAnual - $metaS1);
+
+        return [$metaS1, $metaS2];
+    }
+
+    /**
+     * Meta de ganados del semestre indicado (1 o 2).
+     */
+    public static function metaGanadosPorSemestre(array $metas, $numeroSemestre) {
+        $numeroSemestre = (int)$numeroSemestre === 2 ? 2 : 1;
+
+        return $numeroSemestre === 2
+            ? max(0, (int)($metas['meta_ganados_s2'] ?? 0))
+            : max(0, (int)($metas['meta_ganados_s1'] ?? 0));
+    }
+
+    /**
      * Obtiene metas de ganados para un conjunto de ministerios.
      *
      * @return array [Id_Ministerio => Meta_Ganados]
@@ -209,18 +294,7 @@ class Ministerio extends BaseModel {
             $metas['meta_n3_s1'] = max(0, (int)($row['Meta_Convencion_N3_S1'] ?? 0));
             $metas['meta_n3_s2'] = max(0, (int)($row['Meta_Convencion_N3_S2'] ?? 0));
 
-            // Compatibilidad: si aún no se cargó por semestre, reutiliza la meta antigua.
-            $metaLegacy = max(0, (int)($row['Meta_Ganados'] ?? 0));
-            if ($metas['meta_ganados_s1'] === 0 && $metas['meta_ganados_s2'] === 0 && $metaLegacy > 0) {
-                $metas['meta_ganados_s1'] = $metaLegacy;
-                $metas['meta_ganados_s2'] = $metaLegacy;
-            }
-
-            if ($metas['meta_anual'] === 0) {
-                $metas['meta_anual'] = max(0, $metas['meta_ganados_s1'] + $metas['meta_ganados_s2']);
-            }
-
-            $resultado[$id] = $metas;
+            $resultado[$id] = $this->normalizarMetasDetalleDesdeFila($metas, max(0, (int)($row['Meta_Ganados'] ?? 0)));
         }
 
         return $resultado;
@@ -252,7 +326,18 @@ class Ministerio extends BaseModel {
             $normalizadas[$clave] = max(0, (int)($metas[$clave] ?? 0));
         }
 
-        $metaLegacy = max($normalizadas['meta_ganados_s1'], $normalizadas['meta_ganados_s2']);
+        $metaLegacy = $normalizadas['meta_anual'] > 0
+            ? $normalizadas['meta_anual']
+            : max($normalizadas['meta_ganados_s1'], $normalizadas['meta_ganados_s2']);
+
+        if ($normalizadas['meta_anual'] > 0) {
+            [$metaS1, $metaS2] = self::distribuirMetaAnualEnSemestres(
+                $normalizadas['meta_anual'],
+                $normalizadas['anio_meta']
+            );
+            $normalizadas['meta_ganados_s1'] = $metaS1;
+            $normalizadas['meta_ganados_s2'] = $metaS2;
+        }
 
         $sql = "INSERT INTO ministerio_meta (
                     Id_Ministerio,
@@ -294,7 +379,7 @@ class Ministerio extends BaseModel {
                     Meta_Convencion_N3_S2 = VALUES(Meta_Convencion_N3_S2),
                     Fecha_Actualizacion = NOW()";
 
-        return $this->execute($sql, [
+        $ok = $this->execute($sql, [
             $idMinisterio,
             $metaLegacy,
             $normalizadas['meta_anual'],
@@ -314,6 +399,12 @@ class Ministerio extends BaseModel {
             $normalizadas['meta_n3_s1'],
             $normalizadas['meta_n3_s2']
         ]);
+
+        if (!$ok) {
+            error_log('Ministerio::setMetasDetalle falló para Id_Ministerio=' . $idMinisterio);
+        }
+
+        return $ok;
     }
 
     /**

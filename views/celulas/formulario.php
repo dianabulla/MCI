@@ -6,7 +6,10 @@
 </div>
 
 <div class="form-container">
-    <form method="POST">
+    <form method="POST"<?= isset($celula['Id_Celula']) ? ' action="' . htmlspecialchars(PUBLIC_URL . 'index.php?url=celulas/editar&id=' . (int)$celula['Id_Celula']) . '"' : '' ?>>
+        <?php if (isset($celula['Id_Celula'])): ?>
+        <input type="hidden" name="id_celula" value="<?= (int)$celula['Id_Celula'] ?>">
+        <?php endif; ?>
         <?php
         $tipoCelulaSeleccionada = strtolower(trim((string)($_POST['tipo_celula'] ?? '')));
         if (!in_array($tipoCelulaSeleccionada, ['nueva', 'antigua'], true)) {
@@ -85,7 +88,8 @@
                 <input type="hidden" 
                        id="id_lider" 
                        name="id_lider" 
-                       value="<?= htmlspecialchars((string)$idLiderDefault) ?>">
+                       value="<?= htmlspecialchars((string)$idLiderDefault) ?>"
+                       data-inicial="<?= htmlspecialchars((string)$idLiderDefault) ?>">
                 <div id="lider_autocomplete_results" class="autocomplete-results"></div>
                 <small class="form-text text-muted">
                     <?php if ($esLiderCelulaActual): ?>
@@ -165,6 +169,7 @@
             <div class="autocomplete-container">
                 <input type="text" 
                        id="anfitrion_search" 
+                       name="anfitrion_search"
                        class="form-control autocomplete-input" 
                        placeholder="Buscar anfitrión..."
                        autocomplete="off"
@@ -172,7 +177,8 @@
                 <input type="hidden" 
                        id="id_anfitrion" 
                        name="id_anfitrion" 
-                       value="<?= isset($celula) ? $celula['Id_Anfitrion'] : '' ?>">
+                       value="<?= (isset($celula) && !empty($celula['Id_Anfitrion'])) ? (int)$celula['Id_Anfitrion'] : '' ?>"
+                       data-inicial="<?= (isset($celula) && !empty($celula['Id_Anfitrion'])) ? (int)$celula['Id_Anfitrion'] : '' ?>">
                 <div id="anfitrion_autocomplete_results" class="autocomplete-results"></div>
                 <small class="form-text text-muted">
                     <?php if (isset($celula) && !empty($celula['Nombre_Anfitrion'])): ?>
@@ -301,12 +307,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let debounceTimer;
         let currentFocus = -1;
+        let selectedLabel = (input.value || '').trim();
+        let selectedId = hidden ? String(hidden.value || '').trim() : '';
 
         input.addEventListener('input', function() {
             const searchTerm = this.value.trim();
             currentFocus = -1;
 
             if (searchTerm === '') {
+                selectedLabel = '';
+                selectedId = '';
                 if (hidden) hidden.value = '';
                 if (typeof options.onClear === 'function') {
                     options.onClear();
@@ -315,8 +325,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            if (hidden && hidden.value) {
+            // Solo invalidar el ID si el texto ya no coincide con la selección actual.
+            if (hidden && selectedId !== '' && searchTerm !== selectedLabel) {
                 hidden.value = '';
+                selectedId = '';
             }
 
             clearTimeout(debounceTimer);
@@ -400,8 +412,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
 
                 item.addEventListener('click', function() {
-                    input.value = itemData.Nombre + ' ' + itemData.Apellido;
-                    if (hidden) hidden.value = itemData.Id_Persona;
+                    const label = (itemData.Nombre + ' ' + itemData.Apellido).trim();
+                    input.value = label;
+                    selectedLabel = label;
+                    selectedId = String(itemData.Id_Persona);
+                    if (hidden) hidden.value = selectedId;
                     if (typeof options.onSelect === 'function') {
                         options.onSelect(itemData);
                     }
@@ -461,6 +476,39 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     actualizarNombreCelula();
+
+    const formCelula = document.querySelector('.form-container form');
+    if (formCelula) {
+        formCelula.addEventListener('submit', function(e) {
+            const idLiderHidden = document.getElementById('id_lider');
+            const liderTexto = (liderInput ? liderInput.value.trim() : '');
+            const idLiderInicial = idLiderHidden ? String(idLiderHidden.getAttribute('data-inicial') || '').trim() : '';
+
+            if (idLiderHidden && !idLiderHidden.value.trim() && idLiderInicial !== '') {
+                idLiderHidden.value = idLiderInicial;
+            }
+
+            if (liderTexto !== '' && idLiderHidden && !idLiderHidden.value.trim()) {
+                e.preventDefault();
+                alert('Debes seleccionar el líder de la lista desplegable (no solo escribir el nombre).');
+                if (liderInput) liderInput.focus();
+                return;
+            }
+
+            const idAnfitrionHidden = document.getElementById('id_anfitrion');
+            const anfitrionTexto = (anfitrionInput ? anfitrionInput.value.trim() : '');
+            const idAnfitrionInicial = idAnfitrionHidden ? String(idAnfitrionHidden.getAttribute('data-inicial') || '').trim() : '';
+
+            if (anfitrionTexto === '' && idAnfitrionHidden) {
+                idAnfitrionHidden.value = '';
+            } else if (anfitrionTexto !== '' && idAnfitrionHidden && !idAnfitrionHidden.value.trim()) {
+                e.preventDefault();
+                alert('Debes seleccionar el anfitrión de la lista desplegable (no solo escribir el nombre).');
+                if (anfitrionInput) anfitrionInput.focus();
+                return;
+            }
+        });
+    }
 
     document.addEventListener('click', function(e) {
         if (!e.target.closest('.autocomplete-container')) {

@@ -5,6 +5,7 @@
 
 require_once 'config.php';
 require_once APP . '/Models/Rol.php';
+require_once APP . '/Helpers/PermisosRolService.php';
 
 $method = getRequestMethod();
 $rolModel = new Rol();
@@ -74,6 +75,7 @@ function createRol() {
     $id = $rolModel->create($input);
     
     if ($id) {
+        PermisosRolService::inicializarMatrizDenegada((int)$id);
         $rol = $rolModel->getById($id);
         jsonResponse(true, $rol, 'Rol creado correctamente', 201);
     } else {

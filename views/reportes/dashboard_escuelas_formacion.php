@@ -1,12 +1,18 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 <?php
+require_once APP . '/Helpers/DashboardSelector.php';
+
 $tituloDashboard = (string)($titulo_dashboard ?? 'Dashboard Escuelas');
 $lineaDashboard = (string)($linea_dashboard ?? 'universidad_vida');
+$dashModuloActivo = $lineaDashboard === 'capacitacion_destino' ? 'capacitacion_destino' : 'universidad_vida';
+$dashModuloTitulo = DashboardSelector::etiquetaActivo($dashModuloActivo);
+
 $rutaDashboard = (string)($ruta_dashboard ?? 'reportes/dashboard-escuelas-uv');
 $anio = (int)($anio ?? date('Y'));
 $mes = (int)($mes ?? date('n'));
 $filtroMinisterio = (string)($filtro_ministerio ?? '');
 $filtroLider = (string)($filtro_lider ?? '');
+$filtroEncuentroUv = (string)($filtro_encuentro_uv ?? '');
 $ministeriosDisp = (array)($ministerios_disponibles ?? []);
 $lideresDisp = (array)($lideres_disponibles ?? []);
 $metaPorLider = (int)($meta_por_lider ?? 6);
@@ -384,7 +390,7 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
 <div class="dashboard-escuelas-wrap">
     <div class="dash-head">
         <div>
-            <h2><?= htmlspecialchars($tituloDashboard) ?></h2>
+            <h2>Dashboard · <?= htmlspecialchars($dashModuloTitulo, ENT_QUOTES, 'UTF-8') ?></h2>
             <?php if ($lineaDashboard === 'universidad_vida'): ?>
                 <small style="color:#64748b;">Universidad de la Vida · Inscripciones y pagos por ministerio (modo Consolidar)</small>
             <?php elseif ($lineaDashboard === 'capacitacion_destino'): ?>
@@ -393,8 +399,18 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
                 <small style="color:#64748b;">Módulo exclusivo: <?= htmlspecialchars($labelLinea) ?> · Meta por líder (hombre/mujer): <?= $metaPorLider ?> inscritos</small>
             <?php endif; ?>
         </div>
-        <div class="dash-toolbar">
-            <a href="<?= PUBLIC_URL ?>index.php?url=reportes/dashboard-ganar" class="btn btn-primary">Dashboard Ganar</a>
+        <div class="dash-toolbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <?php
+            DashboardSelector::incluirPartial([
+                'activo' => $dashModuloActivo,
+                'params' => [
+                    'anio' => (int)($anio ?? date('Y')),
+                    'ministerio' => (string)($filtroMinisterio ?? ''),
+                    'lider' => (string)($filtroLider ?? ''),
+                    'mes' => (int)($mes ?? date('n')),
+                ],
+            ]);
+            ?>
         </div>
     </div>
 
@@ -464,6 +480,20 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
                     <?php endforeach; ?>
                 </select>
             </div>
+
+            <?php if ($lineaDashboard === 'universidad_vida'): ?>
+            <div class="group">
+                <label for="dash-filtro-encuentro">Asistencia encuentro</label>
+                <select name="filtro_encuentro" id="dash-filtro-encuentro" onchange="this.form.submit()"
+                    title="Excluye o filtra inscritos según asistencia a día 1 o 2 del encuentro (clases 5 y 6)">
+                    <option value="todos" <?= $filtroEncuentroUv === '' || $filtroEncuentroUv === 'todos' ? 'selected' : '' ?>>Todos</option>
+                    <option value="excluir_asistieron" <?= $filtroEncuentroUv === 'excluir_asistieron' ? 'selected' : '' ?>>Excluir quienes ya asistieron (día 1 y/o 2)</option>
+                    <option value="sin_encuentro" <?= $filtroEncuentroUv === 'sin_encuentro' ? 'selected' : '' ?>>Solo sin asistencia al encuentro</option>
+                    <option value="con_al_menos_uno" <?= $filtroEncuentroUv === 'con_al_menos_uno' ? 'selected' : '' ?>>Solo con asistencia (al menos un día)</option>
+                    <option value="con_ambos" <?= $filtroEncuentroUv === 'con_ambos' ? 'selected' : '' ?>>Solo asistieron ambos días</option>
+                </select>
+            </div>
+            <?php endif; ?>
         </form>
     </div>
 
@@ -571,6 +601,27 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
         return { map: map, slugs: slugs };
     }
 
+    function obtenerInscritosYPagosFila(tr, table, genKeys) {
+        const esPagos = table.getAttribute('data-dash-enable-pago') === '1'
+            && tr.getAttribute('data-dash-skip-pago') !== '1';
+        const tieneGen = genKeys && genKeys.length > 0;
+        if (!tieneGen) {
+            return {
+                ins: parseInt(tr.getAttribute('data-dash-ins') || '0', 10) || 0,
+                pag: parseInt(tr.getAttribute('data-dash-pag') || '0', 10) || 0
+            };
+        }
+        let ins = 0;
+        let pag = 0;
+        genKeys.forEach(function(g) {
+            ins += parseInt(tr.getAttribute('data-dash-' + g) || '0', 10) || 0;
+            if (esPagos) {
+                pag += parseInt(tr.getAttribute('data-dash-pag-' + g) || '0', 10) || 0;
+            }
+        });
+        return { ins: ins, pag: pag };
+    }
+
     function filaCoincide(tr, table) {
         if (!tr.hasAttribute('data-dash-row')) {
             return true;
@@ -637,14 +688,18 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
 
         const enablePago = table.getAttribute('data-dash-enable-pago') === '1';
         if (enablePago && tr.getAttribute('data-dash-skip-pago') !== '1') {
-            const ins = parseInt(tr.getAttribute('data-dash-ins') || '0', 10) || 0;
-            const pag = parseInt(tr.getAttribute('data-dash-pag') || '0', 10) || 0;
+            const cifras = obtenerInscritosYPagosFila(tr, table, genKeys);
+            const ins = cifras.ins;
+            const pag = cifras.pag;
             const pend = Math.max(0, ins - pag);
             const p = filt.pago || 'all';
+            if (genKeys && ins <= 0) {
+                return false;
+            }
             if (p === 'pend' && pend <= 0) {
                 return false;
             }
-            if (p === 'ok' && ins > 0 && pend > 0) {
+            if (p === 'ok' && (ins <= 0 || pend > 0)) {
                 return false;
             }
         }
@@ -713,6 +768,22 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
         return suma;
     }
 
+    function sumarPendientesSegmentosEnFila(tr, keys) {
+        return Math.max(0, sumarSegmentosEnFila(tr, keys, '') - sumarSegmentosEnFila(tr, keys, 'pag-'));
+    }
+
+    function valorColumnaExtraTablaUv(table, tr, keys) {
+        const esPagos = table.id === 'tablaUvPagos' || table.id === 'tablaCapPagos' || table.id === 'tablaUvPagosLider';
+        if (!esPagos) {
+            return sumarSegmentosEnFila(tr, keys, 'asist-');
+        }
+        const pagoFiltro = (table._dashFiltro && table._dashFiltro.pago) ? table._dashFiltro.pago : 'all';
+        if (pagoFiltro === 'pend') {
+            return sumarPendientesSegmentosEnFila(tr, keys);
+        }
+        return sumarSegmentosEnFila(tr, keys, 'pag-');
+    }
+
     function actualizarFilasUvPorSegmento(table) {
         if (!table.classList.contains('uv-simple-table')) {
             return;
@@ -743,10 +814,15 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
                 if (esCapInscritos) {
                     tdExtra.textContent = String(parseInt(tr.getAttribute('data-dash-extra') || '0', 10) || 0);
                 } else {
-                    tdExtra.textContent = String(sumarSegmentosEnFila(tr, keys, prefExtra));
+                    tdExtra.textContent = String(valorColumnaExtraTablaUv(table, tr, keys));
                 }
             }
         });
+        const thPag = table.querySelector('thead .uv-dash-col-extra');
+        if (thPag && esPagos) {
+            const pagoFiltro = (table._dashFiltro && table._dashFiltro.pago) ? table._dashFiltro.pago : 'all';
+            thPag.textContent = pagoFiltro === 'pend' ? 'Pend.' : 'Pagos';
+        }
     }
 
     function recalcularTotalesUv(table) {
@@ -777,7 +853,7 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
                 if (esCapInscritos) {
                     sums.extra += parseInt(tr.getAttribute('data-dash-extra') || '0', 10) || 0;
                 } else {
-                    sums.extra += sumarSegmentosEnFila(tr, keys, prefExtra);
+                    sums.extra += valorColumnaExtraTablaUv(table, tr, keys);
                 }
             } else {
                 sums.total += parseInt(tr.getAttribute('data-dash-ins') || '0', 10) || 0;

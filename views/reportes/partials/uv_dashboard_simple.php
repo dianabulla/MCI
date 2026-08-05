@@ -19,8 +19,10 @@ $kpiConUv = (int)($indicadoresEscalera['con_uv_escalera'] ?? 0);
 $kpiSinUv = (int)($indicadoresEscalera['sin_uv_escalera'] ?? 0);
 $kpiConEncuentro = (int)($indicadoresEscalera['con_encuentro_escalera'] ?? 0);
 $kpiConBautismo = (int)($indicadoresEscalera['con_bautismo_escalera'] ?? 0);
+$kpiConCapDestino = (int)($indicadoresEscalera['con_capacitacion_destino'] ?? 0);
 $kpiPctConUv = (float)($indicadoresEscalera['pct_con_uv'] ?? 0);
 $kpiPctSinUv = (float)($indicadoresEscalera['pct_sin_uv'] ?? 0);
+$kpiPctCapDestino = (float)($indicadoresEscalera['pct_capacitacion_destino'] ?? 0);
 $fechaIni = (string)($fechaInicioMes ?? '');
 $fechaFin = (string)($fechaFinMes ?? '');
 $anioRep = (int)($anio ?? date('Y'));
@@ -113,7 +115,7 @@ $renderFiltrosTablaUv = static function (string $tableId, bool $filtroPagosActiv
     ?>
     <div class="dash-table-tool-row js-dash-filtros-estaticos" data-dash-table-id="<?= $tid ?>">
         <div class="dash-filtros-panel" style="flex:1;min-width:0;">
-            <p class="dash-filter-hint">H y M = por género (las jóvenes cuentan en M; los jóvenes hombres en H). J y Teens = por edad. Sin marcar = ver todos.</p>
+            <p class="dash-filter-hint">Jóvenes = 14–28 años o segmento «jóvenes» (no incluye Teens). Teens = 9–13 años. H/M = por género. Con filtro «Con pendiente», la columna Pagos muestra cuántos faltan por pagar en el segmento elegido (misma base que la pantalla Pagos UV del semestre).</p>
             <div class="dash-inline-filters">
                 <div class="group">
                     <label for="dash-min-<?= $tid ?>">Ministerio</label>
@@ -152,7 +154,7 @@ $renderFiltrosTablaUvLider = static function (string $tableId): void {
     ?>
     <div class="dash-table-tool-row js-dash-filtros-estaticos" data-dash-table-id="<?= $tid ?>">
         <div class="dash-filtros-panel" style="flex:1;min-width:0;">
-            <p class="dash-filter-hint">Filtros: líder de célula y segmento (H / M / Jóvenes / Teens). Sin marcar segmentos = ver todos.</p>
+            <p class="dash-filter-hint">Filtros por líder y segmento. Jóvenes = mismos criterios que inscripciones UV. «Sin pendiente» = del segmento elegido, inscritos con pago registrado.</p>
             <div class="dash-inline-filters">
                 <div class="group">
                     <label for="dash-lid-<?= $tid ?>">Líder de célula</label>
@@ -208,7 +210,22 @@ foreach ($tablaPagos as $fila) {
     $totPag['pag_j'] += (int)($fila['Pagados_Jovenes'] ?? 0);
     $totPag['pag_t'] += (int)($fila['Pagados_Teens'] ?? 0);
 }
+
+$filtroEncuentroUvActivo = trim((string)($filtro_encuentro_uv ?? ''));
+$etiquetasFiltroEncuentroUv = [
+    'excluir_asistieron' => 'Excluyendo quienes ya asistieron al encuentro (día 1 y/o 2)',
+    'sin_encuentro' => 'Solo inscritos sin asistencia al encuentro',
+    'con_al_menos_uno' => 'Solo inscritos con asistencia al encuentro (al menos un día)',
+    'con_ambos' => 'Solo inscritos que asistieron ambos días del encuentro',
+];
 ?>
+
+<?php if ($filtroEncuentroUvActivo !== '' && $filtroEncuentroUvActivo !== 'todos' && isset($etiquetasFiltroEncuentroUv[$filtroEncuentroUvActivo])): ?>
+<p class="dash-filter-active-banner" style="margin:0 0 12px;padding:10px 14px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;font-size:0.85rem;color:#1e40af;">
+    <strong>Filtro encuentro activo:</strong> <?= htmlspecialchars($etiquetasFiltroEncuentroUv[$filtroEncuentroUvActivo], ENT_QUOTES, 'UTF-8') ?>
+    — Los totales de inscripciones y pagos del semestre reflejan solo esas personas.
+</p>
+<?php endif; ?>
 
 <div class="dash-card uv-encuentro-kpis" id="uvIndicadoresEscalera">
     <h4 class="section-title" style="margin-bottom:6px;">Escalera del éxito — Consolidar</h4>
@@ -222,7 +239,7 @@ foreach ($tablaPagos as $fila) {
         <?php elseif ($alcanceKpi === 'alcance_rol'): ?>
             Personas visibles para tu rol; los totales reflejan los peldaños marcados en la escalera (no inscripciones del semestre).
         <?php else: ?>
-            <strong>Toda la iglesia:</strong> cada indicador cuenta peldaños marcados en <strong>Consolidar</strong> (Universidad de la Vida, Encuentro, Bautismo).
+            <strong>Toda la iglesia:</strong> peldaños en <strong>Consolidar</strong> (UV, Encuentro, Bautismo) y paso a <strong>Capacitación Destino</strong> (Discipular en escalera o inscripción Cap).
         <?php endif; ?>
     </p>
     <div class="uv-kpi-row uv-kpi-row-encuentro">
@@ -248,6 +265,11 @@ foreach ($tablaPagos as $fila) {
             <span>Bautismo</span>
             <strong><?= $kpiConBautismo ?></strong>
         </div>
+        <div class="uv-kpi uv-kpi-ok" style="background:#fffbeb;border-color:#e9c46a;">
+            <span>Capacitación Destino</span>
+            <strong style="color:#7a4e08;"><?= $kpiConCapDestino ?></strong>
+            <em class="uv-kpi-pct"><?= number_format($kpiPctCapDestino, 1) ?>%</em>
+        </div>
     </div>
     <?php if ($kpiTotalPersonas > 0): ?>
     <div class="uv-encuentro-bar" role="img" aria-label="Distribución UV en escalera">
@@ -270,7 +292,7 @@ foreach ($tablaPagos as $fila) {
     <span class="uv-dash-alineacion-inline">
         <a href="<?= PUBLIC_URL ?>index.php?url=home/consolidar/asistencias" target="_blank" rel="noopener">Asistencias</a>
         ·
-        <a href="<?= PUBLIC_URL ?>index.php?url=escuelas_formacion/pagos/consolidar" target="_blank" rel="noopener">Pagos UV</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=escuelas_formacion/pagos/consolidar&amp;anio=<?= (int)$anioRep ?>&amp;semestre=<?= (int)$semestreRep ?>" target="_blank" rel="noopener">Pagos UV</a>
     </span>
 </p>
 

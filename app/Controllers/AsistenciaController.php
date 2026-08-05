@@ -59,9 +59,95 @@ class AsistenciaController extends BaseController {
         return $url;
     }
 
+    /**
+     * Miembros activos de una célula sin duplicar por cédula (JSON para reporte).
+     */
+    public function miembrosCelula() {
+        header('Content-Type: application/json; charset=utf-8');
+
+        if (!AuthController::puede('asistencias:crear')) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'Sin permiso']);
+            return;
+        }
+
+        $idCelula = (int)($_GET['id_celula'] ?? 0);
+        if ($idCelula <= 0) {
+            echo json_encode(['ok' => true, 'miembros' => [], 'conteo' => [], 'duplicados_ocultos' => 0]);
+            return;
+        }
+
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
+        $celulaPermitida = false;
+        foreach ($celulas as $celula) {
+            if ((int)($celula['Id_Celula'] ?? 0) === $idCelula) {
+                $celulaPermitida = true;
+                break;
+            }
+        }
+
+        if (!$celulaPermitida) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'Célula no permitida']);
+            return;
+        }
+
+        $resultado = $this->obtenerMiembrosUnicosActivosPorCelula($idCelula);
+        $ids = array_map(static function ($p) {
+            return (int)($p['Id_Persona'] ?? 0);
+        }, $resultado['miembros']);
+        $conteo = $this->asistenciaModel->getConteoAsistenciasPorPersonaYCelula($ids, $idCelula);
+
+        echo json_encode([
+            'ok' => true,
+            'miembros' => $resultado['miembros'],
+            'conteo' => $conteo,
+            'duplicados_ocultos' => $resultado['duplicados_ocultos'],
+        ]);
+    }
+
+    /**
+     * @return array{miembros: array<int, array<string, mixed>>, duplicados_ocultos: int}
+     */
+    private function obtenerMiembrosUnicosActivosPorCelula(int $idCelula): array {
+        $sql = "SELECT p.*
+                FROM persona p
+                WHERE p.Id_Celula = ?
+                  AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                ORDER BY p.Apellido, p.Nombre, p.Id_Persona DESC";
+        $filas = $this->personaModel->query($sql, [$idCelula]);
+
+        $mapa = [];
+        foreach ($filas as $fila) {
+            $doc = preg_replace('/\D+/', '', (string)($fila['Numero_Documento'] ?? ''));
+            $clave = strlen($doc) >= 5
+                ? ('doc:' . $doc)
+                : ('id:' . (int)($fila['Id_Persona'] ?? 0));
+
+            if (!isset($mapa[$clave])) {
+                $mapa[$clave] = $fila;
+                continue;
+            }
+
+            $idNuevo = (int)($fila['Id_Persona'] ?? 0);
+            $idViejo = (int)($mapa[$clave]['Id_Persona'] ?? 0);
+            if ($idNuevo > $idViejo) {
+                $mapa[$clave] = $fila;
+            }
+        }
+
+        $miembros = array_values($mapa);
+
+        return [
+            'miembros' => $miembros,
+            'duplicados_ocultos' => max(0, count($filas) - count($miembros)),
+        ];
+    }
+
     public function index() {
         if (!AuthController::puede('asistencias:ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -307,7 +393,7 @@ class AsistenciaController extends BaseController {
 
     public function exportarExcel() {
         if (!AuthController::puede('asistencias:ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -395,7 +481,7 @@ class AsistenciaController extends BaseController {
     public function registrar() {
         // Verificar permiso de crear
         if (!AuthController::puede('asistencias:crear')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         
@@ -442,13 +528,7 @@ class AsistenciaController extends BaseController {
         } else {
             $returnUrl = $this->resolverReturnUrlAsistencias($_GET['return_url'] ?? '');
             $filtroCelulas = DataIsolation::generarFiltroCelulas();
-            $filtroPersonas = DataIsolation::generarFiltroPersonas();
             $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
-            $personas = $this->personaModel->getAllWithRole($filtroPersonas);
-            $idsPersonas = array_map(static function($persona) {
-                return (int)($persona['Id_Persona'] ?? 0);
-            }, $personas);
-            $conteoAsistenciasPorPersona = $this->asistenciaModel->getConteoAsistenciasCompletasPorPersona($idsPersonas);
 
             $celulaPreseleccionada = null;
             if (isset($_GET['celula']) && $_GET['celula'] !== '') {
@@ -471,11 +551,9 @@ class AsistenciaController extends BaseController {
 
             $data = [
                 'celulas' => $celulas,
-                'personas' => $personas,
                 'celula_preseleccionada' => $celulaPreseleccionada,
                 'fecha_preseleccionada' => $fechaPreseleccionada,
                 'return_url' => $returnUrl,
-                'conteo_asistencias_por_persona' => $conteoAsistenciasPorPersona
             ];
             $this->view('asistencias/formulario', $data);
         }

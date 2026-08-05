@@ -102,6 +102,7 @@ $renderTabla = static function(string $tablaKey, array $tabla, array $headers) {
         'GC' => 'Ganados en célula',
         'FV' => 'Fonovisitas',
         'V' => 'Visitas',
+        'UC' => 'Ubicados en célula',
         'U.V' => 'Universidad de la Vida',
     ];
     ?>
@@ -341,6 +342,7 @@ $renderTablaConsolidarMinisterio = static function(array $tabla) {
         'gc' => 'GC',
         'fv' => 'FV',
         'v'  => 'V',
+        'uc' => 'UC',
     ]); ?>
 
     <!-- CONSOLIDAR: U.V | E | B -->
@@ -404,7 +406,7 @@ $renderTablaConsolidarMinisterio = static function(array $tabla) {
     const tablaConsolidarMinisterioData = <?= json_encode($tablaConsolidarMinisterio, JSON_UNESCAPED_UNICODE) ?>;
 
     const etiquetasCol = {
-        ganar:      { gi: 'Ganados en Iglesia', gc: 'Ganados en C\u00e9lula', fv: 'Fonovisitas', v: 'Visitas', total: 'Total' },
+        ganar:      { gi: 'Ganados en Iglesia', gc: 'Ganados en C\u00e9lula', fv: 'Fonovisitas', v: 'Visitas', uc: 'Ubicados en c\u00e9lula', total: 'Total' },
         consolidar: { uv: 'Universidad de la Vida', e: 'Encuentro', b: 'Bautismo', total: 'Total' },
         discipular: { cdm12: 'CD Nivel 1-2', cdm34: 'CD Nivel 3-4', cdm56: 'CD Nivel 5-6', total: 'Total' },
         enviar:     { celulas: '# C\u00e9lulas', total: 'Total' },
@@ -571,7 +573,8 @@ $renderTablaConsolidarMinisterio = static function(array $tabla) {
                     { name: 'G.I', data: getMonthlySeries(tabla, 'gi') },
                     { name: 'G.C', data: getMonthlySeries(tabla, 'gc') },
                     { name: 'F.V', data: getMonthlySeries(tabla, 'fv') },
-                    { name: 'V', data: getMonthlySeries(tabla, 'v') }
+                    { name: 'V', data: getMonthlySeries(tabla, 'v') },
+                    { name: 'U.C', data: getMonthlySeries(tabla, 'uc') }
                 ]
             };
         }

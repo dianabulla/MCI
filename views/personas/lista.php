@@ -1,6 +1,6 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-<script src="<?= ASSETS_URL ?>/js/descargar_tabla_asistencia.js?v=20260520"></script>
+<script src="<?= ASSETS_URL ?>/js/descargar_tabla_asistencia.js?v=20260526"></script>
 <?php
 $puedeVerPersona = AuthController::puedeVerPersonasConsulta();
 $puedeModuloGanarCompleto = AuthController::puedeVerModuloPersonasGanar();

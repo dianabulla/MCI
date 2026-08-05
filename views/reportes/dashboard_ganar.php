@@ -1,10 +1,13 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 <?php
-
 // ── Variables del controlador ────────────────────────────────────────────────
 $anio               = (int)($anio ?? date('Y'));
 $filtroMinisterio   = (string)($filtro_ministerio ?? '');
 $filtroLider        = (string)($filtro_lider ?? '');
+
+require_once APP . '/Helpers/DashboardSelector.php';
+$dashModuloActivo = DashboardSelector::detectarActivo();
+$dashModuloTitulo = DashboardSelector::etiquetaActivo($dashModuloActivo);
 $mesesLabels        = $meses_labels ?? [];
 $gananciasMensuales = $ganancias_mensuales ?? [];
 $porMinisterio      = $por_ministerio ?? [];
@@ -15,28 +18,24 @@ $totalAnual         = (int)($total_anual ?? 0);
 $semaforoS1         = (string)($semaforo_s1 ?? 'rojo');
 $semaforoS2         = (string)($semaforo_s2 ?? 'rojo');
 $ministeriosConMeta = $ministerios_con_meta ?? [];
+$resumenSemanalLider = $resumen_semanal_lider ?? ['inicio' => '', 'fin' => '', 'rows' => [], 'totales' => []];
+$semanalLiderRows = is_array($resumenSemanalLider['rows'] ?? null) ? $resumenSemanalLider['rows'] : [];
+$semanalLiderTotales = is_array($resumenSemanalLider['totales'] ?? null) ? $resumenSemanalLider['totales'] : [];
+$semanalLiderInicio = (string)($resumenSemanalLider['inicio'] ?? '');
+$semanalLiderFin = (string)($resumenSemanalLider['fin'] ?? '');
 $cumplimientoMetas  = $cumplimiento_metas ?? [];
 $ministeriosDisp    = $ministerios_disponibles ?? [];
 $lideresDisp        = $lideres_disponibles ?? [];
 $dashboardMetasMinisterio = $dashboard_metas_ministerio ?? ['items' => [], 'periodos' => []];
 
 // G12-GANAR totales
-$totalesG12 = $totales_g12 ?? ['gi' => 0, 'gc' => 0, 'fv' => 0, 'v' => 0, 'total' => 0];
+$totalesG12 = $totales_g12 ?? ['gi' => 0, 'gc' => 0, 'fv' => 0, 'v' => 0, 'uc' => 0, 'total' => 0];
 $g12GI      = (int)($totalesG12['gi'] ?? 0);
 $g12GC      = (int)($totalesG12['gc'] ?? 0);
 $g12FV      = (int)($totalesG12['fv'] ?? 0);
 $g12V       = (int)($totalesG12['v'] ?? 0);
-
-// Indicador mensual por Líder
-$lideresH   = $lideres_semanal_hombre ?? [];
-$lideresM   = $lideres_semanal_mujer ?? [];
-$fechaInicioSem = $fecha_inicio_semanal ?? date('Y-m-d', strtotime('-7 days'));
-$fechaFinSem = $fecha_fin_semanal ?? date('Y-m-d');
-$semSemanal = [
-    'verde'   => ['bg' => '#22c55e', 'label' => 'Cumplida'],
-    'amarillo'=> ['bg' => '#eab308', 'label' => 'En progreso'],
-    'rojo'    => ['bg' => '#ef4444', 'label' => 'Atención'],
-];
+$g12UC      = (int)($totalesG12['uc'] ?? 0);
+$g12Total   = (int)($totalesG12['total'] ?? 0);
 
 // Construir URL base del dashboard conservando filtros
 $baseUrl = PUBLIC_URL . 'index.php?url=reportes/dashboard-ganar&anio=' . $anio;
@@ -210,10 +209,20 @@ $semaforoInfo = [
 
 <div class="dash-header">
     <div>
-        <h2>Dashboard · Ganar</h2>
+        <h2>Dashboard · <?= htmlspecialchars($dashModuloTitulo, ENT_QUOTES, 'UTF-8') ?></h2>
         <small style="color:#64748b;">Indicadores y gráficas con semáforo · <?= $anio ?></small>
     </div>
     <div class="dash-header-actions">
+        <?php
+        DashboardSelector::incluirPartial([
+            'activo' => $dashModuloActivo,
+            'params' => [
+                'anio' => $anio,
+                'ministerio' => $filtroMinisterio,
+                'lider' => $filtroLider,
+            ],
+        ]);
+        ?>
         <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="dash-anio-form">
             <input type="hidden" name="url" value="reportes/dashboard-ganar">
             <?php if ($filtroMinisterio !== ''): ?>
@@ -280,6 +289,7 @@ $semaforoInfo = [
     <div id="dashMetasSlidesWrap">
         <?php
         $vistasDashMetas = [
+            'semestre' => ['titulo' => 'Semestre', 'sub' => 'Cumplimiento del semestre actual (meta S1 o S2 según calendario)'],
             'semana' => ['titulo' => 'Semana', 'sub' => 'Cumplimiento semanal por ministerio'],
             'mes' => ['titulo' => 'Mes', 'sub' => 'Cumplimiento mensual por ministerio'],
             'anio' => ['titulo' => 'Año', 'sub' => 'Cumplimiento anual por ministerio'],
@@ -373,6 +383,10 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
                     <td style="background:#3b82f6; color:#fff; font-weight:700; padding:6px 12px; border:1px solid #ccc;">V</td>
                     <td style="padding:6px 14px; border:1px solid #ccc; font-weight:600;"><?= $g12V ?></td>
                 </tr>
+                <tr>
+                    <td style="background:#7c3aed; color:#fff; font-weight:700; padding:6px 12px; border:1px solid #ccc;">UC</td>
+                    <td style="padding:6px 14px; border:1px solid #ccc; font-weight:600;"><?= $g12UC ?></td>
+                </tr>
             </tbody>
         </table>
         <!-- Gráfica de barras -->
@@ -381,79 +395,9 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
         </div>
     </div>
     <p style="margin:10px 0 0 0; font-size:.78rem; color:#64748b;">
-        GI = Ganados en iglesia · GC = Ganados en célula · FV = Fonovisita · V = Visita
+        GI = Ganados en iglesia · GC = Ganados en célula · FV = Fonovisita · V = Visita ·
+        UC = Ubicados en célula (personas nuevas del año con célula asignada<?= $g12Total > 0 ? ' — ' . $g12UC . ' de ' . $g12Total . ' ganados' : '' ?>)
     </p>
-</div>
-
-<!-- ── Indicador Mensual por Líder ────────────────────────────────────── -->
-<div class="card report-card" style="margin-bottom:22px; padding:18px;">
-    <h4 style="margin:0 0 14px 0; font-size:.97rem; color:#374151; font-weight:700;">
-        Indicador mensual por Líder
-    </h4>
-    <small style="color:#64748b; display:block; margin-bottom:14px;">
-        Ganados del <?= date('d/m/Y', strtotime($fechaInicioSem)) ?> al <?= date('d/m/Y', strtotime($fechaFinSem)) ?> ·
-        Meta personal mensual = (Meta anual del ministerio / 12) ÷ líderes del mismo género
-    </small>
-
-    <!-- Hombres -->
-    <?php if (!empty($lideresH)): ?>
-    <div style="margin-bottom:20px;">
-        <h5 style="margin:0 0 10px 0; font-size:.85rem; color:#475569; font-weight:700;">👨 Hombres</h5>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
-            <?php foreach ($lideresH as $lid): ?>
-            <div style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:12px; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,.05);">
-                <div style="font-size:.8rem; color:#475569; margin-bottom:6px; font-weight:600;">
-                    <?= htmlspecialchars(trim($lid['nombre'] . ' ' . $lid['apellido'])) ?>
-                </div>
-                <div style="font-size:.68rem; color:#64748b; margin-bottom:6px;">
-                    <?= htmlspecialchars((string)($lid['ministerio'] ?? 'Sin ministerio')) ?>
-                </div>
-                <div style="background:<?= $semSemanal[$lid['semaforo']]['bg'] ?>; color:<?= stripos($lid['semaforo'], 'amarillo') !== false ? '#1a1a1a' : '#fff' ?>; font-weight:700; padding:8px; border-radius:6px; font-size:.95rem; margin-bottom:6px;">
-                    <?= $lid['ganados'] ?>
-                </div>
-                <div style="font-size:.72rem; color:#475569; margin-bottom:4px; font-weight:600;">
-                    Meta: <?= (int)($lid['meta_personal_mensual'] ?? 0) ?> · Avance: <?= (int)($lid['avance_pct'] ?? 0) ?>%
-                </div>
-                <div style="font-size:.72rem; color:#64748b;">
-                    <?= (int)($lid['meta_personal_mensual'] ?? 0) <= 0 ? 'Sin meta configurada' : htmlspecialchars($semSemanal[$lid['semaforo']]['label']) ?>
-                </div>
-            </div>
-            <?php endforeach; ?>
-        </div>
-    </div>
-    <?php endif; ?>
-
-    <!-- Mujeres -->
-    <?php if (!empty($lideresM)): ?>
-    <div>
-        <h5 style="margin:0 0 10px 0; font-size:.85rem; color:#475569; font-weight:700;">👩 Mujeres</h5>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
-            <?php foreach ($lideresM as $lid): ?>
-            <div style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:12px; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,.05);">
-                <div style="font-size:.8rem; color:#475569; margin-bottom:6px; font-weight:600;">
-                    <?= htmlspecialchars(trim($lid['nombre'] . ' ' . $lid['apellido'])) ?>
-                </div>
-                <div style="font-size:.68rem; color:#64748b; margin-bottom:6px;">
-                    <?= htmlspecialchars((string)($lid['ministerio'] ?? 'Sin ministerio')) ?>
-                </div>
-                <div style="background:<?= $semSemanal[$lid['semaforo']]['bg'] ?>; color:<?= stripos($lid['semaforo'], 'amarillo') !== false ? '#1a1a1a' : '#fff' ?>; font-weight:700; padding:8px; border-radius:6px; font-size:.95rem; margin-bottom:6px;">
-                    <?= $lid['ganados'] ?>
-                </div>
-                <div style="font-size:.72rem; color:#475569; margin-bottom:4px; font-weight:600;">
-                    Meta: <?= (int)($lid['meta_personal_mensual'] ?? 0) ?> · Avance: <?= (int)($lid['avance_pct'] ?? 0) ?>%
-                </div>
-                <div style="font-size:.72rem; color:#64748b;">
-                    <?= (int)($lid['meta_personal_mensual'] ?? 0) <= 0 ? 'Sin meta configurada' : htmlspecialchars($semSemanal[$lid['semaforo']]['label']) ?>
-                </div>
-            </div>
-            <?php endforeach; ?>
-        </div>
-    </div>
-    <?php endif; ?>
-
-    <?php if (empty($lideresH) && empty($lideresM)): ?>
-    <p style="color:#94a3b8; font-size:.85rem; margin:0;">No hay líderes configurados o sin ganados esta semana.</p>
-    <?php endif; ?>
 </div>
 
 <!-- ── Gráficas ────────────────────────────────────────────────────────────── -->
@@ -475,14 +419,72 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
     </div>
 </div>
 
+<!-- ── Resumen semanal por líder (semana pasada) ──────────────────────────── -->
+<?php if ($semanalLiderRows !== []): ?>
+<div class="card report-card" style="margin-bottom:22px; padding:18px;">
+    <h4 style="margin:0 0 14px 0; font-size:.97rem; color:#374151;">
+        Resumen semanal por líder principal de 12 · Semana pasada
+    </h4>
+    <small style="color:#64748b; display:block; margin-bottom:12px;">
+        Del <?= $semanalLiderInicio !== '' ? date('d/m/Y', strtotime($semanalLiderInicio)) : '—' ?>
+        al <?= $semanalLiderFin !== '' ? date('d/m/Y', strtotime($semanalLiderFin)) : '—' ?>
+        (lunes a domingo). Solo líderes principales de 12 del ministerio. Los ganados de su red se suman a cada uno.
+    </small>
+    <p style="margin:0 0 12px; font-size:.78rem; color:#64748b;">
+        G.I = Ganados en iglesia · G.C = Ganados en célula · U.C = Ubicados en célula ·
+        V/F = Con visita y/o fonovisita registrada
+    </p>
+    <div class="table-container">
+        <table class="dash-min-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Líder</th>
+                    <th>Ministerio</th>
+                    <th>G.I</th>
+                    <th>G.C</th>
+                    <th>Total</th>
+                    <th>U.C</th>
+                    <th>V/F</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php $nSem = 1; foreach ($semanalLiderRows as $rowSem): ?>
+                <tr>
+                    <td style="color:#94a3b8;"><?= $nSem++ ?></td>
+                    <td style="font-weight:600;"><?= htmlspecialchars((string)($rowSem['lider'] ?? '')) ?></td>
+                    <td><?= htmlspecialchars((string)($rowSem['ministerio'] ?? '')) ?></td>
+                    <td><?= (int)($rowSem['gi'] ?? 0) ?></td>
+                    <td><?= (int)($rowSem['gc'] ?? 0) ?></td>
+                    <td><strong><?= (int)($rowSem['total'] ?? 0) ?></strong></td>
+                    <td><?= (int)($rowSem['uc'] ?? 0) ?></td>
+                    <td><?= (int)($rowSem['visita_fono'] ?? 0) ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+            <tfoot>
+                <tr style="background:#f8fafc; font-weight:700;">
+                    <td colspan="3">TOTAL</td>
+                    <td><?= (int)($semanalLiderTotales['gi'] ?? 0) ?></td>
+                    <td><?= (int)($semanalLiderTotales['gc'] ?? 0) ?></td>
+                    <td><?= (int)($semanalLiderTotales['total'] ?? 0) ?></td>
+                    <td><?= (int)($semanalLiderTotales['uc'] ?? 0) ?></td>
+                    <td><?= (int)($semanalLiderTotales['visita_fono'] ?? 0) ?></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- ── Tabla semáforo por ministerio ──────────────────────────────────────── -->
 <?php if (!empty($ministeriosConMeta)): ?>
 <div class="card report-card" style="margin-bottom:22px; padding:18px;">
     <h4 style="margin:0 0 14px 0; font-size:.97rem; color:#374151;">
-        Cumplimiento de meta por ministerio · Semestre actual
+        Cumplimiento de meta por ministerio · <?= htmlspecialchars((string)($cumplimientoMetas['titulo'] ?? 'Semestre actual')) ?>
     </h4>
     <small style="color:#64748b; display:block; margin-bottom:12px;">
-        Semáforo basado en porcentaje de meta: Verde ≥ 75 % · Amarillo 40–74 % · Rojo &lt; 40 %
+        Meta del semestre = parte de la meta anual configurada (S1 ene–jun · S2 jul–dic). Semáforo: Verde ≥ 75 % · Amarillo 40–74 % · Rojo &lt; 40 %
     </small>
     <div class="table-container">
         <table class="dash-min-table">
@@ -490,7 +492,8 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
                 <tr>
                     <th>#</th>
                     <th>Ministerio</th>
-                    <th>Meta</th>
+                    <th>Meta semestre</th>
+                    <th>Meta anual</th>
                     <th>Ganados</th>
                     <th>Pendiente</th>
                     <th>% Cumplido</th>
@@ -504,6 +507,7 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
                     <td style="color:#94a3b8;"><?= $n++ ?></td>
                     <td style="font-weight:600;"><?= htmlspecialchars((string)($row['ministerio'] ?? '')) ?></td>
                     <td><?= (int)($row['meta'] ?? 0) ?></td>
+                    <td style="color:#64748b;"><?= (int)($row['meta_anual'] ?? 0) ?></td>
                     <td><strong><?= (int)($row['ganados'] ?? 0) ?></strong></td>
                     <td style="color:#ef4444;"><?= (int)($row['pendiente'] ?? 0) ?></td>
                     <td><strong><?= (int)($row['pct'] ?? 0) ?>%</strong></td>
@@ -526,6 +530,7 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
                 <tr style="background:#f8fafc; font-weight:700;">
                     <td colspan="2">TOTAL</td>
                     <td><?= (int)($cumplimientoMetas['totales']['meta'] ?? 0) ?></td>
+                    <td>—</td>
                     <td><?= (int)($cumplimientoMetas['totales']['ganados'] ?? 0) ?></td>
                     <td style="color:#ef4444;"><?= (int)($cumplimientoMetas['totales']['pendiente'] ?? 0) ?></td>
                     <td><?= $pctMeta ?>%</td>
@@ -676,11 +681,11 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
         new Chart(ctxG12, {
             type: 'bar',
             data: {
-                labels: ['GI', 'GC', 'FV', 'V'],
+                labels: ['GI', 'GC', 'FV', 'V', 'UC'],
                 datasets: [{
                     label: 'G12-GANAR',
-                    data: [<?= $g12GI ?>, <?= $g12GC ?>, <?= $g12FV ?>, <?= $g12V ?>],
-                    backgroundColor: ['#eab308', '#dc2626', '#16a34a', '#3b82f6'],
+                    data: [<?= $g12GI ?>, <?= $g12GC ?>, <?= $g12FV ?>, <?= $g12V ?>, <?= $g12UC ?>],
+                    backgroundColor: ['#eab308', '#dc2626', '#16a34a', '#3b82f6', '#7c3aed'],
                     borderRadius: 6,
                     borderWidth: 0
                 }]
@@ -693,7 +698,7 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
                     tooltip: {
                         callbacks: {
                             label: function(ctx) {
-                                const labels = ['Ganados en iglesia','Ganados en célula','Fonovisita','Visita'];
+                                const labels = ['Ganados en iglesia','Ganados en célula','Fonovisita','Visita','Ubicados en célula'];
                                 return labels[ctx.dataIndex] + ': ' + ctx.raw;
                             }
                         }

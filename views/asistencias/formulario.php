@@ -159,11 +159,10 @@
 // Datos de células desde PHP
 const celulasDisponibles = <?= json_encode($celulas ?? []) ?>;
 
-// Datos de personas desde PHP
-const personas = <?= json_encode($personas ?? []) ?>;
-
-// Conteo de asistencias completas por persona (Asistio = 1)
-const conteoAsistenciasPorPersona = <?= json_encode($conteo_asistencias_por_persona ?? []) ?>;
+const urlMiembrosCelula = '<?= PUBLIC_URL ?>?url=asistencias/miembros-celula';
+let miembrosCelulaActual = [];
+let conteoAsistenciasPorPersona = {};
+let duplicadosOcultosCelula = 0;
 
 // Célula preseleccionada (opcional)
 const celulaPreseleccionada = <?= json_encode($celula_preseleccionada ?? null) ?>;
@@ -339,7 +338,7 @@ document.addEventListener('click', function(e) {
     }
 });
 
-function cargarMiembrosCelula(celulaId) {
+async function cargarMiembrosCelula(celulaId) {
     const miembrosContainer = document.getElementById('miembros-container');
     const listaMiembros = document.getElementById('lista-miembros');
     const botonesAccion = document.getElementById('botones-accion');
@@ -347,17 +346,38 @@ function cargarMiembrosCelula(celulaId) {
     if (!celulaId) {
         miembrosContainer.style.display = 'none';
         botonesAccion.style.display = 'none';
+        miembrosCelulaActual = [];
+        conteoAsistenciasPorPersona = {};
         return;
     }
 
     const celulaIdNum = parseInt(celulaId, 10);
+    listaMiembros.innerHTML = '<p style="color:#64748b;">Cargando miembros de la célula...</p>';
+    miembrosContainer.style.display = 'block';
+    botonesAccion.style.display = 'none';
 
-    // Filtrar personas que pertenecen a esta célula
-    const miembrosCelula = personas.filter(p => parseInt(p.Id_Celula, 10) === celulaIdNum);
-    
+    try {
+        const resp = await fetch(urlMiembrosCelula + '&id_celula=' + encodeURIComponent(String(celulaIdNum)), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+            throw new Error((data && data.error) ? data.error : 'No se pudieron cargar los miembros');
+        }
+        miembrosCelulaActual = Array.isArray(data.miembros) ? data.miembros : [];
+        conteoAsistenciasPorPersona = (data.conteo && typeof data.conteo === 'object') ? data.conteo : {};
+        duplicadosOcultosCelula = parseInt(data.duplicados_ocultos || 0, 10);
+    } catch (err) {
+        listaMiembros.innerHTML = '<div class="alert alert-warning">' + escapeHtml(err.message || 'Error al cargar miembros') + '</div>';
+        return;
+    }
+
+    const miembrosCelula = miembrosCelulaActual;
+    const duplicadosOcultos = duplicadosOcultosCelula;
+
     if (miembrosCelula.length === 0) {
-        listaMiembros.innerHTML = '<div class="alert alert-warning">Esta célula no tiene miembros asignados.</div>';
-        miembrosContainer.style.display = 'block';
+        listaMiembros.innerHTML = '<div class="alert alert-warning">Esta célula no tiene miembros activos asignados.</div>';
         botonesAccion.style.display = 'none';
         return;
     }
@@ -368,10 +388,11 @@ function cargarMiembrosCelula(celulaId) {
     miembrosCelula.forEach(miembro => {
         const idPersona = parseInt(miembro.Id_Persona, 10);
         const totalAsistencias = parseInt(conteoAsistenciasPorPersona[idPersona] || 0, 10);
+        const fila = { ...miembro, totalAsistencias };
         if (totalAsistencias >= 3) {
-            miembrosFrecuentes.push({ ...miembro, totalAsistencias });
+            miembrosFrecuentes.push(fila);
         } else {
-            miembrosNuevos.push({ ...miembro, totalAsistencias });
+            miembrosNuevos.push(fila);
         }
     });
 
@@ -394,7 +415,6 @@ function cargarMiembrosCelula(celulaId) {
             const estado = tipo === 'nuevo'
                 ? ('Nuevo (' + (miembro.totalAsistencias || 0) + '/3)')
                 : ('Frecuente (' + (miembro.totalAsistencias || 0) + ')');
-
             bloque += '<tr style="border-bottom: 1px solid #dee2e6;">';
             bloque += '<td style="padding: 8px;"><strong>' + escapeHtml(nombreCompleto.trim()) + '</strong></td>';
             bloque += '<td style="padding: 8px; color: #5a6b86;">' + escapeHtml(estado) + '</td>';
@@ -414,11 +434,21 @@ function cargarMiembrosCelula(celulaId) {
     };
 
     let html = '';
+    if (duplicadosOcultos > 0) {
+        html += '<div class="alert alert-warning" style="margin-bottom:12px;font-size:0.92em;">';
+        html += 'Se detectaron <strong>' + duplicadosOcultos + '</strong> registro(s) duplicado(s) en esta célula ';
+        html += '(misma cédula o nombre). Se muestra una sola fila por persona y se suman sus asistencias. ';
+        html += 'Conviene unificar esos registros en Personas para evitar confusiones.';
+        html += '</div>';
+    }
     html += construirTablaSeccion('Asistentes nuevos', miembrosNuevos, 'nuevo');
     html += construirTablaSeccion('Asistentes frecuentes', miembrosFrecuentes, 'frecuente');
     html += '<p style="margin-top: 6px; color: #666; font-size: 0.9em;">';
-    html += '<strong>Total de miembros:</strong> ' + miembrosCelula.length + ' | '; 
-    html += '<strong>Regla:</strong> al completar 3 asistencias, pasa de Nuevo a Frecuente.';
+    html += '<strong>Personas únicas:</strong> ' + miembrosCelula.length;
+    if (duplicadosOcultos > 0) {
+        html += ' (' + duplicadosOcultos + ' registro(s) duplicado(s) oculto(s) por misma cédula)';
+    }
+    html += ' | <strong>Regla:</strong> con 3 o más reuniones asistidas en esta célula pasa de Nuevo a Frecuente.';
     html += '</p>';
     
     listaMiembros.innerHTML = html;

@@ -4,8 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $pageTitle ?? 'MCI Madrid Colombia' ?></title>
-    <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/styles.css?v=20260515-sidebar-quick-1">
-    <link rel="stylesheet" href="<?= ASSETS_URL ?>/css/notificaciones-topbar.css?v=20260519-chrome-mobile-1">
+    <?php
+    $urlStyles = function_exists('asset_url') ? asset_url('css/styles.css') : (ASSETS_URL . '/css/styles.css?v=' . date('Ymd'));
+    $urlNotifCss = function_exists('asset_url') ? asset_url('css/notificaciones-topbar.css') : (ASSETS_URL . '/css/notificaciones-topbar.css?v=' . date('Ymd'));
+    ?>
+    <link rel="stylesheet" href="<?= htmlspecialchars($urlStyles, ENT_QUOTES, 'UTF-8') ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars($urlNotifCss, ENT_QUOTES, 'UTF-8') ?>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
 </head>
 <?php
@@ -20,7 +24,17 @@ if (class_exists('AuthController') && AuthController::estaAutenticado()) {
     }
 }
 ?>
-<body<?= $productTourRole !== '' ? ' data-product-tour-role="' . htmlspecialchars($productTourRole, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
+<?php
+$sessionTimeoutSec = 1800;
+$loginSesionExpiradaUrl = function_exists('public_app_url')
+    ? public_app_url('auth/login', ['sesion' => 'expirada'])
+    : '';
+if (class_exists('SessionManager', false)) {
+    $sessionTimeoutSec = (int)SessionManager::IDLE_TIMEOUT_SECONDS;
+    $loginSesionExpiradaUrl = SessionManager::loginUrlConSesionExpirada();
+}
+?>
+<body<?= $productTourRole !== '' ? ' data-product-tour-role="' . htmlspecialchars($productTourRole, ENT_QUOTES, 'UTF-8') . '"' : '' ?><?php if (class_exists('AuthController') && AuthController::estaAutenticado() && $loginSesionExpiradaUrl !== ''): ?> data-session-timeout="<?= $sessionTimeoutSec ?>" data-login-expired-url="<?= htmlspecialchars($loginSesionExpiradaUrl, ENT_QUOTES, 'UTF-8') ?>"<?php endif; ?>>
 <?php
 $currentUrl = $_GET['url'] ?? 'home';
 $isActive = function(array $prefixes) use ($currentUrl) {
@@ -37,8 +51,12 @@ $puedeVer = static function (string $modulo) {
 };
 
 $esDiscipuloMenuDirecto = AuthController::esRolDiscipuloUsuario() && !AuthController::esAdministrador();
+if (class_exists('AuthController') && AuthController::estaAutenticado()) {
+    AuthController::refrescarPerfilServicioSocialEnSesion();
+}
 $esMenuMaestro = AuthController::debeUsarMenuLateralSoloMaterial();
 $esMenuDiscipulo = AuthController::esVistaDiscipuloSimplificada();
+$esMenuServicioSocial = AuthController::esPerfilServicioSocialTalleres();
 $puedeVerMaterialCapDestino = AuthController::puedeVerMaterialCapacitacionDestino();
 
 $puedeVerGanarArea = AuthController::puedeAccederAreaGanarConsolidar();
@@ -53,6 +71,7 @@ $puedeVerRegistroTeensKids = $puedeVer('teen');
 $puedeVerEventosMenu = AuthController::esAdministrador() || AuthController::puede('eventos:ver');
 $puedeVerAsistencias = $puedeVer('asistencias');
 $puedeVerPeticiones = $puedeVer('peticiones');
+$puedeVerTalleres = AuthController::puedeAccederModuloTalleres();
 $puedeVerTransmisiones = $puedeVer('transmisiones');
 $puedeVerObsequios = $puedeVer('entrega_obsequio');
 $puedeVerNehemias = $puedeVer('nehemias');
@@ -196,14 +215,15 @@ if (class_exists('AuthController') && AuthController::estaAutenticado()) {
     $menuDesactualizado = empty($sidebarMenuSesionTmp)
         || $menuVersionActual < $menuVersionEsperada
         || ($esMenuMaestro && !MenuBuilder::menuSesionEsSoloMaterial($sidebarMenuSesionTmp))
-        || ($esMenuDiscipulo && !MenuBuilder::menuSesionEsSoloDiscipulo($sidebarMenuSesionTmp));
+        || ($esMenuDiscipulo && !MenuBuilder::menuSesionEsSoloDiscipulo($sidebarMenuSesionTmp))
+        || ($esMenuServicioSocial && !MenuBuilder::menuSesionEsSoloServicioSocial($sidebarMenuSesionTmp));
 
     if ($menuDesactualizado) {
         AuthController::reconstruirMenuYSesion();
     }
 }
 
-$menuLateralReducido = $esMenuMaestro || $esMenuDiscipulo;
+$menuLateralReducido = $esMenuMaestro || $esMenuDiscipulo || $esMenuServicioSocial;
 $sidebarMenuSesion = is_array($_SESSION['sidebar_menu'] ?? null) ? $_SESSION['sidebar_menu'] : [];
 if ($esMenuMaestro) {
     $useDynamicSidebar = true;
@@ -213,6 +233,11 @@ if ($esMenuMaestro) {
 } elseif ($esMenuDiscipulo) {
     $useDynamicSidebar = true;
     $sidebarMenu = MenuBuilder::menuSesionEsSoloDiscipulo($sidebarMenuSesion)
+        ? $sidebarMenuSesion
+        : MenuBuilder::construirMenu();
+} elseif ($esMenuServicioSocial) {
+    $useDynamicSidebar = true;
+    $sidebarMenu = MenuBuilder::menuSesionEsSoloServicioSocial($sidebarMenuSesion)
         ? $sidebarMenuSesion
         : MenuBuilder::construirMenu();
 } else {
@@ -228,7 +253,7 @@ if ($esMenuMaestro) {
                 <img src="<?= ASSETS_URL ?>/img/logo-mci-madrid.svg" alt="Logo MCI Madrid" class="sidebar-brand-logo">
                 <div class="sidebar-brand-copy">
                     <span class="sidebar-link-text">MCI Madrid</span>
-                    <small class="sidebar-brand-subtitle"><?= $esMenuMaestro ? 'Material Capacitación Destino' : ($esMenuDiscipulo ? 'Mis evaluaciones' : 'Vision y seguimiento') ?></small>
+                    <small class="sidebar-brand-subtitle"><?= $esMenuMaestro ? 'Material Capacitación Destino' : ($esMenuDiscipulo ? 'Mis evaluaciones' : ($esMenuServicioSocial ? 'Servicio Social' : 'Vision y seguimiento')) ?></small>
                 </div>
             </div>
         </div>
@@ -240,7 +265,7 @@ if ($esMenuMaestro) {
         $puedeFormularioPublicoRapido = AuthController::puedeVerModulo('personas_formulario_publico');
         $puedeAlgunAccesoRapido = $puedeNuevoDiscipuloRapido || $puedePlantillasWaRapido || $puedeFormularioPublicoRapido;
         ?>
-        <?php if (!$esMenuMaestro && !$esMenuDiscipulo && ($puedeAlgunAccesoRapido || $puedeVerPeticiones || $puedeVerTransmisiones || $puedeVerEventosMenu)): ?>
+        <?php if (!$esMenuMaestro && !$esMenuDiscipulo && !$esMenuServicioSocial && ($puedeAlgunAccesoRapido || $puedeVerPeticiones || $puedeVerTalleres || $puedeVerTransmisiones || $puedeVerEventosMenu)): ?>
         <div class="sidebar-quick-access">
             <?php if ($puedeAlgunAccesoRapido): ?>
             <details class="sidebar-quick-details">
@@ -272,8 +297,8 @@ if ($esMenuMaestro) {
             </details>
             <?php endif; ?>
             <?php
-            $puedeAlgunEnlaceComunidad = $puedeVerPeticiones || $puedeVerTransmisiones || $puedeVerEventosMenu;
-            $navComunidadActiva = $isActive(['peticiones']) || $isActive(['transmisiones']) || $isActive(['eventos']);
+            $puedeAlgunEnlaceComunidad = $puedeVerPeticiones || $puedeVerTalleres || $puedeVerTransmisiones || $puedeVerEventosMenu;
+            $navComunidadActiva = $isActive(['peticiones']) || $isActive(['talleres']) || $isActive(['transmisiones']) || $isActive(['eventos']);
             ?>
             <?php if ($puedeAlgunEnlaceComunidad): ?>
             <details class="sidebar-quick-details sidebar-quick-details--comunidad"<?= $navComunidadActiva ? ' open' : '' ?>>
@@ -287,6 +312,12 @@ if ($esMenuMaestro) {
                     <a class="sidebar-quick-text-link<?= $isActive(['peticiones']) ? ' is-active' : '' ?>" href="<?= PUBLIC_URL ?>?url=peticiones">
                         <i class="bi bi-chat-heart"></i>
                         <span>Peticiones</span>
+                    </a>
+                    <?php endif; ?>
+                    <?php if ($puedeVerTalleres): ?>
+                    <a class="sidebar-quick-text-link<?= $isActive(['talleres']) ? ' is-active' : '' ?>" href="<?= PUBLIC_URL ?>?url=talleres">
+                        <i class="bi bi-ui-checks-grid"></i>
+                        <span>Talleres</span>
                     </a>
                     <?php endif; ?>
                     <?php if ($puedeVerTransmisiones): ?>
@@ -323,6 +354,10 @@ if ($esMenuMaestro) {
             <?php elseif ($esMenuDiscipulo): ?>
             <a class="sidebar-link <?= $isActive(['home/material/capacitacion-destino', 'programas/evaluaciones', 'programas/tareas']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home/material/capacitacion-destino" data-tour="sidebar-cap-destino">
                 <span class="sidebar-link-icon"><i class="bi bi-signpost-split-fill"></i></span><span class="sidebar-link-text">Cap. Destino</span>
+            </a>
+            <?php elseif ($esMenuServicioSocial): ?>
+            <a class="sidebar-link <?= $isActive(['talleres/servicio-social']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=talleres/servicio-social">
+                <span class="sidebar-link-icon"><i class="bi bi-heart-pulse"></i></span><span class="sidebar-link-text">Servicio Social</span>
             </a>
             <?php else: ?>
             <a class="sidebar-link <?= $isActive(['home']) && !$isActive(['home/material']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home">
@@ -370,6 +405,12 @@ if ($esMenuMaestro) {
             <?php if ($puedeVerNehemias): ?>
             <a class="sidebar-link <?= $isActive(['nehemias']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=nehemias/lista">
                 <span class="sidebar-link-icon"><i class="bi bi-clipboard-data"></i></span><span class="sidebar-link-text">Nehemias</span>
+            </a>
+            <?php endif; ?>
+
+            <?php if ($puedeVerTalleres): ?>
+            <a class="sidebar-link <?= $isActive(['talleres']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=talleres">
+                <span class="sidebar-link-icon"><i class="bi bi-ui-checks-grid"></i></span><span class="sidebar-link-text">Talleres</span>
             </a>
             <?php endif; ?>
 

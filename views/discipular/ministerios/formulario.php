@@ -26,6 +26,15 @@ $idLiderPrincipal1 = (int)($id_lider_principal_1 ?? 0);
 $idLiderPrincipal2 = (int)($id_lider_principal_2 ?? 0);
 $lpError = !empty($lp_error);
 $lpMsg = trim((string)($lp_msg ?? ''));
+$metaGuardada = !empty($meta_guardada);
+$metaError = !empty($meta_error);
+$metaErrorMsg = trim((string)($meta_error_msg ?? ''));
+$datosGuardados = !empty($datos_guardados);
+$idMinisterioForm = (int)($ministerio['Id_Ministerio'] ?? 0);
+$urlAccionForm = $idMinisterioForm > 0
+    ? public_app_url('discipular/ministerios/editar', ['id' => $idMinisterioForm])
+    : public_app_url('discipular/ministerios/crear');
+$urlGuardarMetas = public_app_url('discipular/ministerios/guardar-metas');
 ?>
 
 <style>
@@ -101,7 +110,28 @@ $lpMsg = trim((string)($lp_msg ?? ''));
     </div>
     <?php endif; ?>
 
-    <form method="POST">
+    <?php if ($datosGuardados): ?>
+    <div class="alert alert-success" style="margin-bottom:10px;">
+        Datos del ministerio guardados correctamente.
+    </div>
+    <?php endif; ?>
+
+    <?php if ($metaGuardada): ?>
+    <div class="alert alert-success" style="margin-bottom:10px;">
+        Metas guardadas correctamente.
+    </div>
+    <?php endif; ?>
+
+    <?php if ($metaError): ?>
+    <div class="alert alert-danger" style="margin-bottom:10px;">
+        <?= htmlspecialchars($metaErrorMsg !== '' ? $metaErrorMsg : 'No se pudieron guardar las metas.') ?>
+    </div>
+    <?php endif; ?>
+
+    <form method="POST" action="<?= htmlspecialchars($urlAccionForm, ENT_QUOTES, 'UTF-8') ?>">
+        <?php if ($idMinisterioForm > 0): ?>
+        <input type="hidden" name="id_ministerio" value="<?= $idMinisterioForm ?>">
+        <?php endif; ?>
         <?php if (!empty($returnUrl)): ?>
         <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrl) ?>">
         <?php endif; ?>
@@ -157,8 +187,19 @@ $lpMsg = trim((string)($lp_msg ?? ''));
             </div>
         </div>
 
-        <?php if (!empty($ministerio['Id_Ministerio'])): ?>
-        <div class="card" style="margin-bottom: 14px;">
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Guardar datos del ministerio</button>
+            <a href="<?= htmlspecialchars($volverUrl) ?>" class="btn btn-secondary">Cancelar</a>
+        </div>
+    </form>
+
+    <?php if (!empty($ministerio['Id_Ministerio'])): ?>
+    <form method="POST" action="<?= htmlspecialchars($urlGuardarMetas, ENT_QUOTES, 'UTF-8') ?>" style="margin-top:14px;">
+        <input type="hidden" name="id_ministerio" value="<?= $idMinisterioForm ?>">
+        <?php if (!empty($returnUrl)): ?>
+        <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrl) ?>">
+        <?php endif; ?>
+        <div class="card" id="metas" style="margin-bottom: 14px;">
             <div class="card-body" style="padding: 12px;">
                 <h3 style="margin: 0 0 6px; color:#21457e; font-size: 17px;">Metas por semestre</h3>
                 <small style="color:#5f6f88;">Configura metas de almas ganadas y de cada evento de escalera/convenciones.</small>
@@ -186,7 +227,7 @@ $lpMsg = trim((string)($lp_msg ?? ''));
                             <input type="number" min="0" step="1" id="meta_semanal" name="meta_semanal" class="form-control" value="<?= $metaSemanal ?>" readonly>
                         </div>
                     </div>
-                    <p class="metas-auto-help">La meta semestral de ganados se distribuye automáticamente desde la meta anual según el calendario del año elegido.</p>
+                    <p class="metas-auto-help">La meta anual se reparte automáticamente: Semestre 1 (ene–jun) + Semestre 2 (jul–dic) = meta anual.</p>
                 </div>
 
                 <div class="metas-grid">
@@ -260,13 +301,12 @@ $lpMsg = trim((string)($lp_msg ?? ''));
                 </div>
             </div>
         </div>
-        <?php endif; ?>
 
         <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Guardar</button>
-            <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios" class="btn btn-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-success">Guardar metas</button>
         </div>
     </form>
+    <?php endif; ?>
 </div>
 
 <script>

@@ -1631,10 +1631,24 @@ class DiscipularEvaluacionController extends BaseController {
      */
     private function resolverNumeroClaseDesdeLeccion(int $nivel, string $leccion, int $moduloNumero = 0): int {
         $leccion = trim($leccion);
-        if ($leccion !== '' && preg_match('/(\d{1,2})/', $leccion, $coincidencias) === 1) {
-            $numero = (int)($coincidencias[1] ?? 0);
-            if ($numero >= 1 && $numero <= 10) {
-                return $numero;
+        if ($leccion !== '') {
+            // Priorizar número asociado explícitamente a "lección/clase/evaluación".
+            if (preg_match('/(?:lecci[oó]n|clase|evaluaci[oó]n)\s*[:#\-]?\s*(\d{1,2})/iu', $leccion, $coincidencias) === 1) {
+                $numero = (int)($coincidencias[1] ?? 0);
+                if ($numero >= 1 && $numero <= 10) {
+                    return $numero;
+                }
+            }
+
+            // Fallback: si hay varios números (ej: "Módulo 3 - Lección 2"), usar el último.
+            if (preg_match_all('/(\d{1,2})/', $leccion, $coincidencias) >= 1) {
+                $todos = (array)($coincidencias[1] ?? []);
+                if (!empty($todos)) {
+                    $numero = (int)end($todos);
+                    if ($numero >= 1 && $numero <= 10) {
+                        return $numero;
+                    }
+                }
             }
         }
 
@@ -1645,7 +1659,8 @@ class DiscipularEvaluacionController extends BaseController {
             sort($modulosOrdenados, SORT_NUMERIC);
             foreach ($modulosOrdenados as $modulo) {
                 $lista = (array)($mapa[$nivel][$modulo] ?? []);
-                sort($lista);
+                // Orden natural para evitar que "Lección 10" quede antes de "Lección 2".
+                natsort($lista);
                 foreach ($lista as $nombreLeccion) {
                     $nombre = $this->normalizarLeccionTexto((string)$nombreLeccion);
                     if ($nombre !== '' && !in_array($nombre, $leccionesNivel, true)) {
@@ -1720,22 +1735,11 @@ class DiscipularEvaluacionController extends BaseController {
         $moduloPagos = 'discipular';
 
         $numeroClase = $this->resolverNumeroClaseDesdeLeccion($nivel, $leccion, $moduloNumero);
-
-        if ($numeroClase <= 0) {
+        // Solo usar fecha como último recurso cuando no venga contexto de lección/módulo.
+        if ($numeroClase <= 0 && $leccion === '' && $moduloNumero <= 0) {
             $numeroClase = $asistenciaModel->getNumeroClasePorFecha($moduloMaterial, $programaMaterial, date('Y-m-d'));
-        }
-        if ($numeroClase <= 0) {
-            $numeroClase = $asistenciaModel->getNumeroClasePorFecha($moduloPagos, $programaLinea, date('Y-m-d'));
-        }
-
-        if ($numeroClase <= 0) {
-            $actuales = $asistenciaModel->getAsistenciasPorPrograma([$idPersona], $moduloMaterial, $programaMaterial);
-            $clasesPersona = (array)($actuales[$idPersona] ?? []);
-            for ($i = 1; $i <= 10; $i++) {
-                if (empty($clasesPersona[$i])) {
-                    $numeroClase = $i;
-                    break;
-                }
+            if ($numeroClase <= 0) {
+                $numeroClase = $asistenciaModel->getNumeroClasePorFecha($moduloPagos, $programaLinea, date('Y-m-d'));
             }
         }
 

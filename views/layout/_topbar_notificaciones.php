@@ -69,4 +69,4 @@ $paginaNotificacionesActiva = ($currentUrl ?? '') === 'personas/notificaciones';
         </div>
     </div>
 </div>
-<script src="<?= ASSETS_URL ?>/js/notificaciones-topbar.js?v=20260519-notif-1"></script>
+<script src="<?= htmlspecialchars(function_exists('asset_url') ? asset_url('js/notificaciones-topbar.js') : (ASSETS_URL . '/js/notificaciones-topbar.js?v=' . date('Ymd')), ENT_QUOTES, 'UTF-8') ?>"></script>

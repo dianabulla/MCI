@@ -1,5 +1,11 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
+<?php if ((string)($_GET['guardado'] ?? '') === '1'): ?>
+<div class="alert alert-success" style="margin-bottom: 16px;">
+    <i class="bi bi-check-circle"></i> Célula guardada correctamente.
+</div>
+<?php endif; ?>
+
 <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
     <h2 style="margin:0;">Células</h2>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
@@ -271,25 +277,38 @@ $slugMinisterio = static function ($texto) {
     outline-offset: 2px;
 }
 
+.celulas-detalle-card h3 {
+    font-size: 1.05rem;
+}
+
+.celulas-detalle-card > div:first-child small {
+    font-size: 0.8125rem;
+}
+
 .celulas-data-table th,
 .celulas-data-table td {
-    padding: 6px 8px;
-    font-size: 12px;
-    line-height: 1.25;
+    padding: 7px 10px;
+    font-size: 0.875rem;
+    line-height: 1.35;
     vertical-align: middle;
+}
+
+.celulas-data-table thead th {
+    font-size: 0.8125rem;
 }
 
 .celulas-count-badge {
     display: inline-flex;
-    min-width: 34px;
-    height: 24px;
+    min-width: 36px;
+    height: 26px;
     align-items: center;
     justify-content: center;
-    padding: 0 8px;
+    padding: 0 9px;
     border-radius: 999px;
     background: #e8f1ff;
     border: 1px solid #c9dcfb;
     color: #1f4f8a;
+    font-size: 0.8125rem;
     font-weight: 700;
 }
 
@@ -299,9 +318,9 @@ $slugMinisterio = static function ($texto) {
 }
 
 .celulas-data-table .btn {
-    padding: 4px 8px;
-    font-size: 11px;
-    line-height: 1.2;
+    padding: 5px 9px;
+    font-size: 0.75rem;
+    line-height: 1.25;
 }
 
 .celulas-actions-row {
@@ -323,14 +342,14 @@ $slugMinisterio = static function ($texto) {
 }
 
 .celulas-action-btn--icon {
-    min-width: 30px;
-    width: 30px;
-    height: 30px;
+    min-width: 32px;
+    width: 32px;
+    height: 32px;
     padding: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: 0.8125rem;
 }
 
 .celulas-action-btn--report {

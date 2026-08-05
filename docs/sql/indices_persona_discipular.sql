@@ -1,0 +1,19 @@
+-- =============================================================================
+-- Índices para acelerar Discipular (tabla persona)
+-- =============================================================================
+--
+-- CHECKLIST (los cinco deben aparecer en SHOW INDEX → Key_name):
+--   [x] idx_persona_estado_lider
+--   [x] idx_persona_estado_ministerio
+--   [x] idx_persona_ministerio_estado
+--   [x] idx_persona_lider_estado
+--   [x] idx_persona_rol
+--
+-- Si los cinco ya existen (como en producción mcimadrid, may 2026),
+-- NO ejecute más ALTER aquí. El #1061 solo confirma que ya estaban creados.
+--
+-- Verificación:
+-- SHOW INDEX FROM persona;
+--
+-- La mejora de velocidad en Discipular depende entonces de subir los PHP
+-- (discípulos bajo demanda, personas-asignables por AJAX, etc.), no de este SQL.

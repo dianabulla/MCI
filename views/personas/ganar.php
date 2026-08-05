@@ -169,6 +169,9 @@ $historialToggleUrl = $verHistorialGanar
                 <?php if (($filtroFechaInicioActual ?? '') !== '' && ($filtroFechaFinActual ?? '') !== ''): ?>
                 <small style="display:block; margin-top:4px; color:#637087;">Del <?= htmlspecialchars((string)$filtroFechaInicioActual) ?> al <?= htmlspecialchars((string)$filtroFechaFinActual) ?> · Lun–Dom</small>
                 <?php endif; ?>
+                <?php if ($filtroSemanaRefEsDefaultPendiente): ?>
+                <small style="display:block; margin-top:4px; color:#b45309;">Solo se muestran almas registradas esta semana. Las ya ubicadas en célula salen de pendientes; usa Historial para ver semanas anteriores.</small>
+                <?php endif; ?>
             </div>
             <?php endif; ?>
 
@@ -226,7 +229,7 @@ $historialToggleUrl = $verHistorialGanar
                     <span class="ganar-shortcut-title"><i class="bi bi-person-check"></i> Asignados</span>
                     <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['asignados'] ?? 0) ?></span>
                 </a>
-                <small class="ganar-shortcut-help">Sin invitador y con líder o ministerio asignado</small>
+                <small class="ganar-shortcut-help">Sin invitador, con líder o ministerio · semana seleccionada</small>
             </div>
             <?php endif; ?>
 
@@ -329,8 +332,8 @@ $historialToggleUrl = $verHistorialGanar
                             <?php endif; ?>
                         </td>
                         <td>
-                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Nombre_Celula'] ?? 'Sin célula') ?>">
-                                <?= htmlspecialchars($persona['Nombre_Celula'] ?? 'Sin célula') ?>
+                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Etiqueta_Celula'] ?? ($persona['Nombre_Celula'] ?? 'Sin célula')) ?>">
+                                <?= htmlspecialchars($persona['Etiqueta_Celula'] ?? ($persona['Nombre_Celula'] ?? 'Sin célula')) ?>
                             </span>
                         </td>
                         <td>

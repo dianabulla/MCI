@@ -14,7 +14,7 @@ $puedeAcceso = $esAdmin
 $puede_editar = $esAdmin || $puedeAcceso;
 $puede_eliminar = $esAdmin || $puedeAcceso;
 $puede_editar_persona = $esAdmin
-    || (class_exists('AuthController') && AuthController::puede('personas:editar'));
+    || (class_exists('AuthController') && AuthController::puedeEditarPersonasConsulta());
 
 include VIEWS . '/escuelas_formacion/listado_inscritos.php';
 ?>

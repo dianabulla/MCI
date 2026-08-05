@@ -17,6 +17,16 @@ $tieneSubmodulos = !empty($tiene_submodulos);
 $esCapacitacionDestino = $clave === 'capacitacion_destino';
 $esUniversidadVida = $clave === 'universidad_vida';
 $usaTarjetasTipoMaterial = $esCapacitacionDestino || $esUniversidadVida;
+
+if ($esCapacitacionDestino || $esUniversidadVida) {
+    require_once APP . '/Helpers/ProgramasNavegacion.php';
+    $capSeccionNav = strtolower(trim((string)($_GET['cap_seccion'] ?? '')));
+    ProgramasNavegacion::incluirPartial([
+        'linea' => $esCapacitacionDestino ? 'capacitacion_destino' : 'universidad_vida',
+        'seccion' => ($esCapacitacionDestino && $capSeccionNav === 'inscritos') ? 'asistencias' : 'material',
+        'forzar' => true,
+    ]);
+}
 $configCapacitacionDestino = (array)($config_capacitacion_destino ?? []);
 $profesoresModulos = (array)($profesores_modulos ?? []);
 $restriccionDiscipuloMaterial = (array)($restriccion_discipulo_material ?? []);
@@ -992,6 +1002,14 @@ if ($tieneSubmodulos) {
         border-bottom: 0;
     }
 
+    .cap-inscritos-table .cap-clase-col {
+        width: 52px;
+        min-width: 52px;
+        max-width: 52px;
+        text-align: center;
+        box-sizing: border-box;
+    }
+
     .cap-tarea-card {
         border: 1px solid #d9e5f5;
         border-radius: 12px;
@@ -1293,6 +1311,24 @@ if ($tieneSubmodulos) {
     }
 
     .cap-destino-grid .submodulo-body {
+        display: none;
+    }
+
+    .uv-material-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .uv-material-grid .submodulo-wrap {
+        margin-bottom: 0;
+    }
+
+    .uv-material-grid .submodulo-body {
+        display: block;
+    }
+
+    .uv-material-grid .submodulo-wrap.is-hidden {
         display: none;
     }
 
@@ -2143,6 +2179,7 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                                 data-export-title="Inscritos Capacitación Destino — Nivel <?= (int)$capNivelVista ?>"
                                 data-filename="inscritos-cap-destino-nivel-<?= (int)$capNivelVista ?>"
                                 data-export-subtitle-from="cap-inscritos-filtros-form"
+                                data-export-stats-from="cap-inscritos-contador"
                                 data-label-default="Descargar imagen"
                             >
                                 <i class="bi bi-image"></i> Descargar imagen
@@ -2169,9 +2206,8 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                                     <th></th>
                                     <th></th>
                                     <th></th>
-                                    <th></th>
                                     <?php for ($clase = 1; $clase <= 10; $clase++): ?>
-                                        <th style="text-align:center; width:50px; background:#e8f0f8; padding:6px 3px;">Clase <?= $clase ?></th>
+                                        <th class="cap-clase-col" style="text-align:center; background:#e8f0f8; padding:6px 3px;">Clase <?= $clase ?></th>
                                     <?php endfor; ?>
                                 </tr>
                             </thead>
@@ -2194,7 +2230,7 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                                         <td><?= htmlspecialchars((string)($inscrito['telefono'] ?? '')) ?></td>
                                         <td><?= htmlspecialchars((string)($inscrito['fecha_registro'] ?? '')) ?></td>
                                         <?php for ($clase = 1; $clase <= 10; $clase++): ?>
-                                            <td style="text-align:center; padding:6px 3px;">
+                                            <td class="cap-clase-col" style="text-align:center; padding:6px 3px;">
                                                 <input type="checkbox" class="asistencia-check" 
                                                     data-id-persona="<?= $idPersona ?>" 
                                                     data-clase="<?= $clase ?>"
@@ -2214,7 +2250,7 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                                         Total asistencias
                                     </td>
                                     <?php for ($clase = 1; $clase <= 10; $clase++): ?>
-                                        <td class="cap-asistencia-total" data-clase="<?= $clase ?>" style="text-align:center; background:#e8f0f8; font-weight:700; color:#1e5631; padding:8px 3px;">
+                                        <td class="cap-asistencia-total cap-clase-col" data-clase="<?= $clase ?>" style="text-align:center; background:#e8f0f8; font-weight:700; color:#1e5631; padding:8px 3px;">
                                             <?= (int)($totalesAsistenciaPorClase[$clase] ?? 0) ?>
                                         </td>
                                     <?php endfor; ?>
@@ -2223,7 +2259,7 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                         </table>
                     </div>
                     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-                    <script src="<?= ASSETS_URL ?>/js/descargar_tabla_asistencia.js"></script>
+                    <script src="<?= ASSETS_URL ?>/js/descargar_tabla_asistencia.js?v=20260526"></script>
                     <script>
                     (function() {
                         var panel = document.getElementById('cap-academico-inscritos');
@@ -2569,7 +2605,9 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
 </div>
 <?php endif; ?>
 
+<?php if ($esCapacitacionDestino): ?>
 <div id="cap-inline-panel" class="cap-panel" aria-hidden="true">
+<?php endif; ?>
 <?php endif; ?>
 
 <div id="cap-material-panel" class="card cap-main-section<?= ($esCapacitacionDestino && !$mostrarMaterialCap) ? ' is-hidden' : '' ?>" style="padding:14px;">
@@ -2687,7 +2725,7 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
         <?php endif; ?>
     <?php endif; ?>
 
-    <?php if ($tieneSubmodulos && !$usaTarjetasTipoMaterial): ?>
+    <?php if ($tieneSubmodulos && (!$usaTarjetasTipoMaterial || $esUniversidadVida)): ?>
         <div class="submodulo-tabs" role="tablist" aria-label="Submódulos de material">
             <button type="button" class="submodulo-tab is-active js-submodulo-tab" data-target="submodulo-panel-clase" role="tab" aria-selected="true">Material clase</button>
             <button type="button" class="submodulo-tab js-submodulo-tab" data-target="submodulo-panel-profesor" role="tab" aria-selected="false">Material profesor</button>
@@ -2755,7 +2793,7 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
             }
         ?>
 
-        <?php if ($usaTarjetasTipoMaterial && !$esCapacitacionDestino): ?><div class="cap-destino-grid"><?php endif; ?>
+        <?php if ($usaTarjetasTipoMaterial && !$esCapacitacionDestino): ?><div class="<?= $esUniversidadVida ? 'uv-material-grid' : 'cap-destino-grid' ?>"><?php endif; ?>
         <?php if ($modoSeleccionNivelCap): ?>
             <div class="alert alert-info" style="margin-top:10px;">
                 Selecciona un nivel para entrar a su vista independiente y ver todos sus módulos.
@@ -2822,12 +2860,12 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                 } else {
                     if (stripos($tituloBloque, 'profesor') !== false) {
                         $claseCssBloque .= ' submodulo-profesor';
-                        if (!$usaTarjetasTipoMaterial) {
+                        if (!$usaTarjetasTipoMaterial || $esUniversidadVida) {
                             $panelIdBloque = 'submodulo-panel-profesor';
                         }
                     } elseif (stripos($tituloBloque, 'clase') !== false) {
                         $claseCssBloque .= ' submodulo-clase';
-                        if (!$usaTarjetasTipoMaterial) {
+                        if (!$usaTarjetasTipoMaterial || $esUniversidadVida) {
                             $panelIdBloque = 'submodulo-panel-clase';
                         }
                     }
@@ -2847,13 +2885,13 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                 }
                 $formIdProfesorBloque = 'form-prof-bloque-' . $bloqueIndex;
 
-                if ($tieneSubmodulos && !$usaTarjetasTipoMaterial && $panelIdBloque === 'submodulo-panel-profesor') {
+                if ($tieneSubmodulos && (!$usaTarjetasTipoMaterial || $esUniversidadVida) && $panelIdBloque === 'submodulo-panel-profesor') {
                     $claseCssBloque .= ' is-hidden';
                 }
             ?>
 
             <?php
-                if ($usaTarjetasTipoMaterial) {
+                if ($usaTarjetasTipoMaterial && $esCapacitacionDestino) {
                     $claseCssBloque .= ' is-hidden';
                 }
             ?>
@@ -3337,7 +3375,7 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
     <?php endif; ?>
 </div>
 
-<?php if ($usaTarjetasTipoMaterial && (!$esDiscipuloCapDestino || $usaFlujoCapHub)): ?>
+<?php if ($esCapacitacionDestino && $usaTarjetasTipoMaterial && (!$esDiscipuloCapDestino || $usaFlujoCapHub)): ?>
 </div>
 <?php endif; ?>
 
@@ -4152,7 +4190,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    document.querySelectorAll('.cap-destino-grid .submodulo-head').forEach(function(head) {
+    document.querySelectorAll('.cap-destino-grid .submodulo-head, .uv-material-grid .submodulo-head').forEach(function(head) {
         head.addEventListener('click', function() {
             var bloque = head.closest('.submodulo-wrap');
             if (!bloque || bloque.classList.contains('is-hidden')) {

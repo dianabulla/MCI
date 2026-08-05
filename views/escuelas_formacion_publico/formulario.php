@@ -168,6 +168,109 @@
             color: #758280;
         }
 
+        .doc-upload-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .doc-pendientes-panel,
+        .doc-subidos-panel {
+            margin-top: 12px;
+            border: 1px solid #c5ddd9;
+            border-radius: 10px;
+            background: #f7fcfb;
+            padding: 12px;
+        }
+
+        .doc-pendientes-header,
+        .doc-subidos-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #1f3d3a;
+        }
+
+        .doc-pendientes-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 28px;
+            height: 28px;
+            padding: 0 8px;
+            border-radius: 999px;
+            background: #0a6e6a;
+            color: #fff;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .doc-archivos-lista {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .doc-archivo-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1px solid #d8ebe8;
+            border-radius: 10px;
+            background: #fff;
+        }
+
+        .doc-archivo-info {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .doc-archivo-nombre {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #234542;
+            word-break: break-word;
+        }
+
+        .doc-archivo-meta {
+            display: block;
+            margin-top: 2px;
+            font-size: 12px;
+            color: #6a8582;
+        }
+
+        .doc-archivo-quitar {
+            flex-shrink: 0;
+            min-width: 44px;
+            min-height: 44px;
+            border: 1px solid #e4b4b4;
+            border-radius: 10px;
+            background: #fff5f5;
+            color: #b42318;
+            font-size: 18px;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .doc-archivo-quitar:active {
+            background: #fde8e8;
+        }
+
+        .doc-pendientes-vacio {
+            margin: 0;
+            font-size: 13px;
+            color: #6a8582;
+        }
+
         .abono-lock-box {
             border: 1px dashed #c8dfdc;
             background: #f6fbfa;
@@ -407,6 +510,39 @@
             }
 
             .insc-card { flex-direction: column; align-items: flex-start; }
+
+            .doc-upload-actions {
+                flex-direction: column;
+            }
+
+            .doc-upload-actions .btn {
+                width: 100%;
+            }
+
+            .doc-pendientes-panel,
+            .doc-subidos-panel {
+                padding: 14px;
+            }
+
+            .doc-pendientes-header,
+            .doc-subidos-header {
+                flex-wrap: wrap;
+            }
+
+            .doc-pendientes-badge {
+                min-width: 36px;
+                height: 36px;
+                font-size: 16px;
+            }
+
+            .doc-archivo-item {
+                flex-wrap: nowrap;
+                padding: 12px;
+            }
+
+            .doc-archivo-nombre {
+                font-size: 15px;
+            }
         }
     </style>
 </head>
@@ -435,6 +571,7 @@
         $abonoAuth = is_array($abono_auth ?? null) ? $abono_auth : ['autorizado' => false, 'nombre' => ''];
         $modoAbono = !empty($modo_abono);
         $modoPagosUrl = isset($_GET['modo']) && (string)$_GET['modo'] === 'pagos';
+        $mostrarBloqueAbonos = false;
         $relajarValidacionTipoDocumento = $modoAbono || $modoPagosUrl;
         $abonoAutorizado = !empty($abonoAuth['autorizado']);
         $abonoNombreAuth = (string)($abonoAuth['nombre'] ?? '');
@@ -451,29 +588,47 @@
         }
         ?>
 
-        <?php if (!empty($mensaje)): ?>
-            <div class="alert <?= ($tipo_mensaje ?? '') === 'success' ? 'success' : 'error' ?>">
+        <?php
+        $tipoExitoFormulario = trim((string)($tipo_exito ?? ''));
+        $mostrarExitoConTicket = !empty($registro_exitoso) && $tipoExitoFormulario === 'pago' && !empty($referencia_pago);
+        $mostrarExitoRegistro = ($tipo_mensaje ?? '') === 'success'
+            && in_array($tipoExitoFormulario, ['inscripcion', 'documentos'], true);
+        $urlRegistrarOtra = PUBLIC_URL . '?url=escuelas_formacion/registro-publico/universidad-vida';
+        if ($programaActualFormulario === 'capacitacion_destino') {
+            $urlRegistrarOtra = PUBLIC_URL . '?url=escuelas_formacion/registro-publico/capacitacion-destino';
+        }
+        ?>
+
+        <?php if (!empty($mensaje) && !$mostrarExitoRegistro): ?>
+            <div class="alert <?= ($tipo_mensaje ?? '') === 'success' ? 'success' : 'error' ?>" id="alerta-formulario-mensaje">
                 <?= htmlspecialchars((string)$mensaje) ?>
+            </div>
+        <?php else: ?>
+            <div class="alert success" id="alerta-formulario-mensaje" style="display:none;"></div>
+        <?php endif; ?>
+
+        <?php if ($mostrarExitoRegistro): ?>
+            <div class="success-box" id="panel-exito-registro">
+                <strong>¡Registro completado!</strong>
+                <p style="margin:12px 0 0;"><?= htmlspecialchars((string)$mensaje) ?></p>
+                <p style="margin:8px 0 0; font-size:13px; color:#55706d;">Los datos se guardaron correctamente.</p>
+                <div class="success-actions">
+                    <a class="btn" href="<?= htmlspecialchars($urlRegistrarOtra, ENT_QUOTES, 'UTF-8') ?>">Registrar otra respuesta</a>
+                </div>
+            </div>
+        <?php elseif ($mostrarExitoConTicket): ?>
+            <div class="success-box">
+                <strong>Pago registrado.</strong>
+                <p style="margin:12px 0 0;">Número de referencia de pago:</p>
+                <p style="margin:4px 0 0; font-size:22px; font-weight:800; letter-spacing:3px; font-family:monospace; color:var(--primary);"><?= htmlspecialchars((string)$referencia_pago) ?></p>
+                <p style="margin:4px 0 12px; font-size:12px; color:#667775;">Guarda este código como comprobante de pago.</p>
+                <div style="margin:12px 0; padding:10px 12px; border:1px dashed #b7d7d4; border-radius:10px; background:#f7fcfb;">
+                    <a class="btn" href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/ticket" style="display:inline-block; text-decoration:none;">Ver / imprimir ticket</a>
+                </div>
             </div>
         <?php endif; ?>
 
-        <?php if (!empty($registro_exitoso)): ?>
-            <div class="success-box">
-                <strong>Registro completado.</strong>
-                <?php if (!empty($referencia_pago)): ?>
-                    <p style="margin:12px 0 0;">Número de referencia de pago:</p>
-                    <p style="margin:4px 0 0; font-size:22px; font-weight:800; letter-spacing:3px; font-family:monospace; color:var(--primary);"><?= htmlspecialchars((string)$referencia_pago) ?></p>
-                    <p style="margin:4px 0 12px; font-size:12px; color:#667775;">Guarda este código como comprobante de pago.</p>
-                <?php endif; ?>
-                <div style="margin:12px 0; padding:10px 12px; border:1px dashed #b7d7d4; border-radius:10px; background:#f7fcfb;">
-                    <div style="font-size:13px; color:#45615e; margin-bottom:6px;"><strong>Pago de material:</strong> queda guardado en la inscripción y visible en el ticket imprimible.</div>
-                    <a class="btn" href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/ticket" style="display:inline-block; text-decoration:none;">Ver / imprimir ticket</a>
-                </div>
-                <div class="success-actions">
-                    <a class="btn" href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($rutaRegistroNuevo) ?>" style="display:inline-block; text-decoration:none;">Registrar otra persona</a>
-                </div>
-            </div>
-        <?php else: ?>
+        <?php if (!$mostrarExitoConTicket && !$mostrarExitoRegistro): ?>
             <?php
             $programaActualFormulario = trim((string)($programa_actual ?? ''));
             $programaAnterior = (string)($old['programa'] ?? '');
@@ -492,10 +647,22 @@
                 }
             }
             $ocultarSelectorPrograma = $programaActualFormulario !== '';
+            $esFormularioUv = ($programaActualFormulario === 'universidad_vida' || $programaBaseSeleccionado === 'universidad_vida');
+            $tipoInscripcionUv = (string)($old['tipo_inscripcion_uv'] ?? 'universidad_vida');
+            if (!in_array($tipoInscripcionUv, ['universidad_vida', 'bautismo'], true)) {
+                $tipoInscripcionUv = 'universidad_vida';
+            }
+            $segmentoUvSeleccionado = (string)($old['segmento_preferido'] ?? '');
+            $segmentosUvOpciones = [
+                'jovenes' => 'Encuentro de jóvenes',
+                'mujeres_adultas' => 'Mujeres',
+                'hombres_adultos' => 'Hombres',
+                'teens' => 'Teens',
+            ];
             ?>
             <p class="help">Paso 1: busca por cédula. Si la persona ya existe, se cargarán todos sus datos y solo podrás editar los campos faltantes. Si no existe, se habilitan los datos para crearla y quedará inscrita automáticamente en <?= $programaBaseSeleccionado === 'capacitacion_destino' ? 'Capacitación Destino' : 'Universidad de la Vida' ?>.</p>
 
-            <form method="POST" action="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/guardar" id="form-escuelas" autocomplete="off">
+            <form method="POST" action="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/guardar" id="form-escuelas" autocomplete="off" enctype="multipart/form-data">
                 <?php if ($ocultarSelectorPrograma): ?>
                     <input type="hidden" id="programa" name="programa" value="<?= htmlspecialchars($programaBaseSeleccionado) ?>">
                 <?php endif; ?>
@@ -607,7 +774,33 @@
                 <div class="section" id="section-programa-nuevo">
                     <h3 class="section-title">4. Programa (nuevo registro)</h3>
                     <div class="grid">
-                        <?php if ($ocultarSelectorPrograma): ?>
+                        <?php if ($ocultarSelectorPrograma && $esFormularioUv): ?>
+                            <div class="field full">
+                                <label>¿En qué te inscribes? <span class="req">*</span></label>
+                                <div style="display:flex; flex-direction:column; gap:10px; margin-top:6px;">
+                                    <label style="display:flex; align-items:flex-start; gap:10px; font-weight:500; cursor:pointer;">
+                                        <input type="radio" name="tipo_inscripcion_uv" value="universidad_vida" <?= $tipoInscripcionUv !== 'bautismo' ? 'checked' : '' ?> style="margin-top:3px;">
+                                        <span><strong>Universidad de la Vida</strong> — Un encuentro de jóvenes</span>
+                                    </label>
+                                    <label style="display:flex; align-items:flex-start; gap:10px; font-weight:500; cursor:pointer;">
+                                        <input type="radio" name="tipo_inscripcion_uv" value="bautismo" <?= $tipoInscripcionUv === 'bautismo' ? 'checked' : '' ?> style="margin-top:3px;">
+                                        <span><strong>Bautismo</strong></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="field full" id="wrap-opciones-uv" <?= $tipoInscripcionUv === 'bautismo' ? 'style="display:none;"' : '' ?>>
+                                <label for="segmento_preferido">¿A qué encuentro asistirás? <span class="req">*</span></label>
+                                <select id="segmento_preferido" name="segmento_preferido" <?= $tipoInscripcionUv === 'bautismo' ? '' : 'required' ?>>
+                                    <option value="">Seleccione una opción</option>
+                                    <?php foreach ($segmentosUvOpciones as $valorSegmento => $etiquetaSegmento): ?>
+                                    <option value="<?= htmlspecialchars($valorSegmento, ENT_QUOTES, 'UTF-8') ?>" <?= $segmentoUvSeleccionado === $valorSegmento ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($etiquetaSegmento, ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <p class="help" style="margin-top:6px;">Elija el grupo al que pertenece para el encuentro (jóvenes, mujeres, hombres o teens).</p>
+                            </div>
+                        <?php elseif ($ocultarSelectorPrograma): ?>
                             <div class="field full">
                                 <label>Programa seleccionado</label>
                                 <div style="padding:12px 14px; border:1px solid #d2e4e1; border-radius:10px; background:#f9fefc; color:#1f3d3a;">
@@ -624,6 +817,33 @@
                             </div>
                         <?php endif; ?>
 
+                        <?php if (!$ocultarSelectorPrograma): ?>
+                        <div class="field full" id="wrap-trayectoria-uv-combo" style="display:none;">
+                            <label>¿En qué te inscribes? <span class="req">*</span></label>
+                            <div style="display:flex; flex-direction:column; gap:10px; margin-top:6px;">
+                                <label style="display:flex; align-items:flex-start; gap:10px; font-weight:500; cursor:pointer;">
+                                    <input type="radio" name="tipo_inscripcion_uv" value="universidad_vida" <?= $tipoInscripcionUv !== 'bautismo' ? 'checked' : '' ?> style="margin-top:3px;">
+                                    <span><strong>Universidad de la Vida</strong> — Un encuentro de jóvenes</span>
+                                </label>
+                                <label style="display:flex; align-items:flex-start; gap:10px; font-weight:500; cursor:pointer;">
+                                    <input type="radio" name="tipo_inscripcion_uv" value="bautismo" <?= $tipoInscripcionUv === 'bautismo' ? 'checked' : '' ?> style="margin-top:3px;">
+                                    <span><strong>Bautismo</strong></span>
+                                </label>
+                            </div>
+                            <div class="field full" id="wrap-opciones-uv-combo" style="margin-top:12px; padding:0;">
+                                <label for="segmento_preferido_combo">¿A qué encuentro asistirás? <span class="req">*</span></label>
+                                <select id="segmento_preferido_combo" name="segmento_preferido">
+                                    <option value="">Seleccione una opción</option>
+                                    <?php foreach ($segmentosUvOpciones as $valorSegmento => $etiquetaSegmento): ?>
+                                    <option value="<?= htmlspecialchars($valorSegmento, ENT_QUOTES, 'UTF-8') ?>" <?= $segmentoUvSeleccionado === $valorSegmento ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($etiquetaSegmento, ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+
                         <div class="field" id="wrap-programa-nivel" <?= $programaBaseSeleccionado === 'capacitacion_destino' ? '' : 'style="display:none;"' ?>>
                             <label for="programa_nivel">Nivel de Capacitación Destino <span class="req">*</span></label>
                             <select id="programa_nivel" name="programa_nivel" <?= $programaBaseSeleccionado === 'capacitacion_destino' ? 'required' : '' ?>>
@@ -636,14 +856,49 @@
                 </div>
 
                 <div class="section" id="section-inscripciones-existentes" style="display:none;">
-                    <h3 class="section-title">4. Persona ya registrada</h3>
-                    <p style="margin:0 0 10px; font-size:13px; color:#55706d;">Selecciona la inscripción existente para registrar el abono.</p>
+                    <h3 class="section-title">4. Inscripciones existentes</h3>
+                    <p style="margin:0 0 10px; font-size:13px; color:#55706d;">Esta persona ya tiene inscripciones registradas. Puedes completar datos faltantes o inscribirla en otro programa si aplica.</p>
                     <div id="lista-inscripciones-existentes"></div>
-                    <p id="msg-solo-asistencia" style="display:none; margin:12px 0 0; font-size:13px; color:#7a4b00; border-top:1px solid #f0dfb8; padding-top:10px;">Persona encontrada. Usa esta inscripción para registrar pagos/abonos sin crear una inscripción nueva.</p>
+                    <p id="msg-solo-asistencia" style="display:none; margin:12px 0 0; font-size:13px; color:#55706d; border-top:1px solid #e2e8f0; padding-top:10px;">Ya está inscrita en Universidad de la Vida. Puede subir documentos en la sección de abajo.</p>
                 </div>
 
+                <?php
+                $mostrarBloqueDocumentos = ($programaBaseSeleccionado === 'universidad_vida' || $programaActualFormulario === 'universidad_vida');
+                ?>
+                <?php if ($mostrarBloqueDocumentos): ?>
+                <div class="section" id="section-documentos">
+                    <h3 class="section-title">5. Documentos</h3>
+                    <p id="help-documentos" style="margin:0 0 12px; font-size:13px; color:#55706d;">
+                        Puede seleccionar <strong>varios archivos a la vez</strong> (PDF, JPG, PNG, WEBP, DOC o DOCX; máx. 8 MB c/u).
+                        Si la persona ya está inscrita en Universidad de la Vida, pulse «Guardar documentos»; si es inscripción nueva, se adjuntan al enviar el formulario.
+                    </p>
+                    <div id="msg-documentos-exito" class="alert success" style="display:none; margin:0 0 12px;">Documentos cargados con éxito</div>
+                    <input type="file" id="documentos_uv" name="documentos_uv[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,image/*,application/pdf" style="display:none;">
+                    <div class="doc-upload-actions">
+                        <button type="button" class="btn btn-secondary" id="btn-subir-documentos">+ Agregar archivos</button>
+                        <button type="button" class="btn btn-secondary" id="btn-quitar-todos-documentos" style="display:none;">Quitar todos</button>
+                    </div>
+                    <div id="doc-pendientes-panel" class="doc-pendientes-panel">
+                        <div class="doc-pendientes-header">
+                            <span class="doc-pendientes-badge" id="doc-pendientes-badge">0</span>
+                            <strong id="doc-pendientes-titulo">Archivos listos para subir</strong>
+                        </div>
+                        <p id="doc-pendientes-vacio" class="doc-pendientes-vacio">Ningún archivo seleccionado. Pulse «+ Agregar archivos» para elegir uno o varios.</p>
+                        <ul id="lista-documentos-pendientes" class="doc-archivos-lista" style="display:none;"></ul>
+                    </div>
+                    <div id="doc-subidos-panel" class="doc-subidos-panel" style="display:none;">
+                        <div class="doc-subidos-header">
+                            <strong>Documentos ya guardados</strong>
+                            <span id="doc-subidos-badge" class="doc-pendientes-badge" style="background:#4b6a8a;">0</span>
+                        </div>
+                        <ul id="lista-documentos-subidos" class="doc-archivos-lista"></ul>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php if ($mostrarBloqueAbonos): ?>
                 <div class="section" id="section-pago-material">
-                    <h3 class="section-title">5. Abonos</h3>
+                    <h3 class="section-title"><?= $mostrarBloqueDocumentos ? '6' : '5' ?>. Abonos</h3>
 
                     <div style="margin-bottom:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
                         <button type="button" class="btn btn-secondary" id="btn-mostrar-acceso-abono" <?= $abonoAutorizado ? 'style="display:none;"' : '' ?>>Habilitar abonos</button>
@@ -718,6 +973,7 @@
                     </div>
                     </div>
                 </div>
+                <?php endif; ?>
 
                 <div class="loader" id="loader-busqueda">Buscando coincidencias en Personas...</div>
                 <div class="search-status" id="estado-busqueda"></div>
@@ -739,7 +995,23 @@
     const endpointBuscar = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/registro-publico/buscar-persona') ?>;
     const endpointLideres = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/registro-publico/buscar-lideres') ?>;
     const endpointValidarAbono = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/registro-publico/validar-abono') ?>;
+    const endpointSubirDocumentos = <?= json_encode(function_exists('public_app_url') ? public_app_url('escuelas_formacion/registro-publico/subir-documentos') : (PUBLIC_URL . 'index.php?url=escuelas_formacion/registro-publico/subir-documentos')) ?>;
     const form = document.getElementById('form-escuelas');
+    const btnSubirDocumentos = document.getElementById('btn-subir-documentos');
+    const btnQuitarTodosDocumentos = document.getElementById('btn-quitar-todos-documentos');
+    const inputDocumentos = document.getElementById('documentos_uv');
+    const docPendientesBadge = document.getElementById('doc-pendientes-badge');
+    const docPendientesTitulo = document.getElementById('doc-pendientes-titulo');
+    const docPendientesVacio = document.getElementById('doc-pendientes-vacio');
+    const listaDocumentosPendientes = document.getElementById('lista-documentos-pendientes');
+    const docSubidosPanel = document.getElementById('doc-subidos-panel');
+    const docSubidosBadge = document.getElementById('doc-subidos-badge');
+    const listaDocumentosSubidos = document.getElementById('lista-documentos-subidos');
+    let colaArchivosPendientes = [];
+    const sectionDocumentos = document.getElementById('section-documentos');
+    const helpDocumentos = document.getElementById('help-documentos');
+    const msgDocumentosExito = document.getElementById('msg-documentos-exito');
+    const alertaFormularioMensaje = document.getElementById('alerta-formulario-mensaje');
     const sectionDatosPersonales = document.getElementById('section-datos-personales');
     const tipoDocumento = document.getElementById('tipo_documento');
     const nombre = document.getElementById('nombre');
@@ -755,6 +1027,7 @@
     const ministerio = document.getElementById('id_ministerio');
     const programa = document.getElementById('programa');
     const programaFijo = <?= json_encode($ocultarSelectorPrograma ? $programaBaseSeleccionado : '') ?>;
+    const esFormularioUv = <?= !empty($esFormularioUv) ? 'true' : 'false' ?>;
     const sectionProgramaNuevo = document.getElementById('section-programa-nuevo');
     const wrapProgramaNivel = document.getElementById('wrap-programa-nivel');
     const programaNivel = document.getElementById('programa_nivel');
@@ -795,6 +1068,9 @@
     const inputIdInscripcion = document.getElementById('input-id-inscripcion');
     let personaExistente = false;
     let modoSoloAsistencia = false;
+    let modoGuardarDocumentos = false;
+    let tieneInscripcionUvParaDocumentos = false;
+    const mostrarBloqueAbonos = <?= !empty($mostrarBloqueAbonos) ? 'true' : 'false' ?>;
     const modoAbono = <?= !empty($modo_abono) ? 'true' : 'false' ?>;
     const relajarValidacionTipoDocumento = <?= !empty($relajarValidacionTipoDocumento) ? 'true' : 'false' ?>;
     const usuarioInternoLogueado = <?= !empty($usuario_interno_logueado) ? 'true' : 'false' ?>;
@@ -823,7 +1099,7 @@
 
     // Solo cuentas que pueden recibir pagos (administrativo puro o admin de sistema, con permisos)
     // deben tener abonos automáticos; un líder u otro usuario interno sigue igual que un visitante anónimo.
-    if (usuarioInternoLogueado && puedeRecibirPagosEscuelas) {
+    if (mostrarBloqueAbonos && usuarioInternoLogueado && puedeRecibirPagosEscuelas) {
         abonoAutorizado = true;
     }
 
@@ -973,11 +1249,19 @@
                 return false;
             }
         }
+        if (esFormularioUv || String(programa.value || '') === 'universidad_vida') {
+            if (obtenerTipoInscripcionUvSeleccionado() !== 'bautismo') {
+                const segmento = document.getElementById('segmento_preferido') || document.getElementById('segmento_preferido_combo');
+                if (!segmento || !String(segmento.value || '').trim()) {
+                    return false;
+                }
+            }
+        }
         return true;
     }
 
     function sincronizarAbonoTrasDatosRegistro() {
-        if (modoSoloAsistencia || modoAbono) {
+        if (!mostrarBloqueAbonos || modoSoloAsistencia || modoAbono) {
             return;
         }
         if (!registroDatosMinimosListos()) {
@@ -1010,6 +1294,30 @@
     }
 
     function setModoSoloAsistencia(activo) {
+        if (!mostrarBloqueAbonos) {
+            modoSoloAsistencia = false;
+            if (msgSoloAsistencia) {
+                msgSoloAsistencia.style.display = activo ? '' : 'none';
+            }
+            if (btnGuardarInscripcion) {
+                btnGuardarInscripcion.style.display = '';
+                btnGuardarInscripcion.textContent = 'Guardar inscripción';
+            }
+            if (sectionProgramaNuevo) {
+                sectionProgramaNuevo.style.display = '';
+                sectionProgramaNuevo.style.opacity = '1';
+                sectionProgramaNuevo.querySelectorAll('input, select, textarea, button').forEach(function(el) {
+                    if (el.id === 'btn-limpiar-form') {
+                        return;
+                    }
+                    el.disabled = false;
+                });
+            }
+            if (inputAccion) {
+                inputAccion.value = 'registro';
+            }
+            return;
+        }
         const bloquear = !!activo;
         modoSoloAsistencia = bloquear;
 
@@ -1056,55 +1364,191 @@
             sectionInscripcionesExistentes.style.display = 'none';
             listaInscripcionesExistentes.innerHTML = '';
             setModoSoloAsistencia(false);
+            vincularInscripcionParaDocumentos([]);
             return;
         }
-        listaInscripcionesExistentes.innerHTML = inscripciones.map(function(ins) {
-            return '<div class="insc-card">' +
-                '<div class="insc-info">' +
-                    '<label style="display:flex;align-items:center;gap:8px;font-weight:600;">' +
-                        '<input type="checkbox" class="chk-inscripcion" data-id="' + String(ins.id_inscripcion || '') + '" style="width:16px;height:16px;" ' + (inscripciones.length === 1 ? 'checked' : '') + '> Seleccionar' +
-                    '</label>' +
-                    '<strong>' + String(ins.programa_label || ins.programa || '') + '</strong>' +
-                    '<span class="insc-badge asistio">Inscripción existente</span>' +
-                '</div>' +
-                '<div style="font-size:12px;color:#667775;">Programa registrado previamente.</div>' +
-            '</div>';
-        }).join('');
-        if (inputIdInscripcionAsistencia) {
-            if (inscripciones.length === 1) {
-                inputIdInscripcionAsistencia.value = String(inscripciones[0].id_inscripcion || '');
-                if (inputIdInscripcion) {
-                    inputIdInscripcion.value = String(inscripciones[0].id_inscripcion || '');
-                }
-            } else {
-                inputIdInscripcionAsistencia.value = '';
-                if (inputIdInscripcion) {
-                    inputIdInscripcion.value = '';
+        if (mostrarBloqueAbonos) {
+            listaInscripcionesExistentes.innerHTML = inscripciones.map(function(ins) {
+                return '<div class="insc-card">' +
+                    '<div class="insc-info">' +
+                        '<label style="display:flex;align-items:center;gap:8px;font-weight:600;">' +
+                            '<input type="checkbox" class="chk-inscripcion" data-id="' + String(ins.id_inscripcion || '') + '" style="width:16px;height:16px;" ' + (inscripciones.length === 1 ? 'checked' : '') + '> Seleccionar' +
+                        '</label>' +
+                        '<strong>' + String(ins.programa_label || ins.programa || '') + '</strong>' +
+                        '<span class="insc-badge asistio">Inscripción existente</span>' +
+                    '</div>' +
+                    '<div style="font-size:12px;color:#667775;">Programa registrado previamente.</div>' +
+                '</div>';
+            }).join('');
+            if (inputIdInscripcionAsistencia) {
+                if (inscripciones.length === 1) {
+                    inputIdInscripcionAsistencia.value = String(inscripciones[0].id_inscripcion || '');
+                    if (inputIdInscripcion) {
+                        inputIdInscripcion.value = String(inscripciones[0].id_inscripcion || '');
+                    }
+                } else {
+                    inputIdInscripcionAsistencia.value = '';
+                    if (inputIdInscripcion) {
+                        inputIdInscripcion.value = '';
+                    }
                 }
             }
-        }
 
-        listaInscripcionesExistentes.querySelectorAll('.chk-inscripcion').forEach(function(chk) {
-            chk.addEventListener('change', function() {
-                const idIns = String(chk.dataset.id || '').trim();
-                if (!idIns || idIns === '0') {
-                    chk.checked = false;
-                    return;
-                }
+            listaInscripcionesExistentes.querySelectorAll('.chk-inscripcion').forEach(function(chk) {
+                chk.addEventListener('change', function() {
+                    const idIns = String(chk.dataset.id || '').trim();
+                    if (!idIns || idIns === '0') {
+                        chk.checked = false;
+                        return;
+                    }
 
-                listaInscripcionesExistentes.querySelectorAll('.chk-inscripcion').forEach(function(other) {
-                    if (other !== chk) {
-                        other.checked = false;
+                    listaInscripcionesExistentes.querySelectorAll('.chk-inscripcion').forEach(function(other) {
+                        if (other !== chk) {
+                            other.checked = false;
+                        }
+                    });
+
+                    if (inputIdInscripcionAsistencia) {
+                        inputIdInscripcionAsistencia.value = chk.checked ? idIns : '';
                     }
                 });
-
-                if (inputIdInscripcionAsistencia) {
-                    inputIdInscripcionAsistencia.value = chk.checked ? idIns : '';
-                }
             });
-        });
 
-        setModoSoloAsistencia(true);
+            setModoSoloAsistencia(true);
+        } else {
+            listaInscripcionesExistentes.innerHTML = inscripciones.map(function(ins) {
+                return '<div class="insc-card">' +
+                    '<div class="insc-info">' +
+                        '<strong>' + String(ins.programa_label || ins.programa || '') + '</strong>' +
+                        '<span class="insc-badge asistio">Inscripción existente</span>' +
+                    '</div>' +
+                    '<div style="font-size:12px;color:#667775;">Programa registrado previamente.</div>' +
+                '</div>';
+            }).join('');
+            sectionInscripcionesExistentes.style.display = '';
+            const tieneUv = vincularInscripcionParaDocumentos(inscripciones);
+            if (msgSoloAsistencia) {
+                msgSoloAsistencia.style.display = tieneUv ? '' : 'none';
+            }
+        }
+    }
+
+    function inscripcionUvParaDocumentos(inscripciones) {
+        if (!Array.isArray(inscripciones)) {
+            return null;
+        }
+        let fallback = null;
+        for (let i = 0; i < inscripciones.length; i++) {
+            const ins = inscripciones[i];
+            const prog = String(ins.programa || '');
+            if (prog === 'universidad_vida') {
+                return ins;
+            }
+            if (prog === 'encuentro' && !fallback) {
+                fallback = ins;
+            }
+        }
+        return fallback;
+    }
+
+    function actualizarModoGuardarDocumentos(activo) {
+        modoGuardarDocumentos = !!activo;
+        if (btnGuardarInscripcion && !modoAbono && !modoSoloAsistencia) {
+            if (obtenerTipoInscripcionUvSeleccionado() === 'bautismo') {
+                btnGuardarInscripcion.textContent = 'Registrar bautismo';
+            } else {
+                btnGuardarInscripcion.textContent = modoGuardarDocumentos ? 'Guardar documentos' : 'Guardar inscripción';
+            }
+        }
+    }
+
+    function limpiarAvisoUrlAnterior() {
+        const url = new URL(window.location.href);
+        const tipoUrl = String(url.searchParams.get('tipo') || '').trim();
+        if (tipoUrl === 'success') {
+            return;
+        }
+
+        const alertaAnterior = document.getElementById('alerta-formulario-mensaje');
+        if (alertaAnterior && alertaAnterior.classList.contains('error')) {
+            alertaAnterior.remove();
+        }
+        if (window.history.replaceState) {
+            if (url.searchParams.has('mensaje') || url.searchParams.has('tipo')) {
+                url.searchParams.delete('mensaje');
+                url.searchParams.delete('tipo');
+                url.searchParams.delete('tipo_exito');
+                window.history.replaceState({}, '', url.pathname + '?' + url.searchParams.toString());
+            }
+        }
+    }
+
+    function mostrarMensajeExitoInicial() {
+        const params = new URLSearchParams(window.location.search);
+        const msgUrl = String(params.get('mensaje') || '').trim();
+        const tipoUrl = String(params.get('tipo') || '').trim();
+        const msgAlerta = alertaFormularioMensaje ? String(alertaFormularioMensaje.textContent || '').trim() : '';
+        const mensaje = msgUrl || msgAlerta;
+        const esExito = tipoUrl === 'success'
+            || (alertaFormularioMensaje && alertaFormularioMensaje.classList.contains('success') && mensaje !== '');
+
+        if (!mensaje || !esExito) {
+            return;
+        }
+
+        if (alertaFormularioMensaje) {
+            alertaFormularioMensaje.textContent = mensaje;
+            alertaFormularioMensaje.className = 'alert success';
+            alertaFormularioMensaje.style.display = '';
+        }
+        mostrarToast(mensaje);
+        if (alertaFormularioMensaje && typeof alertaFormularioMensaje.scrollIntoView === 'function') {
+            alertaFormularioMensaje.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    function vincularInscripcionParaDocumentos(inscripciones) {
+        if (msgDocumentosExito) {
+            msgDocumentosExito.style.display = 'none';
+        }
+
+        const insUv = inscripcionUvParaDocumentos(inscripciones);
+        const idIns = insUv ? parseInt(String(insUv.id_inscripcion || ''), 10) : 0;
+        if (idIns <= 0) {
+            tieneInscripcionUvParaDocumentos = false;
+            if (inputIdInscripcion) {
+                inputIdInscripcion.value = '';
+            }
+            if (inputIdInscripcionAsistencia) {
+                inputIdInscripcionAsistencia.value = '';
+            }
+            actualizarModoGuardarDocumentos(false);
+            return false;
+        }
+
+        if (inputIdInscripcion) {
+            inputIdInscripcion.value = String(idIns);
+        }
+        if (inputIdInscripcionAsistencia) {
+            inputIdInscripcionAsistencia.value = String(idIns);
+        }
+        if (sectionDocumentos) {
+            sectionDocumentos.style.display = '';
+        }
+        if (helpDocumentos) {
+            helpDocumentos.textContent = String(insUv.programa || '') === 'universidad_vida'
+                ? 'Persona ya inscrita en Universidad de la Vida. Seleccione archivos y pulse «Guardar documentos».'
+                : 'Puede subir documentos de inmediato para esta inscripción.';
+        }
+        renderListaDocumentosSubidos(insUv.documentos || []);
+        actualizarEstadoDocumentosSeleccionados();
+        const esUniversidadVida = ['universidad_vida', 'encuentro'].includes(String(insUv.programa || ''));
+        tieneInscripcionUvParaDocumentos = esUniversidadVida;
+        actualizarModoGuardarDocumentos(esUniversidadVida && obtenerTipoInscripcionUvSeleccionado() !== 'bautismo');
+        if (esUniversidadVida) {
+            limpiarAvisoUrlAnterior();
+        }
+        return esUniversidadVida;
     }
 
     function toUpperCaseInput(input) {
@@ -1150,6 +1594,64 @@
         const esDestino = String(programa.value || '') === 'capacitacion_destino';
         wrapProgramaNivel.style.display = esDestino ? '' : 'none';
         programaNivel.required = esDestino;
+        actualizarTrayectoriaUv();
+    }
+
+    function obtenerTipoInscripcionUvSeleccionado() {
+        const marcado = document.querySelector('input[name="tipo_inscripcion_uv"]:checked');
+        return marcado ? String(marcado.value || 'universidad_vida') : 'universidad_vida';
+    }
+
+    function actualizarTrayectoriaUv() {
+        const esUv = esFormularioUv || String(programa.value || '') === 'universidad_vida' || String(programaFijo || '') === 'universidad_vida';
+        const wrapCombo = document.getElementById('wrap-trayectoria-uv-combo');
+        if (wrapCombo) {
+            wrapCombo.style.display = (!programaFijo && String(programa.value || '') === 'universidad_vida') ? '' : 'none';
+        }
+
+        const tipo = obtenerTipoInscripcionUvSeleccionado();
+        const esBautismo = tipo === 'bautismo';
+        const wrapOpciones = document.getElementById('wrap-opciones-uv') || document.getElementById('wrap-opciones-uv-combo');
+        const segmento = document.getElementById('segmento_preferido') || document.getElementById('segmento_preferido_combo');
+        const sectionDocs = document.getElementById('section-documentos');
+
+        if (programa) {
+            programa.value = esBautismo ? 'bautismo' : (programaFijo || 'universidad_vida');
+        }
+
+        if (wrapOpciones) {
+            wrapOpciones.style.display = (esUv && !esBautismo) ? '' : 'none';
+        }
+        if (segmento) {
+            if (esUv && !esBautismo) {
+                segmento.setAttribute('required', 'required');
+                segmento.disabled = false;
+            } else {
+                segmento.removeAttribute('required');
+                if (!esUv) {
+                    segmento.disabled = true;
+                }
+            }
+        }
+        if (sectionDocs) {
+            sectionDocs.style.display = (esUv && !esBautismo) ? '' : 'none';
+        }
+
+        if (esBautismo) {
+            actualizarModoGuardarDocumentos(false);
+            if (msgSoloAsistencia && tieneInscripcionUvParaDocumentos) {
+                msgSoloAsistencia.style.display = '';
+                msgSoloAsistencia.textContent = 'Ya está inscrita en Universidad de la Vida. Puede registrar el bautismo sin subir documentos.';
+            }
+        } else if (tieneInscripcionUvParaDocumentos) {
+            actualizarModoGuardarDocumentos(true);
+            if (msgSoloAsistencia) {
+                msgSoloAsistencia.style.display = '';
+                msgSoloAsistencia.textContent = 'Ya está inscrita en Universidad de la Vida. Puede subir documentos en la sección de abajo.';
+            }
+        } else if (msgSoloAsistencia && !tieneInscripcionUvParaDocumentos) {
+            msgSoloAsistencia.style.display = 'none';
+        }
     }
 
     function mostrarToast(mensaje) {
@@ -1212,8 +1714,8 @@
             setInputBloqueado(telefono, false);
             setInputBloqueado(lider, false);
             setSelectBloqueado(ministerio, false);
-            if (sectionPagoMaterial) sectionPagoMaterial.style.display = '';
-            actualizarCamposPago();
+            if (mostrarBloqueAbonos && sectionPagoMaterial) sectionPagoMaterial.style.display = '';
+            if (mostrarBloqueAbonos) actualizarCamposPago();
             return;
         }
 
@@ -1247,8 +1749,8 @@
         // Bloquear ministerio solo si tiene valor válido
         setSelectBloqueado(ministerio, tieneMinisterio);
 
-        if (sectionPagoMaterial) sectionPagoMaterial.style.display = '';
-        actualizarCamposPago();
+        if (mostrarBloqueAbonos && sectionPagoMaterial) sectionPagoMaterial.style.display = '';
+        if (mostrarBloqueAbonos) actualizarCamposPago();
     }
 
     function calcularEdadDesdeFechaNacimiento(fechaTexto) {
@@ -1519,6 +2021,7 @@
             renderInscripciones(data.inscripciones || []);
             if (!Array.isArray(data.inscripciones) || data.inscripciones.length === 0) {
                 setModoSoloAsistencia(false);
+                vincularInscripcionParaDocumentos([]);
             }
 
             const faltaLider = !!(data.requiere_asignacion && data.requiere_asignacion.lider);
@@ -1675,12 +2178,14 @@
     setModoSoloAsistencia(false);
     actualizarProgramaNivel();
 
-    if (modoAbono) {
+    if (mostrarBloqueAbonos && modoAbono) {
         if (inputAccion) inputAccion.value = 'abono';
         if (btnGuardarInscripcion) btnGuardarInscripcion.textContent = 'Guardar abono';
     }
 
-    actualizarCamposPago();
+    if (mostrarBloqueAbonos) {
+        actualizarCamposPago();
+    }
 
     if (prefillInicial && prefillInicial.encontrado) {
         personaExistente = true;
@@ -1698,7 +2203,11 @@
         }
         const insPref = Array.isArray(prefillInicial.inscripciones) ? prefillInicial.inscripciones : [];
         if (insPref.length > 0) {
-            setEstadoBusqueda('info', 'Persona encontrada. Puedes registrar pagos o abonos desde la inscripción existente.');
+            const esUv = vincularInscripcionParaDocumentos(insPref);
+            const msgUv = esUv
+                ? 'Persona ya inscrita en Universidad de la Vida. Puede subir documentos en la sección de abajo.'
+                : 'Persona encontrada. Revisa sus inscripciones y completa los datos que falten.';
+            setEstadoBusqueda('info', msgUv);
         } else {
             setEstadoBusqueda('info', 'Persona encontrada. Completa el programa para registrar una nueva inscripción.');
         }
@@ -1715,6 +2224,14 @@
         actualizarProgramaNivel();
         sincronizarAbonoTrasDatosRegistro();
     });
+
+    document.querySelectorAll('input[name="tipo_inscripcion_uv"]').forEach(function(radio) {
+        radio.addEventListener('change', actualizarTrayectoriaUv);
+    });
+
+    actualizarTrayectoriaUv();
+
+    mostrarMensajeExitoInicial();
 
     if (programaNivel) {
         programaNivel.addEventListener('change', sincronizarAbonoTrasDatosRegistro);
@@ -1769,6 +2286,27 @@
     }
 
     form.addEventListener('submit', function(event) {
+        actualizarTrayectoriaUv();
+
+        if (modoGuardarDocumentos && obtenerTipoInscripcionUvSeleccionado() !== 'bautismo') {
+            event.preventDefault();
+            sincronizarInputDocumentos();
+            const tieneArchivos = colaArchivosPendientes.length > 0;
+            if (tieneArchivos) {
+                if (idInscripcionParaDocumentos() > 0) {
+                    subirDocumentosSeleccionados();
+                } else {
+                    mostrarToast('No se encontró la inscripción para subir documentos');
+                }
+            } else {
+                mostrarToast('Seleccione los archivos que desea subir');
+                if (inputDocumentos) {
+                    inputDocumentos.click();
+                }
+            }
+            return;
+        }
+
         if (relajarValidacionTipoDocumento && tipoDocumento) {
             tipoDocumento.removeAttribute('required');
         }
@@ -1776,12 +2314,13 @@
         if (tipoDocumento && tipoDocumento.disabled) {
             tipoDocumento.disabled = false;
         }
+        actualizarTrayectoriaUv();
 
         const edadValor = parseInt(String(edad.value || '').trim(), 10);
         const telefonoValor = String(telefono.value || '').trim();
         const cedulaValor = String(cedula.value || '').trim();
 
-        if (modoAbono && !modoSoloAsistencia) {
+        if (mostrarBloqueAbonos && modoAbono && !modoSoloAsistencia) {
             const idInscripcion = String(inputIdInscripcionAsistencia ? inputIdInscripcionAsistencia.value : '').trim();
             if (!idInscripcion) {
                 event.preventDefault();
@@ -1828,7 +2367,7 @@
             return;
         }
 
-        if (modoSoloAsistencia) {
+        if (mostrarBloqueAbonos && modoSoloAsistencia) {
             const idInscripcion = String(inputIdInscripcionAsistencia ? inputIdInscripcionAsistencia.value : '').trim();
             if (!idInscripcion) {
                 event.preventDefault();
@@ -1898,7 +2437,7 @@
 
         const metodoReg = String(metodoPago ? metodoPago.value : '').trim();
         const valorRegistro = normalizarValorPagoInput(valorPago ? valorPago.value : '');
-        const quierePagoRegistro = !!metodoReg || (Number.isFinite(valorRegistro) && valorRegistro > 0);
+        const quierePagoRegistro = mostrarBloqueAbonos && (!!metodoReg || (Number.isFinite(valorRegistro) && valorRegistro > 0));
         if (quierePagoRegistro) {
             if (valorPago && Number.isFinite(valorRegistro) && valorRegistro > 0) {
                 valorPago.value = String(Math.round(valorRegistro * 100) / 100);
@@ -2058,6 +2597,9 @@
             actualizarProgramaNivel();
             cerrarListaLideres();
             renderInscripciones([]);
+            limpiarColaArchivosPendientes();
+            renderListaDocumentosSubidos([]);
+            tieneInscripcionUvParaDocumentos = false;
             setEstadoBusqueda('', '');
             setLoading(false);
             toUpperCaseInput(nombre);
@@ -2096,6 +2638,337 @@
         });
         btnCompartirAbono.disabled = !abonoAutorizado;
     }
+
+    function formatearTamanoArchivo(bytes) {
+        const n = Number(bytes) || 0;
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+        return (n / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function etiquetaTipoArchivo(nombre) {
+        const ext = extensionArchivoDocumento(nombre);
+        return ext ? ext.toUpperCase() : 'ARCHIVO';
+    }
+
+    function archivoDuplicadoEnCola(archivo) {
+        return colaArchivosPendientes.some(function (item) {
+            return item.name === archivo.name && item.size === archivo.size && item.lastModified === archivo.lastModified;
+        });
+    }
+
+    function sincronizarInputDocumentos() {
+        if (!inputDocumentos || typeof DataTransfer === 'undefined') {
+            return;
+        }
+        const dt = new DataTransfer();
+        colaArchivosPendientes.forEach(function (archivo) {
+            dt.items.add(archivo);
+        });
+        inputDocumentos.files = dt.files;
+    }
+
+    function limpiarColaArchivosPendientes() {
+        colaArchivosPendientes = [];
+        if (inputDocumentos) {
+            inputDocumentos.value = '';
+        }
+        sincronizarInputDocumentos();
+        renderColaArchivosPendientes();
+    }
+
+    function quitarArchivoPendiente(indice) {
+        if (indice < 0 || indice >= colaArchivosPendientes.length) {
+            return;
+        }
+        colaArchivosPendientes.splice(indice, 1);
+        sincronizarInputDocumentos();
+        renderColaArchivosPendientes();
+    }
+
+    function agregarArchivosACola(fileList) {
+        const errores = [];
+        const agregados = [];
+        if (!fileList || !fileList.length) {
+            return { agregados: agregados, errores: errores };
+        }
+
+        for (let i = 0; i < fileList.length; i++) {
+            const archivo = fileList[i];
+            const erroresArchivo = validarArchivosDocumentosSeleccionados([archivo]);
+            if (erroresArchivo.length > 0) {
+                errores.push.apply(errores, erroresArchivo);
+                continue;
+            }
+            if (archivoDuplicadoEnCola(archivo)) {
+                errores.push('«' + archivo.name + '» ya está en la lista.');
+                continue;
+            }
+            colaArchivosPendientes.push(archivo);
+            agregados.push(archivo);
+        }
+
+        sincronizarInputDocumentos();
+        renderColaArchivosPendientes();
+        return { agregados: agregados, errores: errores };
+    }
+
+    function renderColaArchivosPendientes() {
+        const total = colaArchivosPendientes.length;
+        if (docPendientesBadge) {
+            docPendientesBadge.textContent = String(total);
+        }
+        if (docPendientesTitulo) {
+            docPendientesTitulo.textContent = total === 1
+                ? '1 archivo listo para subir'
+                : total + ' archivos listos para subir';
+        }
+        if (btnQuitarTodosDocumentos) {
+            btnQuitarTodosDocumentos.style.display = total > 0 ? '' : 'none';
+        }
+        if (docPendientesVacio) {
+            docPendientesVacio.style.display = total > 0 ? 'none' : '';
+        }
+        if (!listaDocumentosPendientes) {
+            return;
+        }
+
+        listaDocumentosPendientes.innerHTML = '';
+        listaDocumentosPendientes.style.display = total > 0 ? '' : 'none';
+
+        colaArchivosPendientes.forEach(function (archivo, indice) {
+            const li = document.createElement('li');
+            li.className = 'doc-archivo-item';
+
+            const info = document.createElement('div');
+            info.className = 'doc-archivo-info';
+
+            const nombre = document.createElement('span');
+            nombre.className = 'doc-archivo-nombre';
+            nombre.textContent = archivo.name;
+
+            const meta = document.createElement('span');
+            meta.className = 'doc-archivo-meta';
+            meta.textContent = etiquetaTipoArchivo(archivo.name) + ' · ' + formatearTamanoArchivo(archivo.size);
+
+            info.appendChild(nombre);
+            info.appendChild(meta);
+
+            const btnQuitar = document.createElement('button');
+            btnQuitar.type = 'button';
+            btnQuitar.className = 'doc-archivo-quitar';
+            btnQuitar.setAttribute('aria-label', 'Quitar ' + archivo.name);
+            btnQuitar.textContent = '×';
+            btnQuitar.addEventListener('click', function () {
+                quitarArchivoPendiente(indice);
+            });
+
+            li.appendChild(info);
+            li.appendChild(btnQuitar);
+            listaDocumentosPendientes.appendChild(li);
+        });
+    }
+
+    function renderListaDocumentosSubidos(documentos) {
+        if (!listaDocumentosSubidos) return;
+        listaDocumentosSubidos.innerHTML = '';
+        const total = Array.isArray(documentos) ? documentos.length : 0;
+        if (docSubidosPanel) {
+            docSubidosPanel.style.display = total > 0 ? '' : 'none';
+        }
+        if (docSubidosBadge) {
+            docSubidosBadge.textContent = String(total);
+        }
+        if (total === 0) return;
+
+        documentos.forEach(function (doc) {
+            const li = document.createElement('li');
+            li.className = 'doc-archivo-item';
+
+            const info = document.createElement('div');
+            info.className = 'doc-archivo-info';
+
+            const nombre = String(doc.nombre || doc.archivo || 'Documento');
+            const url = String(doc.url || '');
+            const fecha = String(doc.fecha || '');
+
+            const titulo = document.createElement(url ? 'a' : 'span');
+            titulo.className = 'doc-archivo-nombre';
+            if (url) {
+                titulo.href = url;
+                titulo.target = '_blank';
+                titulo.rel = 'noopener';
+            }
+            titulo.textContent = nombre;
+
+            const meta = document.createElement('span');
+            meta.className = 'doc-archivo-meta';
+            meta.textContent = fecha !== '' ? 'Guardado · ' + fecha : 'Guardado en el sistema';
+
+            info.appendChild(titulo);
+            info.appendChild(meta);
+            li.appendChild(info);
+            listaDocumentosSubidos.appendChild(li);
+        });
+    }
+
+    function idInscripcionParaDocumentos() {
+        const idAsist = inputIdInscripcionAsistencia ? String(inputIdInscripcionAsistencia.value || '').trim() : '';
+        if (idAsist && /^\d+$/.test(idAsist)) return parseInt(idAsist, 10);
+        const idIns = document.getElementById('input-id-inscripcion');
+        const raw = idIns ? String(idIns.value || '').trim() : '';
+        if (raw && /^\d+$/.test(raw)) return parseInt(raw, 10);
+        return 0;
+    }
+
+    const extensionesDocumentosUv = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx'];
+    const tamanoMaxDocumentoUv = 8 * 1024 * 1024;
+
+    function extensionArchivoDocumento(nombre) {
+        const partes = String(nombre || '').toLowerCase().split('.');
+        return partes.length > 1 ? partes.pop() : '';
+    }
+
+    function validarArchivosDocumentosSeleccionados(fileList) {
+        const errores = [];
+        if (!fileList || !fileList.length) {
+            return errores;
+        }
+        for (let i = 0; i < fileList.length; i++) {
+            const archivo = fileList[i];
+            const ext = extensionArchivoDocumento(archivo.name);
+            if (!extensionesDocumentosUv.includes(ext)) {
+                errores.push('«' + archivo.name + '»: formato no permitido.');
+                continue;
+            }
+            if (archivo.size > tamanoMaxDocumentoUv) {
+                errores.push('«' + archivo.name + '»: supera 8 MB.');
+            }
+        }
+        return errores;
+    }
+
+    function actualizarEstadoDocumentosSeleccionados() {
+        renderColaArchivosPendientes();
+    }
+
+    async function leerRespuestaJsonFetch(resp) {
+        const texto = await resp.text();
+        const tipo = String(resp.headers.get('content-type') || '').toLowerCase();
+        if (tipo.indexOf('application/json') !== -1 || (texto.trim().charAt(0) === '{' || texto.trim().charAt(0) === '[')) {
+            try {
+                return JSON.parse(texto);
+            } catch (parseErr) {
+                throw new Error('La respuesta del servidor no es válida. Intente de nuevo en unos minutos.');
+            }
+        }
+        if (resp.status === 413) {
+            throw new Error('Los archivos son demasiado grandes para el servidor. Suba menos archivos o reduzca el tamaño (máx. 8 MB por archivo).');
+        }
+        if (resp.status === 404) {
+            throw new Error('El servicio de subida no está disponible. Recargue la página; si persiste, avise al administrador.');
+        }
+        if (resp.status === 401 || resp.status === 403) {
+            throw new Error('No se pudo completar la subida. Recargue la página e intente de nuevo.');
+        }
+        throw new Error('Error del servidor al subir documentos (código ' + resp.status + '). Intente con archivos más pequeños o más tarde.');
+    }
+
+    async function subirDocumentosSeleccionados() {
+        sincronizarInputDocumentos();
+
+        if (colaArchivosPendientes.length === 0) {
+            mostrarToast('Seleccione al menos un archivo');
+            return;
+        }
+
+        const erroresLocales = validarArchivosDocumentosSeleccionados(colaArchivosPendientes);
+        if (erroresLocales.length > 0) {
+            alert(erroresLocales.join('\n'));
+            return;
+        }
+
+        const idIns = idInscripcionParaDocumentos();
+        if (idIns <= 0) {
+            mostrarToast('Los archivos se subirán cuando guarde la inscripción');
+            return;
+        }
+
+        const fd = new FormData();
+        fd.append('id_inscripcion', String(idIns));
+        for (let i = 0; i < colaArchivosPendientes.length; i++) {
+            fd.append('documentos_uv[]', colaArchivosPendientes[i]);
+        }
+
+        const btnGuardar = btnGuardarInscripcion;
+        if (btnSubirDocumentos) btnSubirDocumentos.disabled = true;
+        if (btnGuardar) btnGuardar.disabled = true;
+        try {
+            const resp = await fetch(endpointSubirDocumentos, {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            });
+            const json = await leerRespuestaJsonFetch(resp);
+            if (!json.success) {
+                throw new Error(json.mensaje || 'No se pudieron subir los documentos');
+            }
+            renderListaDocumentosSubidos(json.documentos || []);
+            limpiarColaArchivosPendientes();
+            const mensajeExito = 'Documentos cargados con éxito';
+            if (msgDocumentosExito) {
+                msgDocumentosExito.textContent = mensajeExito;
+                msgDocumentosExito.style.display = '';
+            }
+            if (alertaFormularioMensaje) {
+                alertaFormularioMensaje.textContent = mensajeExito;
+                alertaFormularioMensaje.className = 'alert success';
+                alertaFormularioMensaje.style.display = '';
+            }
+            mostrarToast(mensajeExito);
+        } catch (err) {
+            alert(err.message || 'Error al subir documentos');
+        } finally {
+            if (btnSubirDocumentos) btnSubirDocumentos.disabled = false;
+            if (btnGuardar) btnGuardar.disabled = false;
+        }
+    }
+
+    if (btnSubirDocumentos && inputDocumentos) {
+        btnSubirDocumentos.addEventListener('click', function () {
+            inputDocumentos.click();
+        });
+
+        inputDocumentos.addEventListener('change', function () {
+            if (!inputDocumentos.files || inputDocumentos.files.length === 0) {
+                return;
+            }
+            const resultado = agregarArchivosACola(inputDocumentos.files);
+            inputDocumentos.value = '';
+            sincronizarInputDocumentos();
+            if (resultado.errores.length > 0) {
+                alert(resultado.errores.join('\n'));
+            }
+            const idIns = idInscripcionParaDocumentos();
+            if (idIns > 0 && !modoGuardarDocumentos && colaArchivosPendientes.length > 0) {
+                subirDocumentosSeleccionados();
+            }
+        });
+    }
+
+    if (btnQuitarTodosDocumentos) {
+        btnQuitarTodosDocumentos.addEventListener('click', function () {
+            if (colaArchivosPendientes.length === 0) {
+                return;
+            }
+            if (confirm('¿Quitar todos los archivos de la lista?')) {
+                limpiarColaArchivosPendientes();
+            }
+        });
+    }
+
+    renderColaArchivosPendientes();
 
     sincronizarEdadConFechaNacimiento();
 })();

@@ -701,37 +701,97 @@ $urlVolver = $returnUrl !== ''
 /* Autocompletar */
 .autocomplete-wrapper {
     position: relative;
+    overflow: visible;
+}
+
+.autocomplete-wrapper.is-autocomplete-open {
+    z-index: 5000;
 }
 
 .autocomplete-items {
     position: absolute;
-    border: 1px solid #d4d4d4;
-    border-bottom: none;
-    border-top: none;
-    z-index: 99;
-    top: 100%;
+    border: 1px solid #94a3b8;
+    border-radius: 8px;
+    z-index: 10000;
+    top: calc(100% + 4px);
     left: 0;
     right: 0;
-    max-height: 250px;
+    max-height: 280px;
+    overflow-x: hidden;
     overflow-y: auto;
-    background: white;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    opacity: 1 !important;
+    color: #0f172a !important;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
+    display: none;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+.autocomplete-items.is-open {
+    display: block;
+}
+
+.autocomplete-items.is-fixed {
+    position: fixed !important;
+    right: auto;
+    z-index: 10050 !important;
+}
+
+.autocomplete-items.is-open-up {
+    top: auto;
+    bottom: calc(100% + 4px);
+    box-shadow: 0 -12px 32px rgba(15, 23, 42, 0.28);
+}
+
+.autocomplete-items.is-fixed.is-open-up {
+    bottom: auto;
 }
 
 .autocomplete-items div {
-    padding: 10px;
+    padding: 10px 12px;
     cursor: pointer;
-    background-color: #fff;
-    border-bottom: 1px solid #d4d4d4;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    opacity: 1 !important;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 14px;
+    line-height: 1.35;
 }
 
-.autocomplete-items div:hover {
-    background-color: #e9e9e9;
+.autocomplete-items div:last-child {
+    border-bottom: none;
 }
 
-.autocomplete-active {
-    background-color: #667eea !important;
-    color: #ffffff;
+.autocomplete-items div:hover,
+.autocomplete-items div.autocomplete-active {
+    background: #dbeafe !important;
+    background-color: #dbeafe !important;
+    color: #1e3a8a !important;
+}
+
+.autocomplete-items .autocomplete-empty,
+.autocomplete-items .autocomplete-meta {
+    cursor: default;
+    color: #334155 !important;
+    font-style: italic;
+    background: #f1f5f9 !important;
+    background-color: #f1f5f9 !important;
+}
+
+.autocomplete-items .autocomplete-meta {
+    font-style: normal;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.form-section-ministerial,
+.bloque-ministerial-general,
+.form-row,
+.form-group {
+    overflow: visible;
 }
 
 
@@ -1014,6 +1074,176 @@ function normalizarTexto(texto) {
         .trim();
 }
 
+function tokensBusqueda(texto) {
+    const normalizado = normalizarTexto(texto);
+    if (!normalizado) {
+        return [];
+    }
+    return normalizado.split(' ').filter(Boolean);
+}
+
+function itemCoincideBusqueda(nombreItem, textoBusqueda) {
+    const nombreNorm = normalizarTexto(nombreItem);
+    const tokens = tokensBusqueda(textoBusqueda);
+    if (!tokens.length) {
+        return false;
+    }
+    // Todas las palabras deben aparecer (en cualquier orden)
+    return tokens.every(function(token) {
+        return nombreNorm.indexOf(token) !== -1;
+    });
+}
+
+function filtrarItemsAutocomplete(items, textoBusqueda, limite) {
+    limite = typeof limite === 'number' ? limite : 40;
+    const tokens = tokensBusqueda(textoBusqueda);
+    if (!tokens.length) {
+        return { total: 0, items: [] };
+    }
+
+    const coincidencias = items.filter(function(item) {
+        return itemCoincideBusqueda(item.nombre, textoBusqueda);
+    });
+
+    coincidencias.sort(function(a, b) {
+        const na = normalizarTexto(a.nombre);
+        const nb = normalizarTexto(b.nombre);
+        const prefijo = tokens.join(' ');
+        const aStarts = na.indexOf(prefijo) === 0 ? 0 : (na.indexOf(tokens[0]) === 0 ? 1 : 2);
+        const bStarts = nb.indexOf(prefijo) === 0 ? 0 : (nb.indexOf(tokens[0]) === 0 ? 1 : 2);
+        if (aStarts !== bStarts) {
+            return aStarts - bStarts;
+        }
+        return na.localeCompare(nb);
+    });
+
+    return {
+        total: coincidencias.length,
+        items: coincidencias.slice(0, limite)
+    };
+}
+
+function resaltarCoincidencia(nombre, textoBusqueda) {
+    const tokens = tokensBusqueda(textoBusqueda);
+    if (!tokens.length) {
+        return escapeHtmlAutocomplete(nombre);
+    }
+    // Resalta la primera coincidencia del texto completo o del primer token
+    const nombreLower = nombre.toLowerCase();
+    const busquedaLower = String(textoBusqueda || '').toLowerCase().trim();
+    let index = busquedaLower ? nombreLower.indexOf(busquedaLower) : -1;
+    let len = busquedaLower.length;
+    if (index < 0 && tokens[0]) {
+        index = normalizarTexto(nombre).indexOf(tokens[0]);
+        // fallback visual sin romper acentos: busca en original case-insensitive el token sin acento aproximado
+        const re = new RegExp(tokens[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        const m = nombre.match(re);
+        if (m && typeof m.index === 'number') {
+            index = m.index;
+            len = m[0].length;
+        } else {
+            index = -1;
+        }
+    }
+    if (index < 0) {
+        return escapeHtmlAutocomplete(nombre);
+    }
+    return escapeHtmlAutocomplete(nombre.substr(0, index))
+        + '<strong>' + escapeHtmlAutocomplete(nombre.substr(index, len)) + '</strong>'
+        + escapeHtmlAutocomplete(nombre.substr(index + len));
+}
+
+function escapeHtmlAutocomplete(texto) {
+    return String(texto || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function posicionarListaAutocomplete(input, lista) {
+    if (!input || !lista) {
+        return;
+    }
+    if (!lista.children.length) {
+        lista.classList.remove('is-open', 'is-open-up', 'is-fixed');
+        lista.style.display = 'none';
+        const wrapVacio = input.closest('.autocomplete-wrapper');
+        if (wrapVacio) {
+            wrapVacio.classList.remove('is-autocomplete-open');
+        }
+        return;
+    }
+
+    // Sacar la lista al body para que no quede traslúcida bajo otras filas del formulario
+    if (lista.parentElement !== document.body) {
+        lista._originalParent = lista.parentElement;
+        document.body.appendChild(lista);
+    }
+
+    const wrap = input.closest('.autocomplete-wrapper');
+    if (wrap) {
+        wrap.classList.add('is-autocomplete-open');
+    }
+
+    const rect = input.getBoundingClientRect();
+    const espacioAbajo = window.innerHeight - rect.bottom - 16;
+    const espacioArriba = rect.top - 16;
+    const abrirArriba = espacioAbajo < 180 && espacioArriba > espacioAbajo;
+    const alturaDisponible = Math.max(120, abrirArriba ? espacioArriba : espacioAbajo);
+    const maxHeight = Math.min(280, alturaDisponible);
+
+    lista.classList.add('is-open', 'is-fixed');
+    lista.classList.toggle('is-open-up', abrirArriba);
+    lista.style.display = 'block';
+    lista.style.left = Math.max(8, rect.left) + 'px';
+    lista.style.width = Math.max(180, rect.width) + 'px';
+    lista.style.maxHeight = maxHeight + 'px';
+    lista.style.right = 'auto';
+    lista.style.zIndex = '10050';
+    lista.style.background = '#ffffff';
+    lista.style.backgroundColor = '#ffffff';
+    lista.style.opacity = '1';
+
+    if (abrirArriba) {
+        lista.style.top = 'auto';
+        lista.style.bottom = Math.max(8, window.innerHeight - rect.top + 4) + 'px';
+    } else {
+        lista.style.bottom = 'auto';
+        lista.style.top = (rect.bottom + 4) + 'px';
+    }
+}
+
+function limpiarListaAutocomplete(lista) {
+    if (!lista) {
+        return;
+    }
+    lista.innerHTML = '';
+    lista.classList.remove('is-open', 'is-open-up', 'is-fixed');
+    lista.style.display = 'none';
+    lista.style.top = '';
+    lista.style.bottom = '';
+    lista.style.left = '';
+    lista.style.width = '';
+    lista.style.maxHeight = '';
+    lista.style.zIndex = '';
+    lista.style.background = '';
+    lista.style.backgroundColor = '';
+    lista.style.opacity = '';
+
+    if (lista._inputRef) {
+        const wrap = lista._inputRef.closest('.autocomplete-wrapper');
+        if (wrap) {
+            wrap.classList.remove('is-autocomplete-open');
+        }
+    }
+
+    // Devolver la lista a su contenedor original
+    if (lista._originalParent && lista.parentElement === document.body) {
+        lista._originalParent.appendChild(lista);
+    }
+}
+
 function obtenerCoincidenciaExacta(items, valor) {
     const texto = normalizarTexto(valor);
     if (!texto) {
@@ -1226,176 +1456,236 @@ function inicializarMayusculasAutomaticas() {
 
 inicializarMayusculasAutomaticas();
 
-// Autocompletar para célula
+// Autocompletar para célula y líder
 const celulaInput = document.getElementById('celula_search');
 const celulaHidden = document.getElementById('id_celula');
 const celulaAutocomplete = document.getElementById('celula_autocomplete');
-let currentFocusCelula = -1;
-
-celulaInput.addEventListener('input', function() {
-    const value = this.value;
-    closeAllLists();
-    
-    limpiarCampoInvalido(celulaInput, celulaError);
-
-    if (!value) {
-        celulaHidden.value = '';
-        return false;
-    }
-
-    const coincidenciaExacta = obtenerCoincidenciaExacta(celulasDisponibles, value);
-    if (!coincidenciaExacta || String(coincidenciaExacta.id) !== String(celulaHidden.value || '')) {
-        celulaHidden.value = '';
-    }
-    
-    currentFocusCelula = -1;
-    
-    const textoBusqueda = normalizarTexto(value);
-    const filtrados = celulasDisponibles.filter(celula => 
-        normalizarTexto(celula.nombre).includes(textoBusqueda)
-    );
-    
-    if (filtrados.length === 0) {
-        const div = document.createElement('div');
-        div.innerHTML = '<em>No se encontraron células</em>';
-        div.style.fontStyle = 'italic';
-        div.style.color = '#999';
-        celulaAutocomplete.appendChild(div);
-        return;
-    }
-    
-    filtrados.forEach(celula => {
-        const div = document.createElement('div');
-        const nombre = celula.nombre;
-        const index = nombre.toLowerCase().indexOf(value.toLowerCase());
-        
-        if (index >= 0) {
-            div.innerHTML = nombre.substr(0, index) + 
-                          '<strong>' + nombre.substr(index, value.length) + '</strong>' + 
-                          nombre.substr(index + value.length);
-        } else {
-            div.innerHTML = nombre;
-        }
-        
-        div.addEventListener('click', function() {
-            celulaInput.value = nombre;
-            celulaHidden.value = celula.id;
-            limpiarCampoInvalido(celulaInput, celulaError);
-            closeAllLists();
-        });
-        
-        celulaAutocomplete.appendChild(div);
-    });
-});
-
-celulaInput.addEventListener('keydown', function(e) {
-    let items = celulaAutocomplete.getElementsByTagName('div');
-    
-    if (e.keyCode === 40) { // Down
-        currentFocusCelula++;
-        addActive(items, currentFocusCelula);
-    } else if (e.keyCode === 38) { // Up
-        currentFocusCelula--;
-        addActive(items, currentFocusCelula);
-    } else if (e.keyCode === 13) { // Enter
-        e.preventDefault();
-        if (currentFocusCelula > -1) {
-            if (items) items[currentFocusCelula].click();
-        }
-    }
-});
-
-celulaInput.addEventListener('blur', function() {
-    setTimeout(() => {
-        sincronizarSeleccionAutocomplete(celulaInput, celulaHidden, celulasDisponibles, celulaError, 'una célula');
-    }, 200);
-});
-
-// Autocompletar para líder
 const liderInput = document.getElementById('lider_search');
 const liderHidden = document.getElementById('id_lider');
 const liderAutocomplete = document.getElementById('lider_autocomplete');
+let currentFocusCelula = -1;
 let currentFocus = -1;
 
-liderInput.addEventListener('input', function() {
-    const value = this.value;
-    closeAllLists();
-    
-    limpiarCampoInvalido(liderInput, liderError);
-
-    if (!value) {
-        liderHidden.value = '';
-        return false;
+function obtenerItemsSeleccionables(lista) {
+    if (!lista) {
+        return [];
     }
+    return Array.from(lista.querySelectorAll('div[data-id]'));
+}
 
-    const coincidenciaExacta = obtenerCoincidenciaExacta(lideresDisponibles, value);
-    if (!coincidenciaExacta || String(coincidenciaExacta.id) !== String(liderHidden.value || '')) {
-        liderHidden.value = '';
-    }
-    
-    currentFocus = -1;
-    
-    const textoBusqueda = normalizarTexto(value);
-    const filtrados = lideresDisponibles.filter(lider => 
-        normalizarTexto(lider.nombre).includes(textoBusqueda)
-    );
-    
-    if (filtrados.length === 0) {
-        const div = document.createElement('div');
-        div.innerHTML = '<em>No se encontraron líderes</em>';
-        div.style.fontStyle = 'italic';
-        div.style.color = '#999';
-        liderAutocomplete.appendChild(div);
+function renderAutocompleteLista(listaEl, resultado, onSelect, etiquetaVacio) {
+    limpiarListaAutocomplete(listaEl);
+    if (!listaEl) {
         return;
     }
-    
-    filtrados.forEach(lider => {
+
+    if (!resultado.items.length) {
+        const vacio = document.createElement('div');
+        vacio.className = 'autocomplete-empty';
+        vacio.textContent = etiquetaVacio || 'Sin resultados';
+        listaEl.appendChild(vacio);
+        posicionarListaAutocomplete(listaEl._inputRef || null, listaEl);
+        return;
+    }
+
+    if (resultado.total > resultado.items.length) {
+        const meta = document.createElement('div');
+        meta.className = 'autocomplete-meta';
+        meta.textContent = 'Mostrando ' + resultado.items.length + ' de ' + resultado.total + ' coincidencias. Sigue escribiendo para filtrar.';
+        listaEl.appendChild(meta);
+    }
+
+    resultado.items.forEach(function(item) {
         const div = document.createElement('div');
-        const nombre = lider.nombre;
-        const index = nombre.toLowerCase().indexOf(value.toLowerCase());
-        
-        if (index >= 0) {
-            div.innerHTML = nombre.substr(0, index) + 
-                          '<strong>' + nombre.substr(index, value.length) + '</strong>' + 
-                          nombre.substr(index + value.length);
-        } else {
-            div.innerHTML = nombre;
-        }
-        
-        div.addEventListener('click', function() {
-            liderInput.value = nombre;
-            liderHidden.value = lider.id;
-            limpiarCampoInvalido(liderInput, liderError);
+        div.setAttribute('data-id', String(item.id));
+        div.innerHTML = resaltarCoincidencia(item.nombre, listaEl._query || '');
+        div.addEventListener('mousedown', function(e) {
+            // mousedown evita que el blur cierre antes del click
+            e.preventDefault();
+            onSelect(item);
             closeAllLists();
         });
-        
-        liderAutocomplete.appendChild(div);
+        listaEl.appendChild(div);
     });
-});
 
-liderInput.addEventListener('keydown', function(e) {
-    let items = liderAutocomplete.getElementsByTagName('div');
-    
-    if (e.keyCode === 40) { // Down
-        currentFocus++;
-        addActive(items, currentFocus);
-    } else if (e.keyCode === 38) { // Up
-        currentFocus--;
-        addActive(items, currentFocus);
-    } else if (e.keyCode === 13) { // Enter
-        e.preventDefault();
-        if (currentFocus > -1) {
-            if (items) items[currentFocus].click();
-        }
+    posicionarListaAutocomplete(listaEl._inputRef || null, listaEl);
+}
+
+function actualizarAutocompleteCampo(input, hidden, items, listaEl, errorEl, focusState, etiquetaVacio) {
+    if (!input || !listaEl) {
+        return;
     }
-});
+
+    const value = input.value || '';
+    listaEl._inputRef = input;
+    listaEl._query = value;
+    limpiarCampoInvalido(input, errorEl);
+
+    if (!String(value).trim()) {
+        if (hidden) {
+            hidden.value = '';
+        }
+        limpiarListaAutocomplete(listaEl);
+        focusState.value = -1;
+        return;
+    }
+
+    const coincidenciaExacta = obtenerCoincidenciaExacta(items, value);
+    if (hidden && (!coincidenciaExacta || String(coincidenciaExacta.id) !== String(hidden.value || ''))) {
+        hidden.value = '';
+    }
+
+    focusState.value = -1;
+    const resultado = filtrarItemsAutocomplete(items, value, 40);
+    renderAutocompleteLista(listaEl, resultado, function(item) {
+        input.value = item.nombre;
+        if (hidden) {
+            hidden.value = item.id;
+        }
+        limpiarCampoInvalido(input, errorEl);
+        if (typeof actualizarAsignadoALiderChecklist === 'function') {
+            actualizarAsignadoALiderChecklist();
+        }
+    }, etiquetaVacio);
+}
+
+const focusCelulaState = { value: -1 };
+const focusLiderState = { value: -1 };
+
+if (celulaInput && celulaAutocomplete) {
+    celulaInput.addEventListener('input', function() {
+        closeAllLists(celulaAutocomplete);
+        actualizarAutocompleteCampo(
+            celulaInput,
+            celulaHidden,
+            celulasDisponibles,
+            celulaAutocomplete,
+            celulaError,
+            focusCelulaState,
+            'No se encontraron células'
+        );
+        currentFocusCelula = focusCelulaState.value;
+    });
+
+    celulaInput.addEventListener('focus', function() {
+        if (String(celulaInput.value || '').trim() !== '') {
+            actualizarAutocompleteCampo(
+                celulaInput,
+                celulaHidden,
+                celulasDisponibles,
+                celulaAutocomplete,
+                celulaError,
+                focusCelulaState,
+                'No se encontraron células'
+            );
+            currentFocusCelula = focusCelulaState.value;
+        }
+    });
+
+    celulaInput.addEventListener('keydown', function(e) {
+        const items = obtenerItemsSeleccionables(celulaAutocomplete);
+        if (e.keyCode === 40) {
+            e.preventDefault();
+            currentFocusCelula = addActive(items, currentFocusCelula + 1);
+        } else if (e.keyCode === 38) {
+            e.preventDefault();
+            currentFocusCelula = addActive(items, currentFocusCelula - 1);
+        } else if (e.keyCode === 13) {
+            e.preventDefault();
+            if (currentFocusCelula > -1 && items[currentFocusCelula]) {
+                items[currentFocusCelula].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            }
+        } else if (e.keyCode === 27) {
+            closeAllLists();
+        }
+    });
+
+    celulaInput.addEventListener('blur', function() {
+        setTimeout(function() {
+            sincronizarSeleccionAutocomplete(celulaInput, celulaHidden, celulasDisponibles, celulaError, 'una célula');
+            limpiarListaAutocomplete(celulaAutocomplete);
+        }, 180);
+    });
+}
+
+if (liderInput && liderAutocomplete) {
+    liderInput.addEventListener('input', function() {
+        closeAllLists(liderAutocomplete);
+        actualizarAutocompleteCampo(
+            liderInput,
+            liderHidden,
+            lideresDisponibles,
+            liderAutocomplete,
+            liderError,
+            focusLiderState,
+            'No se encontraron líderes'
+        );
+        currentFocus = focusLiderState.value;
+    });
+
+    liderInput.addEventListener('focus', function() {
+        if (String(liderInput.value || '').trim() !== '') {
+            actualizarAutocompleteCampo(
+                liderInput,
+                liderHidden,
+                lideresDisponibles,
+                liderAutocomplete,
+                liderError,
+                focusLiderState,
+                'No se encontraron líderes'
+            );
+            currentFocus = focusLiderState.value;
+        }
+    });
+
+    liderInput.addEventListener('keydown', function(e) {
+        const items = obtenerItemsSeleccionables(liderAutocomplete);
+        if (e.keyCode === 40) {
+            e.preventDefault();
+            currentFocus = addActive(items, currentFocus + 1);
+        } else if (e.keyCode === 38) {
+            e.preventDefault();
+            currentFocus = addActive(items, currentFocus - 1);
+        } else if (e.keyCode === 13) {
+            e.preventDefault();
+            if (currentFocus > -1 && items[currentFocus]) {
+                items[currentFocus].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            }
+        } else if (e.keyCode === 27) {
+            closeAllLists();
+        }
+    });
+
+    liderInput.addEventListener('blur', function() {
+        setTimeout(function() {
+            if (liderInput.disabled) {
+                liderHidden.value = '';
+                limpiarCampoInvalido(liderInput, liderError);
+                limpiarListaAutocomplete(liderAutocomplete);
+                return;
+            }
+            sincronizarSeleccionAutocomplete(liderInput, liderHidden, lideresDisponibles, liderError, 'un líder');
+            limpiarListaAutocomplete(liderAutocomplete);
+        }, 180);
+    });
+}
 
 function addActive(items, focusIndex) {
-    if (!items) return false;
+    if (!items || !items.length) {
+        return -1;
+    }
     removeActive(items);
-    if (focusIndex >= items.length) focusIndex = 0;
-    if (focusIndex < 0) focusIndex = (items.length - 1);
-    items[focusIndex].classList.add('autocomplete-active');
+    if (focusIndex >= items.length) {
+        focusIndex = 0;
+    }
+    if (focusIndex < 0) {
+        focusIndex = items.length - 1;
+    }
+    if (items[focusIndex]) {
+        items[focusIndex].classList.add('autocomplete-active');
+        items[focusIndex].scrollIntoView({ block: 'nearest' });
+    }
+    return focusIndex;
 }
 
 function removeActive(items) {
@@ -1404,32 +1694,41 @@ function removeActive(items) {
     }
 }
 
-function closeAllLists(elmnt) {
+function closeAllLists(exceptLista) {
     const items = document.getElementsByClassName('autocomplete-items');
     for (let i = 0; i < items.length; i++) {
-        if (elmnt !== items[i] && elmnt !== liderInput && elmnt !== celulaInput) {
-            items[i].innerHTML = '';
+        if (exceptLista && items[i] === exceptLista) {
+            continue;
         }
+        limpiarListaAutocomplete(items[i]);
     }
 }
 
-// Cerrar al hacer click fuera
 document.addEventListener('click', function(e) {
-    if (e.target !== liderInput && e.target !== celulaInput) {
-        closeAllLists(e.target);
+    const enLider = liderInput && (e.target === liderInput || (liderAutocomplete && liderAutocomplete.contains(e.target)));
+    const enCelula = celulaInput && (e.target === celulaInput || (celulaAutocomplete && celulaAutocomplete.contains(e.target)));
+    if (!enLider && !enCelula) {
+        closeAllLists();
     }
 });
 
-liderInput.addEventListener('blur', function() {
-    setTimeout(() => {
-        if (liderInput.disabled) {
-            liderHidden.value = '';
-            limpiarCampoInvalido(liderInput, liderError);
-            return;
-        }
-        sincronizarSeleccionAutocomplete(liderInput, liderHidden, lideresDisponibles, liderError, 'un líder');
-    }, 200);
+window.addEventListener('resize', function() {
+    if (liderAutocomplete && liderAutocomplete.classList.contains('is-open')) {
+        posicionarListaAutocomplete(liderInput, liderAutocomplete);
+    }
+    if (celulaAutocomplete && celulaAutocomplete.classList.contains('is-open')) {
+        posicionarListaAutocomplete(celulaInput, celulaAutocomplete);
+    }
 });
+
+window.addEventListener('scroll', function() {
+    if (liderAutocomplete && liderAutocomplete.classList.contains('is-open')) {
+        posicionarListaAutocomplete(liderInput, liderAutocomplete);
+    }
+    if (celulaAutocomplete && celulaAutocomplete.classList.contains('is-open')) {
+        posicionarListaAutocomplete(celulaInput, celulaAutocomplete);
+    }
+}, true);
 
 if (personaForm) {
     personaForm.addEventListener('submit', function(e) {

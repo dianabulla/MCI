@@ -42,6 +42,19 @@ class HomeController extends BaseController {
         return $programa;
     }
 
+    private function normalizarProgramaAsistenciasConsolidar($programa) {
+        $programa = trim((string)$programa);
+        if ($programa === 'encuentro') {
+            return 'universidad_vida';
+        }
+
+        if (in_array($programa, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+            return $programa;
+        }
+
+        return $programa;
+    }
+
     private function responderMoverProgramaFormacion(
         bool $ok,
         string $returnUrl,
@@ -691,6 +704,10 @@ class HomeController extends BaseController {
 
         $inscripcionesPublicas = $this->filtrarInscripcionesPorNombreFlexible($inscripcionesPublicas, $filtroBuscar);
 
+        if ((string)($config['modulo'] ?? '') === 'consolidar') {
+            $inscripcionesPublicas = $this->enriquecerInscripcionesPublicasConPagos($inscripcionesPublicas, $programasConsulta);
+        }
+
         $rowsDetalle = [];
         $personasIncluidas = [];
         foreach ($inscripcionesPublicas as $ins) {
@@ -900,11 +917,16 @@ class HomeController extends BaseController {
         if ((string)($config['modulo'] ?? '') === 'discipular' && $filtroProgramaInscripcion === 'capacitacion_destino') {
             $filtroProgramaInscripcion = 'capacitacion_destino_nivel_1';
         }
+        $programasPermitidosAsistencias = $config['programas_permitidos'];
         if ((string)($config['modulo'] ?? '') === 'consolidar') {
-            $filtroProgramaInscripcion = $this->normalizarProgramaConsolidar($filtroProgramaInscripcion);
+            $filtroProgramaInscripcion = $this->normalizarProgramaAsistenciasConsolidar($filtroProgramaInscripcion);
+            $programasPermitidosAsistencias = array_values(array_unique(array_merge(
+                $programasPermitidosAsistencias,
+                ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3']
+            )));
         }
 
-        if ($filtroProgramaInscripcion === '' || !in_array($filtroProgramaInscripcion, $config['programas_permitidos'], true)) {
+        if ($filtroProgramaInscripcion === '' || !in_array($filtroProgramaInscripcion, $programasPermitidosAsistencias, true)) {
             $filtroProgramaInscripcion = $config['programa_default'];
         }
 
@@ -1107,6 +1129,16 @@ class HomeController extends BaseController {
             ];
         }
 
+        if ((string)($config['modulo'] ?? '') === 'consolidar') {
+            foreach (['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'] as $programaNivelCap) {
+                $tarjetasResumen[] = [
+                    'programa' => $programaNivelCap,
+                    'label' => $this->getProgramaEscuelaLabel($programaNivelCap),
+                    'total' => (int)($resumenInscripciones[$programaNivelCap] ?? 0),
+                ];
+            }
+        }
+
         return [
             'config_modulo' => $config,
             'vista_actual' => 'asistencias',
@@ -1136,7 +1168,7 @@ class HomeController extends BaseController {
             && !AuthController::puede('personas:ver')
             && !AuthController::tieneCoordinacionTotalProgramas()
             && !AuthController::puede('programas:exportar_consolidado')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -1154,6 +1186,10 @@ class HomeController extends BaseController {
     }
 
     public function index() {
+        if (AuthController::esPerfilServicioSocialTalleres()) {
+            $this->redirect('talleres/servicio-social');
+        }
+
         if (AuthController::esContextoMaestro() || AuthController::esVistaDiscipuloSimplificada()) {
             $this->redirect(AuthController::obtenerUrlInicioSesion());
         }
@@ -2270,7 +2306,9 @@ class HomeController extends BaseController {
                     MAX(CASE WHEN efi.Asistio_Clase = 1 THEN 1 ELSE 0 END) AS asistio_clase,
                     COALESCE(p.Id_Persona, efi.Id_Persona, 0) AS id_persona,
                     COALESCE(NULLIF(TRIM(m.Nombre_Ministerio), ''), 'Sin ministerio') AS ministerio,
-                    COALESCE(p.Id_Ministerio, 0) AS id_ministerio
+                    COALESCE(p.Id_Ministerio, 0) AS id_ministerio,
+                    MAX(efi.Id_Inscripcion) AS id_inscripcion,
+                    SUBSTRING_INDEX(GROUP_CONCAT(efi.Programa ORDER BY efi.Id_Inscripcion DESC SEPARATOR '|'), '|', 1) AS programa
                 FROM escuela_formacion_inscripcion efi
                 LEFT JOIN persona p ON p.Id_Persona = efi.Id_Persona
                 LEFT JOIN ministerio m ON m.Id_Ministerio = p.Id_Ministerio
@@ -2291,6 +2329,8 @@ class HomeController extends BaseController {
 
             return [
                 'id_persona' => (int)($row['id_persona'] ?? 0),
+                'id_inscripcion' => (int)($row['id_inscripcion'] ?? 0),
+                'programa' => trim((string)($row['programa'] ?? '')),
                 'nombre' => $nombre,
                 'cedula' => trim((string)($row['cedula'] ?? '')),
                 'telefono' => trim((string)($row['telefono'] ?? '')),
@@ -2298,8 +2338,91 @@ class HomeController extends BaseController {
                 'asistio_clase' => (int)($row['asistio_clase'] ?? 0) === 1,
                 'ministerio' => trim((string)($row['ministerio'] ?? 'Sin ministerio')),
                 'id_ministerio' => (int)($row['id_ministerio'] ?? 0),
+                'total_pagado' => 0.0,
+                'registros_pago' => 0,
+                'tiene_pago_registrado' => false,
             ];
         }, $rows)));
+    }
+
+    private function programaPagosCapacitacionDestinoPorNivel(int $nivel): string {
+        $nivel = max(1, min(3, $nivel));
+        return 'capacitacion_destino_nivel_' . $nivel;
+    }
+
+    private function construirMapaPagosInscripciones(array $resumenPagos): array {
+        $mapa = [];
+        foreach ($resumenPagos as $filaPago) {
+            $entry = [
+                'total_pagado' => (float)($filaPago['Total_Pagado'] ?? 0),
+                'registros_pago' => (int)($filaPago['Registros_Pago'] ?? 0),
+            ];
+            $cedula = trim((string)($filaPago['Cedula'] ?? ''));
+            $clave = trim((string)($filaPago['Cedula_Clave'] ?? ''));
+            if ($clave !== '') {
+                $mapa[$clave] = $entry;
+            }
+            if ($cedula !== '') {
+                $mapa[$cedula] = $entry;
+                $digitos = preg_replace('/\D+/', '', $cedula);
+                if ($digitos !== '') {
+                    $mapa[$digitos] = $entry;
+                }
+            }
+            if (preg_match('/SIN-CEDULA-(\d+)$/i', $clave, $coincidenciaId)) {
+                $mapa['SIN-CEDULA-' . (int)$coincidenciaId[1]] = $entry;
+            }
+        }
+        return $mapa;
+    }
+
+    private function buscarPagoInscripcionEnMapa(array $mapa, array $inscripcion): array {
+        $default = ['total_pagado' => 0.0, 'registros_pago' => 0];
+        $cedula = trim((string)($inscripcion['Cedula'] ?? ''));
+        $idPersona = (int)($inscripcion['Id_Persona'] ?? 0);
+        $claves = array_filter([
+            $cedula,
+            preg_replace('/\D+/', '', $cedula),
+            $idPersona > 0 ? 'SIN-CEDULA-' . $idPersona : '',
+        ], static function ($clave) {
+            return trim((string)$clave) !== '';
+        });
+        foreach ($claves as $clave) {
+            if (isset($mapa[$clave])) {
+                return $mapa[$clave];
+            }
+        }
+        return $default;
+    }
+
+    private function enriquecerInscripcionesPublicasConPagos(array $inscripciones, array $programasConsulta): array {
+        if ($inscripciones === [] || $programasConsulta === []) {
+            return $inscripciones;
+        }
+
+        require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+        $inscripcionModel = new EscuelaFormacionInscripcion();
+        $mapasPorPrograma = [];
+        foreach ($programasConsulta as $programaConsulta) {
+            $mapasPorPrograma[$programaConsulta] = $this->construirMapaPagosInscripciones(
+                $inscripcionModel->getResumenPagosAbonos('', 2500, (string)$programaConsulta)
+            );
+        }
+
+        foreach ($inscripciones as &$inscripcion) {
+            $programaIns = trim((string)($inscripcion['Programa'] ?? ''));
+            if ($programaIns === 'capacitacion_destino') {
+                $programaIns = 'capacitacion_destino_nivel_1';
+            }
+            $mapa = $mapasPorPrograma[$programaIns] ?? [];
+            $pago = $this->buscarPagoInscripcionEnMapa($mapa, $inscripcion);
+            $inscripcion['total_pagado'] = (float)$pago['total_pagado'];
+            $inscripcion['registros_pago'] = (int)$pago['registros_pago'];
+            $inscripcion['tiene_pago_registrado'] = $inscripcion['total_pagado'] > 0 || $inscripcion['registros_pago'] > 0;
+        }
+        unset($inscripcion);
+
+        return $inscripciones;
     }
 
     private function obtenerDirectorioTareasMaterialHub(string $modulo): string {
@@ -3279,7 +3402,7 @@ class HomeController extends BaseController {
         });
 
         if (empty($modulosVisibles)) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -3655,9 +3778,12 @@ class HomeController extends BaseController {
             if ($capModuloVista > 0 && !in_array($capModuloVista, $modulosNivelVista, true)) {
                 $capModuloVista = 0;
             }
-            // Hub Cap. Destino: sin cap_modulo → pantalla de selección (no auto-elegir el primero).
-            if ($capModuloVista <= 0 && !$usaFlujoCapHub) {
-                $capModuloVista = (int)($modulosNivelVista[0] ?? 0);
+            if ($capModuloVista <= 0) {
+                $capSeccionDirecta = strtolower(trim((string)($_GET['cap_seccion'] ?? $_GET['cap_academico'] ?? '')));
+                $entrarDirectoAcademico = in_array($capSeccionDirecta, ['inscritos', 'tareas'], true);
+                if (!$usaFlujoCapHub || $entrarDirectoAcademico) {
+                    $capModuloVista = (int)($modulosNivelVista[0] ?? 0);
+                }
             }
         } else {
             $capModuloVista = 0;
@@ -3671,7 +3797,7 @@ class HomeController extends BaseController {
 
         if ((string)($modulo['clave'] ?? '') === 'capacitacion_destino' && $capNivelVista > 0) {
             $inscritosCapNivel = $this->obtenerInscritosCapacitacionDestinoPorNivel($capNivelVista);
-            
+
             // Ordenar alfabéticamente por nombre
             usort($inscritosCapNivel, function($a, $b) {
                 return strcasecmp(
@@ -3901,7 +4027,7 @@ class HomeController extends BaseController {
         }
 
         if (!AuthController::puedeVerCentroMaterial()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -3911,7 +4037,7 @@ class HomeController extends BaseController {
         });
 
         if (empty($modulosVisibles)) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -3964,7 +4090,7 @@ class HomeController extends BaseController {
         $archivo = basename((string)($_GET['archivo'] ?? ''));
 
         if (!isset($modulos[$moduloClave]) || !$this->puedeVerModuloMaterial($modulos[$moduloClave])) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -4224,7 +4350,7 @@ class HomeController extends BaseController {
                 'icono' => 'bi bi-signpost-split-fill',
                 'gradiente' => 'linear-gradient(135deg, #7a4e08 0%, #c8881e 100%)',
                 'consolidar_url' => 'programas/consolidar&insc_programa=capacitacion_destino',
-                'asistencias_url' => '',
+                'asistencias_url' => 'home/material/capacitacion-destino&cap_nivel=1&cap_seccion=inscritos',
                 'dashboard_url' => 'reportes/dashboard-escuelas-capacitacion',
                 'pagos_url' => 'escuelas_formacion/pagos/enviar',
                 'formulario_url' => 'escuelas_formacion/registro-publico/capacitacion-destino',
@@ -4266,7 +4392,7 @@ class HomeController extends BaseController {
 
     private function renderProgramasLanding(): void {
         if (!$this->puedeVerProgramas()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -4297,7 +4423,7 @@ class HomeController extends BaseController {
 
     private function renderProgramasRegistro(): void {
         if (!$this->puedeVerProgramas()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -4320,38 +4446,46 @@ class HomeController extends BaseController {
 
     private function renderProgramasAsistencias(): void {
         require_once APP . '/Helpers/PermisosProgramasAccess.php';
-        if (!PermisosProgramasAccess::puedeVerAsistenciasUniversidadVida()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
-            exit;
-        }
 
         $this->aplicarRestriccionProgramaConsolidarEnRequest();
 
-        $programaSolicitado = $this->normalizarProgramaConsolidar((string)($_GET['insc_programa'] ?? 'universidad_vida'));
+        $inscProgramaRaw = trim((string)($_GET['insc_programa'] ?? 'universidad_vida'));
+        $programaSolicitado = $this->normalizarProgramaConsolidar($inscProgramaRaw);
         if ($programaSolicitado === 'capacitacion_destino') {
-            $this->redirect('programas/consolidar&insc_programa=capacitacion_destino&tipo=info&mensaje=' . urlencode('La vista de asistencias no aplica para Capacitacion Destino.'));
-            return;
+            if (!PermisosProgramasAccess::puedeVerAsistenciasCapacitacionDestino()) {
+                header('Location: ' . public_app_url('auth/acceso-denegado'));
+                exit;
+            }
+
+            $nivelCap = (int)($_GET['cap_nivel'] ?? 0);
+            if ($nivelCap < 1 || $nivelCap > 3) {
+                if (preg_match('/capacitacion_destino_nivel_(\d+)/', $inscProgramaRaw, $mNivelCap)) {
+                    $nivelCap = (int)($mNivelCap[1] ?? 1);
+                } else {
+                    $nivelCap = 1;
+                }
+            }
+            $moduloCap = max(0, (int)($_GET['cap_modulo'] ?? 0));
+            $destinoCap = 'home/material/capacitacion-destino&cap_nivel=' . $nivelCap . '&cap_seccion=inscritos';
+            if ($moduloCap > 0) {
+                $destinoCap .= '&cap_modulo=' . $moduloCap;
+            }
+            header('Location: ' . PUBLIC_URL . '?url=' . $destinoCap);
+            exit;
         }
 
-        $data = $this->obtenerDatosModuloFormacionAsistencias('consolidar');
-        $data['config_modulo']['titulo'] = 'Programas';
-        $data['config_modulo']['ruta_base'] = 'programas/consolidar';
-        $data['config_modulo']['ruta_asistencias'] = 'programas/consolidar/asistencias';
-        $data['config_modulo']['ruta_exportar'] = 'programas/consolidar/exportar';
-        $programaActivo = (string)($data['programa_reporte'] ?? 'universidad_vida');
-        if (in_array($programaActivo, ['capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
-            $programaActivo = 'capacitacion_destino';
+        if (!PermisosProgramasAccess::puedeVerAsistenciasUniversidadVida()) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
         }
-        $programaUnico = in_array($programaActivo, ['universidad_vida', 'capacitacion_destino'], true) ? $programaActivo : null;
-        $data['programas_tabs'] = $this->construirTabsProgramas($programaActivo, true, $programaUnico);
 
-        $this->view('programas/asistencias', $data);
+        $this->view('programas/asistencias', []);
     }
 
     private function exportarProgramasConsolidar(): void {
         require_once APP . '/Helpers/PermisosProgramasAccess.php';
         if (!PermisosProgramasAccess::puedeExportarConsolidado()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -4372,11 +4506,11 @@ class HomeController extends BaseController {
         require_once APP . '/Helpers/PermisosProgramasAccess.php';
         $linea = $this->normalizarProgramaConsolidar((string)($_GET['insc_programa'] ?? 'universidad_vida'));
         if ($linea === 'universidad_vida' && !PermisosProgramasAccess::puedeVerLineaUniversidadVida()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         if ($linea === 'capacitacion_destino' && !PermisosProgramasAccess::puedeVerLineaCapacitacionDestino()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         $this->renderProgramasRegistro();
@@ -4447,7 +4581,12 @@ class HomeController extends BaseController {
 
     private function puedeMarcarAsistenciaProgramaEscuelasFormacion(string $programa): bool {
         if ($this->esProgramaCapacitacionDestino($programa)) {
-            return false;
+            require_once APP . '/Helpers/PermisosProgramasAccess.php';
+            if (!PermisosProgramasAccess::puedeVerAsistenciasCapacitacionDestino()) {
+                return false;
+            }
+
+            return $this->puedeMarcarAsistenciaEscuelasFormacion();
         }
 
         return $this->puedeMarcarAsistenciaEscuelasFormacion();
@@ -4832,6 +4971,16 @@ class HomeController extends BaseController {
         $asistenciaModel = new EscuelaFormacionAsistenciaClase();
         $ok = $asistenciaModel->upsertAsistencia($idPersona, $modulo, $programa, $clase, $asistio);
 
+        if ($ok) {
+            require_once APP . '/Helpers/EscaleraAsistenciaSync.php';
+            $sync = new EscaleraAsistenciaSync();
+            if ($modulo === 'consolidar' && in_array($programa, ['universidad_vida', 'bautismo'], true)) {
+                $sync->afterGuardarAsistencia($idPersona, $modulo, $programa);
+            } elseif ($programa === 'capacitacion_destino' && preg_match('/^modulo_(\d+)$/', $modulo)) {
+                $sync->afterGuardarAsistencia($idPersona, $modulo, $programa);
+            }
+        }
+
         $this->json([
             'ok' => (bool)$ok,
             'id_persona' => $idPersona,
@@ -4887,7 +5036,7 @@ class HomeController extends BaseController {
         require_once APP . '/Helpers/DataIsolation.php';
 
         if (!AuthController::esAdministrador() && !AuthController::puede('personas:ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 

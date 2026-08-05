@@ -5,6 +5,7 @@
 
 require_once APP . '/Models/Rol.php';
 require_once APP . '/Controllers/AuthController.php';
+require_once APP . '/Helpers/PermisosRolService.php';
 
 class RolController extends BaseController {
     private $rolModel;
@@ -15,7 +16,7 @@ class RolController extends BaseController {
 
     public function index() {
         if (!AuthController::puede('roles:ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -25,7 +26,7 @@ class RolController extends BaseController {
 
     public function exportarExcel() {
         if (!AuthController::puede('roles:ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -50,7 +51,7 @@ class RolController extends BaseController {
     public function crear() {
         // Verificar permiso de crear
         if (!AuthController::puede('roles:crear')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         
@@ -60,7 +61,10 @@ class RolController extends BaseController {
                 'Descripcion' => $_POST['descripcion']
             ];
             
-            $this->rolModel->create($data);
+            $idNuevoRol = (int)$this->rolModel->create($data);
+            if ($idNuevoRol > 0) {
+                PermisosRolService::inicializarMatrizDenegada($idNuevoRol);
+            }
             $this->redirect('roles');
         } else {
             $this->view('roles/formulario');
@@ -70,7 +74,7 @@ class RolController extends BaseController {
     public function editar() {
         // Verificar permiso de editar
         if (!AuthController::puede('roles:editar')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         
@@ -99,7 +103,7 @@ class RolController extends BaseController {
     public function eliminar() {
         // Verificar permiso de eliminar
         if (!AuthController::puede('roles:eliminar')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         

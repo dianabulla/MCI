@@ -167,7 +167,7 @@ class EventoController extends BaseController {
 
     private function renderModuloContenido($tipo) {
         if (!AuthController::puede('eventos:ver') && !AuthController::esAdministrador()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -199,6 +199,8 @@ class EventoController extends BaseController {
 
         $error = $_SESSION['evento_modulo_error'] ?? null;
         unset($_SESSION['evento_modulo_error']);
+        $ok = $_SESSION['evento_modulo_ok'] ?? null;
+        unset($_SESSION['evento_modulo_ok']);
 
         $this->view('eventos/modulo_contenido', [
             'modulo' => $config,
@@ -206,13 +208,14 @@ class EventoController extends BaseController {
             'itemEditar' => $itemEditar,
             'urlPublica' => $urlPublica,
             'qrUrl' => $qrUrl,
-            'error' => $error
+            'error' => $error,
+            'ok' => $ok,
         ]);
     }
 
     public function index() {
         if (!AuthController::puede('eventos:ver') && !AuthController::esAdministrador()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -239,7 +242,7 @@ class EventoController extends BaseController {
 
     public function exportarExcel() {
         if (!AuthController::puede('eventos:ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -266,7 +269,7 @@ class EventoController extends BaseController {
 
     public function crear() {
         if (!AuthController::puede('eventos:crear')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         
@@ -301,7 +304,7 @@ class EventoController extends BaseController {
 
     public function editar() {
         if (!AuthController::puede('eventos:editar')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         
@@ -373,7 +376,7 @@ class EventoController extends BaseController {
 
     public function eliminar() {
         if (!AuthController::puede('eventos:eliminar')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         
@@ -469,7 +472,7 @@ class EventoController extends BaseController {
 
     public function guardarModuloContenido() {
         if (!$this->puedeGestionarContenidoPublicoEventos()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -486,10 +489,15 @@ class EventoController extends BaseController {
         }
 
         $idContenido = (int)($_POST['id_contenido'] ?? 0);
+        $imagenesSubidas = ['guardados' => [], 'errores' => []];
 
         try {
-            $nuevaImagen = $this->procesarArchivo('imagen_modulo', ['jpg', 'jpeg', 'png', 'webp', 'gif'], self::MAX_IMAGE_UPLOAD_BYTES);
+            $imagenesSubidas = $this->procesarArchivosMultiples('imagen_modulo', ['jpg', 'jpeg', 'png', 'webp', 'gif'], self::MAX_IMAGE_UPLOAD_BYTES);
             $nuevoVideo = $this->procesarArchivo('video_modulo', ['mp4', 'webm', 'mov', 'm4v'], self::MAX_VIDEO_UPLOAD_BYTES);
+
+            if ($imagenesSubidas['errores'] !== []) {
+                throw new Exception(implode(' ', $imagenesSubidas['errores']));
+            }
 
             $data = [
                 'Tipo_Modulo' => $config['tipo'],
@@ -513,7 +521,16 @@ class EventoController extends BaseController {
                 throw new Exception('Título y párrafo son obligatorios.');
             }
 
+            $listaImagenes = $imagenesSubidas['guardados'];
+            $nuevaImagen = $listaImagenes[0] ?? null;
+
             if ($idContenido > 0) {
+                if (count($listaImagenes) > 1) {
+                    for ($i = 1, $n = count($listaImagenes); $i < $n; $i++) {
+                        $this->eliminarArchivoFisico($listaImagenes[$i]);
+                    }
+                }
+
                 $actual = $this->eventoModuloModel->getById($idContenido);
                 if (empty($actual) || (string)($actual['Tipo_Modulo'] ?? '') !== $config['tipo']) {
                     throw new Exception('Contenido no válido para este módulo.');
@@ -543,21 +560,121 @@ class EventoController extends BaseController {
                 }
 
                 $this->eventoModuloModel->update($idContenido, $data);
+            } elseif (count($listaImagenes) > 1) {
+                $ordenBase = $data['Orden'];
+                foreach ($listaImagenes as $idx => $nombreImagen) {
+                    $fila = $data;
+                    $fila['Imagen'] = $nombreImagen;
+                    $fila['Video'] = $idx === 0 ? $nuevoVideo : null;
+                    if ($idx > 0) {
+                        $fila['Titulo'] = $data['Titulo'] . ' (' . ($idx + 1) . ')';
+                        $fila['Orden'] = $ordenBase + $idx;
+                    }
+                    $this->eventoModuloModel->create($fila);
+                }
+                $_SESSION['evento_modulo_ok'] = count($listaImagenes) . ' imágenes cargadas correctamente.';
             } else {
                 $data['Imagen'] = $nuevaImagen;
                 $data['Video'] = $nuevoVideo;
                 $this->eventoModuloModel->create($data);
             }
         } catch (Exception $e) {
+            foreach ($imagenesSubidas['guardados'] ?? [] as $archivoSubido) {
+                $this->eliminarArchivoFisico($archivoSubido);
+            }
             $_SESSION['evento_modulo_error'] = $e->getMessage();
         }
 
         $this->redirigirModulo($config['tipo']);
     }
 
+    public function guardarModuloContenidoMasivo() {
+        if (!$this->puedeGestionarContenidoPublicoEventos()) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('eventos');
+            return;
+        }
+
+        $tipo = (string)($_POST['tipo_modulo'] ?? '');
+        $config = $this->getModuloConfig($tipo);
+        if (!$config) {
+            $this->redirect('eventos');
+            return;
+        }
+
+        $imagenesSubidas = ['guardados' => [], 'errores' => []];
+
+        try {
+            $parrafo = trim((string)($_POST['parrafo_masivo'] ?? ''));
+            $tituloBase = trim((string)($_POST['titulo_masivo'] ?? ''));
+            $ordenBase = max(0, (int)($_POST['orden_masivo'] ?? 0));
+            $estadoActivo = !empty($_POST['estado_activo_masivo']) ? 1 : 0;
+            $fechaDesde = trim((string)($_POST['fecha_publicacion_desde_masivo'] ?? ''));
+            $fechaHasta = trim((string)($_POST['fecha_publicacion_hasta_masivo'] ?? ''));
+
+            if ($parrafo === '') {
+                throw new Exception('Indica un párrafo base para las imágenes masivas.');
+            }
+
+            $imagenesSubidas = $this->procesarArchivosMultiples('imagenes_masivas', ['jpg', 'jpeg', 'png', 'webp', 'gif'], self::MAX_IMAGE_UPLOAD_BYTES);
+            if ($imagenesSubidas['errores'] !== []) {
+                throw new Exception(implode(' ', $imagenesSubidas['errores']));
+            }
+            if ($imagenesSubidas['guardados'] === []) {
+                throw new Exception('Selecciona al menos una imagen para la carga masiva.');
+            }
+
+            if ($fechaDesde !== '' && $fechaHasta !== '' && $fechaDesde > $fechaHasta) {
+                throw new Exception('La fecha de publicación desde no puede ser mayor que hasta.');
+            }
+
+            $creados = 0;
+            foreach ($imagenesSubidas['guardados'] as $idx => $nombreImagen) {
+                $titulo = $tituloBase !== ''
+                    ? ($tituloBase . (count($imagenesSubidas['guardados']) > 1 ? ' ' . ($idx + 1) : ''))
+                    : $this->tituloDesdeNombreArchivo($nombreImagen, $idx);
+
+                $this->eventoModuloModel->create([
+                    'Tipo_Modulo' => $config['tipo'],
+                    'Titulo' => $titulo,
+                    'Parrafo' => $parrafo,
+                    'Imagen' => $nombreImagen,
+                    'Video' => null,
+                    'Orden' => $ordenBase + $idx,
+                    'Estado_Activo' => $estadoActivo,
+                    'Fecha_Publicacion_Desde' => $fechaDesde !== '' ? $fechaDesde : null,
+                    'Fecha_Publicacion_Hasta' => $fechaHasta !== '' ? $fechaHasta : null,
+                ]);
+                $creados++;
+            }
+
+            $_SESSION['evento_modulo_ok'] = $creados . ' imagen(es) subida(s) correctamente en carga masiva.';
+        } catch (Exception $e) {
+            foreach ($imagenesSubidas['guardados'] as $archivoSubido) {
+                $this->eliminarArchivoFisico($archivoSubido);
+            }
+            $_SESSION['evento_modulo_error'] = $e->getMessage();
+        }
+
+        $this->redirigirModulo($config['tipo']);
+    }
+
+    private function tituloDesdeNombreArchivo(string $nombreArchivo, int $indice = 0): string {
+        $base = pathinfo(basename($nombreArchivo), PATHINFO_FILENAME);
+        $base = trim(preg_replace('/[_-]+/', ' ', (string)$base) ?? '');
+        if ($base === '') {
+            $base = 'Imagen ' . ($indice + 1);
+        }
+        return mb_substr($base, 0, 180);
+    }
+
     public function duplicarModuloContenido() {
         if (!$this->puedeGestionarContenidoPublicoEventos()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -581,7 +698,7 @@ class EventoController extends BaseController {
 
     public function eliminarModuloContenido() {
         if (!AuthController::puede('eventos:eliminar') && !$this->puedeGestionarContenidoPublicoEventos()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -664,13 +781,86 @@ class EventoController extends BaseController {
     }
 
     private function procesarArchivo($campo, $extensionesPermitidas, $maxBytes) {
-        if (!isset($_FILES[$campo]) || !is_array($_FILES[$campo])) {
-            return null;
+        $resultado = $this->procesarArchivosMultiples($campo, $extensionesPermitidas, $maxBytes);
+        if ($resultado['errores'] !== []) {
+            throw new Exception($resultado['errores'][0]);
         }
 
-        $archivo = $_FILES[$campo];
+        return $resultado['guardados'][0] ?? null;
+    }
 
-        if (($archivo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+    /**
+     * @return array{guardados:array<int,string>,errores:array<int,string>}
+     */
+    private function procesarArchivosMultiples($campo, $extensionesPermitidas, $maxBytes) {
+        $archivos = $this->normalizarArchivosMultiples($campo);
+        if ($archivos === []) {
+            return ['guardados' => [], 'errores' => []];
+        }
+
+        $guardados = [];
+        $errores = [];
+
+        foreach ($archivos as $archivo) {
+            $nombreOriginal = trim((string)($archivo['name'] ?? ''));
+            try {
+                $nombre = $this->procesarUnArchivoSubido($archivo, $extensionesPermitidas, $maxBytes);
+                if ($nombre !== null) {
+                    $guardados[] = $nombre;
+                }
+            } catch (Exception $e) {
+                $errores[] = ($nombreOriginal !== '' ? '«' . $nombreOriginal . '»: ' : '') . $e->getMessage();
+            }
+        }
+
+        return ['guardados' => $guardados, 'errores' => $errores];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizarArchivosMultiples($campo) {
+        if (!isset($_FILES[$campo]) || !is_array($_FILES[$campo])) {
+            return [];
+        }
+
+        $input = $_FILES[$campo];
+        if (!isset($input['name'])) {
+            return [];
+        }
+
+        if (!is_array($input['name'])) {
+            if ((int)($input['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                return [];
+            }
+            return [$input];
+        }
+
+        $out = [];
+        foreach ($input['name'] as $i => $name) {
+            if ((int)($input['error'][$i] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                continue;
+            }
+            $out[] = [
+                'name' => $name,
+                'type' => $input['type'][$i] ?? '',
+                'tmp_name' => $input['tmp_name'][$i] ?? '',
+                'error' => $input['error'][$i] ?? UPLOAD_ERR_NO_FILE,
+                'size' => $input['size'][$i] ?? 0,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<string, mixed> $archivo
+     */
+    private function procesarUnArchivoSubido(array $archivo, $extensionesPermitidas, $maxBytes) {
+        $nombreOriginal = trim((string)($archivo['name'] ?? ''));
+        $etiqueta = $nombreOriginal !== '' ? $nombreOriginal : 'archivo';
+
+        if (($archivo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE || $nombreOriginal === '') {
             return null;
         }
 
@@ -681,27 +871,27 @@ class EventoController extends BaseController {
 
             if ($errorUpload === UPLOAD_ERR_INI_SIZE || $errorUpload === UPLOAD_ERR_FORM_SIZE) {
                 if ($limiteServidorTexto !== null) {
-                    throw new Exception('El archivo de ' . str_replace('_', ' ', $campo) . ' supera el límite del servidor (' . $limiteServidorTexto . ').');
+                    throw new Exception('«' . $etiqueta . '» supera el límite del servidor (' . $limiteServidorTexto . ').');
                 }
 
-                throw new Exception('El archivo de ' . str_replace('_', ' ', $campo) . ' supera el límite del servidor.');
+                throw new Exception('«' . $etiqueta . '» supera el límite del servidor.');
             }
 
             if ($errorUpload === UPLOAD_ERR_PARTIAL) {
-                throw new Exception('La carga del archivo de ' . str_replace('_', ' ', $campo) . ' quedó incompleta. Intenta nuevamente.');
+                throw new Exception('La carga de «' . $etiqueta . '» quedó incompleta. Intenta nuevamente.');
             }
 
-            throw new Exception('No se pudo subir el archivo de ' . str_replace('_', ' ', $campo) . '.');
+            throw new Exception('No se pudo subir «' . $etiqueta . '».');
         }
 
         $tamano = (int)($archivo['size'] ?? 0);
         if ($tamano <= 0 || $tamano > $maxBytes) {
-            throw new Exception('El archivo de ' . str_replace('_', ' ', $campo) . ' supera el tamaño permitido (' . $this->formatBytes((int)$maxBytes) . ').');
+            throw new Exception('«' . $etiqueta . '» supera el tamaño permitido (' . $this->formatBytes((int)$maxBytes) . ').');
         }
 
-        $extension = strtolower(pathinfo((string)($archivo['name'] ?? ''), PATHINFO_EXTENSION));
+        $extension = strtolower(pathinfo($nombreOriginal, PATHINFO_EXTENSION));
         if (!in_array($extension, $extensionesPermitidas, true)) {
-            throw new Exception('Formato no permitido para ' . str_replace('_', ' ', $campo) . '.');
+            throw new Exception('Formato no permitido para «' . $etiqueta . '».');
         }
 
         if (!is_dir($this->uploadDir) && !mkdir($this->uploadDir, 0755, true) && !is_dir($this->uploadDir)) {
@@ -711,8 +901,8 @@ class EventoController extends BaseController {
         $nombre = date('YmdHis') . '_' . bin2hex(random_bytes(6)) . '.' . $extension;
         $destino = $this->uploadDir . '/' . $nombre;
 
-        if (!move_uploaded_file($archivo['tmp_name'], $destino)) {
-            throw new Exception('No se pudo guardar el archivo subido.');
+        if (!move_uploaded_file((string)($archivo['tmp_name'] ?? ''), $destino)) {
+            throw new Exception('No se pudo guardar «' . $etiqueta . '».');
         }
 
         return $nombre;

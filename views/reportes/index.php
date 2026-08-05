@@ -1,6 +1,7 @@
 <?php include VIEWS . '/layout/header.php'; ?>
-
 <?php
+require_once APP . '/Helpers/DashboardSelector.php';
+
 $procesoGanar = $proceso_ganar ?? [
     'Ganar' => 0,
     'Consolidar' => 0,
@@ -459,11 +460,22 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 
 <div class="page-header report-page-header report-shell-head">
     <div>
-        <h2>Reportes</h2>
+        <h2><?= $esReporteCelulas ? 'Dashboard · Células' : 'Reportes' ?></h2>
         <small class="report-shell-subtitle"><?= htmlspecialchars($tituloReporte) ?> · Vista tipo panel</small>
     </div>
 
-    <div class="report-shell-actions">
+    <div class="report-shell-actions" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+        <?php if ($esReporteCelulas): ?>
+            <?php
+            DashboardSelector::incluirPartial([
+                'activo' => 'celulas',
+                'params' => [
+                    'ministerio' => (string)($filtro_ministerio ?? ''),
+                    'lider' => (string)($filtro_lider ?? ''),
+                ],
+            ]);
+            ?>
+        <?php endif; ?>
         <span class="report-shell-date"><?= htmlspecialchars($fechaBadgeReporte) ?></span>
     </div>
 
@@ -475,8 +487,18 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 </div>
 
 <div class="card report-card report-toolbar-card" style="margin-bottom: 18px; padding: 14px;">
-    <div class="report-toolbar-actions">
-        <a href="<?= PUBLIC_URL ?>index.php?url=reportes/dashboard-ganar" class="btn btn-primary" title="Abrir dashboard de Ganar">Dashboard Ganar</a>
+    <div class="report-toolbar-actions" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <?php if (!$esReporteCelulas): ?>
+            <?php
+            DashboardSelector::incluirPartial([
+                'activo' => DashboardSelector::detectarActivo(),
+                'params' => [
+                    'ministerio' => (string)($filtro_ministerio ?? ''),
+                    'lider' => (string)($filtro_lider ?? ''),
+                ],
+            ]);
+            ?>
+        <?php endif; ?>
         <a href="<?= PUBLIC_URL ?>index.php?url=reportes&tipo=<?= urlencode($tipoReporte) ?>" class="report-icon-btn" title="Refrescar">☁</a>
     </div>
 </div>
@@ -488,14 +510,9 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 
         <div class="form-group report-date-group" style="margin: 0;">
             <label for="fecha_referencia">Semana a consultar (lun. a dom.)</label>
-            <input type="date" id="fecha_referencia" name="fecha_referencia" class="form-control" value="<?= htmlspecialchars((string)$fecha_referencia) ?>" <?= $semanaVencidaPorDefecto ? '' : 'required' ?>>
+            <input type="date" id="fecha_referencia" name="fecha_referencia" class="form-control" value="<?= htmlspecialchars((string)$fecha_referencia) ?>" required>
             <small style="color:#637087;">
-                <?php if ($semanaVencidaPorDefecto): ?>
-                    Semana vencida (por defecto): <?= date('d/m/Y', strtotime($fecha_inicio)) ?> – <?= date('d/m/Y', strtotime($fecha_fin)) ?>.
-                    Elige cualquier día de otra semana y pulsa Aplicar.
-                <?php else: ?>
-                    Rango aplicado: <?= date('d/m/Y', strtotime($fecha_inicio)) ?> – <?= date('d/m/Y', strtotime($fecha_fin)) ?> (según el día elegido).
-                <?php endif; ?>
+                Rango aplicado: <?= date('d/m/Y', strtotime($fecha_inicio)) ?> – <?= date('d/m/Y', strtotime($fecha_fin)) ?> (lun. a dom. según el día elegido).
             </small>
         </div>
 
@@ -562,7 +579,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </button>
     <button type="button" class="report-kpi-card report-kpi-button kpi-escalera js-kpi-detalle" data-origen="todos">
         <div class="report-kpi-icon">📊</div>
-        <div class="report-kpi-label">Total ganados (semana vencida)</div>
+        <div class="report-kpi-label">Total ganados (semana consultada)</div>
         <div class="report-kpi-value"><?= (int)($resumenOrigen['Total'] ?? 0) ?></div>
     </button>
     <button type="button" class="report-kpi-card report-kpi-button kpi-celula js-kpi-detalle" data-origen="hombres_anio">
@@ -935,9 +952,22 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:6px;">
         <div>
             <h3 style="margin-bottom:4px;">Seguimiento de líderes por ministerio</h3>
-            <small style="color:#60708a;">Semanas sin registrar célula en <?= (int)substr((string)($fecha_referencia ?? date('Y-m-d')), 0, 4) ?> (ordenado de mayor a menor)</small>
+            <small style="color:#60708a;">Semanas sin registrar célula en <?= (int)substr((string)($fecha_referencia ?? date('Y-m-d')), 0, 4) ?> · Por defecto solo células con 2+ semanas sin reporte</small>
+            <small style="display:block; color:#64748b; margin-top:4px; font-size:11px;">
+                <span class="seg-cel-leyenda seg-cel-verde">Verde</span> al día (0–1 sem.)
+                · <span class="seg-cel-leyenda seg-cel-naranja">Naranja</span> atención (2–3 sem.)
+                · <span class="seg-cel-leyenda seg-cel-rojo">Rojo</span> crítico (4+ sem.)
+            </small>
         </div>
         <div class="report-table-filters">
+            <label for="reporteCelulasFiltroColorSeguimiento">Estado</label>
+            <select id="reporteCelulasFiltroColorSeguimiento" class="report-select-ministerio">
+                <option value="seguimiento" selected>Requieren seguimiento (≥2 sem.)</option>
+                <option value="rojo">Crítico (rojo)</option>
+                <option value="naranja">Atención (naranja)</option>
+                <option value="verde">Al día (verde)</option>
+                <option value="todos">Todos</option>
+            </select>
             <label for="reporteCelulasFiltroMinisterioSeguimiento">Ministerio</label>
             <select id="reporteCelulasFiltroMinisterioSeguimiento" class="report-select-ministerio">
                 <option value="">Todos</option>
@@ -956,30 +986,48 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </div>
 
     <div class="table-container" style="margin-top:0;">
-        <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas" id="tablaSeguimientoCelulas">
+        <div class="report-table-export-bar">
+            <button type="button" class="btn btn-secondary btn-sm js-export-tabla-celulas-imagen" data-tabla-id="tablaSeguimientoCelulas">Descargar tabla como imagen</button>
+        </div>
+        <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas table-no-card" id="tablaSeguimientoCelulas">
             <thead>
                 <tr>
                     <th>Ministerio</th>
                     <th>Célula</th>
                     <th>Último reporte</th>
                     <th style="width:160px;">Semanas sin registrar</th>
+                    <th style="width:100px;">Estado</th>
                 </tr>
             </thead>
             <tbody id="tablaSeguimientoCelulasBody">
                 <?php if (!empty($tablaSeguimientoLideresCelula)): ?>
                     <?php foreach ($tablaSeguimientoLideresCelula as $filaSeguimiento): ?>
-                        <tr data-row-type="dato" data-ministerio="<?= htmlspecialchars((string)($filaSeguimiento['ministerio'] ?? 'Sin ministerio'), ENT_QUOTES, 'UTF-8') ?>" data-red="<?= htmlspecialchars((string)($filaSeguimiento['red'] ?? 'Sin red'), ENT_QUOTES, 'UTF-8') ?>">
+                        <?php
+                        $semSeg = (int)($filaSeguimiento['semanas_sin_registrar'] ?? 0);
+                        $semSemaforo = (string)($filaSeguimiento['semaforo'] ?? 'verde');
+                        $semLabel = (string)($filaSeguimiento['semaforo_label'] ?? 'Al día');
+                        ?>
+                        <tr class="seg-cel-row seg-cel-<?= htmlspecialchars($semSemaforo, ENT_QUOTES, 'UTF-8') ?>"
+                            data-row-type="dato"
+                            data-ministerio="<?= htmlspecialchars((string)($filaSeguimiento['ministerio'] ?? 'Sin ministerio'), ENT_QUOTES, 'UTF-8') ?>"
+                            data-red="<?= htmlspecialchars((string)($filaSeguimiento['red'] ?? 'Sin red'), ENT_QUOTES, 'UTF-8') ?>"
+                            data-semaforo="<?= htmlspecialchars($semSemaforo, ENT_QUOTES, 'UTF-8') ?>"
+                            data-semanas="<?= $semSeg ?>">
                             <td><?= htmlspecialchars((string)($filaSeguimiento['ministerio'] ?? 'Sin ministerio')) ?></td>
                             <td><?= htmlspecialchars((string)($filaSeguimiento['celula'] ?? 'Sin nombre')) ?></td>
                             <td><?= htmlspecialchars((string)($filaSeguimiento['ultima_fecha_reporte'] ?? '') ?: 'Nunca') ?></td>
-                            <td><strong><?= (int)($filaSeguimiento['semanas_sin_registrar'] ?? 0) ?></strong></td>
+                            <td><strong><?= $semSeg ?></strong></td>
+                            <td><span class="seg-cel-badge seg-cel-<?= htmlspecialchars($semSemaforo, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($semLabel) ?></span></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php else: ?>
-                    <tr>
-                        <td colspan="4" class="text-center">Sin datos para seguimiento de líderes.</td>
+                    <tr data-row-type="empty">
+                        <td colspan="5" class="text-center">Sin datos para seguimiento de líderes.</td>
                     </tr>
                 <?php endif; ?>
+                <tr data-row-type="empty-filtro" class="is-report-row-hidden" hidden style="display:none;">
+                    <td colspan="5" class="text-center">No hay células visibles con los filtros actuales.</td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -1023,7 +1071,10 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </div>
 
     <div class="table-container" style="margin-top:0;">
-        <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas" id="tablaResumenLideresPorRed">
+        <div class="report-table-export-bar">
+            <button type="button" class="btn btn-secondary btn-sm js-export-tabla-celulas-imagen" data-tabla-id="tablaResumenLideresPorRed">Descargar tabla como imagen</button>
+        </div>
+        <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas table-no-card" id="tablaResumenLideresPorRed">
             <thead>
                 <tr>
                     <th style="width:130px;">Red</th>
@@ -1146,7 +1197,10 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </div>
 
     <div class="table-container" style="margin-top:0;">
-        <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas" id="tablaEstadoSemanalCelulas">
+        <div class="report-table-export-bar">
+            <button type="button" class="btn btn-secondary btn-sm js-export-tabla-celulas-imagen" data-tabla-id="tablaEstadoSemanalCelulas">Descargar tabla como imagen</button>
+        </div>
+        <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas table-no-card" id="tablaEstadoSemanalCelulas">
             <thead>
                 <tr>
                     <th>Ministerio</th>
@@ -1360,7 +1414,8 @@ const detalleEscaleraEtapa = <?= json_encode($reporteEscaleraMesActual['detalles
 const detalleEscaleraPeldanos = <?= json_encode($reporteEscaleraMesActual['detalles_peldanos'] ?? []) ?>;
 const asistencia = <?= json_encode($asistencia_celulas ?? []) ?>;
 const indicadoresCelulas = <?= json_encode($indicadoresCelulas ?? []) ?>;
-const tablaLideresPorRedTipoData = <?= json_encode($tablaLideresPorRedTipo ?? [], JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR) ?>;
+window.tablaLideresPorRedTipoData = <?= json_encode($tablaLideresPorRedTipo ?? [], JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR) ?>;
+const tablaLideresPorRedTipoData = window.tablaLideresPorRedTipoData;
 const detalleLideresAperturas = <?= json_encode($tablaAperturasCelulas['detalle_lideres'] ?? []) ?>;
 const detalleLideresGanar = <?= json_encode($tablaGanarMinisterio['detalle_lideres'] ?? []) ?>;
 const detallesTablasMinisterial = <?= json_encode($detallesTablasMinisterial ?? [], JSON_UNESCAPED_UNICODE) ?>;
@@ -1389,6 +1444,12 @@ const aplicarModoReporte = (modo) => {
 
     if (modo === 'tablas') {
         root.classList.add('show-report-tables');
+        if (typeof instalarBotonesDescargaTablas === 'function') {
+            instalarBotonesDescargaTablas();
+        }
+        if (typeof window.aplicarFiltrosTablasCelulas === 'function') {
+            window.aplicarFiltrosTablasCelulas();
+        }
     }
 
     reportModeButtons.forEach((btn) => {
@@ -1399,6 +1460,8 @@ const aplicarModoReporte = (modo) => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 };
+
+let reporteModoInicial = 'resumen';
 
 if (reportModeButtons.length) {
     reportModeButtons.forEach((btn) => {
@@ -1413,17 +1476,14 @@ if (reportModeButtons.length) {
         });
     });
 
-    let modoInicial = 'resumen';
     try {
         const guardado = String(localStorage.getItem(STORAGE_MODE_KEY) || '').trim();
         if (guardado === 'resumen' || guardado === 'tablas') {
-            modoInicial = guardado;
+            reporteModoInicial = guardado;
         }
     } catch (e) {
         // Mantener valor por defecto.
     }
-
-    aplicarModoReporte(modoInicial);
 }
 
 const slugTexto = (valor) => String(valor || '')
@@ -1433,6 +1493,118 @@ const slugTexto = (valor) => String(valor || '')
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
     .slice(0, 70);
+
+const filaTablaEsVisible = (fila) => {
+    if (!fila || String(fila.nodeName || '').toUpperCase() !== 'TR') {
+        return true;
+    }
+    if (fila.classList.contains('is-report-row-hidden') || fila.hidden || fila.getAttribute('aria-hidden') === 'true') {
+        return false;
+    }
+    const estilo = window.getComputedStyle(fila);
+    return estilo.display !== 'none' && estilo.visibility !== 'hidden' && estilo.opacity !== '0';
+};
+
+const establecerFilaTablaVisible = (fila, visible) => {
+    if (!fila) {
+        return;
+    }
+    fila.classList.toggle('is-report-row-hidden', !visible);
+    fila.hidden = !visible;
+    if (visible) {
+        fila.style.removeProperty('display');
+    } else {
+        fila.style.display = 'none';
+    }
+};
+
+const clonarTablaSoloFilasVisibles = (tabla) => {
+    const clon = document.createElement('table');
+    clon.className = tabla.className;
+    if (tabla.getAttribute('id')) {
+        clon.setAttribute('id', tabla.getAttribute('id') + '_export');
+    }
+
+    tabla.querySelectorAll(':scope > colgroup').forEach((grupo) => {
+        clon.appendChild(grupo.cloneNode(true));
+    });
+
+    ['thead', 'tbody', 'tfoot'].forEach((tag) => {
+        const seccion = tabla.querySelector(':scope > ' + tag);
+        if (!seccion) {
+            return;
+        }
+
+        const seccionClon = document.createElement(tag);
+        let filasCopiadas = 0;
+
+        seccion.querySelectorAll(':scope > tr').forEach((fila) => {
+            if (!filaTablaEsVisible(fila)) {
+                return;
+            }
+            seccionClon.appendChild(fila.cloneNode(true));
+            filasCopiadas += 1;
+        });
+
+        if (filasCopiadas > 0) {
+            clon.appendChild(seccionClon);
+        }
+    });
+
+    return clon;
+};
+
+const obtenerFiltrosActivosExportacion = (contenedor) => {
+    const partes = [];
+
+    const card = contenedor ? contenedor.closest('.card') : null;
+    if (card) {
+        card.querySelectorAll('.report-table-filters select, .report-table-filters input[type="search"], .report-table-filters input[type="text"]').forEach((campo) => {
+            const valor = String(campo.value || '').trim();
+            if (valor === '' || valor === 'todos' || valor === 'all') {
+                return;
+            }
+            const etiqueta = card.querySelector('label[for="' + campo.id + '"]');
+            const nombre = etiqueta ? String(etiqueta.textContent || '').trim().replace(/:$/, '') : '';
+            let textoValor = valor;
+            if (campo.tagName === 'SELECT' && campo.selectedIndex >= 0) {
+                textoValor = String(campo.options[campo.selectedIndex].textContent || valor).trim();
+            }
+            partes.push((nombre !== '' ? nombre + ': ' : '') + textoValor);
+        });
+    }
+
+    const fechaRef = document.getElementById('fecha_referencia');
+    if (fechaRef && String(fechaRef.value || '').trim() !== '') {
+        partes.push('Semana consultada: ' + String(fechaRef.value).trim());
+    }
+
+    const modalDetalle = document.getElementById('reporteDetalleModal');
+    if (modalDetalle && modalDetalle.classList.contains('is-open')) {
+        const mapaDetalle = [
+            ['reporteDetalleFiltroTexto', 'Buscar'],
+            ['reporteDetalleFiltroMinisterio', 'Ministerio'],
+            ['reporteDetalleFiltroProceso', 'Proceso']
+        ];
+        mapaDetalle.forEach(([idCampo, etiqueta]) => {
+            const campo = document.getElementById(idCampo);
+            if (!campo) {
+                return;
+            }
+            const valor = String(campo.value || '').trim();
+            if (valor === '') {
+                return;
+            }
+            let textoValor = valor;
+            if (campo.tagName === 'SELECT' && campo.selectedIndex >= 0) {
+                textoValor = String(campo.options[campo.selectedIndex].textContent || valor).trim();
+            }
+            partes.push(etiqueta + ': ' + textoValor);
+        });
+    }
+
+    return partes;
+};
 
 const descargarTablaComoImagen = async ({ tabla, contenedor, baseNombre, boton, exigirVisible = true, mensajeNoVisible = '' }) => {
     if (typeof html2canvas !== 'function') {
@@ -1491,7 +1663,6 @@ const descargarTablaComoImagen = async ({ tabla, contenedor, baseNombre, boton, 
             .report-table-export-wrap thead { display: table-header-group !important; }
             .report-table-export-wrap tbody { display: table-row-group !important; }
             .report-table-export-wrap tfoot { display: table-footer-group !important; }
-            .report-table-export-wrap tr { display: table-row !important; }
             .report-table-export-wrap th,
             .report-table-export-wrap td {
                 display: table-cell !important;
@@ -1504,6 +1675,7 @@ const descargarTablaComoImagen = async ({ tabla, contenedor, baseNombre, boton, 
                 box-sizing: border-box !important;
                 border: 1px solid #dee2e6 !important;
             }
+            .report-table-export-wrap tr { display: table-row !important; }
             .report-table-export-wrap th { white-space: nowrap !important; background: #f8f9fa !important; font-weight: bold !important; }
             .report-table-export-wrap td {
                 white-space: normal !important;
@@ -1512,9 +1684,50 @@ const descargarTablaComoImagen = async ({ tabla, contenedor, baseNombre, boton, 
             }
             .report-table-export-wrap td::before,
             .report-table-export-wrap td::after { content: none !important; display: none !important; }
+            .report-table-export-caption {
+                font-family: Arial, sans-serif;
+                font-size: 14px;
+                font-weight: 700;
+                color: #1e3a5f;
+                margin-bottom: 8px;
+            }
+            .report-table-export-filters {
+                font-family: Arial, sans-serif;
+                font-size: 12px;
+                color: #475569;
+                margin-bottom: 12px;
+                padding: 8px 10px;
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+            }
         `;
 
-        const tablaClon = tabla.cloneNode(true);
+        const cardPadre = contenedor.closest('.card');
+        const tituloCard = cardPadre ? cardPadre.querySelector('h3, h4') : null;
+        const tituloExport = tituloCard ? String(tituloCard.textContent || '').trim() : '';
+        const filtrosActivos = obtenerFiltrosActivosExportacion(contenedor);
+
+        if (tituloExport !== '') {
+            const tituloEl = document.createElement('div');
+            tituloEl.className = 'report-table-export-caption';
+            tituloEl.textContent = tituloExport;
+            wrap.appendChild(tituloEl);
+        }
+
+        if (filtrosActivos.length > 0) {
+            const filtrosEl = document.createElement('div');
+            filtrosEl.className = 'report-table-export-filters';
+            filtrosEl.textContent = 'Filtros aplicados: ' + filtrosActivos.join(' · ');
+            wrap.appendChild(filtrosEl);
+        }
+
+        const tablaClon = clonarTablaSoloFilasVisibles(tabla);
+        if (!tablaClon.querySelector('tr')) {
+            alert('No hay filas visibles con los filtros actuales para exportar.');
+            return;
+        }
+
         tablaClon.querySelectorAll('button').forEach((btnEl) => {
             const span = document.createElement('span');
             span.textContent = String(btnEl.textContent || '').trim();
@@ -1577,6 +1790,10 @@ const instalarBotonesDescargaTablas = () => {
         if (!tabla || contenedor.dataset.exportImageReady === '1') {
             return;
         }
+        if (contenedor.querySelector('.js-export-tabla-celulas-imagen, .report-table-export-btn')) {
+            contenedor.dataset.exportImageReady = '1';
+            return;
+        }
 
         contenedor.dataset.exportImageReady = '1';
 
@@ -1608,7 +1825,36 @@ const instalarBotonesDescargaTablas = () => {
     });
 };
 
+window.descargarTablaComoImagen = descargarTablaComoImagen;
+window.instalarBotonesDescargaTablas = instalarBotonesDescargaTablas;
 instalarBotonesDescargaTablas();
+
+document.addEventListener('click', (evento) => {
+    const boton = evento.target.closest('.js-export-tabla-celulas-imagen');
+    if (!boton || typeof window.descargarTablaComoImagen !== 'function') {
+        return;
+    }
+    const tablaId = String(boton.getAttribute('data-tabla-id') || '').trim();
+    const tabla = tablaId !== '' ? document.getElementById(tablaId) : null;
+    if (!tabla) {
+        return;
+    }
+    const contenedor = tabla.closest('.table-container');
+    if (!contenedor) {
+        return;
+    }
+    const cardPadre = contenedor.closest('.card');
+    const titulo = cardPadre ? cardPadre.querySelector('h3, h4') : null;
+    const baseNombre = slugTexto(titulo ? titulo.textContent : '') || tablaId;
+    window.descargarTablaComoImagen({
+        tabla,
+        contenedor,
+        baseNombre,
+        boton,
+        exigirVisible: true,
+        mensajeNoVisible: 'Para descargar esta tabla, primero hazla visible en la vista de tablas.'
+    });
+});
 
 const toggleGanadosSemanaAnteriorBtn = document.getElementById('toggleGanadosSemanaAnteriorBtn');
 const reporteGanadosSemanaAnteriorDetalle = document.getElementById('reporteGanadosSemanaAnteriorDetalle');
@@ -2354,7 +2600,10 @@ if (tipoReporte === 'personas') {
 } else {
     const tot = indicadoresCelulas.totales || {};
 
-    new ApexCharts(document.querySelector('#chartIndicadoresCelulas'), {
+    const chartIndicadoresEl = document.querySelector('#chartIndicadoresCelulas');
+    if (chartIndicadoresEl && typeof ApexCharts !== 'undefined') {
+        try {
+            new ApexCharts(chartIndicadoresEl, {
         chart: { type: 'bar', height: 300, toolbar: { show: false } },
         series: [{
             name: 'Células',
@@ -2369,61 +2618,72 @@ if (tipoReporte === 'personas') {
         xaxis: { categories: ['Total', 'Reportadas', 'No reportadas', 'Nuevas S.', 'Cerradas S.'] },
         dataLabels: { enabled: true },
         colors: ['#2a9d8f']
-    }).render();
+            }).render();
+        } catch (e) {
+            console.error('No se pudo renderizar el gráfico de indicadores de células.', e);
+        }
+    }
 
-    new ApexCharts(document.querySelector('#chartAsistencia'), {
-        chart: { type: 'line', height: 290, toolbar: { show: false } },
-        series: [
-            {
-                name: 'Esperadas',
-                type: 'column',
-                data: asistencia.map(x => parseInt(x.Asistencias_Esperadas || 0, 10))
-            },
-            {
-                name: 'Reales',
-                type: 'column',
-                data: asistencia.map(x => parseInt(x.Asistencias_Reales || 0, 10))
-            }
-        ],
-        xaxis: {
-            categories: etiquetasCelulas,
-            labels: {
-                rotate: -18,
-                hideOverlappingLabels: true,
-                trim: false,
-                style: {
-                    fontSize: '11px'
-                }
-            }
-        },
-        yaxis: {
-            min: 0,
-            forceNiceScale: true,
-            labels: {
-                formatter: function(value) {
-                    return Math.round(value);
-                }
-            }
-        },
-        plotOptions: {
-            bar: {
-                borderRadius: 4,
-                columnWidth: '44%'
-            }
-        },
-        legend: {
-            position: 'bottom',
-            horizontalAlign: 'center'
-        },
-        tooltip: {
-            x: {
-                formatter: function(_, { dataPointIndex }) {
-                    return nombresCelulas[dataPointIndex] || 'Sin célula';
-                }
-            }
-        },
-        colors: ['#f59e0b', '#2563eb']
-    }).render();
+    const chartAsistenciaEl = document.querySelector('#chartAsistencia');
+    if (chartAsistenciaEl && typeof ApexCharts !== 'undefined') {
+        try {
+            new ApexCharts(chartAsistenciaEl, {
+                chart: { type: 'line', height: 290, toolbar: { show: false } },
+                series: [
+                    {
+                        name: 'Esperadas',
+                        type: 'column',
+                        data: asistencia.map(x => parseInt(x.Asistencias_Esperadas || 0, 10))
+                    },
+                    {
+                        name: 'Reales',
+                        type: 'column',
+                        data: asistencia.map(x => parseInt(x.Asistencias_Reales || 0, 10))
+                    }
+                ],
+                xaxis: {
+                    categories: etiquetasCelulas,
+                    labels: {
+                        rotate: -18,
+                        hideOverlappingLabels: true,
+                        trim: false,
+                        style: {
+                            fontSize: '11px'
+                        }
+                    }
+                },
+                yaxis: {
+                    min: 0,
+                    forceNiceScale: true,
+                    labels: {
+                        formatter: function(value) {
+                            return Math.round(value);
+                        }
+                    }
+                },
+                plotOptions: {
+                    bar: {
+                        borderRadius: 4,
+                        columnWidth: '44%'
+                    }
+                },
+                legend: {
+                    position: 'bottom',
+                    horizontalAlign: 'center'
+                },
+                tooltip: {
+                    x: {
+                        formatter: function(_, { dataPointIndex }) {
+                            return nombresCelulas[dataPointIndex] || 'Sin célula';
+                        }
+                    }
+                },
+                colors: ['#f59e0b', '#2563eb']
+            }).render();
+        } catch (e) {
+            console.error('No se pudo renderizar el gráfico de asistencia de células.', e);
+        }
+    }
 
     const botonesMinisterio = document.querySelectorAll('.js-ministerio-celula');
     const panelDetalle = document.querySelector('#detalleMinisterioCelulas');
@@ -2509,235 +2769,13 @@ if (tipoReporte === 'personas') {
             abrirDetalleRedCelulas(String(boton.dataset.red || 'Sin red'), parseInt(boton.dataset.total || '0', 10));
         });
     });
-
-    const filtroMinisterioSeguimiento = document.getElementById('reporteCelulasFiltroMinisterioSeguimiento');
-    const filtroRedSeguimiento = document.getElementById('reporteCelulasFiltroRedSeguimiento');
-    const filtroMinisterioResumenRed = document.getElementById('reporteCelulasFiltroMinisterioResumenRed');
-    const filtroLiderResumenRed = document.getElementById('reporteCelulasFiltroLiderResumenRed');
-    const filtroRedResumenRed = document.getElementById('reporteCelulasFiltroRedResumenRed');
-    const bodyResumenRed = document.getElementById('tablaResumenLideresPorRedBody');
-    const filtroMinisterioEstado = document.getElementById('reporteCelulasFiltroMinisterioEstado');
-    const filtroRedEstado = document.getElementById('reporteCelulasFiltroRedEstado');
-    const filtroEstadoReporte = document.getElementById('reporteCelulasFiltroEstadoReporte');
-    const bodySeguimiento = document.getElementById('tablaSeguimientoCelulasBody');
-    const bodyEstado = document.getElementById('tablaEstadoSemanalCelulasBody');
-    const estadoConteoSi = document.getElementById('estadoSemanalConteoSi');
-    const estadoConteoNo = document.getElementById('estadoSemanalConteoNo');
-
-    const aplicarFiltrosSeguimiento = () => {
-        if (!bodySeguimiento) {
-            return;
-        }
-        const ministerioSeleccionado = String((filtroMinisterioSeguimiento && filtroMinisterioSeguimiento.value) || '').trim();
-        const redSeleccionada = String((filtroRedSeguimiento && filtroRedSeguimiento.value) || '').trim();
-        const filas = bodySeguimiento.querySelectorAll('tr[data-row-type="dato"]');
-        filas.forEach((fila) => {
-            const ministerioFila = String(fila.dataset.ministerio || '').trim();
-            const redFila = String(fila.dataset.red || '').trim();
-            const visible = (ministerioSeleccionado === '' || ministerioFila === ministerioSeleccionado)
-                && (redSeleccionada === '' || redFila === redSeleccionada);
-            fila.style.display = visible ? '' : 'none';
-        });
-    };
-
-    const aplicarFiltrosEstado = () => {
-        if (!bodyEstado) {
-            return;
-        }
-        const ministerioSeleccionado = String((filtroMinisterioEstado && filtroMinisterioEstado.value) || '').trim();
-        const redSeleccionada = String((filtroRedEstado && filtroRedEstado.value) || '').trim();
-        const estadoSeleccionado = String((filtroEstadoReporte && filtroEstadoReporte.value) || 'todos');
-        const filas = bodyEstado.querySelectorAll('tr[data-row-type="dato"]');
-
-        let conteoSi = 0;
-        let conteoNo = 0;
-
-        filas.forEach((fila) => {
-            const ministerioFila = String(fila.dataset.ministerio || '').trim();
-            const redFila = String(fila.dataset.red || '').trim();
-            const reportoFila = String(fila.dataset.reporto || '').trim();
-            const pasaMinisterio = ministerioSeleccionado === '' || ministerioFila === ministerioSeleccionado;
-            const pasaRed = redSeleccionada === '' || redFila === redSeleccionada;
-            const pasaEstado = estadoSeleccionado === 'todos' || reportoFila === estadoSeleccionado;
-            const visible = pasaMinisterio && pasaRed && pasaEstado;
-            fila.style.display = visible ? '' : 'none';
-
-            if (visible) {
-                if (reportoFila === 'si') {
-                    conteoSi++;
-                } else if (reportoFila === 'no') {
-                    conteoNo++;
-                }
-            }
-        });
-
-        bodyEstado.querySelectorAll('tr[data-row-type="grupo"]').forEach((filaGrupo) => {
-            const grupo = String(filaGrupo.dataset.group || '');
-            const totalGrupo = grupo === 'si' ? conteoSi : conteoNo;
-            filaGrupo.style.display = totalGrupo > 0 ? '' : 'none';
-            if (totalGrupo > 0) {
-                filaGrupo.innerHTML = `<td colspan="5">${grupo === 'si' ? 'Sí reportaron' : 'No reportaron'} (${totalGrupo})</td>`;
-            }
-        });
-
-        if (estadoConteoSi) {
-            estadoConteoSi.textContent = String(conteoSi);
-        }
-        if (estadoConteoNo) {
-            estadoConteoNo.textContent = String(conteoNo);
-        }
-    };
-
-    const escaparHtml = (valor) => String(valor || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-
-    const normalizarNombreRedUi = (valor) => {
-        const txt = String(valor || '').trim();
-        if (txt === '') {
-            return 'Sin red';
-        }
-        const lower = txt.toLowerCase();
-        if (lower === 'j??venes' || lower === 'j?venes' || lower === 'jã³venes') {
-            return 'Jóvenes';
-        }
-        return txt;
-    };
-
-    const aplicarFiltrosResumenRed = () => {
-        if (!bodyResumenRed) {
-            return;
-        }
-
-        const ministerioSeleccionado = String((filtroMinisterioResumenRed && filtroMinisterioResumenRed.value) || '').trim();
-        const liderSeleccionado = String((filtroLiderResumenRed && filtroLiderResumenRed.value) || '').trim();
-        const redSeleccionada = String((filtroRedResumenRed && filtroRedResumenRed.value) || '').trim();
-
-        const baseRows = Array.isArray(tablaLideresPorRedTipoData) ? tablaLideresPorRedTipoData : [];
-        const rowsFiltradas = baseRows.filter((item) => {
-            const ministerio = String(item.ministerio || 'Sin ministerio').trim() || 'Sin ministerio';
-            const lider = String(item.lider || 'Sin líder').trim() || 'Sin líder';
-            const red = String(item.red || 'Sin red').trim() || 'Sin red';
-
-            const pasaMinisterio = ministerioSeleccionado === '' || ministerio === ministerioSeleccionado;
-            const pasaLider = liderSeleccionado === '' || lider === liderSeleccionado;
-            const pasaRed = redSeleccionada === '' || red === redSeleccionada;
-
-            return pasaMinisterio && pasaLider && pasaRed;
-        });
-
-        const resumenPorRed = {};
-        rowsFiltradas.forEach((item) => {
-            const red = String(item.red || 'Sin red').trim() || 'Sin red';
-            const lider = String(item.lider || 'Sin líder').trim() || 'Sin líder';
-            const keyRed = red;
-
-            if (!resumenPorRed[keyRed]) {
-                resumenPorRed[keyRed] = {
-                    red,
-                    total_celulas: 0,
-                    jovenes: {},
-                    kids: {},
-                    sin_clasificar: {}
-                };
-            }
-
-            const cantJovenes = (parseInt(item.celulas_jovenes || 0, 10) || 0) + (parseInt(item.celulas_rocas || 0, 10) || 0);
-            const cantKids = parseInt(item.celulas_kids || 0, 10) || 0;
-            const cantSinClasificar = parseInt(item.celulas_sin_clasificar || 0, 10) || 0;
-            const total = parseInt(item.total_celulas || 0, 10) || 0;
-
-            resumenPorRed[keyRed].total_celulas += total;
-
-            if (cantJovenes > 0) {
-                resumenPorRed[keyRed].jovenes[lider] = (resumenPorRed[keyRed].jovenes[lider] || 0) + cantJovenes;
-            }
-            if (cantKids > 0) {
-                resumenPorRed[keyRed].kids[lider] = (resumenPorRed[keyRed].kids[lider] || 0) + cantKids;
-            }
-            if (cantSinClasificar > 0) {
-                resumenPorRed[keyRed].sin_clasificar[lider] = (resumenPorRed[keyRed].sin_clasificar[lider] || 0) + cantSinClasificar;
-            }
-        });
-
-        const redKeys = Object.keys(resumenPorRed).sort((a, b) => normalizarNombreRedUi(a).localeCompare(normalizarNombreRedUi(b)));
-
-        if (!redKeys.length) {
-            bodyResumenRed.innerHTML = '<tr><td colspan="3" class="text-center">Sin datos en el resumen por red para estos filtros.</td></tr>';
-            return;
-        }
-
-        const ordenarLista = (obj) => Object.keys(obj)
-            .map((lider) => ({ lider, cantidad: parseInt(obj[lider] || 0, 10) || 0 }))
-            .sort((a, b) => {
-                const cmp = b.cantidad - a.cantidad;
-                if (cmp !== 0) {
-                    return cmp;
-                }
-                return a.lider.localeCompare(b.lider);
-            });
-
-        bodyResumenRed.innerHTML = redKeys.map((redKey) => {
-            const fila = resumenPorRed[redKey];
-            const listaJovenes = ordenarLista(fila.jovenes);
-            const listaKids = ordenarLista(fila.kids);
-            const listaSinClasificar = ordenarLista(fila.sin_clasificar);
-
-            const renderGrupo = (titulo, items) => {
-                if (!items.length) {
-                    return '';
-                }
-                const lis = items.map((it) => `<li>${escaparHtml(it.lider)} <strong>(${it.cantidad})</strong></li>`).join('');
-                return `<div class="report-red-group"><span class="report-red-group__title">${escaparHtml(titulo)}</span><ul class="report-inline-list">${lis}</ul></div>`;
-            };
-
-            const gruposHtml = [
-                renderGrupo('Jóvenes (incluye rocas)', listaJovenes),
-                renderGrupo('Kids', listaKids),
-                renderGrupo('Sin clasificar', listaSinClasificar)
-            ].join('');
-
-            return `<tr>
-                <td><strong>${escaparHtml(normalizarNombreRedUi(fila.red))}</strong></td>
-                <td>${gruposHtml !== '' ? `<div class="report-red-groups">${gruposHtml}</div>` : '<span style="color:#6b7280;">Sin líderes</span>'}</td>
-                <td><strong>${parseInt(fila.total_celulas || 0, 10)}</strong></td>
-            </tr>`;
-        }).join('');
-    };
-
-    if (filtroMinisterioSeguimiento) {
-        filtroMinisterioSeguimiento.addEventListener('change', aplicarFiltrosSeguimiento);
-    }
-    if (filtroRedSeguimiento) {
-        filtroRedSeguimiento.addEventListener('change', aplicarFiltrosSeguimiento);
-    }
-    if (filtroMinisterioEstado) {
-        filtroMinisterioEstado.addEventListener('change', aplicarFiltrosEstado);
-    }
-    if (filtroRedEstado) {
-        filtroRedEstado.addEventListener('change', aplicarFiltrosEstado);
-    }
-    if (filtroEstadoReporte) {
-        filtroEstadoReporte.addEventListener('change', aplicarFiltrosEstado);
-    }
-    if (filtroMinisterioResumenRed) {
-        filtroMinisterioResumenRed.addEventListener('change', aplicarFiltrosResumenRed);
-    }
-    if (filtroLiderResumenRed) {
-        filtroLiderResumenRed.addEventListener('change', aplicarFiltrosResumenRed);
-    }
-    if (filtroRedResumenRed) {
-        filtroRedResumenRed.addEventListener('change', aplicarFiltrosResumenRed);
-    }
-
-    aplicarFiltrosSeguimiento();
-    aplicarFiltrosEstado();
-    aplicarFiltrosResumenRed();
 }
 </script>
+<?php
+$jsFiltrosCelulas = ROOT . '/public/assets/js/reportes-celulas-filtros.js';
+$vFiltrosCelulas = is_file($jsFiltrosCelulas) ? (string)filemtime($jsFiltrosCelulas) : '1';
+?>
+<script src="<?= PUBLIC_URL ?>assets/js/reportes-celulas-filtros.js?v=<?= htmlspecialchars($vFiltrosCelulas, ENT_QUOTES, 'UTF-8') ?>"></script>
 
 <style>
 .report-switcher {
@@ -2902,8 +2940,7 @@ if (tipoReporte === 'personas') {
     display: none;
 }
 
-html.show-report-tables .report-toolbar-card,
-html.show-report-tables .report-filters-card {
+html.show-report-tables .report-toolbar-card {
     display: none !important;
 }
 
@@ -2918,6 +2955,10 @@ html.show-report-tables #reportesVisualContainer .report-table-only {
 html.show-report-tables #reportesVisualContainer .table-container,
 html.show-report-tables #reportesVisualContainer details {
     display: block;
+}
+
+html.show-report-tables #reportesVisualContainer .report-table-export-bar {
+    display: flex !important;
 }
 
 html.show-report-tables #reportesVisualContainer .ganar-extra-section {
@@ -3680,6 +3721,39 @@ html.show-report-tables #reportesVisualContainer .ganar-extra-section {
 
 .data-table--seguimiento-celulas td strong {
     font-size: 12px;
+}
+
+.seg-cel-row.seg-cel-verde td { background: #f0fdf4; }
+.seg-cel-row.seg-cel-naranja td { background: #fff7ed; }
+.seg-cel-row.seg-cel-rojo td { background: #fef2f2; }
+
+.seg-cel-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.seg-cel-badge.seg-cel-verde { background: #dcfce7; color: #166534; }
+.seg-cel-badge.seg-cel-naranja { background: #ffedd5; color: #c2410c; }
+.seg-cel-badge.seg-cel-rojo { background: #fee2e2; color: #b91c1c; }
+
+.seg-cel-leyenda {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    margin-right: 2px;
+}
+.seg-cel-leyenda.seg-cel-verde { background: #dcfce7; color: #166534; }
+.seg-cel-leyenda.seg-cel-naranja { background: #ffedd5; color: #c2410c; }
+.seg-cel-leyenda.seg-cel-rojo { background: #fee2e2; color: #b91c1c; }
+
+.data-table tr.is-report-row-hidden,
+.table tr.is-report-row-hidden {
+    display: none !important;
 }
 
 details summary {

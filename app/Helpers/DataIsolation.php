@@ -6,7 +6,8 @@
 require_once __DIR__ . '/PermisosCatalogo.php';
 
 class DataIsolation {
-    const ROL_ADMINISTRADOR = 6;
+    /** @deprecated Usar PermisosCatalogo; en persona Admin=1, en semilla antigua Admin=6 */
+    const ROL_ADMINISTRADOR = 1;
     const ROL_LIDER_CELULA = 3;
     const ROL_LIDER_12 = 8;
 
@@ -106,7 +107,7 @@ class DataIsolation {
     public static function esAdmin() {
         $id = (int)self::getUsuarioRol();
         $nombre = trim((string)($_SESSION['usuario_rol_nombre'] ?? ''));
-        return PermisosCatalogo::esRolProtegidoPermisos($id, $nombre);
+        return PermisosCatalogo::esRolAdministradorGlobal($id, $nombre);
     }
 
     /**

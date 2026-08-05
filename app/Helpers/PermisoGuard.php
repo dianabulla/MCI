@@ -60,8 +60,9 @@ class PermisoGuard {
 
         $redirect = trim((string)($opciones['redirect'] ?? ''));
         if ($redirect === '') {
-            $base = rtrim((string)(defined('PUBLIC_URL') ? PUBLIC_URL : (defined('BASE_URL') ? BASE_URL . '/public/' : '/')), '/');
-            $redirect = $base . '/index.php?url=auth/acceso-denegado';
+            $redirect = function_exists('public_app_url')
+                ? public_app_url('auth/acceso-denegado')
+                : (rtrim((string)(defined('PUBLIC_URL') ? PUBLIC_URL : '/'), '/') . '/?url=auth/acceso-denegado');
         }
         header('Location: ' . $redirect);
         exit;

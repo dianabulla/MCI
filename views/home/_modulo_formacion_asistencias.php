@@ -18,10 +18,6 @@ $tarjetasResumen = $tarjetas_resumen ?? [];
 $rowsAsistencia = $rows_asistencia ?? [];
 $puedeMarcarAsistencia = !empty($puede_marcar_asistencia);
 $puedeEditarFechasAsistencia = !empty($puede_editar_fechas_asistencia);
-if ($esProgramaCapDestino) {
-    $puedeMarcarAsistencia = false;
-    $puedeEditarFechasAsistencia = false;
-}
 $modoLecturaAsistencia = !$puedeMarcarAsistencia;
 $fechasClases = $fechas_clases ?? [];
 $fechasClasesHombres = $fechas_clases_hombres ?? $fechasClases;
@@ -36,6 +32,8 @@ if ($totalClases <= 0) {
 $encuentroDobleClase5 = !empty($encuentro_doble_clase5);
 $inscProgramaSolicitado = trim((string)($_GET['insc_programa'] ?? ''));
 $mostrarDetalleDiscipular = !($moduloFormacionActual === 'discipular' && $inscProgramaSolicitado === '');
+$mostrarSelectorNivelCap = !empty($mostrar_selector_nivel_cap);
+$mostrarDetalleCapDestino = !($moduloFormacionActual === 'consolidar' && $mostrarSelectorNivelCap);
 $labelClase = static function(int $i) use ($encuentroDobleClase5): string {
     if ($encuentroDobleClase5 && $i === 5) {
         return 'Encuentro dia 1';
@@ -45,7 +43,7 @@ $labelClase = static function(int $i) use ($encuentroDobleClase5): string {
     }
     return 'CL' . $i;
 };
-$puedeEditarPersonaFormacion = class_exists('AuthController') && AuthController::puede('personas:editar');
+$puedeEditarPersonaFormacion = class_exists('AuthController') && AuthController::puedeEditarPersonasConsulta();
 
 $parametrosRetornoFormacion = $_GET;
 if (!isset($parametrosRetornoFormacion['url']) || trim((string)$parametrosRetornoFormacion['url']) === '') {
@@ -91,6 +89,33 @@ if ($moduloFormacionActual === 'discipular') {
             'label' => $labelPrograma,
             'total' => (int)($tarjetasResumenMap[$clavePrograma] ?? 0),
             'url' => PUBLIC_URL . '?' . http_build_query($paramsSubmodulo),
+            'active' => $programaReporte === $clavePrograma,
+        ];
+    }
+}
+
+$submodulosCapDestinoConsolidar = [];
+if ($moduloFormacionActual === 'consolidar') {
+    $tarjetasResumenMapCap = [];
+    foreach ($tarjetasResumen as $tarjetaResumen) {
+        $tarjetasResumenMapCap[(string)($tarjetaResumen['programa'] ?? '')] = (int)($tarjetaResumen['total'] ?? 0);
+    }
+
+    $programasCapNivel = [
+        'capacitacion_destino_nivel_1' => 'Nivel 1',
+        'capacitacion_destino_nivel_2' => 'Nivel 2',
+        'capacitacion_destino_nivel_3' => 'Nivel 3',
+    ];
+
+    foreach ($programasCapNivel as $clavePrograma => $labelPrograma) {
+        $paramsSubmoduloCap = $_GET;
+        $paramsSubmoduloCap['url'] = $rutaAsistencias;
+        $paramsSubmoduloCap['insc_programa'] = $clavePrograma;
+        $submodulosCapDestinoConsolidar[] = [
+            'programa' => $clavePrograma,
+            'label' => $labelPrograma,
+            'total' => (int)($tarjetasResumenMapCap[$clavePrograma] ?? 0),
+            'url' => PUBLIC_URL . '?' . http_build_query($paramsSubmoduloCap),
             'active' => $programaReporte === $clavePrograma,
         ];
     }
@@ -151,12 +176,36 @@ if ($moduloFormacionActual === 'discipular') {
     </div>
 <?php endif; ?>
 
+<?php if (!empty($submodulosCapDestinoConsolidar) && $mostrarSelectorNivelCap): ?>
+    <div class="dashboard-grid" style="grid-template-columns:repeat(3,minmax(0,1fr)); margin:0 0 14px 0;">
+        <?php foreach ($submodulosCapDestinoConsolidar as $submoduloCap): ?>
+            <a href="<?= htmlspecialchars((string)$submoduloCap['url']) ?>" class="gender-card dashboard-card <?= !empty($submoduloCap['active']) ? 'is-active' : '' ?>" style="border-left-color:<?= !empty($submoduloCap['active']) ? '#1f5ea8' : '#7a4e08' ?>; text-decoration:none; color:inherit;">
+                <div class="gender-card-toggle" style="cursor:pointer;">
+                    <span class="gender-card-title-wrap">
+                        <span class="gender-avatar" aria-hidden="true">📘</span>
+                        <span>Capacitación Destino - <?= htmlspecialchars((string)$submoduloCap['label']) ?></span>
+                    </span>
+                    <span class="gender-card-icon">Ver clases</span>
+                </div>
+                <div class="gender-card-metric">
+                    <div class="gender-kpi-grid">
+                        <div class="gender-kpi-box" style="width:100%;">
+                            <span class="kpi-label">Inscritos</span>
+                            <strong class="kpi-value" style="color:#7a4e08;"><?= (int)($submoduloCap['total'] ?? 0) ?></strong>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        <?php endforeach; ?>
+    </div>
+<?php endif; ?>
+
 <?php if ($moduloFormacionActual === 'discipular' && !$mostrarDetalleDiscipular): ?>
     <div class="card report-card" style="margin-bottom:18px; padding:18px; text-align:center;">
         <h3 style="margin:0 0 8px 0;">Selecciona un nivel de Capacitación Destino</h3>
         <small style="color:#637087;">Cada nivel abre su vista independiente de asistencias y registros del formulario.</small>
     </div>
-<?php else: ?>
+<?php elseif ($mostrarDetalleCapDestino): ?>
 
 <div class="card report-card" style="margin-bottom:12px; padding:10px 14px; background:#f6fbff; border-color:#d9e6f5;">
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
@@ -167,9 +216,7 @@ if ($moduloFormacionActual === 'discipular') {
     </div>
     <?php if (!$puedeMarcarAsistencia): ?>
         <div class="alert alert-warning" style="margin:10px 0 0 0; padding:8px 10px; font-size:12px;">
-            <?= $esProgramaCapDestino
-                ? 'Capacitacion Destino esta en modo lectura. No se permite marcar asistencias.'
-                : 'Tu rol no tiene permiso para marcar asistencias en esta matriz.' ?>
+            Tu rol no tiene permiso para marcar asistencias en esta matriz.
         </div>
     <?php endif; ?>
     <?php if (!$puedeEditarFechasAsistencia): ?>

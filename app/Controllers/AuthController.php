@@ -10,6 +10,7 @@ require_once APP . '/Models/Rol.php';
 require_once APP . '/Models/EscuelaFormacionInscripcion.php';
 require_once APP . '/Helpers/DataIsolation.php';
 require_once APP . '/Helpers/PermisosCatalogo.php';
+require_once APP . '/Helpers/PermisosRolService.php';
 require_once APP . '/Helpers/MenuBuilder.php';
 
 class AuthController extends BaseController {
@@ -71,6 +72,7 @@ class AuthController extends BaseController {
                 }
 
                 $preservarPool = $modoAgregarCuenta && isset($_SESSION['usuario_id']);
+                $user['_login_ingresado'] = $usuario;
                 $this->iniciarSesionUsuario($user, $preservarPool);
 
                 if ($modoAgregarCuenta) {
@@ -391,8 +393,34 @@ class AuthController extends BaseController {
      * Cerrar sesión
      */
     public function logout() {
-        session_destroy();
+        $this->destruirSesionApp();
         $this->redirect('auth/login');
+    }
+
+    private function cargarSessionManagerSiExiste(): bool {
+        static $cargado = false;
+        if ($cargado) {
+            return class_exists('SessionManager', false);
+        }
+        foreach ([APP . '/Helpers/SessionManager.php', APP . '/helpers/SessionManager.php'] as $ruta) {
+            if (is_file($ruta)) {
+                require_once $ruta;
+                break;
+            }
+        }
+        $cargado = true;
+        return class_exists('SessionManager', false);
+    }
+
+    private function destruirSesionApp(): void {
+        if ($this->cargarSessionManagerSiExiste()) {
+            SessionManager::destroySession();
+            return;
+        }
+        $_SESSION = [];
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_destroy();
+        }
     }
 
     /**
@@ -490,6 +518,11 @@ class AuthController extends BaseController {
         $_SESSION['usuario_id'] = $idUsuario > 0 ? $idUsuario : 0;
         $_SESSION['usuario_persona_id'] = $idUsuario > 0 ? $idUsuario : null;
         $_SESSION['usuario_nombre'] = $nombreSesion;
+        $loginSesion = trim((string)($user['Usuario'] ?? ''));
+        if ($loginSesion === '') {
+            $loginSesion = trim((string)($user['_login_ingresado'] ?? ''));
+        }
+        $_SESSION['usuario_login'] = strtolower($loginSesion);
         $_SESSION['usuario_rol'] = $idRolActivo;
         $_SESSION['usuario_rol_nombre'] = $nombreRolActivo;
         $_SESSION['available_roles'] = $rolesDisponibles;
@@ -497,9 +530,8 @@ class AuthController extends BaseController {
         $_SESSION['active_context_role_id'] = $idRolActivo;
         $_SESSION['require_context_selection'] = count($rolesDisponibles) > 1;
         $_SESSION['usuario_ministerio'] = $idMinisterio;
-        $_SESSION['permisos'] = $permisos;
-        $_SESSION['permisos_configurados'] = !empty($permisos);
-        $_SESSION['permisos_last_sync'] = time();
+        self::aplicarPermisosEnSesion($idRolActivo, $permisos, $nombreRolActivo);
+        self::refrescarPerfilServicioSocialEnSesion();
         $_SESSION['active_account_id'] = $idUsuario > 0 ? $idUsuario : 0;
         $_SESSION['mostrar_alerta_ganar_pendiente'] = true;
 
@@ -519,6 +551,11 @@ class AuthController extends BaseController {
             $this->usuarioAccesoModel->actualizarUltimoAcceso($idAuthUser);
         }
 
+        if ($this->cargarSessionManagerSiExiste()) {
+            SessionManager::markLogin();
+        } else {
+            $_SESSION['last_activity'] = time();
+        }
         self::reconstruirMenuYSesion();
     }
 
@@ -812,6 +849,205 @@ class AuthController extends BaseController {
     }
 
     /**
+     * Asistente flotante (chatbot): búsqueda y reportes según permisos del usuario.
+     */
+    public static function puedeUsarChatbotAsistente(): bool {
+        return self::esAdministrador()
+            || self::puede('personas:ver')
+            || self::puedeVerPersonasConsulta()
+            || self::puede('reportes:ver');
+    }
+
+    /**
+     * Inicio: permitido si el rol tiene al menos un módulo con ver.
+     */
+    public static function puedeAccederHome(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+
+        if (self::esPerfilServicioSocialTalleres()) {
+            return true;
+        }
+
+        if (empty($_SESSION['permisos_configurados'])) {
+            return true;
+        }
+
+        foreach ((array)($_SESSION['permisos'] ?? []) as $acciones) {
+            if (is_array($acciones) && !empty($acciones['ver'])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Usuario de login en sesión (persona.Usuario o usuario_acceso.Usuario).
+     */
+    public static function getUsuarioLoginSesion(): string {
+        $login = strtolower(trim((string)($_SESSION['usuario_login'] ?? '')));
+        if ($login !== '') {
+            return $login;
+        }
+
+        if (!self::estaAutenticado()) {
+            return '';
+        }
+
+        $origen = (string)($_SESSION['auth_user_source'] ?? 'persona');
+        if ($origen === 'acceso') {
+            $idAcceso = (int)($_SESSION['auth_user_id'] ?? 0);
+            if ($idAcceso > 0) {
+                $model = new UsuarioAcceso();
+                $fila = $model->getById($idAcceso);
+                $login = strtolower(trim((string)($fila['Usuario'] ?? '')));
+            }
+        } else {
+            $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+            if ($idPersona > 0) {
+                $model = new Persona();
+                $fila = $model->getById($idPersona);
+                $login = strtolower(trim((string)($fila['Usuario'] ?? '')));
+            }
+        }
+
+        if ($login !== '') {
+            $_SESSION['usuario_login'] = $login;
+        }
+
+        return $login;
+    }
+
+    /** Logins / roles que usan vista solo Servicio Social (Talleres). */
+    private const LOGINS_PERFIL_SERVICIO_SOCIAL = ['psicologomci', 'psicologosmci'];
+
+    private static function normalizarLoginCuenta(string $login): string {
+        $login = self::normalizarTexto($login);
+        return preg_replace('/[^a-z0-9]/', '', $login) ?? '';
+    }
+
+    private static function cuentaEsPsicologoMci(string $valor): bool {
+        $norm = self::normalizarLoginCuenta($valor);
+        if ($norm === '') {
+            return false;
+        }
+
+        foreach (self::LOGINS_PERFIL_SERVICIO_SOCIAL as $clave) {
+            if ($norm === $clave || str_starts_with($norm, $clave)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function rolEsServicioSocialPsicologo(string $rolNombre): bool {
+        if (self::cuentaEsPsicologoMci($rolNombre)) {
+            return true;
+        }
+
+        $rol = self::normalizarTexto($rolNombre);
+        if ($rol === '') {
+            return false;
+        }
+
+        return strpos($rol, 'psicologo') !== false
+            || strpos($rol, 'servicio social') !== false
+            || strpos($rol, 'servicio_social') !== false;
+    }
+
+    /**
+     * Rol con permisos únicamente en el módulo Talleres (sin otros menús).
+     *
+     * @param array<string, array<string, int>>|null $permisos
+     */
+    public static function sesionSoloTienePermisosModuloTalleres(?array $permisos = null): bool {
+        $permisos = $permisos ?? (array)($_SESSION['permisos'] ?? []);
+        if ($permisos === []) {
+            return false;
+        }
+
+        $tieneTalleres = false;
+        foreach ($permisos as $modulo => $acciones) {
+            if (!is_array($acciones)) {
+                continue;
+            }
+
+            $tieneAlguno = false;
+            foreach ($acciones as $valor) {
+                if (!empty($valor)) {
+                    $tieneAlguno = true;
+                    break;
+                }
+            }
+            if (!$tieneAlguno) {
+                continue;
+            }
+
+            $mod = strtolower(trim((string)$modulo));
+            if ($mod === '' || strpos($mod, 'acceso_rapido_') === 0) {
+                continue;
+            }
+
+            if ($mod === 'talleres' || str_starts_with($mod, 'talleres')) {
+                $tieneTalleres = true;
+                continue;
+            }
+
+            return false;
+        }
+
+        return $tieneTalleres;
+    }
+
+    /**
+     * @param array<string, array<string, int>>|null $permisos
+     */
+    public static function evaluarPerfilServicioSocialTalleres(?string $usuarioLogin = null, ?string $rolNombre = null, ?array $permisos = null): bool {
+        if (!self::estaAutenticado() || self::esAdministrador()) {
+            return false;
+        }
+
+        $login = $usuarioLogin ?? self::getUsuarioLoginSesion();
+        if (self::cuentaEsPsicologoMci($login)) {
+            return true;
+        }
+
+        $rol = $rolNombre ?? (string)($_SESSION['usuario_rol_nombre'] ?? '');
+        if (self::rolEsServicioSocialPsicologo($rol)) {
+            return true;
+        }
+
+        return self::sesionSoloTienePermisosModuloTalleres($permisos);
+    }
+
+    public static function refrescarPerfilServicioSocialEnSesion(): void {
+        if (!self::estaAutenticado()) {
+            unset($_SESSION['perfil_servicio_social_talleres']);
+            return;
+        }
+
+        $_SESSION['perfil_servicio_social_talleres'] = self::evaluarPerfilServicioSocialTalleres();
+    }
+
+    /**
+     * Perfil acotado: solo Servicio Social dentro de Talleres (rol PSICOLOGOMCI).
+     */
+    public static function esPerfilServicioSocialTalleres(): bool {
+        if (!self::estaAutenticado() || self::esAdministrador()) {
+            return false;
+        }
+
+        if (!empty($_SESSION['perfil_servicio_social_talleres'])) {
+            return true;
+        }
+
+        return self::evaluarPerfilServicioSocialTalleres();
+    }
+
+    /**
      * Menú Ganar-Consolidar: Almas ganadas y/o Discípulos.
      */
     public static function puedeAccederAreaGanarConsolidar(): bool {
@@ -837,10 +1073,34 @@ class AuthController extends BaseController {
             || self::puede('personas_consulta:editar');
     }
 
+    /**
+     * Editar fichas desde Discipular / ministerios (misma regla que el botón en equipo-principal).
+     */
+    public static function puedeEditarPersonaDesdeDiscipular(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+
+        return self::puedeEditarPersonasConsulta()
+            || self::puede('ministerios:editar');
+    }
+
     public static function puedeEliminarPersonasConsulta(): bool {
         return self::esAdministrador()
             || self::puede('personas:eliminar')
             || self::puede('personas_consulta:eliminar');
+    }
+
+    /**
+     * Eliminar personas desde listados de Discipular / ministerios.
+     */
+    public static function puedeEliminarPersonaDesdeDiscipular(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+
+        return self::puedeEliminarPersonasConsulta()
+            || self::puede('ministerios:eliminar');
     }
 
     public static function puedeCrearPersonasConsulta(): bool {
@@ -879,6 +1139,19 @@ class AuthController extends BaseController {
 
     public static function puedeVerAsistenciasProgramaUv(): bool {
         require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        return PermisosProgramasAccess::puedeVerAsistenciasUniversidadVida();
+    }
+
+    public static function puedeVerAsistenciasProgramas(): bool {
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        $inscPrograma = strtolower(trim((string)($_GET['insc_programa'] ?? 'universidad_vida')));
+        if ($inscPrograma === 'encuentro') {
+            $inscPrograma = 'universidad_vida';
+        }
+        if (in_array($inscPrograma, ['capacitacion_destino', 'capacitacion_destino_nivel_1', 'capacitacion_destino_nivel_2', 'capacitacion_destino_nivel_3'], true)) {
+            return PermisosProgramasAccess::puedeVerAsistenciasCapacitacionDestino();
+        }
+
         return PermisosProgramasAccess::puedeVerAsistenciasUniversidadVida();
     }
 
@@ -1041,10 +1314,62 @@ class AuthController extends BaseController {
         if ($modulo === '') {
             return false;
         }
+        if ($modulo === 'talleres') {
+            return self::puedeAccederModuloTalleres();
+        }
         if (self::esAdministrador()) {
             return true;
         }
         return self::puede($modulo . ':ver');
+    }
+
+    /**
+     * Talleres: acceso al menú y listado si el rol tiene cualquier permiso del módulo
+     * (no solo «ver»; p. ej. solo gráficas o solo exportar).
+     */
+    public static function puedeAccederModuloTalleres(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+        foreach (['ver', 'crear', 'editar', 'eliminar', 'ver_respuestas', 'ver_graficas', 'exportar_excel', 'gestionar_enlace'] as $accion) {
+            if (self::puede('talleres:' . $accion)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Rol configurado solo para estadísticas (tiene ver_graficas y NO ver_respuestas).
+     * Puede coexistir con «ver» de listado sin ver el detalle de inscritos.
+     */
+    public static function esRolSoloGraficasTalleres(): bool {
+        if (self::esAdministrador()) {
+            return false;
+        }
+        if (!self::puede('talleres:ver_graficas')) {
+            return false;
+        }
+        return !self::puede('talleres:ver_respuestas');
+    }
+
+    /**
+     * Pantalla de respuestas/gráficas.
+     */
+    public static function puedeAccederRespuestasTalleres(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+        if (self::puede('talleres:ver_respuestas')) {
+            return true;
+        }
+        if (self::puede('talleres:ver_graficas')) {
+            return true;
+        }
+        if (self::puede('talleres:ver')) {
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -1066,7 +1391,9 @@ class AuthController extends BaseController {
      * Maestro o discípulo: menú lateral y panel de inicio reducidos.
      */
     public static function esPerfilMenuLateralReducido(): bool {
-        return self::debeUsarMenuLateralSoloMaterial() || self::esVistaDiscipuloSimplificada();
+        return self::debeUsarMenuLateralSoloMaterial()
+            || self::esVistaDiscipuloSimplificada()
+            || self::esPerfilServicioSocialTalleres();
     }
 
     /**
@@ -1093,6 +1420,7 @@ class AuthController extends BaseController {
         if (!self::estaAutenticado()) {
             return;
         }
+        self::refrescarPerfilServicioSocialEnSesion();
         MenuBuilder::sincronizarSesion();
     }
 
@@ -1173,10 +1501,9 @@ class AuthController extends BaseController {
             $personaModel = new Persona();
             $filas = $personaModel->getPermisosPorRol($idRol);
             $permisos = self::normalizarPermisosDesdeFilas((array)$filas);
-
-            $_SESSION['permisos'] = $permisos;
-            $_SESSION['permisos_configurados'] = !empty($permisos);
-            $_SESSION['permisos_last_sync'] = time();
+            $nombreRol = trim((string)($_SESSION['usuario_rol_nombre'] ?? ''));
+            self::aplicarPermisosEnSesion($idRol, $permisos, $nombreRol);
+            self::refrescarPerfilServicioSocialEnSesion();
 
             $activeAccountId = (int)($_SESSION['active_account_id'] ?? 0);
             if ($activeAccountId > 0 && isset($_SESSION['account_pool'][$activeAccountId])) {
@@ -1192,6 +1519,15 @@ class AuthController extends BaseController {
      */
     public static function estaAutenticado() {
         return isset($_SESSION['auth_user_id']) || isset($_SESSION['usuario_id']);
+    }
+
+    /**
+     * @param array<string, array<string, int>> $permisos
+     */
+    private static function aplicarPermisosEnSesion(int $idRol, array $permisos, string $nombreRol = ''): void {
+        $_SESSION['permisos'] = $permisos;
+        $_SESSION['permisos_configurados'] = PermisosRolService::permisosConfiguradosParaSesion($idRol, $permisos, $nombreRol);
+        $_SESSION['permisos_last_sync'] = time();
     }
 
     /**
@@ -1488,6 +1824,10 @@ class AuthController extends BaseController {
      * Ruta de inicio según el perfil activo (maestro → material Cap. Destino, discípulo → evaluaciones).
      */
     public static function obtenerUrlInicioSesion(): string {
+        if (self::esPerfilServicioSocialTalleres()) {
+            return 'talleres/servicio-social';
+        }
+
         if (self::esContextoMaestro()) {
             return self::puedeAccederHubMaterialCompleto()
                 ? 'home/material'
@@ -1758,9 +2098,9 @@ class AuthController extends BaseController {
         $_SESSION['usuario_rol_nombre'] = (string)($rolSeleccionado['nombre_rol'] ?? '');
         $_SESSION['active_context'] = $contexto !== '' ? $contexto : (string)($rolSeleccionado['context_key'] ?? 'lider');
         $_SESSION['active_context_role_id'] = $idRol;
-        $_SESSION['permisos'] = $this->obtenerPermisosNormalizados($idRol);
-        $_SESSION['permisos_configurados'] = !empty($_SESSION['permisos']);
-        $_SESSION['permisos_last_sync'] = time();
+        $permisos = $this->obtenerPermisosNormalizados($idRol);
+        $nombreRol = (string)($rolSeleccionado['nombre_rol'] ?? $_SESSION['usuario_rol_nombre'] ?? '');
+        self::aplicarPermisosEnSesion($idRol, $permisos, $nombreRol);
 
         $activeAccountId = (int)($_SESSION['active_account_id'] ?? 0);
         if ($activeAccountId > 0 && isset($_SESSION['account_pool'][$activeAccountId])) {

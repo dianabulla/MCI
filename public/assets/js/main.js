@@ -362,3 +362,77 @@ document.addEventListener('click', function(e) {
         document.querySelectorAll('.btn-dropdown-wrap.open').forEach(function(el) { el.classList.remove('open'); });
     }
 });
+
+/**
+ * Sesión: redirigir si el servidor responde session_expired (inactividad > 30 min).
+ */
+(function () {
+    'use strict';
+
+    function loginUrlSesionExpirada() {
+        var body = document.body;
+        if (body && body.getAttribute('data-login-expired-url')) {
+            return body.getAttribute('data-login-expired-url');
+        }
+        return null;
+    }
+
+    function irALoginSesionExpirada() {
+        var url = loginUrlSesionExpirada();
+        if (url) {
+            window.location.href = url;
+        }
+    }
+
+    if (typeof window.fetch === 'function') {
+        var fetchOriginal = window.fetch;
+        window.fetch = function () {
+            return fetchOriginal.apply(this, arguments).then(function (response) {
+                if (response.status === 401) {
+                    var clone = response.clone();
+                    clone.json().then(function (data) {
+                        if (data && data.session_expired) {
+                            irALoginSesionExpirada();
+                        }
+                    }).catch(function () { /* no JSON */ });
+                }
+                return response;
+            });
+        };
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var body = document.body;
+        if (!body) {
+            return;
+        }
+        var timeoutSec = parseInt(body.getAttribute('data-session-timeout') || '0', 10);
+        var loginUrl = body.getAttribute('data-login-expired-url');
+        if (!timeoutSec || !loginUrl) {
+            return;
+        }
+
+        var avisoMs = Math.max(60000, (timeoutSec - 120) * 1000);
+        var cierreMs = timeoutSec * 1000;
+        var timerAviso = null;
+        var timerCierre = null;
+
+        function reiniciarTimers() {
+            clearTimeout(timerAviso);
+            clearTimeout(timerCierre);
+            timerAviso = setTimeout(function () {
+                if (window.confirm('Tu sesión expirará en 2 minutos por inactividad. ¿Deseas continuar?')) {
+                    reiniciarTimers();
+                }
+            }, avisoMs);
+            timerCierre = setTimeout(function () {
+                window.location.href = loginUrl;
+            }, cierreMs);
+        }
+
+        ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach(function (evt) {
+            document.addEventListener(evt, reiniciarTimers, { passive: true });
+        });
+        reiniciarTimers();
+    });
+})();

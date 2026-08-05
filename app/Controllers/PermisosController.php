@@ -9,6 +9,7 @@ require_once APP . '/Config/Database.php';
 require_once APP . '/Helpers/PermisosCatalogo.php';
 require_once APP . '/Helpers/PermisosModulos.php';
 require_once APP . '/Helpers/GestionSistemaAccess.php';
+require_once APP . '/Helpers/PermisosRolService.php';
 
 class PermisosController extends BaseController {
     private $rolModel;
@@ -51,6 +52,7 @@ class PermisosController extends BaseController {
      */
     public function index() {
         $roles = $this->rolModel->getAll();
+        PermisosRolService::repararRolesSinMatriz($roles);
         $modulos = $this->getModulos();
         $modulosObsoletos = $this->getModulosObsoletosEnBase();
         
@@ -326,7 +328,11 @@ class PermisosController extends BaseController {
             }
         }
 
-        $_SESSION['permisos_configurados'] = !empty($_SESSION['permisos']);
+        $_SESSION['permisos_configurados'] = PermisosRolService::permisosConfiguradosParaSesion(
+            $rolSesion,
+            is_array($_SESSION['permisos'] ?? null) ? $_SESSION['permisos'] : [],
+            trim((string)($_SESSION['usuario_rol_nombre'] ?? ''))
+        );
         $_SESSION['permisos_last_sync'] = time();
 
         $activeAccountId = (int)($_SESSION['active_account_id'] ?? 0);

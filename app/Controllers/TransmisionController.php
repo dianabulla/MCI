@@ -20,7 +20,7 @@ class TransmisionController extends BaseController {
      */
     public function listar() {
         if (!$this->tienePermiso('ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         
@@ -41,7 +41,7 @@ class TransmisionController extends BaseController {
 
     public function exportarExcel() {
         if (!$this->tienePermiso('ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -71,7 +71,7 @@ class TransmisionController extends BaseController {
      */
     public function crear() {
         if (!$this->tienePermiso('crear')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         
@@ -93,7 +93,7 @@ class TransmisionController extends BaseController {
             if ($isAjax) {
                 $this->json(['error' => 'Acceso denegado'], 403);
             }
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         
@@ -101,7 +101,7 @@ class TransmisionController extends BaseController {
             if ($isAjax) {
                 $this->json(['error' => 'Método no permitido'], 405);
             }
-            header('Location: ' . BASE_URL . '/public/?url=transmisiones/crear');
+            header('Location: ' . public_app_url('transmisiones/crear'));
             exit;
         }
 
@@ -120,7 +120,7 @@ class TransmisionController extends BaseController {
                         'error' => 'Nombre, URL y fecha son obligatorios'
                     ], 400);
                 }
-                header('Location: ' . BASE_URL . '/public/?url=transmisiones/crear&error=' . urlencode('Nombre, URL y fecha son obligatorios'));
+                header('Location: ' . public_app_url('transmisiones/crear', ['error' => 'Nombre, URL y fecha son obligatorios']));
                 exit;
             }
 
@@ -131,7 +131,7 @@ class TransmisionController extends BaseController {
                         'error' => 'URL de YouTube inválida'
                     ], 400);
                 }
-                header('Location: ' . BASE_URL . '/public/?url=transmisiones/crear&error=' . urlencode('URL de YouTube inválida'));
+                header('Location: ' . public_app_url('transmisiones/crear', ['error' => 'URL de YouTube inválida']));
                 exit;
             }
 
@@ -156,7 +156,7 @@ class TransmisionController extends BaseController {
                 ]);
             }
 
-            header('Location: ' . BASE_URL . '/public/?url=transmisiones&success=' . urlencode('Transmisión creada exitosamente'));
+            header('Location: ' . public_app_url('transmisiones', ['success' => 'Transmisión creada exitosamente']));
             exit;
 
         } catch (Exception $e) {
@@ -167,7 +167,7 @@ class TransmisionController extends BaseController {
                 ], 500);
             }
 
-            header('Location: ' . BASE_URL . '/public/?url=transmisiones/crear&error=' . urlencode('Error al guardar la transmisión'));
+            header('Location: ' . public_app_url('transmisiones/crear', ['error' => 'Error al guardar la transmisión']));
             exit;
         }
     }
@@ -177,7 +177,7 @@ class TransmisionController extends BaseController {
      */
     public function editar() {
         if (!$this->tienePermiso('editar')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         

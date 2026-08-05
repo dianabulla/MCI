@@ -68,6 +68,10 @@ class PermisosCatalogo {
                     'label' => 'Asistencias Universidad de la Vida',
                     'descripcion' => 'Vista de asistencias del programa UV.',
                 ],
+                'asistencias_capacitacion_destino' => [
+                    'label' => 'Asistencias Capacitación Destino',
+                    'descripcion' => 'Matriz de asistencias por nivel de Capacitación Destino.',
+                ],
                 'exportar_consolidado' => [
                     'label' => 'Exportar consolidado programas',
                     'descripcion' => 'Descargar planillas del consolidado.',
@@ -135,6 +139,24 @@ class PermisosCatalogo {
                 'exportar_excel' => [
                     'label' => 'Exportar transmisiones',
                     'descripcion' => 'Exportar listado de transmisiones.',
+                ],
+            ],
+            'talleres' => [
+                'ver_respuestas' => [
+                    'label' => 'Ver respuestas de inscritos',
+                    'descripcion' => 'Consultar el detalle de cada inscripción y la lista de respuestas.',
+                ],
+                'ver_graficas' => [
+                    'label' => 'Ver gráficas del cuestionario',
+                    'descripcion' => 'Acceder a la pestaña de gráficas estadísticas del taller.',
+                ],
+                'exportar_excel' => [
+                    'label' => 'Exportar respuestas a Excel',
+                    'descripcion' => 'Descargar las respuestas del formulario en Excel.',
+                ],
+                'gestionar_enlace' => [
+                    'label' => 'Abrir enlace público y QR',
+                    'descripcion' => 'Abrir el formulario público y generar o imprimir el código QR de inscripción.',
                 ],
             ],
             'entrega_obsequio' => [
@@ -273,17 +295,14 @@ class PermisosCatalogo {
         return (bool)preg_match('/\bpastor(a|es)?\b/u', $norm);
     }
 
-    /** Administrador del sistema por nombre (no usar substr "admin" suelto). */
+    /** Administrador global del sistema: solo título exacto (no subcadenas en roles personalizados). */
     public static function esNombreRolAdministrador(string $nombreRol): bool {
         $norm = self::normalizarNombreRol($nombreRol);
         if ($norm === '') {
             return false;
         }
-        if ($norm === 'admin' || $norm === 'administrador') {
-            return true;
-        }
 
-        return (bool)preg_match('/\badministrador\b/u', $norm);
+        return in_array($norm, ['admin', 'administrador', 'administrator', 'administrador del sistema'], true);
     }
 
     /**

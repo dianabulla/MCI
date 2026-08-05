@@ -55,6 +55,67 @@ $fechaPublicacionHasta = htmlspecialchars((string)($itemEditar['Fecha_Publicacio
     </div>
 <?php endif; ?>
 
+<?php if (!empty($ok)): ?>
+    <div class="alert alert-success" style="margin-bottom:14px;">
+        <?= htmlspecialchars((string)$ok) ?>
+    </div>
+<?php endif; ?>
+
+<?php if ($puedeCrear && empty($itemEditar)): ?>
+<div class="card report-card" style="padding:14px; margin-bottom:14px; border:1px solid #dbeafe; background:#f8fbff;">
+    <h3 style="margin-top:0;"><i class="bi bi-images"></i> Subida masiva de imágenes</h3>
+    <p style="margin:0 0 12px; color:#475569;">Selecciona varias imágenes a la vez. Se creará un contenido por cada imagen con el mismo párrafo base.</p>
+    <form method="POST" action="<?= PUBLIC_URL ?>?url=eventos/modulo/guardar-masivo" enctype="multipart/form-data">
+        <input type="hidden" name="tipo_modulo" value="<?= htmlspecialchars((string)($modulo['tipo'] ?? '')) ?>">
+
+        <div class="form-group">
+            <label for="imagenes_masivas">Imágenes <span style="color:#b42318;">*</span></label>
+            <input type="file" id="imagenes_masivas" name="imagenes_masivas[]" class="form-control" accept="image/jpeg,image/png,image/webp,image/gif" multiple required>
+            <small style="display:block; margin-top:6px; color:#666;">Puedes seleccionar muchas imágenes a la vez (JPG, PNG, WEBP, GIF — máx. 50MB c/u).</small>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
+            <div class="form-group" style="margin:0;">
+                <label for="titulo_masivo">Título base (opcional)</label>
+                <input type="text" id="titulo_masivo" name="titulo_masivo" class="form-control" maxlength="180" placeholder="Ej. Galería del evento">
+                <small style="display:block; margin-top:6px; color:#666;">Si lo dejas vacío, usamos el nombre del archivo.</small>
+            </div>
+            <div class="form-group" style="margin:0;">
+                <label for="orden_masivo">Orden inicial</label>
+                <input type="number" min="0" step="1" id="orden_masivo" name="orden_masivo" class="form-control" value="0">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="parrafo_masivo">Párrafo base <span style="color:#b42318;">*</span></label>
+            <textarea id="parrafo_masivo" name="parrafo_masivo" class="form-control" rows="3" required placeholder="Texto que compartirán todos los contenidos creados"></textarea>
+        </div>
+
+        <div class="form-group">
+            <label style="display:flex; align-items:center; gap:8px; margin-bottom:0;">
+                <input type="checkbox" name="estado_activo_masivo" value="1" checked>
+                Publicar contenidos (activos)
+            </label>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
+            <div class="form-group" style="margin:0;">
+                <label for="fecha_publicacion_desde_masivo">Publicar desde</label>
+                <input type="date" id="fecha_publicacion_desde_masivo" name="fecha_publicacion_desde_masivo" class="form-control">
+            </div>
+            <div class="form-group" style="margin:0;">
+                <label for="fecha_publicacion_hasta_masivo">Publicar hasta</label>
+                <input type="date" id="fecha_publicacion_hasta_masivo" name="fecha_publicacion_hasta_masivo" class="form-control">
+            </div>
+        </div>
+
+        <div class="form-actions" style="margin-top:12px;">
+            <button type="submit" class="btn btn-primary">Subir imágenes masivas</button>
+        </div>
+    </form>
+</div>
+<?php endif; ?>
+
 <?php if ($puedeCrear || ($puedeEditar && !empty($itemEditar))): ?>
 <div class="card report-card" style="padding:14px; margin-bottom:14px;">
     <h3 style="margin-top:0;"><?= !empty($itemEditar) ? 'Editar contenido' : 'Nuevo contenido' ?></h3>
@@ -96,8 +157,14 @@ $fechaPublicacionHasta = htmlspecialchars((string)($itemEditar['Fecha_Publicacio
 
         <div class="form-group">
             <label for="imagen_modulo">Imagen (opcional)</label>
-            <input type="file" id="imagen_modulo" name="imagen_modulo" class="form-control" accept="image/*">
-            <small style="display:block; margin-top:6px; color:#666;">Máximo recomendado: 50MB.</small>
+            <input type="file" id="imagen_modulo" name="imagen_modulo[]" class="form-control" accept="image/jpeg,image/png,image/webp,image/gif"<?= empty($itemEditar) ? ' multiple' : '' ?>>
+            <small style="display:block; margin-top:6px; color:#666;">
+                <?php if (empty($itemEditar)): ?>
+                    Puedes seleccionar varias imágenes: se creará un contenido por cada una (mismo título/párrafo).
+                <?php else: ?>
+                    En edición solo se reemplaza una imagen. Máximo recomendado: 50MB.
+                <?php endif; ?>
+            </small>
             <?php if (!empty($itemEditar['Imagen'])): ?>
                 <div style="margin-top:8px;">
                     <img src="<?= rtrim(PUBLIC_URL, '/') . '/uploads/eventos/' . rawurlencode((string)$itemEditar['Imagen']) ?>" alt="Imagen" style="max-width:220px; border-radius:8px;">

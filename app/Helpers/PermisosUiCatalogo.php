@@ -33,6 +33,7 @@ class PermisosUiCatalogo {
             'formulario_universidad_vida' => 'Formulario público Universidad de la Vida',
             'formulario_capacitacion_destino' => 'Formulario público Capacitación Destino',
             'asistencias_universidad_vida' => 'Asistencias Universidad de la Vida',
+            'asistencias_capacitacion_destino' => 'Asistencias Capacitación Destino',
             'exportar_consolidado' => 'Exportar consolidado programas',
         ],
         'escuelas_formacion' => [
@@ -69,6 +70,12 @@ class PermisosUiCatalogo {
         ],
         'transmisiones' => [
             'exportar_excel' => 'Exportar transmisiones',
+        ],
+        'talleres' => [
+            'ver_respuestas' => 'Ver respuestas de inscritos',
+            'ver_graficas' => 'Ver gráficas del cuestionario',
+            'exportar_excel' => 'Exportar respuestas a Excel',
+            'gestionar_enlace' => 'Abrir enlace público y QR',
         ],
         'entrega_obsequio' => [
             'exportar_pdf' => 'Exportar PDF',

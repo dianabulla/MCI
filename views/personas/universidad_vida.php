@@ -140,8 +140,8 @@ foreach ($personas as $personaResumen) {
                             <?= htmlspecialchars($persona['Telefono'] ?? '') ?>
                         </td>
                         <td>
-                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Nombre_Celula'] ?? 'Sin célula') ?>">
-                                <?= htmlspecialchars($persona['Nombre_Celula'] ?? 'Sin célula') ?>
+                            <span class="ganar-cell-truncate" title="<?= htmlspecialchars($persona['Etiqueta_Celula'] ?? ($persona['Nombre_Celula'] ?? 'Sin célula')) ?>">
+                                <?= htmlspecialchars($persona['Etiqueta_Celula'] ?? ($persona['Nombre_Celula'] ?? 'Sin célula')) ?>
                             </span>
                         </td>
                         <td>

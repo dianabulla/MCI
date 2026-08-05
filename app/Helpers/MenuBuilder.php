@@ -5,7 +5,7 @@
  */
 class MenuBuilder {
     /** Incrementar al cambiar estructura del menú lateral (invalida caché en sesión). */
-    public const SIDEBAR_MENU_VERSION = 5;
+    public const SIDEBAR_MENU_VERSION = 10;
 
     /**
      * Sincroniza permisos planos y menú en $_SESSION.
@@ -80,6 +80,10 @@ class MenuBuilder {
      * @return array<int, array<string, mixed>>
      */
     public static function construirMenu(): array {
+        if (self::debeUsarMenuServicioSocial()) {
+            return self::menuServicioSocial();
+        }
+
         if (self::debeUsarMenuMaestro()) {
             return self::filtrarItems(self::menuMaestro());
         }
@@ -89,6 +93,53 @@ class MenuBuilder {
         }
 
         return self::menuEstandar();
+    }
+
+    /**
+     * Perfil PSICOLOGOMCI: solo Servicio Social (Talleres).
+     */
+    private static function debeUsarMenuServicioSocial(): bool {
+        return AuthController::esPerfilServicioSocialTalleres();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private static function menuServicioSocial(): array {
+        if (!AuthController::puedeAccederModuloTalleres()) {
+            return [];
+        }
+
+        return [[
+            'id' => 'servicio_social',
+            'label' => 'Servicio Social',
+            'ruta' => 'talleres/servicio-social',
+            'icon' => 'bi-heart-pulse',
+            'active_prefixes' => ['talleres/servicio-social'],
+        ]];
+    }
+
+    /**
+     * Menú en sesión del perfil Servicio Social.
+     *
+     * @param array<int, array<string, mixed>>|null $menu
+     */
+    public static function menuSesionEsSoloServicioSocial(?array $menu = null): bool {
+        $menu = $menu ?? (array)($_SESSION['sidebar_menu'] ?? []);
+        if ($menu === []) {
+            return true;
+        }
+
+        foreach ($menu as $item) {
+            if (!is_array($item)) {
+                return false;
+            }
+            if ((string)($item['id'] ?? '') !== 'servicio_social') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -302,6 +353,14 @@ class MenuBuilder {
                 'permiso' => 'nehemias:ver',
             ],
             [
+                'id' => 'talleres',
+                'label' => 'Talleres',
+                'ruta' => 'talleres',
+                'icon' => 'bi-ui-checks-grid',
+                'active_prefixes' => ['talleres'],
+                'permiso' => 'talleres:ver',
+            ],
+            [
                 'id' => 'reportes_ganar',
                 'label' => 'Dashboard Ganar',
                 'ruta' => 'reportes/dashboard-ganar',
@@ -332,13 +391,16 @@ class MenuBuilder {
      * @return array<string, mixed>
      */
     public static function construirAccesosRapidos(): array {
-        if (self::debeUsarMenuMaestro() || self::debeUsarMenuDiscipulo()) {
+        if (self::debeUsarMenuServicioSocial() || self::debeUsarMenuMaestro() || self::debeUsarMenuDiscipulo()) {
             return [];
         }
 
         $comunidad = [];
         if (AuthController::puedeVerModulo('peticiones')) {
             $comunidad[] = ['id' => 'peticiones', 'label' => 'Peticiones', 'ruta' => 'peticiones', 'icon' => 'bi-chat-heart'];
+        }
+        if (AuthController::puedeVerModulo('talleres')) {
+            $comunidad[] = ['id' => 'talleres', 'label' => 'Talleres', 'ruta' => 'talleres', 'icon' => 'bi-ui-checks-grid'];
         }
         if (AuthController::puedeVerModulo('transmisiones')) {
             $comunidad[] = ['id' => 'transmisiones', 'label' => 'Transmisiones', 'ruta' => 'transmisiones', 'icon' => 'bi-broadcast'];

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once APP . '/Helpers/PermisosCatalogo.php';
 require_once APP . '/Helpers/PermisosModulos.php';
 require_once APP . '/Helpers/PermisosUiCatalogo.php';
@@ -121,7 +121,7 @@ $modulosHuerfanosPorGrupo = static function (array $modulos, array $jerarquia) u
             </div>
         </div>
         <div class="perm-toolbar__badge" id="perm-rol-badge" hidden>
-            <i class="bi bi-shield-fill-check"></i> Rol protegido — acceso total
+            <i class="bi bi-shield-fill-check"></i> Rol administrador — no editable (acceso total)
         </div>
     </div>
 

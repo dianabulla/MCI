@@ -228,6 +228,28 @@ class PermisosModulos {
 
             ],
 
+            'talleres' => [
+
+                'label' => 'Talleres',
+
+                'descripcion' => 'Formularios de talleres: listado, respuestas, gráficas, Excel y enlaces públicos. Use las acciones permitidas para afinar cada rol.',
+
+                'grupo' => 'Comunidad',
+
+                'crud_labels' => [
+
+                    'puede_ver' => 'Ver listado de formularios',
+
+                    'puede_crear' => 'Crear nuevos formularios',
+
+                    'puede_editar' => 'Editar formularios y preguntas',
+
+                    'puede_eliminar' => 'Eliminar formularios',
+
+                ],
+
+            ],
+
             'transmisiones' => [
 
                 'label' => 'Transmisiones',

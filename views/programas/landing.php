@@ -2,6 +2,9 @@
 require_once APP . '/Helpers/PermisosProgramasAccess.php';
 include VIEWS . '/layout/header.php';
 
+require_once APP . '/Helpers/ProgramasNavegacion.php';
+ProgramasNavegacion::incluirPartial(['modo' => 'hub']);
+
 $submodulosProgramas = is_array($submodulosProgramas ?? null) ? $submodulosProgramas : [];
 $resumenProgramas = is_array($resumenProgramas ?? null) ? $resumenProgramas : [];
 ?>

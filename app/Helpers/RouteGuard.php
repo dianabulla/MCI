@@ -44,6 +44,9 @@ class RouteGuard {
 
         $regla = self::resolverRegla($url);
         if ($regla === null) {
+            if (!empty($_SESSION['permisos_configurados'])) {
+                return false;
+            }
             return true;
         }
 
@@ -54,6 +57,12 @@ class RouteGuard {
      * false = denegar por política de layout; null = sin restricción de layout.
      */
     private static function evaluarPoliticaLayout(string $url): ?bool {
+        if (AuthController::esPerfilServicioSocialTalleres()) {
+            if (!self::urlPermitidaEnPrefijos($url, self::prefijosServicioSocialTalleres())) {
+                return false;
+            }
+        }
+
         if (AuthController::esContextoMaestro()) {
             if (!self::urlPermitidaEnPrefijos($url, self::prefijosMaestro())) {
                 return false;
@@ -72,6 +81,17 @@ class RouteGuard {
         }
 
         return null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function prefijosServicioSocialTalleres(): array {
+        return [
+            'talleres/servicio-social',
+            'home',
+            'auth/',
+        ];
     }
 
     /**
@@ -198,6 +218,9 @@ class RouteGuard {
                         return self::evaluarChecker($checker);
                     }
                 }
+                if ($modulo === 'personas' && $accion === 'editar') {
+                    return AuthController::puedeEditarPersonaDesdeDiscipular();
+                }
                 return AuthController::puede($modulo . ':' . $accion);
             }
         }
@@ -245,8 +268,7 @@ class RouteGuard {
             return;
         }
 
-        $base = rtrim((string)(defined('PUBLIC_URL') ? PUBLIC_URL : ''), '/');
-        header('Location: ' . $base . '/index.php?url=auth/acceso-denegado');
+        header('Location: ' . (function_exists('public_app_url') ? public_app_url('auth/acceso-denegado') : '/?url=auth/acceso-denegado'));
         exit;
     }
 }

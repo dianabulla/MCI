@@ -10,13 +10,15 @@
 
  *
 
- * Rutas no listadas: solo requieren autenticación (comportamiento legacy).
+ * Rutas no listadas: si el rol tiene matriz configurada, se deniegan; si no, solo autenticación (legacy).
 
  */
 
 
 
 return [
+
+    'home' => ['checker' => 'puedeAccederHome'],
 
     // --- Células (piloto Fase 1) ---
 
@@ -62,11 +64,13 @@ return [
 
     'personas/whatsapp/bandeja' => 'personas_plantillas_whatsapp:ver',
 
-    'personas/eliminar' => 'personas:eliminar',
+    'personas/eliminar' => ['checker' => 'puedeEliminarPersonaDesdeDiscipular'],
 
     'personas/exportarExcel' => ['any' => ['personas:exportar_excel', 'personas:editar']],
 
     'personas/crear' => ['any' => ['personas:crear', 'acceso_rapido_nuevo_discipulo:crear']],
+
+    'personas/editar' => ['checker' => 'puedeEditarPersonaDesdeDiscipular'],
 
     'personas/*' => [
 
@@ -88,7 +92,7 @@ return [
 
     'programas/consolidar/exportar' => 'programas:exportar_consolidado',
 
-    'programas/consolidar/asistencias' => ['checker' => 'puedeVerAsistenciasProgramaUv'],
+    'programas/consolidar/asistencias' => ['checker' => 'puedeVerAsistenciasProgramas'],
 
     'programas/evaluaciones' => [
         'permiso' => 'discipular_evaluaciones:ver',
@@ -172,6 +176,8 @@ return [
 
     'discipular/ministerios/eliminar' => 'ministerios:eliminar',
 
+    'discipular/ministerios/personas-asignables' => 'ministerios:ver',
+
     'discipular/ministerios/*' => ['modulo' => 'ministerios', 'inferir_accion' => true],
 
     'discipular/migrar-consolidados' => ['admin_only' => true],
@@ -194,7 +200,13 @@ return [
 
     'teen/recuperar-archivos' => 'teen:editar',
 
+    'teen/subir-mes' => 'teen:crear',
+
+    'teen/guardar-tema-mes' => 'teen:editar',
+
     'teen/editar' => 'teen:editar',
+
+    'teen/asignar-profesor' => 'teen:editar',
 
     'teen/eliminar' => 'teen:eliminar',
 
@@ -244,6 +256,14 @@ return [
 
 
 
+    // --- Asistente (chatbot) ---
+
+    'chatbot/consultar' => ['checker' => 'puedeUsarChatbotAsistente'],
+
+    'chatbot/sugerencias' => ['checker' => 'puedeUsarChatbotAsistente'],
+
+
+
     // --- Reportes ---
 
     'reportes' => 'reportes:ver',
@@ -268,6 +288,42 @@ return [
 
 
 
+    // --- Talleres (formularios dinámicos) ---
+
+    'talleres' => ['checker' => 'puedeAccederModuloTalleres'],
+
+    'talleres/crear' => 'talleres:crear',
+
+    'talleres/guardar' => ['modulo' => 'talleres', 'inferir_accion' => true],
+
+    'talleres/editar' => 'talleres:editar',
+
+    'talleres/eliminar' => 'talleres:eliminar',
+
+    'talleres/respuestas' => ['checker' => 'puedeAccederRespuestasTalleres'],
+
+    'talleres/exportar' => ['any' => ['talleres:exportar_excel', 'talleres:ver_respuestas', 'talleres:ver']],
+
+    'talleres/qr' => ['any' => ['talleres:gestionar_enlace', 'talleres:editar', 'talleres:ver']],
+
+    'talleres/servicio-social' => ['checker' => 'puedeAccederModuloTalleres'],
+
+    'talleres/servicio-social/ver' => ['checker' => 'puedeAccederModuloTalleres'],
+
+    'talleres/servicio-social/actualizar' => ['any' => ['talleres:editar', 'talleres:ver_respuestas']],
+
+    'talleres/servicio-social/horarios' => ['any' => ['talleres:editar', 'talleres:ver_respuestas']],
+
+    'talleres/servicio-social/horarios/guardar' => ['any' => ['talleres:editar', 'talleres:ver_respuestas']],
+
+    'talleres/servicio-social/guardar-historia' => ['any' => ['talleres:editar', 'talleres:ver_respuestas']],
+
+    'talleres/servicio-social/exportar' => ['any' => ['talleres:exportar_excel', 'talleres:ver_respuestas', 'talleres:ver']],
+
+    'talleres/*' => ['modulo' => 'talleres', 'inferir_accion' => true],
+
+
+
     // --- Eventos (panel; rutas /publico sin sesión no pasan por aquí) ---
 
     'eventos' => 'eventos:ver',
@@ -287,6 +343,8 @@ return [
     'eventos/otros' => 'eventos:ver',
 
     'eventos/modulo/guardar' => ['any' => ['eventos:gestionar_contenido_publico', 'eventos:editar']],
+
+    'eventos/modulo/guardar-masivo' => ['any' => ['eventos:gestionar_contenido_publico', 'eventos:editar']],
 
     'eventos/modulo/eliminar' => ['any' => ['eventos:gestionar_contenido_publico', 'eventos:eliminar']],
 
@@ -365,6 +423,12 @@ return [
     'roles/eliminar' => 'roles:eliminar',
 
     'roles/*' => ['modulo' => 'roles', 'inferir_accion' => true],
+
+    'herramientas/diagnostico-documento' => ['admin_only' => true],
+
+    'herramientas/diagnostico-documento/exportar' => ['admin_only' => true],
+
+    'herramientas/diagnostico-permisos-persona' => ['admin_only' => true],
 
 ];
 

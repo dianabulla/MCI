@@ -207,6 +207,13 @@
             <p><?= !empty($modo_agregar_cuenta) ? 'Agregar cuenta para cambio rápido' : 'Misión Carismática Internacional' ?></p>
         </div>
         <div class="login-body">
+            <?php if (isset($_GET['sesion']) && $_GET['sesion'] === 'expirada'): ?>
+            <div class="alert alert-warning" style="background:#fffbeb;border-color:#fcd34d;color:#92400e;">
+                <i class="bi bi-clock-history"></i>
+                Tu sesión se cerró por inactividad (más de 30 minutos). Inicia sesión de nuevo.
+            </div>
+            <?php endif; ?>
+
             <?php if (isset($_SESSION['flash_info']) && $_SESSION['flash_info'] !== ''): ?>
             <div class="alert alert-info" style="background:#edf5ff;border-color:#cfe1ff;color:#2f4f87;">
                 <i class="bi bi-info-circle"></i> <?= htmlspecialchars((string)$_SESSION['flash_info']) ?>

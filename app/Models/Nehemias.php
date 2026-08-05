@@ -222,6 +222,40 @@ class Nehemias extends BaseModel {
     }
 
     /**
+     * Busca un registro completo por cédula o teléfono (para precargar formularios).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function buscarPorDocumentoOTelefono(string $documento, string $telefono = ''): ?array {
+        $documentoNorm = preg_replace('/\D+/', '', trim($documento));
+        $telefonoNorm = preg_replace('/\D+/', '', trim($telefono));
+
+        if ($documentoNorm !== '') {
+            $sql = "SELECT * FROM {$this->table}
+                    WHERE REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(Numero_Cedula, ''))), ' ', ''), '.', ''), '-', '') = ?
+                    ORDER BY Id_Nehemias DESC
+                    LIMIT 1";
+            $rows = $this->query($sql, [strtoupper($documentoNorm)]);
+            if (!empty($rows[0])) {
+                return $rows[0];
+            }
+        }
+
+        if ($telefonoNorm !== '') {
+            $sql = "SELECT * FROM {$this->table}
+                    WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(Telefono_Normalizado, Telefono, '')), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '') = ?
+                    ORDER BY Id_Nehemias DESC
+                    LIMIT 1";
+            $rows = $this->query($sql, [$telefonoNorm]);
+            if (!empty($rows[0])) {
+                return $rows[0];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Obtener conteo de votantes por líder y líder Nehemias
      */
     public function getVotantesPorLider() {

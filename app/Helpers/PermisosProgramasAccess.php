@@ -102,6 +102,20 @@ class PermisosProgramasAccess {
         return self::puedeAccionPrograma('asistencias_universidad_vida');
     }
 
+    public static function puedeVerAsistenciasCapacitacionDestino(): bool {
+        if (self::tieneAccesoCompletoProgramas()) {
+            return true;
+        }
+        if (self::puedeAccionPrograma('asistencias_capacitacion_destino')) {
+            return true;
+        }
+        if (AuthController::puedeVerMaterialCapacitacionDestino()) {
+            return true;
+        }
+
+        return self::puedeVerLineaCapacitacionDestino();
+    }
+
     public static function puedeExportarConsolidado(): bool {
         return self::puedeAccionPrograma('exportar_consolidado');
     }
@@ -150,7 +164,7 @@ class PermisosProgramasAccess {
         return [
             'ver_linea' => self::puedeVerLineaCapacitacionDestino(),
             'consolidado' => self::puedeVerConsolidadoCapacitacionDestino(),
-            'asistencias' => false,
+            'asistencias' => self::puedeVerAsistenciasCapacitacionDestino(),
             'dashboard' => self::puedeVerDashboardCapacitacionDestino(),
             'pagos' => self::puedeGestionarPagosCapacitacionDestino(),
             'formulario' => self::puedeVerFormularioCapacitacionDestino(),

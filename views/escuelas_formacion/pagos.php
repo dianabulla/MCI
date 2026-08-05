@@ -1,12 +1,21 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 <?php
 $programa = (string)($programa ?? 'universidad_vida');
+$lineaNavPagos = (strpos($programa, 'capacitacion_destino') === 0) ? 'capacitacion_destino' : 'universidad_vida';
+require_once APP . '/Helpers/ProgramasNavegacion.php';
+ProgramasNavegacion::incluirPartial([
+    'linea' => $lineaNavPagos,
+    'seccion' => 'pagos',
+    'forzar' => true,
+]);
+
 $programa = $programa === 'capacitacion_destino' ? 'capacitacion_destino_nivel_1' : $programa;
 $programaLabel = ($programa === 'universidad_vida') ? 'Universidad de la Vida' : 'Capacitación Destino';
 $esUv = $programa === 'universidad_vida';
 $buscar = (string)($buscar ?? '');
 $filtroGenero = (string)($filtro_genero ?? '');
 $filtroMinisterio = (string)($filtro_ministerio ?? '');
+$filtroEncuentro = (string)($filtro_encuentro ?? '');
 $bloquearSelectorPrograma = !empty($bloquear_selector_programa);
 $urlVolverPagos = (string)($url_volver_pagos ?? (PUBLIC_URL . '?url=home'));
 $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
@@ -124,9 +133,25 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
                         <option value="">Todos</option>
                         <option value="hombres" <?= $filtroGenero === 'hombres' ? 'selected' : '' ?>>Hombres (todas las edades)</option>
                         <option value="mujeres" <?= $filtroGenero === 'mujeres' ? 'selected' : '' ?>>Mujeres (todas las edades)</option>
-                        <option value="jovenes" <?= $filtroGenero === 'jovenes' ? 'selected' : '' ?>>Jóvenes (por edad)</option>
+                        <option value="jovenes" <?= $filtroGenero === 'jovenes' ? 'selected' : '' ?>>Jóvenes (14–28 años)</option>
+                        <option value="teens" <?= $filtroGenero === 'teens' ? 'selected' : '' ?>>Teens (9–13 años)</option>
                     </select>
-                    <small class="mini-muted" style="display:block;margin-top:4px;">H/M por género (incluye jóvenes). Jóvenes = edad 14–28 y teens 9–13.</small>
+                    <small class="mini-muted" style="display:block;margin-top:4px;">H/M por género. Jóvenes y Teens se clasifican por edad (14–28 y 9–13) o por segmento preferido, igual que asistencias UV.</small>
+                </div>
+                <div class="filtro-group" id="filtro-encuentro-wrap" <?= $esUv ? '' : 'hidden' ?>>
+                    <label for="filtro-encuentro">Asistencia encuentro</label>
+                    <select id="filtro-encuentro" class="form-control" title="Según escuela_formacion_asistencia_clase — clases 5 y 6">
+                        <option value="todos" <?= ($filtroEncuentro === '' || $filtroEncuentro === 'todos') ? 'selected' : '' ?>>Todos</option>
+                        <option value="excluir_asistieron" <?= $filtroEncuentro === 'excluir_asistieron' ? 'selected' : '' ?>>Excluir quienes ya asistieron (día 1 y/o 2)</option>
+                        <option value="sin_encuentro" <?= $filtroEncuentro === 'sin_encuentro' ? 'selected' : '' ?>>Solo sin asistir al encuentro</option>
+                        <option value="sin_dia1" <?= $filtroEncuentro === 'sin_dia1' ? 'selected' : '' ?>>Sin asistencia día 1 (clase 5)</option>
+                        <option value="sin_dia2" <?= $filtroEncuentro === 'sin_dia2' ? 'selected' : '' ?>>Sin asistencia día 2 (clase 6)</option>
+                        <option value="con_dia1" <?= $filtroEncuentro === 'con_dia1' ? 'selected' : '' ?>>Con asistencia día 1</option>
+                        <option value="con_dia2" <?= $filtroEncuentro === 'con_dia2' ? 'selected' : '' ?>>Con asistencia día 2</option>
+                        <option value="con_ambos" <?= $filtroEncuentro === 'con_ambos' ? 'selected' : '' ?>>Asistieron ambos días</option>
+                        <option value="con_al_menos_uno" <?= $filtroEncuentro === 'con_al_menos_uno' ? 'selected' : '' ?>>Asistieron al menos un día</option>
+                    </select>
+                    <small class="mini-muted" style="display:block;margin-top:4px;">Encuentro = clases 5 y 6 en la tabla de asistencias.</small>
                 </div>
                 <div class="filtro-group">
                     <label for="buscar">Buscar</label>
@@ -289,6 +314,8 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
     const buscarInput = document.getElementById('buscar');
     const filtroGeneroInput = document.getElementById('filtro-genero');
     const filtroMinisterioInput = document.getElementById('filtro-ministerio');
+    const filtroEncuentroInput = document.getElementById('filtro-encuentro');
+    const filtroEncuentroWrap = document.getElementById('filtro-encuentro-wrap');
     const filtroForm = document.getElementById('filtro-unificado-form');
     const btnLimpiar = document.getElementById('btn-limpiar');
     const btnDescargarPng = document.getElementById('btn-descargar-png');
@@ -412,15 +439,11 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
     }
 
     function esGeneroJoven(row) {
-        const edad = Number(row.edad || row.Edad || 0);
-        if (edad >= 9 && edad <= 13) {
-            return true;
-        }
-        if (edad >= 14 && edad <= 28) {
-            return true;
-        }
-        const segPref = String(row.segmento_preferido || row.Segmento_Preferido || '').trim().toLowerCase();
-        return segPref === 'jovenes' || segPref === 'teens';
+        return resolverSegmento(row) === 'jovenes';
+    }
+
+    function esGeneroTeen(row) {
+        return resolverSegmento(row) === 'teens';
     }
 
     function calcularTotales(rows) {
@@ -447,7 +470,33 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         const buscar = buscarInput ? String(buscarInput.value || '').trim() : '';
         const genero = filtroGeneroInput ? String(filtroGeneroInput.value || '') : '';
         const ministerio = filtroMinisterioInput ? String(filtroMinisterioInput.value || '') : '';
-        return buscar !== '' || genero !== '' || ministerio !== '';
+        const encuentro = filtroEncuentroInput ? String(filtroEncuentroInput.value || '') : '';
+        return buscar !== '' || genero !== '' || ministerio !== '' || (encuentro !== '' && encuentro !== 'todos');
+    }
+
+    function getEtiquetaFiltroEncuentro(valor) {
+        const mapa = {
+            excluir_asistieron: 'Excluir quienes ya asistieron al encuentro',
+            sin_encuentro: 'Sin asistir al encuentro',
+            sin_dia1: 'Sin asistencia día 1',
+            sin_dia2: 'Sin asistencia día 2',
+            con_dia1: 'Con asistencia día 1',
+            con_dia2: 'Con asistencia día 2',
+            con_ambos: 'Asistieron ambos días',
+            con_al_menos_uno: 'Asistieron al menos un día del encuentro'
+        };
+        return mapa[String(valor || '')] || '';
+    }
+
+    function actualizarVisibilidadFiltroEncuentro(programa) {
+        if (!filtroEncuentroWrap) {
+            return;
+        }
+        const esUvPrograma = String(programa) === 'universidad_vida';
+        filtroEncuentroWrap.hidden = !esUvPrograma;
+        if (!esUvPrograma && filtroEncuentroInput) {
+            filtroEncuentroInput.value = 'todos';
+        }
     }
 
     function ensurePagosResumenPersonasDom() {
@@ -549,8 +598,13 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
                 if (filtroMinisterioInput && filtroMinisterioInput.value !== '') {
                     partes.push('Ministerio: ' + filtroMinisterioInput.value);
                 }
+                if (filtroEncuentroInput && filtroEncuentroInput.value && filtroEncuentroInput.value !== 'todos') {
+                    const ee = getEtiquetaFiltroEncuentro(filtroEncuentroInput.value);
+                    if (ee) partes.push(ee);
+                }
+                const sinPagoIns = statsIns ? Number(statsIns.sin_pago || 0) : 0;
                 const detalleFiltro = esUv && statsIns
-                    ? (' — ' + inscritas + ' inscritas · ' + completoIns + ' pago completo · ' + abonoIns + ' solo abono · ' + conPagoIns + ' con pago')
+                    ? (' — ' + inscritas + ' inscritas · ' + sinPagoIns + ' sin pago · ' + completoIns + ' pago completo · ' + abonoIns + ' solo abono · ' + conPagoIns + ' con pago')
                     : (' — ' + total + ' en tabla · ' + conPago + ' con pago');
                 elFiltro.textContent = 'Filtro activo: ' + partes.join(' · ') + detalleFiltro;
                 elFiltro.hidden = false;
@@ -649,6 +703,9 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         if (valor === 'jovenes') {
             return 'jóvenes';
         }
+        if (valor === 'teens') {
+            return 'teens';
+        }
         return 'personas';
     }
 
@@ -662,6 +719,9 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         }
         if (valor === 'jovenes') {
             return (rows || []).filter((row) => esGeneroJoven(row));
+        }
+        if (valor === 'teens') {
+            return (rows || []).filter((row) => esGeneroTeen(row));
         }
         return rows || [];
     }
@@ -815,6 +875,16 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         params.set('buscar', String(buscarInput ? buscarInput.value : ''));
         params.set('filtro_genero', String(filtroGeneroInput ? filtroGeneroInput.value : ''));
         params.set('filtro_ministerio', String(filtroMinisterioInput ? filtroMinisterioInput.value : ''));
+        params.set('filtro_encuentro', String(filtroEncuentroInput ? filtroEncuentroInput.value : 'todos'));
+        const urlParams = new URLSearchParams(window.location.search);
+        const anioUv = urlParams.get('anio');
+        const semestreUv = urlParams.get('semestre');
+        if (anioUv) {
+            params.set('anio', anioUv);
+        }
+        if (semestreUv) {
+            params.set('semestre', semestreUv);
+        }
 
         estadoCarga.textContent = 'Cargando...';
 
@@ -847,6 +917,8 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
             if (programaLabel) {
                 programaLabel.textContent = data.programa_label || etiquetaPrograma(data.programa);
             }
+
+            actualizarVisibilidadFiltroEncuentro(data.programa);
 
             // Renderizar tabs
             renderHead(data.programa, 'unificada');
@@ -1035,11 +1107,22 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         });
     }
 
+    if (filtroEncuentroInput) {
+        filtroEncuentroInput.addEventListener('change', async () => {
+            try {
+                await cargarDatos();
+            } catch (error) {
+                estadoCarga.textContent = 'Error al cargar';
+            }
+        });
+    }
+
     if (btnLimpiar) {
         btnLimpiar.addEventListener('click', async () => {
             if (buscarInput) buscarInput.value = '';
             if (filtroGeneroInput) filtroGeneroInput.value = '';
             if (filtroMinisterioInput) filtroMinisterioInput.value = '';
+            if (filtroEncuentroInput) filtroEncuentroInput.value = 'todos';
             try {
                 await cargarDatos();
             } catch (error) {

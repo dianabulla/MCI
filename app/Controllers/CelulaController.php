@@ -42,7 +42,7 @@ class CelulaController extends BaseController {
 
     public function index() {
         if (!AuthController::puede('celulas:ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -157,7 +157,7 @@ class CelulaController extends BaseController {
     public function crear() {
         // Verificar permiso de crear
         if (!AuthController::puede('celulas:crear')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         
@@ -178,7 +178,9 @@ class CelulaController extends BaseController {
                 'Hora_Reunion' => $_POST['hora_reunion'],
                 'Id_Lider' => $idLider,
                 'Pastor_Principal' => $_POST['pastor_principal'] ?: null,
-                'Id_Lider_Inmediato' => $_POST['id_lider_inmediato'] ?: null,
+                'Id_Lider_Inmediato' => trim((string)($_POST['id_lider_inmediato'] ?? '')) !== ''
+                    ? (int)$_POST['id_lider_inmediato']
+                    : null,
                 'Barrio' => $_POST['barrio'] ?: null,
                 'Red' => $_POST['red'] ?: null,
                 'Id_Anfitrion' => $_POST['id_anfitrion'] ?: null,
@@ -187,7 +189,7 @@ class CelulaController extends BaseController {
             ];
             
             $this->celulaModel->create($data);
-            $this->redirect('reportes&tipo=celulas');
+            $this->redirect('celulas&guardado=1');
         } else {
             $this->view('celulas/formulario');
         }
@@ -196,37 +198,65 @@ class CelulaController extends BaseController {
     public function editar() {
         // Verificar permiso de editar
         if (!AuthController::puede('celulas:editar')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         
-        $id = $_GET['id'] ?? null;
+        $id = $_POST['id_celula'] ?? $_GET['id'] ?? null;
         
         if (!$id) {
-            $this->redirect('reportes&tipo=celulas');
+            $this->redirect('celulas');
         }
 
         if (!$this->puedeAccederCelula($id)) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $tipoCelulaInput = strtolower(trim((string)($_POST['tipo_celula'] ?? '')));
             $celulaAntes = $this->celulaModel->getById($id);
+            if (!$celulaAntes) {
+                $this->redirect('celulas');
+            }
+
+            $idLiderPost = trim((string)($_POST['id_lider'] ?? ''));
+            $idAnfitrionPost = trim((string)($_POST['id_anfitrion'] ?? ''));
+            $anfitrionTextoPost = trim((string)($_POST['anfitrion_search'] ?? ''));
+
             $data = [
                 'Nombre_Celula' => $_POST['nombre_celula'],
                 'Direccion_Celula' => $_POST['direccion_celula'],
                 'Dia_Reunion' => $_POST['dia_reunion'],
                 'Hora_Reunion' => $_POST['hora_reunion'],
-                'Id_Lider' => $_POST['id_lider'] ?: null,
+                'Id_Lider' => $idLiderPost !== '' ? (int)$idLiderPost : null,
                 'Pastor_Principal' => $_POST['pastor_principal'] ?: null,
-                'Id_Lider_Inmediato' => $_POST['id_lider_inmediato'] ?: null,
+                'Id_Lider_Inmediato' => trim((string)($_POST['id_lider_inmediato'] ?? '')) !== ''
+                    ? (int)$_POST['id_lider_inmediato']
+                    : null,
                 'Barrio' => $_POST['barrio'] ?: null,
                 'Red' => $_POST['red'] ?: null,
-                'Id_Anfitrion' => $_POST['id_anfitrion'] ?: null,
+                'Id_Anfitrion' => $idAnfitrionPost !== '' ? (int)$idAnfitrionPost : null,
                 'Telefono_Anfitrion' => $_POST['telefono_anfitrion'] ?: null
             ];
+
+            // Evitar perder líder/anfitrión si el autocompletado no envió el ID oculto.
+            if ($idLiderPost === '' && !empty($celulaAntes['Id_Lider'])) {
+                $data['Id_Lider'] = (int)$celulaAntes['Id_Lider'];
+            }
+            if ($idAnfitrionPost === '' && !empty($celulaAntes['Id_Anfitrion'])) {
+                $nombreAnfitrionAntes = trim((string)($celulaAntes['Nombre_Anfitrion'] ?? ''));
+                if ($anfitrionTextoPost !== '' && $nombreAnfitrionAntes !== ''
+                    && mb_strtolower($anfitrionTextoPost) === mb_strtolower($nombreAnfitrionAntes)) {
+                    $data['Id_Anfitrion'] = (int)$celulaAntes['Id_Anfitrion'];
+                    if (trim((string)($data['Telefono_Anfitrion'] ?? '')) === '') {
+                        $data['Telefono_Anfitrion'] = $celulaAntes['Telefono_Anfitrion'] ?? null;
+                    }
+                }
+            }
+            if (trim((string)($_POST['id_lider_inmediato'] ?? '')) === '' && !empty($celulaAntes['Id_Lider_Inmediato'])) {
+                $data['Id_Lider_Inmediato'] = (int)$celulaAntes['Id_Lider_Inmediato'];
+            }
 
             if ($tipoCelulaInput !== '') {
                 $data['Es_Antiguo'] = in_array($tipoCelulaInput, ['antigua', 'antiguo', '1'], true) ? 1 : 0;
@@ -235,7 +265,7 @@ class CelulaController extends BaseController {
             }
             
             $this->celulaModel->update($id, $data);
-            $this->redirect('reportes&tipo=celulas');
+            $this->redirect('celulas&guardado=1');
         } else {
             $data = [
                 'celula' => $this->celulaModel->getById($id)
@@ -252,7 +282,7 @@ class CelulaController extends BaseController {
         }
 
         if (!$this->puedeAccederCelula($id)) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -262,7 +292,7 @@ class CelulaController extends BaseController {
 
     public function exportarExcel() {
         if (!AuthController::puede('celulas:ver')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -296,7 +326,7 @@ class CelulaController extends BaseController {
     public function eliminar() {
         // Verificar permiso de eliminar
         if (!AuthController::puede('celulas:eliminar')) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
         
@@ -304,9 +334,10 @@ class CelulaController extends BaseController {
         
         if ($id) {
             if (!$this->puedeAccederCelula($id)) {
-                header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+                header('Location: ' . public_app_url('auth/acceso-denegado'));
                 exit;
             }
+            $this->personaModel->limpiarMiembrosPorCelula($id);
             $this->celulaModel->delete($id);
         }
         
@@ -437,7 +468,7 @@ class CelulaController extends BaseController {
 
     public function materiales() {
         if (!AuthController::puedeVerMaterialCelulas()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
@@ -656,7 +687,7 @@ class CelulaController extends BaseController {
      */
     public function verMaterial() {
         if (!AuthController::puedeVerMaterialCelulas()) {
-            header('Location: ' . BASE_URL . '/public/?url=auth/acceso-denegado');
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
 
