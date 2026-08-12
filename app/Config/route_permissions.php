@@ -133,6 +133,18 @@ return [
     'home/eliminar-inscripcion-formacion' => ['any' => ['personas:eliminar', 'escuelas_formacion:eliminar']],
 
     'home/guardar-asistencia-clase' => 'escuelas_formacion_marcar_asistencia:editar',
+    'home/calificar-tarea-entrega-cap' => [
+        'any' => [
+            'material_capacitacion_destino:editar',
+            'material_capacitacion_destino:crear',
+        ],
+    ],
+    'home/exportar-planilla-cap-destino' => [
+        'any' => [
+            'material_capacitacion_destino:editar',
+            'material_capacitacion_destino:crear',
+        ],
+    ],
 
     'home/lideres-celula' => 'celulas:ver',
 

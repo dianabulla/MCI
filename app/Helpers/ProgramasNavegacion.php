@@ -99,7 +99,10 @@ class ProgramasNavegacion
         if ($url === 'programas' || strpos($url, 'programas/') === 0) {
             return true;
         }
-        // Los dashboards de reportes (UV/Cap) son rutas exclusivas vía DashboardSelector, no este menú.
+        if ($url === 'reportes/dashboard-escuelas-uv' || $url === 'reportes/dashboard-escuelas-capacitacion') {
+            return true;
+        }
+        // Pagos y material UV/Cap dentro del ecosistema Programas.
         if (strpos($url, 'escuelas_formacion/pagos/') === 0) {
             return true;
         }
@@ -155,6 +158,12 @@ class ProgramasNavegacion
         }
         if (strpos($url, 'programas/consolidar') === 0) {
             return ['modo' => $modo, 'linea' => $linea, 'seccion' => 'consolidado'];
+        }
+        if ($url === 'reportes/dashboard-escuelas-uv') {
+            return ['modo' => $modo, 'linea' => 'universidad_vida', 'seccion' => 'dashboard'];
+        }
+        if ($url === 'reportes/dashboard-escuelas-capacitacion') {
+            return ['modo' => $modo, 'linea' => 'capacitacion_destino', 'seccion' => 'dashboard'];
         }
 
         return ['modo' => $modo, 'linea' => $linea, 'seccion' => $seccion];
@@ -311,6 +320,19 @@ class ProgramasNavegacion
         if ($ctx['modo'] === 'hub') {
             return self::urlPublic('home');
         }
+        if ($seccion === 'dashboard') {
+            foreach (self::definicionesLineas() as $def) {
+                if ($def['clave'] !== $linea) {
+                    continue;
+                }
+                $perm = PermisosProgramasAccess::permisosUiLinea($linea);
+                if (!empty($perm['consolidado'])) {
+                    return self::urlPublic((string)$def['consolidar_url']);
+                }
+            }
+
+            return self::urlPublic('programas');
+        }
         if ($seccion === 'consolidado' || $seccion === '') {
             return self::urlPublic('programas');
         }
@@ -331,6 +353,12 @@ class ProgramasNavegacion
     {
         if ($ctx['modo'] === 'hub') {
             return 'Panel principal';
+        }
+        if ($seccion === 'dashboard') {
+            $linea = (string)($ctx['linea'] ?? '');
+            $titulo = self::tituloLinea($linea);
+
+            return $titulo !== '' ? $titulo : 'Consolidado';
         }
         if ($seccion === 'consolidado' || $seccion === '') {
             return 'Programas';

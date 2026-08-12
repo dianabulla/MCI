@@ -4299,17 +4299,42 @@ class ReporteController extends BaseController {
         );
 
         $personas = $this->personaModel->query(
-            "SELECT p.Id_Persona, p.Proceso, p.Escalera_Checklist
+            "SELECT p.Id_Persona, p.Proceso, p.Escalera_Checklist, p.Id_Lider, p.Id_Ministerio,
+                    COALESCE(NULLIF(TRIM(m.Nombre_Ministerio), ''), 'Sin ministerio') AS Nombre_Ministerio
              FROM persona p
+             LEFT JOIN ministerio m ON m.Id_Ministerio = p.Id_Ministerio
              WHERE {$condPersonas}",
             $paramsPersonas
         );
+
+        $idsMinisteriosPersonas = [];
+        foreach ($personas as $personaTmp) {
+            $idMinTmp = (int)($personaTmp['Id_Ministerio'] ?? 0);
+            if ($idMinTmp > 0) {
+                $idsMinisteriosPersonas[$idMinTmp] = $idMinTmp;
+            }
+        }
+        $contextoLideres12 = $this->construirContextoLideresPrincipales12Escalera(
+            (string)$filtroRol,
+            array_values($idsMinisteriosPersonas),
+            $idLiderFiltro
+        );
+        $lideres12PorMinisterio = (array)($contextoLideres12['por_ministerio'] ?? []);
+        $liderSuperiorPorId = (array)($contextoLideres12['lider_superior_por_id'] ?? []);
 
         $total = count($personas);
         $conUv = 0;
         $conEncuentro = 0;
         $conBautismo = 0;
         $conCapDestino = 0;
+        $desglosePorLider12 = [
+            'total' => [],
+            'con_uv' => [],
+            'sin_uv' => [],
+            'encuentro' => [],
+            'bautismo' => [],
+            'cap_destino' => [],
+        ];
 
         $idsPersonas = [];
         foreach ($personas as $persona) {
@@ -4321,20 +4346,48 @@ class ReporteController extends BaseController {
         $idsConInscripcionCap = $this->obtenerIdsConInscripcionCapacitacionDestino(array_values($idsPersonas));
 
         foreach ($personas as $persona) {
+            $ministerioNombre = trim((string)($persona['Nombre_Ministerio'] ?? '')) ?: 'Sin ministerio';
+            $idMinisterioPersona = (int)($persona['Id_Ministerio'] ?? 0);
+            $idLiderPersona = (int)($persona['Id_Lider'] ?? 0);
+            $liderResuelto = $this->resolverLiderPrincipal12PersonaEnMinisterio(
+                $idLiderPersona,
+                $idMinisterioPersona,
+                $lideres12PorMinisterio,
+                $liderSuperiorPorId
+            );
+            $idLider12 = (int)($liderResuelto['id_lider'] ?? 0);
+            $nombreLider12 = (string)($liderResuelto['lider'] ?? 'Sin líder de 12');
+            $ministerioLider = trim((string)($liderResuelto['ministerio'] ?? '')) ?: $ministerioNombre;
             $checklist = $this->obtenerChecklist($persona);
             $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
+
+            $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'total', $idLider12, $nombreLider12, $ministerioLider);
+
             if ($this->peldanoMarcado($checklist, 'Consolidar', 0, $proceso)) {
                 $conUv++;
+                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'con_uv', $idLider12, $nombreLider12, $ministerioLider);
+            } else {
+                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'sin_uv', $idLider12, $nombreLider12, $ministerioLider);
             }
             if ($this->peldanoMarcado($checklist, 'Consolidar', 1, $proceso)) {
                 $conEncuentro++;
+                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'encuentro', $idLider12, $nombreLider12, $ministerioLider);
             }
             if ($this->peldanoMarcado($checklist, 'Consolidar', 2, $proceso)) {
                 $conBautismo++;
+                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'bautismo', $idLider12, $nombreLider12, $ministerioLider);
             }
             if ($this->personaEnCapacitacionDestinoEscalera($checklist, $proceso, $persona, $idsConInscripcionCap)) {
                 $conCapDestino++;
+                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'cap_destino', $idLider12, $nombreLider12, $ministerioLider);
             }
+        }
+
+        if ($idMinisterioFiltro !== null && $idMinisterioFiltro > 0) {
+            $this->sembrarLideresPrincipales12DesgloseEscalera(
+                $desglosePorLider12,
+                (array)($lideres12PorMinisterio[$idMinisterioFiltro] ?? [])
+            );
         }
 
         $sinUv = max(0, $total - $conUv);
@@ -4364,7 +4417,221 @@ class ReporteController extends BaseController {
             'sin_asistencia_encuentro' => $sinUv,
             'pct_asistieron' => $total > 0 ? round(($conEncuentro / $total) * 100, 1) : 0.0,
             'pct_sin_asistencia' => $total > 0 ? round(($sinUv / $total) * 100, 1) : 0.0,
+            'desglose_por_lider12' => $this->formatearDesgloseEscaleraPorLider12(
+                $desglosePorLider12,
+                $idMinisterioFiltro !== null && $idMinisterioFiltro > 0
+            ),
         ];
+    }
+
+    /**
+     * @param array<int> $idsMinisterios
+     * @return array{
+     *   por_ministerio: array<int, array<int, array{lider:string, ministerio:string, id_lider:int}>>,
+     *   lider_superior_por_id: array<int, int>
+     * }
+     */
+    private function construirContextoLideresPrincipales12Escalera(
+        string $filtroRol,
+        array $idsMinisterios,
+        ?int $idLiderFiltro = null
+    ): array {
+        $idsMinisterios = array_values(array_unique(array_filter(array_map('intval', $idsMinisterios), static function ($id) {
+            return $id > 0;
+        })));
+
+        $liderSuperiorPorId = $this->construirMapaSuperiorLideres($filtroRol);
+        if ($idsMinisterios === []) {
+            return [
+                'por_ministerio' => [],
+                'lider_superior_por_id' => $liderSuperiorPorId,
+            ];
+        }
+
+        $filtroLiderStr = ($idLiderFiltro !== null && $idLiderFiltro > 0) ? (string)$idLiderFiltro : '';
+        $lideresVisibles = $this->construirLideresPrincipalesResumenSemanalGanar($idsMinisterios, $filtroLiderStr);
+        $porMinisterio = [];
+        foreach ($lideresVisibles as $lider) {
+            $idLider = (int)($lider['Id_Persona'] ?? 0);
+            $idMinisterio = (int)($lider['Id_Ministerio'] ?? 0);
+            if ($idLider <= 0 || $idMinisterio <= 0) {
+                continue;
+            }
+
+            $nombreLider = trim((string)($lider['Nombre_Completo'] ?? ''));
+            if ($nombreLider === '') {
+                $nombreLider = 'Sin líder';
+            }
+            $nombreMinisterio = trim((string)($lider['Nombre_Ministerio'] ?? ''));
+            if ($nombreMinisterio === '') {
+                $nombreMinisterio = 'Sin ministerio';
+            }
+
+            if (!isset($porMinisterio[$idMinisterio])) {
+                $porMinisterio[$idMinisterio] = [];
+            }
+            $porMinisterio[$idMinisterio][$idLider] = [
+                'id_lider' => $idLider,
+                'lider' => $nombreLider,
+                'ministerio' => $nombreMinisterio,
+            ];
+        }
+
+        return [
+            'por_ministerio' => $porMinisterio,
+            'lider_superior_por_id' => $liderSuperiorPorId,
+        ];
+    }
+
+    /**
+     * @param array<int, array<int, array{lider:string, ministerio:string, id_lider:int}>> $lideresPorMinisterio
+     * @param array<int, int> $liderSuperiorPorId
+     * @return array{id_lider:int, lider:string, ministerio:string}
+     */
+    private function resolverLiderPrincipal12PersonaEnMinisterio(
+        int $idLiderPersona,
+        int $idMinisterioPersona,
+        array $lideresPorMinisterio,
+        array $liderSuperiorPorId
+    ): array {
+        if ($idLiderPersona <= 0 || $idMinisterioPersona <= 0) {
+            return ['id_lider' => 0, 'lider' => 'Sin líder de 12', 'ministerio' => 'Sin ministerio'];
+        }
+
+        $candidatos = (array)($lideresPorMinisterio[$idMinisterioPersona] ?? []);
+        if ($candidatos === []) {
+            return ['id_lider' => 0, 'lider' => 'Sin líder de 12', 'ministerio' => 'Sin ministerio'];
+        }
+
+        $rowsMap = [];
+        foreach ($candidatos as $idLider => $info) {
+            $rowsMap[(int)$idLider] = $info;
+        }
+
+        $idResuelto = $this->resolverLiderPrincipal12ParaResumen($idLiderPersona, $rowsMap, $liderSuperiorPorId);
+        if ($idResuelto > 0 && isset($rowsMap[$idResuelto])) {
+            return [
+                'id_lider' => $idResuelto,
+                'lider' => trim((string)($rowsMap[$idResuelto]['lider'] ?? '')) ?: 'Sin líder de 12',
+                'ministerio' => trim((string)($rowsMap[$idResuelto]['ministerio'] ?? '')) ?: 'Sin ministerio',
+            ];
+        }
+
+        return ['id_lider' => 0, 'lider' => 'Sin líder de 12', 'ministerio' => 'Sin ministerio'];
+    }
+
+    /**
+     * @param array<string, array<string, array{id_lider:int, lider:string, ministerio:string, total:int}>> $desglosePorLider12
+     * @param array<int, array{id_lider:int, lider:string, ministerio:string}> $lideresMinisterio
+     */
+    private function sembrarLideresPrincipales12DesgloseEscalera(array &$desglosePorLider12, array $lideresMinisterio): void {
+        foreach ($lideresMinisterio as $infoLider) {
+            $idLider = (int)($infoLider['id_lider'] ?? 0);
+            if ($idLider <= 0) {
+                continue;
+            }
+            $nombreLider = trim((string)($infoLider['lider'] ?? '')) ?: 'Sin líder';
+            $nombreMinisterio = trim((string)($infoLider['ministerio'] ?? '')) ?: 'Sin ministerio';
+            $clave = (string)$idLider;
+            foreach (array_keys($desglosePorLider12) as $indicador) {
+                if (!isset($desglosePorLider12[$indicador][$clave])) {
+                    $desglosePorLider12[$indicador][$clave] = [
+                        'id_lider' => $idLider,
+                        'lider' => $nombreLider,
+                        'ministerio' => $nombreMinisterio,
+                        'total' => 0,
+                    ];
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, array<string, array{id_lider:int, lider:string, ministerio:string, total:int}>> $desglosePorLider12
+     */
+    private function incrementarDesgloseEscaleraPorLider12(
+        array &$desglosePorLider12,
+        string $indicador,
+        int $idLider,
+        string $lider,
+        string $ministerio
+    ): void {
+        $clave = $idLider > 0 ? (string)$idLider : 'sin_lider';
+        if (!isset($desglosePorLider12[$indicador][$clave])) {
+            $desglosePorLider12[$indicador][$clave] = [
+                'id_lider' => $idLider,
+                'lider' => $lider,
+                'ministerio' => $ministerio,
+                'total' => 0,
+            ];
+        }
+        $desglosePorLider12[$indicador][$clave]['total']++;
+    }
+
+    /**
+     * @param array<string, array<string, array{id_lider:int, lider:string, ministerio:string, total:int}>> $desglosePorLider12
+     * @return array<string, array<int, array{lider:string, ministerio:string, total:int}>>
+     */
+    private function formatearDesgloseEscaleraPorLider12(array $desglosePorLider12, bool $incluirCeros = false): array {
+        $formateado = [];
+        foreach ($desglosePorLider12 as $indicador => $conteosPorClave) {
+            $filas = [];
+            foreach ($conteosPorClave as $fila) {
+                $totalFila = (int)($fila['total'] ?? 0);
+                if (!$incluirCeros && $totalFila <= 0) {
+                    continue;
+                }
+                if ($incluirCeros && $totalFila <= 0 && (int)($fila['id_lider'] ?? 0) <= 0) {
+                    continue;
+                }
+                $filas[] = [
+                    'lider' => (string)($fila['lider'] ?? 'Sin líder de 12'),
+                    'ministerio' => (string)($fila['ministerio'] ?? 'Sin ministerio'),
+                    'total' => $totalFila,
+                ];
+            }
+            usort($filas, static function (array $a, array $b): int {
+                $cmpMin = strcasecmp((string)($a['ministerio'] ?? ''), (string)($b['ministerio'] ?? ''));
+                if ($cmpMin !== 0) {
+                    return $cmpMin;
+                }
+                return strcasecmp((string)($a['lider'] ?? ''), (string)($b['lider'] ?? ''));
+            });
+            $formateado[$indicador] = $filas;
+        }
+
+        return $formateado;
+    }
+
+    /**
+     * @param array<string, array<string, int>> $desglosePorMinisterio
+     * @return array<string, array<int, array{ministerio:string, total:int}>>
+     */
+    private function formatearDesgloseEscaleraPorMinisterio(array $desglosePorMinisterio): array {
+        $formateado = [];
+        foreach ($desglosePorMinisterio as $indicador => $conteosPorMinisterio) {
+            $filas = [];
+            foreach ($conteosPorMinisterio as $ministerio => $totalMinisterio) {
+                $totalMinisterio = (int)$totalMinisterio;
+                if ($totalMinisterio <= 0) {
+                    continue;
+                }
+                $filas[] = [
+                    'ministerio' => (string)$ministerio,
+                    'total' => $totalMinisterio,
+                ];
+            }
+            usort($filas, static function (array $a, array $b): int {
+                $cmp = ((int)($b['total'] ?? 0)) <=> ((int)($a['total'] ?? 0));
+                if ($cmp !== 0) {
+                    return $cmp;
+                }
+                return strcmp((string)($a['ministerio'] ?? ''), (string)($b['ministerio'] ?? ''));
+            });
+            $formateado[$indicador] = $filas;
+        }
+
+        return $formateado;
     }
 
     private function obtenerMapaAsistenciaRealModoConsolidar(array $inscripcionesPublicas): array {

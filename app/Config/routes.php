@@ -32,6 +32,8 @@ return [
     'home/consolidar/asistencias' => 'HomeController@consolidarAsistencias',
     'home/consolidar/exportar' => 'HomeController@exportarConsolidar',
     'home/guardar-asistencia-clase' => 'HomeController@guardarAsistenciaClase',
+    'home/calificar-tarea-entrega-cap' => 'HomeController@calificarTareaEntregaCapAjax',
+    'home/exportar-planilla-cap-destino' => 'HomeController@exportarPlanillaCapDestino',
     'programas' => 'HomeController@programas',
     'programas/consolidar' => 'HomeController@programasConsolidar',
     'programas/asistencias' => 'HomeController@programasAsistencias',

@@ -2810,6 +2810,10 @@ class HomeController extends BaseController {
             throw new Exception('La tarea seleccionada no está disponible.');
         }
 
+        if ($this->personaYaEntregoTareaMaterialHub($idTarea, $idPersona)) {
+            throw new Exception('Ya entregaste esta tarea. No puedes subir más archivos.');
+        }
+
         $cantidad = 0;
         $indice = 1;
 
@@ -2926,6 +2930,180 @@ class HomeController extends BaseController {
         if ((int)$stmt->rowCount() <= 0) {
             throw new Exception('No se pudo calificar la entrega seleccionada.');
         }
+    }
+
+    private function personaYaEntregoTareaMaterialHub(int $idTarea, int $idPersona): bool {
+        $idTarea = (int)$idTarea;
+        $idPersona = (int)$idPersona;
+        if ($idTarea <= 0 || $idPersona <= 0) {
+            return false;
+        }
+
+        $this->asegurarTablasTareasMaterialHub();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return false;
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT COUNT(*) FROM material_hub_tarea_entrega WHERE Id_Tarea = ? AND Id_Persona = ? LIMIT 1'
+        );
+        $stmt->execute([$idTarea, $idPersona]);
+
+        return (int)$stmt->fetchColumn() > 0;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $inscritos
+     * @param array<int, array<string, mixed>> $tareas
+     * @param array<int, array<int, array<string, mixed>>> $entregasPorTarea
+     * @return array<int, array<string, mixed>>
+     */
+    private function construirPlanillaEstudiantesCapDestino(
+        array $inscritos,
+        array $tareas,
+        array $entregasPorTarea,
+        array $asistenciasPorPersona,
+        int $totalClases = 10
+    ): array {
+        $planilla = [];
+        $totalClases = max(1, $totalClases);
+
+        foreach ($inscritos as $inscrito) {
+            if (!is_array($inscrito)) {
+                continue;
+            }
+
+            $idPersona = (int)($inscrito['id_persona'] ?? 0);
+            if ($idPersona <= 0) {
+                continue;
+            }
+
+            $clasesMarcadas = (array)($asistenciasPorPersona[$idPersona] ?? []);
+            $asistencias = count($clasesMarcadas);
+            $asistenciaPct = (int)round(($asistencias / $totalClases) * 100);
+
+            $tareasEstudiante = [];
+            foreach ($tareas as $tarea) {
+                if (!is_array($tarea)) {
+                    continue;
+                }
+
+                $idTarea = (int)($tarea['Id_Tarea'] ?? 0);
+                if ($idTarea <= 0) {
+                    continue;
+                }
+
+                $entrega = null;
+                foreach ((array)($entregasPorTarea[$idTarea] ?? []) as $entregaTmp) {
+                    if (!is_array($entregaTmp)) {
+                        continue;
+                    }
+                    if ((int)($entregaTmp['Id_Persona'] ?? 0) !== $idPersona) {
+                        continue;
+                    }
+                    if ($entrega === null || (int)($entregaTmp['Id_Entrega'] ?? 0) > (int)($entrega['Id_Entrega'] ?? 0)) {
+                        $entrega = $entregaTmp;
+                    }
+                }
+
+                $tareasEstudiante[] = [
+                    'id_tarea' => $idTarea,
+                    'titulo' => (string)($tarea['Titulo'] ?? 'Tarea'),
+                    'entrega' => $entrega,
+                ];
+            }
+
+            $planilla[] = [
+                'id_persona' => $idPersona,
+                'nombre' => (string)($inscrito['nombre'] ?? ''),
+                'cedula' => (string)($inscrito['cedula'] ?? ''),
+                'ministerio' => (string)($inscrito['ministerio'] ?? 'Sin ministerio'),
+                'asistencias' => $asistencias,
+                'asistencia_pct' => $asistenciaPct,
+                'tareas' => $tareasEstudiante,
+            ];
+        }
+
+        return $planilla;
+    }
+
+    /**
+     * @param array<int, array<int, array<string, mixed>>> $entregasPorTarea
+     */
+    private function contarEntregasPendientesCapDestino(array $entregasPorTarea): int {
+        $pendientes = 0;
+        foreach ($entregasPorTarea as $entregas) {
+            foreach ((array)$entregas as $entrega) {
+                if (!is_array($entrega)) {
+                    continue;
+                }
+                if (strtolower(trim((string)($entrega['Estado_Calificacion'] ?? 'pendiente'))) !== 'calificada') {
+                    $pendientes++;
+                }
+            }
+        }
+
+        return $pendientes;
+    }
+
+    public function calificarTareaEntregaCapAjax(): void {
+        header('Content-Type: application/json; charset=utf-8');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['ok' => false, 'error' => 'POST requerido']);
+            exit;
+        }
+
+        if (!AuthController::estaAutenticado()) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'No autenticado']);
+            exit;
+        }
+
+        $modulos = $this->obtenerModulosMaterial();
+        $moduloCap = null;
+        foreach ($modulos as $modTmp) {
+            if ((string)($modTmp['clave'] ?? '') === 'capacitacion_destino') {
+                $moduloCap = $modTmp;
+                break;
+            }
+        }
+        if (!is_array($moduloCap) || !$this->puedeGestionarModuloMaterial($moduloCap)) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'error' => 'No tienes permiso para calificar tareas.']);
+            exit;
+        }
+
+        try {
+            $idEntrega = (int)($_POST['id_entrega'] ?? 0);
+            $notaRaw = trim((string)($_POST['nota_entrega'] ?? ''));
+            $retro = trim((string)($_POST['retroalimentacion_entrega'] ?? ''));
+            $nota = $notaRaw === '' ? null : (float)$notaRaw;
+
+            $this->calificarEntregaTareaMaterialHub(
+                'capacitacion_destino',
+                $idEntrega,
+                $nota,
+                $retro,
+                (int)($_SESSION['usuario_id'] ?? 0),
+                (int)($_POST['nivel'] ?? 0),
+                (int)($_POST['modulo_numero'] ?? 0)
+            );
+
+            echo json_encode([
+                'ok' => true,
+                'nota' => $nota,
+                'estado' => 'calificada',
+                'mensaje' => 'Calificación guardada.',
+            ]);
+        } catch (Exception $e) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
     }
 
     private function guardarProfesorNombreModulo(string $modulo, int $nivel, int $moduloNumero, string $profesorNombre, ?string $conexionZoomUrl = null): void {
@@ -3794,6 +3972,8 @@ class HomeController extends BaseController {
         $entregasTareasCap = [];
         $tareasDiscipuloCap = [];
         $asistenciasPorPersona = [];
+        $planillaEstudiantesCap = [];
+        $hubEntregasPendientesCap = 0;
 
         if ((string)($modulo['clave'] ?? '') === 'capacitacion_destino' && $capNivelVista > 0) {
             $inscritosCapNivel = $this->obtenerInscritosCapacitacionDestinoPorNivel($capNivelVista);
@@ -3831,6 +4011,17 @@ class HomeController extends BaseController {
                         }
                     }
                 }
+            }
+
+            if ($this->puedeGestionarModuloMaterial($modulo)) {
+                $planillaEstudiantesCap = $this->construirPlanillaEstudiantesCapDestino(
+                    $inscritosCapNivel,
+                    $tareasCapNivel,
+                    $entregasTareasCap,
+                    $asistenciasPorPersona,
+                    10
+                );
+                $hubEntregasPendientesCap = $this->contarEntregasPendientesCapDestino($entregasTareasCap);
             }
 
             $totalesAsistenciaPorClase = array_fill(1, 10, 0);
@@ -3919,8 +4110,11 @@ class HomeController extends BaseController {
             'inscritos_cap_nivel' => $inscritosCapNivel,
             'asistencias_por_persona' => $asistenciasPorPersona,
             'totales_asistencia_por_clase' => $totalesAsistenciaPorClase ?? array_fill(1, 10, 0),
+            'total_clases_cap' => 10,
             'tareas_cap_nivel' => $tareasCapNivel,
             'entregas_tareas_cap' => $entregasTareasCap,
+            'planilla_estudiantes_cap' => $planillaEstudiantesCap,
+            'hub_entregas_pendientes_cap' => $hubEntregasPendientesCap,
             'tareas_discipulo_cap' => $tareasDiscipuloCap,
             'cap_modulo_vista' => $capModuloVista,
             'id_persona_actual' => (int)($_SESSION['usuario_id'] ?? 0),
@@ -4082,6 +4276,123 @@ class HomeController extends BaseController {
 
     public function materialCapacitacionDestino() {
         $this->renderDetalleMaterial('capacitacion_destino');
+    }
+
+    public function exportarPlanillaCapDestino(): void {
+        if (!AuthController::estaAutenticado()) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $modulos = $this->obtenerModulosMaterial();
+        $modulo = $modulos['capacitacion_destino'] ?? null;
+        if (!is_array($modulo) || !$this->puedeGestionarModuloMaterial($modulo)) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $capNivel = (int)($_GET['cap_nivel'] ?? 0);
+        $capModulo = (int)($_GET['cap_modulo'] ?? 0);
+        $ministerioFiltro = trim((string)($_GET['ministerio'] ?? ''));
+        $soloPendientes = !empty($_GET['solo_pendientes']);
+        $totalClases = max(1, (int)($_GET['total_clases'] ?? 10));
+
+        if ($capNivel <= 0 || $capModulo <= 0) {
+            http_response_code(400);
+            echo 'Parámetros inválidos para exportar la planilla.';
+            exit;
+        }
+
+        $clave = 'capacitacion_destino';
+        $inscritos = $this->obtenerInscritosCapacitacionDestinoPorNivel($capNivel);
+        usort($inscritos, static function ($a, $b) {
+            return strcasecmp((string)($a['nombre'] ?? ''), (string)($b['nombre'] ?? ''));
+        });
+
+        $tareas = $this->listarTareasMaterialHub($clave, $capNivel, 0, $capModulo);
+        $entregas = $this->listarEntregasTareasMaterialHub($clave, $capNivel, $capModulo);
+
+        $asistenciasPorPersona = [];
+        $idsInscritos = array_column($inscritos, 'id_persona');
+        if (!empty($idsInscritos)) {
+            $modeloAsistencia = new EscuelaFormacionAsistenciaClase();
+            $asistenciasMap = $modeloAsistencia->getAsistenciasPorPrograma(
+                $idsInscritos,
+                'modulo_' . $capNivel,
+                'capacitacion_destino'
+            );
+            foreach ($asistenciasMap as $idPersona => $clasesMap) {
+                $asistenciasPorPersona[$idPersona] = [];
+                foreach ($clasesMap as $numeroClase => $asistio) {
+                    if ($asistio === true) {
+                        $asistenciasPorPersona[$idPersona][] = (int)$numeroClase;
+                    }
+                }
+            }
+        }
+
+        $planilla = $this->construirPlanillaEstudiantesCapDestino(
+            $inscritos,
+            $tareas,
+            $entregas,
+            $asistenciasPorPersona,
+            $totalClases
+        );
+
+        if ($ministerioFiltro !== '') {
+            $planilla = array_values(array_filter($planilla, static function ($est) use ($ministerioFiltro) {
+                return trim((string)($est['ministerio'] ?? '')) === $ministerioFiltro;
+            }));
+        }
+
+        if ($soloPendientes) {
+            $planilla = array_values(array_filter($planilla, static function ($est) {
+                foreach ((array)($est['tareas'] ?? []) as $tareaEst) {
+                    $entrega = is_array($tareaEst['entrega'] ?? null) ? $tareaEst['entrega'] : null;
+                    if ($entrega && strtolower(trim((string)($entrega['Estado_Calificacion'] ?? ''))) !== 'calificada') {
+                        return true;
+                    }
+                }
+                return false;
+            }));
+        }
+
+        $headers = ['Estudiante', 'Cédula', 'Ministerio', 'Asistencia (clases)', 'Asistencia %'];
+        foreach ($tareas as $tarea) {
+            $headers[] = (string)($tarea['Titulo'] ?? 'Tarea');
+        }
+
+        $rows = [];
+        foreach ($planilla as $est) {
+            $row = [
+                (string)($est['nombre'] ?? ''),
+                (string)($est['cedula'] ?? ''),
+                (string)($est['ministerio'] ?? ''),
+                (int)($est['asistencias'] ?? 0) . '/' . $totalClases,
+                (int)($est['asistencia_pct'] ?? 0) . '%',
+            ];
+
+            foreach ((array)($est['tareas'] ?? []) as $tareaEst) {
+                $entrega = is_array($tareaEst['entrega'] ?? null) ? $tareaEst['entrega'] : null;
+                if (!$entrega) {
+                    $row[] = 'Sin entrega';
+                    continue;
+                }
+
+                $nota = $entrega['Nota'] ?? null;
+                $notaTxt = ($nota !== null && $nota !== '') ? (string)$nota : '—';
+                $estado = strtolower(trim((string)($entrega['Estado_Calificacion'] ?? ''))) === 'calificada'
+                    ? 'Calificada'
+                    : 'Pendiente';
+                $retro = trim((string)($entrega['Retroalimentacion'] ?? ''));
+                $row[] = 'Nota: ' . $notaTxt . ' | ' . $estado . ($retro !== '' ? ' | ' . $retro : '');
+            }
+
+            $rows[] = $row;
+        }
+
+        $filename = 'cap_destino_n' . $capNivel . '_m' . $capModulo . '_planilla';
+        $this->exportCsv($filename, $headers, $rows, false);
     }
 
     public function materialVerPdf() {

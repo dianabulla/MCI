@@ -1,6 +1,7 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 <?php
 require_once APP . '/Helpers/DashboardSelector.php';
+require_once APP . '/Helpers/ProgramasNavegacion.php';
 
 $tituloDashboard = (string)($titulo_dashboard ?? 'Dashboard Escuelas');
 $lineaDashboard = (string)($linea_dashboard ?? 'universidad_vida');
@@ -233,6 +234,110 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
 .uv-dash-kpi-note { margin: 0 0 12px; font-size: 0.82rem; color: #475569; line-height: 1.45; }
 .uv-dash-kpi-empty { margin: 8px 0 0; font-size: 0.85rem; color: #94a3b8; }
 .uv-kpi-row-encuentro .uv-kpi { flex: 1 1 160px; }
+.uv-kpi-clickable {
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    width: auto;
+    transition: box-shadow .15s ease, border-color .15s ease, transform .1s ease;
+}
+.uv-kpi-clickable:hover { box-shadow: 0 2px 8px rgba(30, 74, 137, 0.12); border-color: #93c5fd; }
+.uv-kpi-clickable:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.uv-kpi-clickable.is-active {
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    transform: translateY(-1px);
+}
+.uv-dash-kpi-hint { margin: 0 0 10px; font-size: 0.78rem; color: #64748b; }
+.uv-kpi-desglose-panel {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #dbe7f3;
+}
+.uv-kpi-vista-detalle[hidden] { display: none !important; }
+#uvKpiVistaIndicadores[hidden] { display: none !important; }
+.uv-kpi-detalle-toolbar {
+    margin: 0 0 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #dbe7f3;
+}
+.uv-kpi-btn-volver {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px 10px 14px;
+    border: none;
+    border-radius: 10px;
+    background: #1e4a89;
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(30, 74, 137, 0.25);
+    transition: background .15s ease, transform .1s ease;
+}
+.uv-kpi-btn-volver:hover {
+    background: #163a6e;
+    transform: translateY(-1px);
+}
+.uv-kpi-btn-volver:active {
+    transform: translateY(0);
+}
+.uv-kpi-btn-volver-flecha {
+    font-size: 1.25rem;
+    line-height: 1;
+    font-weight: 700;
+}
+.uv-kpi-detalle-titulo { margin: 0 0 8px; color: #1e3a6e; }
+.uv-encuentro-kpis.is-detalle {
+    border-color: #93c5fd;
+}
+.uv-kpi-desglose-volver {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 12px;
+    padding: 6px 12px 6px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    color: #1e4a89;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease;
+}
+.uv-kpi-desglose-volver:hover {
+    background: #f0f7ff;
+    border-color: #93c5fd;
+}
+.uv-kpi-desglose-volver-icon {
+    font-size: 1.1rem;
+    line-height: 1;
+}
+.uv-kpi-desglose-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+.uv-kpi-desglose-head h5 { margin: 0; font-size: 0.95rem; color: #1e3a6e; }
+.uv-kpi-desglose-cerrar {
+    border: none;
+    background: transparent;
+    font-size: 1.4rem;
+    line-height: 1;
+    color: #64748b;
+    cursor: pointer;
+    padding: 0 4px;
+}
+.uv-kpi-desglose-cerrar:hover { color: #1e293b; }
+.uv-kpi-desglose-note { margin: 0 0 10px; }
+.dash-min-table { width:100%; border-collapse:collapse; font-size:.88rem; }
+.dash-min-table th { background:#f1f5f9; padding:8px 10px; text-align:left; font-size:.78rem; color:#475569; font-weight:700; border-bottom:1px solid #e2e8f0; }
+.dash-min-table td { padding:8px 10px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+.dash-min-table tr:last-child td { border-bottom:none; }
 .uv-encuentro-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: #e2e8f0; margin-top: 4px; }
 .uv-encuentro-bar__asistio { background: linear-gradient(90deg, #22c55e, #16a34a); transition: width .3s ease; }
 .uv-encuentro-bar__pendiente { background: linear-gradient(90deg, #fbbf24, #f59e0b); transition: width .3s ease; }
@@ -386,6 +491,16 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
     gap: 4px 10px;
 }
 </style>
+
+<?php
+if (in_array($lineaDashboard, ['universidad_vida', 'capacitacion_destino'], true)) {
+    ProgramasNavegacion::incluirPartial([
+        'linea' => $lineaDashboard,
+        'seccion' => 'dashboard',
+        'forzar' => true,
+    ]);
+}
+?>
 
 <div class="dashboard-escuelas-wrap">
     <div class="dash-head">

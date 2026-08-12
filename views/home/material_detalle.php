@@ -40,11 +40,17 @@ $accesosDiscipuloCapDestino = (array)($accesos_discipulo_cap_destino ?? []);
 $inscritosCapNivel = (array)($inscritos_cap_nivel ?? []);
 $asistenciasPorPersona = (array)($asistencias_por_persona ?? []);
 $totalesAsistenciaPorClase = (array)($totales_asistencia_por_clase ?? []);
-if (count($totalesAsistenciaPorClase) < 10) {
-    $totalesAsistenciaPorClase = array_replace(array_fill(1, 10, 0), $totalesAsistenciaPorClase);
+$totalClasesCap = (int)($total_clases_cap ?? 10);
+if ($totalClasesCap < 1) {
+    $totalClasesCap = 10;
+}
+if (count($totalesAsistenciaPorClase) < $totalClasesCap) {
+    $totalesAsistenciaPorClase = array_replace(array_fill(1, $totalClasesCap, 0), $totalesAsistenciaPorClase);
 }
 $tareasCapNivel = (array)($tareas_cap_nivel ?? []);
 $entregasTareasCap = (array)($entregas_tareas_cap ?? []);
+$planillaEstudiantesCap = (array)($planilla_estudiantes_cap ?? []);
+$hubEntregasPendientesCap = (int)($hub_entregas_pendientes_cap ?? 0);
 $tareasDiscipuloCap = (array)($tareas_discipulo_cap ?? []);
 $capModuloVistaActual = (int)($cap_modulo_vista ?? ($_GET['cap_modulo'] ?? 0));
 $idPersonaActual = (int)($id_persona_actual ?? 0);
@@ -88,10 +94,13 @@ $resumenModulosCap = [];
 
 if ($esCapacitacionDestino && $usaFlujoCapHub) {
     $capSeccionRaw = strtolower(trim((string)($_GET['cap_seccion'] ?? $_GET['cap_academico'] ?? '')));
-    if (in_array($capSeccionRaw, ['material', 'inscritos', 'tareas'], true)) {
+    if (in_array($capSeccionRaw, ['material', 'inscritos', 'tareas', 'calificaciones'], true)) {
         $capSeccionVista = $capSeccionRaw;
     }
     if ($capSeccionVista === 'inscritos' && !$puedeHubInscritos) {
+        $capSeccionVista = '';
+    }
+    if ($capSeccionVista === 'calificaciones' && !$puedeHubTareasGestion) {
         $capSeccionVista = '';
     }
     if ($capSeccionVista === 'tareas' && !$puedeHubTareasGestion && !$puedeHubTareasEntregar) {
@@ -189,6 +198,7 @@ if ($usaFlujoCapHub) {
     $mostrarAcademicoCap = $mostrarContenidoDetalleCapMaestro && (
         ($capSeccionVista === 'inscritos' && $puedeHubInscritos)
         || ($capSeccionVista === 'tareas' && ($puedeHubTareasGestion || $puedeHubTareasEntregar))
+        || ($capSeccionVista === 'calificaciones' && $puedeHubTareasGestion)
     );
     $mostrarMaterialCap = $mostrarContenidoDetalleCapMaestro && $capSeccionVista === 'material' && $puedeHubMaterial;
     if ($modoSeleccionModuloCap || $modoHubModuloCapMaestro) {
@@ -1008,6 +1018,140 @@ if ($tieneSubmodulos) {
         max-width: 52px;
         text-align: center;
         box-sizing: border-box;
+    }
+
+    .cap-planilla-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    .cap-planilla-contador {
+        font-size: 13px;
+        color: #2b4f79;
+    }
+
+    .cap-planilla-pendientes {
+        color: #b45309;
+        font-weight: 600;
+    }
+
+    .cap-planilla-filtros {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+    }
+
+    #cap-planilla-export-excel {
+        margin-left: 4px;
+    }
+
+    .cap-planilla-check-pendientes {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin: 0;
+        color: #4a6283;
+        cursor: pointer;
+    }
+
+    .cap-planilla-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        min-width: 720px;
+    }
+
+    .cap-planilla-table th,
+    .cap-planilla-table td {
+        border: 1px solid #dbe6f5;
+        padding: 6px 8px;
+        vertical-align: top;
+        background: #fff;
+    }
+
+    .cap-planilla-table th {
+        background: #f4f8fd;
+        color: #2b4f79;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .cap-planilla-sticky {
+        position: sticky;
+        z-index: 2;
+        background: #fff;
+    }
+
+    .cap-planilla-sticky-1 { left: 0; min-width: 140px; }
+    .cap-planilla-sticky-2 { left: 140px; min-width: 100px; }
+
+    .cap-planilla-asistencia-col {
+        min-width: 72px;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .cap-planilla-tarea-col {
+        min-width: 130px;
+        max-width: 160px;
+        white-space: normal;
+        font-size: 11px;
+    }
+
+    .cap-planilla-celda-tarea.is-pendiente {
+        background: #fffbeb;
+    }
+
+    .cap-planilla-celda-tarea.is-calificada {
+        background: #f0fdf4;
+    }
+
+    .cap-planilla-sin-entrega {
+        color: #94a3b8;
+        font-size: 11px;
+    }
+
+    .cap-planilla-calif-cell {
+        display: grid;
+        gap: 4px;
+        min-width: 120px;
+    }
+
+    .cap-planilla-archivo-link {
+        color: #2563eb;
+        font-size: 14px;
+    }
+
+    .cap-planilla-nota-input,
+    .cap-planilla-retro-input {
+        font-size: 11px;
+        padding: 2px 6px;
+    }
+
+    .cap-planilla-guardar-btn {
+        font-size: 11px;
+        padding: 2px 8px;
+    }
+
+    .cap-planilla-estado-msg {
+        font-size: 10px;
+        min-height: 14px;
+    }
+
+    .cap-planilla-estado-msg.is-ok { color: #15803d; }
+    .cap-planilla-estado-msg.is-error { color: #b91c1c; }
+    .cap-planilla-estado-msg.is-saving { color: #64748b; }
+
+    .cap-planilla-ayuda {
+        margin: 8px 0 0;
+        font-size: 11px;
+        color: #64748b;
     }
 
     .cap-tarea-card {
@@ -2044,6 +2188,12 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                 <p>Planilla de asistencia y alumnos del nivel <?= (int)$capNivelVista ?> (<?= count($inscritosCapNivel) ?>).</p>
             </a>
             <?php endif; ?>
+            <?php if ($puedeHubTareasGestion): ?>
+            <a class="cap-maestro-hub-card<?= $hubEntregasPendientesCap > 0 ? ' cap-maestro-hub-card--active' : '' ?>" href="<?= htmlspecialchars($urlCapHubModulo . '&cap_seccion=calificaciones', ENT_QUOTES, 'UTF-8') ?>" data-tour="hub-calificaciones">
+                <h4><i class="bi bi-table"></i> Planilla y calificaciones</h4>
+                <p>Notas por estudiante, resumen de asistencia y calificación rápida<?= $hubEntregasPendientesCap > 0 ? ' (' . $hubEntregasPendientesCap . ' entrega(s) pendiente(s)).' : '.' ?></p>
+            </a>
+            <?php endif; ?>
             <?php if ($puedeHubTareasGestion || $puedeHubTareasEntregar): ?>
             <a class="cap-maestro-hub-card<?= $hubTareasActivas > 0 ? ' cap-maestro-hub-card--active' : ' cap-maestro-hub-card--empty' ?>" href="<?= htmlspecialchars($urlCapHubModulo . '&cap_seccion=tareas', ENT_QUOTES, 'UTF-8') ?>" data-tour="hub-tareas" data-tour-maestro="tareas">
                 <h4><i class="bi bi-journal-text"></i> Tareas</h4>
@@ -2127,6 +2277,8 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                 <strong style="color:#2b4f79;"><?php
                     if ($capSeccionVista === 'tareas') {
                         echo 'Tareas módulo ' . (int)$capModuloVistaActual;
+                    } elseif ($capSeccionVista === 'calificaciones') {
+                        echo 'Planilla · Módulo ' . (int)$capModuloVistaActual;
                     } elseif ($capSeccionVista === 'inscritos') {
                         echo 'Inscritos · Nivel ' . (int)$capNivelVista;
                     } else {
@@ -2136,6 +2288,8 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                 <small style="color:#5a6f8d;"><?php
                     if ($capSeccionVista === 'tareas') {
                         echo 'Entrega y seguimiento de tareas de este módulo.';
+                    } elseif ($capSeccionVista === 'calificaciones') {
+                        echo 'Califica tareas por estudiante con resumen de asistencia al nivel.';
                     } elseif ($capSeccionVista === 'inscritos') {
                         echo 'Planilla de asistencia del nivel actual.';
                     } else {
@@ -2145,7 +2299,7 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
             </div>
 
             <?php if ($puedeHubInscritos): ?>
-            <div id="cap-academico-inscritos" class="cap-academico-section<?= ($usaFlujoCapHub && $capSeccionVista === 'tareas') ? ' is-hidden' : '' ?>">
+            <div id="cap-academico-inscritos" class="cap-academico-section<?= ($usaFlujoCapHub && in_array($capSeccionVista, ['tareas', 'calificaciones'], true)) ? ' is-hidden' : '' ?>">
                 <?php if (!empty($inscritosCapNivel)): ?>
                     <?php
                         $ministeriosInscritosCap = [];
@@ -2195,20 +2349,17 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                                 <tr>
                                     <th style="position: sticky; left: 0; background: #f8f9fa; z-index: 10;">Nombre</th>
                                     <th style="position: sticky; left: 120px; background: #f8f9fa; z-index: 10;">Cédula</th>
-                                    <th>Ministerio</th>
-                                    <th>Teléfono</th>
-                                    <th>Inscrito</th>
-                                    <th colspan="10" style="text-align:center; background:#e8f0f8;">Planilla de Asistencia</th>
+                                    <th colspan="<?= (int)$totalClasesCap ?>" style="text-align:center; background:#e8f0f8;">Planilla de Asistencia</th>
+                                    <th colspan="2" style="text-align:center; background:#dbeafe;">Resumen</th>
                                 </tr>
                                 <tr>
                                     <th style="position: sticky; left: 0; background: #f8f9fa; z-index: 10;"></th>
                                     <th style="position: sticky; left: 120px; background: #f8f9fa; z-index: 10;"></th>
-                                    <th></th>
-                                    <th></th>
-                                    <th></th>
-                                    <?php for ($clase = 1; $clase <= 10; $clase++): ?>
+                                    <?php for ($clase = 1; $clase <= $totalClasesCap; $clase++): ?>
                                         <th class="cap-clase-col" style="text-align:center; background:#e8f0f8; padding:6px 3px;">Clase <?= $clase ?></th>
                                     <?php endfor; ?>
+                                    <th style="text-align:center; background:#dbeafe; padding:6px 3px; min-width:72px;">Total</th>
+                                    <th style="text-align:center; background:#dbeafe; padding:6px 3px; min-width:56px;">%</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -2216,8 +2367,16 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                                     <?php
                                         $idPersona = (int)($inscrito['id_persona'] ?? 0);
                                         $asistenciasPersona = !empty($asistenciasPorPersona[$idPersona]) ? (array)$asistenciasPorPersona[$idPersona] : [];
-                                    ?>
-                                    <?php
+                                        $numAsistenciasCap = count($asistenciasPersona);
+                                        $pctAsistenciaCap = $totalClasesCap > 0
+                                            ? (int)round(($numAsistenciasCap / $totalClasesCap) * 100)
+                                            : 0;
+                                        $clasePctCap = 'cap-pct--bajo';
+                                        if ($pctAsistenciaCap >= 75) {
+                                            $clasePctCap = 'cap-pct--alto';
+                                        } elseif ($pctAsistenciaCap >= 50) {
+                                            $clasePctCap = 'cap-pct--medio';
+                                        }
                                         $ministerioInscrito = trim((string)($inscrito['ministerio'] ?? 'Sin ministerio'));
                                         if ($ministerioInscrito === '') {
                                             $ministerioInscrito = 'Sin ministerio';
@@ -2226,10 +2385,7 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                                     <tr class="cap-inscrito-row" data-ministerio="<?= htmlspecialchars($ministerioInscrito, ENT_QUOTES, 'UTF-8') ?>">
                                         <td style="position: sticky; left: 0; background: white; z-index: 5;"><?= htmlspecialchars((string)($inscrito['nombre'] ?? '')) ?></td>
                                         <td style="position: sticky; left: 120px; background: white; z-index: 5;"><?= htmlspecialchars((string)($inscrito['cedula'] ?? '')) ?></td>
-                                        <td><?= htmlspecialchars($ministerioInscrito) ?></td>
-                                        <td><?= htmlspecialchars((string)($inscrito['telefono'] ?? '')) ?></td>
-                                        <td><?= htmlspecialchars((string)($inscrito['fecha_registro'] ?? '')) ?></td>
-                                        <?php for ($clase = 1; $clase <= 10; $clase++): ?>
+                                        <?php for ($clase = 1; $clase <= $totalClasesCap; $clase++): ?>
                                             <td class="cap-clase-col" style="text-align:center; padding:6px 3px;">
                                                 <input type="checkbox" class="asistencia-check" 
                                                     data-id-persona="<?= $idPersona ?>" 
@@ -2241,19 +2397,26 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                                                     style="width:20px; height:20px; cursor:default;">
                                             </td>
                                         <?php endfor; ?>
+                                        <td class="cap-asistencia-resumen-total" style="text-align:center; font-weight:700; background:#f8fafc;">
+                                            <?= (int)$numAsistenciasCap ?>/<?= (int)$totalClasesCap ?>
+                                        </td>
+                                        <td class="cap-asistencia-resumen-pct <?= htmlspecialchars($clasePctCap, ENT_QUOTES, 'UTF-8') ?>" style="text-align:center; font-weight:700;">
+                                            <?= (int)$pctAsistenciaCap ?>%
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
                             <tfoot>
                                 <tr class="cap-asistencia-totales-row">
-                                    <td colspan="5" style="position: sticky; left: 0; background: #e8f0f8; font-weight: 700; color: #2b4f79; z-index: 6;">
+                                    <td colspan="2" style="position: sticky; left: 0; background: #e8f0f8; font-weight: 700; color: #2b4f79; z-index: 6;">
                                         Total asistencias
                                     </td>
-                                    <?php for ($clase = 1; $clase <= 10; $clase++): ?>
+                                    <?php for ($clase = 1; $clase <= $totalClasesCap; $clase++): ?>
                                         <td class="cap-asistencia-total cap-clase-col" data-clase="<?= $clase ?>" style="text-align:center; background:#e8f0f8; font-weight:700; color:#1e5631; padding:8px 3px;">
                                             <?= (int)($totalesAsistenciaPorClase[$clase] ?? 0) ?>
                                         </td>
                                     <?php endfor; ?>
+                                    <td colspan="2" style="background:#e8f0f8;"></td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -2271,8 +2434,39 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                         var contadorNum = document.getElementById('cap-inscritos-contador-num');
                         var contadorDetalle = document.getElementById('cap-inscritos-contador-detalle');
                         var totalInscritos = <?= (int)$totalInscritosCap ?>;
+                        var totalClasesCap = <?= (int)$totalClasesCap ?>;
                         var filas = panel.querySelectorAll('.cap-inscrito-row');
                         var totalesCeldas = panel.querySelectorAll('.cap-asistencia-total');
+
+                        function clasePctResumen(pct) {
+                            if (pct >= 75) {
+                                return 'cap-pct--alto';
+                            }
+                            if (pct >= 50) {
+                                return 'cap-pct--medio';
+                            }
+                            return 'cap-pct--bajo';
+                        }
+
+                        function recalcularResumenAsistenciaFilas() {
+                            filasVisibles().forEach(function(fila) {
+                                var asistencias = 0;
+                                fila.querySelectorAll('.asistencia-check:checked').forEach(function() {
+                                    asistencias++;
+                                });
+                                var pct = totalClasesCap > 0 ? Math.round((asistencias / totalClasesCap) * 100) : 0;
+                                var celdaTotal = fila.querySelector('.cap-asistencia-resumen-total');
+                                var celdaPct = fila.querySelector('.cap-asistencia-resumen-pct');
+                                if (celdaTotal) {
+                                    celdaTotal.textContent = asistencias + '/' + totalClasesCap;
+                                }
+                                if (celdaPct) {
+                                    celdaPct.textContent = pct + '%';
+                                    celdaPct.classList.remove('cap-pct--alto', 'cap-pct--medio', 'cap-pct--bajo');
+                                    celdaPct.classList.add(clasePctResumen(pct));
+                                }
+                            });
+                        }
 
                         function filasVisibles() {
                             return Array.prototype.filter.call(filas, function(fila) {
@@ -2296,6 +2490,7 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                                 });
                                 celda.textContent = String(total);
                             });
+                            recalcularResumenAsistenciaFilas();
                         }
 
                         function aplicarFiltroMinisterio() {
@@ -2370,6 +2565,21 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                         }
                         .cap-inscritos-table tfoot .cap-asistencia-totales-row td {
                             border-top: 2px solid #9eb4cc;
+                        }
+                        .cap-asistencia-resumen-total {
+                            color: #1e3a5f;
+                        }
+                        .cap-asistencia-resumen-pct.cap-pct--alto {
+                            color: #15803d;
+                            background: #ecfdf5 !important;
+                        }
+                        .cap-asistencia-resumen-pct.cap-pct--medio {
+                            color: #a16207;
+                            background: #fffbeb !important;
+                        }
+                        .cap-asistencia-resumen-pct.cap-pct--bajo {
+                            color: #b91c1c;
+                            background: #fef2f2 !important;
                         }
                         .asistencia-check:checked {
                             accent-color: #28a745;
@@ -2501,6 +2711,11 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                                 <?php endif; ?>
 
                                 <?php if ($puedeSubirTareas): ?>
+                                    <?php if ($totalEntregasUsuario > 0): ?>
+                                        <div class="alert alert-success cap-tarea-entregada-msg" style="margin:8px 0;">
+                                            <i class="bi bi-check-circle"></i> Ya entregaste esta tarea. No puedes subir más archivos.
+                                        </div>
+                                    <?php else: ?>
                                     <form method="POST" enctype="multipart/form-data" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>" class="cap-tarea-upload-form">
                                         <input type="hidden" name="accion" value="subir_tarea_entrega">
                                         <input type="hidden" name="modulo" value="<?= htmlspecialchars($clave) ?>">
@@ -2517,10 +2732,11 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                                         <div>
                                             <label style="font-size:12px;">Archivos (varios a la vez)</label>
                                             <input type="file" name="tarea_archivos[]" class="form-control" multiple required accept="<?= htmlspecialchars($capTareaAcceptArchivos, ENT_QUOTES, 'UTF-8') ?>">
-                                            <small class="cap-tarea-upload-hint">Imágenes, audio, video, PDF, Office y más. Máx. 100MB por archivo.</small>
+                                            <small class="cap-tarea-upload-hint">Imágenes, audio, video, PDF, Office y más. Máx. 100MB por archivo. Solo una entrega por tarea.</small>
                                         </div>
                                         <button type="submit" class="btn btn-sm btn-primary">Subir tarea</button>
                                     </form>
+                                    <?php endif; ?>
                                     <?php
                                         $entregas_usuario = (array)($tarea['entregas_usuario'] ?? []);
                                         $clave_modulo_tarea = $clave;
@@ -2589,6 +2805,292 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                     <?php endif; ?>
                 </div>
             </div>
+
+            <?php if ($puedeHubTareasGestion): ?>
+            <div id="cap-academico-calificaciones" class="cap-academico-section<?= (!$usaFlujoCapHub || $capSeccionVista !== 'calificaciones') ? ' is-hidden' : '' ?>" data-tour="maestro-planilla-calificaciones">
+                <?php if (!empty($planillaEstudiantesCap) && !empty($tareasCapNivel)): ?>
+                    <?php
+                        $ministeriosPlanillaCap = [];
+                        foreach ($planillaEstudiantesCap as $estPlanTmp) {
+                            $minPlanTmp = trim((string)($estPlanTmp['ministerio'] ?? 'Sin ministerio'));
+                            if ($minPlanTmp === '') {
+                                $minPlanTmp = 'Sin ministerio';
+                            }
+                            $ministeriosPlanillaCap[$minPlanTmp] = true;
+                        }
+                        ksort($ministeriosPlanillaCap, SORT_NATURAL | SORT_FLAG_CASE);
+                    ?>
+                    <div class="cap-planilla-toolbar">
+                        <div class="cap-planilla-contador">
+                            <strong><?= count($planillaEstudiantesCap) ?></strong> estudiante(s)
+                            <?php if ($hubEntregasPendientesCap > 0): ?>
+                                · <span class="cap-planilla-pendientes"><?= (int)$hubEntregasPendientesCap ?> entrega(s) por calificar</span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="cap-planilla-filtros">
+                            <label for="cap-planilla-filtro-ministerio">Ministerio</label>
+                            <select id="cap-planilla-filtro-ministerio" class="form-control cap-inscritos-filtro-select">
+                                <option value="">Todos</option>
+                                <?php foreach (array_keys($ministeriosPlanillaCap) as $minPlanilla): ?>
+                                    <option value="<?= htmlspecialchars($minPlanilla, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($minPlanilla) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <label class="cap-planilla-check-pendientes">
+                                <input type="checkbox" id="cap-planilla-solo-pendientes"> Solo pendientes
+                            </label>
+                            <button type="button" class="btn btn-sm btn-success" id="cap-planilla-export-excel" title="Descargar planilla en Excel">
+                                <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+                            </button>
+                        </div>
+                    </div>
+                    <div class="cap-planilla-wrap" style="overflow-x:auto;">
+                        <table class="cap-planilla-table" id="cap-planilla-calificaciones">
+                            <thead>
+                                <tr>
+                                    <th class="cap-planilla-sticky cap-planilla-sticky-1">Estudiante</th>
+                                    <th class="cap-planilla-sticky cap-planilla-sticky-2">Cédula</th>
+                                    <th class="cap-planilla-asistencia-col" title="Asistencia al nivel">Asistencia</th>
+                                    <?php foreach ($tareasCapNivel as $tareaCol): ?>
+                                        <th class="cap-planilla-tarea-col" title="<?= htmlspecialchars((string)($tareaCol['Titulo'] ?? 'Tarea'), ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= htmlspecialchars((string)($tareaCol['Titulo'] ?? 'Tarea')) ?>
+                                        </th>
+                                    <?php endforeach; ?>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($planillaEstudiantesCap as $estudiantePlan): ?>
+                                    <?php
+                                        $idEstPlan = (int)($estudiantePlan['id_persona'] ?? 0);
+                                        $asistEst = (int)($estudiantePlan['asistencias'] ?? 0);
+                                        $pctEst = (int)($estudiantePlan['asistencia_pct'] ?? 0);
+                                        $pctClass = $pctEst >= 75 ? 'cap-asistencia-alta' : ($pctEst >= 50 ? 'cap-asistencia-media' : 'cap-asistencia-baja');
+                                        $tienePendiente = false;
+                                        foreach ((array)($estudiantePlan['tareas'] ?? []) as $tEstTmp) {
+                                            $entTmp = is_array($tEstTmp['entrega'] ?? null) ? $tEstTmp['entrega'] : null;
+                                            if ($entTmp && strtolower(trim((string)($entTmp['Estado_Calificacion'] ?? ''))) !== 'calificada') {
+                                                $tienePendiente = true;
+                                                break;
+                                            }
+                                        }
+                                        $ministerioEst = trim((string)($estudiantePlan['ministerio'] ?? 'Sin ministerio'));
+                                        if ($ministerioEst === '') {
+                                            $ministerioEst = 'Sin ministerio';
+                                        }
+                                    ?>
+                                    <tr class="cap-planilla-row" data-ministerio="<?= htmlspecialchars($ministerioEst, ENT_QUOTES, 'UTF-8') ?>" data-tiene-pendiente="<?= $tienePendiente ? '1' : '0' ?>">
+                                        <td class="cap-planilla-sticky cap-planilla-sticky-1"><?= htmlspecialchars((string)($estudiantePlan['nombre'] ?? '')) ?></td>
+                                        <td class="cap-planilla-sticky cap-planilla-sticky-2"><?= htmlspecialchars((string)($estudiantePlan['cedula'] ?? '')) ?></td>
+                                        <td class="cap-planilla-asistencia-col">
+                                            <span class="cap-asistencia-resumen <?= $pctClass ?>"><?= $asistEst ?>/<?= (int)$totalClasesCap ?></span>
+                                            <small class="cap-asistencia-pct"><?= $pctEst ?>%</small>
+                                        </td>
+                                        <?php foreach ((array)($estudiantePlan['tareas'] ?? []) as $tareaEst): ?>
+                                            <?php
+                                                $entregaEst = is_array($tareaEst['entrega'] ?? null) ? $tareaEst['entrega'] : null;
+                                                $idEntregaEst = $entregaEst ? (int)($entregaEst['Id_Entrega'] ?? 0) : 0;
+                                                $estadoEnt = strtolower(trim((string)($entregaEst['Estado_Calificacion'] ?? '')));
+                                                $calificada = $estadoEnt === 'calificada';
+                                                $nombreArchivoEst = $entregaEst ? (string)($entregaEst['Nombre_Archivo'] ?? '') : '';
+                                                $urlArchivoEst = $nombreArchivoEst !== ''
+                                                    ? (rtrim(PUBLIC_URL, '/') . '/uploads/material_hub_tareas/' . rawurlencode($clave) . '/' . rawurlencode($nombreArchivoEst))
+                                                    : '';
+                                            ?>
+                                            <td class="cap-planilla-celda-tarea<?= $calificada ? ' is-calificada' : ($entregaEst ? ' is-pendiente' : '') ?>">
+                                                <?php if (!$entregaEst): ?>
+                                                    <span class="cap-planilla-sin-entrega">Sin entrega</span>
+                                                <?php else: ?>
+                                                    <div class="cap-planilla-calif-cell" data-id-entrega="<?= $idEntregaEst ?>">
+                                                        <?php if ($urlArchivoEst !== ''): ?>
+                                                            <a class="cap-planilla-archivo-link" href="<?= htmlspecialchars($urlArchivoEst, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" title="Ver entrega"><i class="bi bi-paperclip"></i></a>
+                                                        <?php endif; ?>
+                                                        <input type="number" class="form-control form-control-sm cap-planilla-nota-input" min="0" max="5" step="0.1" value="<?= htmlspecialchars((string)($entregaEst['Nota'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="0-5">
+                                                        <input type="text" class="form-control form-control-sm cap-planilla-retro-input" maxlength="120" value="<?= htmlspecialchars((string)($entregaEst['Retroalimentacion'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Retroalimentación">
+                                                        <button type="button" class="btn btn-xs btn-success cap-planilla-guardar-btn" data-id-entrega="<?= $idEntregaEst ?>">Guardar</button>
+                                                        <span class="cap-planilla-estado-msg" aria-live="polite"></span>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </td>
+                                        <?php endforeach; ?>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="cap-planilla-ayuda">Escribe la nota (0–5) y pulsa <strong>Guardar</strong> en cada celda. La asistencia corresponde al nivel <?= (int)$capNivelVista ?> (<?= (int)$totalClasesCap ?> clases).</p>
+                    <script>
+                    (function() {
+                        var tabla = document.getElementById('cap-planilla-calificaciones');
+                        if (!tabla) return;
+                        var urlCalificar = <?= json_encode(rtrim(PUBLIC_URL, '/') . '/index.php?url=home/calificar-tarea-entrega-cap') ?>;
+                        var nivelCap = <?= (int)$capNivelVista ?>;
+                        var moduloCap = <?= (int)$capModuloVistaActual ?>;
+
+                        function escaparCsvCap(valor) {
+                            var txt = String(valor == null ? '' : valor).replace(/\r?\n/g, ' ').trim();
+                            if (/[;"\r\n]/.test(txt)) {
+                                return '"' + txt.replace(/"/g, '""') + '"';
+                            }
+                            return txt;
+                        }
+
+                        function textoCeldaTareaExport(celda) {
+                            if (!celda) {
+                                return 'Sin entrega';
+                            }
+                            if (celda.querySelector('.cap-planilla-sin-entrega')) {
+                                return 'Sin entrega';
+                            }
+                            var notaInput = celda.querySelector('.cap-planilla-nota-input');
+                            var retroInput = celda.querySelector('.cap-planilla-retro-input');
+                            var nota = notaInput ? String(notaInput.value || '').trim() : '';
+                            var retro = retroInput ? String(retroInput.value || '').trim() : '';
+                            var estado = celda.classList.contains('is-calificada') ? 'Calificada' : 'Pendiente';
+                            var partes = ['Nota: ' + (nota !== '' ? nota : '—'), estado];
+                            if (retro !== '') {
+                                partes.push(retro);
+                            }
+                            return partes.join(' | ');
+                        }
+
+                        function exportarPlanillaExcel() {
+                            if (!tabla) {
+                                return;
+                            }
+
+                            var theadRow = tabla.querySelector('thead tr');
+                            var headers = ['Estudiante', 'Cédula', 'Ministerio', 'Asistencia (clases)', 'Asistencia %'];
+                            if (theadRow) {
+                                theadRow.querySelectorAll('th.cap-planilla-tarea-col').forEach(function(th) {
+                                    headers.push(String(th.textContent || '').trim() || 'Tarea');
+                                });
+                            }
+
+                            var filasVisibles = Array.from(tabla.querySelectorAll('.cap-planilla-row')).filter(function(fila) {
+                                return fila.style.display !== 'none';
+                            });
+
+                            if (!filasVisibles.length) {
+                                window.alert('No hay filas visibles para exportar. Ajusta el filtro.');
+                                return;
+                            }
+
+                            var lineas = [];
+                            lineas.push(['Reporte', 'Capacitación Destino — Planilla de calificaciones'].map(escaparCsvCap).join(';'));
+                            lineas.push(['Nivel', String(nivelCap)].map(escaparCsvCap).join(';'));
+                            lineas.push(['Módulo', String(moduloCap)].map(escaparCsvCap).join(';'));
+                            lineas.push(['Generado', new Date().toLocaleString('es-CO')].map(escaparCsvCap).join(';'));
+                            lineas.push('');
+                            lineas.push(headers.map(escaparCsvCap).join(';'));
+
+                            filasVisibles.forEach(function(fila) {
+                                var celdas = fila.querySelectorAll('td');
+                                var celdaAsist = celdas[2] || null;
+                                var asistResumen = celdaAsist ? celdaAsist.querySelector('.cap-asistencia-resumen') : null;
+                                var asistPct = celdaAsist ? celdaAsist.querySelector('.cap-asistencia-pct') : null;
+                                var row = [
+                                    celdas[0] ? String(celdas[0].textContent || '').trim() : '',
+                                    celdas[1] ? String(celdas[1].textContent || '').trim() : '',
+                                    String(fila.getAttribute('data-ministerio') || ''),
+                                    asistResumen ? String(asistResumen.textContent || '').trim() : '',
+                                    asistPct ? String(asistPct.textContent || '').trim() : ''
+                                ];
+                                fila.querySelectorAll('td.cap-planilla-celda-tarea').forEach(function(celdaTarea) {
+                                    row.push(textoCeldaTareaExport(celdaTarea));
+                                });
+                                lineas.push(row.map(escaparCsvCap).join(';'));
+                            });
+
+                            var blob = new Blob(['\uFEFF' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+                            var urlBlob = URL.createObjectURL(blob);
+                            var enlace = document.createElement('a');
+                            var fecha = new Date();
+                            var stamp = fecha.getFullYear()
+                                + String(fecha.getMonth() + 1).padStart(2, '0')
+                                + String(fecha.getDate()).padStart(2, '0');
+                            enlace.href = urlBlob;
+                            enlace.download = 'cap_destino_n' + nivelCap + '_m' + moduloCap + '_planilla_' + stamp + '.csv';
+                            document.body.appendChild(enlace);
+                            enlace.click();
+                            document.body.removeChild(enlace);
+                            setTimeout(function() { URL.revokeObjectURL(urlBlob); }, 500);
+                        }
+
+                        function filtrarPlanilla() {
+                            var minSel = document.getElementById('cap-planilla-filtro-ministerio');
+                            var soloPend = document.getElementById('cap-planilla-solo-pendientes');
+                            var valorMin = minSel ? String(minSel.value || '') : '';
+                            var soloPendiente = soloPend ? soloPend.checked : false;
+                            tabla.querySelectorAll('.cap-planilla-row').forEach(function(fila) {
+                                var minFila = String(fila.getAttribute('data-ministerio') || '');
+                                var tienePend = String(fila.getAttribute('data-tiene-pendiente') || '0') === '1';
+                                var okMin = valorMin === '' || minFila === valorMin;
+                                var okPend = !soloPendiente || tienePend;
+                                fila.style.display = (okMin && okPend) ? '' : 'none';
+                            });
+                        }
+
+                        var filtroMin = document.getElementById('cap-planilla-filtro-ministerio');
+                        var chkPend = document.getElementById('cap-planilla-solo-pendientes');
+                        if (filtroMin) filtroMin.addEventListener('change', filtrarPlanilla);
+                        if (chkPend) chkPend.addEventListener('change', filtrarPlanilla);
+
+                        var btnExportExcel = document.getElementById('cap-planilla-export-excel');
+                        if (btnExportExcel) {
+                            btnExportExcel.addEventListener('click', exportarPlanillaExcel);
+                        }
+
+                        tabla.addEventListener('click', function(e) {
+                            var btn = e.target && e.target.closest ? e.target.closest('.cap-planilla-guardar-btn') : null;
+                            if (!btn) return;
+                            var celda = btn.closest('.cap-planilla-calif-cell');
+                            if (!celda) return;
+                            var idEntrega = parseInt(String(btn.getAttribute('data-id-entrega') || celda.getAttribute('data-id-entrega') || '0'), 10);
+                            if (idEntrega <= 0) return;
+                            var notaInput = celda.querySelector('.cap-planilla-nota-input');
+                            var retroInput = celda.querySelector('.cap-planilla-retro-input');
+                            var msg = celda.querySelector('.cap-planilla-estado-msg');
+                            var fd = new FormData();
+                            fd.append('id_entrega', String(idEntrega));
+                            fd.append('nota_entrega', notaInput ? String(notaInput.value || '') : '');
+                            fd.append('retroalimentacion_entrega', retroInput ? String(retroInput.value || '') : '');
+                            fd.append('nivel', String(nivelCap));
+                            fd.append('modulo_numero', String(moduloCap));
+                            btn.disabled = true;
+                            if (msg) { msg.textContent = 'Guardando…'; msg.className = 'cap-planilla-estado-msg is-saving'; }
+                            fetch(urlCalificar, { method: 'POST', body: fd, credentials: 'same-origin' })
+                                .then(function(r) { return r.json(); })
+                                .then(function(data) {
+                                    btn.disabled = false;
+                                    if (!data || data.ok !== true) {
+                                        throw new Error((data && data.error) ? data.error : 'No se pudo guardar.');
+                                    }
+                                    if (msg) { msg.textContent = 'Guardado'; msg.className = 'cap-planilla-estado-msg is-ok'; }
+                                    var td = celda.closest('td');
+                                    if (td) {
+                                        td.classList.remove('is-pendiente');
+                                        td.classList.add('is-calificada');
+                                    }
+                                    var fila = celda.closest('.cap-planilla-row');
+                                    if (fila) {
+                                        var quedanPend = false;
+                                        fila.querySelectorAll('td.is-pendiente').forEach(function() { quedanPend = true; });
+                                        if (!quedanPend) fila.setAttribute('data-tiene-pendiente', '0');
+                                    }
+                                })
+                                .catch(function(err) {
+                                    btn.disabled = false;
+                                    if (msg) { msg.textContent = err.message || 'Error'; msg.className = 'cap-planilla-estado-msg is-error'; }
+                                });
+                        });
+                    })();
+                    </script>
+                <?php elseif (empty($tareasCapNivel)): ?>
+                    <div class="alert alert-info" style="margin:0;">Crea tareas en la sección <strong>Tareas</strong> para ver la planilla de calificaciones.</div>
+                <?php else: ?>
+                    <div class="alert alert-info" style="margin:0;">No hay inscritos en este nivel para mostrar la planilla.</div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 
@@ -2674,6 +3176,12 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                                         <?php endif; ?>
 
                                         <?php if ($puedeSubirTareas): ?>
+                                            <?php $totalEntregasDisc = (int)($tareaDisc['total_entregas_usuario'] ?? 0); ?>
+                                            <?php if ($totalEntregasDisc > 0): ?>
+                                                <div class="alert alert-success cap-tarea-entregada-msg" style="margin:8px 0;">
+                                                    <i class="bi bi-check-circle"></i> Ya entregaste esta tarea. No puedes subir más archivos.
+                                                </div>
+                                            <?php else: ?>
                                             <form method="POST" enctype="multipart/form-data" action="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($ruta) ?>" class="cap-tarea-upload-form">
                                                 <input type="hidden" name="accion" value="subir_tarea_entrega">
                                                 <input type="hidden" name="modulo" value="<?= htmlspecialchars($clave) ?>">
@@ -2689,10 +3197,11 @@ $formularioSubidaAbierto = $vistaCapNivelIndependiente;
                                                 <div>
                                                     <label style="font-size:12px;">Archivos (varios a la vez)</label>
                                                     <input type="file" name="tarea_archivos[]" class="form-control" multiple required accept="<?= htmlspecialchars($capTareaAcceptArchivos, ENT_QUOTES, 'UTF-8') ?>">
-                                                    <small class="cap-tarea-upload-hint">Imágenes, audio, video, PDF, Office y más. Máx. 100MB por archivo.</small>
+                                                    <small class="cap-tarea-upload-hint">Imágenes, audio, video, PDF, Office y más. Máx. 100MB por archivo. Solo una entrega por tarea.</small>
                                                 </div>
                                                 <button type="submit" class="btn btn-sm btn-primary">Subir tarea</button>
                                             </form>
+                                            <?php endif; ?>
                                             <?php
                                                 $entregas_usuario = (array)($tareaDisc['entregas_usuario'] ?? []);
                                                 $clave_modulo_tarea = $clave;

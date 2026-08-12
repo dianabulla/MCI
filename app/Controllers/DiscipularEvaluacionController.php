@@ -2018,6 +2018,28 @@ class DiscipularEvaluacionController extends BaseController {
         $pdo->exec($sqlEntrega);
     }
 
+    private function personaYaEntregoTareaDiscipulo(int $idTarea, int $idPersona): bool {
+        $idTarea = (int)$idTarea;
+        $idPersona = (int)$idPersona;
+        if ($idTarea <= 0 || $idPersona <= 0) {
+            return false;
+        }
+
+        $this->asegurarTablasTareasMaterialHub();
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return false;
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT COUNT(*) FROM material_hub_tarea_entrega WHERE Id_Tarea = ? AND Id_Persona = ? LIMIT 1'
+        );
+        $stmt->execute([$idTarea, $idPersona]);
+
+        return (int)$stmt->fetchColumn() > 0;
+    }
+
     private function obtenerDirectorioTareasCapDestino(): string {
         return ROOT . '/public/uploads/material_hub_tareas/capacitacion_destino';
     }
@@ -2275,6 +2297,10 @@ class DiscipularEvaluacionController extends BaseController {
             $redirigir('La tarea no corresponde al módulo seleccionado.', 'error');
         }
 
+        if ($this->personaYaEntregoTareaDiscipulo($idTarea, $idPersona)) {
+            $redirigir('Ya entregaste esta tarea. No puedes subir más archivos.', 'error');
+        }
+
         $insert = $pdo->prepare(
             "INSERT INTO material_hub_tarea_entrega
              (Id_Tarea, Id_Persona, Nombre_Archivo, Nombre_Original, Comentario, Estado_Calificacion)
@@ -2338,85 +2364,7 @@ class DiscipularEvaluacionController extends BaseController {
             $this->redirigirAccionTareaDiscipulo($mensaje, $tipo, $volverTareas, $nivelRetorno, $moduloRetorno);
         };
 
-        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
-        $idEntrega = (int)($_POST['id_entrega'] ?? 0);
-        $comentario = trim((string)($_POST['comentario_entrega_editar'] ?? ''));
-
-        if ($idPersona <= 0 || $idEntrega <= 0) {
-            $redirigir('No se pudo identificar la entrega a editar.', 'error');
-        }
-
-        $this->asegurarTablasTareasMaterialHub();
-
-        global $pdo;
-        if (!isset($pdo) || !($pdo instanceof PDO)) {
-            $redirigir('No se pudo conectar para editar tu entrega.', 'error');
-        }
-
-        $sqlEntrega = "SELECT
-                            e.Id_Entrega,
-                            e.Id_Tarea,
-                            e.Id_Persona,
-                            e.Nombre_Archivo,
-                            t.Nivel,
-                            COALESCE(t.Modulo_Numero, 0) AS Modulo_Numero
-                        FROM material_hub_tarea_entrega e
-                        INNER JOIN material_hub_tarea t ON t.Id_Tarea = e.Id_Tarea
-                        WHERE e.Id_Entrega = ?
-                          AND e.Id_Persona = ?
-                          AND t.Modulo = 'capacitacion_destino'
-                        LIMIT 1";
-        $stmtEntrega = $pdo->prepare($sqlEntrega);
-        $stmtEntrega->execute([$idEntrega, $idPersona]);
-        $entrega = $stmtEntrega->fetch(PDO::FETCH_ASSOC);
-
-        if (!$entrega) {
-            $redirigir('No se encontró la entrega seleccionada.', 'error');
-        }
-
-        $nivelEntrega = (int)($entrega['Nivel'] ?? 0);
-        $moduloEntrega = (int)($entrega['Modulo_Numero'] ?? 0);
-        if ($nivelRetorno > 0 && $nivelEntrega !== $nivelRetorno) {
-            $redirigir('La entrega no corresponde al nivel seleccionado.', 'error');
-        }
-        if ($moduloRetorno > 0 && $moduloEntrega > 0 && $moduloEntrega !== $moduloRetorno) {
-            $redirigir('La entrega no corresponde al módulo seleccionado.', 'error');
-        }
-
-        $campos = [
-            'Comentario = ?',
-            'Estado_Calificacion = \'pendiente\'',
-            'Nota = NULL',
-            'Retroalimentacion = NULL',
-            'Calificado_Por = NULL',
-            'Fecha_Calificacion = NULL',
-        ];
-        $params = [$comentario !== '' ? $comentario : null];
-
-        $archivoAnterior = trim((string)($entrega['Nombre_Archivo'] ?? ''));
-        if (isset($_FILES['tarea_archivo_editar']) && (int)($_FILES['tarea_archivo_editar']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
-            $idTarea = (int)($entrega['Id_Tarea'] ?? 0);
-            $guardado = $this->guardarArchivoEntregaTareaDiscipulo($idTarea, $idPersona, $_FILES['tarea_archivo_editar'], 1);
-            $campos[] = 'Nombre_Archivo = ?';
-            $campos[] = 'Nombre_Original = ?';
-            $params[] = (string)($guardado['nombre'] ?? '');
-            $params[] = (string)($guardado['original'] ?? '');
-        }
-
-        $params[] = $idEntrega;
-        $params[] = $idPersona;
-
-        $sqlUpdate = "UPDATE material_hub_tarea_entrega
-                      SET " . implode(', ', $campos) . "
-                      WHERE Id_Entrega = ? AND Id_Persona = ?";
-        $stmtUpdate = $pdo->prepare($sqlUpdate);
-        $stmtUpdate->execute($params);
-
-        if (isset($guardado) && !empty($guardado['nombre']) && $archivoAnterior !== '' && $archivoAnterior !== (string)$guardado['nombre']) {
-            $this->eliminarArchivoEntregaTareaDiscipulo($archivoAnterior);
-        }
-
-        $redirigir('Entrega actualizada correctamente.', 'success');
+        $redirigir('La entrega ya está registrada y no puede modificarse.', 'error');
     }
 
     private function procesarEliminarEntregaTareaDiscipulo(): void {
@@ -2428,61 +2376,7 @@ class DiscipularEvaluacionController extends BaseController {
             $this->redirigirAccionTareaDiscipulo($mensaje, $tipo, $volverTareas, $nivelRetorno, $moduloRetorno);
         };
 
-        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
-        $idEntrega = (int)($_POST['id_entrega'] ?? 0);
-
-        if ($idPersona <= 0 || $idEntrega <= 0) {
-            $redirigir('No se pudo identificar la entrega a eliminar.', 'error');
-        }
-
-        $this->asegurarTablasTareasMaterialHub();
-
-        global $pdo;
-        if (!isset($pdo) || !($pdo instanceof PDO)) {
-            $redirigir('No se pudo conectar para eliminar tu entrega.', 'error');
-        }
-
-        $sqlEntrega = "SELECT
-                            e.Id_Entrega,
-                            e.Nombre_Archivo,
-                            t.Nivel,
-                            COALESCE(t.Modulo_Numero, 0) AS Modulo_Numero
-                        FROM material_hub_tarea_entrega e
-                        INNER JOIN material_hub_tarea t ON t.Id_Tarea = e.Id_Tarea
-                        WHERE e.Id_Entrega = ?
-                          AND e.Id_Persona = ?
-                          AND t.Modulo = 'capacitacion_destino'
-                        LIMIT 1";
-        $stmtEntrega = $pdo->prepare($sqlEntrega);
-        $stmtEntrega->execute([$idEntrega, $idPersona]);
-        $entrega = $stmtEntrega->fetch(PDO::FETCH_ASSOC);
-
-        if (!$entrega) {
-            $redirigir('No se encontró la entrega seleccionada.', 'error');
-        }
-
-        $nivelEntrega = (int)($entrega['Nivel'] ?? 0);
-        $moduloEntrega = (int)($entrega['Modulo_Numero'] ?? 0);
-        if ($nivelRetorno > 0 && $nivelEntrega !== $nivelRetorno) {
-            $redirigir('La entrega no corresponde al nivel seleccionado.', 'error');
-        }
-        if ($moduloRetorno > 0 && $moduloEntrega > 0 && $moduloEntrega !== $moduloRetorno) {
-            $redirigir('La entrega no corresponde al módulo seleccionado.', 'error');
-        }
-
-        $stmtDelete = $pdo->prepare("DELETE FROM material_hub_tarea_entrega WHERE Id_Entrega = ? AND Id_Persona = ? LIMIT 1");
-        $stmtDelete->execute([$idEntrega, $idPersona]);
-
-        if ((int)$stmtDelete->rowCount() <= 0) {
-            $redirigir('No se pudo eliminar la entrega seleccionada.', 'error');
-        }
-
-        $archivo = trim((string)($entrega['Nombre_Archivo'] ?? ''));
-        if ($archivo !== '') {
-            $this->eliminarArchivoEntregaTareaDiscipulo($archivo);
-        }
-
-        $redirigir('Entrega eliminada correctamente.', 'success');
+        $redirigir('La entrega ya está registrada y no puede eliminarse.', 'error');
     }
 
     private function eliminarArchivoEntregaTareaDiscipulo(string $nombreArchivo): void {

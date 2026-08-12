@@ -1,5 +1,5 @@
 <?php include VIEWS . '/layout/header.php'; ?>
-<link rel="stylesheet" href="<?= ASSETS_URL ?>/css/discipular-equipo.css?v=20260803d">
+<link rel="stylesheet" href="<?= ASSETS_URL ?>/css/discipular-equipo.css?v=20260811a">
 
 <?php
 $idMinisterioFiltro = (int)($id_ministerio_filtro ?? 0);
@@ -1490,7 +1490,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                 <div class="cupos-footer-row">
                     <small id="helpModoCupo" style="display:block; margin-top:4px; color:#60708f;">Selecciona una persona y pulsa Confirmar asignación.</small>
                     <div class="cupos-footer-actions">
-                        <button type="button" id="btnLiberarCupo" class="btn btn-outline-danger btn-sm" style="display:none;">Quitar de este cupo</button>
+                        <button type="button" id="btnLiberarCupo" class="btn btn-outline-danger btn-sm" style="display:none;">Liberar cupo</button>
                         <button type="submit" id="btnAsignarCupo" class="btn btn-primary btn-sm">Confirmar asignación</button>
                     </div>
                 </div>
@@ -1691,6 +1691,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                             data-search-digits="<?= htmlspecialchars($digitosBusqueda) ?>"
                         >
                             <td>
+                                <div class="cupos-tabla-acciones">
                                 <button
                                     type="button"
                                     class="btn btn-xs btn-primary js-asignar-desde-cupo"
@@ -1704,6 +1705,18 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                                     data-nombre-rol="<?= htmlspecialchars($nombreRolFila) ?>"
                                     title="Gestionar cupo de líder de 144 (12 bajo líder de 12)"
                                 >Cupo <?= (int)$cupoNumeroFila ?></button>
+                                <?php if ($idPersona > 0): ?>
+                                <button
+                                    type="button"
+                                    class="btn btn-xs btn-outline-danger js-liberar-cupo-directo"
+                                    data-id-lider="<?= $idLiderCupo144 ?>"
+                                    data-id-persona="<?= $idPersona ?>"
+                                    data-id-ministerio="<?= $idMinisterioFiltro ?>"
+                                    data-numero-cupo="<?= (int)$cupoNumeroFila ?>"
+                                    title="Liberar cupo (quedará vacío)"
+                                >Liberar</button>
+                                <?php endif; ?>
+                                </div>
                             </td>
                             <td><?= htmlspecialchars($documento !== '' ? $documento : '-') ?></td>
                             <td>
@@ -1902,6 +1915,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                             <?php if ($tabMuestraColumnaCupo): ?>
                             <td>
                                 <?php if ($esGestionCupoPrincipal): ?>
+                                    <div class="cupos-tabla-acciones">
                                     <button
                                         type="button"
                                         class="btn btn-xs btn-primary js-asignar-desde-cupo"
@@ -1918,7 +1932,20 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                                     >
                                         <?= $cupoNumeroFila > 0 ? ('Cupo ' . (int)$cupoNumeroFila) : 'Gestionar cupo' ?>
                                     </button>
+                                    <?php if ($idPersona > 0 && $cupoNumeroFila > 0): ?>
+                                    <button
+                                        type="button"
+                                        class="btn btn-xs btn-outline-danger js-liberar-cupo-directo"
+                                        data-id-lider="<?= $liderObjetivoFila ?>"
+                                        data-id-persona="<?= $idPersona ?>"
+                                        data-id-ministerio="<?= $idMinisterioFiltro > 0 ? $idMinisterioFiltro : $idMinisterioFila ?>"
+                                        data-numero-cupo="<?= (int)$cupoNumeroFila ?>"
+                                        title="Liberar cupo (quedará vacío)"
+                                    >Liberar</button>
+                                    <?php endif; ?>
+                                    </div>
                                 <?php elseif ($esGestionCupo144Ministerio): ?>
+                                    <div class="cupos-tabla-acciones">
                                     <button
                                         type="button"
                                         class="btn btn-xs btn-primary js-asignar-desde-cupo"
@@ -1935,6 +1962,18 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                                     >
                                         <?= $cupoNumeroFila > 0 ? ('Cupo ' . (int)$cupoNumeroFila) : 'Gestionar cupo' ?>
                                     </button>
+                                    <?php if ($idPersona > 0 && $cupoNumeroFila > 0): ?>
+                                    <button
+                                        type="button"
+                                        class="btn btn-xs btn-outline-danger js-liberar-cupo-directo"
+                                        data-id-lider="<?= $liderObjetivoFila ?>"
+                                        data-id-persona="<?= $idPersona ?>"
+                                        data-id-ministerio="<?= $idMinisterioFiltro ?>"
+                                        data-numero-cupo="<?= (int)$cupoNumeroFila ?>"
+                                        title="Liberar cupo (quedará vacío)"
+                                    >Liberar</button>
+                                    <?php endif; ?>
+                                    </div>
                                 <?php elseif ($esGestionEquipoCelula): ?>
                                     <button
                                         type="button"
@@ -2477,7 +2516,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     max-width: calc(100vw - 24px);
     max-height: min(92vh, calc(100dvh - 24px));
     margin: 0;
-    overflow-x: hidden;
+    overflow-x: auto;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     background: #fff;
@@ -2579,7 +2618,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
 
 .cupos-list-item {
     display: grid;
-    grid-template-columns: 80px 1fr auto;
+    grid-template-columns: 80px minmax(0, 1fr) minmax(220px, auto);
     gap: 12px;
     align-items: center;
     padding: 10px 12px;
@@ -2645,6 +2684,44 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     background: #e8f0ff;
     border-color: #85a4dd;
     color: #4f66d4;
+}
+
+.cupos-item-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.cupos-item-btn--liberar {
+    border-color: #e8c4c4;
+    background: #fff5f5;
+    color: #b42318;
+    font-weight: 700;
+}
+
+.cupos-item-btn--liberar:hover {
+    background: #fee8e8;
+    border-color: #e08a8a;
+    color: #9b1c1c;
+}
+
+@media (max-width: 720px) {
+    .cupos-list-item {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .cupos-item-actions {
+        justify-content: flex-start;
+    }
+}
+
+.cupos-tabla-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
 }
 
 .cupos-header-info {
@@ -3120,8 +3197,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
         const slots = [];
         for (let i = 1; i <= 12; i++) {
             const raw = equipo[i - 1];
-            const cupoNum = parseInt(String(raw && raw.numero_cupo ? raw.numero_cupo : '0'), 10);
-            const persona = raw && raw.id_persona && cupoNum >= 1 && cupoNum <= 12 ? raw : null;
+            const persona = raw && raw.id_persona ? raw : null;
             slots.push({
                 slot_numero: i,
                 persona: persona,
@@ -3355,6 +3431,13 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
             }
 
             const selClass = Number(slotInfo.slot_numero) === selNum ? ' is-selected' : '';
+            const idPersonaSlot = ocupado ? String(persona.id_persona || '') : '';
+            const btnLiberar = ocupado
+                ? ('<button type="button" class="cupos-item-btn cupos-item-btn--liberar js-liberar-cupo-item"'
+                    + ' data-slot-numero="' + slotInfo.slot_numero + '"'
+                    + ' data-id-persona="' + idPersonaSlot + '"'
+                    + ' title="Dejar la casilla vacía">Liberar cupo</button>')
+                : '';
 
             return '<li class="cupos-list-item ' + (ocupado ? 'is-occupied' : '') + selClass + '" data-slot-numero="' + slotInfo.slot_numero + '">'
                 + '<div class="cupos-item-numero">Casilla ' + slotInfo.slot_numero + '</div>'
@@ -3362,7 +3445,10 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                 + '<span class="cupos-item-status ' + (ocupado ? '' : 'libre') + '">' + (ocupado ? escapeHtml(nombre) : 'Libre') + '</span>'
                 + (meta.length > 0 ? '<span class="cupos-item-meta">' + escapeHtml(meta.join(' | ')) + '</span>' : '')
                 + '</div>'
+                + '<div class="cupos-item-actions">'
                 + '<button type="button" class="cupos-item-btn js-gestionar-cupo-item" data-slot-numero="' + slotInfo.slot_numero + '">Elegir casilla</button>'
+                + btnLiberar
+                + '</div>'
                 + '</li>';
         }).join('');
 
@@ -3377,6 +3463,24 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                     seleccionarSlot(slotInfo);
                     abrirGestionSlot(slotInfo, true);
                 }
+            });
+        });
+
+        Array.from(listaCuposEquipo.querySelectorAll('.js-liberar-cupo-item')).forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                const idPersonaBtn = String(btn.dataset.idPersona || '').trim();
+                const numeroCupo = parseInt(String(btn.dataset.slotNumero || '0'), 10);
+                if (idPersonaBtn === '') {
+                    return;
+                }
+                ejecutarLiberarCupo({
+                    id_lider: idLider,
+                    id_persona: idPersonaBtn,
+                    id_ministerio: idMinisterioAsignar ? String(idMinisterioAsignar.value || '0') : '0',
+                    numero_cupo: numeroCupo
+                });
             });
         });
     }
@@ -3844,7 +3948,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
             }
         }
         if (helpModoCupo) {
-            helpModoCupo.textContent = 'Elige una persona y confirma. Si la casilla está ocupada, puedes sustituir o usar «Quitar de este cupo». Máximo 12 por líder.';
+            helpModoCupo.textContent = 'Elige una persona y confirma. Si la casilla está ocupada, puedes sustituir o usar «Liberar cupo». Máximo 12 por líder.';
         }
         sincronizarAyudaBusquedaCupoParaLider(liderAsignar ? String(liderAsignar.value || '').trim() : '');
     }
@@ -3873,6 +3977,42 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
         if (liberarIdMinisterio && idMinisterioAsignar) {
             liberarIdMinisterio.value = String(idMinisterioAsignar.value || '0');
         }
+    }
+
+    function ejecutarLiberarCupo(params) {
+        if (!formLiberarCupo) {
+            return;
+        }
+        const idLider = String((params && params.id_lider) || '').trim();
+        const idPersona = String((params && params.id_persona) || '').trim();
+        const idMinisterio = String((params && params.id_ministerio) || '0').trim();
+        const numeroCupo = parseInt(String((params && params.numero_cupo) || '0'), 10);
+
+        if (idLider === '' || idPersona === '') {
+            return;
+        }
+
+        const msgCupo = numeroCupo > 0
+            ? ('¿Liberar la casilla ' + numeroCupo + '? Quedará vacía y la persona sin líder asignado.')
+            : '¿Liberar este cupo? La persona quedará sin líder asignado.';
+        if (!window.confirm(msgCupo)) {
+            return;
+        }
+
+        if (liberarIdLider) {
+            liberarIdLider.value = idLider;
+        }
+        if (liberarIdPersona) {
+            liberarIdPersona.value = idPersona;
+        }
+        if (liberarIdMinisterio) {
+            liberarIdMinisterio.value = idMinisterio;
+        }
+        if (liberarNumeroCupo) {
+            liberarNumeroCupo.value = numeroCupo > 0 ? String(numeroCupo) : '';
+        }
+
+        formLiberarCupo.submit();
     }
 
     if (buscarCupoUniversal && selectPersonaAsignar) {
@@ -4041,16 +4181,28 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     if (btnLiberarCupo && formLiberarCupo) {
         btnLiberarCupo.addEventListener('click', function() {
             sincronizarBotonLiberar();
-            const idP = liberarIdPersona ? String(liberarIdPersona.value || '').trim() : '';
-            if (idP === '') {
-                return;
-            }
-            if (!window.confirm('¿Quitar a esta persona del cupo? Quedará sin líder asignado.')) {
-                return;
-            }
-            formLiberarCupo.submit();
+            ejecutarLiberarCupo({
+                id_lider: liberarIdLider ? String(liberarIdLider.value || '').trim() : '',
+                id_persona: liberarIdPersona ? String(liberarIdPersona.value || '').trim() : '',
+                id_ministerio: liberarIdMinisterio ? String(liberarIdMinisterio.value || '0').trim() : '0',
+                numero_cupo: liberarNumeroCupo ? parseInt(String(liberarNumeroCupo.value || '0'), 10) : 0
+            });
         });
     }
+
+    document.addEventListener('click', function(e) {
+        const btnLiberar = e.target && e.target.closest ? e.target.closest('.js-liberar-cupo-directo') : null;
+        if (!btnLiberar) {
+            return;
+        }
+        e.preventDefault();
+        ejecutarLiberarCupo({
+            id_lider: String(btnLiberar.dataset.idLider || '').trim(),
+            id_persona: String(btnLiberar.dataset.idPersona || '').trim(),
+            id_ministerio: String(btnLiberar.dataset.idMinisterio || '0').trim(),
+            numero_cupo: parseInt(String(btnLiberar.dataset.numeroCupo || '0'), 10)
+        });
+    });
 
     function prepararAsignacionDesdeBoton(btn) {
         const enVistaJerarquia = document.querySelector('.equipo-shell--jerarquia') !== null;

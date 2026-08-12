@@ -242,6 +242,7 @@ if ($filtroNivel > 0 && $filtroModulo > 0) {
                                         <?php endif; ?>
 
                                         <?php $entregasUsuario = (array)($tareaDisc['entregas_usuario'] ?? []); ?>
+                                        <?php $yaEntregoTarea = (int)($tareaDisc['total_entregas_usuario'] ?? 0) > 0; ?>
                                         <?php if (!empty($entregasUsuario)): ?>
                                             <div class="disc-entrega-wrap">
                                                 <strong style="font-size:12px;color:#1f4f93;">Tus entregas subidas</strong>
@@ -299,6 +300,7 @@ if ($filtroNivel > 0 && $filtroModulo > 0) {
                                                             </div>
 
                                                             <div class="disc-entrega-cell disc-entrega-actions-cell">
+                                                                <?php if (!$yaEntregoTarea): ?>
                                                                 <div class="disc-entrega-actions">
                                                                     <details class="disc-entrega-edit">
                                                                         <summary>Editar</summary>
@@ -323,6 +325,7 @@ if ($filtroNivel > 0 && $filtroModulo > 0) {
                                                                         <button type="submit" class="btn btn-sm btn-outline-danger">Eliminar</button>
                                                                     </form>
                                                                 </div>
+                                                                <?php endif; ?>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -330,6 +333,9 @@ if ($filtroNivel > 0 && $filtroModulo > 0) {
                                             </div>
                                         <?php endif; ?>
 
+                                        <?php if ($yaEntregoTarea): ?>
+                                            <div class="alert alert-success" style="margin-top:8px;font-size:12px;">Ya entregaste esta tarea. No puedes subir más archivos.</div>
+                                        <?php else: ?>
                                         <form method="POST" enctype="multipart/form-data" action="<?= PUBLIC_URL ?>?url=programas/tareas&nivel=<?= $nivelAcceso ?>&modulo=<?= $moduloAcceso ?>" class="disc-entrega-nueva">
                                             <input type="hidden" name="accion" value="subir_tarea_entrega">
                                             <input type="hidden" name="volver_tareas" value="1">
@@ -341,6 +347,7 @@ if ($filtroNivel > 0 && $filtroModulo > 0) {
                                             <small style="display:block;margin-top:4px;color:#637087;font-size:11px;">Varios archivos a la vez · imágenes, audio, video, PDF, etc. · máx. 100MB c/u</small>
                                             <button type="submit" class="btn btn-sm" style="background:#10b981;color:#fff;">Subir tarea</button>
                                         </form>
+                                        <?php endif; ?>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
