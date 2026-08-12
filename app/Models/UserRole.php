@@ -46,7 +46,67 @@ class UserRole extends BaseModel {
         }
     }
 
+    /**
+     * Deja el rol principal en user_roles y solo conserva segundos roles permitidos:
+     * Maestro (asignado explícitamente) y Discípulo (solo si está inscrito en Cap. Destino).
+     */
+    public function establecerRolUnico(int $idPersona, int $idRolPrincipal): bool {
+        if ($idPersona <= 0 || $idRolPrincipal <= 0) {
+            return false;
+        }
+
+        if (!$this->asegurarTabla()) {
+            return false;
+        }
+
+        $idRolMaestro = $this->buscarRolPorAlias('maestro');
+        $idRolDiscipulo = $this->buscarRolPorAlias('discipulo');
+        $conservarMaestroSecundario = false;
+
+        if ($idRolMaestro > 0 && $idRolPrincipal !== $idRolMaestro) {
+            foreach ($this->listarRolesPersona($idPersona) as $rol) {
+                if ((int)($rol['Id_Rol'] ?? 0) === $idRolMaestro) {
+                    $conservarMaestroSecundario = true;
+                    break;
+                }
+            }
+        }
+
+        $conservarDiscipuloSecundario = $this->debeTenerDiscipuloSecundario($idPersona, $idRolPrincipal, $idRolDiscipulo);
+
+        if (!$this->execute('DELETE FROM user_roles WHERE Id_Persona = ?', [$idPersona])) {
+            return false;
+        }
+
+        if (!$this->execute(
+            'INSERT INTO user_roles (Id_Persona, Id_Rol, Activo) VALUES (?, ?, 1)',
+            [$idPersona, $idRolPrincipal]
+        )) {
+            return false;
+        }
+
+        if ($conservarMaestroSecundario && $idRolMaestro > 0) {
+            $this->execute(
+                'INSERT INTO user_roles (Id_Persona, Id_Rol, Activo) VALUES (?, ?, 1)',
+                [$idPersona, $idRolMaestro]
+            );
+        }
+
+        if ($conservarDiscipuloSecundario && $idRolDiscipulo > 0) {
+            $this->execute(
+                'INSERT INTO user_roles (Id_Persona, Id_Rol, Activo) VALUES (?, ?, 1)',
+                [$idPersona, $idRolDiscipulo]
+            );
+        }
+
+        return true;
+    }
+
     public function sincronizarRolPrincipal(int $idPersona, int $idRol): bool {
+        return $this->establecerRolUnico($idPersona, $idRol);
+    }
+
+    public function asignarRol(int $idPersona, int $idRol): bool {
         if ($idPersona <= 0 || $idRol <= 0) {
             return false;
         }
@@ -55,15 +115,64 @@ class UserRole extends BaseModel {
             return false;
         }
 
+        $idRolMaestro = $this->buscarRolPorAlias('maestro');
+        if ($idRolMaestro > 0 && $idRol === $idRolMaestro) {
+            return $this->asignarMaestroSecundario($idPersona, $idRolMaestro);
+        }
+
+        $idRolDiscipulo = $this->buscarRolPorAlias('discipulo');
+        if ($idRolDiscipulo > 0 && $idRol === $idRolDiscipulo) {
+            require_once APP . '/Models/Persona.php';
+            $persona = (new Persona())->getById($idPersona);
+            $idRolPrincipal = (int)($persona['Id_Rol'] ?? 0);
+
+            if ($this->debeTenerDiscipuloSecundario($idPersona, $idRolPrincipal, $idRolDiscipulo)) {
+                return $this->asignarDiscipuloSecundario($idPersona, $idRolPrincipal);
+            }
+
+            return $this->establecerRolUnico($idPersona, $idRol);
+        }
+
+        return $this->establecerRolUnico($idPersona, $idRol);
+    }
+
+    public function asignarDiscipuloSecundario(int $idPersona, int $idRolPrincipal = 0): bool {
+        if ($idPersona <= 0 || !$this->asegurarTabla()) {
+            return false;
+        }
+
+        $idRolDiscipulo = $this->buscarRolPorAlias('discipulo');
+        if ($idRolDiscipulo <= 0) {
+            return false;
+        }
+
+        if ($idRolPrincipal <= 0) {
+            require_once APP . '/Models/Persona.php';
+            $persona = (new Persona())->getById($idPersona);
+            $idRolPrincipal = (int)($persona['Id_Rol'] ?? 0);
+        }
+
+        if (!$this->debeTenerDiscipuloSecundario($idPersona, $idRolPrincipal, $idRolDiscipulo)) {
+            return false;
+        }
+
         $sql = "INSERT INTO user_roles (Id_Persona, Id_Rol, Activo)
                 VALUES (?, ?, 1)
                 ON DUPLICATE KEY UPDATE Activo = VALUES(Activo), Actualizado_En = CURRENT_TIMESTAMP";
 
-        return $this->execute($sql, [$idPersona, $idRol]);
+        return $this->execute($sql, [$idPersona, $idRolDiscipulo]);
     }
 
-    public function asignarRol(int $idPersona, int $idRol): bool {
-        return $this->sincronizarRolPrincipal($idPersona, $idRol);
+    public function asignarMaestroSecundario(int $idPersona, int $idRolMaestro): bool {
+        if ($idPersona <= 0 || $idRolMaestro <= 0 || !$this->asegurarTabla()) {
+            return false;
+        }
+
+        $sql = "INSERT INTO user_roles (Id_Persona, Id_Rol, Activo)
+                VALUES (?, ?, 1)
+                ON DUPLICATE KEY UPDATE Activo = VALUES(Activo), Actualizado_En = CURRENT_TIMESTAMP";
+
+        return $this->execute($sql, [$idPersona, $idRolMaestro]);
     }
 
     public function quitarRol(int $idPersona, int $idRol): bool {
@@ -158,6 +267,19 @@ class UserRole extends BaseModel {
         }
 
         return 0;
+    }
+
+    private function debeTenerDiscipuloSecundario(int $idPersona, int $idRolPrincipal, int $idRolDiscipulo): bool {
+        if ($idPersona <= 0 || $idRolDiscipulo <= 0 || $idRolPrincipal <= 0) {
+            return false;
+        }
+
+        if ($idRolPrincipal === $idRolDiscipulo) {
+            return false;
+        }
+
+        require_once APP . '/Helpers/AccesoDiscipuloCapDestino.php';
+        return AccesoDiscipuloCapDestino::personaInscrita($idPersona);
     }
 
     private function normalizarTexto(string $texto): string {

@@ -102,7 +102,7 @@ class CuentaController extends BaseController {
         }
 
         if ($accion === 'asignar_maestro') {
-            $this->userRoleModel->asignarRol($idPersona, $idRolMaestro);
+            $this->userRoleModel->asignarMaestroSecundario($idPersona, $idRolMaestro);
             $this->redirect('cuentas&tipo=success&mensaje=' . urlencode('Segundo rol Maestro asignado correctamente.'));
             return;
         }

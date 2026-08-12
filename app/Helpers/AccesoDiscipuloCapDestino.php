@@ -32,6 +32,26 @@ class AccesoDiscipuloCapDestino {
     }
 
     /**
+     * Indica si la persona tiene inscripción activa en Capacitación Destino (cualquier nivel).
+     */
+    public static function personaInscrita(int $idPersona): bool {
+        $idPersona = (int)$idPersona;
+        if ($idPersona <= 0) {
+            return false;
+        }
+
+        require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+        $programas = (new EscuelaFormacionInscripcion())->getProgramasInscritosPersona($idPersona);
+        foreach ($programas as $programa) {
+            if (self::esProgramaCapacitacionDestino((string)$programa)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Crea o completa acceso discípulo para una persona inscrita en Cap. Destino.
      */
     public static function provisionar(int $idPersona, string $programa, string $cedula = ''): bool {
@@ -85,7 +105,9 @@ class AccesoDiscipuloCapDestino {
             $userRoleModel->sincronizarRolPrincipal($idPersona, $idRolActual);
         }
 
-        $userRoleModel->asignarRol($idPersona, $idRolDiscipulo);
+        if ($esLiderazgo) {
+            $userRoleModel->asignarDiscipuloSecundario($idPersona, $idRolActual);
+        }
 
         $usuarioActual = trim((string)($persona['Usuario'] ?? ''));
         if ($usuarioActual === '') {

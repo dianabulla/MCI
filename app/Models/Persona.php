@@ -3612,6 +3612,32 @@ class Persona extends BaseModel {
         $stmt->bindParam(':idPersona', $idPersona);
         $stmt->execute();
     }
+
+    public function create($data) {
+        $id = parent::create($data);
+        if ($id && isset($data['Id_Rol'])) {
+            $this->sincronizarUserRolesDesdePersona((int)$id, (int)$data['Id_Rol']);
+        }
+        return $id;
+    }
+
+    public function update($id, $data) {
+        $result = parent::update($id, $data);
+        if ($result && isset($data['Id_Rol'])) {
+            $this->sincronizarUserRolesDesdePersona((int)$id, (int)$data['Id_Rol']);
+        }
+        return $result;
+    }
+
+    private function sincronizarUserRolesDesdePersona(int $idPersona, int $idRol): void {
+        if ($idPersona <= 0 || $idRol <= 0) {
+            return;
+        }
+
+        require_once APP . '/Models/UserRole.php';
+        $userRole = new UserRole();
+        $userRole->sincronizarRolPrincipal($idPersona, $idRol);
+    }
 }
 
 
