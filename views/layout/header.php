@@ -391,7 +391,7 @@ if ($esMenuMaestro) {
             <?php endif; ?>
 
             <?php if ($puedeVerMinisterios): ?>
-            <a class="sidebar-link <?= $isActive(['discipular/ministerios','discipular/ministerios/equipo-principal']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=discipular/ministerios/equipo-principal">
+            <a class="sidebar-link <?= $isActive(['discipular', 'ministerios']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=discipular/ministerios/equipo-principal">
                 <span class="sidebar-link-icon"><i class="bi bi-bank2"></i></span><span class="sidebar-link-text">Discipular</span>
             </a>
             <?php endif; ?>

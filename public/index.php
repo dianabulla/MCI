@@ -164,7 +164,43 @@ $herramientasRoutesFallback = [
 ];
 
 $discipularRoutesFallback = [
+    'discipular' => 'HomeController@discipular',
+    'discipular/asistencias' => 'HomeController@discipularAsistencias',
+    'discipular/exportar' => 'HomeController@exportarDiscipular',
+    'discipular/ministerios' => 'MinisterioController@index',
+    'discipular/ministerios/crear' => 'MinisterioController@crear',
+    'discipular/ministerios/editar' => 'MinisterioController@editar',
+    'discipular/ministerios/guardar-metas' => 'MinisterioController@guardarMetas',
+    'discipular/ministerios/actualizarMeta' => 'MinisterioController@actualizarMeta',
+    'discipular/ministerios/actualizar-lideres-principales' => 'MinisterioController@actualizarLideresPrincipales',
+    'discipular/ministerios/lideres' => 'MinisterioController@lideres',
+    'discipular/ministerios/equipo-principal' => 'MinisterioController@equipoPrincipal',
     'discipular/ministerios/personas-asignables' => 'MinisterioController@personasAsignablesJson',
+    'discipular/ministerios/equipo-12' => 'MinisterioController@equipo12',
+    'discipular/ministerios/lideres-celula' => 'MinisterioController@lideresCelula',
+    'discipular/ministerios/validar-cupo-lider' => 'MinisterioController@validarCupoLider',
+    'discipular/ministerios/asignar-cupo' => 'MinisterioController@asignarCupo',
+    'discipular/ministerios/liberar-cupo' => 'MinisterioController@liberarCupo',
+    'discipular/ministerios/reasignar-cupo' => 'MinisterioController@reasignarCupo',
+    'discipular/ministerios/eliminar' => 'MinisterioController@eliminar',
+    'discipular/ministerios/exportarExcel' => 'MinisterioController@exportarExcel',
+    'ministerios' => 'MinisterioController@index',
+    'ministerios/crear' => 'MinisterioController@crear',
+    'ministerios/editar' => 'MinisterioController@editar',
+    'ministerios/guardar-metas' => 'MinisterioController@guardarMetas',
+    'ministerios/actualizarMeta' => 'MinisterioController@actualizarMeta',
+    'ministerios/actualizar-lideres-principales' => 'MinisterioController@actualizarLideresPrincipales',
+    'ministerios/lideres' => 'MinisterioController@lideres',
+    'ministerios/equipo-principal' => 'MinisterioController@equipoPrincipal',
+    'ministerios/personas-asignables' => 'MinisterioController@personasAsignablesJson',
+    'ministerios/equipo-12' => 'MinisterioController@equipo12',
+    'ministerios/lideres-celula' => 'MinisterioController@lideresCelula',
+    'ministerios/validar-cupo-lider' => 'MinisterioController@validarCupoLider',
+    'ministerios/asignar-cupo' => 'MinisterioController@asignarCupo',
+    'ministerios/liberar-cupo' => 'MinisterioController@liberarCupo',
+    'ministerios/reasignar-cupo' => 'MinisterioController@reasignarCupo',
+    'ministerios/eliminar' => 'MinisterioController@eliminar',
+    'ministerios/exportarExcel' => 'MinisterioController@exportarExcel',
 ];
 foreach ($discipularRoutesFallback as $routeKey => $routeTarget) {
     if (!array_key_exists($routeKey, $routes)) {
@@ -187,7 +223,19 @@ foreach ($escuelasRegistroPublicoRoutesFallback as $routeKey => $routeTarget) {
 }
 
 // Obtener la URL solicitada (soporta tanto 'url' como 'route')
-$url = isset($_GET['url']) ? trim($_GET['url'], '/') : (isset($_GET['route']) ? trim($_GET['route'], '/') : 'home');
+$urlRaw = isset($_GET['url']) ? (string)$_GET['url'] : (isset($_GET['route']) ? (string)$_GET['route'] : 'home');
+$url = str_replace('\\', '/', trim($urlRaw));
+$url = trim($url, '/');
+if (($pos = strpos($url, '?')) !== false) {
+    $url = substr($url, 0, $pos);
+}
+if (($pos = strpos($url, '&')) !== false) {
+    $url = substr($url, 0, $pos);
+}
+$url = trim($url, '/');
+if ($url === '') {
+    $url = 'home';
+}
 
 // Rutas públicas que no requieren autenticación
 $rutasPublicas = [

@@ -109,6 +109,11 @@ return [
     'teen/eliminar' => 'TeenController@eliminar',
     'teen/detalleVistas' => 'TeenController@detalleVistas',
     
+    // Discipular (entrada y alias de métodos que solo redirigen)
+    'discipular' => 'HomeController@discipular',
+    'discipular/asistencias' => 'HomeController@discipularAsistencias',
+    'discipular/exportar' => 'HomeController@exportarDiscipular',
+
     // Ministerios (Dentro de Discipular)
     'discipular/ministerios' => 'MinisterioController@index',
     'discipular/ministerios/crear' => 'MinisterioController@crear',
@@ -127,6 +132,25 @@ return [
     'discipular/ministerios/reasignar-cupo' => 'MinisterioController@reasignarCupo',
     'discipular/ministerios/eliminar' => 'MinisterioController@eliminar',
     'discipular/ministerios/exportarExcel' => 'MinisterioController@exportarExcel',
+
+    // Alias de rutas antiguas ?url=ministerios (bookmarks y redirects viejos)
+    'ministerios' => 'MinisterioController@index',
+    'ministerios/crear' => 'MinisterioController@crear',
+    'ministerios/editar' => 'MinisterioController@editar',
+    'ministerios/guardar-metas' => 'MinisterioController@guardarMetas',
+    'ministerios/actualizarMeta' => 'MinisterioController@actualizarMeta',
+    'ministerios/actualizar-lideres-principales' => 'MinisterioController@actualizarLideresPrincipales',
+    'ministerios/lideres' => 'MinisterioController@lideres',
+    'ministerios/equipo-principal' => 'MinisterioController@equipoPrincipal',
+    'ministerios/personas-asignables' => 'MinisterioController@personasAsignablesJson',
+    'ministerios/equipo-12' => 'MinisterioController@equipo12',
+    'ministerios/lideres-celula' => 'MinisterioController@lideresCelula',
+    'ministerios/validar-cupo-lider' => 'MinisterioController@validarCupoLider',
+    'ministerios/asignar-cupo' => 'MinisterioController@asignarCupo',
+    'ministerios/liberar-cupo' => 'MinisterioController@liberarCupo',
+    'ministerios/reasignar-cupo' => 'MinisterioController@reasignarCupo',
+    'ministerios/eliminar' => 'MinisterioController@eliminar',
+    'ministerios/exportarExcel' => 'MinisterioController@exportarExcel',
 
     // Asistente / chatbot
     'chatbot/consultar' => 'ChatbotController@consultar',

@@ -127,6 +127,7 @@ $idsLideresPrincipalesCupo = array_values(array_filter([$idLiderPrincipal1, $idL
     return (int)$id > 0;
 }));
 $coberturaPrincipalActual = '';
+$coberturaNodoIgnorado = false;
 $generoRedActual = strtolower(trim((string)($_GET['genero_red'] ?? '')));
 if (!in_array($generoRedActual, ['hombres', 'mujeres'], true)) {
     $generoRedActual = '';
@@ -141,11 +142,12 @@ $idsLideresValidosCobertura = array_values(array_unique(array_filter(array_merge
     return (int)$id > 0;
 })));
 
+$coberturaSolicitadaId = 0;
 $coberturaSolicitada = trim((string)($_GET['cobertura_principal'] ?? ''));
 if ($coberturaSolicitada !== '' && ctype_digit($coberturaSolicitada)) {
-    $coberturaId = (int)$coberturaSolicitada;
-    if (in_array($coberturaId, $idsLideresValidosCobertura, true)) {
-        $coberturaPrincipalActual = (string)$coberturaId;
+    $coberturaSolicitadaId = (int)$coberturaSolicitada;
+    if (in_array($coberturaSolicitadaId, $idsLideresValidosCobertura, true)) {
+        $coberturaPrincipalActual = (string)$coberturaSolicitadaId;
     }
 }
 
@@ -679,7 +681,7 @@ $personaModelEquipoPrincipal = new Persona();
 $idsLideresParaCupoJerarquia = array_values(array_unique(array_filter(array_merge(
     array_keys($resumenLiderPorId),
     array_keys($equipoDirectoPorLider),
-    [$idLiderPrincipal1, $idLiderPrincipal2, (int)$coberturaPrincipalActual]
+    [$idLiderPrincipal1, $idLiderPrincipal2, (int)$coberturaPrincipalActual, $coberturaSolicitadaId]
 ), static function ($id) {
     return (int)$id > 0;
 })));
@@ -745,6 +747,69 @@ foreach ([$idLiderPrincipal1, $idLiderPrincipal2] as $idPrincipalSync) {
         continue;
     }
     $resumenLiderPorId[$idPrincipalSync]['equipo_directo'] = $contarEquipoPrincipalFn($equipoDirectoPorLider, $idPrincipalSync);
+}
+
+foreach (array_keys($equipoDirectoPorLider) as $idMapaCupo) {
+    $idsLideresValidosCobertura[] = (int)$idMapaCupo;
+}
+foreach ($equipoDirectoPorLider as $idLiderMapa => $slotsMapaCupo) {
+    if (!is_array($slotsMapaCupo)) {
+        continue;
+    }
+    foreach ($slotsMapaCupo as $slotMapaCupo) {
+        if (!is_array($slotMapaCupo)) {
+            continue;
+        }
+        $idSlotMapa = (int)($slotMapaCupo['id_persona'] ?? 0);
+        if ($idSlotMapa > 0) {
+            $idsLideresValidosCobertura[] = $idSlotMapa;
+            if (!isset($resumenLiderPorId[$idSlotMapa])) {
+                $resumenLiderPorId[$idSlotMapa] = [
+                    'nombre_completo' => trim((string)($slotMapaCupo['nombre'] ?? '')),
+                    'nombre_rol' => trim((string)($slotMapaCupo['nombre_rol'] ?? '')),
+                    'red_total' => 0,
+                    'equipo_directo' => $contarEquipoPrincipalFn($equipoDirectoPorLider, $idSlotMapa),
+                    'id_lider' => (int)$idLiderMapa,
+                ];
+            }
+        }
+    }
+}
+foreach (array_keys($resumenLiderPorId) as $idResumenMapa) {
+    $idsLideresValidosCobertura[] = (int)$idResumenMapa;
+}
+$idsLideresValidosCobertura = array_values(array_unique(array_filter(
+    $idsLideresValidosCobertura,
+    static function ($id) {
+        return (int)$id > 0;
+    }
+)));
+
+if ($coberturaSolicitadaId > 0) {
+    if (in_array($coberturaSolicitadaId, $idsLideresValidosCobertura, true)) {
+        $coberturaPrincipalActual = (string)$coberturaSolicitadaId;
+    } else {
+        $personaCoberturaNodo = $personaModelEquipoPrincipal->getById($coberturaSolicitadaId);
+        if (!empty($personaCoberturaNodo)) {
+            $coberturaPrincipalActual = (string)$coberturaSolicitadaId;
+            $idsLideresValidosCobertura[] = $coberturaSolicitadaId;
+            if (!isset($resumenLiderPorId[$coberturaSolicitadaId])) {
+                $nombreCoberturaNodo = trim(
+                    (string)($personaCoberturaNodo['Nombre'] ?? '') . ' ' . (string)($personaCoberturaNodo['Apellido'] ?? '')
+                );
+                $resumenLiderPorId[$coberturaSolicitadaId] = [
+                    'nombre_completo' => $nombreCoberturaNodo !== '' ? $nombreCoberturaNodo : ('Líder #' . $coberturaSolicitadaId),
+                    'nombre_rol' => trim((string)($personaCoberturaNodo['Nombre_Rol'] ?? '')),
+                    'red_total' => 0,
+                    'equipo_directo' => $contarEquipoPrincipalFn($equipoDirectoPorLider, $coberturaSolicitadaId),
+                    'id_lider' => (int)($personaCoberturaNodo['Id_Lider'] ?? 0),
+                ];
+            }
+        } else {
+            $coberturaPrincipalActual = '';
+            $coberturaNodoIgnorado = true;
+        }
+    }
 }
 
 $obtenerNombreLiderFn = static function (int $id, array $mapa): string {
@@ -1273,6 +1338,11 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     <?php if ($lpOk || $lpError): ?>
     <div class="alert <?= $lpError ? 'alert-danger' : 'alert-success' ?>" style="margin-bottom:4px;">
         <?= htmlspecialchars($lpMsg !== '' ? $lpMsg : ($lpError ? $textoErrorGuardarLiderazgo : $textoOkGuardarLiderazgo)) ?>
+    </div>
+    <?php endif; ?>
+    <?php if (!empty($coberturaNodoIgnorado)): ?>
+    <div class="alert alert-warning" style="margin-bottom:8px;">
+        No se encontró ese líder en la red. Volviste al inicio de Discipular.
     </div>
     <?php endif; ?>
 
