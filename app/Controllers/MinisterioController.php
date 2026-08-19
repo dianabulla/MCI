@@ -1404,7 +1404,7 @@ class MinisterioController extends BaseController {
     }
 
     public function asignarCupo() {
-        if (!AuthController::puede('ministerios:ver')) {
+        if (!AuthController::esAdministrador() && !AuthController::puede('ministerios:editar')) {
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
@@ -1622,7 +1622,7 @@ class MinisterioController extends BaseController {
      * Quita a una persona del cupo (equipo directo) de un líder sin borrar la persona.
      */
     public function liberarCupo() {
-        if (!AuthController::puede('ministerios:ver')) {
+        if (!AuthController::esAdministrador() && !AuthController::puede('ministerios:editar')) {
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
@@ -1679,7 +1679,7 @@ class MinisterioController extends BaseController {
     }
 
     public function reasignarCupo() {
-        if (!AuthController::puede('ministerios:ver')) {
+        if (!AuthController::esAdministrador() && !AuthController::puede('ministerios:editar')) {
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
@@ -2447,7 +2447,8 @@ class MinisterioController extends BaseController {
             $query['return_url'] = (string)$returnUrl;
         }
 
-        $this->redirect('discipular/ministerios/editar&' . http_build_query($query) . '#metas');
+        header('Location: ' . public_app_url('discipular/ministerios/editar', $query) . '#metas');
+        exit;
     }
 
     public function guardarMetas() {
@@ -2495,7 +2496,7 @@ class MinisterioController extends BaseController {
         }
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->redirect('ministerios');
+            $this->redirect('discipular/ministerios');
             return;
         }
 
@@ -2503,7 +2504,7 @@ class MinisterioController extends BaseController {
         $metaGanados = max(0, (int)($_POST['meta_ganados'] ?? 0));
 
         if ($idMinisterio <= 0) {
-            $this->redirect('ministerios');
+            $this->redirect('discipular/ministerios');
             return;
         }
 
@@ -2535,7 +2536,7 @@ class MinisterioController extends BaseController {
             'meta_ganados_s2' => $metaAuto['meta_ganados_s2'],
         ]);
 
-        $this->redirect('discipular/ministerios&meta_guardada=1');
+        $this->redirect('discipular/ministerios', ['meta_guardada' => 1]);
     }
 
     public function actualizarLideresPrincipales() {
@@ -2693,12 +2694,15 @@ class MinisterioController extends BaseController {
             if ($idMinisterioNuevo > 0) {
                 $resultadoLideres = $this->guardarLideresPrincipalesDesdeFormulario($idMinisterioNuevo, $idLiderPrincipal1, $idLiderPrincipal2);
                 if (!$resultadoLideres['ok']) {
-                    $rutaEditar = 'discipular/ministerios/editar&id=' . $idMinisterioNuevo;
+                    $queryEditar = [
+                        'id' => $idMinisterioNuevo,
+                        'lp_error' => 1,
+                        'lp_msg' => (string)$resultadoLideres['message'],
+                    ];
                     if (!empty($returnUrl)) {
-                        $rutaEditar .= '&return_url=' . urlencode((string)$returnUrl);
+                        $queryEditar['return_url'] = (string)$returnUrl;
                     }
-                    $rutaEditar .= '&lp_error=1&lp_msg=' . urlencode((string)$resultadoLideres['message']);
-                    $this->redirect($rutaEditar);
+                    $this->redirect('discipular/ministerios/editar', $queryEditar);
                     return;
                 }
             }

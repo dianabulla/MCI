@@ -53,13 +53,45 @@ if (!function_exists('asset_url')) {
 if (!function_exists('public_app_url')) {
     function public_app_url(string $route = 'home', array $queryParams = []): string {
         $route = ltrim($route, '/');
+
+        $fragment = '';
+        if (($hashPos = strpos($route, '#')) !== false) {
+            $fragment = substr($route, $hashPos);
+            $route = substr($route, 0, $hashPos);
+        }
+
+        $extraQuery = '';
+        if (($qPos = strpos($route, '?')) !== false) {
+            $extraQuery = substr($route, $qPos + 1);
+            $route = substr($route, 0, $qPos);
+        }
+        if (($ampPos = strpos($route, '&')) !== false) {
+            $extraFromAmp = substr($route, $ampPos + 1);
+            $route = substr($route, 0, $ampPos);
+            $extraQuery = $extraQuery === '' ? $extraFromAmp : ($extraQuery . '&' . $extraFromAmp);
+        }
+
+        $route = trim($route, '/');
+        if ($route === '') {
+            $route = 'home';
+        }
+
+        $parsedExtra = [];
+        if ($extraQuery !== '') {
+            parse_str($extraQuery, $parsedExtra);
+            if (!is_array($parsedExtra)) {
+                $parsedExtra = [];
+            }
+        }
+        $queryParams = array_merge($parsedExtra, $queryParams);
+
         $base = rtrim(PUBLIC_URL, '/');
         $url = $base . '/index.php?url=' . $route;
         if ($queryParams !== []) {
             $url .= '&' . http_build_query($queryParams);
         }
 
-        return $url;
+        return $url . $fragment;
     }
 }
 

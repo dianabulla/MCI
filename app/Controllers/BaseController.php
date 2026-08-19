@@ -22,10 +22,13 @@ class BaseController {
     }
 
     /**
-     * Redirigir a otra URL
+     * Redirigir a otra URL de la app (?url=ruta).
+     * $url puede incluir query extra (&foo=bar) o fragmento (#metas); se normaliza.
+     *
+     * @param array<string, mixed> $queryParams
      */
-    protected function redirect($url) {
-        header('Location: ' . public_app_url($url));
+    protected function redirect($url, array $queryParams = []) {
+        header('Location: ' . public_app_url((string)$url, $queryParams));
         exit;
     }
 

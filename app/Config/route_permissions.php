@@ -184,13 +184,47 @@ return [
 
     // --- Discipular / ministerios ---
 
+    'discipular' => 'ministerios:ver',
+
+    'discipular/asistencias' => 'ministerios:ver',
+
+    'discipular/exportar' => 'ministerios:ver',
+
     'discipular/ministerios' => 'ministerios:ver',
 
     'discipular/ministerios/eliminar' => 'ministerios:eliminar',
 
     'discipular/ministerios/personas-asignables' => 'ministerios:ver',
 
+    'discipular/ministerios/asignar-cupo' => 'ministerios:editar',
+
+    'discipular/ministerios/liberar-cupo' => 'ministerios:editar',
+
+    'discipular/ministerios/reasignar-cupo' => 'ministerios:editar',
+
+    'discipular/ministerios/guardar-metas' => 'ministerios:editar',
+
+    'discipular/ministerios/actualizarMeta' => 'ministerios:editar',
+
     'discipular/ministerios/*' => ['modulo' => 'ministerios', 'inferir_accion' => true],
+
+    'ministerios' => 'ministerios:ver',
+
+    'ministerios/eliminar' => 'ministerios:eliminar',
+
+    'ministerios/personas-asignables' => 'ministerios:ver',
+
+    'ministerios/asignar-cupo' => 'ministerios:editar',
+
+    'ministerios/liberar-cupo' => 'ministerios:editar',
+
+    'ministerios/reasignar-cupo' => 'ministerios:editar',
+
+    'ministerios/guardar-metas' => 'ministerios:editar',
+
+    'ministerios/actualizarMeta' => 'ministerios:editar',
+
+    'ministerios/*' => ['modulo' => 'ministerios', 'inferir_accion' => true],
 
     'discipular/migrar-consolidados' => ['admin_only' => true],
 

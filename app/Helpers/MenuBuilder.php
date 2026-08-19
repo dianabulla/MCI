@@ -333,7 +333,7 @@ class MenuBuilder {
                 'label' => 'Discipular',
                 'ruta' => 'discipular/ministerios/equipo-principal',
                 'icon' => 'bi-bank2',
-                'active_prefixes' => ['discipular/ministerios', 'discipular/ministerios/equipo-principal'],
+                'active_prefixes' => ['discipular', 'ministerios'],
                 'permiso' => 'ministerios:ver',
             ],
             [

@@ -26,6 +26,8 @@ $bloqueInicial = !empty($bloques) ? (string)$bloques[0]['id'] : '';
 ?>
 
 <div class="page-header" style="align-items:flex-start; gap:16px;">
+    <div>
+        <h2>Líderes de célula</h2>
         <p style="margin:6px 0 0; font-size:0.88rem; color:#5c6f8b; max-width:48rem;">
             Motor de la visión en hogar: cada líder de célula reporta a su <strong>líder de 12</strong> dentro de la red (ministerio). Consolidados aquí por género.
         </p>
@@ -38,6 +40,7 @@ $bloqueInicial = !empty($bloques) ? (string)$bloques[0]['id'] : '';
         <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios/lideres-celula" class="btn btn-secondary">Ver todos</a>
         <?php endif; ?>
         <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios" class="btn btn-secondary">← Volver a Ministerios</a>
+        <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios/equipo-principal" class="btn btn-secondary">Equipo principal</a>
     </div>
 </div>
 
