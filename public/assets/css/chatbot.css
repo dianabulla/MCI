@@ -36,7 +36,7 @@
     display: none;
     flex-direction: column;
     width: min(380px, calc(100vw - 32px));
-    height: min(520px, calc(100vh - 100px));
+    height: min(620px, calc(100vh - 80px));
     margin-bottom: 12px;
     border-radius: 16px;
     background: #fff;

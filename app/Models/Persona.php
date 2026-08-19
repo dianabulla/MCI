@@ -122,6 +122,77 @@ class Persona extends BaseModel {
         return preg_replace('/\D+/', '', $telefono);
     }
 
+    private function textoSinAcentosPersona(string $texto): string {
+        $texto = function_exists('mb_strtolower') ? mb_strtolower($texto, 'UTF-8') : strtolower($texto);
+        return strtr($texto, [
+            'á' => 'a', 'à' => 'a', 'ä' => 'a', 'â' => 'a',
+            'é' => 'e', 'è' => 'e', 'ë' => 'e', 'ê' => 'e',
+            'í' => 'i', 'ì' => 'i', 'ï' => 'i', 'î' => 'i',
+            'ó' => 'o', 'ò' => 'o', 'ö' => 'o', 'ô' => 'o',
+            'ú' => 'u', 'ù' => 'u', 'ü' => 'u', 'û' => 'u',
+            'ñ' => 'n', 'ç' => 'c',
+        ]);
+    }
+
+    private function sqlSinAcentosPersona(string $expr): string {
+        return "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE("
+            . "LOWER({$expr})"
+            . ", 'á','a'), 'é','e'), 'í','i'), 'ó','o'), 'ú','u'), 'ü','u'), 'ñ','n'), 'à','a')";
+    }
+
+    /**
+     * Nombre/apellido: frase completa o cada palabra del término (p. ej. "diana ais" → Diana Aispuro).
+     *
+     * @param array<int, string> $partesOr
+     * @param array<int, mixed> $params
+     */
+    private function agregarCondicionesBusquedaNombrePersona(
+        string $termino,
+        string $exprNombreCompleto,
+        string $exprNombreInvertido,
+        array &$partesOr,
+        array &$params
+    ): void {
+        $termino = trim($termino);
+        if ($termino === '') {
+            return;
+        }
+
+        $nombreNorm = $this->sqlSinAcentosPersona($exprNombreCompleto);
+        $invertidoNorm = $this->sqlSinAcentosPersona($exprNombreInvertido);
+        $nombreCampoNorm = $this->sqlSinAcentosPersona('p.Nombre');
+        $apellidoCampoNorm = $this->sqlSinAcentosPersona('p.Apellido');
+        $termNorm = $this->textoSinAcentosPersona($termino);
+
+        $partesOr[] = "({$nombreNorm} LIKE ? OR {$invertidoNorm} LIKE ?)";
+        $likeNombre = '%' . $termNorm . '%';
+        $params[] = $likeNombre;
+        $params[] = $likeNombre;
+
+        $tokens = preg_split('/\s+/u', $termino, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (count($tokens) < 2) {
+            return;
+        }
+
+        $andTokens = [];
+        foreach ($tokens as $token) {
+            $token = trim((string)$token);
+            if ($token === '' || (function_exists('mb_strlen') ? mb_strlen($token) : strlen($token)) < 2) {
+                continue;
+            }
+            $tokenNorm = $this->textoSinAcentosPersona($token);
+            $andTokens[] = "({$nombreNorm} LIKE ? OR {$invertidoNorm} LIKE ? OR {$nombreCampoNorm} LIKE ? OR {$apellidoCampoNorm} LIKE ?)";
+            $likeTok = '%' . $tokenNorm . '%';
+            $params[] = $likeTok;
+            $params[] = $likeTok;
+            $params[] = $likeTok;
+            $params[] = $likeTok;
+        }
+        if (!empty($andTokens)) {
+            $partesOr[] = '(' . implode(' AND ', $andTokens) . ')';
+        }
+    }
+
     private function permiteTelefonoDuplicadoPorTipoDocumento($tipoDocumento) {
         $tipoDocumento = strtoupper(trim((string)$tipoDocumento));
         return in_array($tipoDocumento, ['TARJETA DE IDENTIDAD', 'REGISTRO CIVIL'], true);
@@ -2042,12 +2113,81 @@ class Persona extends BaseModel {
         return (int)($resultado[0]['total'] ?? 0);
     }
 
+    /**
+     * Alma ganada que aún debe aparecer en la campana: persona nueva,
+     * sin ubicar (falta ministerio o líder) y todavía en peldaño Ganar.
+     * Si ya tiene ministerio+líder, célula, o avanzó de proceso, no cuenta.
+     */
+    public function esAlmaGanadaPendienteUbicacion(array $persona): bool {
+        if ((int)($persona['Es_Antiguo'] ?? 1) === 1) {
+            return false;
+        }
+
+        if (trim((string)($persona['Canal_Creacion'] ?? '')) === 'Escuelas Formacion (Formulario publico)') {
+            return false;
+        }
+
+        if (!empty($persona['Seguimiento_No_Disponible'])) {
+            return false;
+        }
+
+        $checklistRaw = (string)($persona['Escalera_Checklist'] ?? '');
+        if ($checklistRaw !== '') {
+            $checklist = json_decode($checklistRaw, true);
+            if (is_array($checklist) && !empty($checklist['Ganar'][5])) {
+                return false;
+            }
+        }
+
+        $rol = strtolower(trim((string)($persona['Nombre_Rol'] ?? '')));
+        $rol = strtr($rol, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        ]);
+        if (
+            strpos($rol, 'pastor') !== false
+            || strpos($rol, 'lider de 12') !== false
+            || strpos($rol, 'lider 12') !== false
+            || strpos($rol, 'lideres de 12') !== false
+            || strpos($rol, 'lider de 144') !== false
+            || strpos($rol, 'lider 144') !== false
+            || strpos($rol, 'lideres de 144') !== false
+            || strpos($rol, 'lider de celula') !== false
+            || strpos($rol, 'lider celula') !== false
+        ) {
+            return false;
+        }
+
+        $proceso = strtolower(trim((string)($persona['Proceso'] ?? '')));
+        if (in_array($proceso, ['consolidar', 'discipular', 'enviar'], true)) {
+            return false;
+        }
+
+        $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
+        $idLider = (int)($persona['Id_Lider'] ?? 0);
+        $idCelula = (int)($persona['Id_Celula'] ?? 0);
+        if ($idCelula > 0) {
+            return false;
+        }
+        if ($idMinisterio > 0 && $idLider > 0) {
+            return false;
+        }
+
+        $idPersona = (int)($persona['Id_Persona'] ?? 0);
+        return $idPersona > 0;
+    }
+
     public function contarNuevasAlmasGanadasWithRole($filtroRol) {
         $sql = "SELECT COUNT(*) AS total
                 FROM persona p
                 WHERE $filtroRol
-                  AND COALESCE(p.Es_Antiguo, 0) = 0
-                  AND (p.Id_Ministerio IS NULL OR p.Id_Lider IS NULL OR p.Id_Celula IS NULL)";
+                  AND COALESCE(p.Es_Antiguo, 1) = 0
+                  AND (p.Id_Celula IS NULL OR p.Id_Celula <= 0)
+                  AND (p.Id_Ministerio IS NULL OR p.Id_Ministerio <= 0 OR p.Id_Lider IS NULL OR p.Id_Lider <= 0)
+                  AND (
+                        p.Proceso IS NULL
+                        OR TRIM(p.Proceso) = ''
+                        OR LOWER(TRIM(p.Proceso)) NOT IN ('consolidar', 'discipular', 'enviar')
+                  )";
 
         $resultado = $this->query($sql);
         if (empty($resultado)) {
@@ -2300,10 +2440,7 @@ class Persona extends BaseModel {
 
         $nombreCompleto = "TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, '')))";
         $nombreInvertido = "TRIM(CONCAT(COALESCE(p.Apellido, ''), ' ', COALESCE(p.Nombre, '')))";
-        $partesOr[] = "(LOWER($nombreCompleto) LIKE LOWER(?) OR LOWER($nombreInvertido) LIKE LOWER(?))";
-        $likeNombre = '%' . $termino . '%';
-        $params[] = $likeNombre;
-        $params[] = $likeNombre;
+        $this->agregarCondicionesBusquedaNombrePersona($termino, $nombreCompleto, $nombreInvertido, $partesOr, $params);
 
         $docNorm = $this->normalizarDocumentoParaComparacion($termino);
         if ($docNorm !== '') {
@@ -2339,6 +2476,100 @@ class Persona extends BaseModel {
                 LIMIT " . $limite;
 
         return $this->query($sql, $params);
+    }
+
+    /**
+     * Búsqueda de personas en toda la base (sin aislamiento de red).
+     * Usada por el asistente: nombre, cédula o teléfono.
+     *
+     * @return array{total: int, filas: array<int, array<string, mixed>>}
+     */
+    public function buscarPersonasTextoGlobal(string $termino, int $limite = 40): array {
+        $termino = preg_replace('/\s+/u', ' ', trim($termino));
+        if ($termino === '') {
+            return ['total' => 0, 'filas' => []];
+        }
+
+        $limite = (int)$limite;
+        if ($limite < 1) {
+            $limite = 1;
+        }
+        if ($limite > 80) {
+            $limite = 80;
+        }
+
+        $params = [];
+        $partesOr = [];
+
+        $nombreCompleto = "TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, '')))";
+        $nombreInvertido = "TRIM(CONCAT(COALESCE(p.Apellido, ''), ' ', COALESCE(p.Nombre, '')))";
+        $this->agregarCondicionesBusquedaNombrePersona($termino, $nombreCompleto, $nombreInvertido, $partesOr, $params);
+
+        $docNorm = $this->normalizarDocumentoParaComparacion($termino);
+        if ($docNorm !== '') {
+            $partesOr[] = "REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(p.Numero_Documento, ''))), ' ', ''), '.', ''), '-', '') LIKE ?";
+            $params[] = '%' . $docNorm . '%';
+        }
+
+        $soloDigitos = preg_replace('/\D+/', '', $termino);
+        if ($soloDigitos !== '') {
+            $telExpr = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(p.Telefono, '')), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '')";
+            $partesOr[] = "$telExpr LIKE ?";
+            $params[] = '%' . $soloDigitos . '%';
+        }
+
+        if (empty($partesOr)) {
+            return ['total' => 0, 'filas' => []];
+        }
+
+        $whereBuscar = '(' . implode(' OR ', $partesOr) . ')';
+        $termNorm = $this->textoSinAcentosPersona($termino);
+        $nombreNorm = $this->sqlSinAcentosPersona($nombreCompleto);
+        $paramsOrden = [$termNorm, $termNorm . '%'];
+
+        $fromSql = "FROM persona p
+                LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
+                LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
+                LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
+                LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
+                WHERE {$whereBuscar}";
+
+        $totalFilas = $this->query("SELECT COUNT(*) AS total {$fromSql}", $params);
+        $total = (int)($totalFilas[0]['total'] ?? 0);
+        if ($total <= 0) {
+            return ['total' => 0, 'filas' => []];
+        }
+
+        $sql = "SELECT p.Id_Persona,
+                    p.Nombre,
+                    p.Apellido,
+                    p.Numero_Documento,
+                    p.Telefono,
+                    p.Email,
+                    p.Proceso,
+                    p.Estado_Cuenta,
+                    COALESCE(c.Nombre_Celula, '') AS Nombre_Celula,
+                    COALESCE(r.Nombre_Rol, '') AS Nombre_Rol,
+                    COALESCE(m.Nombre_Ministerio, '') AS Nombre_Ministerio,
+                    TRIM(CONCAT(COALESCE(lid.Nombre, ''), ' ', COALESCE(lid.Apellido, ''))) AS Nombre_Lider
+                {$fromSql}
+                ORDER BY
+                    CASE
+                        WHEN {$nombreNorm} = ? THEN 0
+                        WHEN {$nombreNorm} LIKE ? THEN 1
+                        ELSE 2
+                    END,
+                    p.Apellido ASC,
+                    p.Nombre ASC,
+                    p.Id_Persona DESC
+                LIMIT " . $limite;
+
+        $filas = $this->query($sql, array_merge($params, $paramsOrden));
+
+        return [
+            'total' => $total,
+            'filas' => is_array($filas) ? $filas : [],
+        ];
     }
 
     /**
@@ -3051,6 +3282,7 @@ class Persona extends BaseModel {
                     p.Id_Ministerio,
                     p.Id_Rol,
                     p.Numero_Cupo,
+                    p.Proceso,
                     p.Ultimo_Acceso,
                     m.Nombre_Ministerio,
                     COALESCE(r.Nombre_Rol, '') AS Nombre_Rol,
@@ -3186,6 +3418,8 @@ class Persona extends BaseModel {
                     p.Telefono,
                     p.Genero,
                     p.Numero_Cupo,
+                    p.Proceso,
+                    p.Escalera_Checklist,
                     c.Nombre_Celula,
                     r.Nombre_Rol,
                     m.Nombre_Ministerio,
@@ -3271,10 +3505,7 @@ class Persona extends BaseModel {
 
         $nombreCompleto = "TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, '')))";
         $nombreInvertido = "TRIM(CONCAT(COALESCE(p.Apellido, ''), ' ', COALESCE(p.Nombre, '')))";
-        $partesOr[] = "(LOWER($nombreCompleto) LIKE LOWER(?) OR LOWER($nombreInvertido) LIKE LOWER(?))";
-        $likeNombre = '%' . $termino . '%';
-        $params[] = $likeNombre;
-        $params[] = $likeNombre;
+        $this->agregarCondicionesBusquedaNombrePersona($termino, $nombreCompleto, $nombreInvertido, $partesOr, $params);
 
         $docNorm = $this->normalizarDocumentoParaComparacion($termino);
         if ($docNorm !== '') {
@@ -3303,6 +3534,8 @@ class Persona extends BaseModel {
                     p.Telefono,
                     p.Genero,
                     p.Numero_Cupo,
+                    p.Proceso,
+                    p.Escalera_Checklist,
                     COALESCE(c.Nombre_Celula, '') AS Nombre_Celula,
                     COALESCE(r.Nombre_Rol, '') AS Nombre_Rol,
                     COALESCE(m.Nombre_Ministerio, '') AS Nombre_Ministerio,
@@ -3354,10 +3587,7 @@ class Persona extends BaseModel {
 
         $nombreCompleto = "TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, '')))";
         $nombreInvertido = "TRIM(CONCAT(COALESCE(p.Apellido, ''), ' ', COALESCE(p.Nombre, '')))";
-        $partesOr[] = "(LOWER($nombreCompleto) LIKE LOWER(?) OR LOWER($nombreInvertido) LIKE LOWER(?))";
-        $likeNombre = '%' . $termino . '%';
-        $params[] = $likeNombre;
-        $params[] = $likeNombre;
+        $this->agregarCondicionesBusquedaNombrePersona($termino, $nombreCompleto, $nombreInvertido, $partesOr, $params);
 
         $docNorm = $this->normalizarDocumentoParaComparacion($termino);
         if ($docNorm !== '') {
@@ -3386,6 +3616,8 @@ class Persona extends BaseModel {
                     p.Telefono,
                     p.Genero,
                     p.Numero_Cupo,
+                    p.Proceso,
+                    p.Escalera_Checklist,
                     COALESCE(c.Nombre_Celula, '') AS Nombre_Celula,
                     COALESCE(r.Nombre_Rol, '') AS Nombre_Rol,
                     COALESCE(m.Nombre_Ministerio, '') AS Nombre_Ministerio,

@@ -839,6 +839,43 @@ class ReporteController extends BaseController {
         ];
     }
 
+    /**
+     * Restringe el listado de líderes al ministerio seleccionado y descarta un líder incompatible.
+     *
+     * @return array{lideres_disponibles: array, filtro_lider: int|string, id_lider_filtro: ?int}
+     */
+    private function aplicarCascadaFiltroMinisterioLider(array $opcionesFiltro, $filtroMinisterio, $filtroLider): array {
+        $lideres = array_values((array)($opcionesFiltro['lideres_disponibles'] ?? []));
+        $ministerioId = ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : 0;
+
+        if ($ministerioId > 0) {
+            $lideres = array_values(array_filter($lideres, static function(array $lider) use ($ministerioId): bool {
+                return (int)($lider['Id_Ministerio'] ?? 0) === $ministerioId;
+            }));
+        }
+
+        $liderId = ($filtroLider !== '' && (int)$filtroLider > 0) ? (int)$filtroLider : 0;
+        if ($liderId > 0) {
+            $perteneceAlListado = false;
+            foreach ($lideres as $lider) {
+                if ((int)($lider['Id_Persona'] ?? 0) === $liderId) {
+                    $perteneceAlListado = true;
+                    break;
+                }
+            }
+            if (!$perteneceAlListado) {
+                $liderId = 0;
+                $filtroLider = '';
+            }
+        }
+
+        return [
+            'lideres_disponibles' => $lideres,
+            'filtro_lider' => $filtroLider === '' ? '' : $liderId,
+            'id_lider_filtro' => $liderId > 0 ? $liderId : null,
+        ];
+    }
+
     private function esMinisterioPastoral($nombreMinisterio): bool {
         $nombre = strtolower(trim((string)$nombreMinisterio));
         if ($nombre === '') {
@@ -1800,6 +1837,680 @@ class ReporteController extends BaseController {
             'estado_celulas' => $rowsEstado,
             'lideres_por_red_tipo' => $rowsLideresPorRed,
             'resumen_lideres_por_red' => $resumenLideresPorRed,
+        ];
+    }
+
+    private function esCelulaActivaParaReporte(array $celula): bool {
+        $estado = strtolower(trim((string)($celula['Estado_Celula'] ?? 'activa')));
+        return !in_array($estado, ['cerrada', 'inactiva', '0'], true);
+    }
+
+    private function calcularInicioSemanaTsDesdeFecha(string $fechaYmd): int {
+        $fechaYmd = substr(trim($fechaYmd), 0, 10);
+        $ts = $fechaYmd !== '' ? strtotime($fechaYmd) : false;
+        if ($ts === false) {
+            $ts = strtotime(date('Y-m-d'));
+        }
+
+        $diaSemana = (int)date('N', $ts);
+        return (int)strtotime('-' . ($diaSemana - 1) . ' days', strtotime(date('Y-m-d', $ts)));
+    }
+
+    private function calcularSemanasSinRegistrarCelula(
+        array $celula,
+        array $ultimasFechas,
+        int $inicioSemanaTs,
+        int $inicioAnioTs
+    ): int {
+        $calcularInicioSemanaTs = static function(int $timestamp): int {
+            $diaSemana = (int)date('N', $timestamp);
+            return (int)strtotime('-' . ($diaSemana - 1) . ' days', strtotime(date('Y-m-d', $timestamp)));
+        };
+
+        $idCelula = (int)($celula['Id_Celula'] ?? 0);
+        $ultimaFechaReporte = substr(trim((string)($ultimasFechas[$idCelula] ?? '')), 0, 10);
+        $ultimaFechaTs = $ultimaFechaReporte !== '' ? strtotime($ultimaFechaReporte) : false;
+
+        if ($ultimaFechaTs !== false) {
+            $ultimaSemanaTs = $calcularInicioSemanaTs((int)$ultimaFechaTs);
+            $baseTs = max($ultimaSemanaTs, $inicioAnioTs);
+            $diffDias = (int)floor(($inicioSemanaTs - $baseTs) / 86400);
+            return $diffDias > 0 ? (int)floor($diffDias / 7) : 0;
+        }
+
+        $fechaApertura = substr(trim((string)($celula['Fecha_Apertura'] ?? '')), 0, 10);
+        $fechaAperturaTs = $fechaApertura !== '' ? strtotime($fechaApertura) : false;
+        $aperturaSemanaTs = $fechaAperturaTs !== false ? $calcularInicioSemanaTs((int)$fechaAperturaTs) : false;
+        $baseTs = $aperturaSemanaTs !== false ? max($aperturaSemanaTs, $inicioAnioTs) : $inicioAnioTs;
+        $diffDiasApertura = (int)floor(($inicioSemanaTs - $baseTs) / 86400);
+
+        return $diffDiasApertura > 0 ? (int)floor($diffDiasApertura / 7) : 0;
+    }
+
+    private function contarSobresPendientesCelulaAnio(
+        int $idCelula,
+        array $semanasReportadas,
+        array $entregasSobre
+    ): int {
+        if ($idCelula <= 0 || empty($semanasReportadas[$idCelula])) {
+            return 0;
+        }
+
+        $pendientes = 0;
+        foreach (array_keys($semanasReportadas[$idCelula]) as $semana) {
+            $semanaNorm = $this->normalizarSemanaLunes($semana);
+            if ($semanaNorm === '' || !empty($entregasSobre[$idCelula][$semanaNorm])) {
+                continue;
+            }
+            $pendientes++;
+        }
+
+        return $pendientes;
+    }
+
+    /**
+     * Semanas del año con sobre marcado como entregado (casilla) pero sin reporte de asistencia.
+     */
+    private function contarSobresEntregadosSinReporteCelulaAnio(
+        int $idCelula,
+        array $semanasReportadas,
+        array $entregasSobre
+    ): int {
+        if ($idCelula <= 0 || empty($entregasSobre[$idCelula])) {
+            return 0;
+        }
+
+        $conteo = 0;
+        foreach ($entregasSobre[$idCelula] as $semana => $entrego) {
+            if (!$entrego) {
+                continue;
+            }
+
+            $semanaNorm = $this->normalizarSemanaLunes((string)$semana);
+            if ($semanaNorm === '') {
+                continue;
+            }
+
+            if (empty($semanasReportadas[$idCelula][$semanaNorm])) {
+                $conteo++;
+            }
+        }
+
+        return $conteo;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $mapa
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizarMapaSemanasPorCelula(array $mapa, bool $valoresBooleanos = false): array {
+        $normalizado = [];
+
+        foreach ($mapa as $idCelula => $semanas) {
+            $idCelula = (int)$idCelula;
+            if ($idCelula <= 0 || !is_array($semanas)) {
+                continue;
+            }
+
+            foreach ($semanas as $semana => $valor) {
+                $semanaNorm = $this->normalizarSemanaLunes((string)$semana);
+                if ($semanaNorm === '') {
+                    continue;
+                }
+
+                if ($valoresBooleanos) {
+                    $normalizado[$idCelula][$semanaNorm] = !empty($valor);
+                    continue;
+                }
+
+                $normalizado[$idCelula][$semanaNorm] = true;
+            }
+        }
+
+        return $normalizado;
+    }
+
+    private function normalizarSemanaLunes(string $fechaYmd): string {
+        $fechaYmd = substr(trim($fechaYmd), 0, 10);
+        if ($fechaYmd === '') {
+            return '';
+        }
+
+        $ts = strtotime($fechaYmd);
+        if ($ts === false) {
+            return '';
+        }
+
+        $inicioTs = $this->calcularInicioSemanaTsDesdeFecha($fechaYmd);
+
+        return date('Y-m-d', $inicioTs);
+    }
+
+    private function deduplicarCelulasPorId(array $celulas): array {
+        $unicas = [];
+        foreach ($celulas as $celula) {
+            $idCelula = (int)($celula['Id_Celula'] ?? 0);
+            if ($idCelula <= 0 || isset($unicas[$idCelula])) {
+                continue;
+            }
+            $unicas[$idCelula] = $celula;
+        }
+
+        return array_values($unicas);
+    }
+
+    private function vaciosTotalesReporteCelulasLider(): array {
+        return [
+            'celulas' => 0,
+            'asistentes' => 0,
+            'semanas_sin_entregar_sobre' => 0,
+            'semanas_sin_reportar' => 0,
+        ];
+    }
+
+    /**
+     * @return array{fecha_desde: string, fecha_hasta: string, personalizado: bool}
+     */
+    private function resolverRangoFechasReporteCelulas(int $anio, ?string $desdeRaw, ?string $hastaRaw): array {
+        $defaultInicio = sprintf('%04d-01-01', $anio);
+        $defaultFin = min(sprintf('%04d-12-31', $anio), date('Y-m-d'));
+
+        $desde = $this->normalizarFechaYmd($desdeRaw ?? '');
+        $hasta = $this->normalizarFechaYmd($hastaRaw ?? '');
+
+        if ($desde === '' || $hasta === '') {
+            return [
+                'fecha_desde' => $defaultInicio,
+                'fecha_hasta' => $defaultFin,
+                'personalizado' => false,
+            ];
+        }
+
+        if (strcmp($desde, $hasta) > 0) {
+            [$desde, $hasta] = [$hasta, $desde];
+        }
+
+        $hoy = date('Y-m-d');
+        if (strcmp($hasta, $hoy) > 0) {
+            $hasta = $hoy;
+        }
+
+        return [
+            'fecha_desde' => $desde,
+            'fecha_hasta' => $hasta,
+            'personalizado' => true,
+        ];
+    }
+
+    /**
+     * Semanas consecutivas sin reporte de asistencia hasta la semana actual
+     * (marcar sobre entregado no cuenta como reporte).
+     */
+    private function contarSemanasSinReportarCelula(
+        array $celula,
+        array $ultimasFechas,
+        int $inicioSemanaTs,
+        int $inicioAnioTs
+    ): int {
+        return $this->calcularSemanasSinRegistrarCelula(
+            $celula,
+            $ultimasFechas,
+            $inicioSemanaTs,
+            $inicioAnioTs
+        );
+    }
+
+    private function resolverBaseTsSemanasSinReportarCelula(
+        array $celula,
+        array $ultimasFechas,
+        int $inicioAnioTs
+    ): int {
+        $calcularInicioSemanaTs = static function(int $timestamp): int {
+            $diaSemana = (int)date('N', $timestamp);
+            return (int)strtotime('-' . ($diaSemana - 1) . ' days', strtotime(date('Y-m-d', $timestamp)));
+        };
+
+        $idCelula = (int)($celula['Id_Celula'] ?? 0);
+        $ultimaFechaReporte = substr(trim((string)($ultimasFechas[$idCelula] ?? '')), 0, 10);
+        $ultimaFechaTs = $ultimaFechaReporte !== '' ? strtotime($ultimaFechaReporte) : false;
+
+        if ($ultimaFechaTs !== false) {
+            $ultimaSemanaTs = $calcularInicioSemanaTs((int)$ultimaFechaTs);
+
+            return max($ultimaSemanaTs, $inicioAnioTs);
+        }
+
+        $fechaApertura = substr(trim((string)($celula['Fecha_Apertura'] ?? '')), 0, 10);
+        $fechaAperturaTs = $fechaApertura !== '' ? strtotime($fechaApertura) : false;
+        $aperturaSemanaTs = $fechaAperturaTs !== false ? $calcularInicioSemanaTs((int)$fechaAperturaTs) : false;
+
+        return $aperturaSemanaTs !== false ? max($aperturaSemanaTs, $inicioAnioTs) : $inicioAnioTs;
+    }
+
+    /**
+     * @return list<array{inicio: string, etiqueta: string}>
+     */
+    private function listarSemanasSinReportarCelula(
+        array $celula,
+        array $ultimasFechas,
+        int $inicioSemanaTs,
+        int $inicioAnioTs
+    ): array {
+        $total = $this->contarSemanasSinReportarCelula($celula, $ultimasFechas, $inicioSemanaTs, $inicioAnioTs);
+        if ($total <= 0) {
+            return [];
+        }
+
+        $baseTs = $this->resolverBaseTsSemanasSinReportarCelula($celula, $ultimasFechas, $inicioAnioTs);
+        $semanas = [];
+        for ($i = 1; $i <= $total; $i++) {
+            $lunes = date('Y-m-d', (int)strtotime('+' . ($i * 7) . ' days', $baseTs));
+            $semanas[] = [
+                'inicio' => $lunes,
+                'etiqueta' => $this->formatearEtiquetaSemanaRango($lunes),
+            ] + $this->formatearDetalleSemanaModal($lunes, 'sin_reportar');
+        }
+
+        return $semanas;
+    }
+
+    /**
+     * @return list<array{inicio: string, etiqueta: string}>
+     */
+    private function listarSemanasSinEntregarSobreCelula(
+        int $idCelula,
+        array $semanasReportadas,
+        array $entregasSobre
+    ): array {
+        if ($idCelula <= 0 || empty($semanasReportadas[$idCelula])) {
+            return [];
+        }
+
+        $semanas = [];
+        foreach (array_keys($semanasReportadas[$idCelula]) as $semana) {
+            $semanaNorm = $this->normalizarSemanaLunes($semana);
+            if ($semanaNorm === '' || !empty($entregasSobre[$idCelula][$semanaNorm])) {
+                continue;
+            }
+            $semanas[] = [
+                'inicio' => $semanaNorm,
+                'etiqueta' => $this->formatearEtiquetaSemanaRango($semanaNorm),
+            ] + $this->formatearDetalleSemanaModal($semanaNorm, 'sin_sobre');
+        }
+
+        usort($semanas, static function($a, $b) {
+            return strcmp((string)($a['inicio'] ?? ''), (string)($b['inicio'] ?? ''));
+        });
+
+        return $semanas;
+    }
+
+    private function formatearEtiquetaSemanaRango(string $lunesYmd): string {
+        $lunesYmd = substr(trim($lunesYmd), 0, 10);
+        $ts = $lunesYmd !== '' ? strtotime($lunesYmd) : false;
+        if ($ts === false) {
+            return $lunesYmd;
+        }
+
+        return date('d/m/Y', $ts) . ' – ' . date('d/m/Y', strtotime('+6 days', $ts));
+    }
+
+    /**
+     * Textos legibles para el modal de detalle por semana.
+     *
+     * @return array{periodo: string, periodo_corto: string, mes: string, situacion: string, icono: string}
+     */
+    private function formatearDetalleSemanaModal(string $lunesYmd, string $tipo): array {
+        $lunesYmd = substr(trim($lunesYmd), 0, 10);
+        $ts = $lunesYmd !== '' ? strtotime($lunesYmd) : false;
+        if ($ts === false) {
+            return [
+                'periodo' => $lunesYmd,
+                'periodo_corto' => $lunesYmd,
+                'mes' => '',
+                'situacion' => '',
+                'icono' => '!',
+            ];
+        }
+
+        $finTs = (int)strtotime('+6 days', $ts);
+        $meses = [
+            1 => 'enero', 2 => 'febrero', 3 => 'marzo', 4 => 'abril',
+            5 => 'mayo', 6 => 'junio', 7 => 'julio', 8 => 'agosto',
+            9 => 'septiembre', 10 => 'octubre', 11 => 'noviembre', 12 => 'diciembre',
+        ];
+        $dias = [1 => 'lunes', 2 => 'martes', 3 => 'miércoles', 4 => 'jueves', 5 => 'viernes', 6 => 'sábado', 7 => 'domingo'];
+
+        $diaIni = (int)date('j', $ts);
+        $mesIni = (int)date('n', $ts);
+        $anioIni = (int)date('Y', $ts);
+        $diaFin = (int)date('j', $finTs);
+        $mesFin = (int)date('n', $finTs);
+        $anioFin = (int)date('Y', $finTs);
+        $nombreDiaIni = $dias[(int)date('N', $ts)] ?? 'lunes';
+        $nombreDiaFin = $dias[(int)date('N', $finTs)] ?? 'domingo';
+
+        if ($mesIni === $mesFin && $anioIni === $anioFin) {
+            $periodo = sprintf(
+                'Semana del %s %d al %s %d de %s de %d',
+                $nombreDiaIni,
+                $diaIni,
+                $nombreDiaFin,
+                $diaFin,
+                $meses[$mesIni] ?? '',
+                $anioIni
+            );
+        } else {
+            $periodo = sprintf(
+                'Semana del %s %d de %s al %s %d de %s de %d',
+                $nombreDiaIni,
+                $diaIni,
+                $meses[$mesIni] ?? '',
+                $nombreDiaFin,
+                $diaFin,
+                $meses[$mesFin] ?? '',
+                $anioFin
+            );
+        }
+
+        $periodoCorto = sprintf('%d–%d %s %d', $diaIni, $diaFin, ucfirst($meses[$mesIni] ?? ''), $anioIni);
+        $mesEtiqueta = ucfirst($meses[$mesIni] ?? '') . ' ' . $anioIni;
+
+        if ($tipo === 'sin_sobre') {
+            return [
+                'periodo' => $periodo,
+                'periodo_corto' => $periodoCorto,
+                'mes' => $mesEtiqueta,
+                'situacion' => 'Reportó asistencia, pero no marcó «Sobre entregado» en Asistencias.',
+                'icono' => 'sobre',
+            ];
+        }
+
+        return [
+            'periodo' => $periodo,
+            'periodo_corto' => $periodoCorto,
+            'mes' => $mesEtiqueta,
+            'situacion' => 'No registró reporte de asistencia de célula esa semana.',
+            'icono' => 'reporte',
+        ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $celulasLider
+     * @return list<array{inicio: string, etiqueta: string, celula?: string}>
+     */
+    private function fusionarDetalleSemanasPorCelulas(array $celulasLider, string $campoDetalle): array {
+        $totalCelulas = count($celulasLider);
+        $fusionado = [];
+
+        foreach ($celulasLider as $metrica) {
+            $nombreCelula = trim((string)($metrica['nombre_celula'] ?? '')) ?: 'Célula';
+            foreach ((array)($metrica[$campoDetalle] ?? []) as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                $entry = [
+                    'inicio' => (string)($item['inicio'] ?? ''),
+                    'etiqueta' => (string)($item['etiqueta'] ?? ''),
+                    'periodo' => (string)($item['periodo'] ?? ''),
+                    'periodo_corto' => (string)($item['periodo_corto'] ?? ''),
+                    'mes' => (string)($item['mes'] ?? ''),
+                    'situacion' => (string)($item['situacion'] ?? ''),
+                    'icono' => (string)($item['icono'] ?? ''),
+                ];
+                if ($totalCelulas > 1) {
+                    $entry['celula'] = $nombreCelula;
+                }
+                $fusionado[] = $entry;
+            }
+        }
+
+        usort($fusionado, static function($a, $b) {
+            return strcmp((string)($a['inicio'] ?? ''), (string)($b['inicio'] ?? ''));
+        });
+
+        return $fusionado;
+    }
+
+    private function resolverTipoLiderReporteCelulas(int $idRol): string {
+        $jerarquia = $this->personaModel->getJerarquiaByRol($idRol);
+        if (in_array($jerarquia, ['lider_12', 'lider_144', 'pastor'], true)) {
+            return 'Líder de 12 y célula';
+        }
+
+        return 'Líder de célula';
+    }
+
+    /**
+     * Reporte operativo de células agrupado por ministerio y líder (célula o 12+célula).
+     */
+    private function construirReporteOperativoCelulasPorLider(
+        int $anio,
+        $filtroCelulas,
+        $filtroMinisterio = '',
+        $filtroLider = '',
+        ?string $fechaDesde = null,
+        ?string $fechaHasta = null
+    ): array {
+        $rangoFechas = $this->resolverRangoFechasReporteCelulas($anio, $fechaDesde, $fechaHasta);
+        $fechaInicioAnio = $rangoFechas['fecha_desde'];
+        $fechaFinAnio = $rangoFechas['fecha_hasta'];
+        $inicioSemanaTs = $this->calcularInicioSemanaTsDesdeFecha($fechaFinAnio);
+        $inicioAnioTs = strtotime($fechaInicioAnio);
+        if ($inicioAnioTs === false) {
+            $inicioAnioTs = strtotime(sprintf('%04d-01-01', $anio));
+        }
+
+        $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas, $filtroMinisterio, $filtroLider);
+        $celulas = array_values(array_filter($celulas, function($celula) {
+            return $this->esCelulaActivaParaReporte($celula);
+        }));
+        $celulas = $this->deduplicarCelulasPorId($celulas);
+
+        if (empty($celulas)) {
+            return [
+                'anio' => $anio,
+                'fecha_desde' => $fechaInicioAnio,
+                'fecha_hasta' => $fechaFinAnio,
+                'rango_personalizado' => $rangoFechas['personalizado'],
+                'grupos' => [],
+                'totales' => $this->vaciosTotalesReporteCelulasLider(),
+            ];
+        }
+
+        $idsCelula = array_values(array_unique(array_filter(array_map(static function($celula) {
+            return (int)($celula['Id_Celula'] ?? 0);
+        }, $celulas), static function($id) {
+            return $id > 0;
+        })));
+
+        $this->asistenciaModel->ensureEntregaSobreTableExists();
+        $semanasReportadas = $this->normalizarMapaSemanasPorCelula(
+            $this->asistenciaModel->getMapaSemanasReportadasPorCelula($fechaInicioAnio, $fechaFinAnio, $idsCelula)
+        );
+        $entregasSobre = $this->normalizarMapaSemanasPorCelula(
+            $this->asistenciaModel->getMapaEntregaSobrePorCelula($fechaInicioAnio, $fechaFinAnio, $idsCelula),
+            true
+        );
+        $ultimasFechasAnio = $this->asistenciaModel->getUltimaFechaReportePorCelulaEnRango($idsCelula, $fechaInicioAnio, $fechaFinAnio);
+        $miembrosPorCelula = $this->celulaModel->getConteoMiembrosActivosPorCelulas($idsCelula);
+
+        $metricasPorCelula = [];
+        foreach ($celulas as $celula) {
+            $idCelula = (int)($celula['Id_Celula'] ?? 0);
+            $idLider = (int)($celula['Id_Lider'] ?? 0);
+            if ($idCelula <= 0 || $idLider <= 0 || isset($metricasPorCelula[$idCelula])) {
+                continue;
+            }
+
+            $ministerio = trim((string)($celula['Nombre_Ministerio_Lider'] ?? ''));
+            if ($ministerio === '') {
+                $ministerio = 'Sin ministerio';
+            }
+
+            $metricasPorCelula[$idCelula] = [
+                'id_celula' => $idCelula,
+                'id_lider' => $idLider,
+                'id_ministerio' => (int)($celula['Id_Ministerio_Lider'] ?? 0),
+                'ministerio' => $ministerio,
+                'nombre_lider' => trim((string)($celula['Nombre_Lider'] ?? '')) ?: 'Sin líder',
+                'nombre_celula' => trim((string)($celula['Nombre_Celula'] ?? '')) ?: ('Célula #' . $idCelula),
+                'miembros' => (int)($miembrosPorCelula[$idCelula] ?? 0),
+                'semanas_sin_entregar_sobre' => $this->contarSobresPendientesCelulaAnio($idCelula, $semanasReportadas, $entregasSobre),
+                'semanas_sin_reportar' => $this->contarSemanasSinReportarCelula(
+                    $celula,
+                    $ultimasFechasAnio,
+                    $inicioSemanaTs,
+                    (int)$inicioAnioTs
+                ),
+                'detalle_sin_entregar_sobre' => $this->listarSemanasSinEntregarSobreCelula($idCelula, $semanasReportadas, $entregasSobre),
+                'detalle_sin_reportar' => $this->listarSemanasSinReportarCelula(
+                    $celula,
+                    $ultimasFechasAnio,
+                    $inicioSemanaTs,
+                    (int)$inicioAnioTs
+                ),
+            ];
+        }
+
+        $celulasPorLider = [];
+        foreach ($metricasPorCelula as $metricaCelula) {
+            $idLider = (int)($metricaCelula['id_lider'] ?? 0);
+            if ($idLider <= 0) {
+                continue;
+            }
+            if (!isset($celulasPorLider[$idLider])) {
+                $celulasPorLider[$idLider] = [];
+            }
+            $celulasPorLider[$idLider][] = $metricaCelula;
+        }
+
+        $lideresInfo = $this->personaModel->getResumenLideresByIds(array_keys($celulasPorLider));
+        $gruposMap = [];
+        $idsCelulaTotales = [];
+
+        foreach ($celulasPorLider as $idLider => $celulasLider) {
+            $infoLider = $lideresInfo[$idLider] ?? [];
+            $primera = $celulasLider[0];
+            $ministerio = (string)($primera['ministerio'] ?? 'Sin ministerio');
+            $idMinisterio = (int)($primera['id_ministerio'] ?? 0);
+            if ($idMinisterio <= 0) {
+                $idMinisterio = (int)($infoLider['Id_Ministerio'] ?? 0);
+            }
+
+            $nombreLider = (string)($primera['nombre_lider'] ?? '');
+            if ($nombreLider === '' || $nombreLider === 'Sin líder') {
+                $nombreLider = trim((string)($infoLider['Nombre_Completo'] ?? '')) ?: 'Sin líder';
+            }
+
+            $idRol = (int)($infoLider['Id_Rol'] ?? 0);
+            $tipoLider = $this->resolverTipoLiderReporteCelulas($idRol);
+
+            $idsCelulasLider = array_values(array_unique(array_map(static function($item) {
+                return (int)($item['id_celula'] ?? 0);
+            }, $celulasLider)));
+
+            $totalCelulas = count($idsCelulasLider);
+            $totalAsistentes = $this->celulaModel->contarMiembrosActivosUnicosEnCelulas($idsCelulasLider);
+            $semanasSinEntregarSobre = 0;
+            $semanasSinReportar = 0;
+
+            foreach ($celulasLider as $metricaCelula) {
+                $semanasSinEntregarSobre += (int)($metricaCelula['semanas_sin_entregar_sobre'] ?? 0);
+                $semanasSinReportar += (int)($metricaCelula['semanas_sin_reportar'] ?? 0);
+            }
+
+            $grupoKey = $idMinisterio . '|' . $this->normalizarTextoComparable($ministerio);
+            if (!isset($gruposMap[$grupoKey])) {
+                $gruposMap[$grupoKey] = [
+                    'id_ministerio' => $idMinisterio,
+                    'ministerio' => $ministerio,
+                    'lideres' => [],
+                    'ids_celulas' => [],
+                    'subtotales' => $this->vaciosTotalesReporteCelulasLider(),
+                ];
+            }
+
+            $gruposMap[$grupoKey]['lideres'][] = [
+                'id_lider' => $idLider,
+                'lider' => $nombreLider,
+                'tipo' => $tipoLider,
+                'celulas' => $totalCelulas,
+                'asistentes' => $totalAsistentes,
+                'semanas_sin_entregar_sobre' => $semanasSinEntregarSobre,
+                'semanas_sin_reportar' => $semanasSinReportar,
+                'detalle_sin_entregar_sobre' => $this->fusionarDetalleSemanasPorCelulas($celulasLider, 'detalle_sin_entregar_sobre'),
+                'detalle_sin_reportar' => $this->fusionarDetalleSemanasPorCelulas($celulasLider, 'detalle_sin_reportar'),
+            ];
+
+            $gruposMap[$grupoKey]['ids_celulas'] = array_values(array_unique(array_merge(
+                $gruposMap[$grupoKey]['ids_celulas'],
+                $idsCelulasLider
+            )));
+            $idsCelulaTotales = array_values(array_unique(array_merge($idsCelulaTotales, $idsCelulasLider)));
+        }
+
+        $grupos = array_values($gruposMap);
+        usort($grupos, static function($a, $b) {
+            return strcmp((string)($a['ministerio'] ?? ''), (string)($b['ministerio'] ?? ''));
+        });
+
+        $totales = $this->vaciosTotalesReporteCelulasLider();
+        foreach ($grupos as &$grupo) {
+            usort($grupo['lideres'], static function($a, $b) {
+                $cmpTipo = strcmp((string)($a['tipo'] ?? ''), (string)($b['tipo'] ?? ''));
+                if ($cmpTipo !== 0) {
+                    return $cmpTipo;
+                }
+                return strcmp((string)($a['lider'] ?? ''), (string)($b['lider'] ?? ''));
+            });
+
+            $idsCelulasGrupo = array_values(array_unique(array_map('intval', (array)($grupo['ids_celulas'] ?? []))));
+            $semanasSinEntregarSobreGrupo = 0;
+            $semanasSinReportarGrupo = 0;
+            foreach ($idsCelulasGrupo as $idCelulaGrupo) {
+                if (!isset($metricasPorCelula[$idCelulaGrupo])) {
+                    continue;
+                }
+                $semanasSinEntregarSobreGrupo += (int)($metricasPorCelula[$idCelulaGrupo]['semanas_sin_entregar_sobre'] ?? 0);
+                $semanasSinReportarGrupo += (int)($metricasPorCelula[$idCelulaGrupo]['semanas_sin_reportar'] ?? 0);
+            }
+
+            $grupo['subtotales'] = [
+                'celulas' => count($idsCelulasGrupo),
+                'asistentes' => $this->celulaModel->contarMiembrosActivosUnicosEnCelulas($idsCelulasGrupo),
+                'semanas_sin_entregar_sobre' => $semanasSinEntregarSobreGrupo,
+                'semanas_sin_reportar' => $semanasSinReportarGrupo,
+            ];
+            unset($grupo['ids_celulas']);
+
+            foreach (['celulas', 'semanas_sin_entregar_sobre', 'semanas_sin_reportar'] as $campo) {
+                $totales[$campo] += (int)($grupo['subtotales'][$campo] ?? 0);
+            }
+        }
+        unset($grupo);
+
+        $totales['asistentes'] = $this->celulaModel->contarMiembrosActivosUnicosEnCelulas($idsCelulaTotales);
+        $totales['celulas'] = count(array_unique($idsCelulaTotales));
+        $totalesSemanasSinEntregarSobre = 0;
+        $totalesSemanasSinReportar = 0;
+        foreach (array_unique($idsCelulaTotales) as $idCelulaTotal) {
+            if (!isset($metricasPorCelula[$idCelulaTotal])) {
+                continue;
+            }
+            $totalesSemanasSinEntregarSobre += (int)($metricasPorCelula[$idCelulaTotal]['semanas_sin_entregar_sobre'] ?? 0);
+            $totalesSemanasSinReportar += (int)($metricasPorCelula[$idCelulaTotal]['semanas_sin_reportar'] ?? 0);
+        }
+        $totales['semanas_sin_entregar_sobre'] = $totalesSemanasSinEntregarSobre;
+        $totales['semanas_sin_reportar'] = $totalesSemanasSinReportar;
+
+        return [
+            'anio' => $anio,
+            'fecha_desde' => $fechaInicioAnio,
+            'fecha_hasta' => $fechaFinAnio,
+            'rango_personalizado' => $rangoFechas['personalizado'],
+            'grupos' => $grupos,
+            'totales' => $totales,
         ];
     }
 
@@ -3260,12 +3971,15 @@ class ReporteController extends BaseController {
         $opcionesFiltro = $this->construirOpcionesFiltroMinisterioLider($filtroCelulas);
         $filtroMinisterio = ($filtroMinisterio !== '' && isset($opcionesFiltro['ministerio_ids_permitidos'][(int)$filtroMinisterio])) ? (int)$filtroMinisterio : '';
         $filtroLider      = ($filtroLider !== '' && isset($opcionesFiltro['lider_ids_permitidos'][(int)$filtroLider])) ? (int)$filtroLider : '';
+        $cascadaFiltro = $this->aplicarCascadaFiltroMinisterioLider($opcionesFiltro, $filtroMinisterio, $filtroLider);
+        $filtroLider = $cascadaFiltro['filtro_lider'];
+        $lideresParaVista = $cascadaFiltro['lideres_disponibles'];
 
         $fechaInicioAnio = sprintf('%04d-01-01', $anio);
         $fechaFinAnio    = sprintf('%04d-12-31', $anio);
 
         $idMinisterioFiltro = ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null;
-        $idLiderFiltro      = ($filtroLider !== '' && (int)$filtroLider > 0) ? (int)$filtroLider : null;
+        $idLiderFiltro      = $cascadaFiltro['id_lider_filtro'];
 
         $personasAnio = $this->personaModel->getWithFiltersAndRole(
             $filtroRol,
@@ -3501,12 +4215,23 @@ class ReporteController extends BaseController {
             $liderSuperiorPorId
         );
 
+        $reporteCelulasPorLider = $this->construirReporteOperativoCelulasPorLider(
+            $anio,
+            $filtroCelulas,
+            $filtroMinisterio,
+            $filtroLider,
+            $_GET['cel_desde'] ?? null,
+            $_GET['cel_hasta'] ?? null
+        );
+
         $this->view('reportes/dashboard_ganar', [
             'anio'                   => $anio,
             'filtro_ministerio'      => (string)$filtroMinisterio,
             'filtro_lider'           => (string)$filtroLider,
+            'cel_filtro_desde'       => $this->normalizarFechaYmd($_GET['cel_desde'] ?? ''),
+            'cel_filtro_hasta'       => $this->normalizarFechaYmd($_GET['cel_hasta'] ?? ''),
             'ministerios_disponibles' => $opcionesFiltro['ministerios_disponibles'],
-            'lideres_disponibles'    => $opcionesFiltro['lideres_disponibles'],
+            'lideres_disponibles'    => $lideresParaVista,
             'meses_labels'           => $mesesLabels,
             'ganancias_mensuales'    => $gananciasMensuales,
             'por_ministerio'         => array_values($porMinisterioMap),
@@ -3522,7 +4247,800 @@ class ReporteController extends BaseController {
             'ministerios_con_meta'   => $porMinisterioConMeta,
             'totales_g12'            => $totalesG12,
             'resumen_semanal_lider' => $resumenSemanalLider,
+            'reporte_celulas_por_lider' => $reporteCelulasPorLider,
         ]);
+    }
+
+    public function dashboardGanarRedes() {
+        if (!AuthController::esAdministrador() && !AuthController::puede('reportes:ver')) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $anio = (int)($_GET['anio'] ?? date('Y'));
+        if ($anio < 2020 || $anio > ((int)date('Y') + 2)) {
+            $anio = (int)date('Y');
+        }
+
+        $escala = strtolower(trim((string)($_GET['escala'] ?? 'semestral')));
+        if (!in_array($escala, ['mensual', 'semestral', 'anual'], true)) {
+            $escala = 'semestral';
+        }
+
+        $filtroMinisterio = $_GET['ministerio'] ?? '';
+        $filtroLider = $_GET['lider'] ?? '';
+
+        $filtroRol = DataIsolation::generarFiltroPersonas();
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+
+        $opcionesFiltro = $this->construirOpcionesFiltroMinisterioLider($filtroCelulas);
+        $filtroMinisterio = ($filtroMinisterio !== '' && isset($opcionesFiltro['ministerio_ids_permitidos'][(int)$filtroMinisterio]))
+            ? (int)$filtroMinisterio
+            : '';
+        $filtroLider = ($filtroLider !== '' && isset($opcionesFiltro['lider_ids_permitidos'][(int)$filtroLider]))
+            ? (int)$filtroLider
+            : '';
+        $cascadaFiltro = $this->aplicarCascadaFiltroMinisterioLider($opcionesFiltro, $filtroMinisterio, $filtroLider);
+        $filtroLider = $cascadaFiltro['filtro_lider'];
+        $idMinisterioFiltro = ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null;
+        $idLiderFiltro = $cascadaFiltro['id_lider_filtro'];
+
+        $fechaInicioAnio = sprintf('%04d-01-01', $anio);
+        $fechaFinAnio = sprintf('%04d-12-31', $anio);
+
+        $personasAnio = $this->personaModel->getWithFiltersAndRole(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            null,
+            null,
+            null,
+            null,
+            null,
+            $fechaInicioAnio,
+            $fechaFinAnio
+        );
+
+        $idsPersonas = [];
+        foreach ((array)$personasAnio as $personaTmp) {
+            if (!$this->esPersonaNueva((array)$personaTmp)) {
+                continue;
+            }
+            $idTmp = (int)($personaTmp['Id_Persona'] ?? 0);
+            if ($idTmp > 0) {
+                $idsPersonas[] = $idTmp;
+            }
+        }
+        $flagsFormacion = $this->escuelaInscripcionModel->getFlagsFormacionPorIdsPersonas($idsPersonas);
+        $reporteRedes = $this->construirReporteGanarPorRedes((array)$personasAnio, $anio, $flagsFormacion);
+        $jerarquiaRedes = $this->construirJerarquiaLideresGanarRedes(
+            (array)$personasAnio,
+            $anio,
+            $flagsFormacion,
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro
+        );
+        $reporteRedes['jerarquia'] = $jerarquiaRedes;
+
+        if (!empty($_GET['exportar'])) {
+            $this->exportarReporteGanarRedesCsv($reporteRedes, $escala, $anio);
+            return;
+        }
+
+        $this->view('reportes/dashboard_ganar_redes', [
+            'anio' => $anio,
+            'escala' => $escala,
+            'filtro_ministerio' => (string)$filtroMinisterio,
+            'filtro_lider' => (string)$filtroLider,
+            'ministerios_disponibles' => $opcionesFiltro['ministerios_disponibles'],
+            'lideres_disponibles' => $cascadaFiltro['lideres_disponibles'],
+            'reporte_redes' => $reporteRedes,
+        ]);
+    }
+
+    /**
+     * @return array{gano_iglesia:int,gano_celula:int,encuentro:int,capacitacion_destino:int,realizan_celula:int,total:int}
+     */
+    private function metricasVaciasGanarRedes(): array {
+        return [
+            'gano_iglesia' => 0,
+            'gano_celula' => 0,
+            'encuentro' => 0,
+            'capacitacion_destino' => 0,
+            'realizan_celula' => 0,
+            'total' => 0,
+        ];
+    }
+
+    private function clasificarRedGeneroPersona(array $persona): string {
+        $genero = strtolower(trim((string)($persona['Genero'] ?? '')));
+        $genero = strtr($genero, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        ]);
+        if (strpos($genero, 'mujer') !== false || strpos($genero, 'femen') !== false) {
+            return 'mujeres';
+        }
+        if (strpos($genero, 'hombre') !== false || strpos($genero, 'mascul') !== false) {
+            return 'hombres';
+        }
+
+        return 'otros';
+    }
+
+    private function sumarMetricasGanarRedes(array $destino, array $origen): array {
+        foreach ($this->metricasVaciasGanarRedes() as $clave => $_) {
+            $destino[$clave] = (int)($destino[$clave] ?? 0) + (int)($origen[$clave] ?? 0);
+        }
+
+        return $destino;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $personas
+     * @param array<int, array{encuentro?:bool,universidad_vida?:bool,capacitacion_destino?:bool}> $flagsFormacion
+     * @return array<string, mixed>
+     */
+    private function construirReporteGanarPorRedes(array $personas, int $anio, array $flagsFormacion): array {
+        $meses = $this->obtenerMesesAbreviados();
+        $clavesRed = ['mujeres', 'hombres', 'general'];
+        $bloques = [];
+        foreach ($clavesRed as $claveRed) {
+            $mensual = [];
+            for ($m = 1; $m <= 12; $m++) {
+                $mensual[$m] = array_merge(['periodo' => $meses[$m] ?? ('Mes ' . $m)], $this->metricasVaciasGanarRedes());
+            }
+            $bloques[$claveRed] = [
+                'mensual' => $mensual,
+                'totales' => $this->metricasVaciasGanarRedes(),
+            ];
+        }
+
+        foreach ($personas as $persona) {
+            $persona = (array)$persona;
+            if (!$this->esPersonaNueva($persona)) {
+                continue;
+            }
+
+            $fechaYmd = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
+            $ts = strtotime($fechaYmd);
+            if ($ts === false || (int)date('Y', $ts) !== $anio) {
+                continue;
+            }
+            $mes = (int)date('n', $ts);
+            if ($mes < 1 || $mes > 12) {
+                continue;
+            }
+
+            $red = $this->clasificarRedGeneroPersona($persona);
+            $metricas = $this->extraerMetricasPersonaGanarRedes($persona, $flagsFormacion);
+            if ($metricas === null) {
+                continue;
+            }
+
+            $destinos = ['general'];
+            if ($red === 'mujeres' || $red === 'hombres') {
+                $destinos[] = $red;
+            }
+
+            foreach ($destinos as $claveRed) {
+                $bloques[$claveRed]['mensual'][$mes] = $this->sumarMetricasGanarRedes(
+                    $bloques[$claveRed]['mensual'][$mes],
+                    $metricas
+                );
+                $bloques[$claveRed]['totales'] = $this->sumarMetricasGanarRedes(
+                    $bloques[$claveRed]['totales'],
+                    $metricas
+                );
+            }
+        }
+
+        $etiquetasRed = [
+            'mujeres' => 'Red Mujeres',
+            'hombres' => 'Red Hombres',
+            'general' => 'General (ambas redes)',
+        ];
+
+        $resultado = ['anio' => $anio, 'redes' => []];
+        foreach ($clavesRed as $claveRed) {
+            $resultado['redes'][$claveRed] = array_merge(
+                [
+                    'clave' => $claveRed,
+                    'label' => $etiquetasRed[$claveRed],
+                ],
+                $this->periodizarMensualGanarRedes($bloques[$claveRed]['mensual'], $bloques[$claveRed]['totales'], $anio)
+            );
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * @param array<int, array{encuentro?:bool,universidad_vida?:bool,capacitacion_destino?:bool}> $flagsFormacion
+     * @return array{gano_iglesia:int,gano_celula:int,encuentro:int,capacitacion_destino:int,realizan_celula:int,total:int}|null
+     */
+    private function extraerMetricasPersonaGanarRedes(array $persona, array $flagsFormacion): ?array {
+        $idPersona = (int)($persona['Id_Persona'] ?? 0);
+        $flags = is_array($flagsFormacion[$idPersona] ?? null) ? $flagsFormacion[$idPersona] : [];
+        $origen = $this->clasificarOrigenGanar($persona);
+        $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
+        $checklist = $this->obtenerChecklist($persona);
+
+        $enEncuentro = !empty($flags['encuentro'])
+            || !empty($flags['universidad_vida'])
+            || $this->peldanoMarcado($checklist, 'Consolidar', 0, $proceso)
+            || $this->peldanoMarcado($checklist, 'Consolidar', 1, $proceso);
+
+        $enCapDestino = !empty($flags['capacitacion_destino'])
+            || $this->peldanoMarcado($checklist, 'Discipular', 0, $proceso)
+            || $this->peldanoMarcado($checklist, 'Discipular', 1, $proceso)
+            || $this->peldanoMarcado($checklist, 'Discipular', 2, $proceso);
+
+        $realizaCelula = $this->personaUbicadaEnCelulaGanar($persona)
+            || $this->peldanoMarcado($checklist, 'Enviar', 2, $proceso);
+
+        $metricas = $this->metricasVaciasGanarRedes();
+        $metricas['total'] = 1;
+        if ($origen === 'iglesia') {
+            $metricas['gano_iglesia'] = 1;
+        } elseif ($origen === 'celula') {
+            $metricas['gano_celula'] = 1;
+        }
+        if ($enEncuentro) {
+            $metricas['encuentro'] = 1;
+        }
+        if ($enCapDestino) {
+            $metricas['capacitacion_destino'] = 1;
+        }
+        if ($realizaCelula) {
+            $metricas['realizan_celula'] = 1;
+        }
+
+        return $metricas;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $mensualPorMes
+     * @param array<string, int> $totales
+     * @return array{mensual: array{rows: array, totales: array}, semestral: array{rows: array, totales: array}, anual: array{rows: array, totales: array}}
+     */
+    private function periodizarMensualGanarRedes(array $mensualPorMes, array $totales, int $anio): array {
+        $s1 = array_merge(['periodo' => '1er semestre (ene–jun)'], $this->metricasVaciasGanarRedes());
+        $s2 = array_merge(['periodo' => '2do semestre (jul–dic)'], $this->metricasVaciasGanarRedes());
+        for ($m = 1; $m <= 6; $m++) {
+            $s1 = $this->sumarMetricasGanarRedes($s1, $mensualPorMes[$m] ?? $this->metricasVaciasGanarRedes());
+        }
+        for ($m = 7; $m <= 12; $m++) {
+            $s2 = $this->sumarMetricasGanarRedes($s2, $mensualPorMes[$m] ?? $this->metricasVaciasGanarRedes());
+        }
+
+        return [
+            'mensual' => [
+                'rows' => array_values($mensualPorMes),
+                'totales' => $totales,
+            ],
+            'semestral' => [
+                'rows' => [$s1, $s2],
+                'totales' => $totales,
+            ],
+            'anual' => [
+                'rows' => [array_merge(['periodo' => 'Año ' . $anio], $totales)],
+                'totales' => $totales,
+            ],
+        ];
+    }
+
+    private function mensualVacioGanarRedes(): array {
+        $meses = $this->obtenerMesesAbreviados();
+        $mensual = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $mensual[$m] = array_merge(['periodo' => $meses[$m] ?? ('Mes ' . $m)], $this->metricasVaciasGanarRedes());
+        }
+
+        return $mensual;
+    }
+
+    /**
+     * Árbol: líder de 12 → equipo (144 y líderes de célula) con el mismo reporte.
+     *
+     * @param array<int, array<string, mixed>> $personas
+     * @param array<int, array{encuentro?:bool,universidad_vida?:bool,capacitacion_destino?:bool}> $flagsFormacion
+     * @return array<string, array{label: string, lideres_12: array<int, array<string, mixed>>}>
+     */
+    private function construirJerarquiaLideresGanarRedes(
+        array $personas,
+        int $anio,
+        array $flagsFormacion,
+        string $filtroRol,
+        $idMinisterioFiltro,
+        $idLiderFiltro
+    ): array {
+        $catalogo = $this->personaModel->getResumenLideresCelulaWithRole($filtroRol);
+        $idMinisterioFiltro = (int)$idMinisterioFiltro;
+        $idLiderFiltro = (int)$idLiderFiltro;
+        $mapaCelulaInmediato = $this->celulaModel->getMapaLiderCelulaAInmediato();
+
+        $nodos = [];
+        $es12 = [];
+        $es144 = [];
+        $esCel = [];
+        $parentOf = [];
+
+        foreach ((array)$catalogo as $lider) {
+            $lider = (array)$lider;
+            $id = (int)($lider['Id_Persona'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            if ($idMinisterioFiltro > 0 && (int)($lider['Id_Ministerio'] ?? 0) !== $idMinisterioFiltro) {
+                continue;
+            }
+
+            $nombre = trim(trim((string)($lider['Nombre'] ?? '')) . ' ' . trim((string)($lider['Apellido'] ?? '')));
+            if ($nombre === '') {
+                $nombre = 'Líder #' . $id;
+            }
+
+            $tipo12 = !empty($lider['Es_Lider_12']);
+            $tipo144 = !empty($lider['Es_Lider_144']);
+            $tipoCel = !empty($lider['Es_Lider_Celula']);
+            if ($tipo12) {
+                $es12[$id] = true;
+            } elseif ($tipo144) {
+                $es144[$id] = true;
+            } elseif ($tipoCel) {
+                $esCel[$id] = true;
+            } else {
+                continue;
+            }
+
+            $tipo = $tipo12 ? 'lider_12' : ($tipo144 ? 'lider_144' : 'lider_celula');
+            $nodos[$id] = [
+                'id' => $id,
+                'nombre' => $nombre,
+                'tipo' => $tipo,
+                'tipo_label' => $tipo12 ? 'Líder de 12' : ($tipo144 ? 'Líder de 144' : 'Líder de célula'),
+                'red' => $this->clasificarRedGeneroPersona($lider),
+                'ministerio' => trim((string)($lider['Nombre_Ministerio'] ?? '')) ?: 'Sin ministerio',
+                'hijos_ids' => [],
+                'mensual' => $this->mensualVacioGanarRedes(),
+                'totales' => $this->metricasVaciasGanarRedes(),
+            ];
+
+            $idPadre = (int)($lider['Id_Lider'] ?? 0);
+            if ($idPadre > 0 && $idPadre !== $id) {
+                $parentOf[$id] = $idPadre;
+            }
+        }
+
+        foreach ($mapaCelulaInmediato as $idCelLider => $idInmediato) {
+            if (!isset($parentOf[$idCelLider]) && $idInmediato !== $idCelLider) {
+                $parentOf[$idCelLider] = $idInmediato;
+            }
+        }
+
+        $buscarAncla = function (int $idInicio, array $tiposObjetivo) use ($parentOf, $nodos): int {
+            $visitados = [];
+            $actual = (int)($parentOf[$idInicio] ?? 0);
+            while ($actual > 0 && empty($visitados[$actual])) {
+                $visitados[$actual] = true;
+                if (isset($nodos[$actual]) && in_array((string)($nodos[$actual]['tipo'] ?? ''), $tiposObjetivo, true)) {
+                    return $actual;
+                }
+                $actual = (int)($parentOf[$actual] ?? 0);
+            }
+
+            return 0;
+        };
+
+        foreach (array_keys($es144) as $id144) {
+            $id12 = $buscarAncla($id144, ['lider_12']);
+            if ($id12 > 0) {
+                $nodos[$id12]['hijos_ids'][] = $id144;
+            }
+        }
+        foreach (array_keys($esCel) as $idCel) {
+            $id144 = $buscarAncla($idCel, ['lider_144']);
+            if ($id144 > 0) {
+                $nodos[$id144]['hijos_ids'][] = $idCel;
+                continue;
+            }
+            $id12 = $buscarAncla($idCel, ['lider_12']);
+            if ($id12 > 0) {
+                $nodos[$id12]['hijos_ids'][] = $idCel;
+            }
+        }
+
+        foreach (array_keys($es12) as $id12) {
+            $claveDirectos = 'd' . $id12;
+            $nodos[$claveDirectos] = [
+                'id' => $claveDirectos,
+                'nombre' => 'Directos (sin líder de célula)',
+                'tipo' => 'directos',
+                'tipo_label' => 'Directos',
+                'red' => (string)($nodos[$id12]['red'] ?? 'otros'),
+                'ministerio' => (string)($nodos[$id12]['ministerio'] ?? ''),
+                'hijos_ids' => [],
+                'mensual' => $this->mensualVacioGanarRedes(),
+                'totales' => $this->metricasVaciasGanarRedes(),
+            ];
+            $nodos[$id12]['hijos_ids'][] = $claveDirectos;
+        }
+
+        foreach ($personas as $persona) {
+            $persona = (array)$persona;
+            if (!$this->esPersonaNueva($persona)) {
+                continue;
+            }
+            $fechaYmd = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
+            $ts = strtotime($fechaYmd);
+            if ($ts === false || (int)date('Y', $ts) !== $anio) {
+                continue;
+            }
+            $mes = (int)date('n', $ts);
+            if ($mes < 1 || $mes > 12) {
+                continue;
+            }
+            $metricas = $this->extraerMetricasPersonaGanarRedes($persona, $flagsFormacion);
+            if ($metricas === null) {
+                continue;
+            }
+
+            $idDirecto = (int)($persona['Id_Lider'] ?? 0);
+            if ($idDirecto <= 0) {
+                continue;
+            }
+
+            $cadena = [];
+            $visitados = [];
+            $actual = $idDirecto;
+            while ($actual > 0 && empty($visitados[$actual])) {
+                $visitados[$actual] = true;
+                if (isset($nodos[$actual])) {
+                    $cadena[] = $actual;
+                }
+                $actual = (int)($parentOf[$actual] ?? 0);
+            }
+
+            if ($cadena === []) {
+                continue;
+            }
+
+            foreach ($cadena as $idNodo) {
+                $nodos[$idNodo]['mensual'][$mes] = $this->sumarMetricasGanarRedes($nodos[$idNodo]['mensual'][$mes], $metricas);
+                $nodos[$idNodo]['totales'] = $this->sumarMetricasGanarRedes($nodos[$idNodo]['totales'], $metricas);
+            }
+
+            $primero = $cadena[0];
+            if (isset($es12[$primero])) {
+                $claveDirectos = 'd' . $primero;
+                if (isset($nodos[$claveDirectos])) {
+                    $nodos[$claveDirectos]['mensual'][$mes] = $this->sumarMetricasGanarRedes($nodos[$claveDirectos]['mensual'][$mes], $metricas);
+                    $nodos[$claveDirectos]['totales'] = $this->sumarMetricasGanarRedes($nodos[$claveDirectos]['totales'], $metricas);
+                }
+            }
+        }
+
+        $idsPermitidos = null;
+        if ($idLiderFiltro > 0) {
+            $idsPermitidos = [$idLiderFiltro => true];
+            $colaDesc = [$idLiderFiltro];
+            while ($colaDesc !== []) {
+                $actualCola = array_pop($colaDesc);
+                foreach ((array)($nodos[$actualCola]['hijos_ids'] ?? []) as $idHijo) {
+                    if (isset($idsPermitidos[$idHijo])) {
+                        continue;
+                    }
+                    $idsPermitidos[$idHijo] = true;
+                    $colaDesc[] = $idHijo;
+                }
+            }
+            if (!isset($es12[$idLiderFiltro])) {
+                $id12Filtro = $buscarAncla($idLiderFiltro, ['lider_12']);
+                if ($id12Filtro > 0) {
+                    $idsPermitidos[$id12Filtro] = true;
+                }
+            }
+        }
+
+        $armarNodoVista = null;
+        $armarNodoVista = function ($idNodo) use (&$armarNodoVista, &$nodos, $anio, $idsPermitidos): ?array {
+            if ($idsPermitidos !== null && empty($idsPermitidos[$idNodo])) {
+                return null;
+            }
+            if (!isset($nodos[$idNodo])) {
+                return null;
+            }
+            $nodo = $nodos[$idNodo];
+            $hijos = [];
+            $idsHijos = array_values(array_unique($nodo['hijos_ids']));
+            usort($idsHijos, function ($a, $b) use ($nodos): int {
+                $na = (string)($nodos[$a]['nombre'] ?? '');
+                $nb = (string)($nodos[$b]['nombre'] ?? '');
+                $ta = (string)($nodos[$a]['tipo'] ?? '');
+                $tb = (string)($nodos[$b]['tipo'] ?? '');
+                if ($ta === 'directos') {
+                    return 1;
+                }
+                if ($tb === 'directos') {
+                    return -1;
+                }
+
+                return strcasecmp($na, $nb);
+            });
+            foreach ($idsHijos as $idHijo) {
+                $hijoVista = $armarNodoVista($idHijo);
+                if ($hijoVista === null) {
+                    continue;
+                }
+                if (($hijoVista['tipo'] ?? '') === 'directos' && (int)($hijoVista['totales']['total'] ?? 0) <= 0) {
+                    continue;
+                }
+                $hijos[] = $hijoVista;
+            }
+
+            $periodos = $this->periodizarMensualGanarRedes($nodo['mensual'], $nodo['totales'], $anio);
+
+            return array_merge([
+                'id' => $nodo['id'],
+                'nombre' => $nodo['nombre'],
+                'tipo' => $nodo['tipo'],
+                'tipo_label' => $nodo['tipo_label'],
+                'red' => $nodo['red'],
+                'ministerio' => $nodo['ministerio'],
+                'hijos' => $hijos,
+            ], $periodos);
+        };
+
+        $resultado = [
+            'mujeres' => ['label' => 'Red Mujeres', 'lideres_12' => []],
+            'hombres' => ['label' => 'Red Hombres', 'lideres_12' => []],
+            'otros' => ['label' => 'Sin red (sin género)', 'lideres_12' => []],
+        ];
+
+        $ids12Vista = array_keys($es12);
+        usort($ids12Vista, function ($a, $b) use ($nodos): int {
+            $cmpMin = strcasecmp((string)($nodos[$a]['ministerio'] ?? ''), (string)($nodos[$b]['ministerio'] ?? ''));
+            if ($cmpMin !== 0) {
+                return $cmpMin;
+            }
+
+            return strcasecmp((string)($nodos[$a]['nombre'] ?? ''), (string)($nodos[$b]['nombre'] ?? ''));
+        });
+
+        foreach ($ids12Vista as $id12) {
+            $vista12 = $armarNodoVista($id12);
+            if ($vista12 === null) {
+                continue;
+            }
+            $red = (string)($vista12['red'] ?? 'otros');
+            if (!isset($resultado[$red])) {
+                $red = 'otros';
+            }
+            $resultado[$red]['lideres_12'][] = $vista12;
+        }
+
+        $celulasHuerfanas = [];
+        foreach (array_keys($esCel + $es144) as $idHuerfano) {
+            $yaColgado = false;
+            foreach ($es12 as $id12 => $_) {
+                if (in_array($idHuerfano, $nodos[$id12]['hijos_ids'] ?? [], true)) {
+                    $yaColgado = true;
+                    break;
+                }
+            }
+            foreach ($es144 as $id144 => $_) {
+                if (in_array($idHuerfano, $nodos[$id144]['hijos_ids'] ?? [], true)) {
+                    $yaColgado = true;
+                    break;
+                }
+            }
+            if ($yaColgado) {
+                continue;
+            }
+            $vistaH = $armarNodoVista($idHuerfano);
+            if ($vistaH === null) {
+                continue;
+            }
+            $red = (string)($vistaH['red'] ?? 'otros');
+            if (!isset($resultado[$red])) {
+                $red = 'otros';
+            }
+            $celulasHuerfanas[$red][] = $vistaH;
+        }
+
+        foreach ($celulasHuerfanas as $red => $lista) {
+            if ($lista === []) {
+                continue;
+            }
+            $resultado[$red]['lideres_12'][] = [
+                'id' => 'sin12-' . $red,
+                'nombre' => 'Sin líder de 12',
+                'tipo' => 'sin_12',
+                'tipo_label' => 'Sin líder de 12',
+                'red' => $red,
+                'ministerio' => '',
+                'hijos' => $lista,
+                'mensual' => ['rows' => [], 'totales' => $this->metricasVaciasGanarRedes()],
+                'semestral' => ['rows' => [], 'totales' => $this->metricasVaciasGanarRedes()],
+                'anual' => ['rows' => [], 'totales' => $this->metricasVaciasGanarRedes()],
+            ];
+        }
+
+        return $resultado;
+    }
+
+    private function exportarReporteGanarRedesCsv(array $reporteRedes, string $escala, int $anio): void {
+        $headers = [
+            'Red',
+            'Lider de 12',
+            'Equipo',
+            'Tipo',
+            'Periodo',
+            'Gano iglesia',
+            'Gano celula',
+            'Encuentro / UV',
+            'Capacitacion Destino',
+            'Realizan celula',
+            'Total ganados',
+        ];
+        $rows = [];
+        foreach (['mujeres', 'hombres', 'general'] as $claveRed) {
+            $bloque = $reporteRedes['redes'][$claveRed] ?? [];
+            $label = (string)($bloque['label'] ?? $claveRed);
+            $vista = is_array($bloque[$escala] ?? null) ? $bloque[$escala] : ['rows' => [], 'totales' => []];
+            foreach ((array)($vista['rows'] ?? []) as $fila) {
+                $rows[] = [
+                    $label,
+                    '',
+                    '',
+                    'Resumen red',
+                    (string)($fila['periodo'] ?? ''),
+                    (string)(int)($fila['gano_iglesia'] ?? 0),
+                    (string)(int)($fila['gano_celula'] ?? 0),
+                    (string)(int)($fila['encuentro'] ?? 0),
+                    (string)(int)($fila['capacitacion_destino'] ?? 0),
+                    (string)(int)($fila['realizan_celula'] ?? 0),
+                    (string)(int)($fila['total'] ?? 0),
+                ];
+            }
+        }
+
+        $agregarNodoCsv = null;
+        $agregarNodoCsv = static function (array $nodo, string $redLabel, string $nombre12, string $escalaActiva, array &$rows) use (&$agregarNodoCsv): void {
+            $vista = is_array($nodo[$escalaActiva] ?? null) ? $nodo[$escalaActiva] : ['rows' => [], 'totales' => []];
+            $equipo = (string)($nodo['nombre'] ?? '');
+            $tipo = (string)($nodo['tipo_label'] ?? '');
+            $es12 = (string)($nodo['tipo'] ?? '') === 'lider_12';
+            $lider12 = $es12 ? $equipo : $nombre12;
+            $equipoCol = $es12 ? 'Equipo completo' : $equipo;
+            foreach ((array)($vista['rows'] ?? []) as $fila) {
+                $rows[] = [
+                    $redLabel,
+                    $lider12,
+                    $equipoCol,
+                    $tipo,
+                    (string)($fila['periodo'] ?? ''),
+                    (string)(int)($fila['gano_iglesia'] ?? 0),
+                    (string)(int)($fila['gano_celula'] ?? 0),
+                    (string)(int)($fila['encuentro'] ?? 0),
+                    (string)(int)($fila['capacitacion_destino'] ?? 0),
+                    (string)(int)($fila['realizan_celula'] ?? 0),
+                    (string)(int)($fila['total'] ?? 0),
+                ];
+            }
+            foreach ((array)($nodo['hijos'] ?? []) as $hijo) {
+                $agregarNodoCsv((array)$hijo, $redLabel, $lider12, $escalaActiva, $rows);
+            }
+        };
+
+        $jerarquia = is_array($reporteRedes['jerarquia'] ?? null) ? $reporteRedes['jerarquia'] : [];
+        foreach (['mujeres', 'hombres', 'otros'] as $claveRed) {
+            $bloqueJ = $jerarquia[$claveRed] ?? [];
+            $labelJ = (string)($bloqueJ['label'] ?? $claveRed);
+            foreach ((array)($bloqueJ['lideres_12'] ?? []) as $nodo12) {
+                $agregarNodoCsv((array)$nodo12, $labelJ, (string)($nodo12['nombre'] ?? ''), $escala, $rows);
+            }
+        }
+
+        $this->exportCsv(
+            'reporte_ganar_redes_' . $escala . '_' . $anio . '_' . date('Ymd_His'),
+            $headers,
+            $rows,
+            false
+        );
+    }
+
+    public function exportarCelulasPorLiderExcel() {
+        if (!AuthController::esAdministrador() && !AuthController::puede('reportes:ver')) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $anio = (int)($_GET['anio'] ?? date('Y'));
+        if ($anio < 2020 || $anio > ((int)date('Y') + 2)) {
+            $anio = (int)date('Y');
+        }
+
+        $filtroMinisterio = $_GET['ministerio'] ?? '';
+        $filtroLider = $_GET['lider'] ?? '';
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+
+        $opcionesFiltro = $this->construirOpcionesFiltroMinisterioLider($filtroCelulas);
+        $filtroMinisterio = ($filtroMinisterio !== '' && isset($opcionesFiltro['ministerio_ids_permitidos'][(int)$filtroMinisterio]))
+            ? (int)$filtroMinisterio
+            : '';
+        $filtroLider = ($filtroLider !== '' && isset($opcionesFiltro['lider_ids_permitidos'][(int)$filtroLider]))
+            ? (int)$filtroLider
+            : '';
+
+        $reporte = $this->construirReporteOperativoCelulasPorLider(
+            $anio,
+            $filtroCelulas,
+            $filtroMinisterio,
+            $filtroLider,
+            $_GET['cel_desde'] ?? null,
+            $_GET['cel_hasta'] ?? null
+        );
+
+        $headers = [
+            'Ministerio',
+            'Líder',
+            'Tipo',
+            'Células',
+            'Asistentes',
+            'Semanas sin entregar sobre',
+            'Semanas sin reportar',
+        ];
+
+        $rows = [];
+
+        foreach ((array)($reporte['grupos'] ?? []) as $grupo) {
+            $ministerio = (string)($grupo['ministerio'] ?? 'Sin ministerio');
+            foreach ((array)($grupo['lideres'] ?? []) as $lider) {
+                $rows[] = [
+                    $ministerio,
+                    (string)($lider['lider'] ?? ''),
+                    (string)($lider['tipo'] ?? ''),
+                    (string)(int)($lider['celulas'] ?? 0),
+                    (string)(int)($lider['asistentes'] ?? 0),
+                    (string)(int)($lider['semanas_sin_entregar_sobre'] ?? 0),
+                    (string)(int)($lider['semanas_sin_reportar'] ?? 0),
+                ];
+            }
+
+            $sub = is_array($grupo['subtotales'] ?? null) ? $grupo['subtotales'] : [];
+            $rows[] = [
+                'Subtotal ' . $ministerio,
+                '',
+                '',
+                (string)(int)($sub['celulas'] ?? 0),
+                (string)(int)($sub['asistentes'] ?? 0),
+                (string)(int)($sub['semanas_sin_entregar_sobre'] ?? 0),
+                (string)(int)($sub['semanas_sin_reportar'] ?? 0),
+            ];
+        }
+
+        $totales = is_array($reporte['totales'] ?? null) ? $reporte['totales'] : [];
+        $rows[] = [
+            'TOTAL GENERAL',
+            '',
+            '',
+            (string)(int)($totales['celulas'] ?? 0),
+            (string)(int)($totales['asistentes'] ?? 0),
+            (string)(int)($totales['semanas_sin_entregar_sobre'] ?? 0),
+            (string)(int)($totales['semanas_sin_reportar'] ?? 0),
+        ];
+
+        $this->exportCsv(
+            'reporte_celulas_por_lider_' . $anio
+                . '_' . str_replace('-', '', (string)($reporte['fecha_desde'] ?? ''))
+                . '_' . str_replace('-', '', (string)($reporte['fecha_hasta'] ?? ''))
+                . '_' . date('Ymd_His'),
+            $headers,
+            $rows,
+            false
+        );
     }
 
     private function normalizarGeneroLider($generoRaw) {
@@ -5536,9 +7054,12 @@ class ReporteController extends BaseController {
         $opcionesFiltro = $this->construirOpcionesFiltroMinisterioLider($filtroCelulas);
         $filtroMinisterio = ($filtroMinisterio !== '' && isset($opcionesFiltro['ministerio_ids_permitidos'][(int)$filtroMinisterio])) ? (int)$filtroMinisterio : '';
         $filtroLider = ($filtroLider !== '' && isset($opcionesFiltro['lider_ids_permitidos'][(int)$filtroLider])) ? (int)$filtroLider : '';
+        $cascadaFiltro = $this->aplicarCascadaFiltroMinisterioLider($opcionesFiltro, $filtroMinisterio, $filtroLider);
+        $filtroLider = $cascadaFiltro['filtro_lider'];
+        $lideresParaVista = $cascadaFiltro['lideres_disponibles'];
 
         $idMinisterioFiltro = ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null;
-        $idLiderFiltro = ($filtroLider !== '' && (int)$filtroLider > 0) ? (int)$filtroLider : null;
+        $idLiderFiltro = $cascadaFiltro['id_lider_filtro'];
 
         if ($linea === 'universidad_vida') {
             $rangoUv = $this->resolverRangoSemestreDashboardUv($anio, $semestreUv > 0 ? $semestreUv : null);
@@ -6075,7 +7596,7 @@ class ReporteController extends BaseController {
             'filtro_lider' => (string)$filtroLider,
             'filtro_encuentro_uv' => $filtroEncuentroUv,
             'ministerios_disponibles' => $opcionesFiltro['ministerios_disponibles'],
-            'lideres_disponibles' => $opcionesFiltro['lideres_disponibles'],
+            'lideres_disponibles' => $lideresParaVista,
             'meta_por_lider' => $metaPorLider,
             'resumen_lideres' => $resumen,
             'lideres_hombre' => $lideresHombre,

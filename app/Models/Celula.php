@@ -177,6 +177,68 @@ class Celula extends BaseModel {
     }
 
     /**
+     * Miembros activos por célula (distinct, sin contar al líder de la célula).
+     *
+     * @return array<int, int> [Id_Celula => total]
+     */
+    public function getConteoMiembrosActivosPorCelulas(array $idsCelula): array {
+        $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function($id) {
+            return $id > 0;
+        })));
+
+        if (empty($idsCelula)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));
+        $sql = "SELECT c.Id_Celula,
+                       COUNT(DISTINCT p.Id_Persona) AS Total_Miembros
+                FROM {$this->table} c
+                LEFT JOIN persona p
+                  ON p.Id_Celula = c.Id_Celula
+                 AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                 AND p.Id_Persona <> c.Id_Lider
+                WHERE c.Id_Celula IN ({$placeholders})
+                GROUP BY c.Id_Celula";
+
+        $mapa = [];
+        foreach ($this->query($sql, $idsCelula) as $row) {
+            $idCelula = (int)($row['Id_Celula'] ?? 0);
+            if ($idCelula <= 0) {
+                continue;
+            }
+            $mapa[$idCelula] = (int)($row['Total_Miembros'] ?? 0);
+        }
+
+        return $mapa;
+    }
+
+    /**
+     * Personas activas únicas en un conjunto de células (sin duplicar entre células ni contar líderes).
+     */
+    public function contarMiembrosActivosUnicosEnCelulas(array $idsCelula): int {
+        $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function($id) {
+            return $id > 0;
+        })));
+
+        if (empty($idsCelula)) {
+            return 0;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));
+        $sql = "SELECT COUNT(DISTINCT p.Id_Persona) AS Total_Miembros
+                FROM persona p
+                INNER JOIN {$this->table} c ON c.Id_Celula = p.Id_Celula
+                WHERE c.Id_Celula IN ({$placeholders})
+                  AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                  AND p.Id_Persona <> c.Id_Lider";
+
+        $rows = $this->query($sql, $idsCelula);
+
+        return (int)($rows[0]['Total_Miembros'] ?? 0);
+    }
+
+    /**
      * Verifica si una célula existe dentro del alcance de un filtro de rol.
      */
     public function existsByIdWithRole($idCelula, $filtroRol) {
@@ -192,5 +254,29 @@ class Celula extends BaseModel {
 
         $rows = $this->query($sql, [$idCelula]);
         return !empty($rows);
+    }
+
+    /**
+     * Mapa líder de célula → líder inmediato (12 o 144).
+     *
+     * @return array<int, int>
+     */
+    public function getMapaLiderCelulaAInmediato(): array {
+        $sql = "SELECT Id_Lider, Id_Lider_Inmediato
+                FROM {$this->table}
+                WHERE Id_Lider IS NOT NULL
+                  AND Id_Lider > 0
+                  AND Id_Lider_Inmediato IS NOT NULL
+                  AND Id_Lider_Inmediato > 0";
+        $mapa = [];
+        foreach ((array)$this->query($sql) as $row) {
+            $idLider = (int)($row['Id_Lider'] ?? 0);
+            $idInmediato = (int)($row['Id_Lider_Inmediato'] ?? 0);
+            if ($idLider > 0 && $idInmediato > 0 && $idLider !== $idInmediato) {
+                $mapa[$idLider] = $idInmediato;
+            }
+        }
+
+        return $mapa;
     }
 }

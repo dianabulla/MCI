@@ -20,7 +20,7 @@ $resumenCategorias = [
     [
         'id' => 'nuevas',
         'titulo' => 'Nuevas en Almas ganadas',
-        'descripcion' => 'Personas nuevas asignadas o recién registradas en campaña.',
+        'descripcion' => 'Personas nuevas aún sin ubicar (falta ministerio o líder) y todavía en Ganar.',
         'total' => count($nuevasAlmasGanadas),
         'icono' => 'bi-person-plus-fill',
         'color' => '#00a884',

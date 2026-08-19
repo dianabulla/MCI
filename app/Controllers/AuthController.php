@@ -51,11 +51,17 @@ class AuthController extends BaseController {
             $usuario = $_POST['usuario'] ?? '';
             $contrasena = $_POST['contrasena'] ?? '';
             
-            // Validar credenciales primero contra personas (compatibilidad) y
-            // luego contra cuentas de acceso desacopladas.
-            $user = $this->personaModel->autenticar($usuario, $contrasena);
-            if (!$user) {
-                $user = $this->usuarioAccesoModel->autenticar($usuario, $contrasena);
+            $resultadoAuth = $this->autenticarUsuario($usuario, $contrasena);
+            $user = $resultadoAuth['user'] ?? null;
+
+            if (!empty($resultadoAuth['error'])) {
+                $error = (string)$resultadoAuth['error'];
+                $this->view('auth/login', [
+                    'error' => $error,
+                    'usuario' => $usuario,
+                    'modo_agregar_cuenta' => $modoAgregarCuenta
+                ]);
+                return;
             }
 
             if ($user) {
@@ -368,9 +374,16 @@ class AuthController extends BaseController {
                 if ($origenCuenta === 'acceso' && $idAuthSesion > 0) {
                     $this->usuarioAccesoModel->update($idAuthSesion, $dataUpdate);
                     $cuentaActual = $this->usuarioAccesoModel->getById($idAuthSesion);
+                    $this->sincronizarCredencialesMinisterialesVinculadas($idPersonaSesion, $dataUpdate);
                 } else {
                     $this->personaModel->update($idPersonaSesion, $dataUpdate);
                     $cuentaActual = $this->personaModel->getById($idPersonaSesion);
+                    $accesoVinculado = $idPersonaSesion > 0
+                        ? $this->usuarioAccesoModel->getByPersonaId($idPersonaSesion)
+                        : null;
+                    if (!empty($accesoVinculado)) {
+                        $this->usuarioAccesoModel->update((int)$accesoVinculado['Id_Usuario_Acceso'], $dataUpdate);
+                    }
                 }
 
                 $viewPersona['Usuario'] = (string)($cuentaActual['Usuario'] ?? $usuarioNuevo);
@@ -475,6 +488,100 @@ class AuthController extends BaseController {
         }
 
         return $resultado;
+    }
+
+    /**
+     * @return array{user: ?array, error: ?string}
+     */
+    private function autenticarUsuario(string $usuario, string $contrasena): array {
+        $usuario = trim($usuario);
+        if ($usuario === '' || $contrasena === '') {
+            return ['user' => null, 'error' => null];
+        }
+
+        if ($this->usuarioAccesoModel->existeUsuario($usuario)) {
+            $userAcceso = $this->usuarioAccesoModel->autenticar($usuario, $contrasena);
+            if ($userAcceso) {
+                return [
+                    'user' => $this->enriquecerUsuarioAccesoConPersona($userAcceso),
+                    'error' => null,
+                ];
+            }
+
+            return ['user' => null, 'error' => null];
+        }
+
+        $userPersona = $this->personaModel->autenticar($usuario, $contrasena);
+        if (!$userPersona) {
+            return ['user' => null, 'error' => null];
+        }
+
+        $idPersona = (int)($userPersona['Id_Persona'] ?? 0);
+        if ($idPersona > 0 && $this->usuarioAccesoModel->getByPersonaId($idPersona)) {
+            return [
+                'user' => null,
+                'error' => 'Esta persona ya tiene cuenta ministerial en el nuevo modelo. '
+                    . 'Debe iniciar sesión con el usuario asignado en Cuentas (no con la cédula legacy).',
+            ];
+        }
+
+        return ['user' => $userPersona, 'error' => null];
+    }
+
+    private function enriquecerUsuarioAccesoConPersona(array $userAcceso): array {
+        $idPersona = (int)($userAcceso['Id_Persona'] ?? 0);
+        if ($idPersona <= 0) {
+            return $userAcceso;
+        }
+
+        $persona = $this->personaModel->getById($idPersona);
+        if (empty($persona)) {
+            return $userAcceso;
+        }
+
+        foreach (['Nombre', 'Apellido', 'Id_Ministerio', 'Numero_Documento'] as $campo) {
+            if (!isset($userAcceso[$campo]) || $userAcceso[$campo] === '' || $userAcceso[$campo] === null) {
+                if (array_key_exists($campo, $persona)) {
+                    $userAcceso[$campo] = $persona[$campo];
+                }
+            }
+        }
+
+        $estadoAcceso = trim((string)($userAcceso['Estado_Cuenta'] ?? ''));
+        if ($estadoAcceso === '') {
+            $userAcceso['Estado_Cuenta'] = $persona['Estado_Cuenta'] ?? 'Activo';
+        }
+
+        return $userAcceso;
+    }
+
+    /**
+     * Mantiene persona/user_roles alineados cuando la cuenta ministerial vive en usuario_acceso.
+     *
+     * @param array<string, mixed> $dataUpdate
+     */
+    private function sincronizarCredencialesMinisterialesVinculadas(int $idPersona, array $dataUpdate): void {
+        if ($idPersona <= 0) {
+            return;
+        }
+
+        $personaUpdate = [];
+        if (array_key_exists('Contrasena', $dataUpdate) && $dataUpdate['Contrasena'] !== '') {
+            $personaUpdate['Contrasena'] = $dataUpdate['Contrasena'];
+        }
+
+        $acceso = $this->usuarioAccesoModel->getByPersonaId($idPersona);
+        if (!empty($acceso)) {
+            $usuarioAcceso = trim((string)($acceso['Usuario'] ?? ''));
+            $usuarioPersona = trim((string)($this->personaModel->getById($idPersona)['Usuario'] ?? ''));
+            if ($usuarioPersona !== '' && strcasecmp($usuarioPersona, $usuarioAcceso) !== 0) {
+                $personaUpdate['Usuario'] = '';
+            }
+        }
+
+        if ($personaUpdate !== []) {
+            $this->personaModel->update($idPersona, $personaUpdate);
+        }
     }
 
     private function iniciarSesionUsuario(array $user, $preservarPool = false) {

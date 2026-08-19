@@ -42,7 +42,7 @@ $paginaNotificacionesActiva = ($currentUrl ?? '') === 'personas/notificaciones';
                     </span>
                     <span class="fb-notif-item-body">
                         <span class="fb-notif-item-title">Almas ganadas</span>
-                        <span class="fb-notif-item-desc">Personas nuevas pendientes de ubicar en campaña</span>
+                        <span class="fb-notif-item-desc">Nuevas aún sin ubicar (ministerio y líder) o sin avanzar de Ganar</span>
                     </span>
                     <?php if ($totalNotifAlmas > 0): ?>
                         <span class="fb-notif-item-count"><?= $totalNotifAlmas > 99 ? '99+' : $totalNotifAlmas ?></span>

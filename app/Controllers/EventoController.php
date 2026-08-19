@@ -437,7 +437,7 @@ class EventoController extends BaseController {
             return;
         }
 
-        $urlCompartir = $this->buildAbsolutePublicUrl('eventos/compartir&id=' . $id);
+        $urlCompartir = $this->buildAbsolutePublicUrl('eventos/compartir?id=' . $id);
         $tituloCompartir = trim((string)($evento['Nombre_Evento'] ?? 'Evento'));
         $descripcionCompartir = trim((string)($evento['Descripcion_Evento'] ?? ''));
         $descripcionCompartir = $this->limitarTexto($descripcionCompartir, 180);
@@ -981,14 +981,33 @@ class EventoController extends BaseController {
     }
 
     private function buildAbsolutePublicUrl($route) {
+        if (function_exists('public_app_url')) {
+            $route = ltrim((string)$route, '/');
+            $query = [];
+            if (strpos($route, '?') !== false) {
+                [$route, $queryString] = explode('?', $route, 2);
+                parse_str($queryString, $query);
+            } elseif (strpos($route, '&') !== false) {
+                [$route, $queryString] = explode('&', $route, 2);
+                parse_str($queryString, $query);
+            }
+
+            $relative = public_app_url($route, $query);
+        } else {
+            $relative = rtrim(PUBLIC_URL, '/') . '/index.php?url=' . ltrim((string)$route, '/');
+        }
+
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
             $scheme = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
         }
 
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-        $base = rtrim(PUBLIC_URL, '/');
-        return $scheme . '://' . $host . $base . '/index.php?url=' . $route;
+        if (preg_match('#^https?://#i', $relative)) {
+            return $relative;
+        }
+
+        return $scheme . '://' . $host . $relative;
     }
 
     private function buildAbsoluteAssetUrl($relativePath) {

@@ -916,8 +916,11 @@ class MinisterioController extends BaseController {
 
         $tabCarga = strtolower(trim((string)($_GET['tab'] ?? '')));
         $buscarCarga = trim((string)($_GET['buscar'] ?? ''));
+        $vistaAvanzadaCarga = isset($_GET['vista_avanzada']) && (string)$_GET['vista_avanzada'] === '1';
         if ($tabCarga === '') {
-            $tabCarga = $idMinisterioFiltro > 0 ? 'lideres_144' : 'equipo_principal';
+            $tabCarga = $vistaAvanzadaCarga
+                ? 'discipulos'
+                : ($idMinisterioFiltro > 0 ? 'lideres_144' : 'equipo_principal');
         }
         $cargarDiscipulosCompletos = $buscarCarga !== '' || $tabCarga === 'discipulos';
 
@@ -2495,7 +2498,7 @@ class MinisterioController extends BaseController {
         }
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->redirect('ministerios');
+            $this->redirect('discipular/ministerios');
             return;
         }
 
@@ -2503,7 +2506,7 @@ class MinisterioController extends BaseController {
         $metaGanados = max(0, (int)($_POST['meta_ganados'] ?? 0));
 
         if ($idMinisterio <= 0) {
-            $this->redirect('ministerios');
+            $this->redirect('discipular/ministerios');
             return;
         }
 

@@ -20,7 +20,7 @@ class ChatbotQueryService {
     /**
      * @return array{ok: bool, reply: string, cards: array<int, array<string, mixed>>, links: array<int, array<string, string>>}
      */
-    public function buscarPersonas(string $termino, int $limite = 8): array {
+    public function buscarPersonas(string $termino, int $limite = 20): array {
         $termino = trim($termino);
         if ($termino === '') {
             return [
@@ -31,13 +31,15 @@ class ChatbotQueryService {
             ];
         }
 
-        $filtro = DataIsolation::generarFiltroPersonas();
-        $filas = $this->personaModel->buscarPersonasTextoListadoConRole($filtro, $termino, min(20, max(1, $limite)));
+        $limite = min(40, max(1, $limite));
+        $resultado = $this->personaModel->buscarPersonasTextoGlobal($termino, $limite);
+        $filas = is_array($resultado['filas'] ?? null) ? $resultado['filas'] : [];
+        $total = (int)($resultado['total'] ?? 0);
 
-        if (empty($filas)) {
+        if ($total <= 0 || empty($filas)) {
             return [
                 'ok' => true,
-                'reply' => 'No encontré personas con «' . $termino . '» en tu ámbito de acceso.',
+                'reply' => 'No encontré personas con «' . $termino . '» en toda la base de datos.',
                 'cards' => [],
                 'links' => [
                     ['label' => 'Ver listado de personas', 'url' => public_app_url('personas', ['buscar' => $termino])],
@@ -46,12 +48,13 @@ class ChatbotQueryService {
         }
 
         $cards = [];
-        foreach (array_slice($filas, 0, $limite) as $fila) {
+        foreach ($filas as $fila) {
             $id = (int)($fila['Id_Persona'] ?? 0);
             if ($id <= 0) {
                 continue;
             }
             $nombre = trim((string)($fila['Nombre'] ?? '') . ' ' . (string)($fila['Apellido'] ?? ''));
+            $lider = trim((string)($fila['Nombre_Lider'] ?? ''));
             $meta = array_filter([
                 trim((string)($fila['Nombre_Ministerio'] ?? '')),
                 trim((string)($fila['Nombre_Celula'] ?? '')),
@@ -66,21 +69,28 @@ class ChatbotQueryService {
             if ($tel !== '') {
                 $meta[] = 'Tel ' . $tel;
             }
+            $estado = trim((string)($fila['Estado_Cuenta'] ?? ''));
+            if ($estado !== '' && strcasecmp($estado, 'Activo') !== 0) {
+                $meta[] = $estado;
+            }
 
             $cards[] = [
                 'type' => 'persona',
                 'title' => $nombre !== '' ? $nombre : ('Persona #' . $id),
-                'subtitle' => trim((string)($fila['Nombre_Lider'] ?? '')),
+                'subtitle' => $lider !== '' ? ('Líder: ' . $lider) : 'Sin líder asignado',
                 'meta' => array_values($meta),
                 'url' => public_app_url('personas/detalle', ['id' => $id]),
             ];
         }
 
-        $total = count($filas);
         $mostradas = count($cards);
-        $reply = $total === 1
-            ? 'Encontré 1 persona:'
-            : ('Encontré ' . $total . ' persona(s)' . ($mostradas < $total ? ' (mostrando ' . $mostradas . ')' : '') . ':');
+        if ($total === 1) {
+            $reply = 'Encontré 1 persona en toda la base de datos:';
+        } elseif ($mostradas < $total) {
+            $reply = 'Encontré ' . $total . ' personas en toda la base de datos. Mostrando las ' . $mostradas . ' más relevantes:';
+        } else {
+            $reply = 'Encontré ' . $total . ' persona(s) en toda la base de datos:';
+        }
 
         return [
             'ok' => true,

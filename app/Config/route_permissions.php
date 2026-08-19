@@ -184,6 +184,8 @@ return [
 
     // --- Discipular / ministerios ---
 
+    'discipular' => 'ministerios:ver',
+
     'discipular/ministerios' => 'ministerios:ver',
 
     'discipular/ministerios/eliminar' => 'ministerios:eliminar',
@@ -193,6 +195,26 @@ return [
     'discipular/ministerios/*' => ['modulo' => 'ministerios', 'inferir_accion' => true],
 
     'discipular/migrar-consolidados' => ['admin_only' => true],
+
+    'home/discipular' => 'ministerios:ver',
+
+    'home/discipular/evaluaciones' => [
+        'permiso' => 'discipular_evaluaciones:ver',
+        'layout_discipulo' => true,
+        'layout_maestro' => true,
+    ],
+
+    'home/discipular/tareas' => ['layout_discipulo' => true, 'permiso' => 'discipular_evaluaciones:ver'],
+
+    'home/discipular/*' => 'ministerios:ver',
+
+    'ministerios' => 'ministerios:ver',
+
+    'ministerios/eliminar' => 'ministerios:eliminar',
+
+    'ministerios/personas-asignables' => 'ministerios:ver',
+
+    'ministerios/*' => ['modulo' => 'ministerios', 'inferir_accion' => true],
 
 
 

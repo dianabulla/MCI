@@ -152,6 +152,7 @@ foreach ($authRoutesFallback as $routeKey => $routeTarget) {
 
 $reportesRoutesFallback = [
     'reportes/dashboard-escuelas-uv-detalle' => 'ReporteController@dashboardEscuelasUvDetalleMinisterio',
+    'reportes/dashboard-ganar-redes' => 'ReporteController@dashboardGanarRedes',
 ];
 foreach ($reportesRoutesFallback as $routeKey => $routeTarget) {
     if (!array_key_exists($routeKey, $routes)) {
@@ -164,7 +165,46 @@ $herramientasRoutesFallback = [
 ];
 
 $discipularRoutesFallback = [
+    'discipular' => 'MinisterioController@equipoPrincipal',
+    'discipular/ministerios' => 'MinisterioController@index',
+    'discipular/ministerios/crear' => 'MinisterioController@crear',
+    'discipular/ministerios/editar' => 'MinisterioController@editar',
+    'discipular/ministerios/guardar-metas' => 'MinisterioController@guardarMetas',
+    'discipular/ministerios/actualizarMeta' => 'MinisterioController@actualizarMeta',
+    'discipular/ministerios/actualizar-lideres-principales' => 'MinisterioController@actualizarLideresPrincipales',
+    'discipular/ministerios/lideres' => 'MinisterioController@lideres',
+    'discipular/ministerios/equipo-principal' => 'MinisterioController@equipoPrincipal',
     'discipular/ministerios/personas-asignables' => 'MinisterioController@personasAsignablesJson',
+    'discipular/ministerios/equipo-12' => 'MinisterioController@equipo12',
+    'discipular/ministerios/lideres-celula' => 'MinisterioController@lideresCelula',
+    'discipular/ministerios/validar-cupo-lider' => 'MinisterioController@validarCupoLider',
+    'discipular/ministerios/asignar-cupo' => 'MinisterioController@asignarCupo',
+    'discipular/ministerios/liberar-cupo' => 'MinisterioController@liberarCupo',
+    'discipular/ministerios/reasignar-cupo' => 'MinisterioController@reasignarCupo',
+    'discipular/ministerios/eliminar' => 'MinisterioController@eliminar',
+    'discipular/ministerios/exportarExcel' => 'MinisterioController@exportarExcel',
+    'home/discipular' => 'HomeController@discipular',
+    'home/discipular/asistencias' => 'HomeController@discipularAsistencias',
+    'home/discipular/exportar' => 'HomeController@exportarDiscipular',
+    'home/discipular/evaluaciones' => 'DiscipularEvaluacionController@index',
+    'home/discipular/tareas' => 'DiscipularEvaluacionController@tareas',
+    'ministerios' => 'MinisterioController@index',
+    'ministerios/crear' => 'MinisterioController@crear',
+    'ministerios/editar' => 'MinisterioController@editar',
+    'ministerios/guardar-metas' => 'MinisterioController@guardarMetas',
+    'ministerios/actualizarMeta' => 'MinisterioController@actualizarMeta',
+    'ministerios/actualizar-lideres-principales' => 'MinisterioController@actualizarLideresPrincipales',
+    'ministerios/lideres' => 'MinisterioController@lideres',
+    'ministerios/equipo-principal' => 'MinisterioController@equipoPrincipal',
+    'ministerios/personas-asignables' => 'MinisterioController@personasAsignablesJson',
+    'ministerios/equipo-12' => 'MinisterioController@equipo12',
+    'ministerios/lideres-celula' => 'MinisterioController@lideresCelula',
+    'ministerios/validar-cupo-lider' => 'MinisterioController@validarCupoLider',
+    'ministerios/asignar-cupo' => 'MinisterioController@asignarCupo',
+    'ministerios/liberar-cupo' => 'MinisterioController@liberarCupo',
+    'ministerios/reasignar-cupo' => 'MinisterioController@reasignarCupo',
+    'ministerios/eliminar' => 'MinisterioController@eliminar',
+    'ministerios/exportarExcel' => 'MinisterioController@exportarExcel',
 ];
 foreach ($discipularRoutesFallback as $routeKey => $routeTarget) {
     if (!array_key_exists($routeKey, $routes)) {
@@ -186,11 +226,26 @@ foreach ($escuelasRegistroPublicoRoutesFallback as $routeKey => $routeTarget) {
     }
 }
 
+$publicRouteRegistryPath = APP . '/Helpers/PublicRouteRegistry.php';
+if (is_file($publicRouteRegistryPath)) {
+    require_once $publicRouteRegistryPath;
+    foreach (PublicRouteRegistry::rutasEventosPublicosFallback() as $routeKey => $routeTarget) {
+        if (!array_key_exists($routeKey, $routes)) {
+            $routes[$routeKey] = $routeTarget;
+        }
+    }
+}
+
 // Obtener la URL solicitada (soporta tanto 'url' como 'route')
-$url = isset($_GET['url']) ? trim($_GET['url'], '/') : (isset($_GET['route']) ? trim($_GET['route'], '/') : 'home');
+$urlRaw = isset($_GET['url']) ? (string)$_GET['url'] : (isset($_GET['route']) ? (string)$_GET['route'] : 'home');
+$url = class_exists('PublicRouteRegistry', false)
+    ? PublicRouteRegistry::normalizarUrlSolicitada($urlRaw)
+    : trim($urlRaw, '/');
 
 // Rutas públicas que no requieren autenticación
-$rutasPublicas = [
+$rutasPublicas = class_exists('PublicRouteRegistry', false)
+    ? PublicRouteRegistry::rutasPublicas()
+    : [
     'auth/login',
     'auth/cambiar-cuenta',
     'registro_obsequio',
@@ -227,22 +282,46 @@ $rutasPublicas = [
     'stream/live',
     'stream/gallery',
     'eventos/proximos',
+    'eventos/compartir',
     'eventos/universidad-vida/publico',
     'eventos/capacitacion-destino/publico',
+    'eventos/otros/publico',
     'transmisiones-publico',
     'nehemias',
     'nehemias/formulario',
     'nehemias/guardar',
     'nehemias/testigos-electorales/formulario',
     'nehemias/testigos-electorales/guardar',
-    'nehemias/whatsapp/webhook'
+    'nehemias/whatsapp/webhook',
 ];
 
 // Rutas públicas mínimas por si el despliegue no actualizó todo el array anterior
 $rutasPublicasExtra = [
     'escuelas_formacion/registro-publico/subir-documentos',
+    'eventos/proximos',
+    'eventos/compartir',
+    'eventos/universidad-vida/publico',
+    'eventos/capacitacion-destino/publico',
+    'eventos/otros/publico',
 ];
 $rutasPublicas = array_values(array_unique(array_merge($rutasPublicas, $rutasPublicasExtra)));
+
+$esRutaPublica = static function (string $routeUrl) use ($rutasPublicas): bool {
+    if (class_exists('PublicRouteRegistry', false)) {
+        return PublicRouteRegistry::esRutaPublica($routeUrl);
+    }
+
+    $routeUrl = trim($routeUrl, '/');
+    if (in_array($routeUrl, $rutasPublicas, true)) {
+        return true;
+    }
+
+    if ($routeUrl === 'eventos/proximos' || $routeUrl === 'eventos/compartir') {
+        return true;
+    }
+
+    return (bool)preg_match('#^eventos/[a-z0-9_-]+/publico$#i', $routeUrl);
+};
 
 // Enlace temporal para probar la migración
 if (isset($_GET['accion']) && $_GET['accion'] === 'migrar_consolidados') {
@@ -250,8 +329,20 @@ if (isset($_GET['accion']) && $_GET['accion'] === 'migrar_consolidados') {
     exit;
 }
 
+// Rutas privadas de eventos → vista pública si no hay sesión (evita pedir login por error de enlace)
+if (class_exists('PublicRouteRegistry', false)) {
+    $rutaPublicaEventos = PublicRouteRegistry::rutaPublicaEventosParaPrivada($url);
+    if ($rutaPublicaEventos !== null && !$esRutaPublica($url)) {
+        require_once APP . '/Controllers/AuthController.php';
+        if (!AuthController::estaAutenticado()) {
+            header('Location: ' . public_app_url($rutaPublicaEventos));
+            exit;
+        }
+    }
+}
+
 // Verificar autenticación (excepto para rutas públicas)
-if (!in_array($url, $rutasPublicas)) {
+if (!$esRutaPublica($url)) {
     require_once APP . '/Controllers/AuthController.php';
 
     if (AuthController::estaAutenticado() && empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {

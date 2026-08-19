@@ -46,7 +46,7 @@ class DashboardSelector
         if ($url === 'reportes/dashboard-escuelas-capacitacion') {
             return 'capacitacion_destino';
         }
-        if ($url === 'reportes/dashboard-ganar') {
+        if ($url === 'reportes/dashboard-ganar' || $url === 'reportes/dashboard-ganar-redes') {
             return 'ganar';
         }
         if ($url === 'reportes' && $tipo === 'celulas') {

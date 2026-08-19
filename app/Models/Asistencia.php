@@ -304,6 +304,41 @@ class Asistencia extends BaseModel {
         return $resultado;
     }
 
+    public function getUltimaFechaReportePorCelulaEnRango(array $idsCelula, $fechaInicio, $fechaFin) {
+        $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function($id) {
+            return $id > 0;
+        })));
+
+        $fechaInicio = substr(trim((string)$fechaInicio), 0, 10);
+        $fechaFin = substr(trim((string)$fechaFin), 0, 10);
+
+        if (empty($idsCelula) || $fechaInicio === '' || $fechaFin === '') {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));
+        $sql = "SELECT Id_Celula, MAX(Fecha_Asistencia) AS Ultima_Fecha_Reporte
+                FROM {$this->table}
+                WHERE Id_Celula IN ({$placeholders})
+                  AND Fecha_Asistencia BETWEEN ? AND ?
+                GROUP BY Id_Celula";
+
+        $params = array_merge($idsCelula, [$fechaInicio, $fechaFin]);
+        $rows = $this->query($sql, $params);
+        $resultado = [];
+
+        foreach ($rows as $row) {
+            $idCelula = (int)($row['Id_Celula'] ?? 0);
+            if ($idCelula <= 0) {
+                continue;
+            }
+
+            $resultado[$idCelula] = (string)($row['Ultima_Fecha_Reporte'] ?? '');
+        }
+
+        return $resultado;
+    }
+
     public function getEstadoEntregoSobrePorCelulaSemana(array $idsCelula, $semanaInicio) {
         $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function($id) {
             return $id > 0;
@@ -348,5 +383,98 @@ class Asistencia extends BaseModel {
                 ON DUPLICATE KEY UPDATE Entrego_Sobre = VALUES(Entrego_Sobre), Actualizado_En = NOW()";
 
         return $this->execute($sql, [$idCelula, $semanaInicio, $entregoSobre]);
+    }
+
+    /**
+     * Semanas (lunes) con al menos un reporte de asistencia por célula en un rango.
+     *
+     * @return array<int, array<string, true>> [Id_Celula => [Y-m-d semana => true]]
+     */
+    public function getMapaSemanasReportadasPorCelula($fechaInicio, $fechaFin, array $idsCelula = []) {
+        $fechaInicio = substr(trim((string)$fechaInicio), 0, 10);
+        $fechaFin = substr(trim((string)$fechaFin), 0, 10);
+        if ($fechaInicio === '' || $fechaFin === '') {
+            return [];
+        }
+
+        $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function($id) {
+            return $id > 0;
+        })));
+
+        $sql = "SELECT Id_Celula,
+                       DATE(DATE_SUB(Fecha_Asistencia, INTERVAL WEEKDAY(Fecha_Asistencia) DAY)) AS Semana_Inicio
+                FROM {$this->table}
+                WHERE Fecha_Asistencia BETWEEN ? AND ?
+                  AND Id_Celula IS NOT NULL
+                  AND Id_Celula > 0";
+
+        $params = [$fechaInicio, $fechaFin];
+        if (!empty($idsCelula)) {
+            $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));
+            $sql .= " AND Id_Celula IN ({$placeholders})";
+            $params = array_merge($params, $idsCelula);
+        }
+
+        $sql .= ' GROUP BY Id_Celula, Semana_Inicio';
+
+        $mapa = [];
+        foreach ($this->query($sql, $params) as $row) {
+            $idCelula = (int)($row['Id_Celula'] ?? 0);
+            $semana = substr(trim((string)($row['Semana_Inicio'] ?? '')), 0, 10);
+            if ($idCelula <= 0 || $semana === '') {
+                continue;
+            }
+            if (!isset($mapa[$idCelula])) {
+                $mapa[$idCelula] = [];
+            }
+            $mapa[$idCelula][$semana] = true;
+        }
+
+        return $mapa;
+    }
+
+    /**
+     * Entrega de sobre por célula y semana en un rango.
+     *
+     * @return array<int, array<string, bool>> [Id_Celula => [Y-m-d semana => entrego]]
+     */
+    public function getMapaEntregaSobrePorCelula($fechaInicio, $fechaFin, array $idsCelula = []) {
+        $this->ensureEntregaSobreTableExists();
+
+        $fechaInicio = substr(trim((string)$fechaInicio), 0, 10);
+        $fechaFin = substr(trim((string)$fechaFin), 0, 10);
+        if ($fechaInicio === '' || $fechaFin === '') {
+            return [];
+        }
+
+        $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function($id) {
+            return $id > 0;
+        })));
+
+        $sql = 'SELECT Id_Celula, Semana_Inicio, Entrego_Sobre
+                FROM asistencia_entrega_sobre_semana
+                WHERE Semana_Inicio BETWEEN ? AND ?';
+        $params = [$fechaInicio, $fechaFin];
+
+        if (!empty($idsCelula)) {
+            $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));
+            $sql .= " AND Id_Celula IN ({$placeholders})";
+            $params = array_merge($params, $idsCelula);
+        }
+
+        $mapa = [];
+        foreach ($this->query($sql, $params) as $row) {
+            $idCelula = (int)($row['Id_Celula'] ?? 0);
+            $semana = substr(trim((string)($row['Semana_Inicio'] ?? '')), 0, 10);
+            if ($idCelula <= 0 || $semana === '') {
+                continue;
+            }
+            if (!isset($mapa[$idCelula])) {
+                $mapa[$idCelula] = [];
+            }
+            $mapa[$idCelula][$semana] = (int)($row['Entrego_Sobre'] ?? 0) === 1;
+        }
+
+        return $mapa;
     }
 }

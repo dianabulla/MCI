@@ -4,6 +4,8 @@
 $anio               = (int)($anio ?? date('Y'));
 $filtroMinisterio   = (string)($filtro_ministerio ?? '');
 $filtroLider        = (string)($filtro_lider ?? '');
+$celFiltroDesde     = (string)($cel_filtro_desde ?? '');
+$celFiltroHasta     = (string)($cel_filtro_hasta ?? '');
 
 require_once APP . '/Helpers/DashboardSelector.php';
 $dashModuloActivo = DashboardSelector::detectarActivo();
@@ -23,6 +25,32 @@ $semanalLiderRows = is_array($resumenSemanalLider['rows'] ?? null) ? $resumenSem
 $semanalLiderTotales = is_array($resumenSemanalLider['totales'] ?? null) ? $resumenSemanalLider['totales'] : [];
 $semanalLiderInicio = (string)($resumenSemanalLider['inicio'] ?? '');
 $semanalLiderFin = (string)($resumenSemanalLider['fin'] ?? '');
+$reporteCelulasPorLider = $reporte_celulas_por_lider ?? ['anio' => $anio, 'fecha_hasta' => '', 'grupos' => [], 'totales' => []];
+$reporteCelulasGrupos = is_array($reporteCelulasPorLider['grupos'] ?? null) ? $reporteCelulasPorLider['grupos'] : [];
+$reporteCelulasTotales = is_array($reporteCelulasPorLider['totales'] ?? null) ? $reporteCelulasPorLider['totales'] : [];
+$reporteCelulasFechaDesde = (string)($reporteCelulasPorLider['fecha_desde'] ?? '');
+$reporteCelulasFechaHasta = (string)($reporteCelulasPorLider['fecha_hasta'] ?? '');
+$reporteCelulasRangoPersonalizado = !empty($reporteCelulasPorLider['rango_personalizado']);
+$exportCelulasPorLiderUrl = PUBLIC_URL . 'index.php?url=reportes/dashboard-ganar/exportar-celulas-lider&anio=' . $anio;
+if ($filtroMinisterio !== '') {
+    $exportCelulasPorLiderUrl .= '&ministerio=' . urlencode($filtroMinisterio);
+}
+if ($filtroLider !== '') {
+    $exportCelulasPorLiderUrl .= '&lider=' . urlencode($filtroLider);
+}
+if ($celFiltroDesde !== '') {
+    $exportCelulasPorLiderUrl .= '&cel_desde=' . urlencode($celFiltroDesde);
+}
+if ($celFiltroHasta !== '') {
+    $exportCelulasPorLiderUrl .= '&cel_hasta=' . urlencode($celFiltroHasta);
+}
+$celFiltroResetUrl = PUBLIC_URL . 'index.php?url=reportes/dashboard-ganar&anio=' . $anio;
+if ($filtroMinisterio !== '') {
+    $celFiltroResetUrl .= '&ministerio=' . urlencode($filtroMinisterio);
+}
+if ($filtroLider !== '') {
+    $celFiltroResetUrl .= '&lider=' . urlencode($filtroLider);
+}
 $cumplimientoMetas  = $cumplimiento_metas ?? [];
 $ministeriosDisp    = $ministerios_disponibles ?? [];
 $lideresDisp        = $lideres_disponibles ?? [];
@@ -160,6 +188,41 @@ $semaforoInfo = [
 
 /* Filtros */
 .dash-filters-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px 16px; margin-bottom:18px; box-shadow:0 1px 4px rgba(0,0,0,.05); }
+.dash-celulas-rango-form { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; }
+.dash-celulas-rango-form .form-group { margin:0; }
+.dash-celulas-rango-form label { font-size:.8rem; color:#475569; display:block; margin-bottom:4px; }
+.dash-celulas-rango-form input[type="date"] { padding:6px 10px; border-radius:8px; border:1px solid #d1d5db; font-size:.88rem; }
+.dash-cel-metrica-btn { border:none; background:none; padding:0; font:inherit; font-weight:600; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
+.dash-cel-metrica-btn.is-alerta { color:#dc2626; }
+.dash-cel-metrica-btn.is-neutral { color:#64748b; }
+.dash-cel-metrica-btn:hover { opacity:.85; }
+.dash-cel-detalle-modal { position:fixed; inset:0; z-index:1200; display:flex; align-items:center; justify-content:center; padding:16px; }
+.dash-cel-detalle-modal[hidden] { display:none !important; }
+.dash-cel-detalle-backdrop { position:absolute; inset:0; background:rgba(15,23,42,.45); }
+.dash-cel-detalle-panel { position:relative; z-index:1; background:#fff; border-radius:12px; max-width:720px; width:100%; max-height:85vh; overflow:auto; padding:18px 20px; box-shadow:0 12px 40px rgba(15,23,42,.2); }
+.dash-cel-detalle-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px; }
+.dash-cel-detalle-head h4 { margin:0; font-size:1.05rem; color:#1e293b; }
+.dash-cel-detalle-sub { margin:4px 0 0; font-size:.84rem; color:#64748b; }
+.dash-cel-detalle-cerrar { border:none; background:#f1f5f9; width:32px; height:32px; border-radius:8px; font-size:1.25rem; line-height:1; cursor:pointer; color:#475569; }
+.dash-cel-detalle-ayuda { margin:0 0 14px; padding:12px 14px; border-radius:10px; font-size:.84rem; line-height:1.45; }
+.dash-cel-detalle-ayuda.is-sobre { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; }
+.dash-cel-detalle-ayuda.is-reporte { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+.dash-cel-detalle-ayuda strong { display:block; margin-bottom:4px; font-size:.88rem; }
+.dash-cel-detalle-resumen { margin:0 0 10px; font-size:.82rem; color:#475569; font-weight:600; }
+.dash-cel-detalle-table { width:100%; border-collapse:collapse; font-size:.84rem; }
+.dash-cel-detalle-table th { text-align:left; padding:8px 10px; background:#f8fafc; color:#475569; font-size:.74rem; text-transform:uppercase; letter-spacing:.03em; border-bottom:1px solid #e2e8f0; }
+.dash-cel-detalle-table td { padding:10px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+.dash-cel-detalle-table tr:last-child td { border-bottom:none; }
+.dash-cel-detalle-table .col-num { width:36px; color:#94a3b8; text-align:center; font-weight:600; }
+.dash-cel-detalle-table .col-periodo { min-width:180px; }
+.dash-cel-detalle-table .periodo-principal { font-weight:600; color:#1e293b; margin:0 0 2px; }
+.dash-cel-detalle-table .periodo-fechas { margin:0; font-size:.76rem; color:#64748b; }
+.dash-cel-detalle-table .celula-tag { display:inline-block; padding:2px 8px; border-radius:999px; background:#eef2ff; color:#3730a3; font-size:.72rem; font-weight:600; white-space:nowrap; }
+.dash-cel-detalle-table .situacion-tag { display:inline-flex; align-items:flex-start; gap:6px; }
+.dash-cel-detalle-table .situacion-icon { flex-shrink:0; width:22px; height:22px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; font-size:.72rem; font-weight:700; }
+.dash-cel-detalle-table .situacion-icon.is-sobre { background:#ffedd5; color:#c2410c; }
+.dash-cel-detalle-table .situacion-icon.is-reporte { background:#fee2e2; color:#b91c1c; }
+.dash-cel-detalle-vacio { padding:20px; text-align:center; color:#94a3b8; font-size:.88rem; }
 .dash-filters-form { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
 .dash-filters-form .form-group { margin:0; }
 .dash-filters-form select { padding:6px 10px; border-radius:8px; border:1px solid #d1d5db; font-size:.88rem; min-width:160px; }
@@ -231,6 +294,12 @@ $semaforoInfo = [
             <?php if ($filtroLider !== ''): ?>
                 <input type="hidden" name="lider" value="<?= htmlspecialchars($filtroLider) ?>">
             <?php endif; ?>
+            <?php if ($celFiltroDesde !== ''): ?>
+                <input type="hidden" name="cel_desde" value="<?= htmlspecialchars($celFiltroDesde) ?>">
+            <?php endif; ?>
+            <?php if ($celFiltroHasta !== ''): ?>
+                <input type="hidden" name="cel_hasta" value="<?= htmlspecialchars($celFiltroHasta) ?>">
+            <?php endif; ?>
             <label for="anio_select" style="font-size:.84rem; color:#475569; white-space:nowrap;">Año:</label>
             <select id="anio_select" name="anio" onchange="this.form.submit()">
                 <?php for ($y = (int)date('Y'); $y >= 2023; $y--): ?>
@@ -238,6 +307,16 @@ $semaforoInfo = [
                 <?php endfor; ?>
             </select>
         </form>
+        <?php
+        $urlReporteRedes = PUBLIC_URL . 'index.php?url=reportes/dashboard-ganar-redes&anio=' . $anio;
+        if ($filtroMinisterio !== '') {
+            $urlReporteRedes .= '&ministerio=' . urlencode((string)$filtroMinisterio);
+        }
+        if ($filtroLider !== '') {
+            $urlReporteRedes .= '&lider=' . urlencode((string)$filtroLider);
+        }
+        ?>
+        <a href="<?= htmlspecialchars($urlReporteRedes) ?>" class="btn" style="background:#1e3a8a;color:#fff;padding:7px 12px;border-radius:8px;text-decoration:none;font-size:.84rem;font-weight:600;">Reporte por redes</a>
     </div>
 </div>
 
@@ -246,9 +325,15 @@ $semaforoInfo = [
     <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="dash-filters-form">
         <input type="hidden" name="url" value="reportes/dashboard-ganar">
         <input type="hidden" name="anio" value="<?= $anio ?>">
+        <?php if ($celFiltroDesde !== ''): ?>
+            <input type="hidden" name="cel_desde" value="<?= htmlspecialchars($celFiltroDesde) ?>">
+        <?php endif; ?>
+        <?php if ($celFiltroHasta !== ''): ?>
+            <input type="hidden" name="cel_hasta" value="<?= htmlspecialchars($celFiltroHasta) ?>">
+        <?php endif; ?>
         <div class="form-group">
             <label style="font-size:.8rem;color:#475569;display:block;margin-bottom:4px;">Ministerio</label>
-            <select name="ministerio" onchange="this.form.submit()">
+            <select name="ministerio" id="dash-filtro-ministerio" onchange="dashAlCambiarMinisterio(this)">
                 <option value="">Todos los ministerios</option>
                 <?php foreach ($ministeriosDisp as $min): ?>
                     <option value="<?= (int)($min['Id_Ministerio'] ?? 0) ?>"
@@ -260,7 +345,7 @@ $semaforoInfo = [
         </div>
         <div class="form-group">
             <label style="font-size:.8rem;color:#475569;display:block;margin-bottom:4px;">Líder</label>
-            <select name="lider" onchange="this.form.submit()">
+            <select name="lider" id="dash-filtro-lider" onchange="this.form.submit()">
                 <option value="">Todos los líderes</option>
                 <?php foreach ($lideresDisp as $lid): ?>
                     <option value="<?= (int)($lid['Id_Persona'] ?? 0) ?>"
@@ -474,6 +559,280 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
             </tfoot>
         </table>
     </div>
+</div>
+<?php endif; ?>
+
+<!-- ── Reporte operativo de células por líder ─────────────────────────────── -->
+<?php if ($reporteCelulasGrupos !== []): ?>
+<div class="card report-card" style="margin-bottom:22px; padding:18px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+        <h4 style="margin:0; font-size:.97rem; color:#374151;">
+            Reporte operativo de células por líder
+            <?php if ($reporteCelulasRangoPersonalizado): ?>
+                · <?= $reporteCelulasFechaDesde !== '' ? date('d/m/Y', strtotime($reporteCelulasFechaDesde)) : '—' ?>
+                – <?= $reporteCelulasFechaHasta !== '' ? date('d/m/Y', strtotime($reporteCelulasFechaHasta)) : '—' ?>
+            <?php else: ?>
+                · <?= $anio ?>
+            <?php endif; ?>
+        </h4>
+        <a href="<?= htmlspecialchars($exportCelulasPorLiderUrl) ?>" class="btn btn-sm btn-success" title="Exportar esta tabla a Excel">
+            <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+        </a>
+    </div>
+
+    <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="dash-celulas-rango-form">
+        <input type="hidden" name="url" value="reportes/dashboard-ganar">
+        <input type="hidden" name="anio" value="<?= $anio ?>">
+        <?php if ($filtroMinisterio !== ''): ?>
+            <input type="hidden" name="ministerio" value="<?= htmlspecialchars($filtroMinisterio) ?>">
+        <?php endif; ?>
+        <?php if ($filtroLider !== ''): ?>
+            <input type="hidden" name="lider" value="<?= htmlspecialchars($filtroLider) ?>">
+        <?php endif; ?>
+        <div class="form-group">
+            <label for="cel_desde">Desde</label>
+            <input type="date" id="cel_desde" name="cel_desde" class="form-control"
+                   value="<?= htmlspecialchars($celFiltroDesde !== '' ? $celFiltroDesde : $reporteCelulasFechaDesde) ?>"
+                   max="<?= htmlspecialchars(date('Y-m-d')) ?>">
+        </div>
+        <div class="form-group">
+            <label for="cel_hasta">Hasta</label>
+            <input type="date" id="cel_hasta" name="cel_hasta" class="form-control"
+                   value="<?= htmlspecialchars($celFiltroHasta !== '' ? $celFiltroHasta : $reporteCelulasFechaHasta) ?>"
+                   max="<?= htmlspecialchars(date('Y-m-d')) ?>">
+        </div>
+        <button type="submit" class="btn btn-sm btn-primary">Aplicar rango</button>
+        <?php if ($reporteCelulasRangoPersonalizado): ?>
+            <a href="<?= htmlspecialchars($celFiltroResetUrl) ?>" class="btn btn-sm btn-outline-secondary">Restablecer año</a>
+        <?php endif; ?>
+    </form>
+
+    <small style="color:#64748b; display:block; margin-bottom:12px;">
+        Agrupado por ministerio. Incluye líderes de célula y líderes de 12 que dirigen célula.
+        Datos del
+        <?= $reporteCelulasFechaDesde !== '' ? date('d/m/Y', strtotime($reporteCelulasFechaDesde)) : '—' ?>
+        al <?= $reporteCelulasFechaHasta !== '' ? date('d/m/Y', strtotime($reporteCelulasFechaHasta)) : '—' ?>.
+        Semanas sin entregar sobre = semanas con reporte de asistencia pero sin marcar la casilla de sobre entregado.
+        Semanas sin reportar = semanas consecutivas desde el último reporte de asistencia (marcar sobre no cuenta como reporte).
+        Clic en el número para ver el detalle por semana.
+    </small>
+    <?php
+    $renderMetricaCelulasClick = static function(int $valor, array $detalle, string $tituloModal, string $nombreLider, string $tipo) {
+        if ($valor <= 0) {
+            return '<span style="color:#64748b;">0</span>';
+        }
+
+        $ayuda = $tipo === 'sin_sobre'
+            ? 'En estas semanas la célula sí reportó asistencia, pero en la pantalla de Asistencias no quedó marcada la casilla «Sobre entregado».'
+            : 'Estas son las semanas consecutivas sin reporte de asistencia de célula. Marcar solo el sobre no cuenta como reporte.';
+
+        $payload = htmlspecialchars(json_encode([
+            'titulo' => $tituloModal,
+            'lider' => $nombreLider,
+            'tipo' => $tipo,
+            'ayuda' => $ayuda,
+            'total' => $valor,
+            'items' => array_values($detalle),
+        ], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+
+        return '<button type="button" class="dash-cel-metrica-btn is-alerta" data-detalle="' . $payload
+            . '" title="Ver detalle de semanas">' . $valor . '</button>';
+    };
+    ?>
+    <div class="table-container">
+        <table class="dash-min-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Líder</th>
+                    <th>Tipo</th>
+                    <th>Células</th>
+                    <th>Asistentes</th>
+                    <th>Sem. sin entregar sobre</th>
+                    <th>Sem. sin reportar</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php
+                $nReporteCel = 1;
+                foreach ($reporteCelulasGrupos as $grupoCel):
+                    $ministerioGrupo = (string)($grupoCel['ministerio'] ?? 'Sin ministerio');
+                    $subtotalesGrupo = is_array($grupoCel['subtotales'] ?? null) ? $grupoCel['subtotales'] : [];
+                    $lideresGrupo = is_array($grupoCel['lideres'] ?? null) ? $grupoCel['lideres'] : [];
+                ?>
+                <tr style="background:#eef2ff;">
+                    <td colspan="7" style="font-weight:700; color:#3730a3;">
+                        Ministerio: <?= htmlspecialchars($ministerioGrupo) ?>
+                        · <?= count($lideresGrupo) ?> líder(es)
+                        · <?= (int)($subtotalesGrupo['celulas'] ?? 0) ?> célula(s)
+                    </td>
+                </tr>
+                <?php foreach ($lideresGrupo as $rowCel): ?>
+                <tr>
+                    <td style="color:#94a3b8;"><?= $nReporteCel++ ?></td>
+                    <td style="font-weight:600;"><?= htmlspecialchars((string)($rowCel['lider'] ?? '')) ?></td>
+                    <td><?= htmlspecialchars((string)($rowCel['tipo'] ?? '')) ?></td>
+                    <td><?= (int)($rowCel['celulas'] ?? 0) ?></td>
+                    <td><?= (int)($rowCel['asistentes'] ?? 0) ?></td>
+                    <td><?= $renderMetricaCelulasClick(
+                        (int)($rowCel['semanas_sin_entregar_sobre'] ?? 0),
+                        is_array($rowCel['detalle_sin_entregar_sobre'] ?? null) ? $rowCel['detalle_sin_entregar_sobre'] : [],
+                        'Semanas sin entregar sobre',
+                        (string)($rowCel['lider'] ?? ''),
+                        'sin_sobre'
+                    ) ?></td>
+                    <td><?= $renderMetricaCelulasClick(
+                        (int)($rowCel['semanas_sin_reportar'] ?? 0),
+                        is_array($rowCel['detalle_sin_reportar'] ?? null) ? $rowCel['detalle_sin_reportar'] : [],
+                        'Semanas sin reportar célula',
+                        (string)($rowCel['lider'] ?? ''),
+                        'sin_reportar'
+                    ) ?></td>
+                </tr>
+                <?php endforeach; ?>
+                <tr style="background:#f8fafc; font-weight:600;">
+                    <td colspan="3" style="text-align:right;">Subtotal <?= htmlspecialchars($ministerioGrupo) ?></td>
+                    <td><?= (int)($subtotalesGrupo['celulas'] ?? 0) ?></td>
+                    <td><?= (int)($subtotalesGrupo['asistentes'] ?? 0) ?></td>
+                    <td><?= (int)($subtotalesGrupo['semanas_sin_entregar_sobre'] ?? 0) ?></td>
+                    <td><?= (int)($subtotalesGrupo['semanas_sin_reportar'] ?? 0) ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+            <tfoot>
+                <tr style="background:#f8fafc; font-weight:700;">
+                    <td colspan="3">TOTAL GENERAL</td>
+                    <td><?= (int)($reporteCelulasTotales['celulas'] ?? 0) ?></td>
+                    <td><?= (int)($reporteCelulasTotales['asistentes'] ?? 0) ?></td>
+                    <td><?= (int)($reporteCelulasTotales['semanas_sin_entregar_sobre'] ?? 0) ?></td>
+                    <td><?= (int)($reporteCelulasTotales['semanas_sin_reportar'] ?? 0) ?></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <div id="dashCelDetalleModal" class="dash-cel-detalle-modal" hidden>
+        <div class="dash-cel-detalle-backdrop" data-cerrar-detalle-cel="1"></div>
+        <div class="dash-cel-detalle-panel" role="dialog" aria-modal="true" aria-labelledby="dashCelDetalleTitulo">
+            <div class="dash-cel-detalle-head">
+                <div>
+                    <h4 id="dashCelDetalleTitulo">Detalle</h4>
+                    <p class="dash-cel-detalle-sub" id="dashCelDetalleSub"></p>
+                </div>
+                <button type="button" class="dash-cel-detalle-cerrar" data-cerrar-detalle-cel="1" aria-label="Cerrar">&times;</button>
+            </div>
+            <div class="dash-cel-detalle-ayuda" id="dashCelDetalleAyuda" hidden></div>
+            <p class="dash-cel-detalle-resumen" id="dashCelDetalleResumen"></p>
+            <div class="table-container" id="dashCelDetalleContenedor"></div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        var modal = document.getElementById('dashCelDetalleModal');
+        if (!modal) return;
+
+        var titulo = document.getElementById('dashCelDetalleTitulo');
+        var subtitulo = document.getElementById('dashCelDetalleSub');
+        var ayuda = document.getElementById('dashCelDetalleAyuda');
+        var resumen = document.getElementById('dashCelDetalleResumen');
+        var contenedor = document.getElementById('dashCelDetalleContenedor');
+
+        function cerrarModal() {
+            modal.hidden = true;
+            contenedor.innerHTML = '';
+            ayuda.hidden = true;
+            ayuda.textContent = '';
+            resumen.textContent = '';
+        }
+
+        function escapeHtml(text) {
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function iconoSituacion(item) {
+            if (item.icono === 'sobre') {
+                return '<span class="situacion-icon is-sobre" title="Sobre no entregado">S</span>';
+            }
+            return '<span class="situacion-icon is-reporte" title="Sin reporte">R</span>';
+        }
+
+        function abrirModal(payload) {
+            if (!payload || !Array.isArray(payload.items)) return;
+
+            var tipo = payload.tipo === 'sin_sobre' ? 'sin_sobre' : 'sin_reportar';
+            var total = payload.total || payload.items.length;
+
+            titulo.textContent = payload.titulo || 'Detalle';
+            subtitulo.textContent = payload.lider ? ('Líder: ' + payload.lider) : '';
+
+            ayuda.className = 'dash-cel-detalle-ayuda ' + (tipo === 'sin_sobre' ? 'is-sobre' : 'is-reporte');
+            ayuda.innerHTML = '<strong>¿Qué significa esto?</strong>' + escapeHtml(payload.ayuda || '');
+            ayuda.hidden = false;
+
+            resumen.textContent = total === 1
+                ? '1 semana pendiente en el periodo consultado'
+                : (total + ' semanas pendientes en el periodo consultado');
+
+            if (payload.items.length === 0) {
+                contenedor.innerHTML = '<div class="dash-cel-detalle-vacio">No hay semanas para mostrar.</div>';
+                modal.hidden = false;
+                return;
+            }
+
+            var mostrarCelula = payload.items.some(function(item) { return !!item.celula; });
+            var filas = payload.items.map(function(item, index) {
+                var periodo = escapeHtml(item.periodo || ('Semana ' + (item.etiqueta || item.inicio || '')));
+                var fechas = escapeHtml(item.etiqueta || '');
+                var celula = item.celula
+                    ? '<span class="celula-tag">' + escapeHtml(item.celula) + '</span>'
+                    : '<span style="color:#94a3b8;">—</span>';
+                var situacion = escapeHtml(item.situacion || '');
+
+                return '<tr>'
+                    + '<td class="col-num">' + (index + 1) + '</td>'
+                    + '<td class="col-periodo"><p class="periodo-principal">' + periodo + '</p>'
+                    + (fechas ? '<p class="periodo-fechas">' + fechas + '</p>' : '')
+                    + '</td>'
+                    + (mostrarCelula ? '<td>' + celula + '</td>' : '')
+                    + '<td><span class="situacion-tag">' + iconoSituacion(item) + '<span>' + situacion + '</span></span></td>'
+                    + '</tr>';
+            }).join('');
+
+            contenedor.innerHTML = '<table class="dash-cel-detalle-table"><thead><tr>'
+                + '<th class="col-num">#</th>'
+                + '<th>Semana</th>'
+                + (mostrarCelula ? '<th>Célula</th>' : '')
+                + '<th>Qué ocurrió</th>'
+                + '</tr></thead><tbody>' + filas + '</tbody></table>';
+
+            modal.hidden = false;
+        }
+
+        document.addEventListener('click', function(ev) {
+            var btn = ev.target.closest('.dash-cel-metrica-btn');
+            if (btn && btn.dataset.detalle) {
+                try {
+                    abrirModal(JSON.parse(btn.dataset.detalle));
+                } catch (e) {}
+                return;
+            }
+            if (ev.target.closest('[data-cerrar-detalle-cel="1"]')) {
+                cerrarModal();
+            }
+        });
+
+        document.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Escape' && !modal.hidden) {
+                cerrarModal();
+            }
+        });
+    })();
+    </script>
 </div>
 <?php endif; ?>
 
@@ -771,6 +1130,18 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
         }
     }
 })();
+</script>
+<script>
+function dashAlCambiarMinisterio(select) {
+    const form = select.form;
+    const lider = form ? form.querySelector('select[name="lider"]') : null;
+    if (lider) {
+        lider.value = '';
+    }
+    if (form) {
+        form.submit();
+    }
+}
 </script>
 
 <?php include VIEWS . '/layout/footer.php'; ?>

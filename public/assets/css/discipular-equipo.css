@@ -69,6 +69,98 @@
     padding: 4px 2px 8px;
 }
 
+.jer-topbar--solo-titulo {
+    justify-content: space-between;
+    align-items: center;
+}
+
+.jer-topbar--solo-titulo .visually-hidden {
+    display: none !important;
+}
+
+.jer-btn-listados-top {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 22px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.2;
+    border-radius: 10px;
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22);
+}
+
+.jer-btn-listados-top i {
+    font-size: 1.2rem;
+}
+
+.escalera-indicadores {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0 0 14px;
+}
+
+.escalera-ind {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    text-decoration: none;
+    border: 1px solid #d5e0f2;
+    background: #fff;
+    color: #1f365f;
+    min-height: 92px;
+    transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+
+.escalera-ind:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(30, 64, 120, 0.12);
+}
+
+.escalera-ind.is-active {
+    border-color: transparent;
+    box-shadow: 0 8px 20px rgba(30, 64, 120, 0.16);
+    color: #fff;
+}
+
+.escalera-ind-icon {
+    font-size: 1.15rem;
+    opacity: 0.9;
+}
+
+.escalera-ind-label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.escalera-ind-count {
+    font-size: 1.45rem;
+    line-height: 1;
+    font-weight: 800;
+}
+
+.escalera-ind--ganar { background: #eef6ff; border-color: #c5dbf8; }
+.escalera-ind--consolidar { background: #eefbf3; border-color: #c4ead4; }
+.escalera-ind--discipular { background: #f4eefc; border-color: #ddc9f5; }
+.escalera-ind--enviar { background: #fff4ea; border-color: #f3d2b0; }
+
+.escalera-ind--ganar.is-active { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+.escalera-ind--consolidar.is-active { background: linear-gradient(135deg, #059669, #047857); }
+.escalera-ind--discipular.is-active { background: linear-gradient(135deg, #7c3aed, #6d28d9); }
+.escalera-ind--enviar.is-active { background: linear-gradient(135deg, #ea580c, #c2410c); }
+
+@media (max-width: 760px) {
+    .escalera-indicadores {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
 .jer-topbar-title {
     margin: 0;
     font-size: 1.35rem;
@@ -764,4 +856,173 @@
     .jer-equipo-grid {
         grid-template-columns: 1fr;
     }
+}
+
+.table-container .data-table.tabla-discipulos-compacta,
+.table-container .data-table.tabla-discipulos-compacta.ganar-table {
+    table-layout: auto;
+    overflow: visible;
+}
+
+.tabla-discipulos-compacta th.escalera-inline-col,
+.tabla-discipulos-compacta td.escalera-inline-col {
+    min-width: 168px;
+    overflow: visible;
+    vertical-align: top;
+    text-align: center;
+    white-space: nowrap;
+    word-break: normal;
+    overflow-wrap: normal;
+}
+
+.tabla-discipulos-compacta .escalera-inline-card {
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.tabla-discipulos-compacta .escalera-inline-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: auto;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn {
+    -webkit-appearance: none;
+    appearance: none;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #2d4c79;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none;
+    font: inherit;
+    line-height: 1;
+    transition: transform 0.12s ease;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn.active {
+    background: rgba(15, 23, 42, 0.06);
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.tabla-discipulos-compacta .escalera-step-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    flex: 0 0 auto;
+    border: 2px solid transparent;
+    background: #fff;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn:hover {
+    transform: translateY(-1px);
+}
+
+.tabla-discipulos-compacta .escalera-step-name {
+    display: none;
+}
+
+.tabla-discipulos-compacta .step-initial {
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0.2px;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn.etapa-ganar .escalera-step-icon {
+    border-color: #f2c300;
+    color: #d3a700;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn.etapa-consolidar .escalera-step-icon {
+    border-color: #36c24f;
+    color: #22a83e;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn.etapa-discipular .escalera-step-icon {
+    border-color: #2b8eea;
+    color: #1f77ca;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn.etapa-enviar .escalera-step-icon {
+    border-color: #d90d46;
+    color: #bf0a3d;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn.active .escalera-step-icon {
+    background: #f9fbff;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+}
+
+.tabla-discipulos-compacta .escalera-inline-panel {
+    margin-top: 8px;
+    border: 1px solid #dbe3f4;
+    border-radius: 8px;
+    background: #f8fbff;
+    padding: 8px;
+    display: grid;
+    gap: 6px;
+    text-align: left;
+    white-space: normal;
+}
+
+.tabla-discipulos-compacta .escalera-inline-panel[hidden] {
+    display: none !important;
+}
+
+.tabla-discipulos-compacta .escalera-inline-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 5px;
+    padding: 5px 6px;
+    border: 1px solid #dbe3f4;
+    border-radius: 8px;
+    background: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+    color: #2f4a74;
+    cursor: pointer;
+    min-width: 0;
+}
+
+.tabla-discipulos-compacta .escalera-inline-item input {
+    width: 13px;
+    height: 13px;
+    flex: 0 0 auto;
+}
+
+.tabla-discipulos-compacta .escalera-inline-item span {
+    display: block;
+    min-width: 0;
+    white-space: normal;
+    line-height: 1.15;
+}
+
+.tabla-discipulos-compacta .escalera-inline-card.is-saving {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.tabla-discipulos-compacta .escalera-inline-card.is-bloqueado .escalera-inline-item {
+    opacity: 0.7;
 }

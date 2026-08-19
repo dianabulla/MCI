@@ -574,7 +574,7 @@ if (in_array($lineaDashboard, ['universidad_vida', 'capacitacion_destino'], true
 
             <div class="group">
                 <label>Ministerio</label>
-                <select name="ministerio" onchange="this.form.submit()">
+                <select name="ministerio" id="dash-filtro-ministerio" onchange="dashAlCambiarMinisterio(this)">
                     <option value="">Todos</option>
                     <?php foreach ($ministeriosDisp as $min): ?>
                         <option value="<?= (int)($min['Id_Ministerio'] ?? 0) ?>" <?= (string)($min['Id_Ministerio'] ?? '') === $filtroMinisterio ? 'selected' : '' ?>>
@@ -586,7 +586,7 @@ if (in_array($lineaDashboard, ['universidad_vida', 'capacitacion_destino'], true
 
             <div class="group">
                 <label>Líder</label>
-                <select name="lider" onchange="this.form.submit()">
+                <select name="lider" id="dash-filtro-lider" onchange="this.form.submit()">
                     <option value="">Todos</option>
                     <?php foreach ($lideresDisp as $lid): ?>
                         <option value="<?= (int)($lid['Id_Persona'] ?? 0) ?>" <?= (string)($lid['Id_Persona'] ?? '') === $filtroLider ? 'selected' : '' ?>>
@@ -621,6 +621,18 @@ if (in_array($lineaDashboard, ['universidad_vida', 'capacitacion_destino'], true
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+function dashAlCambiarMinisterio(select) {
+    const form = select.form;
+    const lider = form ? form.querySelector('select[name="lider"]') : null;
+    if (lider) {
+        lider.value = '';
+    }
+    if (form) {
+        form.submit();
+    }
+}
+</script>
 <script>
 (function() {
     const contenedorDashboard = document.querySelector('.dashboard-escuelas-wrap');

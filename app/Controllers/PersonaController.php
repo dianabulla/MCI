@@ -2628,8 +2628,6 @@ class PersonaController extends BaseController {
         $nuevasAlmasGanadas = [];
         $pendientesConectarEnriquecidos = [];
         foreach ($pendientesConectar as $persona) {
-            $esNuevo = ((int)($persona['Es_Antiguo'] ?? 0) !== 1);
-            $esLiderazgo = $this->esRolLiderazgoPorIdRol((int)($persona['Id_Rol'] ?? 0));
             $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
             $idLider = (int)($persona['Id_Lider'] ?? 0);
             $idCelula = (int)($persona['Id_Celula'] ?? 0);
@@ -2650,12 +2648,16 @@ class PersonaController extends BaseController {
                 ? (string)$persona['Proceso']
                 : 'Ganar';
             $pendientesConectarEnriquecidos[] = $persona;
-
-            if ($esNuevo && !$esLiderazgo) {
-                $nuevasAlmasGanadas[] = $persona;
-            }
         }
         $pendientesConectar = $pendientesConectarEnriquecidos;
+
+        $filtroRolPendientesGanar = DataIsolation::generarFiltroPersonasPendienteConsolidar();
+        $candidatasAlmasGanadas = $this->personaModel->getAllWithRole($filtroRolPendientesGanar, true);
+        foreach ((array)$candidatasAlmasGanadas as $personaGanar) {
+            if ($this->personaModel->esAlmaGanadaPendienteUbicacion((array)$personaGanar)) {
+                $nuevasAlmasGanadas[] = $personaGanar;
+            }
+        }
 
         $listaActiva = [];
         $tituloListaActiva = '';
@@ -2664,7 +2666,7 @@ class PersonaController extends BaseController {
             $tituloListaActiva = 'Personas pendientes por ubicar (Discípulos)';
         } elseif ($tipo === 'nuevas') {
             $listaActiva = $nuevasAlmasGanadas;
-            $tituloListaActiva = 'Personas nuevas en Almas ganadas';
+            $tituloListaActiva = 'Personas nuevas aún sin ubicar en Almas ganadas';
         }
 
         $this->view('personas/notificaciones', [
@@ -2854,7 +2856,7 @@ class PersonaController extends BaseController {
             $this->json(['success' => false, 'message' => 'Checklist de escalera no disponible en esta base de datos'], 400);
         }
 
-        if (!AuthController::puedeVerModuloPersonasGanar()) {
+        if (!AuthController::puedeVerModuloPersonasGanar() && !AuthController::puedeEditarPersonaDesdeDiscipular()) {
             $this->json(['success' => false, 'message' => 'No autorizado'], 403);
         }
 

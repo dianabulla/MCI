@@ -159,22 +159,12 @@ if ($puedeVerPendientesGanar) {
         }
 
         foreach ((array)$personasCampana as $personaTmp) {
-            $esNuevo = ((int)($personaTmp['Es_Antiguo'] ?? 0) !== 1);
-            if (trim((string)($personaTmp['Canal_Creacion'] ?? '')) === 'Escuelas Formacion (Formulario publico)') {
+            if (!$personaCampanaModel->esAlmaGanadaPendienteUbicacion((array)$personaTmp)) {
                 continue;
             }
-            $checklistRaw = (string)($personaTmp['Escalera_Checklist'] ?? '');
-            if ($checklistRaw !== '') {
-                $checklist = json_decode($checklistRaw, true);
-                if (is_array($checklist) && !empty($checklist['Ganar'][5])) {
-                    continue;
-                }
-            }
-            if ($esNuevo && !$esRolLiderazgo((string)($personaTmp['Nombre_Rol'] ?? ''))) {
-                $idPersonaTmp = (int)($personaTmp['Id_Persona'] ?? 0);
-                if ($idPersonaTmp > 0) {
-                    $idsNuevasAlmasGanadas[$idPersonaTmp] = true;
-                }
+            $idPersonaTmp = (int)($personaTmp['Id_Persona'] ?? 0);
+            if ($idPersonaTmp > 0) {
+                $idsNuevasAlmasGanadas[$idPersonaTmp] = true;
             }
         }
 

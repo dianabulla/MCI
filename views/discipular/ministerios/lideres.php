@@ -1,5 +1,5 @@
 <?php include VIEWS . '/layout/header.php'; ?>
-<link rel="stylesheet" href="<?= ASSETS_URL ?>/css/discipular-equipo.css?v=20260811a">
+<link rel="stylesheet" href="<?= ASSETS_URL ?>/css/discipular-equipo.css?v=20260819g">
 
 <?php
 $idMinisterioFiltro = (int)($id_ministerio_filtro ?? 0);
@@ -61,7 +61,7 @@ $candidatosLideresPrincipales = is_array($candidatos_lideres_principales ?? null
 $equipoDirectoDesdeController = is_array($equipo_directo_por_lider ?? null) ? $equipo_directo_por_lider : null;
 
 $normalizarTextoMinisterio = static function($texto) {
-    $valor = strtolower(trim((string)$texto));
+    $valor = function_exists('mb_strtolower') ? mb_strtolower(trim((string)$texto), 'UTF-8') : strtolower(trim((string)$texto));
     return strtr($valor, [
         'á' => 'a',
         'é' => 'e',
@@ -70,8 +70,14 @@ $normalizarTextoMinisterio = static function($texto) {
         'ú' => 'u',
         'ü' => 'u',
         'ñ' => 'n',
+        'à' => 'a',
+        'è' => 'e',
+        'ì' => 'i',
+        'ò' => 'o',
+        'ù' => 'u',
     ]);
 };
+$normalizarTextoBusqueda = $normalizarTextoMinisterio;
 $nombreMinisterioNormalizado = $normalizarTextoMinisterio($nombreMinisterioFiltro);
 $esMinisterioPastores = !empty($es_ministerio_pastoral)
     || ($hayFiltroMinisterio && (
@@ -166,6 +172,17 @@ $normalizarGenero = static function ($generoRaw) {
     return $esMujer ? 'mujeres' : 'hombres';
 };
 
+$normalizarProcesoEscalera = static function ($raw): string {
+    $valor = strtolower(trim((string)$raw));
+    $valor = strtr($valor, [
+        'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u',
+    ]);
+    if (in_array($valor, ['ganar', 'consolidar', 'discipular', 'enviar'], true)) {
+        return $valor;
+    }
+    return '';
+};
+
 $candidatosHombresModal = array_filter($candidatosLideresPrincipales, function($cand) use ($idMinisterioFiltro, $hayFiltroMinisterio) {
     $idCand = (int)($cand['id_persona'] ?? 0);
     $idMinCand = (int)($cand['id_ministerio'] ?? 0);
@@ -217,6 +234,9 @@ foreach ($liderazgoRed as $row) {
         'cupos_disponibles' => (int)($row['Cupos_Disponibles'] ?? 12),
         'id_lider_actual' => (int)($row['Id_Lider'] ?? 0),
         'nombre_lider_actual' => trim((string)($row['Nombre_Lider'] ?? '')),
+        'proceso' => $normalizarProcesoEscalera($row['Proceso'] ?? ''),
+        'escalera_checklist' => (string)($row['Escalera_Checklist'] ?? ''),
+        'id_celula' => (int)($row['Id_Celula'] ?? 0),
     ];
 
     if ($esLider12) {
@@ -255,6 +275,9 @@ foreach ($discipulosRed as $row) {
         'cupos_disponibles' => -1,
         'id_lider_actual' => (int)($row['Id_Lider'] ?? 0),
         'nombre_lider_actual' => trim((string)($row['Nombre_Lider'] ?? '')),
+        'proceso' => $normalizarProcesoEscalera($row['Proceso'] ?? ''),
+        'escalera_checklist' => (string)($row['Escalera_Checklist'] ?? ''),
+        'id_celula' => (int)($row['Id_Celula'] ?? 0),
     ];
 }
 
@@ -273,12 +296,21 @@ $personasParaReasignar = array_values(array_filter($rowsTabla, static function($
 }));
 
 $tabSolicitado = strtolower(trim((string)($_GET['tab'] ?? '')));
-$tabActivo = $tabSolicitado !== '' ? $tabSolicitado : ($hayFiltroMinisterio ? 'lideres_144' : 'equipo_principal');
+$vistaAvanzadaActiva = isset($_GET['vista_avanzada']) && (string)$_GET['vista_avanzada'] === '1';
+$tabPorDefecto = $vistaAvanzadaActiva
+    ? 'discipulos'
+    : ($hayFiltroMinisterio ? 'lideres_144' : 'equipo_principal');
+$tabActivo = $tabSolicitado !== '' ? $tabSolicitado : $tabPorDefecto;
 if (!in_array($tabActivo, ['equipo_principal', 'lideres_144', 'lideres_celula', 'discipulos'], true)) {
-    $tabActivo = $hayFiltroMinisterio ? 'lideres_144' : 'equipo_principal';
+    $tabActivo = $tabPorDefecto;
 }
-if ($hayFiltroMinisterio && $tabActivo === 'equipo_principal') {
+if (!$vistaAvanzadaActiva && $hayFiltroMinisterio && $tabActivo === 'equipo_principal') {
     $tabActivo = 'lideres_144';
+}
+
+$etapaEscaleraFiltro = strtolower(trim((string)($_GET['etapa'] ?? '')));
+if (!in_array($etapaEscaleraFiltro, ['ganar', 'consolidar', 'discipular', 'enviar'], true)) {
+    $etapaEscaleraFiltro = '';
 }
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -358,12 +390,13 @@ $textoBusquedaFila = static function (array $row): string {
     ));
 };
 
-$filaCoincideBusqueda = static function (array $row) use ($buscarGet, $soloDigitosBuscar, $textoBusquedaFila): bool {
+$filaCoincideBusqueda = static function (array $row) use ($buscarGet, $soloDigitosBuscar, $textoBusquedaFila, $normalizarTextoBusqueda): bool {
     if ($buscarGet === '') {
         return true;
     }
 
-    $texto = $textoBusquedaFila($row);
+    $texto = $normalizarTextoBusqueda($textoBusquedaFila($row));
+    $query = $normalizarTextoBusqueda($buscarGet);
     $digitos = preg_replace(
         '/\D+/',
         '',
@@ -372,10 +405,35 @@ $filaCoincideBusqueda = static function (array $row) use ($buscarGet, $soloDigit
     if ($soloDigitosBuscar !== '' && $digitos !== '' && strpos($digitos, $soloDigitosBuscar) !== false) {
         return true;
     }
+    if ($query === '') {
+        return true;
+    }
+    if (strpos($texto, $query) !== false) {
+        return true;
+    }
 
-    $tokens = preg_split('/\s+/', $buscarGet, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    $tokens = preg_split('/\s+/', $query, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    $palabras = preg_split('/\s+/', $texto, -1, PREG_SPLIT_NO_EMPTY) ?: [];
     foreach ($tokens as $token) {
-        if (strpos($texto, $token) === false) {
+        if (strpos($texto, $token) !== false) {
+            continue;
+        }
+        $okPalabra = false;
+        foreach ($palabras as $palabra) {
+            if (strpos($palabra, $token) === 0) {
+                $okPalabra = true;
+                break;
+            }
+            $lenToken = strlen($token);
+            if ($lenToken >= 3 && function_exists('levenshtein')) {
+                $prefijo = substr($palabra, 0, $lenToken);
+                if ($prefijo !== '' && levenshtein($token, $prefijo) <= 1) {
+                    $okPalabra = true;
+                    break;
+                }
+            }
+        }
+        if (!$okPalabra) {
             return false;
         }
     }
@@ -391,7 +449,7 @@ $esLider144EnFilaLiderazgo = static function (array $liderRow): bool {
     return strpos($rol, '144') !== false;
 };
 
-$mapearLiderazgoAFilaTabla = static function (array $liderRow) use ($normalizarGenero, $esLider144EnFilaLiderazgo): array {
+$mapearLiderazgoAFilaTabla = static function (array $liderRow) use ($normalizarGenero, $esLider144EnFilaLiderazgo, $normalizarProcesoEscalera): array {
     $esLider12 = (int)($liderRow['Es_Lider_12'] ?? 0) === 1;
     $esLiderCelula = (int)($liderRow['Es_Lider_Celula'] ?? 0) === 1;
     $esLider144 = $esLider144EnFilaLiderazgo($liderRow);
@@ -417,6 +475,7 @@ $mapearLiderazgoAFilaTabla = static function (array $liderRow) use ($normalizarG
         'cupos_disponibles' => (int)($liderRow['Cupos_Disponibles'] ?? 12),
         'id_lider_actual' => (int)($liderRow['Id_Lider'] ?? 0),
         'nombre_lider_actual' => trim((string)($liderRow['Nombre_Lider'] ?? '')),
+        'proceso' => $normalizarProcesoEscalera($liderRow['Proceso'] ?? ''),
     ];
 };
 
@@ -496,6 +555,24 @@ foreach ($rowsTablaFiltradas as $filaAsig) {
     if (!empty($filaAsig['sin_asignacion_red'])) {
         $totalSinAsignacionRedBusqueda++;
     }
+}
+
+$totalesEtapaEscalera = [
+    'ganar' => 0,
+    'consolidar' => 0,
+    'discipular' => 0,
+    'enviar' => 0,
+];
+foreach ($rowsTablaFiltradas as $filaEtapa) {
+    $claveEtapa = (string)($filaEtapa['proceso'] ?? '');
+    if (isset($totalesEtapaEscalera[$claveEtapa])) {
+        $totalesEtapaEscalera[$claveEtapa]++;
+    }
+}
+if ($etapaEscaleraFiltro !== '' && $tabActivo === 'discipulos') {
+    $rowsTablaFiltradas = array_values(array_filter($rowsTablaFiltradas, static function ($row) use ($etapaEscaleraFiltro) {
+        return (string)($row['proceso'] ?? '') === $etapaEscaleraFiltro;
+    }));
 }
 
 $idPerfilPrincipal = 0;
@@ -1032,7 +1109,9 @@ $usarFilasCuposFijas144 = !$vistaPastoralRedSoloLectura
     && $tabActivo === 'lideres_144'
     && !empty($idsLideresParaCupos144);
 $tabMuestraColumnaCupo = !$vistaPastoralRedSoloLectura || $tabActivo === 'equipo_principal';
-$colspanTabla = $tabMuestraColumnaCupo ? 7 : 8;
+$tablaDiscipulosCompacta = ($tabActivo === 'discipulos');
+$tablaLideresPorMinisterio = !$tablaDiscipulosCompacta && !$tabMuestraColumnaCupo;
+$colspanTabla = ($tablaDiscipulosCompacta || $tablaLideresPorMinisterio) ? 6 : ($tabMuestraColumnaCupo ? 7 : 8);
 if ($usarFilasCuposFijas144) {
     $personaPorLiderCupo144 = [];
     $rowsTablaPorId = [];
@@ -1170,12 +1249,20 @@ $totalKpiIzquierdo = $totalPersonasMinisterio;
 $kpiIzquierdoHombres = $totalPersonasMinisterioHombres;
 $kpiIzquierdoMujeres = $totalPersonasMinisterioMujeres;
 
-$buildEquipoUrl = static function(array $override = []) use ($idMinisterioFiltro, $tabActivo, $filtroGeneroGet, $buscarGet, $coberturaPrincipalActual) {
+$buildEquipoUrl = static function(array $override = []) use ($idMinisterioFiltro, $tabActivo, $filtroGeneroGet, $buscarGet, $coberturaPrincipalActual, $vistaAvanzadaActiva, $etapaEscaleraFiltro) {
     $params = [
         'url' => 'discipular/ministerios/equipo-principal',
         'tab' => $tabActivo,
         'genero' => $filtroGeneroGet,
     ];
+
+    if ($vistaAvanzadaActiva) {
+        $params['vista_avanzada'] = '1';
+    }
+
+    if ($etapaEscaleraFiltro !== '') {
+        $params['etapa'] = $etapaEscaleraFiltro;
+    }
 
     if ($idMinisterioFiltro > 0) {
         $params['id_ministerio'] = $idMinisterioFiltro;
@@ -1195,6 +1282,10 @@ $buildEquipoUrl = static function(array $override = []) use ($idMinisterioFiltro
             continue;
         }
         $params[$k] = $v;
+    }
+
+    if (($params['tab'] ?? '') !== 'discipulos') {
+        unset($params['etapa']);
     }
 
     return PUBLIC_URL . '?' . http_build_query($params);
@@ -1236,7 +1327,6 @@ if ($liderGestionCuposId === $idLiderPrincipal1) {
 
 $jerarquiaLiderGestionDefault = trim((string)($jerarquiaPorLiderId[$liderGestionCuposId] ?? ''));
 
-$vistaAvanzadaActiva = isset($_GET['vista_avanzada']) && (string)$_GET['vista_avanzada'] === '1';
 $vistaJerarquiaLimpia = !$hayBusquedaActiva && !$vistaAvanzadaActiva;
 $nodoJerarquiaActivo = (int)$coberturaPrincipalActual;
 $nivelJerarquia = 'inicio';
@@ -1249,8 +1339,8 @@ if ($nodoJerarquiaActivo > 0) {
 $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     'url' => 'discipular/ministerios/equipo-principal',
     'vista_avanzada' => '1',
+    'tab' => 'discipulos',
     'id_ministerio' => $idMinisterioFiltro > 0 ? $idMinisterioFiltro : null,
-    'tab' => $tabActivo !== '' ? $tabActivo : null,
     'genero' => $filtroGeneroGet !== 'todos' ? $filtroGeneroGet : null,
     'buscar' => $buscarGet !== '' ? $buscarGet : null,
     'cobertura_principal' => $coberturaPrincipalActual !== '' ? $coberturaPrincipalActual : null,
@@ -1277,34 +1367,30 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     <?php endif; ?>
 
     <?php if ($vistaJerarquiaLimpia): ?>
-    <header class="jer-topbar">
-        <div>
-            <h2 class="jer-topbar-title">Discipular</h2>
-            <p class="jer-topbar-sub">Elige una red y navega por niveles con clic.</p>
-        </div>
-        <div class="jer-topbar-actions">
-            <?php if ($puedeConfigurarLideresPrincipales): ?>
-            <button type="button" id="btnEditarLiderazgo" class="btn btn-sm btn-secondary" title="<?= htmlspecialchars($tituloBotonEditarLiderazgo) ?>">
-                <i class="bi bi-gear"></i> Configurar
-            </button>
-            <?php endif; ?>
-            <?php if (!$esVistaPropiaLider12): ?>
-            <select id="ministerioSelect" class="form-control form-control-sm jer-ministerio-select" aria-label="Ministerio">
-                <option value="0" <?= !$hayFiltroMinisterio ? 'selected' : '' ?>><?= htmlspecialchars($textoOpcionGeneral) ?></option>
-                <?php foreach ($ministeriosNavegacion as $ministerioNav): ?>
-                    <?php
-                    $idNav = (int)($ministerioNav['Id_Ministerio'] ?? 0);
-                    $nombreNav = trim((string)($ministerioNav['Nombre_Ministerio'] ?? 'Ministerio'));
-                    if ($idNav <= 0) {
-                        continue;
-                    }
-                    ?>
-                    <option value="<?= $idNav ?>" <?= $idNav === $idMinisterioFiltro ? 'selected' : '' ?>><?= htmlspecialchars($nombreNav) ?></option>
-                <?php endforeach; ?>
-            </select>
-            <?php endif; ?>
-            <a href="<?= htmlspecialchars($urlVistaAvanzada) ?>" class="btn btn-sm btn-outline-secondary">Vista avanzada</a>
-        </div>
+    <header class="jer-topbar jer-topbar--solo-titulo">
+        <h2 class="jer-topbar-title">Discipular</h2>
+        <a href="<?= htmlspecialchars($urlVistaAvanzada) ?>" class="btn btn-primary jer-btn-listados-top">
+            <i class="bi bi-list-ul" aria-hidden="true"></i>
+            Listados generales
+        </a>
+        <?php if ($puedeConfigurarLideresPrincipales): ?>
+        <button type="button" id="btnEditarLiderazgo" class="visually-hidden" tabindex="-1" aria-hidden="true" title="<?= htmlspecialchars($tituloBotonEditarLiderazgo) ?>">Configurar</button>
+        <?php endif; ?>
+        <?php if (!$esVistaPropiaLider12): ?>
+        <select id="ministerioSelect" class="visually-hidden" tabindex="-1" aria-hidden="true">
+            <option value="0" <?= !$hayFiltroMinisterio ? 'selected' : '' ?>><?= htmlspecialchars($textoOpcionGeneral) ?></option>
+            <?php foreach ($ministeriosNavegacion as $ministerioNav): ?>
+                <?php
+                $idNav = (int)($ministerioNav['Id_Ministerio'] ?? 0);
+                $nombreNav = trim((string)($ministerioNav['Nombre_Ministerio'] ?? 'Ministerio'));
+                if ($idNav <= 0) {
+                    continue;
+                }
+                ?>
+                <option value="<?= $idNav ?>" <?= $idNav === $idMinisterioFiltro ? 'selected' : '' ?>><?= htmlspecialchars($nombreNav) ?></option>
+            <?php endforeach; ?>
+        </select>
+        <?php endif; ?>
     </header>
     <?php endif; ?>
 
@@ -1388,9 +1474,9 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                 <small><?= htmlspecialchars($textoGestionarMinisterio) ?></small>
             </a>
         </div>
-        <div class="equipo-ministerio-row">
+        <div class="equipo-ministerio-row visually-hidden" aria-hidden="true">
             <label for="ministerioSelect"><?= htmlspecialchars($labelSelectorMinisterio) ?></label>
-            <select id="ministerioSelect" class="form-control form-control-sm" <?= $esVistaPropiaLider12 ? 'disabled' : '' ?>>
+            <select id="ministerioSelect" class="form-control form-control-sm" <?= $esVistaPropiaLider12 ? 'disabled' : '' ?> tabindex="-1">
                 <?php if (!$esVistaPropiaLider12): ?>
                 <option value="0" <?= !$hayFiltroMinisterio ? 'selected' : '' ?>><?= htmlspecialchars($textoOpcionGeneral) ?></option>
                 <?php endif; ?>
@@ -1407,7 +1493,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
             </select>
                 <?php if ($hayFiltroMinisterio && !$esVistaPropiaLider12 && ($idLiderPrincipal1 > 0 || $idLiderPrincipal2 > 0)): ?>
                 <label for="coberturaPrincipalSelect">Equipo principal:</label>
-                <select id="coberturaPrincipalSelect" class="form-control form-control-sm">
+                <select id="coberturaPrincipalSelect" class="form-control form-control-sm" tabindex="-1">
                     <option value="" <?= $coberturaPrincipalActual === '' ? 'selected' : '' ?>>Todos</option>
                     <?php if ($idLiderPrincipal1 > 0): ?>
                     <option value="<?= $idLiderPrincipal1 ?>" <?= $coberturaPrincipalActual === (string)$idLiderPrincipal1 ? 'selected' : '' ?>><?= htmlspecialchars($nombreLiderPrincipal1 !== '' ? $nombreLiderPrincipal1 : 'Líder principal hombre') ?></option>
@@ -1421,7 +1507,9 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     </section>
     <?php endif; ?>
 
+    <?php if ($vistaJerarquiaLimpia): ?>
     <?php include VIEWS . '/discipular/partials/jerarquia_red_navegacion.php'; ?>
+    <?php endif; ?>
 
     <div id="modalAsignarCupo" class="cupos-modal" aria-hidden="true">
         <div class="cupos-modal-backdrop" data-close-modal="1"></div>
@@ -1566,28 +1654,32 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     <?php if (!$vistaJerarquiaLimpia): ?>
     <p class="jer-volver-limpia"><a href="<?= htmlspecialchars(PUBLIC_URL . '?' . http_build_query(array_filter(['url' => 'discipular/ministerios/equipo-principal', 'id_ministerio' => $idMinisterioFiltro > 0 ? $idMinisterioFiltro : null]))) ?>"><i class="bi bi-arrow-left"></i> Volver a vista por redes</a></p>
     <section class="equipo-tabs card">
-        <p class="jer-tabs-hint">También puedes usar la vista detallada por pestañas:</p>
+        <p class="jer-tabs-hint">Listados de la red</p>
         <div class="equipo-tabs-row">
+            <a class="equipo-tab <?= $tabActivo === 'discipulos' ? 'is-active' : '' ?>" href="<?= htmlspecialchars($buildEquipoUrl(['tab' => 'discipulos'])) ?>" data-tab="discipulos">Discípulos <span><?= $totalDiscipulos ?></span></a>
+            <a class="equipo-tab <?= $tabActivo === 'lideres_celula' ? 'is-active' : '' ?>" href="<?= htmlspecialchars($buildEquipoUrl(['tab' => 'lideres_celula'])) ?>" data-tab="lideres_celula">Líderes de célula <span><?= $totalLideresCelula ?></span></a>
+            <a class="equipo-tab <?= $tabActivo === 'lideres_144' ? 'is-active' : '' ?>" href="<?= htmlspecialchars($buildEquipoUrl(['tab' => 'lideres_144'])) ?>" data-tab="lideres_144">Líderes de 144 <span><?= $totalLideres144 ?></span></a>
             <?php if ($mostrarTabEquipoPrincipal): ?>
             <a class="equipo-tab <?= $tabActivo === 'equipo_principal' ? 'is-active' : '' ?>" href="<?= htmlspecialchars($buildEquipoUrl(['tab' => 'equipo_principal'])) ?>" data-tab="equipo_principal">Equipo principal <span><?= $totalEquipoPrincipal ?></span></a>
             <?php endif; ?>
-            <a class="equipo-tab <?= $tabActivo === 'lideres_144' ? 'is-active' : '' ?>" href="<?= htmlspecialchars($buildEquipoUrl(['tab' => 'lideres_144'])) ?>" data-tab="lideres_144">Líderes de 144 <span><?= $totalLideres144 ?></span></a>
-            <a class="equipo-tab <?= $tabActivo === 'lideres_celula' ? 'is-active' : '' ?>" href="<?= htmlspecialchars($buildEquipoUrl(['tab' => 'lideres_celula'])) ?>" data-tab="lideres_celula">Líderes de célula <span><?= $totalLideresCelula ?></span></a>
-            <a class="equipo-tab <?= $tabActivo === 'discipulos' ? 'is-active' : '' ?>" href="<?= htmlspecialchars($buildEquipoUrl(['tab' => 'discipulos'])) ?>" data-tab="discipulos">Discípulos <span><?= $totalDiscipulos ?></span></a>
         </div>
         <form id="formFiltrosEquipoDiscipular" class="equipo-filtros-row" method="get" action="<?= htmlspecialchars(rtrim(PUBLIC_URL, '/') . '/index.php', ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="url" value="discipular/ministerios/equipo-principal">
+            <input type="hidden" name="vista_avanzada" value="1">
             <?php if ($idMinisterioFiltro > 0): ?>
                 <input type="hidden" name="id_ministerio" value="<?= $idMinisterioFiltro ?>">
             <?php endif; ?>
             <input type="hidden" name="tab" value="<?= htmlspecialchars($tabActivo) ?>">
+            <?php if ($etapaEscaleraFiltro !== ''): ?>
+            <input type="hidden" name="etapa" value="<?= htmlspecialchars($etapaEscaleraFiltro) ?>">
+            <?php endif; ?>
 
             <select id="filtroGenero" name="genero" class="form-control form-control-sm equipo-select">
                 <option value="todos" <?= $filtroGeneroGet === 'todos' ? 'selected' : '' ?>>Todos</option>
                 <option value="hombres" <?= $filtroGeneroGet === 'hombres' ? 'selected' : '' ?>>Hombres</option>
                 <option value="mujeres" <?= $filtroGeneroGet === 'mujeres' ? 'selected' : '' ?>>Mujeres</option>
             </select>
-            <input id="busquedaUniversal" name="buscar" class="form-control form-control-sm" type="search" value="<?= htmlspecialchars((string)($_GET['buscar'] ?? '')) ?>" placeholder="Nombre, cédula, teléfono, email, rol, ministerio o líder…" autocomplete="off">
+            <input id="busquedaUniversal" name="buscar" class="form-control form-control-sm" type="search" value="<?= htmlspecialchars((string)($_GET['buscar'] ?? '')) ?>" placeholder="Escribe nombre o apellido… Enter busca en toda la red" autocomplete="off">
             <button type="submit" class="btn btn-sm btn-secondary">Buscar</button>
             <button
                 type="button"
@@ -1600,6 +1692,28 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                 title="Descargar la tabla visible como PNG">
                 <i class="bi bi-image" aria-hidden="true"></i> Imagen
             </button>
+            <?php if ($tabActivo === 'discipulos'): ?>
+            <?php
+                $etiquetasEtapaExcel = [
+                    'ganar' => 'Ganar',
+                    'consolidar' => 'Consolidar',
+                    'discipular' => 'Discipular',
+                    'enviar' => 'Enviar',
+                ];
+                $labelExcelDiscipulos = isset($etiquetasEtapaExcel[$etapaEscaleraFiltro])
+                    ? ('Excel ' . $etiquetasEtapaExcel[$etapaEscaleraFiltro])
+                    : 'Excel';
+            ?>
+            <button
+                type="button"
+                id="btnExportarDiscipulosExcel"
+                class="btn btn-sm btn-success discipular-btn-export-tabla"
+                title="<?= $etapaEscaleraFiltro !== ''
+                    ? 'Exporta a Excel solo los discípulos del peldaño ' . htmlspecialchars($etiquetasEtapaExcel[$etapaEscaleraFiltro], ENT_QUOTES, 'UTF-8')
+                    : 'Exporta a Excel el listado visible. Pulsa Ganar, Consolidar, Discipular o Enviar para exportar solo ese peldaño.' ?>">
+                <i class="bi bi-file-earmark-excel" aria-hidden="true"></i> <?= htmlspecialchars($labelExcelDiscipulos) ?>
+            </button>
+            <?php endif; ?>
         </form>
     </section>
 
@@ -1612,11 +1726,27 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     </div>
     <?php endif; ?>
 
-    <?php if ($vistaPastoralRedSoloLectura && in_array($tabActivo, ['lideres_144', 'lideres_celula', 'discipulos'], true)): ?>
-    <p class="equipo-aviso-consulta" style="margin:0 0 12px; padding:10px 14px; background:#f0f6ff; border:1px solid #c5d9f5; border-radius:8px; color:#365581; font-size:14px;">
-        Vista de consulta: personas ya asignadas en cada ministerio. Para asignar cupos de líderes de 144 o de célula, entra al ministerio correspondiente.
-        En esta cobertura solo se gestionan los <strong>12 cupos bajo pastor/pastora principal</strong> (pestaña Equipo principal).
-    </p>
+    <?php if (!$vistaJerarquiaLimpia && $tabActivo === 'discipulos'): ?>
+    <div class="escalera-indicadores" role="group" aria-label="Niveles de la escalera">
+        <?php
+        $indicadoresEscalera = [
+            ['clave' => 'ganar', 'label' => 'Ganar', 'icono' => 'bi-person-heart', 'clase' => 'escalera-ind--ganar'],
+            ['clave' => 'consolidar', 'label' => 'Consolidar', 'icono' => 'bi-journal-check', 'clase' => 'escalera-ind--consolidar'],
+            ['clave' => 'discipular', 'label' => 'Discipular', 'icono' => 'bi-mortarboard', 'clase' => 'escalera-ind--discipular'],
+            ['clave' => 'enviar', 'label' => 'Enviar', 'icono' => 'bi-send-check', 'clase' => 'escalera-ind--enviar'],
+        ];
+        foreach ($indicadoresEscalera as $indicador):
+            $claveInd = $indicador['clave'];
+            $estaActivo = $etapaEscaleraFiltro === $claveInd;
+            $urlInd = $buildEquipoUrl(['etapa' => $estaActivo ? null : $claveInd]);
+        ?>
+        <a href="<?= htmlspecialchars($urlInd) ?>" class="escalera-ind <?= htmlspecialchars($indicador['clase']) ?><?= $estaActivo ? ' is-active' : '' ?>" data-etapa="<?= htmlspecialchars($claveInd) ?>">
+            <span class="escalera-ind-icon" aria-hidden="true"><i class="bi <?= htmlspecialchars($indicador['icono']) ?>"></i></span>
+            <span class="escalera-ind-label"><?= htmlspecialchars($indicador['label']) ?></span>
+            <strong class="escalera-ind-count"><?= (int)($totalesEtapaEscalera[$claveInd] ?? 0) ?></strong>
+        </a>
+        <?php endforeach; ?>
+    </div>
     <?php endif; ?>
 
     <div class="discipular-tabla-export-meta">
@@ -1627,9 +1757,24 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     </div>
 
     <div id="discipularEquipoTableWrap" class="table-container">
-        <table class="data-table ministerios-equipo-table">
+        <table class="data-table ministerios-equipo-table<?= !empty($tablaDiscipulosCompacta) ? ' tabla-discipulos-compacta ganar-table' : '' ?><?= !empty($tablaLideresPorMinisterio) ? ' tabla-lideres-ministerio' : '' ?>">
             <thead>
                 <tr>
+                    <?php if (!empty($tablaDiscipulosCompacta)): ?>
+                    <th>Nombre</th>
+                    <th>Apellido</th>
+                    <th>Cédula</th>
+                    <th>Teléfono</th>
+                    <th class="escalera-inline-col">Escalera rápida</th>
+                    <th>Opciones</th>
+                    <?php elseif (!empty($tablaLideresPorMinisterio)): ?>
+                    <th>Ministerio</th>
+                    <th>Identificación</th>
+                    <th>Nombre</th>
+                    <th>Apellido</th>
+                    <th>Teléfono</th>
+                    <th>Opciones</th>
+                    <?php else: ?>
                     <?php if ($tabMuestraColumnaCupo): ?>
                     <th title="Gestionar el cupo del líder">Cupo</th>
                     <?php else: ?>
@@ -1642,6 +1787,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                     <th>Telefono</th>
                     <th>Email</th>
                     <th>Opciones</th>
+                    <?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -1672,10 +1818,10 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                             $nombreMinisterioCupo = trim((string)($row['nombre_ministerio'] ?? ''));
                             $nombreLiderCupo = trim((string)($row['nombre_lider_actual'] ?? $nombreLiderCupo144));
                             $cupoNumeroFila = $slotCupo144 > 0 ? $slotCupo144 : (int)($cupoNumeroPorPersona[$idPersona] ?? 0);
-                            $textoBusqueda = strtolower(trim(
+                            $textoBusqueda = $normalizarTextoBusqueda(
                                 $nombre . ' ' . $apellido . ' ' . $documento . ' ' . $telefono . ' ' . $email . ' '
                                 . $nombreMinisterioCupo . ' ' . $nombreRolFila . ' ' . $nombreLiderCupo
-                            ));
+                            );
                             $digitosBusqueda = preg_replace('/\D+/', '', $documento . $telefono);
                 ?>
                         <tr
@@ -1686,6 +1832,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                             data-lideres-144="1"
                             data-lideres-celula="0"
                             data-discipulos="0"
+                            data-etapa="<?= htmlspecialchars((string)($row['proceso'] ?? '')) ?>"
                             data-cupos-disponibles="12"
                             data-search="<?= htmlspecialchars($textoBusqueda) ?>"
                             data-search-digits="<?= htmlspecialchars($digitosBusqueda) ?>"
@@ -1742,6 +1889,9 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                         </tr>
                 <?php
                         else:
+                            if ($etapaEscaleraFiltro !== '' && $tabActivo === 'discipulos') {
+                                continue;
+                            }
                 ?>
                         <tr
                             class="fila-cupo-ministerio-144"
@@ -1751,6 +1901,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                             data-lideres-144="1"
                             data-lideres-celula="0"
                             data-discipulos="0"
+                            data-etapa=""
                             data-cupo-libre="1"
                             data-cupos-disponibles="12"
                             data-search=""
@@ -1838,6 +1989,25 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                             return strcasecmp($na, $nb);
                         });
                     }
+                    if (!empty($tablaLideresPorMinisterio) && !empty($rowsTablaRender)) {
+                        usort($rowsTablaRender, static function ($a, $b) use ($normalizarTextoMinisterio) {
+                            $minA = $normalizarTextoMinisterio($a['nombre_ministerio'] ?? '');
+                            $minB = $normalizarTextoMinisterio($b['nombre_ministerio'] ?? '');
+                            if ($minA === '') {
+                                $minA = 'zzzzzzzz';
+                            }
+                            if ($minB === '') {
+                                $minB = 'zzzzzzzz';
+                            }
+                            $cmpMin = strcasecmp($minA, $minB);
+                            if ($cmpMin !== 0) {
+                                return $cmpMin;
+                            }
+                            $na = strtolower(trim((string)($a['apellido'] ?? '') . ' ' . (string)($a['nombre'] ?? '')));
+                            $nb = strtolower(trim((string)($b['apellido'] ?? '') . ' ' . (string)($b['nombre'] ?? '')));
+                            return strcasecmp($na, $nb);
+                        });
+                    }
                     foreach ($rowsTablaRender as $row):
                         $nombre = trim((string)($row['nombre'] ?? ''));
                         $apellido = trim((string)($row['apellido'] ?? ''));
@@ -1851,6 +2021,43 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                         $idLiderActualFila = (int)($row['id_lider_actual'] ?? 0);
                         $nombreLiderActualFila = trim((string)($row['nombre_lider_actual'] ?? ''));
                         $cupoNumeroFila = (int)($cupoNumeroPorPersona[$idPersona] ?? 0);
+                        $checklistEscaleraFila = [
+                            'Ganar' => [false, false, false, false, false, false],
+                            'Consolidar' => [false, false, false],
+                            'Discipular' => [false, false, false],
+                            'Enviar' => [false, false, false],
+                        ];
+                        if (!empty($tablaDiscipulosCompacta)) {
+                            $checklistRawFila = (string)($row['escalera_checklist'] ?? '');
+                            if ($checklistRawFila !== '') {
+                                $tmpChecklistFila = json_decode($checklistRawFila, true);
+                                if (is_array($tmpChecklistFila)) {
+                                    $checklistEscaleraFila = array_merge($checklistEscaleraFila, $tmpChecklistFila);
+                                }
+                            }
+                            if (!isset($checklistEscaleraFila['Ganar']) || !is_array($checklistEscaleraFila['Ganar'])) {
+                                $checklistEscaleraFila['Ganar'] = [false, false, false, false, false, false];
+                            }
+                            if (!isset($checklistEscaleraFila['Consolidar']) || !is_array($checklistEscaleraFila['Consolidar'])) {
+                                $checklistEscaleraFila['Consolidar'] = [false, false, false];
+                            }
+                            if (!isset($checklistEscaleraFila['Discipular']) || !is_array($checklistEscaleraFila['Discipular'])) {
+                                $checklistEscaleraFila['Discipular'] = [false, false, false];
+                            }
+                            if (!isset($checklistEscaleraFila['Enviar']) || !is_array($checklistEscaleraFila['Enviar'])) {
+                                $checklistEscaleraFila['Enviar'] = [false, false, false];
+                            }
+                            for ($iEsc = 0; $iEsc <= 5; $iEsc++) {
+                                $checklistEscaleraFila['Ganar'][$iEsc] = !empty($checklistEscaleraFila['Ganar'][$iEsc]);
+                            }
+                            for ($iEsc = 0; $iEsc <= 2; $iEsc++) {
+                                $checklistEscaleraFila['Consolidar'][$iEsc] = !empty($checklistEscaleraFila['Consolidar'][$iEsc]);
+                                $checklistEscaleraFila['Discipular'][$iEsc] = !empty($checklistEscaleraFila['Discipular'][$iEsc]);
+                                $checklistEscaleraFila['Enviar'][$iEsc] = !empty($checklistEscaleraFila['Enviar'][$iEsc]);
+                            }
+                        }
+                        $checklistEscaleraFilaJson = htmlspecialchars((string)json_encode($checklistEscaleraFila, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                        $puedeEditarEscaleraInline = !empty($puedeEditarPersonaDiscipular);
                         $puedeGestionarPropioEquipo = !empty($row['es_equipo_principal']) || !empty($row['es_lider_144']) || !empty($row['es_lider_celula']);
                         if (!empty($row['es_equipo_principal'])) {
                             $modoCupoPropio = 'lider_12';
@@ -1879,10 +2086,10 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                         $soloDigitos = static function($valor) {
                             return preg_replace('/\D+/', '', (string)$valor);
                         };
-                        $textoBusqueda = strtolower(trim(
+                        $textoBusqueda = $normalizarTextoBusqueda(
                             $nombre . ' ' . $apellido . ' ' . $documento . ' ' . $telefono . ' ' . $email . ' '
                             . $nombreMinisterioFila . ' ' . $nombreRolFila . ' ' . $nombreLiderActualFila
-                        ));
+                        );
                         $digitosBusqueda = $soloDigitos($documento) . $soloDigitos($telefono);
                 ?>
                         <?php
@@ -1908,10 +2115,151 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                             data-lideres-144="<?= !empty($row['es_lider_144']) ? '1' : '0' ?>"
                             data-lideres-celula="<?= !empty($row['es_lider_celula']) ? '1' : '0' ?>"
                             data-discipulos="<?= $esDiscipuloFilaTab ? '1' : '0' ?>"
+                            data-etapa="<?= htmlspecialchars((string)($row['proceso'] ?? '')) ?>"
                             data-cupos-disponibles="<?= $cuposDisponibles ?>"
                             data-search="<?= htmlspecialchars($textoBusqueda) ?>"
                             data-search-digits="<?= htmlspecialchars($digitosBusqueda) ?>"
                         >
+                            <?php if (!empty($tablaDiscipulosCompacta)): ?>
+                            <td data-label="Nombre">
+                                <?= htmlspecialchars($nombre !== '' ? $nombre : '-') ?>
+                                <?php if (!empty($row['sin_asignacion_red'])): ?>
+                                <span class="badge badge-warning" style="margin-left:6px; font-size:10px; vertical-align:middle;" title="Sin líder ni ministerio: no estaba en la red pastoral">Sin asignar</span>
+                                <?php endif; ?>
+                            </td>
+                            <td data-label="Apellido"><?= htmlspecialchars($apellido !== '' ? $apellido : '-') ?></td>
+                            <td data-label="Cédula"><?= htmlspecialchars($documento !== '' ? $documento : '-') ?></td>
+                            <td data-label="Teléfono"><?= htmlspecialchars($telefono !== '' ? $telefono : '-') ?></td>
+                            <td class="escalera-inline-col" data-label="Escalera rápida">
+                                <?php
+                                    $asignadoALiderMinisterioFila = ((int)($row['id_lider_actual'] ?? 0) > 0) && ((int)($row['id_ministerio'] ?? 0) > 0);
+                                    $tieneCelulaAsignadaFila = ((int)($row['id_celula'] ?? 0) > 0);
+                                    $procesoEscaleraFila = trim((string)($row['proceso'] ?? 'ganar'));
+                                    $procesoEscaleraFila = $procesoEscaleraFila !== '' ? ucfirst($procesoEscaleraFila) : 'Ganar';
+                                ?>
+                                <div
+                                    class="escalera-inline-card js-inline-escalera"
+                                    data-persona-id="<?= $idPersona ?>"
+                                    data-checklist="<?= $checklistEscaleraFilaJson ?>"
+                                    data-observacion-no-disponible="<?= htmlspecialchars((string)($checklistEscaleraFila['_meta']['no_disponible_observacion'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                    data-asignado="<?= $asignadoALiderMinisterioFila ? '1' : '0' ?>"
+                                    data-celula="<?= $tieneCelulaAsignadaFila ? '1' : '0' ?>"
+                                    data-puede-editar="<?= $puedeEditarEscaleraInline ? '1' : '0' ?>"
+                                    data-proceso="<?= htmlspecialchars($procesoEscaleraFila, ENT_QUOTES, 'UTF-8') ?>"
+                                >
+                                    <div class="escalera-inline-steps">
+                                        <button type="button" class="escalera-step-btn etapa-ganar js-inline-step-btn" data-etapa="Ganar" title="Ganar" aria-label="Ganar">
+                                            <span class="escalera-step-icon" aria-hidden="true">
+                                                <span class="step-initial">G</span>
+                                            </span>
+                                            <span class="escalera-step-name">GANAR</span>
+                                        </button>
+                                        <button type="button" class="escalera-step-btn etapa-consolidar js-inline-step-btn" data-etapa="Consolidar" title="Consolidar" aria-label="Consolidar">
+                                            <span class="escalera-step-icon" aria-hidden="true">
+                                                <span class="step-initial">C</span>
+                                            </span>
+                                            <span class="escalera-step-name">CONSOLIDAR</span>
+                                        </button>
+                                        <button type="button" class="escalera-step-btn etapa-discipular js-inline-step-btn" data-etapa="Discipular" title="Discipular" aria-label="Discipular">
+                                            <span class="escalera-step-icon" aria-hidden="true">
+                                                <span class="step-initial">D</span>
+                                            </span>
+                                            <span class="escalera-step-name">DISCIPULAR</span>
+                                        </button>
+                                        <button type="button" class="escalera-step-btn etapa-enviar js-inline-step-btn" data-etapa="Enviar" title="Enviar" aria-label="Enviar">
+                                            <span class="escalera-step-icon" aria-hidden="true">
+                                                <span class="step-initial">E</span>
+                                            </span>
+                                            <span class="escalera-step-name">ENVIAR</span>
+                                        </button>
+                                    </div>
+                                    <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Ganar" hidden>
+                                        <label class="escalera-inline-item" title="Primer contacto">
+                                            <input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="0" <?= !empty($checklistEscaleraFila['Ganar'][0]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                            <span>Primer contacto</span>
+                                        </label>
+                                        <label class="escalera-inline-item" title="Fonovisita">
+                                            <input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="2" <?= !empty($checklistEscaleraFila['Ganar'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                            <span>Fonovisita</span>
+                                        </label>
+                                        <label class="escalera-inline-item" title="Visita">
+                                            <input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="3" <?= !empty($checklistEscaleraFila['Ganar'][3]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                            <span>Visita</span>
+                                        </label>
+                                        <label class="escalera-inline-item" title="No se dispone">
+                                            <input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="5" <?= !empty($checklistEscaleraFila['Ganar'][5]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                            <span>No se dispone</span>
+                                        </label>
+                                    </div>
+                                    <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Consolidar" hidden>
+                                        <label class="escalera-inline-item" title="Universidad de la vida">
+                                            <input type="checkbox" class="js-inline-escalera-check" data-etapa="Consolidar" data-indice="0" <?= !empty($checklistEscaleraFila['Consolidar'][0]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                            <span>Universidad de la vida</span>
+                                        </label>
+                                        <label class="escalera-inline-item" title="Encuentro">
+                                            <input type="checkbox" class="js-inline-escalera-check" data-etapa="Consolidar" data-indice="1" <?= !empty($checklistEscaleraFila['Consolidar'][1]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                            <span>Encuentro</span>
+                                        </label>
+                                        <label class="escalera-inline-item" title="Bautismo">
+                                            <input type="checkbox" class="js-inline-escalera-check" data-etapa="Consolidar" data-indice="2" <?= !empty($checklistEscaleraFila['Consolidar'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                            <span>Bautismo</span>
+                                        </label>
+                                    </div>
+                                    <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Discipular" hidden>
+                                        <label class="escalera-inline-item" title="Capacitación destino nivel 1">
+                                            <input type="checkbox" class="js-inline-escalera-check" data-etapa="Discipular" data-indice="0" <?= !empty($checklistEscaleraFila['Discipular'][0]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                            <span>Destino nivel 1</span>
+                                        </label>
+                                        <label class="escalera-inline-item" title="Capacitación destino nivel 2">
+                                            <input type="checkbox" class="js-inline-escalera-check" data-etapa="Discipular" data-indice="1" <?= !empty($checklistEscaleraFila['Discipular'][1]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                            <span>Destino nivel 2</span>
+                                        </label>
+                                        <label class="escalera-inline-item" title="Capacitación destino nivel 3">
+                                            <input type="checkbox" class="js-inline-escalera-check" data-etapa="Discipular" data-indice="2" <?= !empty($checklistEscaleraFila['Discipular'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                            <span>Destino nivel 3</span>
+                                        </label>
+                                    </div>
+                                    <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Enviar" hidden>
+                                        <label class="escalera-inline-item" title="Célula">
+                                            <input type="checkbox" class="js-inline-escalera-check" data-etapa="Enviar" data-indice="2" <?= !empty($checklistEscaleraFila['Enviar'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                            <span>Célula</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="action-col" data-label="Opciones" style="padding:2px 0; min-width:88px;">
+                                <div class="acciones-fila-compacta">
+                                    <?php if ($puedeEditarPersonaDiscipular): ?>
+                                    <a class="btn btn-xs btn-outline-secondary" href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $idPersona ?>&return_url=<?= urlencode($urlRetornoEquipo) ?>" title="Editar" aria-label="Editar"><i class="bi bi-pencil"></i></a>
+                                    <?php endif; ?>
+                                    <?php if ($puedeEliminarPersonaDiscipular): ?>
+                                    <a class="btn btn-xs btn-outline-danger" href="<?= PUBLIC_URL ?>?url=personas/eliminar&id=<?= $idPersona ?>&return_url=<?= urlencode($urlRetornoEquipo) ?>" title="Eliminar" aria-label="Eliminar" onclick="return confirm('¿Eliminar esta persona? Esta acción no se puede deshacer.')"><i class="bi bi-trash"></i></a>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                            <?php elseif (!empty($tablaLideresPorMinisterio)): ?>
+                            <td data-label="Ministerio"><?= htmlspecialchars($nombreMinisterioFila !== '' ? $nombreMinisterioFila : '-') ?></td>
+                            <td data-label="Identificación"><?= htmlspecialchars($documento !== '' ? $documento : '-') ?></td>
+                            <td data-label="Nombre">
+                                <?= htmlspecialchars($nombre !== '' ? $nombre : '-') ?>
+                                <?php if (!empty($row['sin_asignacion_red'])): ?>
+                                <span class="badge badge-warning" style="margin-left:6px; font-size:10px; vertical-align:middle;" title="Sin líder ni ministerio: no estaba en la red pastoral">Sin asignar</span>
+                                <?php endif; ?>
+                            </td>
+                            <td data-label="Apellido"><?= htmlspecialchars($apellido !== '' ? $apellido : '-') ?></td>
+                            <td data-label="Teléfono"><?= htmlspecialchars($telefono !== '' ? $telefono : '-') ?></td>
+                            <td data-label="Opciones" style="padding:2px 0; min-width:120px;">
+                                <div class="acciones-fila-compacta">
+                                    <a class="btn btn-xs btn-outline-primary" href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= $idPersona ?>">Perfil</a>
+                                    <?php if ($puedeEditarPersonaDiscipular): ?>
+                                    <a class="btn btn-xs btn-outline-secondary" href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $idPersona ?>&return_url=<?= urlencode($urlRetornoEquipo) ?>" title="Editar" aria-label="Editar"><i class="bi bi-pencil"></i></a>
+                                    <?php endif; ?>
+                                    <?php if ($puedeEliminarPersonaDiscipular): ?>
+                                    <a class="btn btn-xs btn-outline-danger" href="<?= PUBLIC_URL ?>?url=personas/eliminar&id=<?= $idPersona ?>&return_url=<?= urlencode($urlRetornoEquipo) ?>" title="Eliminar" aria-label="Eliminar" onclick="return confirm('¿Eliminar esta persona? Esta acción no se puede deshacer.')"><i class="bi bi-trash"></i></a>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                            <?php else: ?>
                             <?php if ($tabMuestraColumnaCupo): ?>
                             <td>
                                 <?php if ($esGestionCupoPrincipal): ?>
@@ -2031,9 +2379,10 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                                     <?php endif; ?>
                                 </div>
                             </td>
+                            <?php endif; ?>
                         </tr>
                     <?php endforeach; ?>
-                    <?php if (!$usarFilasCuposFijas144 && $tabMuestraColumnaCupo): ?>
+                    <?php if (($etapaEscaleraFiltro === '' || $tabActivo !== 'discipulos') && !$usarFilasCuposFijas144 && $tabMuestraColumnaCupo): ?>
                     <?php foreach ($cuposLibresTabla as $cupoLibre): ?>
                         <?php
                             $idLiderLibre = (int)($cupoLibre['id_lider'] ?? 0);
@@ -2047,6 +2396,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                             data-lideres-144="<?= ($tabActivo === 'lideres_144') ? '1' : '0' ?>"
                             data-lideres-celula="0"
                             data-discipulos="0"
+                            data-etapa=""
                             data-cupo-libre="1"
                             data-cupos-disponibles="12"
                             data-search=""
@@ -2468,6 +2818,10 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     margin-top: 10px;
 }
 
+.equipo-ministerio-row.visually-hidden {
+    display: none !important;
+}
+
 .equipo-tabs {
     padding: 12px;
     border-radius: 12px;
@@ -2836,7 +3190,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
 
 .equipo-filtros-row {
     display: grid;
-    grid-template-columns: minmax(140px, 200px) minmax(220px, 1fr) auto auto;
+    grid-template-columns: minmax(140px, 200px) minmax(180px, 1fr) repeat(3, auto);
     gap: 10px;
     align-items: center;
 }
@@ -2868,19 +3222,203 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     vertical-align: middle;
 }
 
-.ministerios-equipo-table th:nth-child(6),
-.ministerios-equipo-table td:nth-child(6) {
+.ministerios-equipo-table:not(.tabla-discipulos-compacta):not(.tabla-lideres-ministerio) th:nth-child(6),
+.ministerios-equipo-table:not(.tabla-discipulos-compacta):not(.tabla-lideres-ministerio) td:nth-child(6) {
     min-width: 150px;
 }
 
-.ministerios-equipo-table th:nth-child(8),
-.ministerios-equipo-table td:nth-child(8) {
+.ministerios-equipo-table:not(.tabla-discipulos-compacta):not(.tabla-lideres-ministerio) th:nth-child(8),
+.ministerios-equipo-table:not(.tabla-discipulos-compacta):not(.tabla-lideres-ministerio) td:nth-child(8) {
     min-width: 126px;
     white-space: nowrap;
 }
 
-.ministerios-equipo-table td:nth-child(7) {
+.ministerios-equipo-table:not(.tabla-discipulos-compacta):not(.tabla-lideres-ministerio) td:nth-child(7) {
     word-break: break-word;
+}
+
+.tabla-lideres-ministerio th:nth-child(6),
+.tabla-lideres-ministerio td:nth-child(6) {
+    min-width: 126px;
+    white-space: nowrap;
+}
+
+.table-container .data-table.tabla-discipulos-compacta {
+    table-layout: auto !important;
+    overflow: visible;
+}
+
+.tabla-discipulos-compacta th.escalera-inline-col,
+.tabla-discipulos-compacta td.escalera-inline-col {
+    min-width: 168px;
+    overflow: visible;
+    vertical-align: top;
+    text-align: center;
+    white-space: nowrap;
+    word-break: normal;
+    overflow-wrap: normal;
+}
+
+.tabla-discipulos-compacta .escalera-inline-card {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.tabla-discipulos-compacta .escalera-inline-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn {
+    -webkit-appearance: none;
+    appearance: none;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #2d4c79;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none;
+    font: inherit;
+    line-height: 1;
+    transition: transform 0.12s ease;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn.active {
+    background: rgba(15, 23, 42, 0.06);
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.tabla-discipulos-compacta .escalera-step-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    flex: 0 0 auto;
+    border: 2px solid transparent;
+    background: #fff;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn:hover {
+    transform: translateY(-1px);
+}
+
+.tabla-discipulos-compacta .escalera-step-name {
+    display: none;
+}
+
+.tabla-discipulos-compacta .step-initial {
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 0.2px;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn.etapa-ganar .escalera-step-icon {
+    border-color: #f2c300;
+    color: #d3a700;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn.etapa-consolidar .escalera-step-icon {
+    border-color: #36c24f;
+    color: #22a83e;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn.etapa-discipular .escalera-step-icon {
+    border-color: #2b8eea;
+    color: #1f77ca;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn.etapa-enviar .escalera-step-icon {
+    border-color: #d90d46;
+    color: #bf0a3d;
+}
+
+.tabla-discipulos-compacta .escalera-step-btn.active .escalera-step-icon {
+    background: #f9fbff;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+}
+
+.tabla-discipulos-compacta .escalera-inline-panel {
+    margin-top: 8px;
+    border: 1px solid #dbe3f4;
+    border-radius: 8px;
+    background: #f8fbff;
+    padding: 8px;
+    display: grid;
+    gap: 6px;
+    text-align: left;
+    white-space: normal;
+}
+
+.tabla-discipulos-compacta .escalera-inline-panel[hidden] {
+    display: none !important;
+}
+
+.tabla-discipulos-compacta .escalera-inline-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 5px;
+    padding: 5px 6px;
+    border: 1px solid #dbe3f4;
+    border-radius: 8px;
+    background: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+    color: #2f4a74;
+    cursor: pointer;
+    min-width: 0;
+}
+
+.tabla-discipulos-compacta .escalera-inline-item input {
+    width: 13px;
+    height: 13px;
+    flex: 0 0 auto;
+}
+
+.tabla-discipulos-compacta .escalera-inline-item span {
+    display: block;
+    min-width: 0;
+    white-space: normal;
+    line-height: 1.15;
+}
+
+.tabla-discipulos-compacta .escalera-inline-card.is-saving {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.tabla-discipulos-compacta .escalera-inline-card.is-bloqueado .escalera-inline-item {
+    opacity: 0.7;
+}
+
+@media (max-width: 980px) {
+    .tabla-discipulos-compacta td.escalera-inline-col {
+        display: block;
+        text-align: left;
+        white-space: normal;
+    }
+
+    .tabla-discipulos-compacta td.escalera-inline-col .escalera-inline-steps {
+        justify-content: flex-end;
+    }
 }
 
 .acciones-fila {
@@ -3524,6 +4062,16 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
         const params = new URLSearchParams();
         params.set('url', 'discipular/ministerios/equipo-principal');
         params.set('tab', opts.tab !== undefined ? String(opts.tab) : tabActual);
+        <?php if (!empty($vistaAvanzadaActiva)): ?>
+        params.set('vista_avanzada', '1');
+        <?php endif; ?>
+        const tabDestino = params.get('tab') || '';
+        const etapaEscalera = opts.etapa !== undefined
+            ? String(opts.etapa || '')
+            : '<?= htmlspecialchars($etapaEscaleraFiltro, ENT_QUOTES, 'UTF-8') ?>';
+        if (tabDestino === 'discipulos' && etapaEscalera !== '') {
+            params.set('etapa', etapaEscalera);
+        }
         const genero = opts.genero !== undefined ? String(opts.genero) : generoFiltroActual();
         params.set('genero', genero);
         guardarGeneroFiltroLocal(genero);
@@ -3591,19 +4139,80 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
         return true;
     }
 
+    function normalizarTextoBusqueda(texto) {
+        return String(texto || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/ñ/g, 'n')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function distanciaLevenshtein(a, b) {
+        const s = String(a || '');
+        const t = String(b || '');
+        if (s === t) {
+            return 0;
+        }
+        const m = s.length;
+        const n = t.length;
+        if (m === 0) {
+            return n;
+        }
+        if (n === 0) {
+            return m;
+        }
+        const fila = new Array(n + 1);
+        for (let j = 0; j <= n; j++) {
+            fila[j] = j;
+        }
+        for (let i = 1; i <= m; i++) {
+            let prev = fila[0];
+            fila[0] = i;
+            for (let j = 1; j <= n; j++) {
+                const tmp = fila[j];
+                const costo = s.charAt(i - 1) === t.charAt(j - 1) ? 0 : 1;
+                fila[j] = Math.min(fila[j] + 1, fila[j - 1] + 1, prev + costo);
+                prev = tmp;
+            }
+        }
+        return fila[n];
+    }
+
     function textoCoincideBusqueda(textoFila, digitosFila, texto, textoDigitos) {
         if (texto === '') {
             return true;
         }
-        if (textoDigitos !== '' && digitosFila.indexOf(textoDigitos) !== -1) {
+        if (textoDigitos !== '' && String(digitosFila || '').indexOf(textoDigitos) !== -1) {
             return true;
         }
-        const tokens = texto.split(/\s+/).filter(Boolean);
+        const haystack = normalizarTextoBusqueda(textoFila);
+        const query = normalizarTextoBusqueda(texto);
+        if (!query) {
+            return true;
+        }
+        if (haystack.indexOf(query) !== -1) {
+            return true;
+        }
+        const tokens = query.split(/\s+/).filter(Boolean);
+        const palabras = haystack.split(/\s+/).filter(Boolean);
         if (!tokens.length) {
             return true;
         }
         return tokens.every(function(token) {
-            return textoFila.indexOf(token) !== -1;
+            if (haystack.indexOf(token) !== -1) {
+                return true;
+            }
+            return palabras.some(function(palabra) {
+                if (palabra.indexOf(token) === 0) {
+                    return true;
+                }
+                if (token.length >= 3 && palabra.length >= 3) {
+                    return distanciaLevenshtein(token, palabra.slice(0, token.length)) <= 1;
+                }
+                return false;
+            });
         });
     }
 
@@ -3707,6 +4316,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     }
 
     if (buscador) {
+        const buscarServidorActual = '<?= htmlspecialchars($buscarGet, ENT_QUOTES, 'UTF-8') ?>';
         buscador.addEventListener('input', function() {
             aplicarFiltros();
             if (!formFiltrosDiscipular) {
@@ -3714,11 +4324,12 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
             }
             clearTimeout(timerBuscarDiscipular);
             const val = String(buscador.value || '').trim();
-            timerBuscarDiscipular = setTimeout(function() {
-                if (val.length >= 2 || val === '') {
+            // Solo recargar al vaciar si veníamos de una búsqueda en servidor.
+            if (val === '' && buscarServidorActual !== '') {
+                timerBuscarDiscipular = setTimeout(function() {
                     formFiltrosDiscipular.requestSubmit();
-                }
-            }, 650);
+                }, 400);
+            }
         });
         buscador.addEventListener('keydown', function(ev) {
             if (ev.key === 'Enter' && formFiltrosDiscipular) {
@@ -3726,6 +4337,94 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                 clearTimeout(timerBuscarDiscipular);
                 formFiltrosDiscipular.requestSubmit();
             }
+        });
+    }
+
+    const btnExportarDiscipulosExcel = document.getElementById('btnExportarDiscipulosExcel');
+    if (btnExportarDiscipulosExcel) {
+        const etapaExcelActual = '<?= htmlspecialchars($etapaEscaleraFiltro, ENT_QUOTES, 'UTF-8') ?>';
+        const etiquetasEtapaExcelJs = {
+            ganar: 'Ganar',
+            consolidar: 'Consolidar',
+            discipular: 'Discipular',
+            enviar: 'Enviar'
+        };
+
+        function csvCeldaExcel(valor) {
+            return '"' + String(valor || '').replace(/"/g, '""') + '"';
+        }
+
+        function textoCeldaLimpia(td) {
+            if (!td) {
+                return '';
+            }
+            const clon = td.cloneNode(true);
+            clon.querySelectorAll('.badge, .escalera-inline-card, .acciones-fila-compacta, button, a').forEach(function(nodo) {
+                nodo.remove();
+            });
+            return String(clon.textContent || '').replace(/\s+/g, ' ').trim();
+        }
+
+        btnExportarDiscipulosExcel.addEventListener('click', function() {
+            const tabla = document.querySelector('.tabla-discipulos-compacta');
+            if (!tabla) {
+                alert('Abre el listado de Discípulos para exportar.');
+                return;
+            }
+
+            const filas = Array.from(tabla.querySelectorAll('tbody tr[data-discipulos="1"]')).filter(function(tr) {
+                if (String(tr.dataset.cupoLibre || '0') === '1') {
+                    return false;
+                }
+                if (tr.style.display === 'none') {
+                    return false;
+                }
+                const etapaFila = String(tr.dataset.etapa || '').toLowerCase();
+                if (etapaExcelActual !== '' && etapaFila !== etapaExcelActual) {
+                    return false;
+                }
+                return true;
+            });
+
+            if (!filas.length) {
+                alert(etapaExcelActual !== ''
+                    ? 'No hay discípulos visibles en este peldaño para exportar.'
+                    : 'No hay discípulos visibles para exportar. Pulsa Ganar, Consolidar, Discipular o Enviar y vuelve a intentar.');
+                return;
+            }
+
+            const lineas = ['sep=;', csvCeldaExcel('Nombre') + ';' + csvCeldaExcel('Apellido') + ';' + csvCeldaExcel('Cedula') + ';' + csvCeldaExcel('Telefono') + ';' + csvCeldaExcel('Peldano')];
+            filas.forEach(function(tr) {
+                const celdas = tr.querySelectorAll('td');
+                const etapaFila = String(tr.dataset.etapa || '').toLowerCase();
+                const peldano = etiquetasEtapaExcelJs[etapaFila] || etapaFila || '';
+                lineas.push([
+                    csvCeldaExcel(textoCeldaLimpia(celdas[0])),
+                    csvCeldaExcel(textoCeldaLimpia(celdas[1])),
+                    csvCeldaExcel(textoCeldaLimpia(celdas[2])),
+                    csvCeldaExcel(textoCeldaLimpia(celdas[3])),
+                    csvCeldaExcel(peldano)
+                ].join(';'));
+            });
+
+            const csv = '\uFEFF' + lineas.join('\r\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const enlace = document.createElement('a');
+            const sufijo = etapaExcelActual !== '' ? etapaExcelActual : 'listado';
+            const fecha = new Date();
+            const stamp = fecha.getFullYear()
+                + ('0' + (fecha.getMonth() + 1)).slice(-2)
+                + ('0' + fecha.getDate()).slice(-2)
+                + '_'
+                + ('0' + fecha.getHours()).slice(-2)
+                + ('0' + fecha.getMinutes()).slice(-2);
+            enlace.href = url;
+            enlace.download = 'discipulos_' + sufijo + '_' + stamp + '.csv';
+            document.body.appendChild(enlace);
+            enlace.click();
+            document.body.removeChild(enlace);
+            URL.revokeObjectURL(url);
         });
     }
 
@@ -4343,6 +5042,210 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     actualizarPreviewPersonaNueva();
 
     aplicarFiltros();
+})();
+</script>
+
+<script>
+(function() {
+    const endpointChecklist = '<?= PUBLIC_URL ?>?url=personas/actualizarChecklistEscalera';
+    const etapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
+    const tarjetasEscalera = document.querySelectorAll('.js-inline-escalera');
+    if (!tarjetasEscalera.length) {
+        return;
+    }
+
+    function parseChecklist(raw) {
+        if (!raw) {
+            return {
+                Ganar: [false, false, false, false, false, false],
+                Consolidar: [false, false, false],
+                Discipular: [false, false, false],
+                Enviar: [false, false, false],
+                _meta: {}
+            };
+        }
+
+        try {
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') {
+                throw new Error('Checklist inválido');
+            }
+
+            if (!Array.isArray(parsed.Ganar)) parsed.Ganar = [false, false, false, false, false, false];
+            if (!Array.isArray(parsed.Consolidar)) parsed.Consolidar = [false, false, false];
+            if (!Array.isArray(parsed.Discipular)) parsed.Discipular = [false, false, false];
+            if (!Array.isArray(parsed.Enviar)) parsed.Enviar = [false, false, false];
+
+            for (let i = 0; i <= 5; i++) parsed.Ganar[i] = !!parsed.Ganar[i];
+            for (let i = 0; i <= 2; i++) {
+                parsed.Consolidar[i] = !!parsed.Consolidar[i];
+                parsed.Discipular[i] = !!parsed.Discipular[i];
+                parsed.Enviar[i] = !!parsed.Enviar[i];
+            }
+
+            if (!parsed._meta || typeof parsed._meta !== 'object') {
+                parsed._meta = {};
+            }
+
+            return parsed;
+        } catch (e) {
+            return {
+                Ganar: [false, false, false, false, false, false],
+                Consolidar: [false, false, false],
+                Discipular: [false, false, false],
+                Enviar: [false, false, false],
+                _meta: {}
+            };
+        }
+    }
+
+    function aplicarChecksEnVista(container, checklist) {
+        container.querySelectorAll('.js-inline-escalera-check').forEach(function(check) {
+            const etapa = check.getAttribute('data-etapa') || '';
+            const indice = parseInt(check.getAttribute('data-indice') || '-1', 10);
+            if (!etapa || indice < 0 || !Array.isArray(checklist[etapa])) {
+                return;
+            }
+            check.checked = !!checklist[etapa][indice];
+        });
+    }
+
+    function aplicarBloqueoNoDisponible(container, checklist, puedeEditar) {
+        const noDisponible = !!(checklist.Ganar && checklist.Ganar[5]);
+        container.querySelectorAll('.js-inline-escalera-check').forEach(function(check) {
+            const etapa = check.getAttribute('data-etapa') || 'Ganar';
+            const indice = parseInt(check.getAttribute('data-indice') || '-1', 10);
+            let disabled = !puedeEditar;
+            if (!disabled && noDisponible && !(etapa === 'Ganar' && indice === 5)) {
+                disabled = true;
+            }
+            check.disabled = disabled;
+        });
+        container.classList.toggle('is-bloqueado', noDisponible);
+    }
+
+    async function guardarChecklistInline(container, etapa, indice, marcado) {
+        const idPersona = parseInt(container.getAttribute('data-persona-id') || '0', 10);
+        if (!idPersona) {
+            return false;
+        }
+
+        const checklist = parseChecklist(container.getAttribute('data-checklist') || '');
+        let observacionNoDisponible = '';
+
+        if (etapa === 'Ganar' && indice === 5 && marcado) {
+            const observacionActual = String((checklist._meta && checklist._meta.no_disponible_observacion) || '');
+            const ingresada = window.prompt('Escribe una observación para marcar "No se dispone":', observacionActual);
+            if (ingresada === null) {
+                return false;
+            }
+            const limpia = String(ingresada || '').trim();
+            if (limpia === '') {
+                alert('La observación es obligatoria para "No se dispone".');
+                return false;
+            }
+            observacionNoDisponible = limpia;
+        }
+
+        if (etapa === 'Ganar' && indice === 5 && !marcado && checklist._meta) {
+            checklist._meta.no_disponible_observacion = '';
+        }
+
+        container.classList.add('is-saving');
+        try {
+            const response = await fetch(endpointChecklist, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    id_persona: idPersona,
+                    etapa: etapa,
+                    indice: indice,
+                    marcado: marcado ? 1 : 0,
+                    observacion_no_disponible: (etapa === 'Ganar' && indice === 5) ? observacionNoDisponible : ''
+                })
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data || !data.success) {
+                throw new Error((data && data.message) ? data.message : 'No se pudo guardar.');
+            }
+
+            const checklistServidor = parseChecklist(JSON.stringify(data.checklist || {}));
+            container.setAttribute('data-checklist', JSON.stringify(checklistServidor));
+            aplicarChecksEnVista(container, checklistServidor);
+            return true;
+        } catch (error) {
+            alert(error.message || 'Error al guardar checklist.');
+            return false;
+        } finally {
+            container.classList.remove('is-saving');
+        }
+    }
+
+    tarjetasEscalera.forEach(function(container) {
+        const checklist = parseChecklist(container.getAttribute('data-checklist') || '');
+        const puedeEditar = container.getAttribute('data-puede-editar') === '1';
+        checklist.Ganar[1] = container.getAttribute('data-asignado') === '1';
+        checklist.Ganar[4] = container.getAttribute('data-celula') === '1';
+        checklist.Enviar[2] = container.getAttribute('data-celula') === '1';
+        container.setAttribute('data-checklist', JSON.stringify(checklist));
+
+        aplicarChecksEnVista(container, checklist);
+        aplicarBloqueoNoDisponible(container, checklist, puedeEditar);
+
+        let etapaAbierta = null;
+        function mostrarPanel(etapaObjetivo) {
+            container.querySelectorAll('.js-inline-stage-panel').forEach(function(panel) {
+                if (etapaObjetivo && panel.getAttribute('data-etapa') === etapaObjetivo) {
+                    panel.removeAttribute('hidden');
+                } else {
+                    panel.setAttribute('hidden', 'hidden');
+                }
+            });
+
+            container.querySelectorAll('.js-inline-step-btn').forEach(function(btn) {
+                btn.classList.toggle('active', !!etapaObjetivo && btn.getAttribute('data-etapa') === etapaObjetivo);
+            });
+
+            etapaAbierta = etapaObjetivo || null;
+        }
+
+        mostrarPanel(null);
+
+        container.querySelectorAll('.js-inline-step-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const etapa = btn.getAttribute('data-etapa') || 'Ganar';
+                if (etapaAbierta === etapa) {
+                    mostrarPanel(null);
+                    return;
+                }
+                mostrarPanel(etapa);
+            });
+        });
+
+        container.querySelectorAll('.js-inline-escalera-check').forEach(function(check) {
+            check.addEventListener('change', async function() {
+                const etapa = String(check.getAttribute('data-etapa') || 'Ganar');
+                const indice = parseInt(check.getAttribute('data-indice') || '-1', 10);
+                if (!etapas.includes(etapa) || indice < 0) {
+                    return;
+                }
+
+                const nuevoValor = !!check.checked;
+                const guardado = await guardarChecklistInline(container, etapa, indice, nuevoValor);
+                if (!guardado) {
+                    check.checked = !nuevoValor;
+                    return;
+                }
+
+                const checklistActualizado = parseChecklist(container.getAttribute('data-checklist') || '');
+                aplicarBloqueoNoDisponible(container, checklistActualizado, puedeEditar);
+            });
+        });
+    });
 })();
 </script>
 

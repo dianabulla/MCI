@@ -14,8 +14,8 @@ if (!$puedeUsarChatbot) {
 
 $chatbotConsultarUrl = public_app_url('chatbot/consultar');
 $chatbotSugerenciasUrl = public_app_url('chatbot/sugerencias');
-$chatbotCssUrl = function_exists('asset_url') ? asset_url('css/chatbot.css') : (ASSETS_URL . '/css/chatbot.css?v=20260803');
-$chatbotJsUrl = function_exists('asset_url') ? asset_url('js/chatbot.js') : (ASSETS_URL . '/js/chatbot.js?v=20260803');
+$chatbotCssUrl = function_exists('asset_url') ? asset_url('css/chatbot.css') : (ASSETS_URL . '/css/chatbot.css?v=20260819');
+$chatbotJsUrl = function_exists('asset_url') ? asset_url('js/chatbot.js') : (ASSETS_URL . '/js/chatbot.js?v=20260819');
 ?>
 <link rel="stylesheet" href="<?= htmlspecialchars($chatbotCssUrl, ENT_QUOTES, 'UTF-8') ?>">
 
@@ -24,7 +24,7 @@ $chatbotJsUrl = function_exists('asset_url') ? asset_url('js/chatbot.js') : (ASS
         <header class="mci-chatbot-head">
             <div>
                 <h3 id="mci-chatbot-title">Asistente MCI</h3>
-                <p class="mci-chatbot-sub">Buscar personas · reportes rápidos</p>
+                <p class="mci-chatbot-sub">Busca personas en toda la base · reportes rápidos</p>
             </div>
             <button type="button" id="mci-chatbot-close" class="mci-chatbot-close" aria-label="Cerrar asistente">&times;</button>
         </header>

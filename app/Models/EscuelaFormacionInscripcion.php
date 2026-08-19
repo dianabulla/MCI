@@ -797,6 +797,57 @@ class EscuelaFormacionInscripcion extends BaseModel {
         }
     }
 
+    /**
+     * Programas de escuelas por Id_Persona (encuentro, UV, capacitación destino).
+     *
+     * @param int[] $idsPersona
+     * @return array<int, array{encuentro: bool, universidad_vida: bool, capacitacion_destino: bool}>
+     */
+    public function getFlagsFormacionPorIdsPersonas(array $idsPersona): array {
+        $ids = [];
+        foreach ($idsPersona as $id) {
+            $id = (int)$id;
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+        if ($ids === []) {
+            return [];
+        }
+
+        $inSql = implode(',', array_map('intval', array_values($ids)));
+        $rows = $this->query(
+            "SELECT Id_Persona, Programa
+             FROM {$this->table}
+             WHERE Id_Persona IN ({$inSql})"
+        );
+
+        $mapa = [];
+        foreach ((array)$rows as $row) {
+            $id = (int)($row['Id_Persona'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            if (!isset($mapa[$id])) {
+                $mapa[$id] = [
+                    'encuentro' => false,
+                    'universidad_vida' => false,
+                    'capacitacion_destino' => false,
+                ];
+            }
+            $programa = strtolower(trim((string)($row['Programa'] ?? '')));
+            if ($programa === 'encuentro') {
+                $mapa[$id]['encuentro'] = true;
+            } elseif ($programa === 'universidad_vida') {
+                $mapa[$id]['universidad_vida'] = true;
+            } elseif ($programa === 'capacitacion_destino' || strpos($programa, 'capacitacion_destino_') === 0) {
+                $mapa[$id]['capacitacion_destino'] = true;
+            }
+        }
+
+        return $mapa;
+    }
+
     private function vincularInscripcionesHuérfanasAPersona(int $idPersona, string $cedulaNorm, string $telefonoNorm): void {
         if ($idPersona <= 0) {
             return;
