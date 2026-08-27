@@ -25,9 +25,7 @@ class TallerServicioSocialController extends BaseController {
     }
 
     private function puedeGestionar(): bool {
-        return AuthController::esAdministrador()
-            || AuthController::puede('talleres:editar')
-            || AuthController::puede('talleres:ver_respuestas');
+        return AuthController::puedeGestionarServicioSocial();
     }
 
     private function ipCliente(): string {
@@ -62,7 +60,7 @@ class TallerServicioSocialController extends BaseController {
             'citas' => $citas,
             'filtros' => $filtros,
             'conteos' => $conteos,
-            'tipos_cita' => TallerServicioSocial::TIPOS_CITA,
+            'tipos_cita' => TallerServicioSocial::tiposCitaParaFiltro(),
             'remitido_por' => TallerServicioSocial::REMITIDO_POR,
             'estados' => TallerServicioSocial::ESTADOS,
             'puede_gestionar' => $this->puedeGestionar(),
@@ -93,7 +91,7 @@ class TallerServicioSocialController extends BaseController {
             ? $this->model->listarHistoriaPaciente($tipoDoc, $documento)
             : [];
         $citasPaciente = ($tipoDoc !== '' && $documento !== '')
-            ? $this->model->listarCitasPaciente($tipoDoc, $documento, $id)
+            ? $this->model->listarCitasPaciente($tipoDoc, $documento, 0)
             : [];
         $documentosRemision = ServicioSocialDocumentos::obtenerParaCita($id, $cita['Documentos_Remision'] ?? null);
 
@@ -106,7 +104,7 @@ class TallerServicioSocialController extends BaseController {
             'historia_clinica' => $historiaClinica,
             'citas_paciente' => $citasPaciente,
             'documentos_remision' => $documentosRemision,
-            'horarios_sabado' => TallerServicioSocial::HORARIOS_SABADO,
+            'horarios_sabado' => TallerServicioSocial::catalogoHorariosSabado(),
             'puede_gestionar' => $this->puedeGestionar(),
             'flash_ok' => $flashOk,
             'flash_error' => $flashError,
@@ -143,6 +141,26 @@ class TallerServicioSocialController extends BaseController {
 
         header('Location: ' . public_app_url('talleres/servicio-social/ver', ['id' => $id]));
         exit;
+    }
+
+    public function eliminar() {
+        $this->requiereAccesoAdmin();
+
+        if (!$this->puedeGestionar()) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $id = (int)($_POST['id_cita'] ?? $_GET['id'] ?? 0);
+        $resultado = $this->model->eliminarCita($id);
+
+        if ($resultado['ok']) {
+            $_SESSION['ss_flash_ok'] = $resultado['message'];
+        } else {
+            $_SESSION['ss_flash_error'] = $resultado['message'];
+        }
+
+        $this->redirect('talleres/servicio-social');
     }
 
     public function guardarHistoriaClinica() {
@@ -232,6 +250,12 @@ class TallerServicioSocialController extends BaseController {
         $valores = is_array($_SESSION['ss_pub_valores'] ?? null) ? $_SESSION['ss_pub_valores'] : [];
         unset($_SESSION['ss_pub_errors'], $_SESSION['ss_pub_valores']);
 
+        $sabadosPublicos = TallerServicioSocial::sabadosAgendaPublica();
+        $sabadoPermitido = (string)($sabadosPublicos[0]['fecha'] ?? '');
+        if ($sabadoPermitido !== '' && (string)($valores['fecha_preferida'] ?? '') !== $sabadoPermitido) {
+            $valores['fecha_preferida'] = $sabadoPermitido;
+        }
+
         $this->view('talleres/servicio_social/formulario_publico', [
             'ok' => $ok,
             'errores' => $errores,
@@ -239,9 +263,9 @@ class TallerServicioSocialController extends BaseController {
             'tipos_cita' => TallerServicioSocial::TIPOS_CITA,
             'tipos_documento' => TallerServicioSocial::TIPOS_DOCUMENTO,
             'remitido_por' => TallerServicioSocial::REMITIDO_POR,
-            'horarios_sabado' => TallerServicioSocial::HORARIOS_SABADO,
-            'proximos_sabados' => TallerServicioSocial::proximosSabados(16),
-            'puede_agendar_hoy' => TallerServicioSocial::puedeAgendarHoy(),
+            'horarios_sabado' => TallerServicioSocial::catalogoHorariosSabado(),
+            'proximos_sabados' => $sabadosPublicos,
+            'puede_agendar_hoy' => TallerServicioSocial::puedeAgendarHoy() && $sabadosPublicos !== [],
             'url_buscar_persona' => public_app_url('talleres_publico/servicio-social/buscar-persona'),
             'url_disponibilidad' => public_app_url('talleres_publico/servicio-social/disponibilidad'),
         ]);
@@ -264,7 +288,7 @@ class TallerServicioSocialController extends BaseController {
         $config = $this->model->obtenerConfigHorarioSabado($fecha);
         $habilitadas = $this->model->horasHabilitadasSabado($fecha);
         if ($habilitadas === null) {
-            $habilitadas = array_keys(TallerServicioSocial::HORARIOS_SABADO);
+            $habilitadas = array_keys(TallerServicioSocial::catalogoHorariosSabado());
         }
 
         $flashOk = (string)($_SESSION['ss_flash_ok'] ?? '');
@@ -274,7 +298,7 @@ class TallerServicioSocialController extends BaseController {
         $this->view('talleres/servicio_social/horarios', [
             'fecha' => $fecha,
             'proximos_sabados' => $proximos,
-            'horarios_sabado' => TallerServicioSocial::HORARIOS_SABADO,
+            'horarios_sabado' => TallerServicioSocial::catalogoHorariosSabado(),
             'horas_habilitadas' => $habilitadas,
             'config' => $config,
             'flash_ok' => $flashOk,
@@ -365,24 +389,43 @@ class TallerServicioSocialController extends BaseController {
         header('Content-Type: application/json; charset=utf-8');
 
         $fecha = trim((string)($_GET['fecha'] ?? ''));
-        if ($fecha === '' || !TallerServicioSocial::esSabado($fecha)) {
-            echo json_encode(['ok' => false, 'mensaje' => 'Selecciona un sábado válido.'], JSON_UNESCAPED_UNICODE);
+        $sabadoPermitido = TallerServicioSocial::sabadoSemanaActual();
+        if ($fecha === '' || !TallerServicioSocial::esSabado($fecha) || $sabadoPermitido === null || $fecha !== $sabadoPermitido) {
+            echo json_encode(['ok' => false, 'mensaje' => 'Solo se puede consultar el sábado de esta semana.'], JSON_UNESCAPED_UNICODE);
             return;
         }
 
+        $documento = trim((string)($_GET['documento'] ?? $_POST['documento'] ?? ''));
         $disp = $this->model->disponibilidadFecha($fecha);
-        $disponibles = 0;
-        foreach ($disp['horas'] as $h) {
-            if (!empty($h['disponible'])) {
-                $disponibles++;
+        $yaTieneCita = $documento !== '' && $this->model->tieneCitaActivaEnFecha($documento, $fecha);
+
+        $horasVisibles = [];
+        if (!$yaTieneCita) {
+            foreach ($disp['horas'] as $h) {
+                if (!empty($h['disponible'])) {
+                    $horasVisibles[] = [
+                        'hora' => (string)($h['hora'] ?? ''),
+                        'label' => (string)($h['label'] ?? ''),
+                        'disponible' => true,
+                    ];
+                }
             }
+        }
+
+        $mensaje = '';
+        if ($yaTieneCita) {
+            $mensaje = 'Ya tienes una cita para este sábado. Solo se permite una agenda por persona el mismo día.';
+        } elseif ($horasVisibles === []) {
+            $mensaje = 'No hay horarios disponibles ese sábado. Elige otra fecha.';
         }
 
         echo json_encode([
             'ok' => true,
             'fecha' => $fecha,
-            'horas' => $disp['horas'],
-            'tiene_cupos' => $disponibles > 0,
+            'horas' => $horasVisibles,
+            'tiene_cupos' => $horasVisibles !== [],
+            'ya_tiene_cita' => $yaTieneCita,
+            'mensaje' => $mensaje,
         ], JSON_UNESCAPED_UNICODE);
     }
 
@@ -393,7 +436,7 @@ class TallerServicioSocialController extends BaseController {
         }
 
         if (!TallerServicioSocial::puedeAgendarHoy()) {
-            $_SESSION['ss_pub_errors'] = ['Las solicitudes de cita solo se reciben de lunes a jueves.'];
+            $_SESSION['ss_pub_errors'] = ['Las solicitudes de cita solo se reciben de lunes a viernes.'];
             $this->redirect('talleres_publico/servicio-social');
             return;
         }

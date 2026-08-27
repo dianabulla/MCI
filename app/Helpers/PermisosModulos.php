@@ -40,7 +40,23 @@ class PermisosModulos {
             self::definicionesInternas(),
             PermisosUiCatalogo::modulosDerivadosParaMatriz()
         );
+        foreach (self::modulosRetirados() as $claveRetirada) {
+            unset($cache[$claveRetirada]);
+        }
         return $cache;
+    }
+
+    /**
+     * Módulos que ya no se muestran (menú Comunidad / matriz de permisos).
+     *
+     * @return array<int, string>
+     */
+    public static function modulosRetirados(): array {
+        return ['peticiones', 'transmisiones'];
+    }
+
+    public static function esModuloRetirado(string $modulo): bool {
+        return in_array($modulo, self::modulosRetirados(), true);
     }
 
     /**
@@ -930,7 +946,7 @@ class PermisosModulos {
 
         foreach (self::definiciones() as $clave => $meta) {
 
-            if (PermisosUiCatalogo::esModuloDerivado($clave)) {
+            if (PermisosUiCatalogo::esModuloDerivado($clave) || self::esModuloRetirado($clave)) {
 
                 continue;
 
@@ -1005,6 +1021,9 @@ class PermisosModulos {
 
         $grupos = [];
         foreach (self::definicionesInternas() as $clave => $meta) {
+            if (self::esModuloRetirado($clave)) {
+                continue;
+            }
             $grupo = (string)($meta['grupo'] ?? 'Otros');
             if (!isset($grupos[$grupo])) {
                 $grupos[$grupo] = ['submodulos' => []];

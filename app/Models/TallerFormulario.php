@@ -127,8 +127,10 @@ class TallerFormulario extends BaseModel {
         $this->ensureColumn('talleres_formulario', 'Texto_Autorizacion', 'TEXT NULL AFTER Mensaje_Gracias');
         $this->ensureColumn('talleres_formulario', 'Tipo_Plantilla', "VARCHAR(40) NOT NULL DEFAULT 'general' AFTER Texto_Autorizacion");
         $this->ensureColumn('talleres_formulario', 'Imagen_Header', 'VARCHAR(255) NULL AFTER Descripcion');
+        $this->ensureColumn('talleres_formulario', 'Acepta_Pago', 'TINYINT(1) NOT NULL DEFAULT 1 AFTER Tipo_Plantilla');
         $this->ensureTipoBloqueAutorizacion();
         $this->ensureTablaPagos();
+        $this->activarPagoEnTodosLosFormularios();
     }
 
     private function ensureTipoBloqueAutorizacion(): void {
@@ -174,6 +176,21 @@ class TallerFormulario extends BaseModel {
         }
         $titulo = strtolower(trim((string)($formulario['Titulo'] ?? '')));
         return str_contains($titulo, 'presentación de niños') || str_contains($titulo, 'presentacion de ninos');
+    }
+
+    /**
+     * Todos los talleres (existentes y nuevos) permiten registrar pagos.
+     */
+    public function aceptaPago(?array $formulario): bool {
+        return is_array($formulario) && (int)($formulario['Id_Formulario'] ?? 0) > 0;
+    }
+
+    private function activarPagoEnTodosLosFormularios(): void {
+        try {
+            $this->db->exec('UPDATE talleres_formulario SET Acepta_Pago = 1 WHERE Acepta_Pago IS NULL OR Acepta_Pago = 0');
+        } catch (Throwable $e) {
+            // Columna aún no disponible en este motor.
+        }
     }
 
     public function esTourLevantate(?array $formulario): bool {
@@ -598,6 +615,7 @@ class TallerFormulario extends BaseModel {
             'Mensaje_Gracias' => $config['mensaje_gracias'],
             'Texto_Autorizacion' => $config['texto_autorizacion'],
             'Tipo_Plantilla' => self::TIPO_PLANTILLA_PRESENTACION_NINOS,
+            'Acepta_Pago' => 1,
             'Creado_Por' => $creadoPor > 0 ? $creadoPor : null,
         ]);
 
@@ -679,6 +697,7 @@ class TallerFormulario extends BaseModel {
             'Texto_Autorizacion' => $config['texto_autorizacion'],
             'Tipo_Plantilla' => self::TIPO_PLANTILLA_TOUR_LEVANTATE,
             'Imagen_Header' => $config['imagen_header'],
+            'Acepta_Pago' => 1,
             'Creado_Por' => $creadoPor > 0 ? $creadoPor : null,
         ]);
 

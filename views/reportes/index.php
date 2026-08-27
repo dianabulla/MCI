@@ -166,6 +166,8 @@ $reporteGanadosFinSemanaAnterior = $reporte_ganados_fin_semana_anterior ?? [
     'fin' => '',
     'rows' => [],
     'totales' => ['ganados' => 0, 'asignados' => 0, 'por_verificar' => 0, 'total_domingo' => 0],
+    'invitadores' => [],
+    'personas' => [],
     'texto' => ''
 ];
 
@@ -665,6 +667,30 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </div>
 
     <div id="reporteGanadosSemanaAnteriorDetalle" style="display:block;">
+        <div class="rpt-ganados-semana-filtros" role="group" aria-label="Filtrar ganados por género">
+            <button type="button" class="rpt-ganados-filtro is-active" data-genero="todos">Todos</button>
+            <button type="button" class="rpt-ganados-filtro" data-genero="hombres">Red Hombres</button>
+            <button type="button" class="rpt-ganados-filtro" data-genero="mujeres">Red Mujeres</button>
+        </div>
+        <p class="rpt-ganados-semana-ayuda">El filtro es por red del líder, igual que en Discipular. Pulsa quien ganó para ver las personas y a qué líder pertenecen.</p>
+
+        <div class="table-container table-container--always-visible" style="margin-bottom: 12px; display:block;">
+            <table class="data-table" id="tablaGanadosInvitadoresSemana">
+                <thead>
+                    <tr>
+                        <th>Quién ganó</th>
+                        <th style="width:120px;">Ganados</th>
+                        <th>Líderes de esas personas</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaGanadosInvitadoresSemanaBody">
+                    <tr>
+                        <td colspan="3" class="text-center">Cargando…</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
     <?php if (!empty($reporteGanadosFinSemanaAnterior['rows'])): ?>
         <div class="table-container table-container--always-visible" style="margin-bottom: 12px; display:block;">
             <table class="data-table">
@@ -701,11 +727,6 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
                     </tr>
                 </tbody>
             </table>
-        </div>
-
-    <?php else: ?>
-        <div class="report-empty-state">
-            Sin registros de iglesia para el fin de semana anterior.
         </div>
     <?php endif; ?>
     </div>
@@ -1421,6 +1442,7 @@ const detalleLideresGanar = <?= json_encode($tablaGanarMinisterio['detalle_lider
 const detallesTablasMinisterial = <?= json_encode($detallesTablasMinisterial ?? [], JSON_UNESCAPED_UNICODE) ?>;
 const detallesGananciaMinisterial = <?= json_encode($detallesGananciaMinisterial ?? [], JSON_UNESCAPED_UNICODE) ?>;
 const detallesGanadosFinSemana = <?= json_encode($reporteGanadosFinSemanaAnterior['detalles'] ?? [], JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR) ?>;
+const invitadoresGanadosFinSemana = <?= json_encode($reporteGanadosFinSemanaAnterior['invitadores'] ?? [], JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR) ?>;
 const reporteEscuelasUv = <?= json_encode($reporteEscuelasUv ?? ['total' => 0, 'rows' => []], JSON_UNESCAPED_UNICODE) ?>;
 const resumenEscuelasInscripciones = <?= json_encode($resumenEscuelasInscripciones ?? [], JSON_UNESCAPED_UNICODE) ?>;
 const escuelasTotalRegistroPublico = <?= (int)$escuelasTotalRegistroPublico ?>;
@@ -2191,11 +2213,15 @@ if (tipoReporte === 'personas') {
     const construirFilaPersona = (item) => {
         const nombre = String(item.nombre || `${item.Nombre || ''} ${item.Apellido || ''}`.trim() || 'Sin nombre');
         const lider = String(item.lider || item.Nombre_Lider || 'Sin líder');
+        const redLider = String(item.red_lider || '');
+        const liderConRed = redLider === 'hombres'
+            ? lider + ' (Red Hombres)'
+            : (redLider === 'mujeres' ? lider + ' (Red Mujeres)' : lider);
         const celula = String(item.celula || item.Nombre_Celula || 'Sin célula');
         const ministerio = String(item.ministerio || item.Nombre_Ministerio || 'Sin ministerio');
         const proceso = String(item.proceso || item.Proceso || '');
         const fecha = String(item.fecha_registro || item.Fecha_Registro || '');
-        return `<tr><td>${escaparHtml(nombre)}</td><td>${escaparHtml(lider)}</td><td>${escaparHtml(celula)}</td><td>${escaparHtml(ministerio)}</td><td>${escaparHtml(proceso)}</td><td>${escaparHtml(fecha)}</td></tr>`;
+        return `<tr><td>${escaparHtml(nombre)}</td><td>${escaparHtml(liderConRed)}</td><td>${escaparHtml(celula)}</td><td>${escaparHtml(ministerio)}</td><td>${escaparHtml(proceso)}</td><td>${escaparHtml(fecha)}</td></tr>`;
     };
 
     const reconstruirOpcionesFiltrosDetalle = () => {
@@ -2377,20 +2403,15 @@ if (tipoReporte === 'personas') {
     document.querySelectorAll('.js-ganados-fin-ministerio').forEach((boton) => {
         boton.addEventListener('click', () => {
             const ministerio = String(boton.dataset.ministerio || 'Sin ministerio');
-            const filas = Array.isArray(detallesGanadosFinSemana[ministerio]) ? detallesGanadosFinSemana[ministerio] : [];
+            let filas = Array.isArray(detallesGanadosFinSemana[ministerio]) ? detallesGanadosFinSemana[ministerio] : [];
+            if (filtroGeneroGanadosFin !== 'todos') {
+                filas = filas.filter((item) => String(item.red_lider || item.genero_clave || '') === filtroGeneroGanadosFin);
+            }
             reporteDetalleModalTitle.textContent = `Ganados fin de semana - ${ministerio}`;
             if (!filas.length) {
                 reporteDetalleModalBody.innerHTML = '<tr><td colspan="6" class="text-center">Sin personas para este ministerio</td></tr>';
             } else {
-                reporteDetalleModalBody.innerHTML = filas.map((item) => {
-                    const persona = escaparHtml(`${item.Nombre || ''} ${item.Apellido || ''}`.trim() || 'Sin nombre');
-                    const lider = escaparHtml(item.Nombre_Lider || 'Sin líder');
-                    const celula = escaparHtml(item.Nombre_Celula || 'Sin célula');
-                    const ministerioTexto = escaparHtml(item.Nombre_Ministerio || 'Sin ministerio');
-                    const proceso = escaparHtml(item.Proceso || '');
-                    const fecha = escaparHtml(item.Fecha_Registro || '');
-                    return `<tr><td>${persona}</td><td>${lider}</td><td>${celula}</td><td>${ministerioTexto}</td><td>${proceso}</td><td>${fecha}</td></tr>`;
-                }).join('');
+                reporteDetalleModalBody.innerHTML = filas.map(construirFilaPersona).join('');
             }
 
             prepararFiltrosDetalleModal();
@@ -2399,6 +2420,91 @@ if (tipoReporte === 'personas') {
             reporteDetalleModal.setAttribute('aria-hidden', 'false');
         });
     });
+
+    let filtroGeneroGanadosFin = 'todos';
+    const tbodyInvitadoresGanados = document.getElementById('tablaGanadosInvitadoresSemanaBody');
+
+    const personasInvitadorPorFiltro = (invitador) => {
+        const personas = Array.isArray(invitador && invitador.personas) ? invitador.personas : [];
+        if (filtroGeneroGanadosFin === 'todos') {
+            return personas;
+        }
+        return personas.filter((item) => String(item.red_lider || item.genero_clave || '') === filtroGeneroGanadosFin);
+    };
+
+    const lideresDePersonas = (personas) => {
+        const vistos = [];
+        personas.forEach((item) => {
+            const lider = String(item.Nombre_Lider || 'Sin líder').trim() || 'Sin líder';
+            if (vistos.indexOf(lider) === -1) {
+                vistos.push(lider);
+            }
+        });
+        return vistos;
+    };
+
+    const pintarTablaInvitadoresGanados = () => {
+        if (!tbodyInvitadoresGanados) {
+            return;
+        }
+        const lista = Array.isArray(invitadoresGanadosFinSemana) ? invitadoresGanadosFinSemana : [];
+        const filas = lista.map((inv) => {
+            const personas = personasInvitadorPorFiltro(inv);
+            return { inv, personas, total: personas.length };
+        }).filter((fila) => fila.total > 0);
+
+        if (!filas.length) {
+            tbodyInvitadoresGanados.innerHTML = '<tr><td colspan="3" class="text-center">Sin registros de iglesia para este filtro.</td></tr>';
+            return;
+        }
+
+        tbodyInvitadoresGanados.innerHTML = filas.map((fila) => {
+            const nombre = escaparHtml(fila.inv.nombre || 'Sin invitador');
+            const clave = escaparHtml(fila.inv.key || '');
+            const lideres = escaparHtml(lideresDePersonas(fila.personas).join(', '));
+            return `<tr>
+                <td><button type="button" class="report-link-button js-ganados-fin-invitador" data-key="${clave}">${nombre}</button></td>
+                <td><strong>${fila.total}</strong></td>
+                <td>${lideres}</td>
+            </tr>`;
+        }).join('');
+    };
+
+    document.querySelectorAll('.rpt-ganados-filtro').forEach((boton) => {
+        boton.addEventListener('click', () => {
+            filtroGeneroGanadosFin = String(boton.getAttribute('data-genero') || 'todos');
+            document.querySelectorAll('.rpt-ganados-filtro').forEach((otro) => {
+                otro.classList.toggle('is-active', otro === boton);
+            });
+            pintarTablaInvitadoresGanados();
+        });
+    });
+
+    if (tbodyInvitadoresGanados) {
+        tbodyInvitadoresGanados.addEventListener('click', (evento) => {
+            const boton = evento.target.closest('.js-ganados-fin-invitador');
+            if (!boton) {
+                return;
+            }
+            const clave = String(boton.getAttribute('data-key') || '');
+            const invitador = (Array.isArray(invitadoresGanadosFinSemana) ? invitadoresGanadosFinSemana : [])
+                .find((item) => String(item.key || '') === clave);
+            const filas = invitador ? personasInvitadorPorFiltro(invitador) : [];
+            const etiquetaFiltro = filtroGeneroGanadosFin === 'hombres'
+                ? 'Red Hombres'
+                : (filtroGeneroGanadosFin === 'mujeres' ? 'Red Mujeres' : 'todos');
+            reporteDetalleModalTitle.textContent = `Ganados por ${invitador ? invitador.nombre : 'invitador'} (${filas.length}${etiquetaFiltro !== 'todos' ? ' · ' + etiquetaFiltro : ''})`;
+            if (!filas.length) {
+                reporteDetalleModalBody.innerHTML = '<tr><td colspan="6" class="text-center">Sin personas para este invitador</td></tr>';
+            } else {
+                reporteDetalleModalBody.innerHTML = filas.map(construirFilaPersona).join('');
+            }
+            prepararFiltrosDetalleModal();
+            reporteDetalleModal.classList.add('is-open');
+            reporteDetalleModal.setAttribute('aria-hidden', 'false');
+        });
+        pintarTablaInvitadoresGanados();
+    }
 
     document.querySelectorAll('.js-open-ministerial').forEach((boton) => {
         boton.addEventListener('click', () => {
@@ -3572,6 +3678,36 @@ html.show-report-tables #reportesVisualContainer .ganar-extra-section {
 
 .report-link-button:hover {
     color: #0f2748;
+}
+
+.rpt-ganados-semana-filtros {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 8px 0;
+}
+
+.rpt-ganados-filtro {
+    border: 1px solid #cfdff5;
+    background: #fff;
+    color: #1f3f74;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.rpt-ganados-filtro.is-active {
+    background: #1f3f74;
+    border-color: #1f3f74;
+    color: #fff;
+}
+
+.rpt-ganados-semana-ayuda {
+    margin: 0 0 10px 0;
+    font-size: 12px;
+    color: #60708a;
 }
 
 .report-subpanel {

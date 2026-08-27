@@ -25,14 +25,25 @@ class TallerServicioSocial extends BaseModel {
 
     /** @var array<string, string> */
     public const TIPOS_CITA = [
-        'orientacion' => 'Orientación / asesoría',
+        'orientacion' => 'Orientación psicológica',
         'acompanamiento' => 'Acompañamiento psicosocial',
+        'ansiedad' => 'Ansiedad / estrés',
+        'depresion' => 'Estado de ánimo / depresión',
+        'duelo' => 'Duelo / pérdida',
+        'familia' => 'Familia / pareja',
+        'infancia' => 'Niños / adolescentes',
+        'crisis' => 'Crisis emocional',
+        'otro' => 'Otro tema psicológico',
+    ];
+
+    /** Tipos antiguos: se siguen mostrando en citas ya guardadas. */
+    /** @var array<string, string> */
+    public const TIPOS_CITA_LEGADO = [
         'ayuda_alimentaria' => 'Ayuda alimentaria',
         'vivienda' => 'Vivienda / vivienda temporal',
         'salud' => 'Salud / remisión médica',
         'empleo' => 'Empleo / emprendimiento',
         'juridico' => 'Orientación jurídica',
-        'otro' => 'Otro',
     ];
 
     /** @var array<string, string> */
@@ -56,17 +67,30 @@ class TallerServicioSocial extends BaseModel {
         'no_asistio' => 'No asistió',
     ];
 
-    /** Horarios de atención los sábados (clave 24h => etiqueta). */
-    public const HORARIOS_SABADO = [
-        '08:00' => '8:00 a.m.',
-        '09:00' => '9:00 a.m.',
-        '10:00' => '10:00 a.m.',
-        '11:00' => '11:00 a.m.',
-        '14:00' => '2:00 p.m.',
-        '15:00' => '3:00 p.m.',
-        '16:00' => '4:00 p.m.',
-        '17:00' => '5:00 p.m.',
-    ];
+    /**
+     * Horarios de atención los sábados: las 24 horas del día (clave 24h => etiqueta).
+     *
+     * @return array<string, string>
+     */
+    public static function catalogoHorariosSabado(): array {
+        static $horas = null;
+        if (is_array($horas)) {
+            return $horas;
+        }
+
+        $horas = [];
+        for ($h = 0; $h < 24; $h++) {
+            $clave = sprintf('%02d:00', $h);
+            $hora12 = $h % 12;
+            if ($hora12 === 0) {
+                $hora12 = 12;
+            }
+            $sufijo = $h < 12 ? 'a.m.' : 'p.m.';
+            $horas[$clave] = $hora12 . ':00 ' . $sufijo;
+        }
+
+        return $horas;
+    }
 
     /** Estados que ocupan un cupo horario. */
     private const ESTADOS_OCUPAN_CUPO = ['pendiente', 'confirmada', 'atendida'];
@@ -117,6 +141,7 @@ class TallerServicioSocial extends BaseModel {
         $this->ensureColumn('talleres_servicio_social_cita', 'Tipo_Documento', 'VARCHAR(60) NULL AFTER Apellido');
         $this->ensureColumn('talleres_servicio_social_cita', 'Nombre_Eps', 'VARCHAR(120) NULL AFTER Documento');
         $this->ensureColumn('talleres_servicio_social_cita', 'Documentos_Remision', 'JSON NULL AFTER Remitido_Detalle');
+        $this->ensureEstadoColumnaFlexible();
     }
 
     private function ensureHorarioSabadoSchema(): void {
@@ -166,6 +191,14 @@ class TallerServicioSocial extends BaseModel {
         }
     }
 
+    private function ensureEstadoColumnaFlexible(): void {
+        try {
+            $this->db->exec("ALTER TABLE {$this->table} MODIFY COLUMN Estado VARCHAR(30) NOT NULL DEFAULT 'pendiente'");
+        } catch (Throwable $e) {
+            // Columna ya es VARCHAR o el motor no permite el cambio.
+        }
+    }
+
     public static function etiquetaTipoDocumento(string $clave): string {
         return self::TIPOS_DOCUMENTO[$clave] ?? ($clave !== '' ? $clave : '—');
     }
@@ -194,7 +227,20 @@ class TallerServicioSocial extends BaseModel {
     }
 
     public static function etiquetaTipo(string $clave): string {
-        return self::TIPOS_CITA[$clave] ?? ($clave !== '' ? $clave : '—');
+        if (isset(self::TIPOS_CITA[$clave])) {
+            return self::TIPOS_CITA[$clave];
+        }
+        if (isset(self::TIPOS_CITA_LEGADO[$clave])) {
+            return self::TIPOS_CITA_LEGADO[$clave];
+        }
+        return $clave !== '' ? $clave : '—';
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function tiposCitaParaFiltro(): array {
+        return self::TIPOS_CITA + self::TIPOS_CITA_LEGADO;
     }
 
     public static function etiquetaRemitido(string $clave): string {
@@ -202,7 +248,25 @@ class TallerServicioSocial extends BaseModel {
     }
 
     public static function etiquetaEstado(string $clave): string {
+        $clave = self::normalizarEstado($clave);
         return self::ESTADOS[$clave] ?? ($clave !== '' ? $clave : '—');
+    }
+
+    public static function normalizarEstado(string $valor): string {
+        $valor = strtolower(trim($valor));
+        $valor = str_replace([' ', '-'], '_', $valor);
+        $alias = [
+            'noasistio' => 'no_asistio',
+            'no_asiste' => 'no_asistio',
+            'inasistencia' => 'no_asistio',
+            'cancelado' => 'cancelada',
+            'anulado' => 'cancelada',
+            'anulada' => 'cancelada',
+        ];
+        if (isset($alias[$valor])) {
+            return $alias[$valor];
+        }
+        return $valor;
     }
 
     public static function normalizarDocumento(string $documento): string {
@@ -213,10 +277,10 @@ class TallerServicioSocial extends BaseModel {
         return (string)preg_replace('/[^A-Z0-9]/', '', $documento);
     }
 
-    /** Solo lunes (1) a jueves (4) se puede enviar solicitudes. */
+    /** Lunes (1) a viernes (5) se pueden enviar solicitudes. */
     public static function puedeAgendarHoy(): bool {
         $dow = (int)date('N');
-        return $dow >= 1 && $dow <= 4;
+        return $dow >= 1 && $dow <= 5;
     }
 
     public static function esSabado(string $fecha): bool {
@@ -227,7 +291,40 @@ class TallerServicioSocial extends BaseModel {
     }
 
     /**
-     * Próximos sábados disponibles para agendar (desde hoy).
+     * Sábado de la semana en curso (lunes a sábado). El domingo esa semana ya cerró.
+     */
+    public static function sabadoSemanaActual(): ?string {
+        $hoy = new DateTime('today');
+        $dow = (int)$hoy->format('N');
+        if ($dow === 7) {
+            return null;
+        }
+        if ($dow === 6) {
+            return $hoy->format('Y-m-d');
+        }
+        $hoy->modify('+' . (6 - $dow) . ' days');
+        return $hoy->format('Y-m-d');
+    }
+
+    /**
+     * Único sábado que el público puede agendar: el de esta semana.
+     *
+     * @return array<int, array{fecha:string,label:string}>
+     */
+    public static function sabadosAgendaPublica(): array {
+        $fecha = self::sabadoSemanaActual();
+        if ($fecha === null || $fecha < date('Y-m-d')) {
+            return [];
+        }
+
+        return [[
+            'fecha' => $fecha,
+            'label' => self::etiquetaSabado($fecha),
+        ]];
+    }
+
+    /**
+     * Próximos sábados (configuración interna / admin).
      *
      * @return array<int, array{fecha:string,label:string}>
      */
@@ -302,7 +399,7 @@ class TallerServicioSocial extends BaseModel {
         $horas = [];
         foreach ($decoded as $hora) {
             $norm = self::normalizarHora((string)$hora);
-            if ($norm !== '' && isset(self::HORARIOS_SABADO[$norm])) {
+            if ($norm !== '' && isset(self::catalogoHorariosSabado()[$norm])) {
                 $horas[] = $norm;
             }
         }
@@ -341,7 +438,7 @@ class TallerServicioSocial extends BaseModel {
         $horas = [];
         foreach ($horasHabilitadas as $hora) {
             $norm = self::normalizarHora((string)$hora);
-            if ($norm !== '' && isset(self::HORARIOS_SABADO[$norm])) {
+            if ($norm !== '' && isset(self::catalogoHorariosSabado()[$norm])) {
                 $horas[] = $norm;
             }
         }
@@ -402,7 +499,7 @@ class TallerServicioSocial extends BaseModel {
         }
 
         $bloqueadas = [];
-        foreach (array_keys(self::HORARIOS_SABADO) as $hora) {
+        foreach (array_keys(self::catalogoHorariosSabado()) as $hora) {
             if (!in_array($hora, $habilitadas, true)) {
                 $bloqueadas[] = $hora;
             }
@@ -416,12 +513,12 @@ class TallerServicioSocial extends BaseModel {
         if ($hora === '') {
             return '';
         }
-        if (isset(self::HORARIOS_SABADO[$hora])) {
+        if (isset(self::catalogoHorariosSabado()[$hora])) {
             return $hora;
         }
         if (preg_match('/^(\d{1,2}):(\d{2})/', $hora, $m)) {
             $normalizada = sprintf('%02d:%02d', (int)$m[1], (int)$m[2]);
-            if (isset(self::HORARIOS_SABADO[$normalizada])) {
+            if (isset(self::catalogoHorariosSabado()[$normalizada])) {
                 return $normalizada;
             }
         }
@@ -430,7 +527,7 @@ class TallerServicioSocial extends BaseModel {
 
     public static function etiquetaHora(string $hora): string {
         $hora = self::normalizarHora($hora);
-        return self::HORARIOS_SABADO[$hora] ?? ($hora !== '' ? $hora : '—');
+        return self::catalogoHorariosSabado()[$hora] ?? ($hora !== '' ? $hora : '—');
     }
 
     /**
@@ -626,7 +723,7 @@ class TallerServicioSocial extends BaseModel {
      */
     public function horasOcupadas(string $fecha, int $excluirIdCita = 0): array {
         if (!self::esSabado($fecha)) {
-            return array_keys(self::HORARIOS_SABADO);
+            return array_keys(self::catalogoHorariosSabado());
         }
 
         $ocupadas = $this->horasBloqueadasManualmente($fecha);
@@ -651,12 +748,38 @@ class TallerServicioSocial extends BaseModel {
     }
 
     /**
+     * Una persona (mismo documento) no puede tener más de una cita activa el mismo sábado.
+     */
+    public function tieneCitaActivaEnFecha(string $documento, string $fecha, int $excluirIdCita = 0): bool {
+        $docNorm = self::normalizarDocumento($documento);
+        if ($docNorm === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+            return false;
+        }
+
+        $exprDoc = self::sqlExprDocumentoNorm('Documento');
+        $estados = implode("','", self::ESTADOS_OCUPAN_CUPO);
+        $sql = "SELECT Id_Cita FROM {$this->table}
+                WHERE {$exprDoc} = ?
+                  AND Fecha_Preferida = ?
+                  AND Estado IN ('{$estados}')";
+        $params = [$docNorm, $fecha];
+        if ($excluirIdCita > 0) {
+            $sql .= ' AND Id_Cita <> ?';
+            $params[] = $excluirIdCita;
+        }
+        $sql .= ' LIMIT 1';
+        $rows = $this->query($sql, $params);
+
+        return !empty($rows[0]);
+    }
+
+    /**
      * @return array<int, string>
      */
     public function horasDisponiblesCatalogo(string $fecha): array {
         $habilitadas = $this->horasHabilitadasSabado($fecha);
         if ($habilitadas === null) {
-            return array_keys(self::HORARIOS_SABADO);
+            return array_keys(self::catalogoHorariosSabado());
         }
 
         return $habilitadas;
@@ -669,7 +792,7 @@ class TallerServicioSocial extends BaseModel {
         $ocupadas = $this->horasOcupadas($fecha, $excluirIdCita);
         $catalogo = $this->horasDisponiblesCatalogo($fecha);
         $horas = [];
-        foreach (self::HORARIOS_SABADO as $hora => $label) {
+        foreach (self::catalogoHorariosSabado() as $hora => $label) {
             $enCatalogo = in_array($hora, $catalogo, true);
             $horas[] = [
                 'hora' => $hora,
@@ -685,9 +808,9 @@ class TallerServicioSocial extends BaseModel {
     /**
      * @return array{ok:bool,error?:string}
      */
-    public function validarAgendamiento(string $fecha, string $hora): array {
+    public function validarAgendamiento(string $fecha, string $hora, string $documento = ''): array {
         if (!self::puedeAgendarHoy()) {
-            return ['ok' => false, 'error' => 'Las solicitudes de cita solo se reciben de lunes a jueves.'];
+            return ['ok' => false, 'error' => 'Las solicitudes de cita solo se reciben de lunes a viernes.'];
         }
         if ($fecha === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
             return ['ok' => false, 'error' => 'Indica una fecha preferida válida.'];
@@ -699,14 +822,23 @@ class TallerServicioSocial extends BaseModel {
             return ['ok' => false, 'error' => 'La fecha preferida no puede ser anterior a hoy.'];
         }
 
+        $sabadoSemana = self::sabadoSemanaActual();
+        if ($sabadoSemana === null || $fecha !== $sabadoSemana) {
+            return ['ok' => false, 'error' => 'Solo se puede agendar el sábado de esta semana.'];
+        }
+
+        if ($documento !== '' && $this->tieneCitaActivaEnFecha($documento, $fecha)) {
+            return ['ok' => false, 'error' => 'Ya tienes una cita para ese sábado. Solo se permite una agenda por persona el mismo día.'];
+        }
+
         $horaNorm = self::normalizarHora($hora);
-        if ($horaNorm === '' || !isset(self::HORARIOS_SABADO[$horaNorm])) {
+        if ($horaNorm === '' || !isset(self::catalogoHorariosSabado()[$horaNorm])) {
             return ['ok' => false, 'error' => 'Selecciona un horario válido.'];
         }
 
         $catalogo = $this->horasDisponiblesCatalogo($fecha);
         if (!in_array($horaNorm, $catalogo, true)) {
-            return ['ok' => false, 'error' => 'Ese horario no está habilitado para ese sábado.'];
+            return ['ok' => false, 'error' => 'Ese horario no está disponible. Elige otra hora.'];
         }
 
         $ocupadas = $this->horasOcupadas($fecha);
@@ -732,7 +864,8 @@ class TallerServicioSocial extends BaseModel {
         }
 
         $tipo = trim((string)($filtros['tipo'] ?? ''));
-        if ($tipo !== '' && isset(self::TIPOS_CITA[$tipo])) {
+        $tiposFiltro = self::tiposCitaParaFiltro();
+        if ($tipo !== '' && isset($tiposFiltro[$tipo])) {
             $sql .= ' AND Tipo_Cita = ?';
             $params[] = $tipo;
         }
@@ -843,7 +976,7 @@ class TallerServicioSocial extends BaseModel {
         if ($telefono === '') {
             $errors[] = 'El teléfono es obligatorio.';
         }
-        $validacionAgenda = $this->validarAgendamiento($fechaPref, $horaPref);
+        $validacionAgenda = $this->validarAgendamiento($fechaPref, $horaPref, $documento);
         if (!$validacionAgenda['ok']) {
             $errors[] = (string)($validacionAgenda['error'] ?? 'Fecha u hora no válida.');
         }
@@ -1062,7 +1195,7 @@ class TallerServicioSocial extends BaseModel {
             return ['ok' => false, 'message' => 'La cita no existe.'];
         }
 
-        $estado = trim((string)($datos['estado'] ?? ''));
+        $estado = self::normalizarEstado((string)($datos['estado'] ?? ''));
         if ($estado === '' || !isset(self::ESTADOS[$estado])) {
             return ['ok' => false, 'message' => 'Estado no válido.'];
         }
@@ -1087,42 +1220,35 @@ class TallerServicioSocial extends BaseModel {
         if ($fechaAtencion !== '') {
             $ts = strtotime($fechaAtencion);
             $update['Fecha_Atencion'] = $ts ? date('Y-m-d H:i:s', $ts) : null;
-        } elseif ($estado === 'atendida') {
+        } elseif ($estado === 'atendida' && trim((string)($citaActual['Fecha_Atencion'] ?? '')) === '') {
             $update['Fecha_Atencion'] = date('Y-m-d H:i:s');
-        } elseif (in_array($estado, ['pendiente', 'confirmada', 'cancelada', 'no_asistio'], true)) {
-            // No borrar fecha de atención previa si ya existía; solo auto-asignar al marcar atendida.
         }
 
+        $avisos = [];
         $cambioFecha = false;
         if ($fechaPref !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaPref)) {
             if (!self::esSabado($fechaPref)) {
-                return ['ok' => false, 'message' => 'Las citas solo se agendan los sábados.'];
-            }
-            if ($fechaPref !== $fechaActual) {
+                $avisos[] = 'La fecha no se cambió porque no es sábado.';
+            } elseif ($fechaPref !== $fechaActual) {
                 $update['Fecha_Preferida'] = $fechaPref;
                 $cambioFecha = true;
             }
         }
 
-        $horaNorm = '';
-        if ($horaPref !== '') {
-            $horaNorm = self::normalizarHora($horaPref);
-            if ($horaNorm === '' || !isset(self::HORARIOS_SABADO[$horaNorm])) {
-                return ['ok' => false, 'message' => 'Horario no válido.'];
-            }
-        }
-
+        $horaNorm = $horaPref !== '' ? self::normalizarHora($horaPref) : '';
         $fechaValidar = $update['Fecha_Preferida'] ?? $fechaActual;
         if ($horaNorm !== '' && ($cambioFecha || $horaNorm !== $horaActual)) {
-            $catalogo = $this->horasDisponiblesCatalogo($fechaValidar);
-            if (!in_array($horaNorm, $catalogo, true)) {
-                return ['ok' => false, 'message' => 'Ese horario no está habilitado para ese sábado.'];
+            if (!isset(self::catalogoHorariosSabado()[$horaNorm])) {
+                $avisos[] = 'La hora no se cambió porque no es válida.';
+            } else {
+                $catalogo = $this->horasDisponiblesCatalogo($fechaValidar);
+                $ocupadas = $this->horasOcupadas($fechaValidar, $idCita);
+                if (!in_array($horaNorm, $catalogo, true) || in_array($horaNorm, $ocupadas, true)) {
+                    $avisos[] = 'La hora no se cambió porque ese cupo no está disponible.';
+                } else {
+                    $update['Hora_Preferida'] = $horaNorm;
+                }
             }
-            $ocupadas = $this->horasOcupadas($fechaValidar, $idCita);
-            if (in_array($horaNorm, $ocupadas, true)) {
-                return ['ok' => false, 'message' => 'Ese horario ya está ocupado.'];
-            }
-            $update['Hora_Preferida'] = $horaNorm;
         }
 
         try {
@@ -1137,10 +1263,60 @@ class TallerServicioSocial extends BaseModel {
         }
 
         $verificacion = $this->getById($idCita);
-        if (empty($verificacion) || (string)($verificacion['Estado'] ?? '') !== $estado) {
+        $estadoGuardado = self::normalizarEstado((string)($verificacion['Estado'] ?? $verificacion['estado'] ?? ''));
+        if (empty($verificacion) || $estadoGuardado !== $estado) {
             return ['ok' => false, 'message' => 'No se confirmó el cambio de estado. Intenta de nuevo.'];
         }
 
-        return ['ok' => true, 'message' => 'Cita actualizada correctamente.'];
+        $mensaje = 'Estado actualizado a «' . self::etiquetaEstado($estado) . '».';
+        if ($avisos !== []) {
+            $mensaje .= ' ' . implode(' ', $avisos);
+        }
+
+        return ['ok' => true, 'message' => $mensaje];
+    }
+
+    /**
+     * @return array{ok:bool,message:string}
+     */
+    public function eliminarCita(int $idCita): array {
+        $idCita = (int)$idCita;
+        $cita = $idCita > 0 ? $this->getById($idCita) : null;
+        if (empty($cita)) {
+            return ['ok' => false, 'message' => 'La cita no existe o ya fue eliminada.'];
+        }
+
+        try {
+            $ok = $this->delete($idCita);
+        } catch (Throwable $e) {
+            error_log('Servicio Social eliminarCita: ' . $e->getMessage());
+            return ['ok' => false, 'message' => 'No se pudo eliminar la cita.'];
+        }
+
+        if (!$ok) {
+            return ['ok' => false, 'message' => 'No se pudo eliminar la cita.'];
+        }
+
+        $dir = ServicioSocialDocumentos::directorioCita($idCita);
+        if (is_dir($dir)) {
+            $archivos = scandir($dir);
+            if (is_array($archivos)) {
+                foreach ($archivos as $archivo) {
+                    if ($archivo === '.' || $archivo === '..') {
+                        continue;
+                    }
+                    $ruta = $dir . DIRECTORY_SEPARATOR . $archivo;
+                    if (is_file($ruta)) {
+                        @unlink($ruta);
+                    }
+                }
+            }
+            @rmdir($dir);
+        }
+
+        $nombre = trim((string)($cita['Nombre'] ?? '') . ' ' . (string)($cita['Apellido'] ?? ''));
+        $etiqueta = $nombre !== '' ? $nombre : ('#' . $idCita);
+
+        return ['ok' => true, 'message' => 'Se eliminó la cita de ' . $etiqueta . '.'];
     }
 }

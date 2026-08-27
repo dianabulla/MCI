@@ -114,30 +114,20 @@ class DataIsolation {
      * Verificar si el usuario es líder de célula
      */
     public static function esLiderCelula() {
-        if (self::getUsuarioRol() === self::ROL_LIDER_CELULA) {
-            return true;
+        if (self::esRolCelulas()) {
+            return false;
         }
 
         $rolNombre = self::getUsuarioRolNombre();
-        // Aceptar variantes de nombre: "lider de celula", "lider celula", etc.
-        return (strpos($rolNombre, 'lider de celula') !== false)
-            || (strpos($rolNombre, 'lider celula') !== false)
-            || (strpos($rolNombre, 'lider') !== false && strpos($rolNombre, 'celula') !== false);
+        return PermisosCatalogo::esNombreRolLiderCelula($rolNombre);
     }
 
     /**
      * Verificar si el usuario es líder de 12
      */
     public static function esLider12() {
-        if (self::getUsuarioRol() === self::ROL_LIDER_12) {
-            return true;
-        }
-
         $rolNombre = self::getUsuarioRolNombre();
-        // Aceptar variantes de nombre: "lider de 12", "lider 12".
-        return (strpos($rolNombre, 'lider de 12') !== false)
-            || (strpos($rolNombre, 'lider 12') !== false)
-            || (strpos($rolNombre, 'lider') !== false && strpos($rolNombre, '12') !== false);
+        return PermisosCatalogo::esNombreRolLider12($rolNombre);
     }
 
     /**

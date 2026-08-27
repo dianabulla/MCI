@@ -584,6 +584,9 @@ class PersonaController extends BaseController {
         $checklistNormalizado = $this->normalizarChecklistEscalera($checklistActual);
         $checklistNormalizado['Ganar'][1] = $this->personaTieneAsignacionLiderYMinisterio($personaReferencia);
         $checklistNormalizado['Ganar'][4] = $this->personaTieneCelulaAsignada($personaReferencia);
+        if ($checklistNormalizado['Ganar'][4]) {
+            $checklistNormalizado['Enviar'][2] = true;
+        }
         $checklistNormalizado['_meta']['convenciones'] = $this->normalizarConvencionesSeleccionadas($convencionesSeleccionadas);
 
         return $checklistNormalizado;
@@ -1653,32 +1656,18 @@ class PersonaController extends BaseController {
     }
 
     private function obtenerIdRolDiscipuloDefault() {
-        $idDiscipulo = 0;
-
+        require_once APP . '/Helpers/PermisosCatalogo.php';
         try {
             $roles = $this->rolModel->getAll();
-            foreach ((array)$roles as $rol) {
-                $nombreRol = $this->textoSinAcentos((string)($rol['Nombre_Rol'] ?? ''));
-                if (
-                    strpos($nombreRol, 'discipulo') !== false
-                    || strpos($nombreRol, 'disipulo') !== false
-                    || strpos($nombreRol, 'miembro') !== false
-                ) {
-                    $idDiscipulo = (int)($rol['Id_Rol'] ?? 0);
-                    if ($idDiscipulo > 0) {
-                        return $idDiscipulo;
-                    }
-                }
+            $id = PermisosCatalogo::resolverIdRolDiscipuloDesdeCatalogo((array)$roles);
+            if ($id > 0) {
+                return $id;
             }
         } catch (Exception $e) {
-            $idDiscipulo = 0;
+            return 0;
         }
 
-        if ($idDiscipulo > 0) {
-            return $idDiscipulo;
-        }
-
-        return (int)$this->obtenerIdRolAsistenteDefault();
+        return 0;
     }
 
     private function validarYNormalizarReglasPorRol(array &$data) {
@@ -2801,6 +2790,19 @@ class PersonaController extends BaseController {
         return $normalizado;
     }
 
+    private function etapaEscaleraCompleta(string $etapa, array $valores): bool {
+        if ($etapa === 'Ganar') {
+            // Ítems que se chulean: primer contacto, fonovisita y visita.
+            // Asignación líder/ministerio (1) es automática. Célula (4) no bloquea el paso a Consolidar.
+            return !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]) && !empty($valores[3]);
+        }
+        if ($etapa === 'Enviar') {
+            return !empty($valores[2]);
+        }
+
+        return !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]);
+    }
+
     private function calcularProcesoPorChecklist(array $checklistNormalizado) {
         if (!empty($checklistNormalizado['Ganar'][5])) {
             return 'Ganar';
@@ -2811,12 +2813,7 @@ class PersonaController extends BaseController {
 
         foreach ($etapas as $etapa) {
             $valores = $checklistNormalizado[$etapa] ?? [false, false, false];
-            if ($etapa === 'Ganar') {
-                $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]) && !empty($valores[3]) && !empty($valores[4]);
-            } else {
-                $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]);
-            }
-            if (!$completa) {
+            if (!$this->etapaEscaleraCompleta($etapa, is_array($valores) ? $valores : [])) {
                 break;
             }
             $completadasSeguidas++;
@@ -2956,12 +2953,6 @@ class PersonaController extends BaseController {
             $this->json(['success' => false, 'message' => 'Primero debes asignar líder y ministerio'], 422);
         }
 
-        if ($etapa === 'Discipular' && $marcado && in_array($indice, [0, 1, 2], true)) {
-            $checklistNormalizado['Discipular'][0] = false;
-            $checklistNormalizado['Discipular'][1] = false;
-            $checklistNormalizado['Discipular'][2] = false;
-        }
-
         $checklistNormalizado[$etapa][$indice] = $marcado;
 
         if ($etapa === 'Ganar' && $indice === 5) {
@@ -2974,7 +2965,12 @@ class PersonaController extends BaseController {
             $this->personaModel->cambiarEstado($idPersona, $marcado ? 'Inactivo' : 'Activo');
             if ($marcado) {
                 $this->personaModel->update($idPersona, ['Id_Celula' => null]);
+                $checklistNormalizado['Ganar'][4] = false;
             }
+        }
+
+        if (!empty($checklistNormalizado['Ganar'][4]) && !($etapa === 'Enviar' && $indice === 2 && !$marcado)) {
+            $checklistNormalizado['Enviar'][2] = true;
         }
 
         $nuevoProceso = $this->soportaProceso
@@ -3460,10 +3456,6 @@ class PersonaController extends BaseController {
 
             if ((int)$idRolSeleccionado <= 0 && $idRolDiscipulo > 0) {
                 $idRolSeleccionado = $idRolDiscipulo;
-            }
-
-            if ((int)$idRolSeleccionado <= 0 && $idRolAsistente > 0) {
-                $idRolSeleccionado = $idRolAsistente;
             }
             $rolEsAsistente = $this->esRolAsistente($idRolSeleccionado);
             $idMinisterioNormalizado = $this->normalizarIdMinisterioPost($_POST['id_ministerio'] ?? null);

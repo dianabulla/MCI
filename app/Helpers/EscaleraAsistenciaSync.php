@@ -148,8 +148,12 @@ class EscaleraAsistenciaSync {
             $this->decodificarChecklist((string)($persona['Escalera_Checklist'] ?? ''))
         );
         $this->aplicarReglasAutomaticasGanar($checklist, $persona);
-        $checklist['Consolidar'][0] = $tieneUv;
-        $checklist['Consolidar'][1] = $tieneEncuentro;
+        if ($tieneUv) {
+            $checklist['Consolidar'][0] = true;
+        }
+        if ($tieneEncuentro) {
+            $checklist['Consolidar'][1] = true;
+        }
 
         $this->persistir($idPersona, $checklist, $persona);
     }
@@ -167,7 +171,9 @@ class EscaleraAsistenciaSync {
             $this->decodificarChecklist((string)($persona['Escalera_Checklist'] ?? ''))
         );
         $this->aplicarReglasAutomaticasGanar($checklist, $persona);
-        $checklist['Consolidar'][2] = $marcado;
+        if ($marcado) {
+            $checklist['Consolidar'][2] = true;
+        }
 
         $this->persistir($idPersona, $checklist, $persona);
     }
@@ -212,7 +218,9 @@ class EscaleraAsistenciaSync {
             $this->decodificarChecklist((string)($persona['Escalera_Checklist'] ?? ''))
         );
         $this->aplicarReglasAutomaticasGanar($checklist, $persona);
-        $checklist['Discipular'][$nivel - 1] = $cumple;
+        if ($cumple) {
+            $checklist['Discipular'][$nivel - 1] = true;
+        }
 
         $this->persistir($idPersona, $checklist, $persona);
     }
@@ -259,6 +267,9 @@ class EscaleraAsistenciaSync {
     private function aplicarReglasAutomaticasGanar(array &$checklist, array $persona): void {
         $checklist['Ganar'][1] = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
         $checklist['Ganar'][4] = !empty($persona['Id_Celula']);
+        if (!empty($persona['Id_Celula'])) {
+            $checklist['Enviar'][2] = true;
+        }
     }
 
     private function decodificarChecklist(string $raw): array {
@@ -335,8 +346,9 @@ class EscaleraAsistenciaSync {
         foreach ($etapas as $etapa) {
             $valores = $checklistNormalizado[$etapa] ?? [false, false, false];
             if ($etapa === 'Ganar') {
-                $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2])
-                    && !empty($valores[3]) && !empty($valores[4]);
+                $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]) && !empty($valores[3]);
+            } elseif ($etapa === 'Enviar') {
+                $completa = !empty($valores[2]);
             } else {
                 $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]);
             }

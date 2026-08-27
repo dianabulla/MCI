@@ -162,6 +162,8 @@ foreach ($reportesRoutesFallback as $routeKey => $routeTarget) {
 
 $herramientasRoutesFallback = [
     'herramientas/diagnostico-permisos-persona' => 'DiagnosticoPermisosPersonaController@index',
+    'herramientas/corregir-rol-celulas' => 'CorregirRolCelulasController@index',
+    'herramientas/corregir-rol-celulas/aplicar' => 'CorregirRolCelulasController@aplicar',
 ];
 
 $discipularRoutesFallback = [

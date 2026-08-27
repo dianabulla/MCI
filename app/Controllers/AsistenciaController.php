@@ -59,6 +59,39 @@ class AsistenciaController extends BaseController {
         return $url;
     }
 
+    private function esPeticionAjaxAsistencia(): bool {
+        $xhr = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''));
+        if ($xhr === 'xmlhttprequest') {
+            return true;
+        }
+        $accept = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
+        return strpos($accept, 'application/json') !== false;
+    }
+
+    private function responderRegistroCelula(bool $esAjax, bool $ok, string $mensaje, string $returnUrl, string $fechaHora): void {
+        if ($esAjax) {
+            if (!$ok) {
+                http_response_code(400);
+            }
+            $this->json([
+                'ok' => $ok,
+                'success' => $ok,
+                'message' => $mensaje,
+                'fecha_hora' => $fechaHora,
+                'redirect' => $returnUrl,
+            ], $ok ? 200 : 400);
+        }
+
+        if ($ok) {
+            header('Location: ' . $returnUrl);
+            exit;
+        }
+
+        $_SESSION['asistencia_flash_error'] = $mensaje;
+        header('Location: ' . PUBLIC_URL . '?url=asistencias/registrar');
+        exit;
+    }
+
     /**
      * Miembros activos de una célula sin duplicar por cédula (JSON para reporte).
      */
@@ -487,44 +520,82 @@ class AsistenciaController extends BaseController {
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $returnUrl = $this->resolverReturnUrlAsistencias($_POST['return_url'] ?? '');
-            $idCelula = $_POST['id_celula'];
-            $fecha = $_POST['fecha'];
+            $idCelula = (int)($_POST['id_celula'] ?? 0);
+            $fecha = trim((string)($_POST['fecha'] ?? ''));
             $asistencias = $_POST['asistencias'] ?? [];
             $tema = $_POST['tema'] ?? null;
             $tipoCelula = $_POST['tipo_celula'] ?? null;
             $noSeRealizo = !empty($_POST['no_se_realizo']);
             $observaciones = trim((string)($_POST['observaciones'] ?? ''));
+            $esAjax = $this->esPeticionAjaxAsistencia();
+            $marca = date('d/m/Y h:i');
+            $ampm = ((int)date('G') < 12) ? 'a.m.' : 'p.m.';
+            $fechaHora = $marca . ' ' . $ampm;
 
-            if ($noSeRealizo) {
+            try {
+                if ($idCelula <= 0) {
+                    throw new RuntimeException('Selecciona una célula para reportar.');
+                }
+                if ($fecha === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+                    throw new RuntimeException('Indica una fecha válida para el reporte.');
+                }
+                if (!is_array($asistencias) || $asistencias === []) {
+                    throw new RuntimeException('No se pudo reportar la célula. No hay miembros para registrar.');
+                }
+
+                if ($noSeRealizo) {
+                    foreach ($asistencias as $idPersona => $asistio) {
+                        $asistencias[$idPersona] = 0;
+                    }
+
+                    if ($observaciones === '') {
+                        $observaciones = 'No se realizó';
+                    } elseif (stripos($observaciones, 'no se realiz') === false) {
+                        $observaciones = 'No se realizó. ' . $observaciones;
+                    }
+                }
+
+                $observaciones = $observaciones !== '' ? $observaciones : null;
+                $guardados = 0;
+                $fallos = 0;
+
                 foreach ($asistencias as $idPersona => $asistio) {
-                    $asistencias[$idPersona] = 0;
+                    $asistioValor = (int)$asistio;
+                    try {
+                        $okFila = $this->asistenciaModel->registrarAsistencia(
+                            $idPersona,
+                            $idCelula,
+                            $fecha,
+                            $asistioValor,
+                            $tema,
+                            $tipoCelula,
+                            $observaciones
+                        );
+                        if ($okFila) {
+                            $guardados++;
+                        } else {
+                            $fallos++;
+                        }
+                    } catch (Throwable $eFila) {
+                        error_log('Error al registrar asistencia de célula: ' . $eFila->getMessage());
+                        $fallos++;
+                    }
                 }
 
-                if ($observaciones === '') {
-                    $observaciones = 'No se realizó';
-                } elseif (stripos($observaciones, 'no se realiz') === false) {
-                    $observaciones = 'No se realizó. ' . $observaciones;
+                if ($guardados <= 0) {
+                    throw new RuntimeException('No se pudo reportar la célula. Inténtalo de nuevo.');
                 }
-            }
 
-            $observaciones = $observaciones !== '' ? $observaciones : null;
-            
-            foreach ($asistencias as $idPersona => $asistio) {
-                // Convertir a entero: "1" o 1 = asistió, "0" o vacío = no asistió
-                $asistioValor = (int)$asistio;
-                $this->asistenciaModel->registrarAsistencia(
-                    $idPersona,
-                    $idCelula,
-                    $fecha,
-                    $asistioValor,
-                    $tema,
-                    $tipoCelula,
-                    $observaciones
-                );
+                $mensajeOk = 'Célula reportada con éxito. Fecha y hora: ' . $fechaHora;
+                $this->responderRegistroCelula($esAjax, true, $mensajeOk, $returnUrl, $fechaHora);
+            } catch (Throwable $e) {
+                error_log('Error al reportar célula: ' . $e->getMessage());
+                $mensajeError = $e instanceof RuntimeException
+                    ? $e->getMessage()
+                    : 'Ocurrió un error y no se pudo reportar la célula. Inténtalo de nuevo.';
+                $this->responderRegistroCelula($esAjax, false, $mensajeError, $returnUrl, $fechaHora);
             }
-            
-            header('Location: ' . $returnUrl);
-            exit;
+            return;
         } else {
             $returnUrl = $this->resolverReturnUrlAsistencias($_GET['return_url'] ?? '');
             $filtroCelulas = DataIsolation::generarFiltroCelulas();

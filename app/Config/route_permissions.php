@@ -302,6 +302,12 @@ return [
 
     'reportes' => 'reportes:ver',
 
+    'reportes/dashboard-ganar' => ['checker' => 'puedeVerDashboardGanar'],
+
+    'reportes/dashboard-ganar-redes' => ['checker' => 'puedeVerDashboardGanar'],
+
+    'reportes/dashboard-ganar/exportar-celulas-lider' => ['checker' => 'puedeVerDashboardGanar'],
+
     'reportes/dashboard-escuelas-uv' => ['checker' => 'puedeVerDashboardProgramaUv'],
 
     'reportes/dashboard-escuelas-uv-detalle' => ['checker' => 'puedeVerDashboardProgramaUv'],
@@ -344,13 +350,15 @@ return [
 
     'talleres/servicio-social/ver' => ['checker' => 'puedeAccederModuloTalleres'],
 
-    'talleres/servicio-social/actualizar' => ['any' => ['talleres:editar', 'talleres:ver_respuestas']],
+    'talleres/servicio-social/actualizar' => ['checker' => 'puedeGestionarServicioSocial'],
 
-    'talleres/servicio-social/horarios' => ['any' => ['talleres:editar', 'talleres:ver_respuestas']],
+    'talleres/servicio-social/eliminar' => ['checker' => 'puedeGestionarServicioSocial'],
 
-    'talleres/servicio-social/horarios/guardar' => ['any' => ['talleres:editar', 'talleres:ver_respuestas']],
+    'talleres/servicio-social/horarios' => ['checker' => 'puedeGestionarServicioSocial'],
 
-    'talleres/servicio-social/guardar-historia' => ['any' => ['talleres:editar', 'talleres:ver_respuestas']],
+    'talleres/servicio-social/horarios/guardar' => ['checker' => 'puedeGestionarServicioSocial'],
+
+    'talleres/servicio-social/guardar-historia' => ['checker' => 'puedeGestionarServicioSocial'],
 
     'talleres/servicio-social/exportar' => ['any' => ['talleres:exportar_excel', 'talleres:ver_respuestas', 'talleres:ver']],
 
@@ -463,6 +471,10 @@ return [
     'herramientas/diagnostico-documento/exportar' => ['admin_only' => true],
 
     'herramientas/diagnostico-permisos-persona' => ['admin_only' => true],
+
+    'herramientas/corregir-rol-celulas' => ['admin_only' => true],
+
+    'herramientas/corregir-rol-celulas/aplicar' => ['admin_only' => true],
 
 ];
 

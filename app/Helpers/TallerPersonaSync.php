@@ -794,14 +794,9 @@ class TallerPersonaSync {
 
 
 
-        $idRol = $esTourLevantate
-            ? $this->obtenerIdRolDiscipuloDefault()
-            : $this->obtenerIdRolAsistenteDefault();
-
+        $idRol = $this->obtenerIdRolDiscipuloDefault();
         if ($idRol <= 0) {
-
             $idRol = $this->obtenerIdRolAsistenteDefault();
-
         }
 
         if ($idRol > 0) {

@@ -10,6 +10,7 @@ require_once APP . '/Models/UserRole.php';
 require_once APP . '/Controllers/AuthController.php';
 require_once APP . '/Helpers/GestionSistemaAccess.php';
 require_once APP . '/Helpers/PermisoGuard.php';
+require_once APP . '/Helpers/PermisosCatalogo.php';
 
 class CuentaController extends BaseController {
     private $personaModel;
@@ -324,6 +325,12 @@ class CuentaController extends BaseController {
 
     private function sincronizarRolMinisterialPersona(int $idPersona, int $idRol): void {
         if ($idPersona <= 0 || $idRol <= 0) {
+            return;
+        }
+
+        $filaRol = $this->rolModel->getById($idRol);
+        $nombreRol = trim((string)($filaRol['Nombre_Rol'] ?? ''));
+        if (PermisosCatalogo::esRolAdministrativoEspecial($idRol, $nombreRol)) {
             return;
         }
 

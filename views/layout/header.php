@@ -25,7 +25,7 @@ if (class_exists('AuthController') && AuthController::estaAutenticado()) {
 }
 ?>
 <?php
-$sessionTimeoutSec = 1800;
+$sessionTimeoutSec = 0;
 $loginSesionExpiradaUrl = function_exists('public_app_url')
     ? public_app_url('auth/login', ['sesion' => 'expirada'])
     : '';
@@ -33,8 +33,18 @@ if (class_exists('SessionManager', false)) {
     $sessionTimeoutSec = (int)SessionManager::IDLE_TIMEOUT_SECONDS;
     $loginSesionExpiradaUrl = SessionManager::loginUrlConSesionExpirada();
 }
+$attrsSesionTimeout = '';
+if (
+    class_exists('AuthController')
+    && AuthController::estaAutenticado()
+    && $sessionTimeoutSec > 0
+    && $loginSesionExpiradaUrl !== ''
+) {
+    $attrsSesionTimeout = ' data-session-timeout="' . (int)$sessionTimeoutSec . '" data-login-expired-url="'
+        . htmlspecialchars($loginSesionExpiradaUrl, ENT_QUOTES, 'UTF-8') . '"';
+}
 ?>
-<body<?= $productTourRole !== '' ? ' data-product-tour-role="' . htmlspecialchars($productTourRole, ENT_QUOTES, 'UTF-8') . '"' : '' ?><?php if (class_exists('AuthController') && AuthController::estaAutenticado() && $loginSesionExpiradaUrl !== ''): ?> data-session-timeout="<?= $sessionTimeoutSec ?>" data-login-expired-url="<?= htmlspecialchars($loginSesionExpiradaUrl, ENT_QUOTES, 'UTF-8') ?>"<?php endif; ?>>
+<body<?= $productTourRole !== '' ? ' data-product-tour-role="' . htmlspecialchars($productTourRole, ENT_QUOTES, 'UTF-8') . '"' : '' ?><?= $attrsSesionTimeout ?>>
 <?php
 $currentUrl = $_GET['url'] ?? 'home';
 $isActive = function(array $prefixes) use ($currentUrl) {
@@ -70,12 +80,10 @@ $puedeVerMinisterios = $puedeVer('ministerios');
 $puedeVerRegistroTeensKids = $puedeVer('teen');
 $puedeVerEventosMenu = AuthController::esAdministrador() || AuthController::puede('eventos:ver');
 $puedeVerAsistencias = $puedeVer('asistencias');
-$puedeVerPeticiones = $puedeVer('peticiones');
 $puedeVerTalleres = AuthController::puedeAccederModuloTalleres();
-$puedeVerTransmisiones = $puedeVer('transmisiones');
 $puedeVerObsequios = $puedeVer('entrega_obsequio');
 $puedeVerNehemias = $puedeVer('nehemias');
-$puedeVerReportes = $puedeVer('reportes');
+$puedeVerReportes = $puedeVer('reportes') || AuthController::puedeVerDashboardGanar();
 $puedeVerRoles = $puedeVer('roles');
 $puedeVerMaterialCelulasEnEnviar = $puedeVerEnviar && (AuthController::esAdministrador() || AuthController::puedeVerMaterialCelulas());
 $puedeVerAsistenciasEnEnviar = $puedeVerEnviar && $puedeVerAsistencias;
@@ -255,7 +263,7 @@ if ($esMenuMaestro) {
         $puedeFormularioPublicoRapido = AuthController::puedeVerModulo('personas_formulario_publico');
         $puedeAlgunAccesoRapido = $puedeNuevoDiscipuloRapido || $puedePlantillasWaRapido || $puedeFormularioPublicoRapido;
         ?>
-        <?php if (!$esMenuMaestro && !$esMenuDiscipulo && !$esMenuServicioSocial && ($puedeAlgunAccesoRapido || $puedeVerPeticiones || $puedeVerTalleres || $puedeVerTransmisiones || $puedeVerEventosMenu)): ?>
+        <?php if (!$esMenuMaestro && !$esMenuDiscipulo && !$esMenuServicioSocial && ($puedeAlgunAccesoRapido || $puedeVerTalleres || $puedeVerEventosMenu)): ?>
         <div class="sidebar-quick-access">
             <?php if ($puedeAlgunAccesoRapido): ?>
             <details class="sidebar-quick-details">
@@ -287,8 +295,8 @@ if ($esMenuMaestro) {
             </details>
             <?php endif; ?>
             <?php
-            $puedeAlgunEnlaceComunidad = $puedeVerPeticiones || $puedeVerTalleres || $puedeVerTransmisiones || $puedeVerEventosMenu;
-            $navComunidadActiva = $isActive(['peticiones']) || $isActive(['talleres']) || $isActive(['transmisiones']) || $isActive(['eventos']);
+            $puedeAlgunEnlaceComunidad = $puedeVerTalleres || $puedeVerEventosMenu;
+            $navComunidadActiva = $isActive(['talleres']) || $isActive(['eventos']);
             ?>
             <?php if ($puedeAlgunEnlaceComunidad): ?>
             <details class="sidebar-quick-details sidebar-quick-details--comunidad"<?= $navComunidadActiva ? ' open' : '' ?>>
@@ -298,22 +306,10 @@ if ($esMenuMaestro) {
                     <span class="sidebar-quick-caret"><i class="bi bi-chevron-down"></i></span>
                 </summary>
                 <div class="sidebar-quick-modules">
-                    <?php if ($puedeVerPeticiones): ?>
-                    <a class="sidebar-quick-text-link<?= $isActive(['peticiones']) ? ' is-active' : '' ?>" href="<?= PUBLIC_URL ?>?url=peticiones">
-                        <i class="bi bi-chat-heart"></i>
-                        <span>Peticiones</span>
-                    </a>
-                    <?php endif; ?>
                     <?php if ($puedeVerTalleres): ?>
                     <a class="sidebar-quick-text-link<?= $isActive(['talleres']) ? ' is-active' : '' ?>" href="<?= PUBLIC_URL ?>?url=talleres">
                         <i class="bi bi-ui-checks-grid"></i>
                         <span>Talleres</span>
-                    </a>
-                    <?php endif; ?>
-                    <?php if ($puedeVerTransmisiones): ?>
-                    <a class="sidebar-quick-text-link<?= $isActive(['transmisiones']) ? ' is-active' : '' ?>" href="<?= PUBLIC_URL ?>?url=transmisiones">
-                        <i class="bi bi-broadcast"></i>
-                        <span>Transmisiones</span>
                     </a>
                     <?php endif; ?>
                     <?php if ($puedeVerEventosMenu): ?>
@@ -405,7 +401,7 @@ if ($esMenuMaestro) {
             <?php endif; ?>
 
             <?php if ($puedeVerReportes): ?>
-            <a class="sidebar-link <?= ($currentUrl === 'reportes/dashboard-ganar') ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=reportes/dashboard-ganar">
+            <a class="sidebar-link <?= (strpos((string)$currentUrl, 'reportes/dashboard-ganar') === 0) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=reportes/dashboard-ganar">
                 <span class="sidebar-link-icon"><i class="bi bi-speedometer2"></i></span><span class="sidebar-link-text">Dashboard Ganar</span>
             </a>
             <?php endif; ?>

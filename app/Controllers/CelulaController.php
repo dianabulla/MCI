@@ -735,7 +735,13 @@ class CelulaController extends BaseController {
             $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono, r.Nombre_Rol as Rol
                     FROM persona p
                     LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
-                    WHERE p.Id_Rol IN (3, 6, 8)
+                    WHERE (
+                        LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%pastor%'
+                        OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lider de 12%'
+                        OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lider 12%'
+                        OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lider de celula%'
+                        OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lider celula%'
+                    )
                     AND (p.Nombre LIKE ? OR p.Apellido LIKE ?)
                     AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
                     ORDER BY p.Nombre, p.Apellido
@@ -774,7 +780,12 @@ class CelulaController extends BaseController {
             // Sin filtro DataIsolation para permitir asignar cualquier líder de 12 del sistema.
             $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono
                     FROM persona p
-                    WHERE p.Id_Rol = 8
+                    LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
+                    WHERE (
+                        LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lider de 12%'
+                        OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lider 12%'
+                        OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lideres de 12%'
+                    )
                     AND (p.Nombre LIKE ? OR p.Apellido LIKE ?)
                     AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
                     ORDER BY p.Nombre, p.Apellido

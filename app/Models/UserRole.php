@@ -59,6 +59,20 @@ class UserRole extends BaseModel {
             return false;
         }
 
+        require_once APP . '/Helpers/PermisosCatalogo.php';
+        $filaPrincipal = $this->query('SELECT Nombre_Rol FROM rol WHERE Id_Rol = ? LIMIT 1', [$idRolPrincipal]);
+        $nombrePrincipal = trim((string)($filaPrincipal[0]['Nombre_Rol'] ?? ''));
+        if (PermisosCatalogo::esRolAdministrativoEspecial($idRolPrincipal, $nombrePrincipal)) {
+            require_once APP . '/Models/Persona.php';
+            $persona = (new Persona())->getById($idPersona);
+            $idRolFicha = (int)($persona['Id_Rol'] ?? 0);
+            $nombreFicha = trim((string)($persona['Nombre_Rol'] ?? ''));
+            if ($idRolFicha > 0 && $idRolFicha !== $idRolPrincipal
+                && !PermisosCatalogo::esRolAdministrativoEspecial($idRolFicha, $nombreFicha)) {
+                return $this->establecerRolUnico($idPersona, $idRolFicha);
+            }
+        }
+
         $idRolMaestro = $this->buscarRolPorAlias('maestro');
         $idRolDiscipulo = $this->buscarRolPorAlias('discipulo');
         $conservarMaestroSecundario = false;
@@ -245,6 +259,7 @@ class UserRole extends BaseModel {
             return 0;
         }
 
+        require_once APP . '/Helpers/PermisosCatalogo.php';
         $rows = $this->query("SELECT Id_Rol, Nombre_Rol FROM rol ORDER BY Id_Rol ASC");
         foreach ($rows as $row) {
             $idRol = (int)($row['Id_Rol'] ?? 0);
@@ -255,6 +270,13 @@ class UserRole extends BaseModel {
 
             if ($alias === 'discipulo') {
                 if (strpos($nombre, 'discipul') !== false || strpos($nombre, 'disipul') !== false || strpos($nombre, 'discipl') !== false || strpos($nombre, 'disipl') !== false) {
+                    return $idRol;
+                }
+            }
+
+            if ($alias === 'administrador' || $alias === 'admin') {
+                if (PermisosCatalogo::esNombreRolAdministrador((string)($row['Nombre_Rol'] ?? ''))
+                    && !PermisosCatalogo::esNombreRolPastoral((string)($row['Nombre_Rol'] ?? ''))) {
                     return $idRol;
                 }
             }

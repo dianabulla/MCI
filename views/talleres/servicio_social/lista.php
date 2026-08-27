@@ -84,6 +84,7 @@ $qExport = http_build_query(array_filter([
     <div class="ss-stat"><strong><?= (int)($conteos['confirmada'] ?? 0) ?></strong><span>Confirmadas</span></div>
     <div class="ss-stat"><strong><?= (int)($conteos['atendida'] ?? 0) ?></strong><span>Atendidas</span></div>
     <div class="ss-stat"><strong><?= (int)($conteos['cancelada'] ?? 0) ?></strong><span>Canceladas</span></div>
+    <div class="ss-stat"><strong><?= (int)($conteos['no_asistio'] ?? 0) ?></strong><span>No asistió</span></div>
 </div>
 
 <div class="form-container" style="margin-bottom:16px;">
@@ -171,7 +172,7 @@ $qExport = http_build_query(array_filter([
                 <?php foreach ($citas as $cita): ?>
                     <?php
                     $id = (int)($cita['Id_Cita'] ?? 0);
-                    $estado = (string)($cita['Estado'] ?? 'pendiente');
+                    $estado = TallerServicioSocial::normalizarEstado((string)($cita['Estado'] ?? 'pendiente'));
                     $tipo = (string)($cita['Tipo_Cita'] ?? '');
                     $rem = (string)($cita['Remitido_Por'] ?? '');
                     $nombre = trim((string)($cita['Nombre'] ?? '') . ' ' . (string)($cita['Apellido'] ?? ''));
@@ -217,7 +218,15 @@ $qExport = http_build_query(array_filter([
                                 <?= htmlspecialchars(TallerServicioSocial::etiquetaEstado($estado), ENT_QUOTES, 'UTF-8') ?>
                             </span>
                         </td>
-                        <td>
+                        <td style="white-space:nowrap;">
+                            <?php if ($puedeGestionar): ?>
+                            <a href="<?= PUBLIC_URL ?>?url=talleres/servicio-social/eliminar&id=<?= $id ?>"
+                               class="btn btn-sm btn-outline-danger"
+                               title="Eliminar cita"
+                               onclick="return confirm('¿Eliminar la cita de <?= htmlspecialchars($nombre !== '' ? $nombre : ('#' . $id), ENT_QUOTES, 'UTF-8') ?>? Esta acción no se puede deshacer.');">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                            <?php endif; ?>
                             <a href="<?= PUBLIC_URL ?>?url=talleres/servicio-social/ver&id=<?= $id ?>" class="btn btn-sm btn-outline-primary" title="Ver respuesta">
                                 <i class="bi bi-eye"></i>
                             </a>

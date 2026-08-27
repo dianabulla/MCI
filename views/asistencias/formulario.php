@@ -1,6 +1,10 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
 <?php $volverUrlAsistencias = (string)($return_url ?? (PUBLIC_URL . '?url=asistencias')); ?>
+<?php
+$flashErrorAsistencia = (string)($_SESSION['asistencia_flash_error'] ?? '');
+unset($_SESSION['asistencia_flash_error']);
+?>
 
 <div class="page-header">
     <h2>Registrar Asistencia</h2>
@@ -9,6 +13,10 @@
         <a href="<?= htmlspecialchars($volverUrlAsistencias) ?>" class="btn btn-secondary">Volver</a>
     </div>
 </div>
+
+<?php if ($flashErrorAsistencia !== ''): ?>
+<div class="alert alert-danger"><?= htmlspecialchars($flashErrorAsistencia, ENT_QUOTES, 'UTF-8') ?></div>
+<?php endif; ?>
 
 <div class="form-container" style="max-width: 800px;">
     <form method="POST" id="formAsistencia">
@@ -370,6 +378,9 @@ async function cargarMiembrosCelula(celulaId) {
         duplicadosOcultosCelula = parseInt(data.duplicados_ocultos || 0, 10);
     } catch (err) {
         listaMiembros.innerHTML = '<div class="alert alert-warning">' + escapeHtml(err.message || 'Error al cargar miembros') + '</div>';
+        if (!navigator.onLine || /failed to fetch|networkerror|load failed/i.test(String(err.message || ''))) {
+            window.alert('No tienes conexión a internet. Sal del sistema e ingresa nuevamente.');
+        }
         return;
     }
 
@@ -537,7 +548,11 @@ if (btnGuardarNoDisponible) {
         } catch (err) {
             boton.disabled = false;
             boton.textContent = textoOriginal;
-            window.alert(err.message || 'Error al marcar No se dispuso.');
+            if (!navigator.onLine || /failed to fetch|networkerror|load failed/i.test(String(err.message || ''))) {
+                window.alert('No tienes conexión a internet. Sal del sistema e ingresa nuevamente.');
+            } else {
+                window.alert(err.message || 'Error al marcar No se dispuso.');
+            }
         } finally {
             btnGuardarNoDisponible.disabled = false;
         }
@@ -564,6 +579,90 @@ if (celulaPreseleccionada) {
         actualizarEnlacePersonaNueva(celulaInicial.Id_Celula);
         cargarMiembrosCelula(celulaInicial.Id_Celula);
     }
+}
+
+const MSG_SIN_CONEXION = 'No tienes conexión a internet. Sal del sistema e ingresa nuevamente.';
+const MSG_ERROR_REPORTE = 'Ocurrió un error y no se pudo reportar la célula. Inténtalo de nuevo.';
+const urlVolverAsistencias = <?= json_encode($volverUrlAsistencias, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+
+function hayConexionInternet() {
+    return navigator.onLine !== false;
+}
+
+function esErrorDeConexion(err) {
+    if (!hayConexionInternet()) {
+        return true;
+    }
+    const msg = String((err && err.message) || err || '').toLowerCase();
+    return msg.indexOf('failed to fetch') !== -1
+        || msg.indexOf('networkerror') !== -1
+        || msg.indexOf('load failed') !== -1
+        || msg.indexOf('network request failed') !== -1;
+}
+
+window.addEventListener('offline', function () {
+    window.alert(MSG_SIN_CONEXION);
+});
+
+const formAsistencia = document.getElementById('formAsistencia');
+if (formAsistencia) {
+    formAsistencia.addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        if (!hayConexionInternet()) {
+            window.alert(MSG_SIN_CONEXION);
+            return;
+        }
+
+        const idCelula = String((celulaHidden && celulaHidden.value) || '').trim();
+        if (!idCelula) {
+            window.alert('Selecciona una célula para reportar.');
+            return;
+        }
+
+        const btn = formAsistencia.querySelector('button[type="submit"]');
+        if (btn) {
+            btn.disabled = true;
+            btn.dataset.textoOriginal = btn.textContent;
+            btn.textContent = 'Reportando...';
+        }
+
+        try {
+            const resp = await fetch(window.location.href, {
+                method: 'POST',
+                body: new FormData(formAsistencia),
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            let data = null;
+            try {
+                data = await resp.json();
+            } catch (parseErr) {
+                throw new Error(MSG_ERROR_REPORTE);
+            }
+
+            if (!resp.ok || !data || !data.ok) {
+                throw new Error((data && data.message) ? data.message : MSG_ERROR_REPORTE);
+            }
+
+            window.alert(data.message || ('Célula reportada con éxito. Fecha y hora: ' + (data.fecha_hora || '')));
+            window.location.href = data.redirect || urlVolverAsistencias;
+        } catch (err) {
+            if (esErrorDeConexion(err)) {
+                window.alert(MSG_SIN_CONEXION);
+            } else {
+                window.alert(err.message || MSG_ERROR_REPORTE);
+            }
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = btn.dataset.textoOriginal || 'Guardar Asistencias';
+            }
+        }
+    });
 }
 </script>
 

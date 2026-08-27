@@ -1,17 +1,22 @@
 <?php
 /**
- * Sesión: tiempo de inactividad y cierre seguro.
+ * Sesión: cookie de navegador y cierre al cerrar sesión (sin corte por inactividad).
  */
 class SessionManager {
-    /** Segundos sin actividad antes de cerrar sesión (30 minutos). */
-    public const IDLE_TIMEOUT_SECONDS = 1800;
+    /** 0 = no cerrar la sesión por inactividad. */
+    public const IDLE_TIMEOUT_SECONDS = 0;
+
+    /** Conservar el archivo de sesión aunque no haya peticiones (30 días). */
+    public const SESSION_GC_SECONDS = 2592000;
 
     /**
      * Debe llamarse antes de session_start().
      */
     public static function configure(): void {
-        $timeout = self::IDLE_TIMEOUT_SECONDS;
-        ini_set('session.gc_maxlifetime', (string)$timeout);
+        $gc = self::IDLE_TIMEOUT_SECONDS > 0
+            ? self::IDLE_TIMEOUT_SECONDS
+            : self::SESSION_GC_SECONDS;
+        ini_set('session.gc_maxlifetime', (string)$gc);
         ini_set('session.use_strict_mode', '1');
         ini_set('session.use_only_cookies', '1');
 
@@ -55,7 +60,7 @@ class SessionManager {
         $now = time();
         $last = (int)($_SESSION['last_activity'] ?? 0);
 
-        if ($last > 0 && ($now - $last) > self::IDLE_TIMEOUT_SECONDS) {
+        if (self::IDLE_TIMEOUT_SECONDS > 0 && $last > 0 && ($now - $last) > self::IDLE_TIMEOUT_SECONDS) {
             self::destroySession();
             self::respondSessionExpired();
         }

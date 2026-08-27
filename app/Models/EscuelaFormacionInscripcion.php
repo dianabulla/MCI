@@ -823,10 +823,9 @@ class EscuelaFormacionInscripcion extends BaseModel {
         );
 
         $mapa = [];
-        foreach ((array)$rows as $row) {
-            $id = (int)($row['Id_Persona'] ?? 0);
+        $marcar = static function (array &$mapa, int $id, string $programa): void {
             if ($id <= 0) {
-                continue;
+                return;
             }
             if (!isset($mapa[$id])) {
                 $mapa[$id] = [
@@ -835,13 +834,77 @@ class EscuelaFormacionInscripcion extends BaseModel {
                     'capacitacion_destino' => false,
                 ];
             }
-            $programa = strtolower(trim((string)($row['Programa'] ?? '')));
-            if ($programa === 'encuentro') {
+            $programa = strtolower(trim($programa));
+            if ($programa === 'encuentro' || $programa === 'universidad_vida' || $programa === 'bautismo') {
                 $mapa[$id]['encuentro'] = true;
-            } elseif ($programa === 'universidad_vida') {
                 $mapa[$id]['universidad_vida'] = true;
             } elseif ($programa === 'capacitacion_destino' || strpos($programa, 'capacitacion_destino_') === 0) {
                 $mapa[$id]['capacitacion_destino'] = true;
+            }
+        };
+
+        foreach ((array)$rows as $row) {
+            $marcar($mapa, (int)($row['Id_Persona'] ?? 0), (string)($row['Programa'] ?? ''));
+        }
+
+        $personas = $this->query(
+            "SELECT Id_Persona, Numero_Documento, Usuario, Telefono
+             FROM persona
+             WHERE Id_Persona IN ({$inSql})"
+        );
+        $cedulaAIds = [];
+        $telefonoAIds = [];
+        foreach ((array)$personas as $persona) {
+            $id = (int)($persona['Id_Persona'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $cedulaNorm = $this->normalizarDocumentoParaComparacion((string)($persona['Numero_Documento'] ?? ''));
+            if ($cedulaNorm === '') {
+                $cedulaNorm = $this->normalizarDocumentoParaComparacion((string)($persona['Usuario'] ?? ''));
+            }
+            $telefonoNorm = $this->normalizarTelefonoParaComparacion((string)($persona['Telefono'] ?? ''));
+            if ($cedulaNorm !== '') {
+                $cedulaAIds[$cedulaNorm][$id] = $id;
+            }
+            if ($telefonoNorm !== '') {
+                $telefonoAIds[$telefonoNorm][$id] = $id;
+            }
+        }
+
+        if ($cedulaAIds !== []) {
+            $exprCedula = $this->sqlExprCedulaNormalizada('Cedula');
+            $cedulasSql = implode(',', array_map(static function (string $c): string {
+                return "'" . str_replace("'", "''", $c) . "'";
+            }, array_keys($cedulaAIds)));
+            $rowsCedula = $this->query(
+                "SELECT {$exprCedula} AS Cedula_Norm, Programa
+                 FROM {$this->table}
+                 WHERE {$exprCedula} IN ({$cedulasSql})"
+            );
+            foreach ((array)$rowsCedula as $row) {
+                $cedulaNorm = (string)($row['Cedula_Norm'] ?? '');
+                foreach (array_keys($cedulaAIds[$cedulaNorm] ?? []) as $idPersona) {
+                    $marcar($mapa, (int)$idPersona, (string)($row['Programa'] ?? ''));
+                }
+            }
+        }
+
+        if ($telefonoAIds !== []) {
+            $exprTelefono = $this->sqlExprTelefonoNormalizado('Telefono');
+            $telefonosSql = implode(',', array_map(static function (string $t): string {
+                return "'" . str_replace("'", "''", $t) . "'";
+            }, array_keys($telefonoAIds)));
+            $rowsTel = $this->query(
+                "SELECT {$exprTelefono} AS Telefono_Norm, Programa
+                 FROM {$this->table}
+                 WHERE {$exprTelefono} IN ({$telefonosSql})"
+            );
+            foreach ((array)$rowsTel as $row) {
+                $telNorm = (string)($row['Telefono_Norm'] ?? '');
+                foreach (array_keys($telefonoAIds[$telNorm] ?? []) as $idPersona) {
+                    $marcar($mapa, (int)$idPersona, (string)($row['Programa'] ?? ''));
+                }
             }
         }
 

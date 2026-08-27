@@ -260,6 +260,10 @@ class TallerController extends BaseController {
 
             'modo' => 'crear',
 
+            'es_presentacion_ninos' => false,
+
+            'acepta_pago' => true,
+
         ]);
 
     }
@@ -428,6 +432,10 @@ class TallerController extends BaseController {
 
             'modo' => 'editar',
 
+            'es_presentacion_ninos' => $this->model->esPresentacionNinos($formulario),
+
+            'acepta_pago' => $this->model->aceptaPago($formulario),
+
         ]);
 
     }
@@ -505,6 +513,8 @@ class TallerController extends BaseController {
             'Mensaje_Gracias' => $mensajeGracias !== '' ? $mensajeGracias : null,
 
             'Texto_Autorizacion' => $textoAutorizacion !== '' ? $textoAutorizacion : null,
+
+            'Acepta_Pago' => 1,
 
         ];
 
@@ -845,6 +855,8 @@ class TallerController extends BaseController {
             'solo_graficas' => $soloGraficas,
 
             'es_presentacion_ninos' => $this->model->esPresentacionNinos($formulario),
+
+            'acepta_pago' => $this->model->aceptaPago($formulario),
 
             'es_tour_levantate' => $esTourLevantate,
 
@@ -1567,11 +1579,21 @@ class TallerController extends BaseController {
     /**
      * @param array<string, mixed> $formulario
      * @param array<string, mixed> $json
-     * @param array<string, mixed> $pago
      * @return array<string, mixed>
      */
+    private function metadatosTicketPago(array $formulario, array $json): array {
+        $titulo = trim((string)($formulario['Titulo'] ?? 'Taller'));
+        $esPresentacion = $this->model->esPresentacionNinos($formulario);
+        return [
+            'etiqueta_nombre' => $esPresentacion ? 'Niño(a)' : 'Inscrito',
+            'pie_comprobante' => 'Comprobante de pago — ' . ($titulo !== '' ? $titulo : 'Taller'),
+            'nombre' => trim((string)($json['nino_nombre'] ?? $json['persona_nombre'] ?? '')),
+            'documento' => trim((string)($json['nino_documento'] ?? $json['persona_documento'] ?? '')),
+            'acudiente' => trim((string)($json['padres_nombre'] ?? '')),
+        ];
+    }
+
     private function construirTicketPagoDesdeDatos(array $formulario, array $json, array $pago): array {
-        $nombreNino = trim((string)($json['nino_nombre'] ?? $json['persona_nombre'] ?? ''));
         $tipoPago = trim((string)($pago['Tipo_Pago'] ?? 'completo'));
         if ($tipoPago === 'completo') {
             $tipoEtiqueta = 'Pago total';
@@ -1586,12 +1608,16 @@ class TallerController extends BaseController {
             $fechaRegistro = substr($fechaRegistro, 0, 16);
         }
 
+        $meta = $this->metadatosTicketPago($formulario, $json);
+
         return [
             'fecha' => $fechaRegistro !== '' ? $fechaRegistro : date('Y-m-d H:i'),
             'formulario' => (string)($formulario['Titulo'] ?? 'Taller'),
-            'nombre' => $nombreNino,
-            'documento' => trim((string)($json['nino_documento'] ?? $json['persona_documento'] ?? '')),
-            'acudiente' => trim((string)($json['padres_nombre'] ?? '')),
+            'nombre' => $meta['nombre'],
+            'documento' => $meta['documento'],
+            'acudiente' => $meta['acudiente'],
+            'etiqueta_nombre' => $meta['etiqueta_nombre'],
+            'pie_comprobante' => $meta['pie_comprobante'],
             'metodo_pago' => trim((string)($pago['Metodo_Pago'] ?? 'Efectivo')),
             'recibido_por' => trim((string)($pago['Recibido_Por'] ?? '')),
             'tipo_pago' => $tipoEtiqueta,
@@ -1636,6 +1662,16 @@ class TallerController extends BaseController {
         if (!$formulario) {
 
             header('Location: ' . PUBLIC_URL . '?url=talleres');
+
+            exit;
+
+        }
+
+        if (!$this->model->aceptaPago($formulario)) {
+
+            $_SESSION['talleres_flash_error'] = 'Este formulario no tiene habilitado el registro de pagos. Actívelo al editar el enlace.';
+
+            header('Location: ' . PUBLIC_URL . '?url=talleres/respuestas&id=' . $idFormulario);
 
             exit;
 
@@ -1748,6 +1784,16 @@ class TallerController extends BaseController {
 
         $formulario = $this->model->getById($idFormulario);
 
+        if (!$formulario || !$this->model->aceptaPago($formulario)) {
+
+            $_SESSION['talleres_flash_error'] = 'Este formulario no tiene habilitado el registro de pagos.';
+
+            header('Location: ' . PUBLIC_URL . '?url=talleres/respuestas&id=' . $idFormulario);
+
+            exit;
+
+        }
+
         $json = json_decode((string)($respuesta['Datos_JSON'] ?? '{}'), true);
 
         if (!is_array($json)) {
@@ -1795,16 +1841,18 @@ class TallerController extends BaseController {
 
         ]);
 
-        $nombreNino = trim((string)($json['nino_nombre'] ?? $json['persona_nombre'] ?? ''));
-
         $tipoEtiqueta = $tipoNormalizado === 'abono' ? 'Abono' : 'Pago total';
+
+        $metaTicket = $this->metadatosTicketPago($formulario, $json);
 
         $_SESSION['talleres_ticket'] = [
             'fecha' => date('Y-m-d H:i'),
             'formulario' => (string)($formulario['Titulo'] ?? 'Taller'),
-            'nombre' => $nombreNino,
-            'documento' => trim((string)($json['nino_documento'] ?? $json['persona_documento'] ?? '')),
-            'acudiente' => trim((string)($json['padres_nombre'] ?? '')),
+            'nombre' => $metaTicket['nombre'],
+            'documento' => $metaTicket['documento'],
+            'acudiente' => $metaTicket['acudiente'],
+            'etiqueta_nombre' => $metaTicket['etiqueta_nombre'],
+            'pie_comprobante' => $metaTicket['pie_comprobante'],
             'telefono_acudiente' => trim((string)($json['padres_telefono'] ?? '')),
             'metodo_pago' => $metodo !== '' ? $metodo : 'Efectivo',
             'recibido_por' => $recibidoPor,

@@ -364,7 +364,8 @@ document.addEventListener('click', function(e) {
 });
 
 /**
- * Sesión: redirigir si el servidor responde session_expired (inactividad > 30 min).
+ * Sesión: si el servidor envía session_expired, ir al login.
+ * El aviso por inactividad solo corre si data-session-timeout > 0.
  */
 (function () {
     'use strict';

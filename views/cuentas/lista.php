@@ -20,6 +20,8 @@ foreach ($cuentasPersona as $cuenta) {
         'usuario' => (string)($cuenta['Usuario'] ?? ''),
         'numero_documento' => (string)($cuenta['Numero_Documento'] ?? ''),
         'estado' => (string)($cuenta['Estado_Cuenta'] ?? 'Activo'),
+        'nombre_rol' => (string)($cuenta['Nombre_Rol'] ?? ''),
+        'id_rol' => (int)($cuenta['Id_Rol'] ?? 0),
         'tipo' => 'persona',
         'id' => (int)($cuenta['Id_Persona'] ?? 0),
         'id_persona' => (int)($cuenta['Id_Persona'] ?? 0),
@@ -32,6 +34,8 @@ foreach ($cuentasAccesoVinculadas as $cuenta) {
         'usuario' => (string)($cuenta['Usuario'] ?? ''),
         'numero_documento' => (string)($cuenta['Numero_Documento'] ?? ''),
         'estado' => (string)($cuenta['Estado_Cuenta'] ?? 'Activo'),
+        'nombre_rol' => (string)($cuenta['Nombre_Rol'] ?? ''),
+        'id_rol' => (int)($cuenta['Id_Rol'] ?? 0),
         'tipo' => 'acceso',
         'id' => (int)($cuenta['Id_Usuario_Acceso'] ?? 0),
         'id_persona' => (int)($cuenta['Id_Persona'] ?? 0),
@@ -86,19 +90,19 @@ usort($cuentasMinisteriales, static function ($a, $b) {
 </div>
 
 <div class="form-container" style="margin-bottom: 16px;">
-    <div class="filter-grid" style="display:grid; grid-template-columns: minmax(260px, 1fr) auto; gap:12px; align-items:end;">
+    <div class="filter-grid cuentas-filter-grid">
         <div class="form-group" style="margin-bottom:0;">
             <label for="cuentas_busqueda">Buscar en cuentas</label>
             <input
                 type="text"
                 id="cuentas_busqueda"
                 class="form-control"
-                placeholder="Escribe nombre, usuario o número de cédula..."
+                placeholder="Escribe nombre, usuario, cédula o rol..."
                 autocomplete="off"
             >
-            <small style="color:#637087;">Filtra en tiempo real por nombre o cédula.</small>
+            <small style="color:#637087;">Filtra en tiempo real por nombre, cédula o rol.</small>
         </div>
-        <div class="form-group" style="margin-bottom:0; display:flex; gap:8px;">
+        <div class="form-group cuentas-filter-actions">
             <button type="button" id="cuentas_btn_limpiar" class="btn btn-secondary">Limpiar</button>
         </div>
     </div>
@@ -115,6 +119,7 @@ usort($cuentasMinisteriales, static function ($a, $b) {
                     <th>Nombre</th>
                     <th>Usuario</th>
                     <th>Cédula</th>
+                    <th>Rol actual</th>
                     <th>Estado</th>
                     <th>Segundo Rol</th>
                     <th>Editar</th>
@@ -124,28 +129,47 @@ usort($cuentasMinisteriales, static function ($a, $b) {
                 <?php if (!empty($cuentasMinisteriales)): ?>
                     <?php foreach ($cuentasMinisteriales as $cuenta): ?>
                     <?php
-                        $textoBusqueda = trim((string)($cuenta['nombre'] ?? '') . ' ' . (string)($cuenta['usuario'] ?? '') . ' ' . (string)($cuenta['numero_documento'] ?? ''));
                         $idPersonaCuenta = (int)($cuenta['id_persona'] ?? 0);
+                        $idRolPrincipal = (int)($cuenta['id_rol'] ?? 0);
+                        $rolPrincipalNombre = trim((string)($cuenta['nombre_rol'] ?? ''));
                         $rolesSecundariosPersona = (array)($rolesPorPersona[$idPersonaCuenta] ?? []);
                         $tieneMaestro = false;
+                        $rolesExtraNombres = [];
                         foreach ($rolesSecundariosPersona as $rolTmp) {
-                            if ((int)($rolTmp['Id_Rol'] ?? 0) === $idRolMaestro && $idRolMaestro > 0) {
+                            $idRolTmp = (int)($rolTmp['Id_Rol'] ?? 0);
+                            $nombreRolTmp = trim((string)($rolTmp['Nombre_Rol'] ?? ''));
+                            if ($idRolTmp === $idRolMaestro && $idRolMaestro > 0) {
                                 $tieneMaestro = true;
-                                break;
                             }
+                            if ($nombreRolTmp === '') {
+                                continue;
+                            }
+                            if ($idRolTmp === $idRolPrincipal || strcasecmp($nombreRolTmp, $rolPrincipalNombre) === 0) {
+                                continue;
+                            }
+                            $rolesExtraNombres[] = $nombreRolTmp;
                         }
+                        $rolesExtraNombres = array_values(array_unique($rolesExtraNombres));
+                        $textoRolActual = $rolPrincipalNombre !== '' ? $rolPrincipalNombre : 'Sin rol';
+                        $textoBusqueda = trim((string)($cuenta['nombre'] ?? '') . ' ' . (string)($cuenta['usuario'] ?? '') . ' ' . (string)($cuenta['numero_documento'] ?? '') . ' ' . $textoRolActual . ' ' . implode(' ', $rolesExtraNombres));
                     ?>
                     <tr data-cuentas-row="1" data-search="<?= htmlspecialchars((string)$textoBusqueda, ENT_QUOTES, 'UTF-8') ?>">
-                        <td><?= htmlspecialchars((string)($cuenta['nombre'] ?? '')) ?></td>
-                        <td><?= htmlspecialchars((string)($cuenta['usuario'] ?? '')) ?></td>
-                        <td><?= htmlspecialchars((string)($cuenta['numero_documento'] ?? '')) ?: '—' ?></td>
-                        <td><?= htmlspecialchars((string)($cuenta['estado'] ?? 'Activo')) ?></td>
-                        <td>
+                        <td data-label="Nombre"><?= htmlspecialchars((string)($cuenta['nombre'] ?? '')) ?></td>
+                        <td data-label="Usuario"><?= htmlspecialchars((string)($cuenta['usuario'] ?? '')) ?></td>
+                        <td data-label="Cédula"><?= htmlspecialchars((string)($cuenta['numero_documento'] ?? '')) ?: '—' ?></td>
+                        <td data-label="Rol actual">
+                            <span class="cuentas-rol-principal"><?= htmlspecialchars($textoRolActual) ?></span>
+                            <?php if (!empty($rolesExtraNombres)): ?>
+                                <small class="cuentas-rol-extra"><?= htmlspecialchars(implode(' · ', $rolesExtraNombres)) ?></small>
+                            <?php endif; ?>
+                        </td>
+                        <td data-label="Estado"><?= htmlspecialchars((string)($cuenta['estado'] ?? 'Activo')) ?></td>
+                        <td data-label="Segundo rol">
                             <?php if ($idPersonaCuenta > 0 && $idRolMaestro > 0): ?>
-                                <form method="POST" action="<?= PUBLIC_URL ?>?url=cuentas/asignar-segundo-rol" style="margin:0;display:flex;flex-direction:column;gap:6px;">
+                                <form method="POST" action="<?= PUBLIC_URL ?>?url=cuentas/asignar-segundo-rol" class="cuentas-segundo-rol-form">
                                     <input type="hidden" name="id_persona" value="<?= $idPersonaCuenta ?>">
                                     <input type="hidden" name="accion_segundo_rol" value="<?= $tieneMaestro ? 'quitar_maestro' : 'asignar_maestro' ?>">
-                                    <button type="submit" class="btn btn-sm <?= $tieneMaestro ? 'btn-warning' : 'btn-info' ?>" style="white-space:nowrap;">
+                                    <button type="submit" class="btn btn-sm <?= $tieneMaestro ? 'btn-warning' : 'btn-info' ?>">
                                         <?= $tieneMaestro ? 'Quitar Maestro' : 'Asignar Maestro' ?>
                                     </button>
                                 </form>
@@ -153,7 +177,7 @@ usort($cuentasMinisteriales, static function ($a, $b) {
                                 <small style="color:#637087;">No aplica</small>
                             <?php endif; ?>
                         </td>
-                        <td>
+                        <td data-label="Editar">
                             <a href="<?= PUBLIC_URL ?>?url=cuentas/editar&tipo=<?= htmlspecialchars((string)($cuenta['tipo'] ?? 'persona')) ?>&id=<?= (int)($cuenta['id'] ?? 0) ?>" class="btn btn-sm cuentas-action-btn cuentas-action-btn--icon cuentas-action-btn--edit" title="Editar" aria-label="Editar">
                                 <i class="bi bi-pencil-fill" aria-hidden="true"></i>
                             </a>
@@ -162,11 +186,11 @@ usort($cuentasMinisteriales, static function ($a, $b) {
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr data-cuentas-empty="ministeriales">
-                        <td colspan="6" class="text-center">No hay cuentas ministeriales registradas.</td>
+                        <td colspan="7" class="text-center">No hay cuentas ministeriales registradas.</td>
                     </tr>
                 <?php endif; ?>
                 <tr data-cuentas-empty-search="ministeriales" style="display:none;">
-                    <td colspan="6" class="text-center">No hay resultados para esa búsqueda.</td>
+                    <td colspan="7" class="text-center">No hay resultados para esa búsqueda.</td>
                 </tr>
             </tbody>
         </table>
@@ -183,6 +207,7 @@ usort($cuentasMinisteriales, static function ($a, $b) {
                 <tr>
                     <th>Nombre</th>
                     <th>Usuario</th>
+                    <th>Rol actual</th>
                     <th>Estado</th>
                     <th>Editar</th>
                 </tr>
@@ -190,18 +215,19 @@ usort($cuentasMinisteriales, static function ($a, $b) {
             <tbody>
                 <?php if (!$tablaUsuarioAccesoDisponible): ?>
                     <tr>
-                        <td colspan="4" class="text-center">La tabla usuario_acceso aún no existe. Ejecuta la migración SQL para habilitarla.</td>
+                        <td colspan="5" class="text-center">La tabla usuario_acceso aún no existe. Ejecuta la migración SQL para habilitarla.</td>
                     </tr>
                 <?php elseif (!empty($cuentasAdministrativas)): ?>
                     <?php foreach ($cuentasAdministrativas as $cuenta): ?>
                     <?php
                         $textoBusquedaAdmin = trim((string)($cuenta['Nombre_Mostrar'] ?? '') . ' ' . (string)($cuenta['Usuario'] ?? ''));
                     ?>
-                    <tr data-cuentas-row="1" data-search="<?= htmlspecialchars((string)$textoBusquedaAdmin, ENT_QUOTES, 'UTF-8') ?>">
-                        <td><?= htmlspecialchars((string)($cuenta['Nombre_Mostrar'] ?? 'Sin nombre')) ?></td>
-                        <td><?= htmlspecialchars((string)($cuenta['Usuario'] ?? '')) ?></td>
-                        <td><?= htmlspecialchars((string)($cuenta['Estado_Cuenta'] ?? 'Activo')) ?></td>
-                        <td>
+                    <tr data-cuentas-row="1" data-search="<?= htmlspecialchars((string)$textoBusquedaAdmin . ' ' . (string)($cuenta['Nombre_Rol'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                        <td data-label="Nombre"><?= htmlspecialchars((string)($cuenta['Nombre_Mostrar'] ?? 'Sin nombre')) ?></td>
+                        <td data-label="Usuario"><?= htmlspecialchars((string)($cuenta['Usuario'] ?? '')) ?></td>
+                        <td data-label="Rol actual"><?= htmlspecialchars(trim((string)($cuenta['Nombre_Rol'] ?? '')) ?: 'Sin rol') ?></td>
+                        <td data-label="Estado"><?= htmlspecialchars((string)($cuenta['Estado_Cuenta'] ?? 'Activo')) ?></td>
+                        <td data-label="Editar">
                             <a href="<?= PUBLIC_URL ?>?url=cuentas/editar&tipo=acceso&id=<?= (int)($cuenta['Id_Usuario_Acceso'] ?? 0) ?>" class="btn btn-sm cuentas-action-btn cuentas-action-btn--icon cuentas-action-btn--edit" title="Editar" aria-label="Editar">
                                 <i class="bi bi-pencil-fill" aria-hidden="true"></i>
                             </a>
@@ -210,11 +236,11 @@ usort($cuentasMinisteriales, static function ($a, $b) {
                     <?php endforeach; ?>
                 <?php else: ?>
                     <tr data-cuentas-empty="administrativas">
-                        <td colspan="4" class="text-center">No hay usuarios administrativos registrados.</td>
+                        <td colspan="5" class="text-center">No hay usuarios administrativos registrados.</td>
                     </tr>
                 <?php endif; ?>
                 <tr data-cuentas-empty-search="administrativas" style="display:none;">
-                    <td colspan="4" class="text-center">No hay resultados para esa búsqueda.</td>
+                    <td colspan="5" class="text-center">No hay resultados para esa búsqueda.</td>
                 </tr>
             </tbody>
         </table>
@@ -222,6 +248,43 @@ usort($cuentasMinisteriales, static function ($a, $b) {
 </div>
 
 <style>
+.cuentas-filter-grid {
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) auto;
+    gap: 12px;
+    align-items: end;
+}
+
+.cuentas-filter-actions {
+    margin-bottom: 0;
+    display: flex;
+    gap: 8px;
+}
+
+.cuentas-rol-principal {
+    display: block;
+    font-weight: 700;
+    color: #1f365f;
+}
+
+.cuentas-rol-extra {
+    display: block;
+    color: #637087;
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.cuentas-segundo-rol-form {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cuentas-segundo-rol-form .btn {
+    white-space: nowrap;
+}
+
 .cuentas-header-actions {
     display: flex;
     gap: 10px;
@@ -354,6 +417,66 @@ usort($cuentasMinisteriales, static function ($a, $b) {
     .cuentas-header-actions {
         width: 100%;
         justify-content: flex-start;
+    }
+
+    .cuentas-action-group {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        border-radius: 16px;
+        padding: 8px;
+        gap: 6px;
+    }
+
+    .cuentas-action-pill {
+        width: 100%;
+        white-space: normal;
+        text-align: center;
+        padding: 12px 14px;
+        font-size: 0.95rem;
+        border-radius: 12px;
+        background: #edf4ff;
+    }
+
+    .cuentas-summary-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .cuentas-filter-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cuentas-filter-actions .btn {
+        width: 100%;
+    }
+
+    .cuentas-data-table tbody tr {
+        height: auto;
+    }
+
+    .cuentas-data-table th,
+    .cuentas-data-table td {
+        padding: 10px 4px;
+        font-size: 0.95rem;
+        line-height: 1.35;
+        text-align: right;
+    }
+
+    .cuentas-data-table td[data-label="Editar"],
+    .cuentas-data-table td[data-label="Segundo rol"] {
+        align-items: center;
+    }
+
+    .cuentas-segundo-rol-form .btn,
+    .cuentas-action-btn--icon {
+        width: 100%;
+        min-width: 0;
+        height: 42px;
+        white-space: normal;
+    }
+
+    .cuentas-rol-extra {
+        font-size: 0.85rem;
     }
 }
 </style>

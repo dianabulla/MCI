@@ -272,6 +272,90 @@ class PermisosCatalogo {
         return mb_strtolower(trim($nombreRol), 'UTF-8');
     }
 
+    public static function nombreRolSinAcentos(string $nombreRol): string {
+        $norm = self::normalizarNombreRol($nombreRol);
+        return strtr($norm, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        ]);
+    }
+
+    /** Líder de 12 (no 144). */
+    public static function esNombreRolLider12(string $nombreRol): bool {
+        $n = self::nombreRolSinAcentos($nombreRol);
+        if (strpos($n, 'lider') === false || strpos($n, '144') !== false) {
+            return false;
+        }
+        return strpos($n, '12') !== false;
+    }
+
+    /** Líder de 144. */
+    public static function esNombreRolLider144(string $nombreRol): bool {
+        $n = self::nombreRolSinAcentos($nombreRol);
+        return strpos($n, 'lider') !== false && strpos($n, '144') !== false;
+    }
+
+    /** Líder de célula (no el rol administrativo "Células"). */
+    public static function esNombreRolLiderCelula(string $nombreRol): bool {
+        $n = self::nombreRolSinAcentos($nombreRol);
+        if (strpos($n, 'lider') === false) {
+            return false;
+        }
+        return strpos($n, 'celula') !== false;
+    }
+
+    public static function esNombreRolDiscipulo(string $nombreRol): bool {
+        $n = self::nombreRolSinAcentos($nombreRol);
+        return strpos($n, 'discipul') !== false
+            || strpos($n, 'disipul') !== false
+            || strpos($n, 'discipl') !== false
+            || strpos($n, 'disipl') !== false;
+    }
+
+    /**
+     * Rol ministerial por defecto al crear una persona.
+     *
+     * @param array<int, array<string, mixed>> $roles
+     */
+    public static function resolverIdRolDiscipuloDesdeCatalogo(array $roles): int {
+        foreach ($roles as $rol) {
+            $id = (int)($rol['Id_Rol'] ?? 0);
+            $nombre = trim((string)($rol['Nombre_Rol'] ?? ''));
+            if ($id > 0 && self::esNombreRolDiscipulo($nombre)) {
+                return $id;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Cuentas administrativas especiales (Ganar, Células, Administrador).
+     * No son jerarquía ministerial: pastor → 12 → 144 → célula → discípulo.
+     */
+    public static function esRolAdministrativoEspecial(int $idRol, string $nombreRol): bool {
+        if (self::esRolAdministradorGlobal($idRol, $nombreRol)) {
+            return true;
+        }
+        if (self::esNombreRolLiderCelula($nombreRol) || self::esNombreRolLider144($nombreRol) || self::esNombreRolLider12($nombreRol)) {
+            return false;
+        }
+        if (self::esNombreRolPastoral($nombreRol)) {
+            return false;
+        }
+
+        $n = self::nombreRolSinAcentos($nombreRol);
+        if ($n === '') {
+            return false;
+        }
+        if ($n === 'celulas' || $n === 'celula') {
+            return true;
+        }
+        if ($n === 'ganar' || strpos($n, 'ganar') === 0) {
+            return true;
+        }
+
+        return false;
+    }
+
     /** Maestro / Teacher (Capacitación Destino y material). */
     public static function esNombreRolMaestro(string $nombreRol): bool {
         $norm = self::normalizarNombreRol($nombreRol);
@@ -307,8 +391,8 @@ class PermisosCatalogo {
 
     /**
      * Rol administrador global (acceso total, matriz de permisos bloqueada).
-     * Hay dos esquemas en BD: Admin en Id 1 (persona) o Admin en Id 6 (semilla antigua).
-     * Pastores suele ser Id 6 en catálogo persona — se excluye por nombre.
+     * Se reconoce por el nombre (Administrador / Admin). El id 6 en este
+     * catálogo es Pastores, no administrador.
      */
     public static function esRolAdministradorGlobal(int $idRol, string $nombreRol = ''): bool {
         if (self::esNombreRolPastoral($nombreRol)) {
@@ -324,8 +408,7 @@ class PermisosCatalogo {
             return false;
         }
 
-        // Sin nombre en sesión: compatibilidad con ambos IDs históricos (no pastoral).
-        return in_array($idRol, [self::ID_ROL_ADMINISTRADOR_PERSONA, self::ID_ROL_ADMINISTRADOR_LEGACY], true);
+        return $idRol === self::ID_ROL_ADMINISTRADOR_PERSONA;
     }
 
     /**

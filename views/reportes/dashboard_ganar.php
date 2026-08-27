@@ -2,10 +2,12 @@
 <?php
 // ── Variables del controlador ────────────────────────────────────────────────
 $anio               = (int)($anio ?? date('Y'));
-$filtroMinisterio   = (string)($filtro_ministerio ?? '');
-$filtroLider        = (string)($filtro_lider ?? '');
+$filtroMinisterio = (string)($filtro_ministerio ?? '');
+$filtroLider      = (string)($filtro_lider ?? '');
 $celFiltroDesde     = (string)($cel_filtro_desde ?? '');
 $celFiltroHasta     = (string)($cel_filtro_hasta ?? '');
+$alcanceGlobalDash = !isset($dashboard_alcance_global) || !empty($dashboard_alcance_global);
+$nombreMinisterioAlcance = trim((string)($dashboard_ministerio_nombre ?? ''));
 
 require_once APP . '/Helpers/DashboardSelector.php';
 $dashModuloActivo = DashboardSelector::detectarActivo();
@@ -273,7 +275,12 @@ $semaforoInfo = [
 <div class="dash-header">
     <div>
         <h2>Dashboard · <?= htmlspecialchars($dashModuloTitulo, ENT_QUOTES, 'UTF-8') ?></h2>
-        <small style="color:#64748b;">Indicadores y gráficas con semáforo · <?= $anio ?></small>
+        <small style="color:#64748b;">
+            Indicadores y gráficas con semáforo · <?= $anio ?>
+            <?php if (!$alcanceGlobalDash && $nombreMinisterioAlcance !== ''): ?>
+                · <?= htmlspecialchars($nombreMinisterioAlcance) ?>
+            <?php endif; ?>
+        </small>
     </div>
     <div class="dash-header-actions">
         <?php
@@ -333,6 +340,12 @@ $semaforoInfo = [
         <?php endif; ?>
         <div class="form-group">
             <label style="font-size:.8rem;color:#475569;display:block;margin-bottom:4px;">Ministerio</label>
+            <?php if (!$alcanceGlobalDash): ?>
+                <input type="hidden" name="ministerio" value="<?= htmlspecialchars($filtroMinisterio) ?>">
+                <div style="padding:7px 10px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;font-size:.88rem;font-weight:600;color:#0f172a;min-width:160px;">
+                    <?= htmlspecialchars($nombreMinisterioAlcance !== '' ? $nombreMinisterioAlcance : 'Tu ministerio') ?>
+                </div>
+            <?php else: ?>
             <select name="ministerio" id="dash-filtro-ministerio" onchange="dashAlCambiarMinisterio(this)">
                 <option value="">Todos los ministerios</option>
                 <?php foreach ($ministeriosDisp as $min): ?>
@@ -342,6 +355,7 @@ $semaforoInfo = [
                     </option>
                 <?php endforeach; ?>
             </select>
+            <?php endif; ?>
         </div>
         <div class="form-group">
             <label style="font-size:.8rem;color:#475569;display:block;margin-bottom:4px;">Líder</label>

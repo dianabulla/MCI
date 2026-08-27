@@ -225,6 +225,7 @@ return [
     'talleres/servicio-social/horarios' => 'TallerServicioSocialController@horariosSabado',
     'talleres/servicio-social/horarios/guardar' => 'TallerServicioSocialController@guardarHorariosSabado',
     'talleres/servicio-social/guardar-historia' => 'TallerServicioSocialController@guardarHistoriaClinica',
+    'talleres/servicio-social/eliminar' => 'TallerServicioSocialController@eliminar',
     'talleres/servicio-social/exportar' => 'TallerServicioSocialController@exportar',
 
     // Talleres — formulario público (sin autenticación)
@@ -270,6 +271,8 @@ return [
     'herramientas/diagnostico-documento/exportar' => 'DiagnosticoDocumentoController@exportar',
     'herramientas/diagnostico-permisos-persona' => 'DiagnosticoPermisosPersonaController@index',
     'herramientas/diagnostico-reporte-celulas' => 'DiagnosticoReporteCelulasController@index',
+    'herramientas/corregir-rol-celulas' => 'CorregirRolCelulasController@index',
+    'herramientas/corregir-rol-celulas/aplicar' => 'CorregirRolCelulasController@aplicar',
     
     // Entrega de Obsequios (Requiere autenticación)
     'entrega_obsequio' => 'EntregaObsequioController@index',

@@ -197,6 +197,12 @@ $configPlantillaPadres = TallerFormulario::getConfigPlantillaTallerPadres();
 
             </label>
 
+            <small class="text-muted" style="display:block;margin-top:6px;">
+
+                En las respuestas de este enlace podrá registrar pagos o abonos y generar el ticket, igual que en Presentación de niños.
+
+            </small>
+
         </div>
 
     </div>

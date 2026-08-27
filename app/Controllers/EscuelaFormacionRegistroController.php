@@ -456,7 +456,9 @@ class EscuelaFormacionRegistroController extends BaseController {
         foreach ($etapas as $etapa) {
             $valores = $checklistNormalizado[$etapa] ?? [false, false, false];
             if ($etapa === 'Ganar') {
-                $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]) && !empty($valores[3]) && !empty($valores[4]);
+                $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]) && !empty($valores[3]);
+            } elseif ($etapa === 'Enviar') {
+                $completa = !empty($valores[2]);
             } else {
                 $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]);
             }
@@ -510,7 +512,9 @@ class EscuelaFormacionRegistroController extends BaseController {
         $checklistNormalizado = $this->normalizarChecklistEscalera($checklistActual);
         $checklistNormalizado['Ganar'][1] = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
         $checklistNormalizado['Ganar'][4] = !empty($persona['Id_Celula']);
-        $checklistNormalizado['Consolidar'][(int)$mapaProgramaAIndice[$programa]] = true;
+        if ($checklistNormalizado['Ganar'][4]) {
+            $checklistNormalizado['Enviar'][2] = true;
+        }
 
         $checklistJson = json_encode($checklistNormalizado, JSON_UNESCAPED_UNICODE);
         if ($checklistJson === false) {
@@ -597,6 +601,9 @@ class EscuelaFormacionRegistroController extends BaseController {
         $checklistNormalizado['Ganar'][1] = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
         $checklistNormalizado['Ganar'][4] = !empty($persona['Id_Celula']);
         $checklistNormalizado['Discipular'][(int)$mapaProgramaAIndice[$programa]] = true;
+        if ($checklistNormalizado['Ganar'][4]) {
+            $checklistNormalizado['Enviar'][2] = true;
+        }
 
         $checklistJson = json_encode($checklistNormalizado, JSON_UNESCAPED_UNICODE);
         if ($checklistJson === false) {
@@ -916,6 +923,16 @@ class EscuelaFormacionRegistroController extends BaseController {
         return $this->idRolAsistenteCache;
     }
 
+    private function obtenerIdRolDiscipuloDefault() {
+        require_once APP . '/Helpers/PermisosCatalogo.php';
+        try {
+            $rows = $this->personaModel->query('SELECT Id_Rol, Nombre_Rol FROM rol ORDER BY Id_Rol ASC');
+            return PermisosCatalogo::resolverIdRolDiscipuloDesdeCatalogo((array)$rows);
+        } catch (Exception $e) {
+            return 0;
+        }
+    }
+
     private function normalizarProgramaInscripcion($programa) {
         $programa = trim((string)$programa);
         if ($programa === 'capacitacion_destino') {
@@ -1204,9 +1221,9 @@ class EscuelaFormacionRegistroController extends BaseController {
             $data['Fecha_Nacimiento'] = $fechaNacimiento !== '' ? $fechaNacimiento : null;
         }
 
-        $idRolAsistente = $this->obtenerIdRolAsistenteDefault();
-        if ($idRolAsistente > 0) {
-            $data['Id_Rol'] = $idRolAsistente;
+        $idRolDiscipulo = $this->obtenerIdRolDiscipuloDefault();
+        if ($idRolDiscipulo > 0) {
+            $data['Id_Rol'] = $idRolDiscipulo;
         }
 
         if ($this->soportaCreadoPor) {

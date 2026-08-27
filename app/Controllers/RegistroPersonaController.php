@@ -116,36 +116,18 @@ class RegistroPersonaController extends BaseController {
     }
 
     private function obtenerIdRolDiscipuloDefault() {
+        require_once APP . '/Helpers/PermisosCatalogo.php';
         try {
             $rows = $this->personaModel->query("SELECT Id_Rol, Nombre_Rol FROM rol ORDER BY Id_Rol ASC");
-            foreach ((array)$rows as $row) {
-                $nombreRol = strtolower(trim((string)($row['Nombre_Rol'] ?? '')));
-                $nombreRol = strtr($nombreRol, [
-                    'á' => 'a',
-                    'é' => 'e',
-                    'í' => 'i',
-                    'ó' => 'o',
-                    'ú' => 'u',
-                    'ü' => 'u',
-                    'ñ' => 'n'
-                ]);
-
-                if (
-                    strpos($nombreRol, 'discipulo') !== false
-                    || strpos($nombreRol, 'disipulo') !== false
-                    || strpos($nombreRol, 'miembro') !== false
-                ) {
-                    $id = (int)($row['Id_Rol'] ?? 0);
-                    if ($id > 0) {
-                        return $id;
-                    }
-                }
+            $id = PermisosCatalogo::resolverIdRolDiscipuloDesdeCatalogo((array)$rows);
+            if ($id > 0) {
+                return $id;
             }
         } catch (Exception $e) {
-            // fall through
+            return 0;
         }
 
-        return (int)$this->obtenerIdRolAsistenteDefault();
+        return 0;
     }
 
     private function aplicarAccesoAutomaticoDiscipulo(array &$data) {

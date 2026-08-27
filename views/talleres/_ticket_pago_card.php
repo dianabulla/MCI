@@ -6,6 +6,14 @@ $fecha = trim((string)($ticket['fecha'] ?? ''));
 $nombre = trim((string)($ticket['nombre'] ?? ''));
 $documento = trim((string)($ticket['documento'] ?? ''));
 $acudiente = trim((string)($ticket['acudiente'] ?? ''));
+$etiquetaNombre = trim((string)($ticket['etiqueta_nombre'] ?? ''));
+if ($etiquetaNombre === '') {
+    $etiquetaNombre = $acudiente !== '' ? 'Niño(a)' : 'Inscrito';
+}
+$pieComprobante = trim((string)($ticket['pie_comprobante'] ?? ''));
+if ($pieComprobante === '') {
+    $pieComprobante = 'Comprobante de pago — ' . ($formulario !== '' ? $formulario : 'Taller');
+}
 $metodoPago = trim((string)($ticket['metodo_pago'] ?? ''));
 $recibidoPor = trim((string)($ticket['recibido_por'] ?? ''));
 $tipoPago = trim((string)($ticket['tipo_pago'] ?? ''));
@@ -19,7 +27,7 @@ $referencia = trim((string)($ticket['referencia_pago'] ?? ''));
     <div class="ticket-pago-export__row"><span>Formulario</span><strong><?= htmlspecialchars($formulario, ENT_QUOTES, 'UTF-8') ?></strong></div>
     <?php endif; ?>
     <div class="ticket-pago-export__row"><span>Fecha</span><strong><?= htmlspecialchars($fecha !== '' ? $fecha : date('Y-m-d H:i'), ENT_QUOTES, 'UTF-8') ?></strong></div>
-    <div class="ticket-pago-export__row"><span>Niño(a)</span><strong><?= htmlspecialchars($nombre !== '' ? $nombre : '—', ENT_QUOTES, 'UTF-8') ?></strong></div>
+    <div class="ticket-pago-export__row"><span><?= htmlspecialchars($etiquetaNombre, ENT_QUOTES, 'UTF-8') ?></span><strong><?= htmlspecialchars($nombre !== '' ? $nombre : '—', ENT_QUOTES, 'UTF-8') ?></strong></div>
     <div class="ticket-pago-export__row"><span>Documento</span><strong><?= htmlspecialchars($documento !== '' ? $documento : '—', ENT_QUOTES, 'UTF-8') ?></strong></div>
     <?php if ($acudiente !== ''): ?>
     <div class="ticket-pago-export__row"><span>Acudiente</span><strong><?= htmlspecialchars($acudiente, ENT_QUOTES, 'UTF-8') ?></strong></div>
@@ -31,5 +39,5 @@ $referencia = trim((string)($ticket['referencia_pago'] ?? ''));
     <div class="ticket-pago-export__row"><span>Valor</span><strong>$<?= htmlspecialchars($valorPago !== '' ? $valorPago : '0', ENT_QUOTES, 'UTF-8') ?></strong></div>
     <div class="ticket-pago-export__ref-label">Referencia</div>
     <div class="ticket-pago-export__ref"><?= htmlspecialchars($referencia !== '' ? $referencia : '—', ENT_QUOTES, 'UTF-8') ?></div>
-    <div class="ticket-pago-export__foot">Comprobante de pago — Presentación de niños</div>
+    <div class="ticket-pago-export__foot"><?= htmlspecialchars($pieComprobante, ENT_QUOTES, 'UTF-8') ?></div>
 </div>

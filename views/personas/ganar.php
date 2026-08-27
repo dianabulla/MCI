@@ -451,7 +451,7 @@ $historialToggleUrl = $verHistorialGanar
 
                                 <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Enviar" hidden>
                                     <label class="escalera-inline-item" title="Célula">
-                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Enviar" data-indice="2" <?= !empty($checklistEscalera['Enviar'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
+                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Enviar" data-indice="2" <?= (!empty($checklistEscalera['Enviar'][2]) || !empty($tieneCelulaAsignada)) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
                                         <span>Célula</span>
                                     </label>
                                 </div>
@@ -1524,7 +1524,7 @@ $historialToggleUrl = $verHistorialGanar
 
                 const indiceReal = (indicesChecklist[etapa] && typeof indicesChecklist[etapa][i] !== 'undefined') ? indicesChecklist[etapa][i] : i;
                 const done = !!(modalState.checklist[etapa] && modalState.checklist[etapa][indiceReal]);
-                let editable = etapaIndex === indiceProceso;
+                let editable = true;
                 if (etapa === 'Ganar' && indiceReal === 1) {
                     editable = false;
                 }
@@ -2065,9 +2065,17 @@ $historialToggleUrl = $verHistorialGanar
             }
 
             const checklistServidor = parseChecklist(JSON.stringify(data.checklist || {}));
-            checklistServidor.Ganar[1] = container.getAttribute('data-asignado') === '1';
-            checklistServidor.Ganar[4] = container.getAttribute('data-celula') === '1';
-            checklistServidor.Enviar[2] = container.getAttribute('data-celula') === '1';
+            if (container.getAttribute('data-asignado') === '1') {
+                checklistServidor.Ganar[1] = true;
+            } else {
+                checklistServidor.Ganar[1] = false;
+            }
+            if (container.getAttribute('data-celula') === '1') {
+                checklistServidor.Ganar[4] = true;
+                checklistServidor.Enviar[2] = true;
+            } else {
+                checklistServidor.Ganar[4] = false;
+            }
 
             container.setAttribute('data-checklist', JSON.stringify(checklistServidor));
             if (checklistServidor._meta && checklistServidor._meta.no_disponible_observacion) {
@@ -2090,9 +2098,17 @@ $historialToggleUrl = $verHistorialGanar
     document.querySelectorAll('.js-inline-escalera').forEach(function(container) {
         const checklist = parseChecklist(container.getAttribute('data-checklist') || '');
         const puedeEditar = container.getAttribute('data-puede-editar') === '1';
-        checklist.Ganar[1] = container.getAttribute('data-asignado') === '1';
-        checklist.Ganar[4] = container.getAttribute('data-celula') === '1';
-        checklist.Enviar[2] = container.getAttribute('data-celula') === '1';
+        if (container.getAttribute('data-asignado') === '1') {
+            checklist.Ganar[1] = true;
+        } else {
+            checklist.Ganar[1] = false;
+        }
+        if (container.getAttribute('data-celula') === '1') {
+            checklist.Ganar[4] = true;
+            checklist.Enviar[2] = true;
+        } else {
+            checklist.Ganar[4] = false;
+        }
         container.setAttribute('data-checklist', JSON.stringify(checklist));
 
         aplicarChecksEnVista(container, checklist);

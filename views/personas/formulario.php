@@ -335,12 +335,19 @@ $urlVolver = $returnUrl !== ''
             }
             foreach ($ordenEtapasFormulario as $idxEtapa => $etapaNombreTmp) {
                 if ($idxEtapa < $indiceProcesoFormulario) {
-                    $limite = min(3, count($checklistFormulario[$etapaNombreTmp]));
-                    for ($iTmp = 0; $iTmp < $limite; $iTmp++) {
-                        $checklistFormulario[$etapaNombreTmp][$iTmp] = true;
+                    if ($etapaNombreTmp === 'Ganar') {
+                        $checklistFormulario['Ganar'][0] = true;
+                        $checklistFormulario['Ganar'][1] = true;
+                        $checklistFormulario['Ganar'][2] = true;
+                        $checklistFormulario['Ganar'][3] = true;
+                    } elseif ($etapaNombreTmp === 'Enviar') {
+                        $checklistFormulario['Enviar'][2] = true;
+                    } else {
+                        $limite = min(3, count($checklistFormulario[$etapaNombreTmp]));
+                        for ($iTmp = 0; $iTmp < $limite; $iTmp++) {
+                            $checklistFormulario[$etapaNombreTmp][$iTmp] = true;
+                        }
                     }
-                } elseif ($idxEtapa === $indiceProcesoFormulario && isset($checklistFormulario[$etapaNombreTmp][0])) {
-                    $checklistFormulario[$etapaNombreTmp][0] = true;
                 }
             }
 
@@ -921,9 +928,14 @@ function calcularProcesoDesdeChecklistFormulario(checklist) {
     let consecutivas = 0;
     for (const etapa of etapasEventosProcesos) {
         const valores = Array.isArray(checklist[etapa]) ? checklist[etapa] : [];
-        const completa = etapa === 'Ganar'
-            ? (!!valores[0] && !!valores[1] && !!valores[2] && !!valores[3] && !!valores[4])
-            : (!!valores[0] && !!valores[1] && !!valores[2]);
+        let completa = false;
+        if (etapa === 'Ganar') {
+            completa = !!(valores[0] && valores[1] && valores[2] && valores[3]);
+        } else if (etapa === 'Enviar') {
+            completa = !!valores[2];
+        } else {
+            completa = !!(valores[0] && valores[1] && valores[2]);
+        }
         if (!completa) {
             break;
         }
@@ -969,6 +981,9 @@ function actualizarAsignadoALiderChecklist() {
 
     checklistFormularioState.Ganar[1] = tieneLider && tieneMinisterio;
     checklistFormularioState.Ganar[4] = tieneCelula;
+    if (tieneCelula) {
+        checklistFormularioState.Enviar[2] = true;
+    }
     sincronizarEventosProcesos();
 }
 

@@ -367,7 +367,10 @@ class MenuBuilder {
                 'icon' => 'bi-speedometer2',
                 'active_prefixes' => ['reportes/dashboard-ganar'],
                 'active_exact' => ['reportes/dashboard-ganar'],
-                'permiso' => 'reportes:ver',
+                'permiso' => null,
+                'visible' => static function () {
+                    return AuthController::puedeVerDashboardGanar();
+                },
             ],
             [
                 'id' => 'administracion',
@@ -396,14 +399,8 @@ class MenuBuilder {
         }
 
         $comunidad = [];
-        if (AuthController::puedeVerModulo('peticiones')) {
-            $comunidad[] = ['id' => 'peticiones', 'label' => 'Peticiones', 'ruta' => 'peticiones', 'icon' => 'bi-chat-heart'];
-        }
         if (AuthController::puedeVerModulo('talleres')) {
             $comunidad[] = ['id' => 'talleres', 'label' => 'Talleres', 'ruta' => 'talleres', 'icon' => 'bi-ui-checks-grid'];
-        }
-        if (AuthController::puedeVerModulo('transmisiones')) {
-            $comunidad[] = ['id' => 'transmisiones', 'label' => 'Transmisiones', 'ruta' => 'transmisiones', 'icon' => 'bi-broadcast'];
         }
         if (AuthController::puedeVerModulo('eventos')) {
             $comunidad[] = ['id' => 'eventos', 'label' => 'Eventos', 'ruta' => 'eventos', 'icon' => 'bi-calendar-event'];

@@ -110,7 +110,7 @@
         }
         dibujarLinea(ctx, 'Fecha', data.fecha || '', y, width);
         y += 22;
-        dibujarLinea(ctx, 'Niño(a)', data.nombre, y, width);
+        dibujarLinea(ctx, data.etiqueta_nombre || 'Inscrito', data.nombre, y, width);
         y += 22;
         dibujarLinea(ctx, 'Documento', data.documento, y, width);
         y += 22;
@@ -156,7 +156,7 @@
         ctx.fillStyle = '#94a3b8';
         ctx.font = '11px Arial, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Comprobante de pago — Presentación de niños', width / 2, y);
+        ctx.fillText(data.pie_comprobante || ('Comprobante de pago — ' + (data.formulario || 'Taller')), width / 2, y);
         ctx.textAlign = 'left';
 
         return canvas;

@@ -19,6 +19,7 @@ $v = static function (array $valores, string $clave, string $default = ''): stri
 $hoy = date('Y-m-d');
 $remitidoActual = $v($valores, 'remitido_por', 'ninguno');
 $fechaSel = $v($valores, 'fecha_preferida');
+$horaSel = $v($valores, 'hora_preferida');
 if ($fechaSel === '' && $proximosSabados !== []) {
     $fechaSel = (string)($proximosSabados[0]['fecha'] ?? '');
 }
@@ -229,7 +230,7 @@ if ($fechaSel === '' && $proximosSabados !== []) {
     <div class="brand">
         <div class="pill"><i class="bi bi-heart-pulse"></i> MCI Madrid Colombia</div>
         <h1>Servicio Social</h1>
-        <p>Agenda una cita para atención los <strong>sábados</strong>. Las solicitudes se reciben de <strong>lunes a jueves</strong>.</p>
+        <p>Agenda una cita de <strong>atención psicológica</strong> para el <strong>sábado de esta semana</strong>. Las solicitudes se reciben de <strong>lunes a viernes</strong>.</p>
     </div>
 
     <?php if ($ok): ?>
@@ -243,7 +244,7 @@ if ($fechaSel === '' && $proximosSabados !== []) {
 
     <?php if (!$puedeAgendarHoy): ?>
     <div class="alert alert-warn">
-        <strong>Formulario cerrado hoy.</strong> Las solicitudes de cita solo se reciben de lunes a jueves. Vuelve a intentarlo en un día hábil.
+        <strong>Formulario cerrado hoy.</strong> Las solicitudes de cita solo se reciben de lunes a viernes. Vuelve a intentarlo en un día hábil.
     </div>
     <?php endif; ?>
 
@@ -316,42 +317,37 @@ if ($fechaSel === '' && $proximosSabados !== []) {
 
         <div class="section-title"><i class="bi bi-calendar2-check"></i> Agendamiento</div>
         <div class="alert alert-info" style="margin-bottom:14px;">
-            Las citas de atención son los <strong>sábados</strong>. Elige fecha y hora disponibles.
+            Las citas de atención son <strong>solo el sábado de esta semana</strong>. No se abren sábados siguientes. Solo verás horas con cupo. Si ya tienes cita ese día, no podrás agendar otra.
         </div>
         <div class="grid-2">
             <div class="field">
-                <label for="fecha_preferida">Sábado de la cita <span class="req">*</span></label>
+                <label for="fecha_preferida">Sábado de esta semana <span class="req">*</span></label>
                 <select id="fecha_preferida" name="fecha_preferida" required>
-                    <option value="">Selecciona un sábado…</option>
+                    <?php if ($proximosSabados === []): ?>
+                    <option value="">No hay sábado disponible esta semana</option>
+                    <?php else: ?>
                     <?php foreach ($proximosSabados as $sab): ?>
                     <?php $f = (string)($sab['fecha'] ?? ''); ?>
                     <option value="<?= htmlspecialchars($f, ENT_QUOTES, 'UTF-8') ?>" <?= $fechaSel === $f ? 'selected' : '' ?>>
                         <?= htmlspecialchars((string)($sab['label'] ?? $f), ENT_QUOTES, 'UTF-8') ?>
                     </option>
                     <?php endforeach; ?>
+                    <?php endif; ?>
                 </select>
-                <div class="hint" id="hint_fecha">Las citas solo se agendan los sábados de cada mes.</div>
+                <div class="hint" id="hint_fecha">Únicamente el sábado de la semana actual.</div>
             </div>
             <div class="field">
                 <label for="hora_preferida">Hora de la cita <span class="req">*</span></label>
                 <select id="hora_preferida" name="hora_preferida" required>
                     <option value="">Primero elige un sábado…</option>
-                    <?php
-                    $horaSel = $v($valores, 'hora_preferida');
-                    foreach ($horariosSabado as $hk => $hl):
-                    ?>
-                    <option value="<?= htmlspecialchars($hk, ENT_QUOTES, 'UTF-8') ?>" <?= $horaSel === $hk ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($hl, ENT_QUOTES, 'UTF-8') ?>
-                    </option>
-                    <?php endforeach; ?>
                 </select>
-                <div class="hint" id="hint_hora">Las horas ocupadas aparecen bloqueadas.</div>
+                <div class="hint" id="hint_hora">Solo se muestran las horas con cupo. Las no disponibles no aparecen.</div>
             </div>
         </div>
         <div class="field">
-            <label for="tipo_cita">Tipo de cita <span class="req">*</span></label>
+            <label for="tipo_cita">Tema de la consulta <span class="req">*</span></label>
             <select id="tipo_cita" name="tipo_cita" required>
-                <option value="">Selecciona…</option>
+                <option value="">Selecciona un tema psicológico…</option>
                 <?php foreach ($tiposCita as $k => $label): ?>
                 <option value="<?= htmlspecialchars($k, ENT_QUOTES, 'UTF-8') ?>" <?= $v($valores, 'tipo_cita') === $k ? 'selected' : '' ?>>
                     <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?>
@@ -360,9 +356,9 @@ if ($fechaSel === '' && $proximosSabados !== []) {
             </select>
         </div>
         <div class="field">
-            <label for="necesidad_principal">Principal necesidad <span class="req">*</span></label>
+            <label for="necesidad_principal">Motivo de la consulta <span class="req">*</span></label>
             <textarea id="necesidad_principal" name="necesidad_principal" required
-                      placeholder="Describe brevemente en qué podemos ayudarte"><?= htmlspecialchars($v($valores, 'necesidad_principal'), ENT_QUOTES, 'UTF-8') ?></textarea>
+                      placeholder="Describe brevemente el motivo de tu consulta psicológica"><?= htmlspecialchars($v($valores, 'necesidad_principal'), ENT_QUOTES, 'UTF-8') ?></textarea>
         </div>
 
         <div class="section-title"><i class="bi bi-signpost-2"></i> Remisión</div>
@@ -408,18 +404,18 @@ if ($fechaSel === '' && $proximosSabados !== []) {
 (function () {
     var URL_BUSCAR = <?= json_encode($urlBuscarPersona, JSON_UNESCAPED_UNICODE) ?>;
     var URL_DISP = <?= json_encode($urlDisponibilidad, JSON_UNESCAPED_UNICODE) ?>;
-    var HORARIOS = <?= json_encode($horariosSabado, JSON_UNESCAPED_UNICODE) ?>;
     var PROXIMOS_SABADOS = <?= json_encode($proximosSabados, JSON_UNESCAPED_UNICODE) ?>;
     var puedeAgendar = <?= $puedeAgendarHoy ? 'true' : 'false' ?>;
+    var horaInicial = <?= json_encode($horaSel, JSON_UNESCAPED_UNICODE) ?>;
+    var horasPermitidas = [];
+    var bloqueoPorCitaDelDia = false;
 
     function esSabado(fechaStr) {
         if (!fechaStr) return false;
         for (var i = 0; i < PROXIMOS_SABADOS.length; i++) {
             if (PROXIMOS_SABADOS[i].fecha === fechaStr) return true;
         }
-        var p = fechaStr.split('-');
-        var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
-        return d.getDay() === 6;
+        return false;
     }
 
     function proximoSabado(fechaStr) {
@@ -481,12 +477,14 @@ if ($fechaSel === '' && $proximosSabados !== []) {
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (btnBuscar) btnBuscar.classList.remove('loading');
-                if (!banner) return;
                 if (!data || !data.ok) {
-                    banner.textContent = (data && data.mensaje)
-                        ? data.mensaje
-                        : 'No encontramos datos con ese documento. Puedes continuar llenando el formulario.';
-                    banner.classList.add('visible');
+                    if (banner) {
+                        banner.textContent = (data && data.mensaje)
+                            ? data.mensaje
+                            : 'No encontramos datos con ese documento. Puedes continuar llenando el formulario.';
+                        banner.classList.add('visible');
+                    }
+                    recargarHorasFecha();
                     return;
                 }
                 var p = data.prefill || {};
@@ -502,8 +500,11 @@ if ($fechaSel === '' && $proximosSabados !== []) {
                 if ((data.citas_anteriores || 0) > 0) {
                     msg += ' Citas anteriores: ' + data.citas_anteriores + '.';
                 }
-                banner.textContent = msg + ' (No se modifica el directorio de personas.)';
-                banner.classList.add('visible');
+                if (banner) {
+                    banner.textContent = msg + ' (No se modifica el directorio de personas.)';
+                    banner.classList.add('visible');
+                }
+                recargarHorasFecha();
             })
             .catch(function () {
                 if (btnBuscar) btnBuscar.classList.remove('loading');
@@ -514,59 +515,103 @@ if ($fechaSel === '' && $proximosSabados !== []) {
             });
     }
 
+    function recargarHorasFecha() {
+        var fecha = document.getElementById('fecha_preferida');
+        if (fecha && fecha.value) {
+            cargarHoras(fecha.value, horaInicial);
+        }
+    }
+
+    function documentoActual() {
+        var doc = document.getElementById('documento');
+        return doc ? String(doc.value || '').trim() : '';
+    }
+
+    function aplicarEstadoEnvio() {
+        var btn = document.getElementById('btn_submit');
+        if (!btn || !puedeAgendar) return;
+        btn.disabled = bloqueoPorCitaDelDia || horasPermitidas.length === 0;
+    }
+
     function cargarHoras(fecha, horaPreseleccionada) {
         var selHora = document.getElementById('hora_preferida');
         var hintHora = document.getElementById('hint_hora');
         if (!selHora) return;
 
+        horasPermitidas = [];
+        bloqueoPorCitaDelDia = false;
+        selHora.disabled = true;
         selHora.innerHTML = '<option value="">Cargando horarios…</option>';
+        aplicarEstadoEnvio();
 
         if (!fecha || !esSabado(fecha)) {
             selHora.innerHTML = '<option value="">Elige un sábado válido</option>';
+            if (hintHora) hintHora.textContent = 'Las citas solo se agendan los sábados.';
+            aplicarEstadoEnvio();
             return;
         }
 
         if (!URL_DISP) {
-            selHora.innerHTML = '<option value="">Selecciona hora…</option>';
-            Object.keys(HORARIOS).forEach(function (k) {
-                var opt = document.createElement('option');
-                opt.value = k;
-                opt.textContent = HORARIOS[k];
-                if (horaPreseleccionada === k) opt.selected = true;
-                selHora.appendChild(opt);
-            });
+            selHora.innerHTML = '<option value="">No se pudieron cargar los horarios</option>';
+            if (hintHora) hintHora.textContent = 'Recarga la página e inténtalo de nuevo.';
+            aplicarEstadoEnvio();
             return;
         }
 
         var url = URL_DISP + (URL_DISP.indexOf('?') >= 0 ? '&' : '?') + 'fecha=' + encodeURIComponent(fecha);
+        var doc = documentoActual();
+        if (doc !== '') {
+            url += '&documento=' + encodeURIComponent(doc);
+        }
+
         fetch(url, { headers: { 'Accept': 'application/json' } })
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 selHora.innerHTML = '<option value="">Selecciona hora…</option>';
-                var disponibles = 0;
-                (data.horas || []).forEach(function (h) {
-                    var opt = document.createElement('option');
-                    opt.value = h.hora;
-                    var suffix = '';
-                    if (h.bloqueada) suffix = ' (no disponible)';
-                    else if (!h.disponible) suffix = ' (ocupada)';
-                    opt.textContent = h.label + suffix;
-                    if (!h.disponible) {
-                        opt.disabled = true;
-                    } else {
-                        disponibles++;
-                        if (horaPreseleccionada === h.hora) opt.selected = true;
+                bloqueoPorCitaDelDia = !!(data && data.ya_tiene_cita);
+                var horas = (data && data.horas) ? data.horas : [];
+                var pre = horaPreseleccionada || horaInicial || '';
+
+                if (bloqueoPorCitaDelDia) {
+                    selHora.innerHTML = '<option value="">Ya tienes una cita este sábado</option>';
+                } else {
+                    horas.forEach(function (h) {
+                        if (!h || !h.hora || h.disponible === false) return;
+                        horasPermitidas.push(String(h.hora));
+                        var opt = document.createElement('option');
+                        opt.value = h.hora;
+                        opt.textContent = h.label || h.hora;
+                        if (pre === h.hora) opt.selected = true;
+                        selHora.appendChild(opt);
+                    });
+                    if (horasPermitidas.length === 0) {
+                        selHora.innerHTML = '<option value="">No hay horas disponibles</option>';
                     }
-                    selHora.appendChild(opt);
-                });
-                if (hintHora) {
-                    hintHora.textContent = disponibles > 0
-                        ? disponibles + ' horario(s) disponible(s) para ese sábado.'
-                        : 'No hay cupos disponibles ese sábado. Elige otra fecha.';
                 }
+
+                selHora.disabled = false;
+
+                if (hintHora) {
+                    if (bloqueoPorCitaDelDia) {
+                        hintHora.textContent = (data && data.mensaje)
+                            ? data.mensaje
+                            : 'Ya tienes una cita este sábado. No puedes agendar otra para el mismo día.';
+                    } else if (horasPermitidas.length > 0) {
+                        hintHora.textContent = horasPermitidas.length + ' horario(s) disponible(s). Solo se muestran horas con cupo.';
+                    } else {
+                        hintHora.textContent = (data && data.mensaje)
+                            ? data.mensaje
+                            : 'No hay horarios disponibles ese sábado. Elige otra fecha.';
+                    }
+                }
+                aplicarEstadoEnvio();
             })
             .catch(function () {
+                horasPermitidas = [];
+                selHora.disabled = false;
                 selHora.innerHTML = '<option value="">Error al cargar horarios</option>';
+                if (hintHora) hintHora.textContent = 'No se pudieron cargar los horarios. Recarga e inténtalo de nuevo.';
+                aplicarEstadoEnvio();
             });
     }
 
@@ -579,7 +624,7 @@ if ($fechaSel === '' && $proximosSabados !== []) {
         if (val === '') return;
 
         if (hintFecha) {
-            hintFecha.textContent = 'Las citas solo se agendan los sábados de cada mes.';
+            hintFecha.textContent = 'Únicamente el sábado de la semana actual.';
         }
 
         var horaSel = document.getElementById('hora_preferida');
@@ -622,7 +667,11 @@ if ($fechaSel === '' && $proximosSabados !== []) {
     if (btnBuscar) btnBuscar.addEventListener('click', buscarPersona);
     if (docInput) {
         docInput.addEventListener('blur', function () {
-            if (String(docInput.value || '').trim().length >= 3) buscarPersona();
+            if (String(docInput.value || '').trim().length >= 3) {
+                buscarPersona();
+            } else {
+                recargarHorasFecha();
+            }
         });
         docInput.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') {
@@ -648,14 +697,20 @@ if ($fechaSel === '' && $proximosSabados !== []) {
         form.addEventListener('submit', function (e) {
             var f = document.getElementById('fecha_preferida');
             var h = document.getElementById('hora_preferida');
+            var horaVal = h ? String(h.value || '') : '';
             if (f && !esSabado(String(f.value || ''))) {
                 e.preventDefault();
-                alert('La cita debe ser un sábado.');
+                alert('Solo se puede agendar el sábado de esta semana.');
                 return;
             }
-            if (h && h.selectedOptions && h.selectedOptions[0] && h.selectedOptions[0].disabled) {
+            if (bloqueoPorCitaDelDia) {
                 e.preventDefault();
-                alert('Ese horario ya no está disponible. Elige otra hora.');
+                alert('Ya tienes una cita para ese sábado. Solo se permite una agenda por persona el mismo día.');
+                return;
+            }
+            if (!horaVal || horasPermitidas.indexOf(horaVal) === -1) {
+                e.preventDefault();
+                alert('Ese horario no está disponible. Elige una hora de la lista.');
             }
         });
     }

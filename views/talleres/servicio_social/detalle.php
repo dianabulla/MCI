@@ -16,7 +16,7 @@ $citasPaciente = is_array($citas_paciente ?? null) ? $citas_paciente : [];
 
 $documentosRemision = is_array($documentos_remision ?? null) ? $documentos_remision : [];
 
-$horariosSabado = is_array($horarios_sabado ?? null) ? $horarios_sabado : TallerServicioSocial::HORARIOS_SABADO;
+$horariosSabado = is_array($horarios_sabado ?? null) ? $horarios_sabado : TallerServicioSocial::catalogoHorariosSabado();
 
 $puedeGestionar = !empty($puede_gestionar);
 
@@ -26,7 +26,7 @@ $flashError = (string)($flash_error ?? '');
 
 $id = (int)($cita['Id_Cita'] ?? 0);
 
-$estado = (string)($cita['Estado'] ?? 'pendiente');
+$estado = TallerServicioSocial::normalizarEstado((string)($cita['Estado'] ?? 'pendiente'));
 
 $nombre = trim((string)($cita['Nombre'] ?? '') . ' ' . (string)($cita['Apellido'] ?? ''));
 
@@ -188,13 +188,27 @@ $documento = (string)($cita['Documento'] ?? '');
 
     <p class="text-muted" style="margin:4px 0 0;">Detalle de la solicitud, historia clínica y gestión del estado.</p>
 
-    <div style="margin-top:12px;">
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
 
         <a href="<?= PUBLIC_URL ?>?url=talleres/servicio-social" class="btn btn-secondary btn-sm">
 
             <i class="bi bi-arrow-left"></i> Volver al listado
 
         </a>
+
+        <?php if ($puedeGestionar): ?>
+
+        <a href="<?= PUBLIC_URL ?>?url=talleres/servicio-social/eliminar&id=<?= $id ?>"
+
+           class="btn btn-outline-danger btn-sm"
+
+           onclick="return confirm('¿Eliminar esta cita? Esta acción no se puede deshacer.');">
+
+            <i class="bi bi-trash"></i> Eliminar cita
+
+        </a>
+
+        <?php endif; ?>
 
     </div>
 
@@ -436,27 +450,51 @@ $documento = (string)($cita['Documento'] ?? '');
 
                         <?php foreach ($citasPaciente as $otra): ?>
 
-                        <?php $oid = (int)($otra['Id_Cita'] ?? 0); ?>
+                        <?php
+                        $oid = (int)($otra['Id_Cita'] ?? 0);
+                        $estadoOtra = TallerServicioSocial::normalizarEstado((string)($otra['Estado'] ?? ''));
+                        $esActual = $oid === $id;
+                        ?>
 
-                        <tr>
+                        <tr<?= $esActual ? ' style="background:#f8fafc;"' : '' ?>>
 
-                            <td><?= htmlspecialchars((string)($otra['Fecha_Preferida'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                            <td><?= htmlspecialchars((string)($otra['Fecha_Preferida'] ?? ''), ENT_QUOTES, 'UTF-8') ?><?php if ($esActual): ?> <small class="text-muted">(esta cita)</small><?php endif; ?></td>
 
                             <td><?= htmlspecialchars(TallerServicioSocial::etiquetaTipo((string)($otra['Tipo_Cita'] ?? '')), ENT_QUOTES, 'UTF-8') ?></td>
 
                             <td>
 
-                                <span class="ss-badge ss-badge-<?= htmlspecialchars((string)($otra['Estado'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                <span class="ss-badge ss-badge-<?= htmlspecialchars($estadoOtra, ENT_QUOTES, 'UTF-8') ?>">
 
-                                    <?= htmlspecialchars(TallerServicioSocial::etiquetaEstado((string)($otra['Estado'] ?? '')), ENT_QUOTES, 'UTF-8') ?>
+                                    <?= htmlspecialchars(TallerServicioSocial::etiquetaEstado($estadoOtra), ENT_QUOTES, 'UTF-8') ?>
 
                                 </span>
 
                             </td>
 
-                            <td>
+                            <td style="white-space:nowrap;">
+
+                                <?php if ($puedeGestionar): ?>
+
+                                <a href="<?= PUBLIC_URL ?>?url=talleres/servicio-social/eliminar&id=<?= $oid ?>"
+
+                                   class="btn btn-sm btn-outline-danger"
+
+                                   title="Eliminar cita"
+
+                                   onclick="return confirm('¿Eliminar esta cita? Esta acción no se puede deshacer.');">
+
+                                    <i class="bi bi-trash"></i>
+
+                                </a>
+
+                                <?php endif; ?>
+
+                                <?php if (!$esActual): ?>
 
                                 <a href="<?= PUBLIC_URL ?>?url=talleres/servicio-social/ver&id=<?= $oid ?>" class="btn btn-sm btn-outline-primary">Ver</a>
+
+                                <?php endif; ?>
 
                             </td>
 

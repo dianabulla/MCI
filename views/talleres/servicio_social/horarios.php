@@ -5,7 +5,7 @@ require_once APP . '/Models/TallerServicioSocial.php';
 
 $fecha = (string)($fecha ?? '');
 $proximosSabados = is_array($proximos_sabados ?? null) ? $proximos_sabados : TallerServicioSocial::proximosSabados(16);
-$horariosSabado = is_array($horarios_sabado ?? null) ? $horarios_sabado : TallerServicioSocial::HORARIOS_SABADO;
+$horariosSabado = is_array($horarios_sabado ?? null) ? $horarios_sabado : TallerServicioSocial::catalogoHorariosSabado();
 $horasHabilitadas = is_array($horas_habilitadas ?? null) ? $horas_habilitadas : array_keys($horariosSabado);
 $config = is_array($config ?? null) ? $config : null;
 $flashOk = (string)($flash_ok ?? '');
@@ -46,8 +46,8 @@ $tieneConfig = $config !== null;
 <div class="page-header">
     <h2>Horarios por sábado</h2>
     <p class="text-muted" style="margin:4px 0 0;">
-        Configura qué horas estarán disponibles cada sábado. Desmarca las que quieras bloquear
-        (por ejemplo, si solo atienden de 2:00 a 5:00 p.m., deja marcadas solo esas horas).
+        Configura qué horas estarán disponibles cada sábado. Puedes habilitar cualquier hora del día (00:00 a 23:00).
+        Desmarca las que quieras bloquear.
     </p>
     <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
         <a href="<?= PUBLIC_URL ?>?url=talleres/servicio-social" class="btn btn-secondary btn-sm">
@@ -92,6 +92,10 @@ $tieneConfig = $config !== null;
     <form method="POST" action="<?= PUBLIC_URL ?>?url=talleres/servicio-social/horarios/guardar">
         <input type="hidden" name="fecha" value="<?= htmlspecialchars($fecha, ENT_QUOTES, 'UTF-8') ?>">
 
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px;">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="ssMarcarTodas">Marcar las 24 horas</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="ssDesmarcarTodas">Desmarcar todas</button>
+        </div>
         <div class="ss-horas-grid">
             <?php foreach ($horariosSabado as $hk => $hl): ?>
             <?php $checked = in_array($hk, $horasHabilitadas, true); ?>
@@ -123,5 +127,19 @@ $tieneConfig = $config !== null;
     </form>
     <?php endif; ?>
 </div>
+<script>
+(function() {
+    var marcar = document.getElementById('ssMarcarTodas');
+    var desmarcar = document.getElementById('ssDesmarcarTodas');
+    if (!marcar || !desmarcar) return;
+    function setAll(on) {
+        document.querySelectorAll('input[name="horas[]"]').forEach(function(el) {
+            el.checked = on;
+        });
+    }
+    marcar.addEventListener('click', function() { setAll(true); });
+    desmarcar.addEventListener('click', function() { setAll(false); });
+})();
+</script>
 
 <?php include VIEWS . '/layout/footer.php'; ?>

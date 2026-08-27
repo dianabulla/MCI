@@ -895,6 +895,98 @@ class ReporteController extends BaseController {
         return $nombre === 'pastoral' || strpos($nombre, 'ministerio pastoral') !== false;
     }
 
+    /**
+     * @return array{
+     *   acceso_global: bool,
+     *   id_ministerio_forzado: ?int,
+     *   nombre_ministerio: string,
+     *   filtro_personas: string,
+     *   filtro_celulas: string
+     * }
+     */
+    private function resolverAlcanceDashboardGanar(): array {
+        $accesoGlobal = AuthController::esAdministrador()
+            || AuthController::puede('reportes:ver')
+            || DataIsolation::tieneAccesoTotal();
+
+        $filtroPersonas = DataIsolation::generarFiltroPersonas();
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+
+        if ($accesoGlobal) {
+            return [
+                'acceso_global' => true,
+                'id_ministerio_forzado' => null,
+                'nombre_ministerio' => '',
+                'filtro_personas' => $filtroPersonas,
+                'filtro_celulas' => $filtroCelulas,
+            ];
+        }
+
+        $idMin = (int)(DataIsolation::getUsuarioMinisterioId() ?? 0);
+        $nombre = '';
+        if ($idMin > 0) {
+            $filas = $this->ministerioModel->query(
+                'SELECT Nombre_Ministerio FROM ministerio WHERE Id_Ministerio = ? LIMIT 1',
+                [$idMin]
+            );
+            $nombre = trim((string)($filas[0]['Nombre_Ministerio'] ?? ''));
+            $filtroPersonas = 'p.Id_Ministerio = ' . $idMin;
+            $filtroCelulas = '(
+                c.Id_Lider IN (SELECT Id_Persona FROM persona WHERE Id_Ministerio = ' . $idMin . ')
+                OR EXISTS (
+                    SELECT 1 FROM persona pm
+                    WHERE pm.Id_Celula = c.Id_Celula AND pm.Id_Ministerio = ' . $idMin . '
+                )
+            )';
+        }
+
+        return [
+            'acceso_global' => false,
+            'id_ministerio_forzado' => $idMin > 0 ? $idMin : null,
+            'nombre_ministerio' => $nombre,
+            'filtro_personas' => $filtroPersonas,
+            'filtro_celulas' => $filtroCelulas,
+        ];
+    }
+
+    private function aplicarAlcanceDashboardGanar(array $alcance, $filtroMinisterio): array {
+        if (!empty($alcance['id_ministerio_forzado'])) {
+            $filtroMinisterio = (int)$alcance['id_ministerio_forzado'];
+        }
+
+        return [
+            'filtro_rol' => (string)($alcance['filtro_personas'] ?? '1=0'),
+            'filtro_celulas' => (string)($alcance['filtro_celulas'] ?? '1=0'),
+            'filtro_ministerio' => $filtroMinisterio,
+        ];
+    }
+
+    private function reaplicarMinisterioForzado(array $alcance, $filtroMinisterio, array $opcionesFiltro): array {
+        if (empty($alcance['id_ministerio_forzado'])) {
+            return [
+                'filtro_ministerio' => $filtroMinisterio,
+                'opciones_filtro' => $opcionesFiltro,
+            ];
+        }
+
+        $id = (int)$alcance['id_ministerio_forzado'];
+        $filtroMinisterio = $id;
+        if (empty($opcionesFiltro['ministerio_ids_permitidos'][$id])) {
+            $opcionesFiltro['ministerio_ids_permitidos'][$id] = true;
+            $opcionesFiltro['ministerios_disponibles'][] = [
+                'Id_Ministerio' => $id,
+                'Nombre_Ministerio' => $alcance['nombre_ministerio'] !== ''
+                    ? $alcance['nombre_ministerio']
+                    : 'Mi ministerio',
+            ];
+        }
+
+        return [
+            'filtro_ministerio' => $filtroMinisterio,
+            'opciones_filtro' => $opcionesFiltro,
+        ];
+    }
+
     private function filtrarMinisteriosSinPastoral(array $ministerios): array {
         return array_values(array_filter($ministerios, function($ministerio) {
             $nombre = (string)($ministerio['Nombre_Ministerio'] ?? $ministerio['Nombre_Ministerio_Lider'] ?? '');
@@ -1121,17 +1213,85 @@ class ReporteController extends BaseController {
         $lineasTexto[] = '2 Todos deben actualizar el Drive de consolidación Diciembre 2025 y Enero y Febrero de 2026';
 
         $detallesPorMinisterio = [];
+        $invitadoresMap = [];
+        $personasNormalizadas = [];
+
         foreach ($detallePersonas as $itemDetalle) {
             $ministerio = trim((string)($itemDetalle['Nombre_Ministerio'] ?? ''));
             if ($ministerio === '') {
                 $ministerio = 'Sin ministerio';
             }
 
+            $generoClave = $this->clasificarRedGeneroPersona($itemDetalle);
+            $redLider = $this->clasificarRedGeneroPersona([
+                'Genero' => (string)($itemDetalle['Genero_Lider'] ?? ''),
+            ]);
+            if ($redLider === 'otros') {
+                $redLider = $generoClave;
+            }
+            $invitadoNombre = trim((string)($itemDetalle['Invitado_Por'] ?? ''));
+            if ($invitadoNombre === '') {
+                $invitadoNombre = 'Sin invitador';
+            }
+            $invitadoKey = $this->normalizarTextoComparable($invitadoNombre);
+            if ($invitadoKey === '') {
+                $invitadoKey = 'sin-invitador';
+            }
+
+            $personaItem = [
+                'Id_Persona' => (int)($itemDetalle['Id_Persona'] ?? 0),
+                'Nombre' => (string)($itemDetalle['Nombre'] ?? ''),
+                'Apellido' => (string)($itemDetalle['Apellido'] ?? ''),
+                'Genero' => (string)($itemDetalle['Genero'] ?? ''),
+                'genero_clave' => $generoClave,
+                'red_lider' => $redLider,
+                'Genero_Lider' => (string)($itemDetalle['Genero_Lider'] ?? ''),
+                'Id_Lider' => (int)($itemDetalle['Id_Lider'] ?? 0),
+                'Invitado_Por' => $invitadoNombre,
+                'invitado_key' => $invitadoKey,
+                'Nombre_Ministerio' => $ministerio,
+                'Nombre_Celula' => trim((string)($itemDetalle['Nombre_Celula'] ?? '')) ?: 'Sin célula',
+                'Nombre_Lider' => trim((string)($itemDetalle['Nombre_Lider'] ?? '')) ?: 'Sin líder',
+                'Proceso' => (string)($itemDetalle['Proceso'] ?? ''),
+                'Fecha_Registro' => (string)($itemDetalle['Fecha_Registro'] ?? ''),
+            ];
+            $personasNormalizadas[] = $personaItem;
+
             if (!isset($detallesPorMinisterio[$ministerio])) {
                 $detallesPorMinisterio[$ministerio] = [];
             }
-            $detallesPorMinisterio[$ministerio][] = $itemDetalle;
+            $detallesPorMinisterio[$ministerio][] = $personaItem;
+
+            if (!isset($invitadoresMap[$invitadoKey])) {
+                $invitadoresMap[$invitadoKey] = [
+                    'key' => $invitadoKey,
+                    'nombre' => $invitadoNombre,
+                    'ganados' => 0,
+                    'hombres' => 0,
+                    'mujeres' => 0,
+                    'otros' => 0,
+                    'personas' => [],
+                ];
+            }
+            $invitadoresMap[$invitadoKey]['ganados']++;
+            if ($redLider === 'hombres') {
+                $invitadoresMap[$invitadoKey]['hombres']++;
+            } elseif ($redLider === 'mujeres') {
+                $invitadoresMap[$invitadoKey]['mujeres']++;
+            } else {
+                $invitadoresMap[$invitadoKey]['otros']++;
+            }
+            $invitadoresMap[$invitadoKey]['personas'][] = $personaItem;
         }
+
+        $invitadores = array_values($invitadoresMap);
+        usort($invitadores, static function ($a, $b) {
+            $cmp = ((int)($b['ganados'] ?? 0)) <=> ((int)($a['ganados'] ?? 0));
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+            return strcasecmp((string)($a['nombre'] ?? ''), (string)($b['nombre'] ?? ''));
+        });
 
         return [
             'inicio' => $inicioAnterior,
@@ -1139,6 +1299,8 @@ class ReporteController extends BaseController {
             'rows' => $rows,
             'totales' => $totales,
             'detalles' => $detallesPorMinisterio,
+            'invitadores' => $invitadores,
+            'personas' => $personasNormalizadas,
             'texto' => implode("\n", $lineasTexto)
         ];
     }
@@ -3951,7 +4113,7 @@ class ReporteController extends BaseController {
     }
 
     public function dashboardGanar() {
-        if (!AuthController::esAdministrador() && !AuthController::puede('reportes:ver')) {
+        if (!AuthController::puedeVerDashboardGanar()) {
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
@@ -3964,12 +4126,20 @@ class ReporteController extends BaseController {
         $filtroMinisterio = $_GET['ministerio'] ?? '';
         $filtroLider      = $_GET['lider'] ?? '';
 
-        $filtroRol        = DataIsolation::generarFiltroPersonas();
-        $filtroCelulas    = DataIsolation::generarFiltroCelulas();
-        $filtroMinisterios = DataIsolation::generarFiltroMinisterios();
+        $alcance = $this->resolverAlcanceDashboardGanar();
+        $aplicado = $this->aplicarAlcanceDashboardGanar($alcance, $filtroMinisterio);
+        $filtroRol = $aplicado['filtro_rol'];
+        $filtroCelulas = $aplicado['filtro_celulas'];
+        $filtroMinisterio = $aplicado['filtro_ministerio'];
+        $filtroMinisterios = !empty($alcance['id_ministerio_forzado'])
+            ? ('m.Id_Ministerio = ' . (int)$alcance['id_ministerio_forzado'])
+            : DataIsolation::generarFiltroMinisterios();
 
         $opcionesFiltro = $this->construirOpcionesFiltroMinisterioLider($filtroCelulas);
         $filtroMinisterio = ($filtroMinisterio !== '' && isset($opcionesFiltro['ministerio_ids_permitidos'][(int)$filtroMinisterio])) ? (int)$filtroMinisterio : '';
+        $reaplicado = $this->reaplicarMinisterioForzado($alcance, $filtroMinisterio, $opcionesFiltro);
+        $filtroMinisterio = $reaplicado['filtro_ministerio'];
+        $opcionesFiltro = $reaplicado['opciones_filtro'];
         $filtroLider      = ($filtroLider !== '' && isset($opcionesFiltro['lider_ids_permitidos'][(int)$filtroLider])) ? (int)$filtroLider : '';
         $cascadaFiltro = $this->aplicarCascadaFiltroMinisterioLider($opcionesFiltro, $filtroMinisterio, $filtroLider);
         $filtroLider = $cascadaFiltro['filtro_lider'];
@@ -4248,11 +4418,13 @@ class ReporteController extends BaseController {
             'totales_g12'            => $totalesG12,
             'resumen_semanal_lider' => $resumenSemanalLider,
             'reporte_celulas_por_lider' => $reporteCelulasPorLider,
+            'dashboard_alcance_global' => !empty($alcance['acceso_global']),
+            'dashboard_ministerio_nombre' => (string)($alcance['nombre_ministerio'] ?? ''),
         ]);
     }
 
     public function dashboardGanarRedes() {
-        if (!AuthController::esAdministrador() && !AuthController::puede('reportes:ver')) {
+        if (!AuthController::puedeVerDashboardGanar()) {
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
@@ -4267,16 +4439,32 @@ class ReporteController extends BaseController {
             $escala = 'semestral';
         }
 
+        $redActiva = strtolower(trim((string)($_GET['red'] ?? '')));
+        if (!in_array($redActiva, ['mujeres', 'hombres', 'otros'], true)) {
+            $redActiva = '';
+        }
+
+        $periodo = strtolower(trim((string)($_GET['periodo'] ?? 'anio')));
+        if (!in_array($periodo, ['s1', 's2', 'anio'], true)) {
+            $periodo = 'anio';
+        }
+
         $filtroMinisterio = $_GET['ministerio'] ?? '';
         $filtroLider = $_GET['lider'] ?? '';
 
-        $filtroRol = DataIsolation::generarFiltroPersonas();
-        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        $alcance = $this->resolverAlcanceDashboardGanar();
+        $aplicado = $this->aplicarAlcanceDashboardGanar($alcance, $filtroMinisterio);
+        $filtroRol = $aplicado['filtro_rol'];
+        $filtroCelulas = $aplicado['filtro_celulas'];
+        $filtroMinisterio = $aplicado['filtro_ministerio'];
 
         $opcionesFiltro = $this->construirOpcionesFiltroMinisterioLider($filtroCelulas);
         $filtroMinisterio = ($filtroMinisterio !== '' && isset($opcionesFiltro['ministerio_ids_permitidos'][(int)$filtroMinisterio]))
             ? (int)$filtroMinisterio
             : '';
+        $reaplicado = $this->reaplicarMinisterioForzado($alcance, $filtroMinisterio, $opcionesFiltro);
+        $filtroMinisterio = $reaplicado['filtro_ministerio'];
+        $opcionesFiltro = $reaplicado['opciones_filtro'];
         $filtroLider = ($filtroLider !== '' && isset($opcionesFiltro['lider_ids_permitidos'][(int)$filtroLider]))
             ? (int)$filtroLider
             : '';
@@ -4331,11 +4519,15 @@ class ReporteController extends BaseController {
         $this->view('reportes/dashboard_ganar_redes', [
             'anio' => $anio,
             'escala' => $escala,
+            'red_activa' => $redActiva,
+            'periodo' => $periodo,
             'filtro_ministerio' => (string)$filtroMinisterio,
             'filtro_lider' => (string)$filtroLider,
             'ministerios_disponibles' => $opcionesFiltro['ministerios_disponibles'],
             'lideres_disponibles' => $cascadaFiltro['lideres_disponibles'],
             'reporte_redes' => $reporteRedes,
+            'dashboard_alcance_global' => !empty($alcance['acceso_global']),
+            'dashboard_ministerio_nombre' => (string)($alcance['nombre_ministerio'] ?? ''),
         ]);
     }
 
@@ -4456,43 +4648,39 @@ class ReporteController extends BaseController {
     }
 
     /**
+     * Embudo de un ganado del periodo:
+     * iglesia / célula → total → Encuentro/UV (inscrito) → Cap. Destino (inscrito) → ubicado en célula.
+     *
      * @param array<int, array{encuentro?:bool,universidad_vida?:bool,capacitacion_destino?:bool}> $flagsFormacion
      * @return array{gano_iglesia:int,gano_celula:int,encuentro:int,capacitacion_destino:int,realizan_celula:int,total:int}|null
      */
     private function extraerMetricasPersonaGanarRedes(array $persona, array $flagsFormacion): ?array {
+        $origen = $this->clasificarOrigenGanar($persona);
+        if ($origen !== 'iglesia' && $origen !== 'celula') {
+            return null;
+        }
+
         $idPersona = (int)($persona['Id_Persona'] ?? 0);
         $flags = is_array($flagsFormacion[$idPersona] ?? null) ? $flagsFormacion[$idPersona] : [];
-        $origen = $this->clasificarOrigenGanar($persona);
-        $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
-        $checklist = $this->obtenerChecklist($persona);
 
-        $enEncuentro = !empty($flags['encuentro'])
-            || !empty($flags['universidad_vida'])
-            || $this->peldanoMarcado($checklist, 'Consolidar', 0, $proceso)
-            || $this->peldanoMarcado($checklist, 'Consolidar', 1, $proceso);
-
-        $enCapDestino = !empty($flags['capacitacion_destino'])
-            || $this->peldanoMarcado($checklist, 'Discipular', 0, $proceso)
-            || $this->peldanoMarcado($checklist, 'Discipular', 1, $proceso)
-            || $this->peldanoMarcado($checklist, 'Discipular', 2, $proceso);
-
-        $realizaCelula = $this->personaUbicadaEnCelulaGanar($persona)
-            || $this->peldanoMarcado($checklist, 'Enviar', 2, $proceso);
+        $enEncuentroUv = !empty($flags['encuentro']) || !empty($flags['universidad_vida']);
+        $enCapDestino = !empty($flags['capacitacion_destino']);
+        $ubicadoCelula = $this->personaUbicadaEnCelulaGanar($persona);
 
         $metricas = $this->metricasVaciasGanarRedes();
         $metricas['total'] = 1;
         if ($origen === 'iglesia') {
             $metricas['gano_iglesia'] = 1;
-        } elseif ($origen === 'celula') {
+        } else {
             $metricas['gano_celula'] = 1;
         }
-        if ($enEncuentro) {
+        if ($enEncuentroUv) {
             $metricas['encuentro'] = 1;
         }
         if ($enCapDestino) {
             $metricas['capacitacion_destino'] = 1;
         }
-        if ($realizaCelula) {
+        if ($ubicadoCelula) {
             $metricas['realizan_celula'] = 1;
         }
 
@@ -4879,10 +5067,10 @@ class ReporteController extends BaseController {
             'Periodo',
             'Gano iglesia',
             'Gano celula',
-            'Encuentro / UV',
-            'Capacitacion Destino',
-            'Realizan celula',
             'Total ganados',
+            'Encuentro / UV (inscritos)',
+            'Capacitacion Destino (inscritos)',
+            'Ubicados en celula',
         ];
         $rows = [];
         foreach (['mujeres', 'hombres', 'general'] as $claveRed) {
@@ -4898,10 +5086,10 @@ class ReporteController extends BaseController {
                     (string)($fila['periodo'] ?? ''),
                     (string)(int)($fila['gano_iglesia'] ?? 0),
                     (string)(int)($fila['gano_celula'] ?? 0),
+                    (string)(int)($fila['total'] ?? 0),
                     (string)(int)($fila['encuentro'] ?? 0),
                     (string)(int)($fila['capacitacion_destino'] ?? 0),
                     (string)(int)($fila['realizan_celula'] ?? 0),
-                    (string)(int)($fila['total'] ?? 0),
                 ];
             }
         }
@@ -4923,10 +5111,10 @@ class ReporteController extends BaseController {
                     (string)($fila['periodo'] ?? ''),
                     (string)(int)($fila['gano_iglesia'] ?? 0),
                     (string)(int)($fila['gano_celula'] ?? 0),
+                    (string)(int)($fila['total'] ?? 0),
                     (string)(int)($fila['encuentro'] ?? 0),
                     (string)(int)($fila['capacitacion_destino'] ?? 0),
                     (string)(int)($fila['realizan_celula'] ?? 0),
-                    (string)(int)($fila['total'] ?? 0),
                 ];
             }
             foreach ((array)($nodo['hijos'] ?? []) as $hijo) {
@@ -4952,7 +5140,7 @@ class ReporteController extends BaseController {
     }
 
     public function exportarCelulasPorLiderExcel() {
-        if (!AuthController::esAdministrador() && !AuthController::puede('reportes:ver')) {
+        if (!AuthController::puedeVerDashboardGanar()) {
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
@@ -4964,12 +5152,18 @@ class ReporteController extends BaseController {
 
         $filtroMinisterio = $_GET['ministerio'] ?? '';
         $filtroLider = $_GET['lider'] ?? '';
-        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        $alcance = $this->resolverAlcanceDashboardGanar();
+        $aplicado = $this->aplicarAlcanceDashboardGanar($alcance, $filtroMinisterio);
+        $filtroCelulas = $aplicado['filtro_celulas'];
+        $filtroMinisterio = $aplicado['filtro_ministerio'];
 
         $opcionesFiltro = $this->construirOpcionesFiltroMinisterioLider($filtroCelulas);
         $filtroMinisterio = ($filtroMinisterio !== '' && isset($opcionesFiltro['ministerio_ids_permitidos'][(int)$filtroMinisterio]))
             ? (int)$filtroMinisterio
             : '';
+        $reaplicado = $this->reaplicarMinisterioForzado($alcance, $filtroMinisterio, $opcionesFiltro);
+        $filtroMinisterio = $reaplicado['filtro_ministerio'];
+        $opcionesFiltro = $reaplicado['opciones_filtro'];
         $filtroLider = ($filtroLider !== '' && isset($opcionesFiltro['lider_ids_permitidos'][(int)$filtroLider]))
             ? (int)$filtroLider
             : '';

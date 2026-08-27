@@ -60,6 +60,38 @@ class Persona extends BaseModel {
     }
 
     /**
+     * Solo altas: si no hay rol o vino el administrativo Células, usar Discípulo.
+     * No se usa en update: no pisa pastor, 12, 144, líder de célula ni discípulo ya asignados.
+     */
+    private function aplicarRolDiscipuloSoloEnAlta(array $data): array {
+        require_once APP . '/Helpers/PermisosCatalogo.php';
+
+        $idDiscipulo = (int)$this->buscarIdRolPorPatrones(['discipulo', 'disipulo']);
+        if ($idDiscipulo <= 0) {
+            return $data;
+        }
+
+        $idRol = (int)($data['Id_Rol'] ?? 0);
+        if ($idRol <= 0) {
+            $data['Id_Rol'] = $idDiscipulo;
+            return $data;
+        }
+
+        if ($idRol === $idDiscipulo) {
+            return $data;
+        }
+
+        $filas = $this->query('SELECT Nombre_Rol FROM rol WHERE Id_Rol = ? LIMIT 1', [$idRol]);
+        $nombre = trim((string)($filas[0]['Nombre_Rol'] ?? ''));
+        $n = PermisosCatalogo::nombreRolSinAcentos($nombre);
+        if (($n === 'celulas' || $n === 'celula') && !PermisosCatalogo::esNombreRolLiderCelula($nombre)) {
+            $data['Id_Rol'] = $idDiscipulo;
+        }
+
+        return $data;
+    }
+
+    /**
      * Tipo_Reunion (Ganado en) normalizado para comparaciones en SQL.
      */
     private function sqlTipoReunionNormalizado(string $alias = 'p'): string {
@@ -1227,19 +1259,18 @@ class Persona extends BaseModel {
         $aliasPersona = trim((string)$aliasPersona) ?: 'p';
         $aliasRol = trim((string)$aliasRol) ?: 'r';
 
-        // Incluye Id_Rol fijos (3 célula, 6 pastores, 8 líder 12, 13 líder 144)
-        // además de patrones por nombre, por si el nombre del rol tiene tildes u otras variantes.
+        $nombreRol = "LOWER(COALESCE({$aliasRol}.Nombre_Rol, ''))";
         return "(
-            {$aliasPersona}.Id_Rol IN (3, 6, 8, 13)
-            OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%pastor%'
-            OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%lider de celula%'
-            OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%lider celula%'
-            OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%lider de 12%'
-            OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%lider 12%'
-            OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%lideres de 12%'
-            OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%lider de 144%'
-            OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%lider 144%'
-            OR LOWER(COALESCE({$aliasRol}.Nombre_Rol, '')) LIKE '%lideres de 144%'
+            {$nombreRol} LIKE '%pastor%'
+            OR {$nombreRol} LIKE '%lider de celula%'
+            OR {$nombreRol} LIKE '%lider celula%'
+            OR ({$nombreRol} LIKE '%lider%' AND {$nombreRol} LIKE '%celula%')
+            OR {$nombreRol} LIKE '%lider de 12%'
+            OR {$nombreRol} LIKE '%lider 12%'
+            OR {$nombreRol} LIKE '%lideres de 12%'
+            OR {$nombreRol} LIKE '%lider de 144%'
+            OR {$nombreRol} LIKE '%lider 144%'
+            OR {$nombreRol} LIKE '%lideres de 144%'
         )";
     }
 
@@ -1357,39 +1388,27 @@ class Persona extends BaseModel {
     }
 
     private function jerarquiaDesdeIdRolYNombre(int $idRol, string $nombreRol): string {
-        $nombreRol = $this->normalizarNombreRol($nombreRol);
+        require_once APP . '/Helpers/PermisosCatalogo.php';
 
-        if (strpos($nombreRol, 'admin') !== false) {
+        if (PermisosCatalogo::esRolAdministrativoEspecial($idRol, $nombreRol)) {
             return 'administrativo';
         }
+
+        $nombreRol = $this->normalizarNombreRol($nombreRol);
 
         if (strpos($nombreRol, 'pastor') !== false) {
             return 'pastor';
         }
 
-        if (
-            $idRol === 8
-            || strpos($nombreRol, 'lider de 12') !== false
-            || strpos($nombreRol, 'lider 12') !== false
-            || strpos($nombreRol, 'lideres de 12') !== false
-        ) {
+        if (PermisosCatalogo::esNombreRolLider12($nombreRol)) {
             return 'lider_12';
         }
 
-        if (
-            $idRol === 13
-            || strpos($nombreRol, 'lider de 144') !== false
-            || strpos($nombreRol, 'lider 144') !== false
-            || strpos($nombreRol, 'lideres de 144') !== false
-        ) {
+        if (PermisosCatalogo::esNombreRolLider144($nombreRol)) {
             return 'lider_144';
         }
 
-        if (
-            $idRol === 3
-            || strpos($nombreRol, 'lider de celula') !== false
-            || strpos($nombreRol, 'lider celula') !== false
-        ) {
+        if (PermisosCatalogo::esNombreRolLiderCelula($nombreRol)) {
             return 'lider_celula';
         }
 
@@ -1460,8 +1479,20 @@ class Persona extends BaseModel {
             return 0;
         }
 
-        $rows = $this->query('SELECT Id_Rol FROM rol WHERE Id_Rol = ? LIMIT 1', [$idFallback]);
-        return !empty($rows[0]['Id_Rol']) ? (int)$rows[0]['Id_Rol'] : 0;
+        $rows = $this->query('SELECT Id_Rol, Nombre_Rol FROM rol WHERE Id_Rol = ? LIMIT 1', [$idFallback]);
+        if (empty($rows[0]['Id_Rol'])) {
+            return 0;
+        }
+
+        $nombreNorm = $this->normalizarNombreRol($rows[0]['Nombre_Rol'] ?? '');
+        foreach ($patrones as $patron) {
+            $patronNorm = $this->normalizarNombreRol($patron);
+            if ($patronNorm !== '' && strpos($nombreNorm, $patronNorm) !== false) {
+                return (int)$rows[0]['Id_Rol'];
+            }
+        }
+
+        return 0;
     }
 
     public function resolverRolAscensoPorLider($idRolLider, $idRolActualPersona) {
@@ -1520,6 +1551,10 @@ class Persona extends BaseModel {
         return (int)$this->buscarIdRolPorPatrones(['lider de 12', 'lider 12', 'lideres de 12']);
     }
 
+    public function resolverIdRolLiderCelula() {
+        return (int)$this->buscarIdRolPorPatrones(['lider de celula', 'lider celula']);
+    }
+
     public function contarCoberturaDirectaLiderazgo($idLider, $excludePersonaId = null) {
         $idLider = (int)$idLider;
         $excludePersonaId = $excludePersonaId !== null ? (int)$excludePersonaId : 0;
@@ -1533,9 +1568,7 @@ class Persona extends BaseModel {
                 LEFT JOIN rol r ON r.Id_Rol = p.Id_Rol
                 WHERE p.Id_Lider = ?
                   AND (
-                        p.Id_Rol = 3
-                        OR p.Id_Rol = 8
-                        OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%pastor%'
+                        LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%pastor%'
                         OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lider de celula%'
                         OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lider celula%'
                         OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%lider de 12%'
@@ -2026,6 +2059,7 @@ class Persona extends BaseModel {
                     p.Id_Ministerio,
                     p.Nombre,
                     p.Apellido,
+                    p.Numero_Documento,
                     r.Nombre_Rol,
                     m.Nombre_Ministerio
                 FROM persona p
@@ -3043,11 +3077,15 @@ class Persona extends BaseModel {
                     p.Id_Persona,
                     p.Nombre,
                     p.Apellido,
+                    p.Genero,
                     p.Fecha_Registro,
                     p.Proceso,
+                    TRIM(COALESCE(p.Invitado_Por, '')) AS Invitado_Por,
                     COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
-                    COALESCE(c.Nombre_Celula, 'Sin cÃ©lula') AS Nombre_Celula,
-                    TRIM(CONCAT(COALESCE(l.Nombre, ''), ' ', COALESCE(l.Apellido, ''))) AS Nombre_Lider
+                    COALESCE(c.Nombre_Celula, 'Sin célula') AS Nombre_Celula,
+                    TRIM(CONCAT(COALESCE(l.Nombre, ''), ' ', COALESCE(l.Apellido, ''))) AS Nombre_Lider,
+                    l.Genero AS Genero_Lider,
+                    l.Id_Persona AS Id_Lider
                 FROM persona p
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
                 LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
@@ -3358,8 +3396,7 @@ class Persona extends BaseModel {
         $nombreRol = 'LOWER(COALESCE(' . $aliasRol . '.Nombre_Rol, \'\'))';
 
         return '('
-            . $aliasPersona . '.Id_Rol IN (3, 8)'
-            . ' OR ' . $nombreRol . " LIKE '%pastor%'"
+            . $nombreRol . " LIKE '%pastor%'"
             . ' OR ' . $nombreRol . " LIKE '%admin%'"
             . ' OR ' . $nombreRol . " LIKE '%lider de 12%'"
             . ' OR ' . $nombreRol . " LIKE '%lider 12%'"
@@ -3700,8 +3737,7 @@ class Persona extends BaseModel {
         if ($soloLiderCelulaO144) {
             $nombreRol = "LOWER(COALESCE(r.Nombre_Rol, ''))";
             $sql .= " AND (
-                p.Id_Rol IN (3, 13)
-                OR {$nombreRol} LIKE '%lider de celula%'
+                {$nombreRol} LIKE '%lider de celula%'
                 OR {$nombreRol} LIKE '%lider celula%'
                 OR {$nombreRol} LIKE '%lider de 144%'
                 OR {$nombreRol} LIKE '%lider 144%'
@@ -3846,6 +3882,7 @@ class Persona extends BaseModel {
     }
 
     public function create($data) {
+        $data = $this->aplicarRolDiscipuloSoloEnAlta($data);
         $id = parent::create($data);
         if ($id && isset($data['Id_Rol'])) {
             $this->sincronizarUserRolesDesdePersona((int)$id, (int)$data['Id_Rol']);

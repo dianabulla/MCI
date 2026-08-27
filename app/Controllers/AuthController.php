@@ -556,6 +556,136 @@ class AuthController extends BaseController {
     }
 
     /**
+     * Elige el rol con el que entra la cuenta (persona, usuario_acceso y user_roles).
+     * Si en cualquiera aparece Administrador, ese gana y no se vuelve a grabar Pastor.
+     *
+     * @param array<string, mixed> $user
+     * @return array{id_rol:int, nombre_rol:string}
+     */
+    private function resolverYSincronizarRolPrincipalCuenta(array $user): array {
+        $idPersona = (int)($user['Id_Persona'] ?? 0);
+        $idAcceso = (int)($user['Id_Usuario_Acceso'] ?? 0);
+        $candidatos = [];
+
+        $agregar = function (int $idRol, string $nombre, string $fuente) use (&$candidatos): void {
+            if ($idRol <= 0) {
+                return;
+            }
+            $nombre = trim($nombre);
+            if ($nombre === '') {
+                $fila = $this->rolModel->getById($idRol);
+                $nombre = trim((string)($fila['Nombre_Rol'] ?? ''));
+            }
+            $candidatos[] = [
+                'id_rol' => $idRol,
+                'nombre_rol' => $nombre,
+                'fuente' => $fuente,
+            ];
+        };
+
+        $agregar((int)($user['Id_Rol'] ?? 0), (string)($user['Nombre_Rol'] ?? ''), 'cuenta');
+
+        if ($idPersona > 0) {
+            $persona = $this->personaModel->getById($idPersona);
+            if (!empty($persona)) {
+                $agregar((int)($persona['Id_Rol'] ?? 0), (string)($persona['Nombre_Rol'] ?? ''), 'persona');
+            }
+            foreach ($this->userRoleModel->listarRolesPersona($idPersona) as $rolUr) {
+                $agregar((int)($rolUr['Id_Rol'] ?? 0), (string)($rolUr['Nombre_Rol'] ?? ''), 'user_roles');
+            }
+        }
+
+        $elegido = null;
+        foreach ($candidatos as $candidato) {
+            if (PermisosCatalogo::esRolAdministradorGlobal((int)$candidato['id_rol'], (string)$candidato['nombre_rol'])) {
+                $elegido = $candidato;
+                break;
+            }
+        }
+        // Cuenta administrativa (Células, Ganar, etc.): entra con ese rol y no pisa el ministerial de persona.
+        if ($elegido === null && $idAcceso > 0) {
+            foreach ($candidatos as $candidato) {
+                if (($candidato['fuente'] ?? '') !== 'cuenta') {
+                    continue;
+                }
+                if (PermisosCatalogo::esRolAdministrativoEspecial((int)$candidato['id_rol'], (string)$candidato['nombre_rol'])) {
+                    $elegido = $candidato;
+                    break;
+                }
+            }
+        }
+        if ($elegido === null) {
+            foreach ($candidatos as $candidato) {
+                if (($candidato['fuente'] ?? '') !== 'persona') {
+                    continue;
+                }
+                if (PermisosCatalogo::esRolAdministrativoEspecial((int)$candidato['id_rol'], (string)$candidato['nombre_rol'])) {
+                    continue;
+                }
+                $elegido = $candidato;
+                break;
+            }
+        }
+        if ($elegido === null) {
+            foreach ($candidatos as $candidato) {
+                if (($candidato['fuente'] ?? '') === 'persona') {
+                    $elegido = $candidato;
+                    break;
+                }
+            }
+        }
+        if ($elegido === null) {
+            $elegido = $candidatos[0] ?? ['id_rol' => 0, 'nombre_rol' => ''];
+        }
+
+        $idRol = (int)($elegido['id_rol'] ?? 0);
+        $nombreRol = trim((string)($elegido['nombre_rol'] ?? ''));
+        if ($idRol > 0 && $nombreRol === '') {
+            $fila = $this->rolModel->getById($idRol);
+            $nombreRol = trim((string)($fila['Nombre_Rol'] ?? ''));
+        }
+
+        if ($idRol > 0 && $idPersona > 0) {
+            $esAdministrativo = PermisosCatalogo::esRolAdministrativoEspecial($idRol, $nombreRol);
+            $personaActual = $this->personaModel->getById($idPersona);
+            $idRolPersona = (int)($personaActual['Id_Rol'] ?? 0);
+
+            if (!$esAdministrativo) {
+                if ($idRolPersona !== $idRol) {
+                    $this->personaModel->update($idPersona, ['Id_Rol' => $idRol]);
+                }
+                $this->userRoleModel->sincronizarRolPrincipal($idPersona, $idRol);
+            }
+        }
+
+        if ($idRol > 0) {
+            $idRolAccesoActual = (int)($user['Id_Rol'] ?? 0);
+            $nombreRolAcceso = trim((string)($user['Nombre_Rol'] ?? ''));
+            if ($idAcceso <= 0 && $idPersona > 0) {
+                $accesoVinculado = $this->usuarioAccesoModel->getByPersonaId($idPersona);
+                if (!empty($accesoVinculado)) {
+                    $idAcceso = (int)($accesoVinculado['Id_Usuario_Acceso'] ?? 0);
+                    $idRolAccesoActual = (int)($accesoVinculado['Id_Rol'] ?? 0);
+                    $nombreRolAcceso = trim((string)($accesoVinculado['Nombre_Rol'] ?? ''));
+                }
+            }
+            if ($nombreRolAcceso === '' && $idRolAccesoActual > 0) {
+                $filaAccesoRol = $this->rolModel->getById($idRolAccesoActual);
+                $nombreRolAcceso = trim((string)($filaAccesoRol['Nombre_Rol'] ?? ''));
+            }
+            $cuentaEsAdministrativa = PermisosCatalogo::esRolAdministrativoEspecial(
+                $idRolAccesoActual,
+                $nombreRolAcceso
+            );
+            if ($idAcceso > 0 && $idRolAccesoActual !== $idRol && !$cuentaEsAdministrativa) {
+                $this->usuarioAccesoModel->update($idAcceso, ['Id_Rol' => $idRol]);
+            }
+        }
+
+        return ['id_rol' => $idRol, 'nombre_rol' => $nombreRol];
+    }
+
+    /**
      * Mantiene persona/user_roles alineados cuando la cuenta ministerial vive en usuario_acceso.
      *
      * @param array<string, mixed> $dataUpdate
@@ -594,8 +724,10 @@ class AuthController extends BaseController {
         $idAuthUser = isset($user['Id_Usuario_Acceso'])
             ? (int)($user['Id_Usuario_Acceso'] ?? 0)
             : $idUsuario;
-        $idRol = (int)($user['Id_Rol'] ?? 0);
-        $rolesDisponibles = $this->resolverRolesDisponibles($idUsuario, $idRol, (string)($user['Nombre_Rol'] ?? ''));
+        $rolPrincipal = $this->resolverYSincronizarRolPrincipalCuenta($user);
+        $idRol = (int)($rolPrincipal['id_rol'] ?? ($user['Id_Rol'] ?? 0));
+        $nombreRolPrincipal = trim((string)($rolPrincipal['nombre_rol'] ?? ($user['Nombre_Rol'] ?? '')));
+        $rolesDisponibles = $this->resolverRolesDisponibles($idUsuario, $idRol, $nombreRolPrincipal);
         $rolActivo = $this->resolverRolActivoInicial($rolesDisponibles, $idRol);
         $idRolActivo = (int)($rolActivo['id_rol'] ?? $idRol);
         $permisos = $this->obtenerPermisosNormalizados($idRolActivo);
@@ -1244,6 +1376,18 @@ class AuthController extends BaseController {
         return PermisosProgramasAccess::puedeVerDashboardCapacitacionDestino();
     }
 
+    /**
+     * Dashboard Ganar (general y por redes): admin, reportes o líderes de ministerio.
+     * Los ministerios ven solo su propio alcance.
+     */
+    public static function puedeVerDashboardGanar(): bool {
+        if (self::esAdministrador() || self::puede('reportes:ver')) {
+            return true;
+        }
+
+        return self::puede('ministerios:ver');
+    }
+
     public static function puedeVerAsistenciasProgramaUv(): bool {
         require_once APP . '/Helpers/PermisosProgramasAccess.php';
         return PermisosProgramasAccess::puedeVerAsistenciasUniversidadVida();
@@ -1424,6 +1568,10 @@ class AuthController extends BaseController {
         if ($modulo === 'talleres') {
             return self::puedeAccederModuloTalleres();
         }
+        require_once APP . '/Helpers/PermisosModulos.php';
+        if (PermisosModulos::esModuloRetirado($modulo)) {
+            return false;
+        }
         if (self::esAdministrador()) {
             return true;
         }
@@ -1444,6 +1592,16 @@ class AuthController extends BaseController {
             }
         }
         return false;
+    }
+
+    /**
+     * Gestionar citas de Servicio Social (estado, horarios, eliminar).
+     */
+    public static function puedeGestionarServicioSocial(): bool {
+        return self::esAdministrador()
+            || self::esPerfilServicioSocialTalleres()
+            || self::puede('talleres:editar')
+            || self::puede('talleres:ver_respuestas');
     }
 
     /**
@@ -2075,7 +2233,7 @@ class AuthController extends BaseController {
 
         if ($idPersona > 0) {
             $this->userRoleModel->asegurarTabla();
-            if ($idRolLegacy > 0) {
+            if ($idRolLegacy > 0 && !PermisosCatalogo::esRolAdministrativoEspecial($idRolLegacy, $nombreRolLegacy)) {
                 $this->userRoleModel->sincronizarRolPrincipal($idPersona, $idRolLegacy);
             }
 

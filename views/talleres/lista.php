@@ -78,7 +78,10 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
                     $urlQr = PUBLIC_URL . '?url=talleres_publico/qr&slug=' . urlencode($slug);
                     ?>
                     <tr>
-                        <td><strong><?= htmlspecialchars((string)($f['Titulo'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong></td>
+                        <td>
+                            <strong><?= htmlspecialchars((string)($f['Titulo'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+                            <span class="badge bg-teal" style="background:#0f766e;margin-left:6px;">Pagos</span>
+                        </td>
                         <td>
                             <?php if ($puedeGestionarEnlace && !empty($f['Activo'])): ?>
                                 <a href="<?= htmlspecialchars($urlPublica, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" title="Abrir formulario">

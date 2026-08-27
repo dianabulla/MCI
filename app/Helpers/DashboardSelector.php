@@ -108,14 +108,44 @@ class DashboardSelector
         $dashboardSelectorActivo = $activo;
         $dashboardSelectorOpciones = [];
         foreach (self::opciones() as $op) {
+            $idOp = (string)($op['id'] ?? '');
+            if (!self::puedeVerOpcion($idOp)) {
+                continue;
+            }
             $dashboardSelectorOpciones[] = [
-                'id' => (string)($op['id'] ?? ''),
+                'id' => $idOp,
                 'label' => (string)($op['label'] ?? ''),
                 'href' => self::urlOpcion($op, $paramsPreservar),
-                'activa' => ($op['id'] ?? '') === $activo,
+                'activa' => $idOp === $activo,
             ];
         }
 
+        if (count($dashboardSelectorOpciones) <= 1) {
+            return;
+        }
+
         include VIEWS . '/reportes/_selector_dashboard.php';
+    }
+
+    private static function puedeVerOpcion(string $id): bool
+    {
+        if (!class_exists('AuthController', false)) {
+            return true;
+        }
+
+        if ($id === 'ganar') {
+            return AuthController::puedeVerDashboardGanar();
+        }
+        if ($id === 'celulas') {
+            return AuthController::esAdministrador() || AuthController::puede('reportes:ver');
+        }
+        if ($id === 'universidad_vida') {
+            return AuthController::puedeVerDashboardProgramaUv();
+        }
+        if ($id === 'capacitacion_destino') {
+            return AuthController::puedeVerDashboardProgramaCap();
+        }
+
+        return false;
     }
 }

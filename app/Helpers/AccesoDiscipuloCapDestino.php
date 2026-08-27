@@ -90,11 +90,29 @@ class AccesoDiscipuloCapDestino {
         }
 
         $idRolActual = (int)($persona['Id_Rol'] ?? 0);
+        $nombreRolActual = trim((string)($persona['Nombre_Rol'] ?? ''));
+        require_once APP . '/Helpers/PermisosCatalogo.php';
         $jerarquia = $personaModel->getJerarquiaByRol($idRolActual);
-        $esLiderazgo = in_array($jerarquia, ['pastor', 'lider_12', 'lider_144', 'lider_celula', 'administrativo'], true);
+        $esLiderazgo = in_array($jerarquia, ['pastor', 'lider_12', 'lider_144', 'lider_celula'], true);
 
         if (!$esLiderazgo) {
-            if ($idRolActual !== $idRolDiscipulo) {
+            $filasCel = $personaModel->query(
+                'SELECT Id_Celula FROM celula WHERE Id_Lider = ? LIMIT 1',
+                [$idPersona]
+            );
+            if (!empty($filasCel)) {
+                $esLiderazgo = true;
+                $idRolLiderCelula = (int)$personaModel->resolverIdRolLiderCelula();
+                if ($idRolLiderCelula > 0 && PermisosCatalogo::esRolAdministrativoEspecial($idRolActual, $nombreRolActual)) {
+                    $personaModel->update($idPersona, ['Id_Rol' => $idRolLiderCelula]);
+                    $idRolActual = $idRolLiderCelula;
+                }
+            }
+        }
+
+        if (!$esLiderazgo) {
+            if ($idRolActual !== $idRolDiscipulo
+                && ($idRolActual <= 0 || PermisosCatalogo::esRolAdministrativoEspecial($idRolActual, $nombreRolActual))) {
                 $personaModel->update($idPersona, ['Id_Rol' => $idRolDiscipulo]);
                 $personaModel->ajustarEscaleraPorRol($idPersona, $idRolDiscipulo);
                 $idRolActual = $idRolDiscipulo;

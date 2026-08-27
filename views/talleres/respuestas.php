@@ -18,6 +18,7 @@ $puedeGraficas = !empty($permisosTaller['ver_graficas']);
 $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
 $puedeRegistrarPago = !empty($permisosTaller['ver_respuestas']) || !empty($permisosTaller['editar']);
 $esPresentacionNinos = !empty($es_presentacion_ninos);
+$aceptaPago = true;
 $esTourLevantate = !empty($es_tour_levantate);
 $resumenPorMinisterio = is_array($resumen_por_ministerio ?? null) ? $resumen_por_ministerio : [];
 $totalResumenMinisterios = array_sum(array_map(static fn(array $f): int => (int)($f['total'] ?? 0), $resumenPorMinisterio));
@@ -399,6 +400,18 @@ function taller_resp_valor(array $valores, string $clave): string {
     </div>
 </div>
 
+<?php
+$flashOkResp = $_SESSION['talleres_flash_ok'] ?? '';
+$flashErrorResp = $_SESSION['talleres_flash_error'] ?? '';
+unset($_SESSION['talleres_flash_ok'], $_SESSION['talleres_flash_error']);
+?>
+<?php if ($flashOkResp !== ''): ?>
+<div class="alert alert-success"><?= htmlspecialchars($flashOkResp, ENT_QUOTES, 'UTF-8') ?></div>
+<?php endif; ?>
+<?php if ($flashErrorResp !== ''): ?>
+<div class="alert alert-danger"><?= htmlspecialchars($flashErrorResp, ENT_QUOTES, 'UTF-8') ?></div>
+<?php endif; ?>
+
 <?php if (!$soloGraficas && $totalInscripciones > 0 && $puedeGraficas && $graficasList !== []): ?>
 <nav class="taller-resp-tabs" aria-label="Vista de respuestas">
     <button type="button" class="<?= $tabActiva === 'lista' ? 'active' : '' ?>" data-tab="lista">Lista de inscripciones</button>
@@ -476,7 +489,7 @@ function taller_resp_valor(array $valores, string $clave): string {
                     </div>
                     <?php endif; ?>
                 </div>
-                <?php if ($puedeRegistrarPago && $esPresentacionNinos): ?>
+                <?php if ($puedeRegistrarPago && $aceptaPago): ?>
                 <div class="taller-resp-pago">
                     <a class="taller-resp-pago-btn" href="<?= htmlspecialchars($urlPago, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" title="Registrar pago/abono" aria-label="Registrar pago">💳</a>
                     <?php if ($totalPagado > 0): ?>

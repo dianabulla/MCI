@@ -1153,7 +1153,7 @@ if (filtroNombre && filtroPerfilForm) {
 
                 const indiceReal = (indicesChecklist[etapa] && typeof indicesChecklist[etapa][i] !== 'undefined') ? indicesChecklist[etapa][i] : i;
                 const done = !!(modalState.checklist[etapa] && modalState.checklist[etapa][indiceReal]);
-                let editable = etapaIndex === indiceProceso;
+                let editable = true;
                 if (etapa === 'Ganar' && indiceReal === 1) {
                     editable = false;
                 }
