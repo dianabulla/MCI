@@ -77,7 +77,7 @@ class DashboardSelector
             $query = array_merge($query, $opcion['query']);
         }
 
-        foreach (['anio', 'ministerio', 'lider', 'mes'] as $clave) {
+        foreach (['anio', 'ministerio', 'lider', 'mes', 'semestre'] as $clave) {
             if (!array_key_exists($clave, $paramsPreservar)) {
                 continue;
             }

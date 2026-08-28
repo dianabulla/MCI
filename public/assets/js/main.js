@@ -364,8 +364,8 @@ document.addEventListener('click', function(e) {
 });
 
 /**
- * Sesión: si el servidor envía session_expired, ir al login.
- * El aviso por inactividad solo corre si data-session-timeout > 0.
+ * Si el servidor responde session_expired (401), ir al login.
+ * No hay cierre ni aviso por inactividad en el cliente.
  */
 (function () {
     'use strict';
@@ -401,39 +401,4 @@ document.addEventListener('click', function(e) {
             });
         };
     }
-
-    document.addEventListener('DOMContentLoaded', function () {
-        var body = document.body;
-        if (!body) {
-            return;
-        }
-        var timeoutSec = parseInt(body.getAttribute('data-session-timeout') || '0', 10);
-        var loginUrl = body.getAttribute('data-login-expired-url');
-        if (!timeoutSec || !loginUrl) {
-            return;
-        }
-
-        var avisoMs = Math.max(60000, (timeoutSec - 120) * 1000);
-        var cierreMs = timeoutSec * 1000;
-        var timerAviso = null;
-        var timerCierre = null;
-
-        function reiniciarTimers() {
-            clearTimeout(timerAviso);
-            clearTimeout(timerCierre);
-            timerAviso = setTimeout(function () {
-                if (window.confirm('Tu sesión expirará en 2 minutos por inactividad. ¿Deseas continuar?')) {
-                    reiniciarTimers();
-                }
-            }, avisoMs);
-            timerCierre = setTimeout(function () {
-                window.location.href = loginUrl;
-            }, cierreMs);
-        }
-
-        ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach(function (evt) {
-            document.addEventListener(evt, reiniciarTimers, { passive: true });
-        });
-        reiniciarTimers();
-    });
 })();

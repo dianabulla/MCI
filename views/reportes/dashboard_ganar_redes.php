@@ -22,7 +22,7 @@ $etiquetasMetrica = [
     'gano_iglesia' => 'Ganó iglesia',
     'gano_celula' => 'Ganó célula',
     'total' => 'Total ganados',
-    'encuentro' => 'Encuentro / UV',
+    'encuentro' => 'Universidad de la Vida',
     'capacitacion_destino' => 'Cap. Destino',
     'realizan_celula' => 'Ubicados en célula',
 ];
@@ -30,7 +30,7 @@ $etiquetasCortas = [
     'gano_iglesia' => 'Iglesia',
     'gano_celula' => 'Célula',
     'total' => 'Total',
-    'encuentro' => 'Enc. / UV',
+    'encuentro' => 'UV',
     'capacitacion_destino' => 'Cap. Destino',
     'realizan_celula' => 'Ubicados',
 ];

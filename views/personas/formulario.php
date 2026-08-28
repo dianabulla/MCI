@@ -42,6 +42,7 @@ $urlVolver = $returnUrl !== ''
         <input type="hidden" name="celula_retorno" value="<?= (int)($celula_retorno ?? 0) ?>">
         <?php elseif ($returnToCelulas): ?>
         <input type="hidden" name="return_to" value="celulas">
+        <input type="hidden" name="celula_retorno" value="<?= (int)($celula_retorno ?? 0) ?>">
         <?php endif; ?>
         <?php if ($returnUrl !== ''): ?>
         <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrl, ENT_QUOTES, 'UTF-8') ?>">
@@ -157,6 +158,18 @@ $urlVolver = $returnUrl !== ''
                     <?php
                     $celulaNombreSeleccionada = $post_data['celula_search'] ?? (isset($persona) && !empty($persona['Id_Celula']) ? ($persona['Nombre_Celula'] ?? '') : '');
                     $celulaIdSeleccionada = $post_data['id_celula'] ?? (isset($persona) && !empty($persona['Id_Celula']) ? $persona['Id_Celula'] : '');
+                    $idCelulaContexto = (int)($celula_retorno ?? 0);
+                    if ((string)$celulaIdSeleccionada === '' && $idCelulaContexto > 0 && empty($persona)) {
+                        $celulaIdSeleccionada = $idCelulaContexto;
+                        if ($celulaNombreSeleccionada === '' && !empty($celulas)) {
+                            foreach ($celulas as $celulaOpcion) {
+                                if ((int)($celulaOpcion['Id_Celula'] ?? 0) === $idCelulaContexto) {
+                                    $celulaNombreSeleccionada = trim((string)($celulaOpcion['Nombre_Celula'] ?? ''));
+                                    break;
+                                }
+                            }
+                        }
+                    }
                     ?>
                     <input type="text" id="celula_search" class="form-control"
                            placeholder="Buscar célula..."
@@ -229,6 +242,12 @@ $urlVolver = $returnUrl !== ''
                             $tipoReunionSeleccionado = 'Otros';
                         } else {
                             $tipoReunionSeleccionado = '';
+                        }
+                        $vieneDesdeCelula = empty($persona)
+                            && (int)($celula_retorno ?? 0) > 0
+                            && ($returnToAsistencia || $returnToCelulas);
+                        if ($tipoReunionSeleccionado === '' && $vieneDesdeCelula) {
+                            $tipoReunionSeleccionado = 'Celula';
                         }
                         $ganadoEnOtroObservacion = $post_data['ganado_en_otro_observacion'] ?? ($persona['Observacion_Ganado_En'] ?? '');
                         if ($ganadoEnOtroObservacion === '' && in_array((string)$tipoReunionRaw, ['Migrados', 'Asignados'], true)) {

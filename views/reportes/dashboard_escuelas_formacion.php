@@ -334,6 +334,31 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
 }
 .uv-kpi-desglose-cerrar:hover { color: #1e293b; }
 .uv-kpi-desglose-note { margin: 0 0 10px; }
+.uv-kpi-lider-link {
+    display: inline;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #1e4a89;
+    font: inherit;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.uv-kpi-lider-link:hover { color: #163a6e; }
+.uv-kpi-ficha-link {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 8px;
+    background: #1e4a89;
+    color: #fff !important;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+.uv-kpi-ficha-link:hover { background: #163a6e; color: #fff !important; }
 .dash-min-table { width:100%; border-collapse:collapse; font-size:.88rem; }
 .dash-min-table th { background:#f1f5f9; padding:8px 10px; text-align:left; font-size:.78rem; color:#475569; font-weight:700; border-bottom:1px solid #e2e8f0; }
 .dash-min-table td { padding:8px 10px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
@@ -507,9 +532,9 @@ if (in_array($lineaDashboard, ['universidad_vida', 'capacitacion_destino'], true
         <div>
             <h2>Dashboard · <?= htmlspecialchars($dashModuloTitulo, ENT_QUOTES, 'UTF-8') ?></h2>
             <?php if ($lineaDashboard === 'universidad_vida'): ?>
-                <small style="color:#64748b;">Universidad de la Vida · Inscripciones y pagos por ministerio (modo Consolidar)</small>
+                <small style="color:#64748b;">Universidad de la Vida · Semestre 1, semestre 2 o año · Inscritos, asistencia y Encuentro por red</small>
             <?php elseif ($lineaDashboard === 'capacitacion_destino'): ?>
-                <small style="color:#64748b;">Capacitación Destino · Inscripciones y pagos por ministerio y nivel (modo Consolidar)</small>
+                <small style="color:#64748b;">Capacitación Destino · Semestre 1, semestre 2 o año · Inscritos, asistencia y avance por red</small>
             <?php else: ?>
                 <small style="color:#64748b;">Módulo exclusivo: <?= htmlspecialchars($labelLinea) ?> · Meta por líder (hombre/mujer): <?= $metaPorLider ?> inscritos</small>
             <?php endif; ?>
@@ -523,6 +548,7 @@ if (in_array($lineaDashboard, ['universidad_vida', 'capacitacion_destino'], true
                     'ministerio' => (string)($filtroMinisterio ?? ''),
                     'lider' => (string)($filtroLider ?? ''),
                     'mes' => (int)($mes ?? date('n')),
+                    'semestre' => (int)($semestre_uv ?? 0),
                 ],
             ]);
             ?>
@@ -532,12 +558,14 @@ if (in_array($lineaDashboard, ['universidad_vida', 'capacitacion_destino'], true
     <div class="dash-card">
         <?php if ($lineaDashboard === 'universidad_vida'): ?>
             <p style="margin:0 0 10px;font-size:0.86rem;color:#475569;">
-                Filtro por <strong>semestre</strong> (fecha de registro del inscripción, igual que Consolidar).
-                Los pagos cuentan si están en la ficha <em>o</em> en movimientos de pago.
+                Filtro por <strong>semestre 1</strong>, <strong>semestre 2</strong> o <strong>año</strong> (fecha de inscripción).
+                La red se toma del líder. Asistencia a clase y Encuentro salen de la <strong>lista de asistencias</strong> (clases 1–4 y días 5–6).
+                Pasar al Encuentro exige <strong>70% de las clases UV</strong> y al menos un día de Encuentro marcado.
             </p>
         <?php elseif ($lineaDashboard === 'capacitacion_destino'): ?>
             <p style="margin:0 0 10px;font-size:0.86rem;color:#475569;">
-                Las tablas de inscripciones y pagos usan la misma base que <strong>Consolidar</strong> (todos los niveles).
+                Filtra por <strong>semestre 1</strong>, <strong>semestre 2</strong> o <strong>año</strong> (fecha de inscripción).
+                La red se toma del líder de la persona. Pasar de nivel exige <strong>70% de asistencias</strong> y <strong>70% de evaluaciones aprobadas</strong>.
             </p>
         <?php endif; ?>
         <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="filters-form">
@@ -552,13 +580,14 @@ if (in_array($lineaDashboard, ['universidad_vida', 'capacitacion_destino'], true
                 </select>
             </div>
 
-            <?php if ($lineaDashboard === 'universidad_vida'): ?>
+            <?php if ($lineaDashboard === 'universidad_vida' || $lineaDashboard === 'capacitacion_destino'): ?>
                 <?php $semestreUv = (int)($semestre_uv ?? 0); ?>
                 <div class="group">
-                    <label>Semestre</label>
+                    <label>Periodo</label>
                     <select name="semestre" onchange="this.form.submit()">
                         <option value="1" <?= $semestreUv === 1 ? 'selected' : '' ?>>Semestre 1 (Ene – Jun)</option>
                         <option value="2" <?= $semestreUv === 2 ? 'selected' : '' ?>>Semestre 2 (Jul – Dic)</option>
+                        <option value="3" <?= $semestreUv === 3 ? 'selected' : '' ?>>Año completo</option>
                     </select>
                 </div>
             <?php else: ?>

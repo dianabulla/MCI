@@ -24,27 +24,8 @@ if (class_exists('AuthController') && AuthController::estaAutenticado()) {
     }
 }
 ?>
-<?php
-$sessionTimeoutSec = 0;
-$loginSesionExpiradaUrl = function_exists('public_app_url')
-    ? public_app_url('auth/login', ['sesion' => 'expirada'])
-    : '';
-if (class_exists('SessionManager', false)) {
-    $sessionTimeoutSec = (int)SessionManager::IDLE_TIMEOUT_SECONDS;
-    $loginSesionExpiradaUrl = SessionManager::loginUrlConSesionExpirada();
-}
-$attrsSesionTimeout = '';
-if (
-    class_exists('AuthController')
-    && AuthController::estaAutenticado()
-    && $sessionTimeoutSec > 0
-    && $loginSesionExpiradaUrl !== ''
-) {
-    $attrsSesionTimeout = ' data-session-timeout="' . (int)$sessionTimeoutSec . '" data-login-expired-url="'
-        . htmlspecialchars($loginSesionExpiradaUrl, ENT_QUOTES, 'UTF-8') . '"';
-}
 ?>
-<body<?= $productTourRole !== '' ? ' data-product-tour-role="' . htmlspecialchars($productTourRole, ENT_QUOTES, 'UTF-8') . '"' : '' ?><?= $attrsSesionTimeout ?>>
+<body<?= $productTourRole !== '' ? ' data-product-tour-role="' . htmlspecialchars($productTourRole, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
 <?php
 $currentUrl = $_GET['url'] ?? 'home';
 $isActive = function(array $prefixes) use ($currentUrl) {

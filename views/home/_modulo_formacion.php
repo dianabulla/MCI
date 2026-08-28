@@ -71,7 +71,9 @@ $puedeMaterialUv = PermisosProgramasAccess::puedeVerMaterialUniversidadVida();
 $puedeMaterialCap = PermisosProgramasAccess::puedeVerMaterialCapacitacionDestino();
 $puedeExportarConsolidado = PermisosProgramasAccess::puedeExportarConsolidado();
 $esModuloConsolidar = $moduloFormacionActual === 'consolidar';
-$mostrarTablaProgramaMinisterio = in_array($moduloFormacionActual, ['consolidar', 'discipular'], true);
+$esListadoUvUnico = $programaRutaActual === 'universidad_vida';
+$mostrarTablaProgramaMinisterio = in_array($moduloFormacionActual, ['consolidar', 'discipular'], true)
+    && !$esListadoUvUnico;
 $tituloTablaProgramaMinisterio = trim($programaReporteLabel) !== ''
     ? $programaReporteLabel . ' por ministerio'
     : 'Reporte por ministerio';
@@ -683,6 +685,56 @@ if ($mostrarNavProgramasUnificada) {
         <small style="color:#637087;">Mostrando <?= $totalRegistrosVisibles ?> registros recientes (max. 300)</small>
     </div>
 
+    <?php if (!empty($esListadoUvUnico)): ?>
+    <div class="table-container">
+        <table class="data-table insc-table-ordenada">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Nombre</th>
+                    <th>Edad</th>
+                    <th>Genero</th>
+                    <th>Cedula</th>
+                    <th>Telefono</th>
+                    <th>Lider</th>
+                    <th>Ministerio</th>
+                    <th class="col-acciones-insc">Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (!empty($inscripcionesPublicas)): ?>
+                    <?php foreach ($inscripcionesPublicas as $ins): ?>
+                        <?php
+                        $idPersonaIns = (int)($ins['Id_Persona'] ?? 0);
+                        $segmentoAccion = (string)($ins['_segmento_actual'] ?? '');
+                        if ($segmentoAccion === '') {
+                            $segmentoAccion = 'hombres_adultos';
+                        }
+                        ?>
+                        <tr>
+                            <td data-label="Fecha"><?= htmlspecialchars((string)($ins['Fecha_Registro'] ?? '')) ?></td>
+                            <td data-label="Nombre" class="col-nowrap col-nombre"><?= htmlspecialchars((string)($ins['Nombre'] ?? '')) ?></td>
+                            <td data-label="Edad"><?= (int)($ins['Edad'] ?? 0) ?></td>
+                            <td data-label="Genero"><?= htmlspecialchars((string)($ins['Genero'] ?? '')) ?></td>
+                            <td data-label="Cedula"><?= htmlspecialchars((string)($ins['Cedula'] ?? '')) ?></td>
+                            <td data-label="Telefono"><?= htmlspecialchars((string)($ins['Telefono'] ?? '')) ?></td>
+                            <td data-label="Lider" class="col-nowrap col-lider"><?= htmlspecialchars((string)($ins['Lider'] ?? '')) ?></td>
+                            <td data-label="Ministerio"><?= htmlspecialchars((string)($ins['Nombre_Ministerio'] ?? '')) ?></td>
+                            <td data-label="Acción" class="text-center">
+                                <?= $renderAccionesRegistroFormacion($ins, $idPersonaIns, $segmentoAccion) ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="9" class="text-center"><?= htmlspecialchars($mensajeSinInscripcionesPrograma) ?></td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php else: ?>
+
     <div class="card report-card" style="margin-bottom:12px; padding:0; overflow:hidden;">
         <div class="table-container">
             <table class="data-table">
@@ -1172,8 +1224,9 @@ if ($mostrarNavProgramasUnificada) {
         <small style="display:block;margin-top:8px;color:#637087;">Total unificado mujeres: <?= $mujeresUnificadasRegistradas ?></small>
     </div>
     <?php endif; ?>
+    <?php endif; ?>
 
-    <?php if (!empty($inscripcionesOtros)): ?>
+    <?php if (!empty($inscripcionesOtros) && empty($esListadoUvUnico)): ?>
         <small style="display:block; margin-top:10px; color:#637087;">
             <?php if ($esReporteCapDestino): ?>
                 Hay <?= $otrosRegistrados ?> registro(s) sin nivel reconocido en Capacitación Destino.

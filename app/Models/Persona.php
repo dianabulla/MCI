@@ -98,26 +98,30 @@ class Persona extends BaseModel {
         return "REPLACE(REPLACE(LOWER(TRIM(COALESCE({$alias}.Tipo_Reunion, ''))), 'é', 'e'), 'í', 'i')";
     }
 
-    /** Ganado en célula. */
+    /** Ganado en célula: campo Ganado en = Célula. Origen_Ganar solo si Ganado en está vacío. */
     private function sqlEsGanadoEnCelula(string $alias = 'p'): string {
         $tipo = $this->sqlTipoReunionNormalizado($alias);
         $porTipo = "({$tipo} LIKE '%celula%')";
         if ($this->tieneColumna('Origen_Ganar')) {
-            return "({$porTipo} OR TRIM(COALESCE({$alias}.Origen_Ganar, '')) = 'Celula')";
+            return "({$porTipo} OR (
+                {$tipo} = ''
+                AND TRIM(COALESCE({$alias}.Origen_Ganar, '')) = 'Celula'
+            ))";
         }
         return $porTipo;
     }
 
     /**
-     * Ganado en iglesia: cualquier opción distinta de célula (Domingo, Somos Uno, Otros, etc.).
-     * Excluye vacío y migrados.
+     * Ganado en iglesia: Domingo, Somos Uno, Otros, etc.
+     * Excluye célula, vacío y migrados. Origen_Ganar=Domingo solo si Ganado en está vacío.
      */
     private function sqlEsGanadoEnIglesia(string $alias = 'p'): string {
         $tipo = $this->sqlTipoReunionNormalizado($alias);
         $celula = $this->sqlEsGanadoEnCelula($alias);
         $base = "({$tipo} <> '' AND NOT {$celula} AND {$tipo} NOT LIKE '%migrados%')";
         if ($this->tieneColumna('Origen_Ganar')) {
-            return "({$base} OR TRIM(COALESCE({$alias}.Origen_Ganar, '')) = 'Domingo')";
+            $origenDomingo = "({$tipo} = '' AND TRIM(COALESCE({$alias}.Origen_Ganar, '')) = 'Domingo')";
+            return "({$base} OR {$origenDomingo})";
         }
         return $base;
     }
@@ -3072,6 +3076,7 @@ class Persona extends BaseModel {
         $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
 
         $esIglesiaExpr = $this->sqlEsGanadoEnIglesia('p');
+        $esCelulaExpr = $this->sqlEsGanadoEnCelula('p');
 
         $sql = "SELECT
                     p.Id_Persona,
@@ -3080,18 +3085,26 @@ class Persona extends BaseModel {
                     p.Genero,
                     p.Fecha_Registro,
                     p.Proceso,
+                    p.Tipo_Reunion,
                     TRIM(COALESCE(p.Invitado_Por, '')) AS Invitado_Por,
                     COALESCE(m.Nombre_Ministerio, 'Sin ministerio') AS Nombre_Ministerio,
                     COALESCE(c.Nombre_Celula, 'Sin célula') AS Nombre_Celula,
                     TRIM(CONCAT(COALESCE(l.Nombre, ''), ' ', COALESCE(l.Apellido, ''))) AS Nombre_Lider,
                     l.Genero AS Genero_Lider,
-                    l.Id_Persona AS Id_Lider
+                    l.Id_Persona AS Id_Lider,
+                    p.Id_Ministerio,
+                    p.Id_Lider AS Id_Lider_Persona,
+                    CASE
+                        WHEN {$esCelulaExpr} THEN 'celula'
+                        WHEN {$esIglesiaExpr} THEN 'iglesia'
+                        ELSE 'otro'
+                    END AS Origen_Clave
                 FROM persona p
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
                 LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
                 LEFT JOIN persona l ON p.Id_Lider = l.Id_Persona
                 WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
-                  AND {$esIglesiaExpr}
+                  AND ({$esIglesiaExpr} OR {$esCelulaExpr})
                   AND $filtroRol" . $filtroNuevas;
 
         $params = [$fechaInicio, $fechaFin];

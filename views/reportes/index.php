@@ -167,6 +167,7 @@ $reporteGanadosFinSemanaAnterior = $reporte_ganados_fin_semana_anterior ?? [
     'rows' => [],
     'totales' => ['ganados' => 0, 'asignados' => 0, 'por_verificar' => 0, 'total_domingo' => 0],
     'invitadores' => [],
+    'arbol_lideres_12' => [],
     'personas' => [],
     'texto' => ''
 ];
@@ -672,63 +673,27 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
             <button type="button" class="rpt-ganados-filtro" data-genero="hombres">Red Hombres</button>
             <button type="button" class="rpt-ganados-filtro" data-genero="mujeres">Red Mujeres</button>
         </div>
-        <p class="rpt-ganados-semana-ayuda">El filtro es por red del líder, igual que en Discipular. Pulsa quien ganó para ver las personas y a qué líder pertenecen.</p>
+        <p class="rpt-ganados-semana-ayuda">Cada fila es un líder de 12 (red hombres o red mujeres del ministerio). Pulsa para desplegar los sublíderes que ganaron ese fin de semana. Iglesia y célula se cuentan por separado.</p>
 
         <div class="table-container table-container--always-visible" style="margin-bottom: 12px; display:block;">
-            <table class="data-table" id="tablaGanadosInvitadoresSemana">
+            <table class="data-table rpt-ganados-lideres12-table" id="tablaGanadosLideres12Semana">
                 <thead>
                     <tr>
-                        <th>Quién ganó</th>
-                        <th style="width:120px;">Ganados</th>
-                        <th>Líderes de esas personas</th>
-                    </tr>
-                </thead>
-                <tbody id="tablaGanadosInvitadoresSemanaBody">
-                    <tr>
-                        <td colspan="3" class="text-center">Cargando…</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-    <?php if (!empty($reporteGanadosFinSemanaAnterior['rows'])): ?>
-        <div class="table-container table-container--always-visible" style="margin-bottom: 12px; display:block;">
-            <table class="data-table">
-                <thead>
-                    <tr>
+                        <th>Líder de 12</th>
                         <th>Ministerio</th>
-                        <th style="width:130px;">Ganados</th>
-                        <th style="width:130px;">Asignados</th>
-                        <th style="width:140px;">Por verificar</th>
+                        <th>Red</th>
+                        <th style="width:80px;">Total</th>
+                        <th style="width:90px;">Iglesia</th>
+                        <th style="width:90px;">Célula</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <?php foreach (($reporteGanadosFinSemanaAnterior['rows'] ?? []) as $row): ?>
-                        <tr>
-                            <td>
-                                <button
-                                    type="button"
-                                    class="report-link-button js-ganados-fin-ministerio"
-                                    data-ministerio="<?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio'), ENT_QUOTES, 'UTF-8') ?>"
-                                >
-                                    <?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio')) ?>
-                                </button>
-                            </td>
-                            <td><strong><?= (int)($row['ganados'] ?? 0) ?></strong></td>
-                            <td><?= (int)($row['asignados'] ?? 0) ?></td>
-                            <td><?= (int)($row['por_verificar'] ?? 0) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    <tr class="reporte-metas-total-row">
-                        <td><strong>TOTAL</strong></td>
-                        <td><strong><?= (int)($reporteGanadosFinSemanaAnterior['totales']['ganados'] ?? 0) ?></strong></td>
-                        <td><strong><?= (int)($reporteGanadosFinSemanaAnterior['totales']['asignados'] ?? 0) ?></strong></td>
-                        <td><strong><?= (int)($reporteGanadosFinSemanaAnterior['totales']['por_verificar'] ?? 0) ?></strong></td>
+                <tbody id="tablaGanadosLideres12SemanaBody">
+                    <tr>
+                        <td colspan="6" class="text-center">Cargando…</td>
                     </tr>
                 </tbody>
             </table>
         </div>
-    <?php endif; ?>
     </div>
 </div>
 
@@ -1442,7 +1407,7 @@ const detalleLideresGanar = <?= json_encode($tablaGanarMinisterio['detalle_lider
 const detallesTablasMinisterial = <?= json_encode($detallesTablasMinisterial ?? [], JSON_UNESCAPED_UNICODE) ?>;
 const detallesGananciaMinisterial = <?= json_encode($detallesGananciaMinisterial ?? [], JSON_UNESCAPED_UNICODE) ?>;
 const detallesGanadosFinSemana = <?= json_encode($reporteGanadosFinSemanaAnterior['detalles'] ?? [], JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR) ?>;
-const invitadoresGanadosFinSemana = <?= json_encode($reporteGanadosFinSemanaAnterior['invitadores'] ?? [], JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR) ?>;
+const arbolLideres12GanadosFinSemana = <?= json_encode($reporteGanadosFinSemanaAnterior['arbol_lideres_12'] ?? [], JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR) ?>;
 const reporteEscuelasUv = <?= json_encode($reporteEscuelasUv ?? ['total' => 0, 'rows' => []], JSON_UNESCAPED_UNICODE) ?>;
 const resumenEscuelasInscripciones = <?= json_encode($resumenEscuelasInscripciones ?? [], JSON_UNESCAPED_UNICODE) ?>;
 const escuelasTotalRegistroPublico = <?= (int)$escuelasTotalRegistroPublico ?>;
@@ -2219,7 +2184,9 @@ if (tipoReporte === 'personas') {
             : (redLider === 'mujeres' ? lider + ' (Red Mujeres)' : lider);
         const celula = String(item.celula || item.Nombre_Celula || 'Sin célula');
         const ministerio = String(item.ministerio || item.Nombre_Ministerio || 'Sin ministerio');
-        const proceso = String(item.proceso || item.Proceso || '');
+        const origen = String(item.origen_label || '').trim();
+        const procesoBase = String(item.proceso || item.Proceso || '');
+        const proceso = origen !== '' ? (origen + (procesoBase !== '' ? ' · ' + procesoBase : '')) : procesoBase;
         const fecha = String(item.fecha_registro || item.Fecha_Registro || '');
         return `<tr><td>${escaparHtml(nombre)}</td><td>${escaparHtml(liderConRed)}</td><td>${escaparHtml(celula)}</td><td>${escaparHtml(ministerio)}</td><td>${escaparHtml(proceso)}</td><td>${escaparHtml(fecha)}</td></tr>`;
     };
@@ -2422,52 +2389,94 @@ if (tipoReporte === 'personas') {
     });
 
     let filtroGeneroGanadosFin = 'todos';
-    const tbodyInvitadoresGanados = document.getElementById('tablaGanadosInvitadoresSemanaBody');
+    const tbodyLideres12Ganados = document.getElementById('tablaGanadosLideres12SemanaBody');
+    const lideres12Abiertos = {};
 
-    const personasInvitadorPorFiltro = (invitador) => {
-        const personas = Array.isArray(invitador && invitador.personas) ? invitador.personas : [];
+    const etiquetaRedGanados = (red) => {
+        if (red === 'hombres') {
+            return 'Red Hombres';
+        }
+        if (red === 'mujeres') {
+            return 'Red Mujeres';
+        }
+        return 'Sin red';
+    };
+
+    const listaLideres12Filtrada = () => {
+        const lista = Array.isArray(arbolLideres12GanadosFinSemana) ? arbolLideres12GanadosFinSemana : [];
         if (filtroGeneroGanadosFin === 'todos') {
-            return personas;
+            return lista.filter((nodo) => (intSafe(nodo.ganados) > 0));
         }
-        return personas.filter((item) => String(item.red_lider || item.genero_clave || '') === filtroGeneroGanadosFin);
+        return lista.filter((nodo) => String(nodo.red || '') === filtroGeneroGanadosFin && intSafe(nodo.ganados) > 0);
     };
 
-    const lideresDePersonas = (personas) => {
-        const vistos = [];
-        personas.forEach((item) => {
-            const lider = String(item.Nombre_Lider || 'Sin líder').trim() || 'Sin líder';
-            if (vistos.indexOf(lider) === -1) {
-                vistos.push(lider);
-            }
-        });
-        return vistos;
+    const intSafe = (valor) => {
+        const n = parseInt(valor, 10);
+        return Number.isFinite(n) ? n : 0;
     };
 
-    const pintarTablaInvitadoresGanados = () => {
-        if (!tbodyInvitadoresGanados) {
+    const pintarTablaLideres12Ganados = () => {
+        if (!tbodyLideres12Ganados) {
             return;
         }
-        const lista = Array.isArray(invitadoresGanadosFinSemana) ? invitadoresGanadosFinSemana : [];
-        const filas = lista.map((inv) => {
-            const personas = personasInvitadorPorFiltro(inv);
-            return { inv, personas, total: personas.length };
-        }).filter((fila) => fila.total > 0);
-
-        if (!filas.length) {
-            tbodyInvitadoresGanados.innerHTML = '<tr><td colspan="3" class="text-center">Sin registros de iglesia para este filtro.</td></tr>';
+        const lista = listaLideres12Filtrada();
+        if (!lista.length) {
+            tbodyLideres12Ganados.innerHTML = '<tr><td colspan="6" class="text-center">Sin ganados de iglesia ni célula para este filtro.</td></tr>';
             return;
         }
 
-        tbodyInvitadoresGanados.innerHTML = filas.map((fila) => {
-            const nombre = escaparHtml(fila.inv.nombre || 'Sin invitador');
-            const clave = escaparHtml(fila.inv.key || '');
-            const lideres = escaparHtml(lideresDePersonas(fila.personas).join(', '));
-            return `<tr>
-                <td><button type="button" class="report-link-button js-ganados-fin-invitador" data-key="${clave}">${nombre}</button></td>
-                <td><strong>${fila.total}</strong></td>
-                <td>${lideres}</td>
+        tbodyLideres12Ganados.innerHTML = lista.map((nodo) => {
+            const clave = String(nodo.key || '');
+            const abierto = !!lideres12Abiertos[clave];
+            const nombre = escaparHtml(nodo.nombre || 'Líder de 12');
+            const ministerio = escaparHtml(nodo.ministerio || 'Sin ministerio');
+            const red = etiquetaRedGanados(String(nodo.red || ''));
+            const chevron = abierto ? '▾' : '▸';
+            let html = `<tr class="rpt-ganados-12-row" data-key="${escaparHtml(clave)}">
+                <td>
+                    <button type="button" class="report-link-button js-ganados-fin-12" data-key="${escaparHtml(clave)}">${chevron} ${nombre}</button>
+                </td>
+                <td>${ministerio}</td>
+                <td>${escaparHtml(red)}</td>
+                <td><strong>${intSafe(nodo.ganados)}</strong></td>
+                <td>${intSafe(nodo.ganados_iglesia)}</td>
+                <td>${intSafe(nodo.ganados_celula)}</td>
             </tr>`;
+            if (abierto) {
+                const subs = Array.isArray(nodo.sublideres) ? nodo.sublideres : [];
+                if (!subs.length) {
+                    html += `<tr class="rpt-ganados-sub-row"><td colspan="6" class="rpt-ganados-sub-vacio">Sin sublíderes con ganados</td></tr>`;
+                } else {
+                    html += subs.map((sub) => {
+                        const claveSub = escaparHtml(sub.key || '');
+                        return `<tr class="rpt-ganados-sub-row">
+                            <td class="rpt-ganados-sub-nombre">
+                                <button type="button" class="report-link-button js-ganados-fin-sub" data-key="${claveSub}">${escaparHtml(sub.nombre || 'Sublíder')}</button>
+                            </td>
+                            <td></td>
+                            <td></td>
+                            <td>${intSafe(sub.ganados)}</td>
+                            <td>${intSafe(sub.ganados_iglesia)}</td>
+                            <td>${intSafe(sub.ganados_celula)}</td>
+                        </tr>`;
+                    }).join('');
+                }
+            }
+            return html;
         }).join('');
+    };
+
+    const buscarSubliderPorClave = (clave) => {
+        const lista = Array.isArray(arbolLideres12GanadosFinSemana) ? arbolLideres12GanadosFinSemana : [];
+        for (let i = 0; i < lista.length; i += 1) {
+            const subs = Array.isArray(lista[i].sublideres) ? lista[i].sublideres : [];
+            for (let j = 0; j < subs.length; j += 1) {
+                if (String(subs[j].key || '') === clave) {
+                    return { doce: lista[i], sub: subs[j] };
+                }
+            }
+        }
+        return null;
     };
 
     document.querySelectorAll('.rpt-ganados-filtro').forEach((boton) => {
@@ -2476,26 +2485,30 @@ if (tipoReporte === 'personas') {
             document.querySelectorAll('.rpt-ganados-filtro').forEach((otro) => {
                 otro.classList.toggle('is-active', otro === boton);
             });
-            pintarTablaInvitadoresGanados();
+            pintarTablaLideres12Ganados();
         });
     });
 
-    if (tbodyInvitadoresGanados) {
-        tbodyInvitadoresGanados.addEventListener('click', (evento) => {
-            const boton = evento.target.closest('.js-ganados-fin-invitador');
-            if (!boton) {
+    if (tbodyLideres12Ganados) {
+        tbodyLideres12Ganados.addEventListener('click', (evento) => {
+            const boton12 = evento.target.closest('.js-ganados-fin-12');
+            if (boton12) {
+                const clave = String(boton12.getAttribute('data-key') || '');
+                lideres12Abiertos[clave] = !lideres12Abiertos[clave];
+                pintarTablaLideres12Ganados();
                 return;
             }
-            const clave = String(boton.getAttribute('data-key') || '');
-            const invitador = (Array.isArray(invitadoresGanadosFinSemana) ? invitadoresGanadosFinSemana : [])
-                .find((item) => String(item.key || '') === clave);
-            const filas = invitador ? personasInvitadorPorFiltro(invitador) : [];
-            const etiquetaFiltro = filtroGeneroGanadosFin === 'hombres'
-                ? 'Red Hombres'
-                : (filtroGeneroGanadosFin === 'mujeres' ? 'Red Mujeres' : 'todos');
-            reporteDetalleModalTitle.textContent = `Ganados por ${invitador ? invitador.nombre : 'invitador'} (${filas.length}${etiquetaFiltro !== 'todos' ? ' · ' + etiquetaFiltro : ''})`;
+            const botonSub = evento.target.closest('.js-ganados-fin-sub');
+            if (!botonSub || !reporteDetalleModalBody) {
+                return;
+            }
+            const hallado = buscarSubliderPorClave(String(botonSub.getAttribute('data-key') || ''));
+            const filas = hallado && Array.isArray(hallado.sub.personas) ? hallado.sub.personas : [];
+            const titulo12 = hallado ? hallado.doce.nombre : '';
+            const tituloSub = hallado ? hallado.sub.nombre : 'Sublíder';
+            reporteDetalleModalTitle.textContent = `Ganados · ${tituloSub} (bajo ${titulo12})`;
             if (!filas.length) {
-                reporteDetalleModalBody.innerHTML = '<tr><td colspan="6" class="text-center">Sin personas para este invitador</td></tr>';
+                reporteDetalleModalBody.innerHTML = '<tr><td colspan="6" class="text-center">Sin personas</td></tr>';
             } else {
                 reporteDetalleModalBody.innerHTML = filas.map(construirFilaPersona).join('');
             }
@@ -2503,7 +2516,7 @@ if (tipoReporte === 'personas') {
             reporteDetalleModal.classList.add('is-open');
             reporteDetalleModal.setAttribute('aria-hidden', 'false');
         });
-        pintarTablaInvitadoresGanados();
+        pintarTablaLideres12Ganados();
     }
 
     document.querySelectorAll('.js-open-ministerial').forEach((boton) => {
@@ -3705,9 +3718,52 @@ html.show-report-tables #reportesVisualContainer .ganar-extra-section {
 }
 
 .rpt-ganados-semana-ayuda {
-    margin: 0 0 10px 0;
-    font-size: 12px;
     color: #60708a;
+    font-size: 13px;
+    margin: 0 0 12px 0;
+}
+
+.rpt-ganados-sub-row td {
+    background: #f4f7fb;
+    font-weight: 500;
+}
+
+.rpt-ganados-sub-nombre {
+    padding-left: 28px !important;
+}
+
+.rpt-ganados-sub-vacio {
+    padding-left: 28px !important;
+    color: #64748b;
+}
+
+#tablaGanadosLideres12Semana.rpt-ganados-lideres12-table {
+    table-layout: auto;
+    width: max-content;
+    min-width: 100%;
+}
+
+#tablaGanadosLideres12Semana.rpt-ganados-lideres12-table th:nth-child(1),
+#tablaGanadosLideres12Semana.rpt-ganados-lideres12-table td:nth-child(1) {
+    white-space: nowrap;
+    width: auto;
+    min-width: max-content;
+    overflow: visible;
+}
+
+#tablaGanadosLideres12Semana.rpt-ganados-lideres12-table .report-link-button {
+    white-space: nowrap;
+    display: inline-block;
+    max-width: none;
+    overflow: visible;
+    text-decoration: none;
+}
+
+#tablaGanadosLideres12Semana.rpt-ganados-lideres12-table th:nth-child(n+4),
+#tablaGanadosLideres12Semana.rpt-ganados-lideres12-table td:nth-child(n+4) {
+    white-space: nowrap;
+    width: 1%;
+    text-align: center;
 }
 
 .report-subpanel {

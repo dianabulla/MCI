@@ -562,4 +562,86 @@ class DiscipularEvaluacion extends BaseModel {
                         }
         }
     }
+
+    /**
+     * Evaluaciones activas por nivel (1–3).
+     *
+     * @return array<int, int>
+     */
+    public function contarEvaluacionesActivasPorNivel(): array {
+        $map = [1 => 0, 2 => 0, 3 => 0];
+        try {
+            $stmt = $this->db->query(
+                "SELECT Nivel, COUNT(*) AS Total
+                 FROM discipular_evaluaciones
+                 WHERE Activa = 1 AND Nivel IN (1, 2, 3)
+                 GROUP BY Nivel"
+            );
+            foreach ((array)$stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $nivel = (int)($row['Nivel'] ?? 0);
+                if (isset($map[$nivel])) {
+                    $map[$nivel] = (int)($row['Total'] ?? 0);
+                }
+            }
+        } catch (Throwable $e) {
+            return $map;
+        }
+
+        return $map;
+    }
+
+    /**
+     * Evaluaciones con último intento aprobado, por persona y nivel.
+     *
+     * @param array<int, int> $idsPersona
+     * @return array<int, array<int, int>>
+     */
+    public function contarEvaluacionesAprobadasPorPersonaNivel(array $idsPersona): array {
+        $idsPersona = array_values(array_unique(array_filter(array_map('intval', $idsPersona), static function ($id) {
+            return $id > 0;
+        })));
+        if ($idsPersona === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsPersona), '?'));
+        $sql = "SELECT r.Id_Persona, e.Nivel, COUNT(*) AS Aprobadas
+                FROM discipular_evaluacion_resultados r
+                INNER JOIN discipular_evaluaciones e ON e.Id_Evaluacion = r.Id_Evaluacion
+                WHERE r.Id_Persona IN ({$placeholders})
+                  AND e.Nivel IN (1, 2, 3)
+                  AND r.Aprobado = 1
+                  AND r.Id_Resultado = (
+                      SELECT r2.Id_Resultado
+                      FROM discipular_evaluacion_resultados r2
+                      WHERE r2.Id_Evaluacion = r.Id_Evaluacion
+                        AND r2.Id_Persona = r.Id_Persona
+                      ORDER BY r2.Intento_Numero DESC, r2.Id_Resultado DESC
+                      LIMIT 1
+                  )
+                GROUP BY r.Id_Persona, e.Nivel";
+
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($idsPersona);
+            $rows = (array)$stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($rows as $row) {
+            $idPersona = (int)($row['Id_Persona'] ?? 0);
+            $nivel = (int)($row['Nivel'] ?? 0);
+            if ($idPersona <= 0 || $nivel < 1 || $nivel > 3) {
+                continue;
+            }
+            if (!isset($map[$idPersona])) {
+                $map[$idPersona] = [];
+            }
+            $map[$idPersona][$nivel] = (int)($row['Aprobadas'] ?? 0);
+        }
+
+        return $map;
+    }
 }

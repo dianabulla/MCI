@@ -1781,7 +1781,8 @@ class PersonaController extends BaseController {
     }
 
     /**
-     * Resolver anclaje automático cuando la creación viene desde asistencias.
+     * Anclaje cuando la persona se crea desde una célula (asistencias o ficha de célula).
+     * Si no eligieron otro "Ganado en", queda Célula.
      */
     private function resolverAnclajeDesdeAsistencia($celulaRetorno, array $data) {
         $idCelulaOrigen = (int)($celulaRetorno ?? 0);
@@ -1807,9 +1808,11 @@ class PersonaController extends BaseController {
         $data['Id_Celula'] = $idCelulaOrigen;
         $data['Id_Lider'] = $idLider;
         $data['Id_Ministerio'] = $idMinisterio;
-        // Si viene desde asistencias, se considera ganado en célula.
         if (empty($data['Tipo_Reunion'])) {
             $data['Tipo_Reunion'] = 'Celula';
+        }
+        if ($this->personaModel->tieneColumna('Origen_Ganar') && ($data['Tipo_Reunion'] ?? '') === 'Celula') {
+            $data['Origen_Ganar'] = 'Celula';
         }
 
         return $data;
@@ -3621,9 +3624,8 @@ class PersonaController extends BaseController {
                     : 'Ganar';
             }
 
-            // Regla de negocio: si se crea desde Asistencias, se ancla automáticamente
-            // a la célula/líder/ministerio de origen de ese registro.
-            if ($returnTo === 'asistencia') {
+            // Desde asistencias o desde la ficha/lista de una célula: ancla y marca Ganado en = Célula si no eligieron otro origen.
+            if ($returnTo === 'asistencia' || $returnTo === 'celulas') {
                 $data = $this->resolverAnclajeDesdeAsistencia($celulaRetorno, $data);
             }
 

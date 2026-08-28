@@ -801,7 +801,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
      * Programas de escuelas por Id_Persona (encuentro, UV, capacitación destino).
      *
      * @param int[] $idsPersona
-     * @return array<int, array{encuentro: bool, universidad_vida: bool, capacitacion_destino: bool}>
+     * @return array<int, array{encuentro: bool, universidad_vida: bool, bautismo: bool, capacitacion_destino: bool}>
      */
     public function getFlagsFormacionPorIdsPersonas(array $idsPersona): array {
         $ids = [];
@@ -831,13 +831,17 @@ class EscuelaFormacionInscripcion extends BaseModel {
                 $mapa[$id] = [
                     'encuentro' => false,
                     'universidad_vida' => false,
+                    'bautismo' => false,
                     'capacitacion_destino' => false,
                 ];
             }
             $programa = strtolower(trim($programa));
-            if ($programa === 'encuentro' || $programa === 'universidad_vida' || $programa === 'bautismo') {
-                $mapa[$id]['encuentro'] = true;
+            if ($programa === 'universidad_vida') {
                 $mapa[$id]['universidad_vida'] = true;
+            } elseif ($programa === 'encuentro') {
+                $mapa[$id]['encuentro'] = true;
+            } elseif ($programa === 'bautismo') {
+                $mapa[$id]['bautismo'] = true;
             } elseif ($programa === 'capacitacion_destino' || strpos($programa, 'capacitacion_destino_') === 0) {
                 $mapa[$id]['capacitacion_destino'] = true;
             }
@@ -1572,6 +1576,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
                     p.Edad AS Edad_Persona_Actual,
                     p.Id_Lider AS Id_Lider_Persona_Actual,
                     TRIM(CONCAT(COALESCE(lp.Nombre, ''), ' ', COALESCE(lp.Apellido, ''))) AS Lider_Persona_Actual,
+                    lp.Genero AS Genero_Lider_Persona_Actual,
                     mp.Nombre_Ministerio AS Nombre_Ministerio_Persona_Actual
                 FROM {$this->table} s
                 LEFT JOIN persona p ON s.Id_Persona = p.Id_Persona

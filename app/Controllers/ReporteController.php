@@ -11,6 +11,8 @@ require_once APP . '/Models/EscuelaFormacionInscripcion.php';
 require_once APP . '/Models/EscuelaFormacionEstado.php';
 require_once APP . '/Models/EscuelaFormacionAsistenciaClase.php';
 require_once APP . '/Helpers/DataIsolation.php';
+require_once APP . '/Models/DiscipularEvaluacion.php';
+require_once APP . '/Helpers/ProgresoFormacionFlujo.php';
 
 class ReporteController extends BaseController {
     private $personaModel;
@@ -1238,6 +1240,12 @@ class ReporteController extends BaseController {
                 $invitadoKey = 'sin-invitador';
             }
 
+            $origenClave = strtolower(trim((string)($itemDetalle['Origen_Clave'] ?? '')));
+            if ($origenClave !== 'celula' && $origenClave !== 'iglesia') {
+                $origenClave = 'iglesia';
+            }
+            $origenLabel = $origenClave === 'celula' ? 'Célula' : 'Iglesia';
+
             $personaItem = [
                 'Id_Persona' => (int)($itemDetalle['Id_Persona'] ?? 0),
                 'Nombre' => (string)($itemDetalle['Nombre'] ?? ''),
@@ -1247,6 +1255,7 @@ class ReporteController extends BaseController {
                 'red_lider' => $redLider,
                 'Genero_Lider' => (string)($itemDetalle['Genero_Lider'] ?? ''),
                 'Id_Lider' => (int)($itemDetalle['Id_Lider'] ?? 0),
+                'Id_Ministerio' => (int)($itemDetalle['Id_Ministerio'] ?? 0),
                 'Invitado_Por' => $invitadoNombre,
                 'invitado_key' => $invitadoKey,
                 'Nombre_Ministerio' => $ministerio,
@@ -1254,6 +1263,8 @@ class ReporteController extends BaseController {
                 'Nombre_Lider' => trim((string)($itemDetalle['Nombre_Lider'] ?? '')) ?: 'Sin líder',
                 'Proceso' => (string)($itemDetalle['Proceso'] ?? ''),
                 'Fecha_Registro' => (string)($itemDetalle['Fecha_Registro'] ?? ''),
+                'origen_clave' => $origenClave,
+                'origen_label' => $origenLabel,
             ];
             $personasNormalizadas[] = $personaItem;
 
@@ -1293,6 +1304,8 @@ class ReporteController extends BaseController {
             return strcasecmp((string)($a['nombre'] ?? ''), (string)($b['nombre'] ?? ''));
         });
 
+        $arbolLideres12 = $this->construirArbolGanadosPorLider12($personasNormalizadas);
+
         return [
             'inicio' => $inicioAnterior,
             'fin' => $finAnterior,
@@ -1300,9 +1313,260 @@ class ReporteController extends BaseController {
             'totales' => $totales,
             'detalles' => $detallesPorMinisterio,
             'invitadores' => $invitadores,
+            'arbol_lideres_12' => $arbolLideres12,
             'personas' => $personasNormalizadas,
             'texto' => implode("\n", $lineasTexto)
         ];
+    }
+
+    /**
+     * Una fila por líder de 12 (hombre y mujer del ministerio) con sublíderes desplegables.
+     *
+     * @param array<int, array<string, mixed>> $personasGanadas
+     * @return array<int, array<string, mixed>>
+     */
+    private function construirArbolGanadosPorLider12(array $personasGanadas): array {
+        if ($personasGanadas === []) {
+            return [];
+        }
+
+        $idsMinisterio = [];
+        $idsLiderDirecto = [];
+        foreach ($personasGanadas as $persona) {
+            $idMin = (int)($persona['Id_Ministerio'] ?? 0);
+            if ($idMin > 0) {
+                $idsMinisterio[$idMin] = $idMin;
+            }
+            $idLider = (int)($persona['Id_Lider'] ?? 0);
+            if ($idLider > 0) {
+                $idsLiderDirecto[$idLider] = $idLider;
+            }
+        }
+
+        $principalesPorMin = $this->ministerioModel->getLideresPrincipalesByMinisterioIds(array_values($idsMinisterio));
+        $idsSemilla = $idsLiderDirecto;
+        foreach ($principalesPorMin as $pares) {
+            foreach (['id_lider_principal_1', 'id_lider_principal_2'] as $campo) {
+                $idP = (int)($pares[$campo] ?? 0);
+                if ($idP > 0) {
+                    $idsSemilla[$idP] = $idP;
+                }
+            }
+        }
+
+        $mapa = $this->cargarMapaCadenaLideres(array_values($idsSemilla));
+
+        $arbol = [];
+        foreach ($personasGanadas as $persona) {
+            $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
+            $ministerio = (string)($persona['Nombre_Ministerio'] ?? 'Sin ministerio');
+            $idLiderDirecto = (int)($persona['Id_Lider'] ?? 0);
+            $principales = $principalesPorMin[$idMinisterio] ?? [
+                'id_lider_principal_1' => 0,
+                'id_lider_principal_2' => 0,
+            ];
+            $ids12Min = array_values(array_filter([
+                (int)$principales['id_lider_principal_1'],
+                (int)$principales['id_lider_principal_2'],
+            ]));
+
+            $cadena = [];
+            $visto = [];
+            $cursor = $idLiderDirecto;
+            while ($cursor > 0 && !isset($visto[$cursor])) {
+                $visto[$cursor] = true;
+                $cadena[] = $cursor;
+                $cursor = (int)($mapa[$cursor]['Id_Lider'] ?? 0);
+            }
+
+            $id12 = 0;
+            foreach ($cadena as $idNodo) {
+                if (in_array($idNodo, $ids12Min, true)) {
+                    $id12 = $idNodo;
+                    break;
+                }
+            }
+            if ($id12 <= 0) {
+                foreach ($cadena as $idNodo) {
+                    $jerarquia = $this->personaModel->getJerarquiaByRol((int)($mapa[$idNodo]['Id_Rol'] ?? 0));
+                    if (in_array($jerarquia, ['lider_12', 'pastor'], true)) {
+                        $id12 = $idNodo;
+                        break;
+                    }
+                }
+            }
+            if ($id12 <= 0 && $ids12Min !== []) {
+                $redRef = $this->clasificarRedGeneroPersona([
+                    'Genero' => (string)($mapa[$idLiderDirecto]['Genero'] ?? ($persona['Genero_Lider'] ?? '')),
+                ]);
+                if ($redRef === 'otros') {
+                    $redRef = (string)($persona['red_lider'] ?? 'otros');
+                }
+                foreach ($ids12Min as $idCand) {
+                    $redCand = $this->clasificarRedGeneroPersona([
+                        'Genero' => (string)($mapa[$idCand]['Genero'] ?? ''),
+                    ]);
+                    if ($redCand === $redRef || ($redRef === 'otros' && $redCand !== 'otros')) {
+                        $id12 = $idCand;
+                        break;
+                    }
+                }
+                if ($id12 <= 0) {
+                    $id12 = $ids12Min[0];
+                }
+            }
+
+            $idSub = 0;
+            $nombreSub = 'Ganados directos del líder de 12';
+            if ($id12 > 0) {
+                $pos12 = array_search($id12, $cadena, true);
+                if ($pos12 === false) {
+                    $idSub = $idLiderDirecto;
+                    $nombreSub = trim((string)($persona['Nombre_Lider'] ?? '')) ?: 'Sin líder';
+                } elseif ((int)$pos12 === 0) {
+                    $idSub = 0;
+                    $nombreSub = 'Ganados directos del líder de 12';
+                } else {
+                    $idSub = (int)$cadena[(int)$pos12 - 1];
+                    $nombreSub = trim((string)(($mapa[$idSub]['Nombre'] ?? '') . ' ' . ($mapa[$idSub]['Apellido'] ?? ''))) ?: 'Sublíder';
+                }
+            } else {
+                $idSub = $idLiderDirecto;
+                $nombreSub = trim((string)($persona['Nombre_Lider'] ?? '')) ?: 'Sin líder';
+            }
+
+            $clave12 = $idMinisterio . ':' . ($id12 > 0 ? (string)$id12 : 'sin-12');
+            if (!isset($arbol[$clave12])) {
+                $nombre12 = 'Sin líder de 12';
+                $red12 = 'otros';
+                $genero12 = '';
+                if ($id12 > 0) {
+                    $nombre12 = trim((string)(($mapa[$id12]['Nombre'] ?? '') . ' ' . ($mapa[$id12]['Apellido'] ?? '')));
+                    if ($nombre12 === '') {
+                        $nombre12 = 'Líder de 12';
+                    }
+                    $genero12 = (string)($mapa[$id12]['Genero'] ?? '');
+                    $red12 = $this->clasificarRedGeneroPersona(['Genero' => $genero12]);
+                }
+                $arbol[$clave12] = [
+                    'key' => $clave12,
+                    'id_lider_12' => $id12,
+                    'nombre' => $nombre12,
+                    'red' => $red12,
+                    'ministerio' => $ministerio,
+                    'id_ministerio' => $idMinisterio,
+                    'ganados' => 0,
+                    'ganados_iglesia' => 0,
+                    'ganados_celula' => 0,
+                    'sublideres' => [],
+                ];
+            }
+
+            $claveSub = $idSub > 0 ? ('s' . $idSub) : 'directo';
+            if (!isset($arbol[$clave12]['sublideres'][$claveSub])) {
+                $arbol[$clave12]['sublideres'][$claveSub] = [
+                    'key' => $clave12 . ':' . $claveSub,
+                    'id_sublider' => $idSub,
+                    'nombre' => $nombreSub,
+                    'ganados' => 0,
+                    'ganados_iglesia' => 0,
+                    'ganados_celula' => 0,
+                    'personas' => [],
+                ];
+            }
+
+            $origenClave = (string)($persona['origen_clave'] ?? 'iglesia');
+            $arbol[$clave12]['ganados']++;
+            $arbol[$clave12]['sublideres'][$claveSub]['ganados']++;
+            if ($origenClave === 'celula') {
+                $arbol[$clave12]['ganados_celula']++;
+                $arbol[$clave12]['sublideres'][$claveSub]['ganados_celula']++;
+            } else {
+                $arbol[$clave12]['ganados_iglesia']++;
+                $arbol[$clave12]['sublideres'][$claveSub]['ganados_iglesia']++;
+            }
+            $arbol[$clave12]['sublideres'][$claveSub]['personas'][] = $persona;
+        }
+
+        $lista = array_values($arbol);
+        foreach ($lista as &$nodo12) {
+            $subs = array_values((array)($nodo12['sublideres'] ?? []));
+            usort($subs, static function ($a, $b) {
+                $cmp = ((int)($b['ganados'] ?? 0)) <=> ((int)($a['ganados'] ?? 0));
+                if ($cmp !== 0) {
+                    return $cmp;
+                }
+                return strcasecmp((string)($a['nombre'] ?? ''), (string)($b['nombre'] ?? ''));
+            });
+            $nodo12['sublideres'] = $subs;
+        }
+        unset($nodo12);
+
+        usort($lista, static function ($a, $b) {
+            $cmpMin = strcasecmp((string)($a['ministerio'] ?? ''), (string)($b['ministerio'] ?? ''));
+            if ($cmpMin !== 0) {
+                return $cmpMin;
+            }
+            $ordenRed = ['hombres' => 0, 'mujeres' => 1, 'otros' => 2];
+            $oa = $ordenRed[(string)($a['red'] ?? 'otros')] ?? 9;
+            $ob = $ordenRed[(string)($b['red'] ?? 'otros')] ?? 9;
+            if ($oa !== $ob) {
+                return $oa <=> $ob;
+            }
+            return ((int)($b['ganados'] ?? 0)) <=> ((int)($a['ganados'] ?? 0));
+        });
+
+        return $lista;
+    }
+
+    /**
+     * @param array<int, int> $idsIniciales
+     * @return array<int, array<string, mixed>>
+     */
+    private function cargarMapaCadenaLideres(array $idsIniciales): array {
+        $mapa = [];
+        $pendientes = array_values(array_unique(array_filter(array_map('intval', $idsIniciales))));
+        $vueltas = 0;
+        while ($pendientes !== [] && $vueltas < 20) {
+            $vueltas++;
+            $faltan = [];
+            foreach ($pendientes as $id) {
+                if ($id > 0 && !isset($mapa[$id])) {
+                    $faltan[] = $id;
+                }
+            }
+            if ($faltan === []) {
+                break;
+            }
+            $placeholders = implode(',', array_fill(0, count($faltan), '?'));
+            $rows = $this->personaModel->query(
+                "SELECT Id_Persona, Id_Lider, Id_Ministerio, Id_Rol, Nombre, Apellido, Genero
+                 FROM persona
+                 WHERE Id_Persona IN ({$placeholders})",
+                $faltan
+            );
+            $pendientes = [];
+            foreach ((array)$rows as $row) {
+                $id = (int)($row['Id_Persona'] ?? 0);
+                if ($id <= 0) {
+                    continue;
+                }
+                $idPadre = (int)($row['Id_Lider'] ?? 0);
+                $mapa[$id] = [
+                    'Id_Lider' => $idPadre,
+                    'Id_Ministerio' => (int)($row['Id_Ministerio'] ?? 0),
+                    'Id_Rol' => (int)($row['Id_Rol'] ?? 0),
+                    'Nombre' => (string)($row['Nombre'] ?? ''),
+                    'Apellido' => (string)($row['Apellido'] ?? ''),
+                    'Genero' => (string)($row['Genero'] ?? ''),
+                ];
+                if ($idPadre > 0 && !isset($mapa[$idPadre])) {
+                    $pendientes[] = $idPadre;
+                }
+            }
+        }
+
+        return $mapa;
     }
 
     private function obtenerContextoSemestre($fechaReferencia) {
@@ -2857,31 +3121,43 @@ class ReporteController extends BaseController {
     }
 
     /**
-     * Clasifica el origen de la persona: 'iglesia' | 'celula' | 'otros'
-     * - 'iglesia'  → Cualquier origen distinto de Célula
-     * - 'celula'   → Tipo_Reunion = Célula
-     * - 'otros'    → reservado para compatibilidad (actualmente no se usa)
-     */
-    /**
      * Persona nueva ganada que ya tiene célula asignada en el padrón (Id_Celula > 0).
+     * No es lo mismo que “ganado en célula”.
      */
     private function personaUbicadaEnCelulaGanar(array $persona): bool {
         return (int)($persona['Id_Celula'] ?? 0) > 0;
     }
 
+    /**
+     * Clasifica el origen de la persona: 'iglesia' | 'celula' | 'otros'
+     * - 'celula'  → Ganado en = Célula
+     * - 'iglesia' → Domingo, Somos Uno, Otros (no célula, no migrados)
+     * - 'otros'   → vacío o Migrados (no cuenta en GI ni GC)
+     */
     private function clasificarOrigenGanar(array $persona): string {
         $tipo = strtolower(trim((string)($persona['Tipo_Reunion'] ?? '')));
         $tipo = strtr($tipo, [
             'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
         ]);
-        if ($tipo === '' || strpos($tipo, 'migrados') !== false) {
+        $origenGanar = strtolower(trim((string)($persona['Origen_Ganar'] ?? '')));
+        $origenGanar = strtr($origenGanar, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        ]);
+
+        if (strpos($tipo, 'migrados') !== false) {
             return 'otros';
         }
-        if (strpos($tipo, 'celula') !== false) {
+        if (strpos($tipo, 'celula') !== false || ($tipo === '' && $origenGanar === 'celula')) {
             return 'celula';
         }
+        if ($tipo !== '') {
+            return 'iglesia';
+        }
+        if ($origenGanar === 'domingo') {
+            return 'iglesia';
+        }
 
-        return 'iglesia';
+        return 'otros';
     }
 
     /**
@@ -2923,26 +3199,37 @@ class ReporteController extends BaseController {
      * considerando que etapas anteriores a la actual se dan por completadas.
      */
     private function peldanoMarcado(array $checklist, string $etapa, int $indice, string $procesoActual): bool {
-        $ordenEtapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
-        $idxActual  = array_search($procesoActual, $ordenEtapas, true);
-        $idxEtapa   = array_search($etapa, $ordenEtapas, true);
-
-        // Etapas anteriores → se consideran completas
-        if ($idxActual !== false && $idxEtapa !== false && $idxEtapa < $idxActual) {
-            return true;
-        }
-
+        unset($procesoActual);
         $checksEtapa = $checklist[$etapa] ?? [];
         if (array_key_exists($indice, $checksEtapa)) {
             return !empty($checksEtapa[$indice]);
         }
 
-        // Primer peldaño de la etapa activa = marcado por defecto
-        if ($etapa === $procesoActual && $indice === 0) {
-            return true;
+        return false;
+    }
+
+    /**
+     * @param array<int, int> $idsPersona
+     * @return array<int, array<string, mixed>>
+     */
+    private function cargarHechosFlujoFormacion(array $idsPersona): array {
+        return (new ProgresoFormacionFlujo())->hechosPorPersonas($idsPersona);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $personas
+     * @return array<int, int>
+     */
+    private function idsPersonaDeFilas(array $personas): array {
+        $ids = [];
+        foreach ($personas as $persona) {
+            $id = (int)($persona['Id_Persona'] ?? 0);
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
         }
 
-        return false;
+        return array_values($ids);
     }
 
     private function construirDetallePersonaReporteMinisterial(array $persona): array {
@@ -3105,9 +3392,11 @@ class ReporteController extends BaseController {
             $rows[$m] = array_merge(['mes' => $meses[$m]], array_fill_keys(array_keys($peldanos), 0), ['total' => 0]);
         }
 
+        $hechosFlujo = $this->cargarHechosFlujoFormacion($this->idsPersonaDeFilas($personas));
+
         foreach ($personas as $persona) {
             $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
-            if ($etapa !== 'Consolidar' && $proceso !== $etapa) {
+            if ($etapa !== 'Consolidar' && $etapa !== 'Discipular' && $proceso !== $etapa) {
                 continue;
             }
 
@@ -3121,12 +3410,23 @@ class ReporteController extends BaseController {
             $checklist = $this->obtenerChecklist($persona);
             $contado = false;
             $detalle = $this->construirDetallePersonaReporteMinisterial($persona);
+            $idPersona = (int)($persona['Id_Persona'] ?? 0);
+            $hecho = (array)($hechosFlujo[$idPersona] ?? []);
 
             foreach ($peldanos as $col => $idx) {
                 $marcado = false;
                 if ($etapa === 'Consolidar' && $col === 'uv') {
-                    // En tablas de Consolidar se permite histórico completo (nuevos + antiguos).
-                    $marcado = $this->esOrigenValidoUniversidadVida($persona, false);
+                    $marcado = !empty($hecho['inscrito_uv']) || !empty($hecho['asistio_uv']);
+                } elseif ($etapa === 'Consolidar' && $col === 'e') {
+                    $marcado = !empty($hecho['encuentro']);
+                } elseif ($etapa === 'Consolidar' && $col === 'b') {
+                    $marcado = !empty($hecho['bautismo']);
+                } elseif ($etapa === 'Discipular' && $col === 'cdm12') {
+                    $marcado = !empty($hecho['cap_n1']) || $this->peldanoMarcado($checklist, $etapa, $idx, $proceso);
+                } elseif ($etapa === 'Discipular' && $col === 'cdm34') {
+                    $marcado = !empty($hecho['cap_n2']) || $this->peldanoMarcado($checklist, $etapa, $idx, $proceso);
+                } elseif ($etapa === 'Discipular' && $col === 'cdm56') {
+                    $marcado = !empty($hecho['cap_n3']) || $this->peldanoMarcado($checklist, $etapa, $idx, $proceso);
                 } else {
                     $marcado = $this->peldanoMarcado($checklist, $etapa, $idx, $proceso);
                 }
@@ -3158,9 +3458,8 @@ class ReporteController extends BaseController {
     }
 
     /**
-     * Construye tabla ENVIAR: personas en proceso Enviar que ya están haciendo célula
-     * (peldaño índice 2 de Enviar = 'Celula').
-     * Columna única: # Células abiertas.
+     * Construye tabla ENVIAR: personas del año que ya son líderes de célula
+     * (celula.Id_Lider), no el peldaño de ficha ni solo pertenecer a una célula.
      */
     private function construirTablaEnviarMensual(array $personas, int $anio): array {
         $meses   = $this->obtenerMesesAbreviados();
@@ -3172,12 +3471,9 @@ class ReporteController extends BaseController {
             $rows[$m] = ['mes' => $meses[$m], 'celulas' => 0, 'total' => 0];
         }
 
-        foreach ($personas as $persona) {
-            $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
-            if ($proceso !== 'Enviar') {
-                continue;
-            }
+        $hechosFlujo = $this->cargarHechosFlujoFormacion($this->idsPersonaDeFilas($personas));
 
+        foreach ($personas as $persona) {
             $fechaYmd = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
             $ts = strtotime($fechaYmd);
             if ($ts === false || (int)date('Y', $ts) !== $anio) {
@@ -3185,16 +3481,17 @@ class ReporteController extends BaseController {
             }
             $mes = (int)date('n', $ts);
 
-            $checklist = $this->obtenerChecklist($persona);
             $detalle   = $this->construirDetallePersonaReporteMinisterial($persona);
+            $idPersona = (int)($persona['Id_Persona'] ?? 0);
+            $esLiderCelula = !empty($hechosFlujo[$idPersona]['lider_celula']);
 
-            // Peldaño índice 2 de Enviar = 'Celula' (ya abrió célula)
-            if ($this->peldanoMarcado($checklist, 'Enviar', 2, $proceso)) {
-                $rows[$mes]['celulas']++;
-                $totales['celulas']++;
-                $detalles['celulas'][$mes][] = $detalle;
+            if (!$esLiderCelula) {
+                continue;
             }
 
+            $rows[$mes]['celulas']++;
+            $totales['celulas']++;
+            $detalles['celulas'][$mes][] = $detalle;
             $rows[$mes]['total']++;
             $totales['total']++;
             $detalles['total'][$mes][] = $detalle;
@@ -3238,6 +3535,9 @@ class ReporteController extends BaseController {
 
             $ministerio = trim((string)($persona['Nombre_Ministerio'] ?? '')) ?: 'Sin ministerio';
             $origen     = $this->clasificarOrigenGanar($persona);
+            if ($origen !== 'celula' && $origen !== 'iglesia') {
+                continue;
+            }
             $col        = ($origen === 'celula') ? 'celula' : 'iglesia';
 
             if (!isset($rowsMap[$ministerio])) {
@@ -3282,14 +3582,14 @@ class ReporteController extends BaseController {
         $totales = ['uv' => 0, 'e' => 0, 'b' => 0, 'total' => 0];
         $detalles = []; // [ministerio][uv|e|b|total][]
 
+        $hechosFlujo = $this->cargarHechosFlujoFormacion($this->idsPersonaDeFilas($personas));
+
         foreach ($personas as $persona) {
             $fechaYmd = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
             $ts = strtotime($fechaYmd);
             if ($ts === false || (int)date('Y', $ts) !== $anio) {
                 continue;
             }
-
-            $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
 
             $ministerio = trim((string)($persona['Nombre_Ministerio'] ?? '')) ?: 'Sin ministerio';
             if (!isset($rowsMap[$ministerio])) {
@@ -3302,20 +3602,21 @@ class ReporteController extends BaseController {
                 ];
             }
 
-            $checklist = $this->obtenerChecklist($persona);
             $detalle = $this->construirDetallePersonaReporteMinisterial($persona);
+            $idPersona = (int)($persona['Id_Persona'] ?? 0);
+            $hecho = (array)($hechosFlujo[$idPersona] ?? []);
 
-            if ($this->esOrigenValidoUniversidadVida($persona, false)) {
+            if (!empty($hecho['inscrito_uv']) || !empty($hecho['asistio_uv'])) {
                 $rowsMap[$ministerio]['uv']++;
                 $totales['uv']++;
                 $detalles[$ministerio]['uv'][] = $detalle;
             }
-            if ($this->peldanoMarcado($checklist, 'Consolidar', 1, $proceso)) {
+            if (!empty($hecho['encuentro'])) {
                 $rowsMap[$ministerio]['e']++;
                 $totales['e']++;
                 $detalles[$ministerio]['e'][] = $detalle;
             }
-            if ($this->peldanoMarcado($checklist, 'Consolidar', 2, $proceso)) {
+            if (!empty($hecho['bautismo'])) {
                 $rowsMap[$ministerio]['b']++;
                 $totales['b']++;
                 $detalles[$ministerio]['b'][] = $detalle;
@@ -4189,6 +4490,9 @@ class ReporteController extends BaseController {
             }
             $mes    = (int)date('n', $ts);
             $origen = $this->clasificarOrigenGanar($persona);
+            if ($origen !== 'celula' && $origen !== 'iglesia') {
+                continue;
+            }
             $col    = ($origen === 'celula') ? 'celula' : 'iglesia';
             $gananciasMensuales[$mes][$col]++;
             $gananciasMensuales[$mes]['total']++;
@@ -4499,7 +4803,7 @@ class ReporteController extends BaseController {
                 $idsPersonas[] = $idTmp;
             }
         }
-        $flagsFormacion = $this->escuelaInscripcionModel->getFlagsFormacionPorIdsPersonas($idsPersonas);
+        $flagsFormacion = $this->cargarHechosFlujoFormacion($idsPersonas);
         $reporteRedes = $this->construirReporteGanarPorRedes((array)$personasAnio, $anio, $flagsFormacion);
         $jerarquiaRedes = $this->construirJerarquiaLideresGanarRedes(
             (array)$personasAnio,
@@ -4663,8 +4967,11 @@ class ReporteController extends BaseController {
         $idPersona = (int)($persona['Id_Persona'] ?? 0);
         $flags = is_array($flagsFormacion[$idPersona] ?? null) ? $flagsFormacion[$idPersona] : [];
 
-        $enEncuentroUv = !empty($flags['encuentro']) || !empty($flags['universidad_vida']);
-        $enCapDestino = !empty($flags['capacitacion_destino']);
+        $enEncuentroUv = !empty($flags['inscrito_uv'])
+            || !empty($flags['asistio_uv'])
+            || !empty($flags['universidad_vida'])
+            || !empty($flags['encuentro']);
+        $enCapDestino = !empty($flags['cap_destino']) || !empty($flags['capacitacion_destino']);
         $ubicadoCelula = $this->personaUbicadaEnCelulaGanar($persona);
 
         $metricas = $this->metricasVaciasGanarRedes();
@@ -5552,6 +5859,24 @@ class ReporteController extends BaseController {
         ];
     }
 
+    /**
+     * Semestre 1, semestre 2 o año completo (semestre = 3).
+     *
+     * @return array{semestre: int, fecha_inicio: string, fecha_fin: string, etiqueta: string}
+     */
+    private function resolverRangoPeriodoDashboardEscuelas(int $anio, $semestreInput = null, bool $permitirAnio = false): array {
+        if ($permitirAnio && (int)$semestreInput === 3) {
+            return [
+                'semestre' => 3,
+                'fecha_inicio' => sprintf('%04d-01-01', $anio),
+                'fecha_fin' => sprintf('%04d-12-31', $anio),
+                'etiqueta' => 'Año completo (Enero – Diciembre)',
+            ];
+        }
+
+        return $this->resolverRangoSemestreDashboardUv($anio, $semestreInput);
+    }
+
     private function resolverNombreMinisterioInscripcionDashboard(array $inscripcion): string {
         $desdePersona = trim((string)($inscripcion['Nombre_Ministerio_Persona_Actual'] ?? ''));
         $desdeInscripcion = trim((string)($inscripcion['Nombre_Ministerio'] ?? ''));
@@ -5941,7 +6266,8 @@ class ReporteController extends BaseController {
     }
 
     /**
-     * Pasó a Capacitación Destino: etapa Discipular/Enviar, peldaño Discipular marcado o inscripción Cap.
+     * Pasó a Capacitación Destino: inscripción real o peldaño Discipular marcado en ficha.
+     * No cuenta por estar en proceso Enviar (eso no es Cap Destino).
      *
      * @param array<int, true> $idsConInscripcionCap
      */
@@ -5953,10 +6279,6 @@ class ReporteController extends BaseController {
     ): bool {
         $idPersona = (int)($persona['Id_Persona'] ?? 0);
         if ($idPersona > 0 && !empty($idsConInscripcionCap[$idPersona])) {
-            return true;
-        }
-
-        if (in_array($proceso, ['Discipular', 'Enviar'], true)) {
             return true;
         }
 
@@ -5991,7 +6313,8 @@ class ReporteController extends BaseController {
     }
 
     /**
-     * KPIs UV: personas en alcance según filtros, contadas por Escalera_Checklist (Consolidar).
+     * KPIs del flujo: solo personas nuevas (casilla Nuevo / Es_Antiguo = 0)
+     * registradas en el periodo, con UV/Encuentro/Bautismo/Cap alineados a escuelas y escalera rápida.
      *
      * @return array<string, int|float|string>
      */
@@ -6002,7 +6325,8 @@ class ReporteController extends BaseController {
         ?string $fechaInicio = null,
         ?string $fechaFin = null
     ): array {
-        unset($fechaInicio, $fechaFin);
+        $fechaInicio = substr(trim((string)$fechaInicio), 0, 10);
+        $fechaFin = substr(trim((string)$fechaFin), 0, 10);
 
         [$condPersonas, $paramsPersonas] = $this->construirCondicionSqlPersonasDashboard(
             $filtroRol,
@@ -6011,13 +6335,30 @@ class ReporteController extends BaseController {
         );
 
         $personas = $this->personaModel->query(
-            "SELECT p.Id_Persona, p.Proceso, p.Escalera_Checklist, p.Id_Lider, p.Id_Ministerio,
+            "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Proceso, p.Escalera_Checklist, p.Id_Lider, p.Id_Ministerio, p.Fecha_Registro,
+                    COALESCE(p.Es_Antiguo, 1) AS Es_Antiguo,
                     COALESCE(NULLIF(TRIM(m.Nombre_Ministerio), ''), 'Sin ministerio') AS Nombre_Ministerio
              FROM persona p
              LEFT JOIN ministerio m ON m.Id_Ministerio = p.Id_Ministerio
-             WHERE {$condPersonas}",
+             WHERE {$condPersonas}
+               AND COALESCE(p.Es_Antiguo, 1) = 0",
             $paramsPersonas
         );
+
+        if ($fechaInicio !== '' && $fechaFin !== '' && $fechaInicio !== '0000-00-00') {
+            $personas = array_values(array_filter((array)$personas, static function ($persona) use ($fechaInicio, $fechaFin) {
+                $fechaRegistro = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
+                if ($fechaRegistro === '' || $fechaRegistro === '0000-00-00') {
+                    return false;
+                }
+
+                return $fechaRegistro >= $fechaInicio && $fechaRegistro <= $fechaFin;
+            }));
+        }
+
+        $personas = array_values(array_filter((array)$personas, function ($persona) {
+            return $this->esPersonaNueva((array)$persona);
+        }));
 
         $idsMinisteriosPersonas = [];
         foreach ($personas as $personaTmp) {
@@ -6055,7 +6396,7 @@ class ReporteController extends BaseController {
                 $idsPersonas[$idPersona] = $idPersona;
             }
         }
-        $idsConInscripcionCap = $this->obtenerIdsConInscripcionCapacitacionDestino(array_values($idsPersonas));
+        $hechosFlujo = $this->cargarHechosFlujoFormacion(array_values($idsPersonas));
 
         foreach ($personas as $persona) {
             $ministerioNombre = trim((string)($persona['Nombre_Ministerio'] ?? '')) ?: 'Sin ministerio';
@@ -6070,28 +6411,30 @@ class ReporteController extends BaseController {
             $idLider12 = (int)($liderResuelto['id_lider'] ?? 0);
             $nombreLider12 = (string)($liderResuelto['lider'] ?? 'Sin líder de 12');
             $ministerioLider = trim((string)($liderResuelto['ministerio'] ?? '')) ?: $ministerioNombre;
-            $checklist = $this->obtenerChecklist($persona);
-            $proceso = $this->normalizarProcesoValor($persona['Proceso'] ?? '');
+            $idPersona = (int)($persona['Id_Persona'] ?? 0);
+            $hecho = (array)($hechosFlujo[$idPersona] ?? []);
+            $detallePersona = $this->resumenPersonaDesgloseUv($persona);
 
-            $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'total', $idLider12, $nombreLider12, $ministerioLider);
+            $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'total', $idLider12, $nombreLider12, $ministerioLider, $detallePersona);
 
-            if ($this->peldanoMarcado($checklist, 'Consolidar', 0, $proceso)) {
+            $tieneUv = !empty($hecho['inscrito_uv']) || !empty($hecho['asistio_uv']);
+            if ($tieneUv) {
                 $conUv++;
-                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'con_uv', $idLider12, $nombreLider12, $ministerioLider);
+                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'con_uv', $idLider12, $nombreLider12, $ministerioLider, $detallePersona);
             } else {
-                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'sin_uv', $idLider12, $nombreLider12, $ministerioLider);
+                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'sin_uv', $idLider12, $nombreLider12, $ministerioLider, $detallePersona);
             }
-            if ($this->peldanoMarcado($checklist, 'Consolidar', 1, $proceso)) {
+            if (!empty($hecho['encuentro'])) {
                 $conEncuentro++;
-                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'encuentro', $idLider12, $nombreLider12, $ministerioLider);
+                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'encuentro', $idLider12, $nombreLider12, $ministerioLider, $detallePersona);
             }
-            if ($this->peldanoMarcado($checklist, 'Consolidar', 2, $proceso)) {
+            if (!empty($hecho['bautismo'])) {
                 $conBautismo++;
-                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'bautismo', $idLider12, $nombreLider12, $ministerioLider);
+                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'bautismo', $idLider12, $nombreLider12, $ministerioLider, $detallePersona);
             }
-            if ($this->personaEnCapacitacionDestinoEscalera($checklist, $proceso, $persona, $idsConInscripcionCap)) {
+            if (!empty($hecho['cap_destino'])) {
                 $conCapDestino++;
-                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'cap_destino', $idLider12, $nombreLider12, $ministerioLider);
+                $this->incrementarDesgloseEscaleraPorLider12($desglosePorLider12, 'cap_destino', $idLider12, $nombreLider12, $ministerioLider, $detallePersona);
             }
         }
 
@@ -6252,6 +6595,7 @@ class ReporteController extends BaseController {
                         'lider' => $nombreLider,
                         'ministerio' => $nombreMinisterio,
                         'total' => 0,
+                        'personas' => [],
                     ];
                 }
             }
@@ -6259,14 +6603,34 @@ class ReporteController extends BaseController {
     }
 
     /**
-     * @param array<string, array<string, array{id_lider:int, lider:string, ministerio:string, total:int}>> $desglosePorLider12
+     * @return array{id:int,nombre:string}|null
+     */
+    private function resumenPersonaDesgloseUv(array $persona): ?array {
+        $idPersona = (int)($persona['Id_Persona'] ?? 0);
+        if ($idPersona <= 0) {
+            return null;
+        }
+        $nombre = trim(trim((string)($persona['Nombre'] ?? '')) . ' ' . trim((string)($persona['Apellido'] ?? '')));
+        if ($nombre === '') {
+            $nombre = 'Sin nombre';
+        }
+
+        return [
+            'id' => $idPersona,
+            'nombre' => $nombre,
+        ];
+    }
+
+    /**
+     * @param array<string, array<string, array{id_lider:int, lider:string, ministerio:string, total:int, personas?:array}>> $desglosePorLider12
      */
     private function incrementarDesgloseEscaleraPorLider12(
         array &$desglosePorLider12,
         string $indicador,
         int $idLider,
         string $lider,
-        string $ministerio
+        string $ministerio,
+        ?array $personaDetalle = null
     ): void {
         $clave = $idLider > 0 ? (string)$idLider : 'sin_lider';
         if (!isset($desglosePorLider12[$indicador][$clave])) {
@@ -6275,14 +6639,22 @@ class ReporteController extends BaseController {
                 'lider' => $lider,
                 'ministerio' => $ministerio,
                 'total' => 0,
+                'personas' => [],
             ];
         }
         $desglosePorLider12[$indicador][$clave]['total']++;
+        $idPersona = (int)($personaDetalle['id'] ?? 0);
+        if ($idPersona > 0) {
+            $desglosePorLider12[$indicador][$clave]['personas'][$idPersona] = [
+                'id' => $idPersona,
+                'nombre' => (string)($personaDetalle['nombre'] ?? 'Sin nombre'),
+            ];
+        }
     }
 
     /**
-     * @param array<string, array<string, array{id_lider:int, lider:string, ministerio:string, total:int}>> $desglosePorLider12
-     * @return array<string, array<int, array{lider:string, ministerio:string, total:int}>>
+     * @param array<string, array<string, array{id_lider:int, lider:string, ministerio:string, total:int, personas?:array}>> $desglosePorLider12
+     * @return array<string, array<int, array{id_lider:int, lider:string, ministerio:string, total:int, personas:array}>>
      */
     private function formatearDesgloseEscaleraPorLider12(array $desglosePorLider12, bool $incluirCeros = false): array {
         $formateado = [];
@@ -6296,10 +6668,16 @@ class ReporteController extends BaseController {
                 if ($incluirCeros && $totalFila <= 0 && (int)($fila['id_lider'] ?? 0) <= 0) {
                     continue;
                 }
+                $personas = array_values((array)($fila['personas'] ?? []));
+                usort($personas, static function (array $a, array $b): int {
+                    return strcasecmp((string)($a['nombre'] ?? ''), (string)($b['nombre'] ?? ''));
+                });
                 $filas[] = [
+                    'id_lider' => (int)($fila['id_lider'] ?? 0),
                     'lider' => (string)($fila['lider'] ?? 'Sin líder de 12'),
                     'ministerio' => (string)($fila['ministerio'] ?? 'Sin ministerio'),
                     'total' => $totalFila,
+                    'personas' => $personas,
                 ];
             }
             usort($filas, static function (array $a, array $b): int {
@@ -6579,6 +6957,135 @@ class ReporteController extends BaseController {
         return $tablaUvPorMinisterio;
     }
 
+    /**
+     * UV: inscritos, asistencia real a clases (lista 1–4) y Encuentro (lista 5–6) por ministerio y red.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function construirTablaUvAvancePorMinisterioYRed(
+        $filtroRol,
+        ?int $idMinisterioFiltro,
+        ?int $idLiderFiltro,
+        ?string $fechaInicio = null,
+        ?string $fechaFin = null
+    ): array {
+        $inscripcionesPublicas = $this->obtenerInscripcionesPublicasModoConsolidar(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            $fechaInicio,
+            $fechaFin,
+            'uv'
+        );
+
+        $idsPersona = array_values(array_unique(array_filter(array_map(static function ($inscripcion) {
+            return (int)($inscripcion['Id_Persona'] ?? 0);
+        }, $inscripcionesPublicas), static function ($id) {
+            return $id > 0;
+        })));
+
+        $asistUv = [];
+        $asistEncuentro = [];
+        if ($idsPersona !== []) {
+            $asistUv = $this->escuelaAsistenciaClaseModel->getAsistenciasPorPrograma(
+                $idsPersona,
+                'consolidar',
+                'universidad_vida'
+            );
+            $asistEncuentro = $this->escuelaAsistenciaClaseModel->getAsistenciasPorPrograma(
+                $idsPersona,
+                'consolidar',
+                'encuentro'
+            );
+        }
+
+        $umbral = 0.70;
+        $clasesUvEsperadas = 4;
+        $map = [];
+        $yaContados = [];
+
+        foreach ($inscripcionesPublicas as $inscripcion) {
+            $programa = (string)($inscripcion['Programa'] ?? '');
+            if ($programa !== 'universidad_vida' && $programa !== 'encuentro') {
+                continue;
+            }
+
+            $idPersona = (int)($inscripcion['Id_Persona'] ?? 0);
+            if ($idPersona > 0) {
+                if (isset($yaContados[$idPersona])) {
+                    continue;
+                }
+                $yaContados[$idPersona] = true;
+            }
+
+            $ministerioNombre = $this->resolverNombreMinisterioInscripcionDashboard($inscripcion);
+            if ($this->esMinisterioPastoral($ministerioNombre)) {
+                continue;
+            }
+
+            $red = $this->redInscripcionCapDashboard($inscripcion);
+            $clave = $ministerioNombre . '|' . $red;
+            if (!isset($map[$clave])) {
+                $map[$clave] = [
+                    'ministerio' => $ministerioNombre,
+                    'red' => $red,
+                    'inscritos' => 0,
+                    'asistieron' => 0,
+                    'pasaron' => 0,
+                ];
+            }
+
+            $map[$clave]['inscritos']++;
+
+            $mapClasesUv = $idPersona > 0 ? (array)($asistUv[$idPersona] ?? []) : [];
+            $mapClasesEnc = $idPersona > 0 ? (array)($asistEncuentro[$idPersona] ?? []) : [];
+
+            $clasesUv = 0;
+            for ($n = 1; $n <= 4; $n++) {
+                if (!empty($mapClasesUv[$n])) {
+                    $clasesUv++;
+                }
+            }
+
+            if ($clasesUv > 0) {
+                $map[$clave]['asistieron']++;
+            }
+
+            $fueEncuentro = !empty($mapClasesUv[5]) || !empty($mapClasesUv[6]);
+            if (!$fueEncuentro) {
+                foreach ($mapClasesEnc as $asistioEnc) {
+                    if (!empty($asistioEnc)) {
+                        $fueEncuentro = true;
+                        break;
+                    }
+                }
+            }
+
+            $pctClases = $clasesUvEsperadas > 0 ? ($clasesUv / $clasesUvEsperadas) : 0.0;
+            if ($pctClases >= $umbral && $fueEncuentro) {
+                $map[$clave]['pasaron']++;
+            }
+        }
+
+        $tabla = array_values($map);
+        usort($tabla, static function ($a, $b) {
+            $cmpMin = strcasecmp((string)($a['ministerio'] ?? ''), (string)($b['ministerio'] ?? ''));
+            if ($cmpMin !== 0) {
+                return $cmpMin;
+            }
+            $orden = ['hombres' => 0, 'mujeres' => 1, 'otros' => 2];
+            $oa = $orden[(string)($a['red'] ?? 'otros')] ?? 9;
+            $ob = $orden[(string)($b['red'] ?? 'otros')] ?? 9;
+            if ($oa !== $ob) {
+                return $oa <=> $ob;
+            }
+
+            return ((int)($b['inscritos'] ?? 0)) <=> ((int)($a['inscritos'] ?? 0));
+        });
+
+        return $tabla;
+    }
+
     private function construirTablaCapPorMinisterioModoConsolidar(
         $filtroRol,
         ?int $idMinisterioFiltro,
@@ -6614,6 +7121,176 @@ class ReporteController extends BaseController {
             $inscripcionesPublicas,
             $personasConAsistencia
         );
+    }
+
+    /**
+     * Clases marcadas en la planilla del nivel (10 clases).
+     *
+     * @param array<int, int> $idsPersona
+     * @return array<int, array<int, int>> persona => nivel => clases asistidas
+     */
+    private function obtenerConteoClasesCapPorPersonaNivel(array $idsPersona): array {
+        $idsPersona = array_values(array_unique(array_filter(array_map('intval', $idsPersona), static function ($id) {
+            return $id > 0;
+        })));
+        $map = [];
+        if ($idsPersona === []) {
+            return $map;
+        }
+
+        for ($nivel = 1; $nivel <= 3; $nivel++) {
+            $asistencias = $this->escuelaAsistenciaClaseModel->getAsistenciasPorPrograma(
+                $idsPersona,
+                'modulo_' . $nivel,
+                'capacitacion_destino'
+            );
+            foreach ((array)$asistencias as $idPersona => $clases) {
+                $asistidas = 0;
+                foreach ((array)$clases as $asistio) {
+                    if (!empty($asistio)) {
+                        $asistidas++;
+                    }
+                }
+                if ($asistidas <= 0) {
+                    continue;
+                }
+                $idPersona = (int)$idPersona;
+                if (!isset($map[$idPersona])) {
+                    $map[$idPersona] = [];
+                }
+                $map[$idPersona][$nivel] = $asistidas;
+            }
+        }
+
+        return $map;
+    }
+
+    private function nivelNumericoCapacitacionDestino(array $inscripcion): int {
+        $nivel = EscuelaFormacionResumenHelper::resolverNivelCapacitacionDestino($inscripcion);
+        if ($nivel === 'nivel_2') {
+            return 2;
+        }
+        if ($nivel === 'nivel_3') {
+            return 3;
+        }
+        if ($nivel === 'nivel_1') {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    private function redInscripcionCapDashboard(array $inscripcion): string {
+        $redLider = $this->clasificarRedGeneroPersona([
+            'Genero' => (string)($inscripcion['Genero_Lider_Persona_Actual'] ?? ''),
+        ]);
+        if ($redLider === 'hombres' || $redLider === 'mujeres') {
+            return $redLider;
+        }
+
+        return $this->clasificarRedGeneroPersona($inscripcion);
+    }
+
+    /**
+     * Inscritos, asistencia real y paso de nivel (≥70% clases y ≥70% evaluaciones aprobadas) por ministerio y red.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function construirTablaCapAvancePorMinisterioYRed(
+        $filtroRol,
+        ?int $idMinisterioFiltro,
+        ?int $idLiderFiltro,
+        ?string $fechaInicio = null,
+        ?string $fechaFin = null
+    ): array {
+        require_once APP . '/Helpers/EscuelaFormacionResumenHelper.php';
+
+        $inscripcionesPublicas = $this->obtenerInscripcionesPublicasModoConsolidar(
+            $filtroRol,
+            $idMinisterioFiltro,
+            $idLiderFiltro,
+            $fechaInicio,
+            $fechaFin,
+            'cap'
+        );
+
+        $idsPersona = array_values(array_unique(array_filter(array_map(static function ($inscripcion) {
+            return (int)($inscripcion['Id_Persona'] ?? 0);
+        }, $inscripcionesPublicas), static function ($id) {
+            return $id > 0;
+        })));
+
+        $clasesPorPersona = $this->obtenerConteoClasesCapPorPersonaNivel($idsPersona);
+        $evalModel = new DiscipularEvaluacion();
+        $esperadasEval = $evalModel->contarEvaluacionesActivasPorNivel();
+        $aprobadasPorPersona = $evalModel->contarEvaluacionesAprobadasPorPersonaNivel($idsPersona);
+
+        $umbral = 0.70;
+        $clasesNivel = 10;
+        $map = [];
+
+        foreach ($inscripcionesPublicas as $inscripcion) {
+            if (!EscuelaFormacionResumenHelper::esProgramaCapacitacionDestino((string)($inscripcion['Programa'] ?? ''))) {
+                continue;
+            }
+
+            $ministerioNombre = $this->resolverNombreMinisterioInscripcionDashboard($inscripcion);
+            if ($this->esMinisterioPastoral($ministerioNombre)) {
+                continue;
+            }
+
+            $red = $this->redInscripcionCapDashboard($inscripcion);
+            $clave = $ministerioNombre . '|' . $red;
+            if (!isset($map[$clave])) {
+                $map[$clave] = [
+                    'ministerio' => $ministerioNombre,
+                    'red' => $red,
+                    'inscritos' => 0,
+                    'asistieron' => 0,
+                    'pasaron' => 0,
+                ];
+            }
+
+            $map[$clave]['inscritos']++;
+
+            $idPersona = (int)($inscripcion['Id_Persona'] ?? 0);
+            $nivelNum = $this->nivelNumericoCapacitacionDestino($inscripcion);
+            if ($nivelNum < 1) {
+                $nivelNum = 1;
+            }
+
+            $asistidas = (int)(($clasesPorPersona[$idPersona][$nivelNum] ?? 0));
+            if ($asistidas > 0) {
+                $map[$clave]['asistieron']++;
+            }
+
+            $pctAsist = $clasesNivel > 0 ? ($asistidas / $clasesNivel) : 0.0;
+            $esperadas = (int)($esperadasEval[$nivelNum] ?? 0);
+            $aprobadas = (int)(($aprobadasPorPersona[$idPersona][$nivelNum] ?? 0));
+            $pctEval = $esperadas > 0 ? ($aprobadas / $esperadas) : 1.0;
+
+            if ($pctAsist >= $umbral && $pctEval >= $umbral) {
+                $map[$clave]['pasaron']++;
+            }
+        }
+
+        $tabla = array_values($map);
+        usort($tabla, static function ($a, $b) {
+            $cmpMin = strcasecmp((string)($a['ministerio'] ?? ''), (string)($b['ministerio'] ?? ''));
+            if ($cmpMin !== 0) {
+                return $cmpMin;
+            }
+            $orden = ['hombres' => 0, 'mujeres' => 1, 'otros' => 2];
+            $oa = $orden[(string)($a['red'] ?? 'otros')] ?? 9;
+            $ob = $orden[(string)($b['red'] ?? 'otros')] ?? 9;
+            if ($oa !== $ob) {
+                return $oa <=> $ob;
+            }
+
+            return ((int)($b['inscritos'] ?? 0)) <=> ((int)($a['inscritos'] ?? 0));
+        });
+
+        return $tabla;
     }
 
     private function construirTablaPagosCapModoConsolidar(
@@ -7255,8 +7932,12 @@ class ReporteController extends BaseController {
         $idMinisterioFiltro = ($filtroMinisterio !== '' && (int)$filtroMinisterio > 0) ? (int)$filtroMinisterio : null;
         $idLiderFiltro = $cascadaFiltro['id_lider_filtro'];
 
-        if ($linea === 'universidad_vida') {
-            $rangoUv = $this->resolverRangoSemestreDashboardUv($anio, $semestreUv > 0 ? $semestreUv : null);
+        if ($linea === 'universidad_vida' || $linea === 'capacitacion_destino') {
+            $rangoUv = $this->resolverRangoPeriodoDashboardEscuelas(
+                $anio,
+                $semestreUv > 0 ? $semestreUv : null,
+                true
+            );
             $semestreUv = (int)$rangoUv['semestre'];
             $fechaInicioMes = (string)$rangoUv['fecha_inicio'];
             $fechaFinMes = (string)$rangoUv['fecha_fin'];
@@ -7673,12 +8354,17 @@ class ReporteController extends BaseController {
         $tablaPagosUv = [];
         $tablaPagosUvLiderCelula = [];
         $tablaUvModoConsolidar = [];
+        $tablaUvAvanceRedes = [];
         $tablaCapModoConsolidar = [];
+        $tablaCapAvanceRedes = [];
         $tablaPagosCap = [];
         $reporteUvMinisterios = [];
         $totalInscripcionesUvPeriodo = 0;
+        $totalAsistenciasUv = 0;
+        $totalPasaronUv = 0;
         $totalInscripcionesCapPeriodo = 0;
         $totalAsistenciasCap = 0;
+        $totalPasaronCap = 0;
         $indicadoresEncuentroUv = [];
         $detalleLideresMinisterioUv = [];
         $nombreMinisterioFiltrado = '';
@@ -7722,17 +8408,18 @@ class ReporteController extends BaseController {
                 $fechaFinMes
             );
 
-            $inscripcionesUvPeriodo = $this->obtenerInscripcionesPublicasModoConsolidar(
+            $tablaUvAvanceRedes = $this->construirTablaUvAvancePorMinisterioYRed(
                 $filtroRol,
                 $idMinisterioFiltro,
                 $idLiderFiltro,
                 $fechaInicioMes,
                 $fechaFinMes
             );
-            foreach ($inscripcionesUvPeriodo as $insUv) {
-                if ((string)($insUv['Programa'] ?? '') === 'universidad_vida') {
-                    $totalInscripcionesUvPeriodo++;
-                }
+
+            foreach ($tablaUvAvanceRedes as $filaUvAvance) {
+                $totalInscripcionesUvPeriodo += (int)($filaUvAvance['inscritos'] ?? 0);
+                $totalAsistenciasUv += (int)($filaUvAvance['asistieron'] ?? 0);
+                $totalPasaronUv += (int)($filaUvAvance['pasaron'] ?? 0);
             }
 
             if ($idMinisterioFiltro !== null && $idMinisterioFiltro > 0) {
@@ -7752,11 +8439,18 @@ class ReporteController extends BaseController {
                 );
             }
         } elseif ($linea === 'capacitacion_destino') {
-            // Cap: misma base que Consolidar (inscripciones activas, sin recorte por mes en tablas).
-            $fechaInicioTablasCap = null;
-            $fechaFinTablasCap = null;
+            $fechaInicioTablasCap = $fechaInicioMes;
+            $fechaFinTablasCap = $fechaFinMes;
 
             $tablaCapModoConsolidar = $this->construirTablaCapPorMinisterioModoConsolidar(
+                $filtroRol,
+                $idMinisterioFiltro,
+                $idLiderFiltro,
+                $fechaInicioTablasCap,
+                $fechaFinTablasCap
+            );
+
+            $tablaCapAvanceRedes = $this->construirTablaCapAvancePorMinisterioYRed(
                 $filtroRol,
                 $idMinisterioFiltro,
                 $idLiderFiltro,
@@ -7772,9 +8466,10 @@ class ReporteController extends BaseController {
                 $fechaFinTablasCap
             );
 
-            foreach ($tablaCapModoConsolidar as $filaCap) {
-                $totalInscripcionesCapPeriodo += (int)($filaCap['total'] ?? 0);
-                $totalAsistenciasCap += (int)($filaCap['asistencias_reales'] ?? 0);
+            foreach ($tablaCapAvanceRedes as $filaCapAvance) {
+                $totalInscripcionesCapPeriodo += (int)($filaCapAvance['inscritos'] ?? 0);
+                $totalAsistenciasCap += (int)($filaCapAvance['asistieron'] ?? 0);
+                $totalPasaronCap += (int)($filaCapAvance['pasaron'] ?? 0);
             }
         }
 
@@ -7809,10 +8504,15 @@ class ReporteController extends BaseController {
             'reporte_uv_ministerios' => $reporteUvMinisterios,
             'total_inscripciones_uv_periodo' => $totalInscripcionesUvPeriodo,
             'tabla_uv_modo_consolidar' => $tablaUvModoConsolidar,
+            'tabla_uv_avance_redes' => $tablaUvAvanceRedes,
+            'total_asistencias_uv' => $totalAsistenciasUv,
+            'total_pasaron_uv' => $totalPasaronUv,
             'tabla_cap_modo_consolidar' => $tablaCapModoConsolidar,
+            'tabla_cap_avance_redes' => $tablaCapAvanceRedes,
             'tabla_pagos_cap' => $tablaPagosCap,
             'total_inscripciones_cap_periodo' => $totalInscripcionesCapPeriodo,
             'total_asistencias_cap' => $totalAsistenciasCap,
+            'total_pasaron_cap' => $totalPasaronCap,
             'indicadores_encuentro_uv' => $indicadoresEncuentroUv,
             'detalle_lideres_ministerio_uv' => $detalleLideresMinisterioUv,
             'nombre_ministerio_filtrado' => $nombreMinisterioFiltrado,
