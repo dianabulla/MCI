@@ -5,10 +5,8 @@ if (empty($navProgramas['mostrar'])) {
     return;
 }
 $modoHub = ($navProgramas['modo'] ?? '') === 'hub';
-$lineas = (array)($navProgramas['lineas'] ?? []);
 $secciones = (array)($navProgramas['secciones'] ?? []);
 $breadcrumb = (array)($navProgramas['breadcrumb'] ?? []);
-$lineaActiva = (string)($navProgramas['linea_activa'] ?? '');
 ?>
 <nav class="programas-nav" aria-label="Navegación de programas">
     <div class="programas-nav__top">
@@ -32,29 +30,6 @@ $lineaActiva = (string)($navProgramas['linea_activa'] ?? '');
             <?php endforeach; ?>
         </ol>
     </div>
-
-    <?php if (count($lineas) > 0): ?>
-    <div class="programas-nav__lineas" role="tablist" aria-label="Línea de programa">
-        <?php foreach ($lineas as $linea):
-            $clave = (string)($linea['clave'] ?? '');
-            $activa = !empty($linea['activa']) || ($modoHub && $lineaActiva === $clave);
-        ?>
-        <a href="<?= htmlspecialchars((string)($linea['href'] ?? '#'), ENT_QUOTES, 'UTF-8') ?>"
-           class="programas-nav__linea <?= $activa ? 'is-active' : '' ?>"
-           style="--linea-color: <?= htmlspecialchars((string)($linea['color'] ?? '#1e4a89'), ENT_QUOTES, 'UTF-8') ?>;"
-           role="tab"
-           <?= $activa ? 'aria-selected="true"' : 'aria-selected="false"' ?>>
-            <span class="programas-nav__linea-icon" style="background: <?= htmlspecialchars((string)($linea['gradiente'] ?? ''), ENT_QUOTES, 'UTF-8') ?>;">
-                <i class="<?= htmlspecialchars((string)($linea['icono'] ?? 'bi bi-grid'), ENT_QUOTES, 'UTF-8') ?>" aria-hidden="true"></i>
-            </span>
-            <span class="programas-nav__linea-text">
-                <strong><?= htmlspecialchars((string)($linea['titulo_corto'] ?? $linea['titulo'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
-                <small><?= htmlspecialchars((string)($linea['titulo'] ?? ''), ENT_QUOTES, 'UTF-8') ?></small>
-            </span>
-        </a>
-        <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
 
     <?php if (!$modoHub && count($secciones) > 0): ?>
     <div class="programas-nav__secciones" role="tablist" aria-label="Sección">
@@ -125,48 +100,6 @@ $lineaActiva = (string)($navProgramas['linea_activa'] ?? '');
 .programas-nav__crumb a { color: #2563eb; text-decoration: none; font-weight: 600; }
 .programas-nav__crumb a:hover { text-decoration: underline; }
 .programas-nav__crumb span[aria-current="page"] { color: #0f172a; font-weight: 700; }
-.programas-nav__lineas {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 8px;
-    margin-bottom: 10px;
-}
-.programas-nav__linea {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
-    background: #fff;
-    text-decoration: none;
-    color: inherit;
-    transition: border-color .15s, box-shadow .15s, transform .15s;
-}
-.programas-nav__linea:hover {
-    border-color: var(--linea-color, #1e4a89);
-    box-shadow: 0 6px 16px rgba(30, 74, 137, 0.12);
-    transform: translateY(-1px);
-}
-.programas-nav__linea.is-active {
-    border-color: var(--linea-color, #1e4a89);
-    box-shadow: inset 0 0 0 1px var(--linea-color, #1e4a89);
-    background: linear-gradient(180deg, #fff 0%, #f0f6ff 100%);
-}
-.programas-nav__linea-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    flex-shrink: 0;
-    font-size: 1.1rem;
-}
-.programas-nav__linea-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.programas-nav__linea-text strong { font-size: 0.88rem; color: #0f172a; line-height: 1.2; }
-.programas-nav__linea-text small { font-size: 0.72rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .programas-nav__secciones {
     display: flex;
     gap: 8px;
@@ -201,7 +134,5 @@ $lineaActiva = (string)($navProgramas['linea_activa'] ?? '');
 .programas-nav__chip.is-active .bi { color: #fff; }
 @media (max-width: 640px) {
     .programas-nav { padding: 10px; border-radius: 12px; }
-    .programas-nav__lineas { grid-template-columns: 1fr; }
-    .programas-nav__linea-text small { display: none; }
 }
 </style>

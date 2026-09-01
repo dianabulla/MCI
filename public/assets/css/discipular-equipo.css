@@ -864,6 +864,15 @@
     overflow: visible;
 }
 
+.tabla-discipulos-compacta th.lider-directo-col,
+.tabla-discipulos-compacta td.lider-directo-col {
+    max-width: 148px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+}
+
 .tabla-discipulos-compacta th.escalera-inline-col,
 .tabla-discipulos-compacta td.escalera-inline-col {
     min-width: 168px;

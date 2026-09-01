@@ -6,7 +6,6 @@
 class ProgramasNavegacion
 {
     private const SECCIONES = [
-        'consolidado' => 'Consolidado',
         'asistencias' => 'Asistencias',
         'dashboard' => 'Dashboard',
         'pagos' => 'Pagos',
@@ -41,6 +40,9 @@ class ProgramasNavegacion
         }
         if (!empty($opciones['seccion']) && isset(self::SECCIONES[$opciones['seccion']])) {
             $ctx['seccion'] = (string)$opciones['seccion'];
+        }
+        if (($ctx['modo'] ?? '') === 'hub') {
+            $ctx['linea'] = null;
         }
 
         $lineas = self::construirLineas($ctx);
@@ -131,7 +133,12 @@ class ProgramasNavegacion
         }
 
         if ($url === 'programas') {
-            return ['modo' => 'hub', 'linea' => $linea, 'seccion' => null];
+            $lineaGet = strtolower(trim((string)($_GET['linea'] ?? '')));
+            if (in_array($lineaGet, ['universidad_vida', 'capacitacion_destino'], true)) {
+                return ['modo' => 'menu', 'linea' => $lineaGet, 'seccion' => null];
+            }
+
+            return ['modo' => 'hub', 'linea' => null, 'seccion' => null];
         }
 
         if (strpos($url, 'escuelas_formacion/pagos/consolidar') === 0) {
@@ -219,9 +226,6 @@ class ProgramasNavegacion
             if (empty($perm['ver_linea'])) {
                 continue;
             }
-            $hrefConsolidar = !empty($perm['consolidado'])
-                ? self::urlPublic((string)$def['consolidar_url'])
-                : self::urlPublic('programas');
             $out[] = [
                 'clave' => $clave,
                 'titulo' => (string)$def['titulo'],
@@ -230,7 +234,7 @@ class ProgramasNavegacion
                 'gradiente' => (string)$def['gradiente'],
                 'color' => (string)$def['color'],
                 'activa' => ($ctx['linea'] ?? '') === $clave,
-                'href' => $hrefConsolidar,
+                'href' => self::urlPublic('programas&linea=' . $clave),
             ];
         }
 
@@ -243,7 +247,7 @@ class ProgramasNavegacion
      */
     private static function construirSecciones(string $lineaActiva, int $capNivel, array $ctx): array
     {
-        if ($ctx['modo'] === 'hub') {
+        if ($ctx['modo'] === 'hub' || $ctx['modo'] === 'menu') {
             return [];
         }
 
@@ -262,7 +266,6 @@ class ProgramasNavegacion
         $seccionActiva = (string)($ctx['seccion'] ?? '');
 
         $map = [
-            'consolidado' => ['perm' => 'consolidado', 'url' => (string)$def['consolidar_url']],
             'asistencias' => ['perm' => 'asistencias', 'url' => self::urlAsistenciasLinea($lineaActiva, (string)$def['asistencias_url'], $capNivel)],
             'dashboard' => ['perm' => 'dashboard', 'url' => (string)$def['dashboard_url']],
             'pagos' => ['perm' => 'pagos', 'url' => (string)$def['pagos_url']],
@@ -320,30 +323,11 @@ class ProgramasNavegacion
         if ($ctx['modo'] === 'hub') {
             return self::urlPublic('home');
         }
-        if ($seccion === 'dashboard') {
-            foreach (self::definicionesLineas() as $def) {
-                if ($def['clave'] !== $linea) {
-                    continue;
-                }
-                $perm = PermisosProgramasAccess::permisosUiLinea($linea);
-                if (!empty($perm['consolidado'])) {
-                    return self::urlPublic((string)$def['consolidar_url']);
-                }
-            }
-
+        if ($ctx['modo'] === 'menu') {
             return self::urlPublic('programas');
         }
-        if ($seccion === 'consolidado' || $seccion === '') {
-            return self::urlPublic('programas');
-        }
-        foreach (self::definicionesLineas() as $def) {
-            if ($def['clave'] !== $linea) {
-                continue;
-            }
-            $perm = PermisosProgramasAccess::permisosUiLinea($linea);
-            if (!empty($perm['consolidado'])) {
-                return self::urlPublic((string)$def['consolidar_url']);
-            }
+        if ($linea !== '') {
+            return self::urlPublic('programas&linea=' . $linea);
         }
 
         return self::urlPublic('programas');
@@ -354,17 +338,13 @@ class ProgramasNavegacion
         if ($ctx['modo'] === 'hub') {
             return 'Panel principal';
         }
-        if ($seccion === 'dashboard') {
-            $linea = (string)($ctx['linea'] ?? '');
-            $titulo = self::tituloLinea($linea);
-
-            return $titulo !== '' ? $titulo : 'Consolidado';
-        }
-        if ($seccion === 'consolidado' || $seccion === '') {
+        if ($ctx['modo'] === 'menu') {
             return 'Programas';
         }
+        $linea = (string)($ctx['linea'] ?? '');
+        $titulo = self::tituloLinea($linea);
 
-        return 'Consolidado';
+        return $titulo !== '' ? $titulo : 'Programas';
     }
 
     /**
@@ -372,11 +352,17 @@ class ProgramasNavegacion
      */
     private static function breadcrumb(array $ctx, string $lineaLabel, string $seccionLabel): array
     {
+        $lineaClave = (string)($ctx['linea'] ?? '');
         $items = [
             ['label' => 'Programas', 'href' => self::urlPublic('programas'), 'activo' => $ctx['modo'] === 'hub'],
         ];
         if ($ctx['modo'] !== 'hub' && $lineaLabel !== '') {
-            $items[] = ['label' => $lineaLabel, 'href' => '', 'activo' => $seccionLabel === ''];
+            $hrefLinea = $lineaClave !== '' ? self::urlPublic('programas&linea=' . $lineaClave) : '';
+            $items[] = [
+                'label' => $lineaLabel,
+                'href' => $hrefLinea,
+                'activo' => $ctx['modo'] === 'menu' || $seccionLabel === '',
+            ];
         }
         if ($seccionLabel !== '') {
             $items[] = ['label' => $seccionLabel, 'href' => '', 'activo' => true];

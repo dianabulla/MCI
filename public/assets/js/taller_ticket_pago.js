@@ -209,6 +209,17 @@
         throw new Error('No se encontró el ticket para exportar.');
     }
 
+    function setTicketData(data) {
+        let el = document.getElementById('ticket-pago-data');
+        if (!el) {
+            el = document.createElement('script');
+            el.type = 'application/json';
+            el.id = 'ticket-pago-data';
+            document.body.appendChild(el);
+        }
+        el.textContent = JSON.stringify(data || {});
+    }
+
     function descargarBlob(blob, filename) {
         const url = URL.createObjectURL(blob);
         const enlace = document.createElement('a');
@@ -311,6 +322,8 @@
         generarTicketPng: generarTicketPng,
         descargarTicketImagen: descargarTicketImagen,
         compartirTicketWhatsapp: compartirTicketWhatsapp,
+        setTicketData: setTicketData,
+        mostrarVistaPrevia: mostrarVistaPrevia,
         iniciar: iniciar,
     };
 

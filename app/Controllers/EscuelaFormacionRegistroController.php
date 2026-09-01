@@ -1304,7 +1304,7 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         $paginaTitulo = 'Inscripción pública';
         if ($programaActual === 'universidad_vida') {
-            $paginaTitulo = 'Inscripción pública - Universidad de la Vida';
+            $paginaTitulo = 'Universidad de la Vida — Un encuentro con Jesús';
         } elseif ($programaActual === 'capacitacion_destino') {
             $paginaTitulo = 'Inscripción pública - Capacitación Destino';
         }
@@ -1829,9 +1829,31 @@ class EscuelaFormacionRegistroController extends BaseController {
         $filtroGenero = trim((string)($_GET['filtro_genero'] ?? ''));
         $filtroMinisterio = trim((string)($_GET['filtro_ministerio'] ?? ''));
         $filtroEncuentro = trim((string)($_GET['filtro_encuentro'] ?? ''));
-        
-        if ((string)($_GET['ajax'] ?? '') === '1' || strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest') {
+
+        require_once APP . '/Helpers/PeriodoSemestre.php';
+        require_once APP . '/Helpers/SegmentoRedUv.php';
+        $redPagos = '';
+        if ($programa === 'universidad_vida') {
+            $redPagos = SegmentoRedUv::normalizarRed((string)($_GET['red'] ?? ''));
+            if ($redPagos !== '' && $filtroGenero === '') {
+                $filtroGenero = $this->filtroGeneroDesdeRedUv($redPagos);
+            }
+        }
+
+        $esAjax = ((string)($_GET['ajax'] ?? '') === '1' || strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest');
+        if ($esAjax) {
             $this->responderPagosUnificadosJson($programa, $buscar, $cedulaDetalle, $filtroGenero, $filtroMinisterio, $filtroEncuentro);
+        }
+
+        if ($programa === 'universidad_vida' && $redPagos === '' && !$esAjax) {
+            require_once APP . '/Helpers/PeriodoSemestre.php';
+            $conteosRed = $this->contarPagosUniversidadVidaPorRed();
+            $this->view('programas/pagos_redes', [
+                'conteos_red' => $conteosRed,
+                'tarjetas_red' => $this->tarjetasPagosUniversidadVidaPorRed($conteosRed),
+                'periodo_semestre' => PeriodoSemestre::resolver(),
+            ]);
+            return;
         }
 
         $resumen = $this->inscripcionModel->getResumenPagosAbonos($buscar, 400, $programa);
@@ -1854,7 +1876,122 @@ class EscuelaFormacionRegistroController extends BaseController {
             'bloquear_selector_programa' => (bool)$bloquearSelectorPrograma,
             'url_volver_pagos' => $volverProgramas['href'],
             'etiqueta_volver_pagos' => $volverProgramas['label'],
+            'red_pagos' => $redPagos,
+            'url_hub_redes' => $redPagos !== '' ? $this->urlPagosUniversidadVida(['red' => null, 'filtro_genero' => null]) : '',
+            'periodo_semestre' => PeriodoSemestre::resolver(),
         ]);
+    }
+
+    private function filtroGeneroDesdeRedUv(string $red): string
+    {
+        require_once APP . '/Helpers/SegmentoRedUv.php';
+        switch (SegmentoRedUv::normalizarRed($red)) {
+            case 'hombres':
+                return 'hombres_adultos';
+            case 'mujeres':
+                return 'mujeres_adultas';
+            case 'jovenes':
+                return 'jovenes';
+            case 'teens':
+                return 'teens';
+            default:
+                return '';
+        }
+    }
+
+    /**
+     * @param array<string, string|null> $extra
+     */
+    private function urlPagosUniversidadVida(array $extra = []): string
+    {
+        $params = $_GET;
+        $params['url'] = 'escuelas_formacion/pagos/consolidar';
+        unset($params['ajax']);
+
+        foreach ($extra as $clave => $valor) {
+            if ($valor === null || $valor === '') {
+                unset($params[$clave]);
+            } else {
+                $params[$clave] = $valor;
+            }
+        }
+
+        return rtrim((string)PUBLIC_URL, '/') . '/?' . http_build_query($params);
+    }
+
+    /**
+     * @return array{hombres:int,mujeres:int,jovenes:int,teens:int,otros:int,total:int}
+     */
+    private function contarPagosUniversidadVidaPorRed(): array
+    {
+        require_once APP . '/Helpers/SegmentoRedUv.php';
+
+        $data = $this->construirDatosPagosEscuelasUnificados('universidad_vida', '', '', '', '', '');
+        $personas = [];
+        foreach ((array)($data['resumen'] ?? []) as $fila) {
+            $totalPagado = (float)($fila['total_pagado'] ?? 0);
+            $abonos = (float)($fila['total_abonos'] ?? 0);
+            $registros = (int)($fila['registros_pago'] ?? 0);
+            if ($totalPagado <= 0 && $abonos <= 0 && $registros <= 0) {
+                continue;
+            }
+            $personas[] = [
+                'Genero' => (string)($fila['genero'] ?? ''),
+                'Edad' => (int)($fila['edad'] ?? 0),
+                'Segmento_Preferido' => (string)($fila['segmento_preferido'] ?? ''),
+            ];
+        }
+
+        return SegmentoRedUv::contarPorRed($personas);
+    }
+
+    /**
+     * @param array{hombres?:int,mujeres?:int,jovenes?:int,teens?:int,otros?:int,total?:int} $conteos
+     * @return array<int, array<string, mixed>>
+     */
+    private function tarjetasPagosUniversidadVidaPorRed(array $conteos): array
+    {
+        $defs = [
+            'hombres' => [
+                'titulo' => 'Hombres',
+                'subtitulo' => 'Red adulta (29+ o segmento hombres)',
+                'icono' => '👨',
+                'color' => '#1e4a89',
+                'avatar_class' => 'gender-avatar-male',
+            ],
+            'mujeres' => [
+                'titulo' => 'Mujeres',
+                'subtitulo' => 'Red adulta (29+ o segmento mujeres)',
+                'icono' => '👩',
+                'color' => '#8b1c62',
+                'avatar_class' => 'gender-avatar-female',
+            ],
+            'jovenes' => [
+                'titulo' => 'Jóvenes',
+                'subtitulo' => '14–28 años o segmento jóvenes',
+                'icono' => '🧑',
+                'color' => '#1e6b3c',
+                'avatar_class' => '',
+            ],
+            'teens' => [
+                'titulo' => 'Teens',
+                'subtitulo' => '9–13 años o segmento teens',
+                'icono' => '🧒',
+                'color' => '#7b3fa0',
+                'avatar_class' => '',
+            ],
+        ];
+
+        $tarjetas = [];
+        foreach ($defs as $red => $def) {
+            $tarjetas[] = array_merge($def, [
+                'red' => $red,
+                'total' => (int)($conteos[$red] ?? 0),
+                'url' => $this->urlPagosUniversidadVida(['red' => $red, 'filtro_genero' => null]),
+            ]);
+        }
+
+        return $tarjetas;
     }
 
     public function pagosConsolidar() {
@@ -2141,25 +2278,14 @@ class EscuelaFormacionRegistroController extends BaseController {
      * @return array{semestre: int, fecha_inicio: string, fecha_fin: string, etiqueta: string}
      */
     private function resolverRangoSemestreUvPagos(int $anio, $semestreInput = null): array {
-        $semestre = (int)$semestreInput;
-        if ($semestre !== 1 && $semestre !== 2) {
-            $semestre = ((int)date('n')) <= 6 ? 1 : 2;
-        }
-
-        if ($semestre === 1) {
-            return [
-                'semestre' => 1,
-                'fecha_inicio' => sprintf('%04d-01-01', $anio),
-                'fecha_fin' => sprintf('%04d-06-30', $anio),
-                'etiqueta' => 'Semestre 1 (Enero – Junio)',
-            ];
-        }
+        require_once APP . '/Helpers/PeriodoSemestre.php';
+        $rango = PeriodoSemestre::resolver($anio, $semestreInput);
 
         return [
-            'semestre' => 2,
-            'fecha_inicio' => sprintf('%04d-07-01', $anio),
-            'fecha_fin' => sprintf('%04d-12-31', $anio),
-            'etiqueta' => 'Semestre 2 (Julio – Diciembre)',
+            'semestre' => (int)$rango['semestre'],
+            'fecha_inicio' => (string)$rango['fecha_inicio'],
+            'fecha_fin' => (string)$rango['fecha_fin'],
+            'etiqueta' => (string)$rango['etiqueta'],
         ];
     }
 
@@ -2308,60 +2434,27 @@ class EscuelaFormacionRegistroController extends BaseController {
     }
 
     private function clasificarGeneroBaseEscuela(string $genero): string {
-        $genero = strtolower(trim($genero));
-        if ($genero === '') {
-            return 'otro';
-        }
-
-        $esMujer = strpos($genero, 'mujer') !== false
-            || strpos($genero, 'femen') !== false
-            || preg_match('/(^|[^a-z])(f|fem|female)([^a-z]|$)/', $genero);
-        $esHombre = strpos($genero, 'hombre') !== false
-            || strpos($genero, 'mascul') !== false
-            || preg_match('/(^|[^a-z])(m|masc|male|h)([^a-z]|$)/', $genero);
-
-        if ($esHombre && !$esMujer) {
-            return 'hombre';
-        }
-        if ($esMujer && !$esHombre) {
-            return 'mujer';
-        }
-
-        return 'otro';
+        require_once APP . '/Helpers/SegmentoRedUv.php';
+        return SegmentoRedUv::clasificarGenero($genero);
     }
 
     private function resolverSegmentoEscuela(string $genero, int $edad, string $segmentoPreferido = ''): string {
-        $segmentoPreferido = strtolower(trim($segmentoPreferido));
-        if (in_array($segmentoPreferido, ['jovenes', 'teens', 'hombres_adultos', 'mujeres_adultas'], true)) {
-            return $segmentoPreferido;
-        }
-
-        $generoClasificado = $this->clasificarGeneroBaseEscuela($genero);
-        if ($edad >= 14 && $edad <= 28) {
-            return 'jovenes';
-        }
-        if ($edad >= 9 && $edad <= 13) {
-            return 'teens';
-        }
-        if (($edad >= 29 || $edad <= 0) && $generoClasificado === 'hombre') {
-            return 'hombres_adultos';
-        }
-        if (($edad >= 29 || $edad <= 0) && $generoClasificado === 'mujer') {
-            return 'mujeres_adultas';
-        }
-
-        $genero = strtolower(trim($genero));
-        if ($genero !== '' && strpos($genero, 'joven') !== false) {
-            return 'jovenes';
-        }
-
-        return 'otros';
+        require_once APP . '/Helpers/SegmentoRedUv.php';
+        return SegmentoRedUv::resolver($genero, $edad, $segmentoPreferido);
     }
 
     private function coincideFiltroGeneroEscuela(string $filtroGenero, string $genero, int $edad = 0, string $segmentoPreferido = ''): bool {
         $filtroGenero = strtolower(trim($filtroGenero));
         if ($filtroGenero === '' || $filtroGenero === 'todos') {
             return true;
+        }
+
+        $segmento = $this->resolverSegmentoEscuela($genero, $edad, $segmentoPreferido);
+        if ($filtroGenero === 'hombres_adultos') {
+            return $segmento === 'hombres_adultos';
+        }
+        if ($filtroGenero === 'mujeres_adultas') {
+            return $segmento === 'mujeres_adultas';
         }
 
         if ($filtroGenero === 'hombres' || $filtroGenero === 'hombre') {
@@ -2372,7 +2465,6 @@ class EscuelaFormacionRegistroController extends BaseController {
             return $this->clasificarGeneroBaseEscuela($genero) === 'mujer';
         }
 
-        $segmento = $this->resolverSegmentoEscuela($genero, $edad, $segmentoPreferido);
         if ($filtroGenero === 'jovenes' || $filtroGenero === 'joven') {
             // Misma regla que el dashboard UV (columna Jov.): 14–28 o segmento «jóvenes», sin teens.
             return $segmento === 'jovenes';
@@ -2424,6 +2516,8 @@ class EscuelaFormacionRegistroController extends BaseController {
     private function construirDatosPagosEscuelasUnificados(string $programa, string $buscar, string $cedulaDetalle = '', string $filtroGenero = '', string $filtroMinisterio = '', string $filtroEncuentro = ''): array {
         $programa = $this->normalizarProgramaPagosEscuelas($programa);
         $buscar = trim($buscar);
+        require_once APP . '/Helpers/PeriodoSemestre.php';
+        $rangoFiltroUv = PeriodoSemestre::resolver();
         $cedulaDetalle = trim($cedulaDetalle);
         $filtroGenero = trim((string)$filtroGenero);
         $filtroMinisterio = trim((string)$filtroMinisterio);
@@ -2517,6 +2611,7 @@ class EscuelaFormacionRegistroController extends BaseController {
             $segmentoPreferido = '';
             $nombreMinisterio = '';
             $idMinisterio = 0;
+            $lider = '';
 
             if ($inscripcionRef) {
                 if ($nombre === '') {
@@ -2533,6 +2628,10 @@ class EscuelaFormacionRegistroController extends BaseController {
                 $segmentoPreferido = trim((string)($inscripcionRef['Segmento_Preferido'] ?? ''));
                 $nombreMinisterio = trim((string)($inscripcionRef['Nombre_Ministerio'] ?? ''));
                 $idMinisterio = (int)($inscripcionRef['Id_Ministerio'] ?? 0);
+                $lider = trim((string)($inscripcionRef['Lider_Persona_Actual'] ?? ''));
+                if ($lider === '') {
+                    $lider = trim((string)($inscripcionRef['Lider'] ?? ''));
+                }
             }
 
             // Aplicar filtro de género/segmento (todos = sin filtrar por segmento)
@@ -2550,6 +2649,14 @@ class EscuelaFormacionRegistroController extends BaseController {
                 : [];
 
             if ($programa === 'universidad_vida' && !$this->coincideFiltroEncuentroEscuela($filtroEncuentro, $mapAsistenciasPersona)) {
+                continue;
+            }
+
+            $fechaClasifica = substr(trim((string)($inscripcionRef['Fecha_Registro'] ?? '')), 0, 10);
+            if ($fechaClasifica === '' || $fechaClasifica === '0000-00-00') {
+                $fechaClasifica = substr(trim((string)($filaPago['Ultimo_Movimiento'] ?? '')), 0, 10);
+            }
+            if ($programa === 'universidad_vida' && !PeriodoSemestre::fechaEnRango($fechaClasifica, $rangoFiltroUv)) {
                 continue;
             }
 
@@ -2600,6 +2707,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'segmento_preferido' => $segmentoPreferido,
                 'ministerio' => $nombreMinisterio,
                 'id_ministerio' => $idMinisterio,
+                'lider' => $lider,
                 'programa' => $programa,
                 'programa_label' => $programaLabel,
                 'registros_pago' => (int)($filaPago['Registros_Pago'] ?? 0),
@@ -2618,6 +2726,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'total_preguntas' => $totalPreguntas,
                 'pago_completo' => $pagoCompleto,
                 'semaforo' => $semaforo,
+                'fecha_registro' => $fechaClasifica,
             ];
         }
 
@@ -2636,15 +2745,8 @@ class EscuelaFormacionRegistroController extends BaseController {
         }, $filas));
 
         $statsInscripciones = [];
-        $rangoSemestreUv = null;
+        $rangoSemestreUv = $programa === 'universidad_vida' ? $rangoFiltroUv : null;
         if ($programa === 'universidad_vida') {
-            $anioUv = (int)($_GET['anio'] ?? date('Y'));
-            if ($anioUv < 2020 || $anioUv > ((int)date('Y') + 2)) {
-                $anioUv = (int)date('Y');
-            }
-            $semestreUvInput = (int)($_GET['semestre'] ?? 0);
-            $rangoSemestreUv = $this->resolverRangoSemestreUvPagos($anioUv, $semestreUvInput > 0 ? $semestreUvInput : null);
-
             $inscripcionesUvStats = $this->filtrarInscripcionesUvPorRangoFecha(
                 (array)$inscripciones,
                 (string)$rangoSemestreUv['fecha_inicio'],
@@ -2749,6 +2851,98 @@ class EscuelaFormacionRegistroController extends BaseController {
         header('Content-Type: text/html; charset=UTF-8');
         echo $this->renderTicketHtml($data);
         exit;
+    }
+
+    public function reenviarTicketPago() {
+        if (!$this->usuarioPuedeVerPagos()) {
+            $this->json(['ok' => false, 'mensaje' => 'No tienes permiso para reenviar tickets.'], 403);
+        }
+
+        if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST') {
+            $this->json(['ok' => false, 'mensaje' => 'Método no permitido.'], 405);
+        }
+
+        $raw = (string)file_get_contents('php://input');
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            $payload = $_POST;
+        }
+
+        $referencia = trim((string)($payload['referencia'] ?? ''));
+        if ($referencia === '') {
+            $this->json(['ok' => false, 'mensaje' => 'Falta la referencia del pago.'], 400);
+        }
+
+        $movimiento = $this->inscripcionModel->getMovimientoPagoPorReferencia($referencia);
+        if (!is_array($movimiento)) {
+            $this->json(['ok' => false, 'mensaje' => 'No se encontró ese ticket de pago.'], 404);
+        }
+
+        $telefono = trim((string)($movimiento['Telefono'] ?? ''));
+        if ($this->whatsappLocalQueueModel->normalizarTelefono($telefono) === null) {
+            $this->json(['ok' => false, 'mensaje' => 'Esta persona no tiene un teléfono válido para WhatsApp.'], 400);
+        }
+
+        $imagenData = trim((string)($payload['imagen'] ?? ''));
+        if (strpos($imagenData, 'base64,') !== false) {
+            $imagenData = substr($imagenData, strpos($imagenData, 'base64,') + 7);
+        }
+        $binario = base64_decode($imagenData, true);
+        if ($binario === false || strlen($binario) < 24 || strncmp($binario, "\x89PNG\r\n\x1a\n", 8) !== 0) {
+            $this->json(['ok' => false, 'mensaje' => 'La imagen del ticket no es válida.'], 400);
+        }
+        if (strlen($binario) > 2 * 1024 * 1024) {
+            $this->json(['ok' => false, 'mensaje' => 'La imagen del ticket es demasiado pesada.'], 400);
+        }
+
+        $destDir = ROOT . '/public/uploads/tickets';
+        if (!is_dir($destDir) && !@mkdir($destDir, 0755, true) && !is_dir($destDir)) {
+            $this->json(['ok' => false, 'mensaje' => 'No se pudo guardar el ticket.'], 500);
+        }
+
+        $fileName = 'ticket_' . preg_replace('/[^\w-]+/', '_', $referencia) . '_' . date('Ymd_His') . '.png';
+        $destPath = $destDir . '/' . $fileName;
+        if (@file_put_contents($destPath, $binario) === false) {
+            $this->json(['ok' => false, 'mensaje' => 'No se pudo guardar el ticket.'], 500);
+        }
+
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $scheme = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
+        }
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $base = rtrim((string)PUBLIC_URL, '/');
+        $mediaUrl = $scheme . '://' . $host . $base . '/uploads/tickets/' . rawurlencode($fileName);
+
+        $ticketData = [
+            'fecha' => (string)($movimiento['Fecha_Registro'] ?? ''),
+            'nombre' => (string)($movimiento['Nombre'] ?? ''),
+            'cedula' => (string)($movimiento['Cedula'] ?? ''),
+            'programa' => $this->etiquetaProgramaEscuela((string)($movimiento['Programa'] ?? '')),
+            'metodo_pago' => (string)($movimiento['Metodo_Pago'] ?? ''),
+            'recibido_por' => (string)($movimiento['Recibido_Por'] ?? ''),
+            'tipo_pago' => (string)($movimiento['Tipo_Pago'] ?? ''),
+            'valor_pago' => number_format((float)($movimiento['Valor_Pago'] ?? 0), 0, ',', '.'),
+            'referencia_pago' => $referencia,
+        ];
+        $mensaje = $this->buildTicketWhatsappMensaje($ticketData);
+        $okCola = $this->whatsappLocalQueueModel->encolar(
+            $telefono,
+            $mensaje,
+            'ticket_pago_escuelas',
+            'ticket:' . $referencia . ':' . uniqid('', true),
+            $mediaUrl,
+            'image'
+        );
+
+        if (!$okCola) {
+            $this->json(['ok' => false, 'mensaje' => 'No se pudo encolar el envío por WhatsApp.'], 500);
+        }
+
+        $this->json([
+            'ok' => true,
+            'mensaje' => 'Ticket encolado: se enviará por WhatsApp como imagen.',
+        ]);
     }
 
     public function buscarAsistenciaPublica() {
@@ -4099,6 +4293,11 @@ class EscuelaFormacionRegistroController extends BaseController {
             $limit  = max(1, min(2500, (int)($_GET['limit'] ?? 2500)));
 
             $personas = $this->inscripcionModel->getInscritosBasicos($programa, $buscar, $limit);
+            require_once APP . '/Helpers/PeriodoSemestre.php';
+            $rangoSemestre = PeriodoSemestre::resolver();
+            $personas = array_values(array_filter((array)$personas, static function ($persona) use ($rangoSemestre) {
+                return PeriodoSemestre::fechaEnRango((string)($persona['Fecha_Registro'] ?? ''), $rangoSemestre);
+            }));
             // Mapa completo de pagos (sin filtrar por búsqueda) para marcar bien cada inscripción.
             $pagosPorClave = $this->construirMapaPagosPorClave(
                 $this->inscripcionModel->getResumenPagosAbonos('', 2500, $programa)

@@ -1060,12 +1060,28 @@ class TallerFormulario extends BaseModel {
         return (int)$this->db->lastInsertId();
     }
 
+    public function vincularPersonaRespuesta(int $idRespuesta, int $idPersona): bool {
+        $idRespuesta = (int)$idRespuesta;
+        $idPersona = (int)$idPersona;
+        if ($idRespuesta <= 0 || $idPersona <= 0) {
+            return false;
+        }
+        return $this->execute(
+            'UPDATE talleres_formulario_respuesta SET Id_Persona = ? WHERE Id_Respuesta = ?',
+            [$idPersona, $idRespuesta]
+        );
+    }
+
     public function actualizarDatosJsonRespuesta(int $idRespuesta, array $datos): bool {
         $idRespuesta = (int)$idRespuesta;
         if ($idRespuesta <= 0) {
             return false;
         }
-        $json = json_encode($datos, JSON_UNESCAPED_UNICODE);
+        $flags = JSON_UNESCAPED_UNICODE;
+        if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+            $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+        }
+        $json = json_encode($datos, $flags);
         if ($json === false) {
             return false;
         }
@@ -1242,6 +1258,20 @@ class TallerFormulario extends BaseModel {
             $payload['Id_Persona'] = $idPersona;
         }
         return $this->insertEnTabla('talleres_formulario_respuesta', $payload);
+    }
+
+    public function eliminarRespuesta(int $idRespuesta): bool {
+        $idRespuesta = (int)$idRespuesta;
+        if ($idRespuesta <= 0 || $this->getRespuestaPorId($idRespuesta) === null) {
+            return false;
+        }
+        try {
+            $this->execute('DELETE FROM talleres_formulario_pago WHERE Id_Respuesta = ?', [$idRespuesta]);
+        } catch (Throwable $e) {
+            // Tabla de pagos puede no existir en instalaciones antiguas.
+        }
+        $this->execute('DELETE FROM talleres_formulario_respuesta WHERE Id_Respuesta = ?', [$idRespuesta]);
+        return true;
     }
 
     public function eliminarFormulario(int $idFormulario): bool {

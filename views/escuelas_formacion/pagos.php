@@ -19,6 +19,14 @@ $filtroEncuentro = (string)($filtro_encuentro ?? '');
 $bloquearSelectorPrograma = !empty($bloquear_selector_programa);
 $urlVolverPagos = (string)($url_volver_pagos ?? (PUBLIC_URL . '?url=home'));
 $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
+require_once APP . '/Helpers/SegmentoRedUv.php';
+$redPagos = SegmentoRedUv::normalizarRed((string)($red_pagos ?? ($_GET['red'] ?? '')));
+$modoRedPagos = $esUv && $redPagos !== '';
+$etiquetaRedPagos = SegmentoRedUv::etiqueta($redPagos);
+$urlHubRedesPagos = (string)($url_hub_redes ?? '');
+$tituloPagos = $modoRedPagos
+    ? ('Pagos Universidad de la Vida · ' . $etiquetaRedPagos)
+    : 'Escuelas de Formación - Pagos, asistencia y evaluación';
 ?>
 
 <style>
@@ -30,6 +38,7 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
 .unified-pagos-status { display:flex; gap:12px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
 .unified-pagos-summary { display:flex; gap:10px; flex-wrap:wrap; width:100%; }
 .unified-pagos-summary-card { min-width:240px; flex:1 1 240px; padding:12px 14px; border:1px solid #cfe0f5; border-radius:12px; background:linear-gradient(180deg, #fbfdff 0%, #f1f7ff 100%); box-shadow:inset 0 1px 0 rgba(255,255,255,0.7); }
+button.unified-pagos-summary-card { font: inherit; color: inherit; text-align: left; appearance: none; -webkit-appearance: none; }
 .unified-pagos-summary-card strong { display:block; margin-bottom:6px; color:#1e3a5f; font-size:0.84rem; line-height:1.25; }
 .unified-pagos-summary-metric { display:flex; align-items:baseline; gap:8px; margin-bottom:4px; }
 .unified-pagos-summary-metric span { color:#0f172a; font-size:1.35rem; font-weight:800; line-height:1; }
@@ -38,6 +47,9 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
 .unified-pagos-summary-card--abonos { background:linear-gradient(180deg, #fffdfa 0%, #fff4e8 100%); border-color:#f2dcc1; }
 .unified-pagos-summary-card--ok { background:linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 100%); border-color:#bbf7d0; }
 .unified-pagos-summary-card--warn { background:linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%); border-color:#fde68a; }
+.unified-pagos-summary-card--click { cursor:pointer; transition:box-shadow .15s, transform .15s, border-color .15s; }
+.unified-pagos-summary-card--click:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(15,23,42,.1); }
+.unified-pagos-summary-card--click.is-active { box-shadow:inset 0 0 0 2px #1e4a89; }
 .unified-pagos-resumen-filtro { margin:0 0 12px; padding:8px 12px; font-size:0.78rem; color:#1e40af; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; }
 .unified-pagos-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 .unified-pagos-table { width:100%; border-collapse:collapse; }
@@ -78,6 +90,20 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
 .tabs-contenido.is-active { display:block; }
 .btn-ministerio { background:none; border:none; color:#0f766e; cursor:pointer; text-decoration:underline; padding:0; font-size:inherit; font-family:inherit; }
 .btn-ministerio:hover { text-decoration:none; }
+.ticket-pago-export { width:400px; padding:22px 20px 18px; background:#fff; border:2px solid #0a6e6a; border-radius:14px; color:#0f172a; font-family:Arial,sans-serif; }
+.ticket-pago-export__brand { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#0a6e6a; }
+.ticket-pago-export__title { margin:8px 0 16px; font-size:22px; font-weight:800; }
+.ticket-pago-export__row { display:flex; justify-content:space-between; gap:12px; margin:0 0 8px; font-size:13px; }
+.ticket-pago-export__row span { color:#64748b; }
+.ticket-pago-export__row strong { color:#1e293b; text-align:right; }
+.ticket-pago-export__sep { height:1px; background:#dbeafe; margin:12px 0; }
+.ticket-pago-export__ref-label { font-size:12px; color:#64748b; }
+.ticket-pago-export__ref { font-family:"Courier New",monospace; font-size:28px; font-weight:700; color:#0a6e6a; letter-spacing:1px; margin:4px 0 12px; }
+.ticket-pago-export__foot { font-size:11px; color:#94a3b8; text-align:center; }
+.ticket-pago-export-offscreen { position:fixed; left:-9999px; top:0; z-index:-1; pointer-events:none; }
+.pagos-ticket-preview { display:block; max-width:100%; height:auto; margin:0 auto 14px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; }
+.pagos-ticket-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+.detail-modal__panel--ticket { width:min(460px, calc(100% - 24px)); }
 @media (max-width:768px) {
     .unified-pagos-head h2 { font-size:1.2rem; }
     .unified-pagos-toolbar { width:100%; }
@@ -94,10 +120,13 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
 <div class="unified-pagos-shell">
     <div class="unified-pagos-head">
         <div>
-            <h2 style="margin:0;">Escuelas de Formación - Pagos, asistencia y evaluación</h2>
-            <small class="mini-muted">Vista actual: <strong id="programa-label"><?= htmlspecialchars($programaLabel) ?></strong></small>
+            <h2 style="margin:0;"><?= htmlspecialchars($tituloPagos) ?></h2>
+            <small class="mini-muted">Vista actual: <strong id="programa-label"><?= htmlspecialchars($programaLabel) ?></strong><?= $modoRedPagos ? ' · solo personas con pago o abono' : '' ?></small>
         </div>
         <div class="unified-pagos-toolbar">
+            <?php if ($modoRedPagos && $urlHubRedesPagos !== ''): ?>
+            <a href="<?= htmlspecialchars($urlHubRedesPagos, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-secondary btn-sm">← Cambiar red</a>
+            <?php endif; ?>
             <a href="<?= htmlspecialchars($urlVolverPagos, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-secondary btn-sm"><?= htmlspecialchars($etiquetaVolverPagos, ENT_QUOTES, 'UTF-8') ?></a>
             <?php if ($esUv): ?>
             <a href="<?= htmlspecialchars(PUBLIC_URL . '?url=programas/consolidar/asistencias&insc_programa=universidad_vida', ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-primary btn-sm">Ir a asistencias</a>
@@ -109,6 +138,7 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
     <div class="unified-pagos-card">
         <form id="filtro-unificado-form">
             <div class="filtros-row">
+                <?php if (!$modoRedPagos): ?>
                 <div class="filtro-group">
                     <label for="programa-select">Programa</label>
                     <select id="programa-select" class="form-control" <?= $bloquearSelectorPrograma ? 'disabled' : '' ?>>
@@ -121,12 +151,30 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
                         <?php endif; ?>
                     </select>
                 </div>
+                <?php else: ?>
+                <input type="hidden" id="programa-select" value="universidad_vida">
+                <?php endif; ?>
+                <?php if ($esUv): ?>
+                <?php
+                $filtro_semestre_form = false;
+                include VIEWS . '/programas/_filtro_semestre.php';
+                ?>
+                <?php endif; ?>
+                <?php if ($modoRedPagos): ?>
+                <div class="filtro-group">
+                    <label for="filtro-lider">Líder</label>
+                    <select id="filtro-lider" class="form-control">
+                        <option value="">Todos los líderes</option>
+                    </select>
+                </div>
+                <?php endif; ?>
                 <div class="filtro-group">
                     <label for="filtro-ministerio">Ministerio</label>
                     <select id="filtro-ministerio" class="form-control">
                         <option value="">Todos los ministerios</option>
                     </select>
                 </div>
+                <?php if (!$modoRedPagos): ?>
                 <div class="filtro-group">
                     <label for="filtro-genero">Género</label>
                     <select id="filtro-genero" class="form-control">
@@ -138,21 +186,10 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
                     </select>
                     <small class="mini-muted" style="display:block;margin-top:4px;">H/M por género. Jóvenes y Teens se clasifican por edad (14–28 y 9–13) o por segmento preferido, igual que asistencias UV.</small>
                 </div>
-                <div class="filtro-group" id="filtro-encuentro-wrap" <?= $esUv ? '' : 'hidden' ?>>
-                    <label for="filtro-encuentro">Asistencia encuentro</label>
-                    <select id="filtro-encuentro" class="form-control" title="Según escuela_formacion_asistencia_clase — clases 5 y 6">
-                        <option value="todos" <?= ($filtroEncuentro === '' || $filtroEncuentro === 'todos') ? 'selected' : '' ?>>Todos</option>
-                        <option value="excluir_asistieron" <?= $filtroEncuentro === 'excluir_asistieron' ? 'selected' : '' ?>>Excluir quienes ya asistieron (día 1 y/o 2)</option>
-                        <option value="sin_encuentro" <?= $filtroEncuentro === 'sin_encuentro' ? 'selected' : '' ?>>Solo sin asistir al encuentro</option>
-                        <option value="sin_dia1" <?= $filtroEncuentro === 'sin_dia1' ? 'selected' : '' ?>>Sin asistencia día 1 (clase 5)</option>
-                        <option value="sin_dia2" <?= $filtroEncuentro === 'sin_dia2' ? 'selected' : '' ?>>Sin asistencia día 2 (clase 6)</option>
-                        <option value="con_dia1" <?= $filtroEncuentro === 'con_dia1' ? 'selected' : '' ?>>Con asistencia día 1</option>
-                        <option value="con_dia2" <?= $filtroEncuentro === 'con_dia2' ? 'selected' : '' ?>>Con asistencia día 2</option>
-                        <option value="con_ambos" <?= $filtroEncuentro === 'con_ambos' ? 'selected' : '' ?>>Asistieron ambos días</option>
-                        <option value="con_al_menos_uno" <?= $filtroEncuentro === 'con_al_menos_uno' ? 'selected' : '' ?>>Asistieron al menos un día</option>
-                    </select>
-                    <small class="mini-muted" style="display:block;margin-top:4px;">Encuentro = clases 5 y 6 en la tabla de asistencias.</small>
-                </div>
+                <?php else: ?>
+                <input type="hidden" id="filtro-genero" value="<?= htmlspecialchars($filtroGenero, ENT_QUOTES, 'UTF-8') ?>">
+                <?php endif; ?>
+                <input type="hidden" id="filtro-encuentro" value="todos">
                 <div class="filtro-group">
                     <label for="buscar">Buscar</label>
                     <input type="text" id="buscar" value="<?= htmlspecialchars($buscar) ?>" class="form-control" placeholder="Nombre, cédula, teléfono...">
@@ -168,10 +205,12 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
     <div class="unified-pagos-card">
         <div class="unified-pagos-topbar">
             <div>
+                <?php if (!$modoRedPagos): ?>
                 <div class="tabs-navegacion">
                     <button type="button" class="tab-btn is-active" data-tab="unificada">Tabla unificada</button>
                     <button type="button" class="tab-btn" data-tab="por-genero">Por género</button>
                 </div>
+                <?php endif; ?>
             </div>
             <div class="unified-pagos-status">
                 <small id="resumen-recaudo" class="mini-muted"><strong>Total recaudado:</strong> $0</small>
@@ -179,6 +218,24 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
             </div>
         </div>
 
+        <?php if ($modoRedPagos): ?>
+        <div id="pagos-resumen-personas" class="unified-pagos-summary">
+            <button type="button" class="unified-pagos-summary-card unified-pagos-summary-card--ok unified-pagos-summary-card--click" data-filtro-indicador="pago_total" aria-pressed="false">
+                <strong>Pago total (≥ $180.000)</strong>
+                <div class="unified-pagos-summary-metric">
+                    <span id="pagos-total-pago-completo">0</span>
+                    <small>personas</small>
+                </div>
+            </button>
+            <button type="button" class="unified-pagos-summary-card unified-pagos-summary-card--warn unified-pagos-summary-card--click" data-filtro-indicador="abono" aria-pressed="false">
+                <strong>Abono (sin completar)</strong>
+                <div class="unified-pagos-summary-metric">
+                    <span id="pagos-total-abonos">0</span>
+                    <small>personas</small>
+                </div>
+            </button>
+        </div>
+        <?php else: ?>
         <div id="resumen-genero-uv" class="unified-pagos-summary" hidden>
             <div class="unified-pagos-summary-card">
                 <strong id="resumen-genero-uv-titulo">Consolidado de personas con pagos para el encuentro</strong>
@@ -197,6 +254,7 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
                 <p id="resumen-abonos-uv-detalle">Valor en abonos: $0</p>
             </div>
         </div>
+        <?php endif; ?>
 
         <!-- TAB: UNIFICADA -->
         <div id="tab-unificada" class="tabs-contenido is-active">
@@ -212,6 +270,7 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         </div>
 
         <!-- TAB: POR GÉNERO -->
+        <?php if (!$modoRedPagos): ?>
         <div id="tab-por-genero" class="tabs-contenido">
             <div style="margin-bottom:16px;">
                 <h4 style="margin:0 0 12px 0;">Hombres (Jóvenes + Adultos)</h4>
@@ -239,6 +298,7 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
                 </div>
             </div>
         </div>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -264,14 +324,51 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
                         <th>Libro</th>
                         <th>Valor</th>
                         <th>Referencia</th>
+                        <th>Ticket</th>
                     </tr>
                 </thead>
                 <tbody id="detalle-modal-body">
-                    <tr><td colspan="8">Sin datos.</td></tr>
+                    <tr><td colspan="9">Sin datos.</td></tr>
                 </tbody>
             </table>
         </div>
     </div>
+</div>
+
+<div id="ticket-modal" class="detail-modal" aria-hidden="true">
+    <div class="detail-modal__backdrop"></div>
+    <div class="detail-modal__panel detail-modal__panel--ticket">
+        <div class="detail-modal__head">
+            <div>
+                <h3 style="margin:0;">Ticket de pago</h3>
+                <small id="ticket-modal-subtitulo" class="mini-muted"></small>
+            </div>
+            <button type="button" id="ticket-modal-cerrar" class="btn btn-outline-secondary btn-sm">Cerrar</button>
+        </div>
+        <img id="ticket-pago-preview" class="pagos-ticket-preview" alt="Vista previa del ticket" hidden>
+        <p id="ticket-modal-estado" class="mini-muted">Preparando imagen...</p>
+        <div class="pagos-ticket-actions">
+            <button type="button" id="btn-pagos-ticket-descargar" class="btn btn-outline-secondary btn-sm">Descargar imagen</button>
+            <button type="button" id="btn-pagos-ticket-enviar" class="btn btn-primary btn-sm">Enviar imagen por WhatsApp</button>
+        </div>
+    </div>
+</div>
+<script type="application/json" id="ticket-pago-data">{}</script>
+<div id="ticket-pago-export" class="ticket-pago-export ticket-pago-export-offscreen" aria-hidden="true">
+    <div class="ticket-pago-export__brand">MCI Madrid Colombia</div>
+    <div class="ticket-pago-export__title">Ticket de pago</div>
+    <div class="ticket-pago-export__row"><span>Programa</span><strong id="ticket-exp-programa">—</strong></div>
+    <div class="ticket-pago-export__row"><span>Fecha</span><strong id="ticket-exp-fecha">—</strong></div>
+    <div class="ticket-pago-export__row"><span>Nombre</span><strong id="ticket-exp-nombre">—</strong></div>
+    <div class="ticket-pago-export__row"><span>Documento</span><strong id="ticket-exp-documento">—</strong></div>
+    <div class="ticket-pago-export__sep"></div>
+    <div class="ticket-pago-export__row"><span>Método</span><strong id="ticket-exp-metodo">—</strong></div>
+    <div class="ticket-pago-export__row"><span>Recibido por</span><strong id="ticket-exp-recibido">—</strong></div>
+    <div class="ticket-pago-export__row"><span>Tipo</span><strong id="ticket-exp-tipo">—</strong></div>
+    <div class="ticket-pago-export__row"><span>Valor</span><strong id="ticket-exp-valor">$0</strong></div>
+    <div class="ticket-pago-export__ref-label">Referencia</div>
+    <div id="ticket-exp-ref" class="ticket-pago-export__ref">—</div>
+    <div id="ticket-exp-pie" class="ticket-pago-export__foot">Comprobante de pago</div>
 </div>
 
 <!-- Modal: Personas del ministerio -->
@@ -304,16 +401,31 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
     </div>
 </div>
 
+<?php
+$urlHtml2canvas = function_exists('asset_url')
+    ? asset_url('js/vendor/html2canvas.min.js')
+    : (rtrim(ASSETS_URL, '/') . '/js/vendor/html2canvas.min.js?v=' . date('Ymd'));
+$urlTicketJs = function_exists('asset_url')
+    ? asset_url('js/taller_ticket_pago.js')
+    : (rtrim(ASSETS_URL, '/') . '/js/taller_ticket_pago.js?v=' . date('Ymd'));
+?>
+<script src="<?= htmlspecialchars($urlHtml2canvas, ENT_QUOTES, 'UTF-8') ?>"></script>
+<script src="<?= htmlspecialchars($urlTicketJs, ENT_QUOTES, 'UTF-8') ?>"></script>
 <script>
 (function() {
-    const baseUrl = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/pagos') ?>;
+    const baseUrl = <?= json_encode(PUBLIC_URL . '?url=' . ($esUv ? 'escuelas_formacion/pagos/consolidar' : 'escuelas_formacion/pagos')) ?>;
+    const urlReenviarTicket = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/pagos/reenviar-ticket') ?>;
     const currentProgram = <?= json_encode($programa) ?>;
+    const MODO_RED = <?= $modoRedPagos ? 'true' : 'false' ?>;
+    const RED_PAGOS = <?= json_encode($redPagos) ?>;
+    const FILTRO_GENERO_INICIAL = <?= json_encode($filtroGenero) ?>;
     
     // Elementos del DOM
     const programSelect = document.getElementById('programa-select');
     const buscarInput = document.getElementById('buscar');
     const filtroGeneroInput = document.getElementById('filtro-genero');
     const filtroMinisterioInput = document.getElementById('filtro-ministerio');
+    const filtroLiderInput = document.getElementById('filtro-lider');
     const filtroEncuentroInput = document.getElementById('filtro-encuentro');
     const filtroEncuentroWrap = document.getElementById('filtro-encuentro-wrap');
     const filtroForm = document.getElementById('filtro-unificado-form');
@@ -340,6 +452,12 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
     const detalleModalTitulo = document.getElementById('detalle-modal-titulo');
     const detalleModalSubtitulo = document.getElementById('detalle-modal-subtitulo');
     const detalleModalCerrar = document.getElementById('detalle-modal-cerrar');
+    const ticketModal = document.getElementById('ticket-modal');
+    const ticketModalCerrar = document.getElementById('ticket-modal-cerrar');
+    const ticketModalSubtitulo = document.getElementById('ticket-modal-subtitulo');
+    const ticketModalEstado = document.getElementById('ticket-modal-estado');
+    const btnPagosTicketDescargar = document.getElementById('btn-pagos-ticket-descargar');
+    const btnPagosTicketEnviar = document.getElementById('btn-pagos-ticket-enviar');
     
     // Modal ministerio
     const ministerioModal = document.getElementById('ministerio-modal');
@@ -349,6 +467,8 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
     const ministerioModalCerrar = document.getElementById('ministerio-modal-cerrar');
     
     let datosActuales = null;
+    let resumenTablaBase = [];
+    let filtroIndicador = '';
     const UMBRAL_PAGO_COMPLETO_UV = 180000;
 
     function etiquetaPrograma(programa) {
@@ -376,8 +496,110 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
     }
 
     function money(value) {
-        const num = Number(value || 0);
-        return '$' + num.toLocaleString('es-CO', { maximumFractionDigits: 0 });
+        const n = Number(value || 0);
+        if (!Number.isFinite(n)) {
+            return '$0';
+        }
+        return '$' + n.toLocaleString('es-CO');
+    }
+
+    function etiquetaProgramaTicket(codigo) {
+        const map = {
+            universidad_vida: 'Universidad de la Vida',
+            encuentro: 'Encuentro',
+            bautismo: 'Bautismo',
+            capacitacion_destino: 'Capacitación Destino',
+            capacitacion_destino_nivel_1: 'Capacitación Destino - Nivel 1',
+            capacitacion_destino_nivel_2: 'Capacitación Destino - Nivel 2',
+            capacitacion_destino_nivel_3: 'Capacitación Destino - Nivel 3'
+        };
+        const key = String(codigo || '').trim();
+        return map[key] || key || 'Programa';
+    }
+
+    function setText(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value || '—';
+    }
+
+    function payloadTicketDesdeMovimiento(mov) {
+        const programaLabelTicket = etiquetaProgramaTicket(mov.Programa || '');
+        const valorTxt = money(mov.Valor_Pago || 0).replace(/^\$\s?/, '');
+        return {
+            formulario: programaLabelTicket,
+            fecha: String(mov.Fecha_Registro || ''),
+            etiqueta_nombre: 'Nombre',
+            nombre: String(mov.Nombre || ''),
+            documento: String(mov.Cedula || ''),
+            metodo_pago: String(mov.Metodo_Pago || ''),
+            recibido_por: String(mov.Recibido_Por || ''),
+            tipo_pago: String(mov.Tipo_Pago || ''),
+            valor_pago: valorTxt,
+            referencia_pago: String(mov.Referencia_Pago || ''),
+            pie_comprobante: 'Comprobante de pago — ' + programaLabelTicket
+        };
+    }
+
+    function pintarTicketExport(data) {
+        setText('ticket-exp-programa', data.formulario);
+        setText('ticket-exp-fecha', data.fecha);
+        setText('ticket-exp-nombre', data.nombre);
+        setText('ticket-exp-documento', data.documento);
+        setText('ticket-exp-metodo', data.metodo_pago);
+        setText('ticket-exp-recibido', data.recibido_por);
+        setText('ticket-exp-tipo', data.tipo_pago);
+        setText('ticket-exp-valor', '$' + (data.valor_pago || '0'));
+        setText('ticket-exp-ref', data.referencia_pago);
+        setText('ticket-exp-pie', data.pie_comprobante);
+    }
+
+    async function blobToDataUrl(blob) {
+        return new Promise(function (resolve, reject) {
+            const reader = new FileReader();
+            reader.onload = function () { resolve(String(reader.result || '')); };
+            reader.onerror = function () { reject(new Error('No se pudo leer la imagen del ticket.')); };
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    async function abrirTicket(mov) {
+        const data = payloadTicketDesdeMovimiento(mov);
+        if (!data.referencia_pago) {
+            alert('Este movimiento no tiene referencia de ticket.');
+            return;
+        }
+        pintarTicketExport(data);
+        if (window.TallerTicketPago && typeof window.TallerTicketPago.setTicketData === 'function') {
+            window.TallerTicketPago.setTicketData(data);
+        }
+        if (ticketModalSubtitulo) {
+            ticketModalSubtitulo.textContent = (data.nombre || '') + ' · ' + data.referencia_pago;
+        }
+        const preview = document.getElementById('ticket-pago-preview');
+        if (preview) {
+            preview.hidden = true;
+            preview.removeAttribute('src');
+        }
+        if (ticketModalEstado) ticketModalEstado.textContent = 'Preparando imagen...';
+        ticketModal.classList.add('is-open');
+        ticketModal.setAttribute('aria-hidden', 'false');
+        try {
+            if (window.TallerTicketPago && typeof window.TallerTicketPago.mostrarVistaPrevia === 'function') {
+                await window.TallerTicketPago.mostrarVistaPrevia();
+            }
+            if (preview && preview.getAttribute('src')) {
+                preview.hidden = false;
+            }
+            if (ticketModalEstado) ticketModalEstado.textContent = 'Puedes descargar el ticket o reenviarlo por WhatsApp como imagen.';
+        } catch (err) {
+            if (ticketModalEstado) ticketModalEstado.textContent = err.message || 'No se pudo generar la imagen.';
+        }
+    }
+
+    function cerrarTicket() {
+        if (!ticketModal) return;
+        ticketModal.classList.remove('is-open');
+        ticketModal.setAttribute('aria-hidden', 'true');
     }
 
     function clasificarGeneroBase(genero) {
@@ -446,6 +668,32 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         return resolverSegmento(row) === 'teens';
     }
 
+    function poblarFiltroLideresPagos(rows) {
+        if (!filtroLiderInput) return;
+        const actual = String(filtroLiderInput.value || '').trim();
+        const lideres = [];
+        const seen = {};
+        (rows || []).forEach(function (row) {
+            const nombre = String(row.lider || '').trim();
+            if (nombre === '' || seen[nombre]) return;
+            seen[nombre] = true;
+            lideres.push(nombre);
+        });
+        lideres.sort(function (a, b) {
+            return a.localeCompare(b, 'es', { sensitivity: 'base' });
+        });
+        filtroLiderInput.innerHTML = '<option value="">Todos los líderes</option>';
+        lideres.forEach(function (nombre) {
+            const opt = document.createElement('option');
+            opt.value = nombre;
+            opt.textContent = nombre;
+            filtroLiderInput.appendChild(opt);
+        });
+        if (actual && seen[actual]) {
+            filtroLiderInput.value = actual;
+        }
+    }
+
     function calcularTotales(rows) {
         return (rows || []).reduce((acc, row) => {
             acc.pagado += Number(row.total_pagado || 0);
@@ -492,14 +740,16 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         if (!filtroEncuentroWrap) {
             return;
         }
-        const esUvPrograma = String(programa) === 'universidad_vida';
-        filtroEncuentroWrap.hidden = !esUvPrograma;
-        if (!esUvPrograma && filtroEncuentroInput) {
+        filtroEncuentroWrap.hidden = true;
+        if (filtroEncuentroInput) {
             filtroEncuentroInput.value = 'todos';
         }
     }
 
     function ensurePagosResumenPersonasDom() {
+        if (MODO_RED) {
+            return;
+        }
         if (document.getElementById('pagos-resumen-personas')) {
             return;
         }
@@ -511,17 +761,23 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         const wrap = document.createElement('div');
         wrap.id = 'pagos-resumen-personas';
         wrap.className = 'unified-pagos-summary';
-        wrap.innerHTML = ''
+        wrap.innerHTML = MODO_RED
+            ? (''
+                + '<button type="button" class="unified-pagos-summary-card unified-pagos-summary-card--ok unified-pagos-summary-card--click" data-filtro-indicador="pago_total" aria-pressed="false"><strong>Pago completo UV (&ge; $180.000)</strong>'
+                + '<div class="unified-pagos-summary-metric"><span id="pagos-total-pago-completo">0</span><small>personas</small></div></button>'
+                + '<button type="button" class="unified-pagos-summary-card unified-pagos-summary-card--warn unified-pagos-summary-card--click" data-filtro-indicador="abono" aria-pressed="false"><strong>Solo abono (sin completar)</strong>'
+                + '<div class="unified-pagos-summary-metric"><span id="pagos-total-abonos">0</span><small>personas</small></div></button>')
+            : (''
             + '<div class="unified-pagos-summary-card"><strong id="pagos-label-inscritas">Inscritas UV</strong>'
             + '<div class="unified-pagos-summary-metric"><span id="pagos-total-inscritas">0</span><small>inscritas</small></div>'
             + '<p id="pagos-sub-inscritas" style="margin:0;font-size:0.78rem;color:#52657d;">Con movimiento en tabla: <span id="pagos-total-personas">0</span></p></div>'
             + '<div class="unified-pagos-summary-card unified-pagos-summary-card--ok"><strong id="pagos-label-con-pago">Con pago registrado</strong>'
             + '<div class="unified-pagos-summary-metric"><span id="pagos-total-con-pago">0</span><small>personas</small></div>'
             + '<p id="pagos-sub-con-pago" style="margin:0;font-size:0.78rem;color:#52657d;" hidden></p></div>'
-            + '<div class="unified-pagos-summary-card"><strong>Pago completo UV (&ge; $180.000)</strong>'
-            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-pago-completo">0</span><small>personas</small></div></div>'
-            + '<div class="unified-pagos-summary-card unified-pagos-summary-card--warn"><strong>Solo abono (sin completar)</strong>'
-            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-abonos">0</span><small>personas</small></div></div>';
+            + '<button type="button" class="unified-pagos-summary-card unified-pagos-summary-card--ok unified-pagos-summary-card--click" data-filtro-indicador="pago_total" aria-pressed="false"><strong>Pago completo UV (&ge; $180.000)</strong>'
+            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-pago-completo">0</span><small>personas</small></div></button>'
+            + '<button type="button" class="unified-pagos-summary-card unified-pagos-summary-card--warn unified-pagos-summary-card--click" data-filtro-indicador="abono" aria-pressed="false"><strong>Solo abono (sin completar)</strong>'
+            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-abonos">0</span><small>personas</small></div></button>');
 
         const filtro = document.createElement('p');
         filtro.id = 'pagos-resumen-filtro';
@@ -543,6 +799,18 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         const conPago = filasNorm.filter((row) => tienePagoRegistradoRow(row)).length;
         const pagoCompleto = filasNorm.filter((row) => tienePagoTotalUv(row)).length;
         const conAbono = filasNorm.filter((row) => tieneSoloAbonoUv(row)).length;
+
+        if (MODO_RED) {
+            const elAbonosRed = document.getElementById('pagos-total-abonos');
+            const elCompletoRed = document.getElementById('pagos-total-pago-completo');
+            if (elAbonosRed) elAbonosRed.textContent = String(conAbono);
+            if (elCompletoRed) elCompletoRed.textContent = String(pagoCompleto);
+            if (resumenGeneroUv) resumenGeneroUv.hidden = true;
+            const elFiltroRed = document.getElementById('pagos-resumen-filtro');
+            if (elFiltroRed) elFiltroRed.hidden = true;
+            return;
+        }
+
         const filtrosActivos = hayFiltrosPagosActivos();
         const rowsGlobal = (datosActuales && datosActuales.resumen) ? datosActuales.resumen : rows;
         const totalGlobal = rowsGlobal.length;
@@ -650,6 +918,42 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         return row;
     }
 
+    function filasPorIndicador(rows) {
+        const lista = rows || [];
+        const programa = datosActuales && datosActuales.programa ? String(datosActuales.programa) : String(currentProgram || '');
+        const norm = programa === 'universidad_vida' ? lista.map((row) => normalizarFilaPagoUv(row)) : lista;
+        if (filtroIndicador === 'pago_total') {
+            return norm.filter((row) => tienePagoTotalUv(row));
+        }
+        if (filtroIndicador === 'abono') {
+            return norm.filter((row) => tieneSoloAbonoUv(row));
+        }
+        return norm;
+    }
+
+    function marcarTarjetasIndicador() {
+        document.querySelectorAll('[data-filtro-indicador]').forEach((btn) => {
+            const activo = String(btn.getAttribute('data-filtro-indicador') || '') === filtroIndicador;
+            btn.classList.toggle('is-active', activo);
+            btn.setAttribute('aria-pressed', activo ? 'true' : 'false');
+        });
+    }
+
+    function pintarTablaIndicador(programa) {
+        const filas = filasPorIndicador(resumenTablaBase);
+        renderHead(programa, 'unificada');
+        renderRows(programa, filas, null, 'unificada');
+        marcarTarjetasIndicador();
+        if (estadoCarga) {
+            let extra = '';
+            if (filtroIndicador === 'pago_total') extra = ' · filtro: pago total';
+            if (filtroIndicador === 'abono') extra = ' · filtro: abono';
+            estadoCarga.textContent = 'Datos actualizados'
+                + (filas.length ? (' · ' + filas.length + ' en tabla') : '')
+                + extra;
+        }
+    }
+
     function renderFooter(programa, rows, tabId = 'unificada') {
         const isUv = String(programa) === 'universidad_vida';
         const footId = tabId === 'unificada' ? 'tabla-foot-unificada' : (tabId === 'hombres' ? 'tabla-foot-hombres' : 'tabla-foot-mujeres');
@@ -665,7 +969,7 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
 
         if (isUv) {
             footElement.innerHTML = '<tr>' +
-                '<td colspan="5">TOTAL RECAUDADO</td>' +
+                '<td colspan="' + (MODO_RED ? '4' : '5') + '">TOTAL RECAUDADO</td>' +
                 '<td>' + sumaAbonos.toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
                 '<td>' + sumaPagosCompletos.toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
                 '<td>' + sumaTodosPagos.toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
@@ -711,6 +1015,12 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
 
     function filtrarResumenPorGenero(rows, genero) {
         const valor = String(genero || '').trim().toLowerCase();
+        if (valor === 'hombres_adultos') {
+            return (rows || []).filter((row) => resolverSegmento(row) === 'hombres_adultos');
+        }
+        if (valor === 'mujeres_adultas') {
+            return (rows || []).filter((row) => resolverSegmento(row) === 'mujeres_adultas');
+        }
         if (valor === 'hombres') {
             return (rows || []).filter((row) => esGeneroHombre(row));
         }
@@ -731,7 +1041,7 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
             return;
         }
 
-        if (String(programa) !== 'universidad_vida') {
+        if (MODO_RED || String(programa) !== 'universidad_vida') {
             resumenGeneroUv.hidden = true;
             resumenGeneroUvTitulo.textContent = 'Consolidado de personas con pagos para el encuentro';
             resumenGeneroUvCantidad.textContent = '0';
@@ -764,7 +1074,9 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
     function renderHead(programa, tabId = 'unificada') {
         const isUv = String(programa) === 'universidad_vida';
         const columns = isUv
-            ? ['Persona', 'Cédula', 'Teléfono', 'Ministerio', 'Segmento', 'Abonos', 'Pago total', 'Pago general', 'Detalle']
+            ? (MODO_RED
+                ? ['Persona', 'Cédula', 'Teléfono', 'Ministerio', 'Abonos', 'Pago total', 'Pago general', 'Detalle']
+                : ['Persona', 'Cédula', 'Teléfono', 'Ministerio', 'Segmento', 'Abonos', 'Pago total', 'Pago general', 'Detalle'])
             : ['Persona', 'Cédula', 'Teléfono', 'Ministerio', 'Segmento', 'Nivel', 'Pagos', 'Abonos', 'Nota', 'Detalle'];
 
         const headId = tabId === 'unificada' ? 'tabla-head-unificada' : (tabId === 'hombres' ? 'tabla-head-hombres' : 'tabla-head-mujeres');
@@ -795,7 +1107,7 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         const bodyElement = document.getElementById(bodyId);
         
         if (!rowsFiltradas || !rowsFiltradas.length) {
-            const colspan = isUv ? 9 : 10;
+            const colspan = isUv ? (MODO_RED ? 8 : 9) : 10;
             if (bodyElement) {
                 bodyElement.innerHTML = '<tr><td colspan="' + colspan + '">No hay datos para este filtro.</td></tr>';
             }
@@ -814,18 +1126,18 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
                     ? '-'
                     : Number(row.nota_final).toFixed(1) + '%';
                 
-                const ministerioHtml = row.ministerio && row.ministerio.trim() !== '' 
-                    ? '<button type="button" class="btn-ministerio js-ver-ministerio" data-ministerio="' + escapeHtml(row.ministerio) + '">' + escapeHtml(row.ministerio) + '</button>'
+                const ministerioHtml = row.ministerio && String(row.ministerio).trim() !== ''
+                    ? escapeHtml(row.ministerio)
                     : '<span class="mini-muted">-</span>';
 
                 if (isUv) {
-                    // ABONOS | PAGO TOTAL | PAGO GENERAL
+                    const celdaSegmento = MODO_RED ? '' : ('<td>' + escapeHtml(segmento) + '</td>');
                     return '<tr>' +
                         '<td>' + escapeHtml(row.persona || '') + '</td>' +
                         '<td>' + escapeHtml(row.cedula || '') + '</td>' +
                         '<td>' + escapeHtml(row.telefono || '') + '</td>' +
                         '<td>' + ministerioHtml + '</td>' +
-                        '<td>' + escapeHtml(segmento) + '</td>' +
+                        celdaSegmento +
                         '<td>' + Number(row.total_abonos || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
                         '<td>' + Number(row.total_pago_completo || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
                         '<td>' + Number(row.total_pagado || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
@@ -856,14 +1168,6 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
                 });
             });
 
-            document.querySelectorAll('.js-ver-ministerio').forEach((btn) => {
-                btn.addEventListener('click', async () => {
-                    const ministerio = String(btn.dataset.ministerio || '');
-                    if (!ministerio) return;
-                    await cargarMinisterio(ministerio);
-                });
-            });
-
             renderFooter(programa, rowsFiltradas, tabId);
         }
     }
@@ -876,14 +1180,16 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         params.set('filtro_genero', String(filtroGeneroInput ? filtroGeneroInput.value : ''));
         params.set('filtro_ministerio', String(filtroMinisterioInput ? filtroMinisterioInput.value : ''));
         params.set('filtro_encuentro', String(filtroEncuentroInput ? filtroEncuentroInput.value : 'todos'));
-        const urlParams = new URLSearchParams(window.location.search);
-        const anioUv = urlParams.get('anio');
-        const semestreUv = urlParams.get('semestre');
-        if (anioUv) {
-            params.set('anio', anioUv);
+        if (RED_PAGOS) {
+            params.set('red', RED_PAGOS);
         }
-        if (semestreUv) {
-            params.set('semestre', semestreUv);
+        const anioInput = document.getElementById('filtro-anio');
+        const semestreInput = document.getElementById('filtro-semestre');
+        if (anioInput && anioInput.value) {
+            params.set('anio', anioInput.value);
+        }
+        if (semestreInput && semestreInput.value) {
+            params.set('semestre', semestreInput.value);
         }
 
         estadoCarga.textContent = 'Cargando...';
@@ -920,36 +1226,57 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
 
             actualizarVisibilidadFiltroEncuentro(data.programa);
 
-            // Renderizar tabs
-            renderHead(data.programa, 'unificada');
-            renderRows(data.programa, data.resumen || [], null, 'unificada');
-            
-            renderHead(data.programa, 'hombres');
-            renderRows(data.programa, data.resumen || [], 'hombres', 'hombres');
-            
-            renderHead(data.programa, 'mujeres');
-            renderRows(data.programa, data.resumen || [], 'mujeres', 'mujeres');
+            let resumenTabla = data.resumen || [];
+            if (String(data.programa) === 'universidad_vida') {
+                resumenTabla = resumenTabla.filter((row) => tienePagoRegistradoRow(row) || Number(row.total_abonos || 0) > 0);
+                poblarFiltroLideresPagos(resumenTabla);
+                const liderSel = filtroLiderInput ? String(filtroLiderInput.value || '').trim() : '';
+                if (liderSel !== '') {
+                    resumenTabla = resumenTabla.filter((row) => String(row.lider || '').trim() === liderSel);
+                }
+                resumenTabla.sort(function (a, b) {
+                    const la = String(a.lider || '').trim() || '\uffff';
+                    const lb = String(b.lider || '').trim() || '\uffff';
+                    const cmpL = la.localeCompare(lb, 'es', { sensitivity: 'base' });
+                    if (cmpL !== 0) return cmpL;
+                    return String(a.persona || '').localeCompare(String(b.persona || ''), 'es', { sensitivity: 'base' });
+                });
+            }
+
+            resumenTablaBase = resumenTabla;
+
+            if (!MODO_RED) {
+                renderHead(data.programa, 'hombres');
+                renderRows(data.programa, data.resumen || [], 'hombres', 'hombres');
+
+                renderHead(data.programa, 'mujeres');
+                renderRows(data.programa, data.resumen || [], 'mujeres', 'mujeres');
+            }
 
             const filasActivas = String(data.programa) === 'universidad_vida'
-                ? (data.resumen || []).map((row) => normalizarFilaPagoUv(row))
-                : (data.resumen || []);
-            actualizarResumenRecaudo(data.programa, filasActivas);
+                ? resumenTabla.map((row) => normalizarFilaPagoUv(row))
+                : resumenTabla;
+            actualizarResumenRecaudo(data.programa, filasPorIndicador(resumenTablaBase));
             actualizarResumenPersonasPagos(data.programa, filasActivas);
             actualizarResumenGeneroUv(data.programa, filasActivas, filtroGeneroInput ? filtroGeneroInput.value : '');
-
-            estadoCarga.textContent = 'Datos actualizados'
-                + (filasActivas.length ? (' · ' + filasActivas.length + ' en tabla') : '');
+            pintarTablaIndicador(data.programa);
         } catch (error) {
             estadoCarga.textContent = 'Error al cargar';
             console.error(error);
             const colspan = 10;
             const msg = '<tr><td colspan="' + colspan + '">' + escapeHtml(error.message || 'No se pudo cargar la información') + '</td></tr>';
-            document.getElementById('tabla-body-unificada').innerHTML = msg;
-            document.getElementById('tabla-body-hombres').innerHTML = msg;
-            document.getElementById('tabla-body-mujeres').innerHTML = msg;
-            document.getElementById('tabla-foot-unificada').innerHTML = '';
-            document.getElementById('tabla-foot-hombres').innerHTML = '';
-            document.getElementById('tabla-foot-mujeres').innerHTML = '';
+            const bodyUni = document.getElementById('tabla-body-unificada');
+            if (bodyUni) bodyUni.innerHTML = msg;
+            const bodyH = document.getElementById('tabla-body-hombres');
+            if (bodyH) bodyH.innerHTML = msg;
+            const bodyM = document.getElementById('tabla-body-mujeres');
+            if (bodyM) bodyM.innerHTML = msg;
+            const footUni = document.getElementById('tabla-foot-unificada');
+            if (footUni) footUni.innerHTML = '';
+            const footH = document.getElementById('tabla-foot-hombres');
+            if (footH) footH.innerHTML = '';
+            const footM = document.getElementById('tabla-foot-mujeres');
+            if (footM) footM.innerHTML = '';
             if (resumenRecaudo) {
                 resumenRecaudo.innerHTML = '<strong>Total recaudado:</strong> $0';
             }
@@ -987,11 +1314,15 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
 
             const detalle = data.detalle || [];
             if (!detalle.length) {
-                detalleModalBody.innerHTML = '<tr><td colspan="8">No hay movimientos para esta persona.</td></tr>';
+                detalleModalBody.innerHTML = '<tr><td colspan="9">No hay movimientos para esta persona.</td></tr>';
             } else {
                 detalleModalBody.innerHTML = detalle.map((mov) => {
                     const entregoLibroRaw = mov.Entrego_Libro ?? null;
                     const entregoLibroTxt = entregoLibroRaw === null || entregoLibroRaw === '' ? '-' : (Number(entregoLibroRaw) === 1 ? 'Sí' : 'No');
+                    const refPago = String(mov.Referencia_Pago || '').trim();
+                    const ticketBtn = refPago
+                        ? '<button type="button" class="btn btn-outline-primary btn-sm js-ver-ticket" data-ref="' + escapeHtml(refPago) + '">Ver ticket</button>'
+                        : '<span class="mini-muted">—</span>';
                     return '<tr>' +
                         '<td>' + escapeHtml(mov.Fecha_Registro || '') + '</td>' +
                         '<td>' + escapeHtml(mov.Programa || '') + '</td>' +
@@ -1000,9 +1331,17 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
                         '<td>' + escapeHtml(mov.Tipo_Pago || '') + '</td>' +
                         '<td>' + escapeHtml(entregoLibroTxt) + '</td>' +
                         '<td>' + money(mov.Valor_Pago || 0) + '</td>' +
-                        '<td style="font-family:monospace;">' + escapeHtml(mov.Referencia_Pago || '') + '</td>' +
+                        '<td style="font-family:monospace;">' + escapeHtml(refPago) + '</td>' +
+                        '<td>' + ticketBtn + '</td>' +
                     '</tr>';
                 }).join('');
+                detalleModalBody.querySelectorAll('.js-ver-ticket').forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        const ref = String(btn.getAttribute('data-ref') || '');
+                        const mov = detalle.find((item) => String(item.Referencia_Pago || '') === ref);
+                        if (mov) abrirTicket(mov);
+                    });
+                });
             }
 
             detalleModal.classList.add('is-open');
@@ -1106,6 +1445,28 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
             }
         });
     }
+    const filtroAnioInput = document.getElementById('filtro-anio');
+    const filtroSemestreInput = document.getElementById('filtro-semestre');
+    [filtroAnioInput, filtroSemestreInput].forEach((el) => {
+        if (!el) return;
+        el.addEventListener('change', async () => {
+            try {
+                await cargarDatos();
+            } catch (error) {
+                estadoCarga.textContent = 'Error al cargar';
+            }
+        });
+    });
+
+    if (filtroLiderInput) {
+        filtroLiderInput.addEventListener('change', async () => {
+            try {
+                await cargarDatos();
+            } catch (error) {
+                estadoCarga.textContent = 'Error al cargar';
+            }
+        });
+    }
 
     if (filtroEncuentroInput) {
         filtroEncuentroInput.addEventListener('change', async () => {
@@ -1117,12 +1478,26 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         });
     }
 
+    document.addEventListener('click', (event) => {
+        const btn = event.target && event.target.closest ? event.target.closest('[data-filtro-indicador]') : null;
+        if (!btn || !document.getElementById('pagos-resumen-personas') || !document.getElementById('pagos-resumen-personas').contains(btn)) {
+            return;
+        }
+        const siguiente = String(btn.getAttribute('data-filtro-indicador') || '');
+        filtroIndicador = (filtroIndicador === siguiente) ? '' : siguiente;
+        const programa = (datosActuales && datosActuales.programa) ? datosActuales.programa : currentProgram;
+        actualizarResumenRecaudo(programa, filasPorIndicador(resumenTablaBase));
+        pintarTablaIndicador(programa);
+    });
+
     if (btnLimpiar) {
         btnLimpiar.addEventListener('click', async () => {
             if (buscarInput) buscarInput.value = '';
-            if (filtroGeneroInput) filtroGeneroInput.value = '';
+            if (filtroGeneroInput) filtroGeneroInput.value = MODO_RED ? FILTRO_GENERO_INICIAL : '';
             if (filtroMinisterioInput) filtroMinisterioInput.value = '';
+            if (filtroLiderInput) filtroLiderInput.value = '';
             if (filtroEncuentroInput) filtroEncuentroInput.value = 'todos';
+            filtroIndicador = '';
             try {
                 await cargarDatos();
             } catch (error) {
@@ -1157,6 +1532,74 @@ $etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver al panel');
         ministerioModal.addEventListener('click', (event) => {
             if (event.target && event.target.classList.contains('detail-modal__backdrop')) {
                 cerrarMinisterio();
+            }
+        });
+    }
+
+    if (ticketModalCerrar) {
+        ticketModalCerrar.addEventListener('click', cerrarTicket);
+    }
+    if (ticketModal) {
+        ticketModal.addEventListener('click', (event) => {
+            if (event.target && event.target.classList.contains('detail-modal__backdrop')) {
+                cerrarTicket();
+            }
+        });
+    }
+    if (btnPagosTicketDescargar) {
+        btnPagosTicketDescargar.addEventListener('click', () => {
+            if (!window.TallerTicketPago || typeof window.TallerTicketPago.descargarTicketImagen !== 'function') {
+                alert('No se pudo preparar la imagen del ticket.');
+                return;
+            }
+            btnPagosTicketDescargar.disabled = true;
+            window.TallerTicketPago.descargarTicketImagen()
+                .catch((err) => alert(err.message || 'Error al descargar'))
+                .finally(() => { btnPagosTicketDescargar.disabled = false; });
+        });
+    }
+    if (btnPagosTicketEnviar) {
+        btnPagosTicketEnviar.addEventListener('click', async () => {
+            if (!window.TallerTicketPago || typeof window.TallerTicketPago.generarTicketPng !== 'function') {
+                alert('No se pudo preparar la imagen del ticket.');
+                return;
+            }
+            const dataEl = document.getElementById('ticket-pago-data');
+            let referencia = '';
+            try {
+                referencia = String((JSON.parse(dataEl.textContent || '{}') || {}).referencia_pago || '');
+            } catch (e) {
+                referencia = '';
+            }
+            if (!referencia) {
+                alert('Falta la referencia del ticket.');
+                return;
+            }
+            btnPagosTicketEnviar.disabled = true;
+            if (ticketModalEstado) ticketModalEstado.textContent = 'Enviando imagen por WhatsApp...';
+            try {
+                const blob = await window.TallerTicketPago.generarTicketPng();
+                const imagen = await blobToDataUrl(blob);
+                const response = await fetch(urlReenviarTicket, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({ referencia: referencia, imagen: imagen })
+                });
+                const raw = await response.text();
+                let data = null;
+                try { data = JSON.parse(raw); } catch (e) { data = null; }
+                if (!response.ok || !data || !data.ok) {
+                    throw new Error((data && data.mensaje) || 'No se pudo reenviar el ticket.');
+                }
+                if (ticketModalEstado) ticketModalEstado.textContent = data.mensaje || 'Ticket encolado.';
+            } catch (err) {
+                alert(err.message || 'Error al enviar');
+                if (ticketModalEstado) ticketModalEstado.textContent = 'No se pudo enviar. Puedes descargar la imagen e intentarlo de nuevo.';
+            } finally {
+                btnPagosTicketEnviar.disabled = false;
             }
         });
     }

@@ -1198,46 +1198,61 @@ class HomeController extends BaseController {
         require_once APP . '/Models/Celula.php';
         require_once APP . '/Models/Evento.php';
         require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+        require_once APP . '/Models/Teen.php';
         require_once APP . '/Helpers/DataIsolation.php';
 
         $personaModel = new Persona();
         $celulaModel = new Celula();
         $eventoModel = new Evento();
         $inscripcionModel = new EscuelaFormacionInscripcion();
+        $teenModel = new Teen();
 
         $filtroPersonas = DataIsolation::generarFiltroPersonas();
         $filtroCelulas = DataIsolation::generarFiltroCelulas();
         $filtroEventos = DataIsolation::generarFiltroEventos();
-        $resumenInscripciones = $inscripcionModel->getResumenProgramas();
 
-        // La tarjeta principal de Consolidar debe reflejar exactamente lo mismo
-        // que se muestra en el panel de Consolidar (Hombres + Mujeres visibles).
-        $datosConsolidar = $this->obtenerDatosModuloFormacion('consolidar');
-        $inscripcionesConsolidar = $datosConsolidar['inscripciones_publicas'] ?? [];
-        $totalConsolidarPanel = 0;
-        foreach ($inscripcionesConsolidar as $inscripcionConsolidar) {
-            $generoRegistro = strtolower(trim((string)($inscripcionConsolidar['Genero'] ?? '')));
-            $esMujer = strpos($generoRegistro, 'mujer') !== false
-                || strpos($generoRegistro, 'femen') !== false
-                || in_array($generoRegistro, ['f', 'fem', 'female'], true);
-            $esHombre = strpos($generoRegistro, 'hombre') !== false
-                || strpos($generoRegistro, 'mascul') !== false
-                || in_array($generoRegistro, ['m', 'masc', 'male', 'h'], true);
-            if ($esMujer || $esHombre) {
-                $totalConsolidarPanel++;
+        $personasVisibles = $personaModel->getAllActivosWithRole($filtroPersonas);
+        $totalPersonas = count($personasVisibles);
+
+        $totalesEscalera = $personaModel->getTotalesEscalera($filtroPersonas);
+        $totalGanarConsolidar = (int)($totalesEscalera['Ganar'] ?? 0) + (int)($totalesEscalera['Consolidar'] ?? 0);
+        if ($totalGanarConsolidar <= 0) {
+            $totalGanarConsolidar = $totalPersonas;
+        }
+
+        $celulasVisibles = $celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
+        $idsCelulas = array_map(static function ($celula) {
+            return (int)($celula['Id_Celula'] ?? 0);
+        }, is_array($celulasVisibles) ? $celulasVisibles : []);
+        $totalPersonasCelulas = $celulaModel->contarMiembrosActivosUnicosEnCelulas($idsCelulas);
+
+        $inscritosUv = $inscripcionModel->getInscritosBasicos('universidad_vida', '', 2500);
+        $inscritosCap = $inscripcionModel->getInscritosBasicos('capacitacion_destino', '', 2500);
+        $clavesProgramas = [];
+        foreach (array_merge(is_array($inscritosUv) ? $inscritosUv : [], is_array($inscritosCap) ? $inscritosCap : []) as $inscrito) {
+            $idPersona = (int)($inscrito['Id_Persona'] ?? 0);
+            $cedula = preg_replace('/\D+/', '', (string)($inscrito['Cedula'] ?? ''));
+            if ($idPersona > 0) {
+                $clavesProgramas['id:' . $idPersona] = true;
+            } elseif ($cedula !== '') {
+                $clavesProgramas['cc:' . $cedula] = true;
+            } else {
+                $clavesProgramas['ins:' . (int)($inscrito['Id_Inscripcion'] ?? 0)] = true;
             }
         }
 
         $data = [
-            'totalPersonas' => count($personaModel->getAllActivosWithRole($filtroPersonas)),
-            'totalCelulas' => count($celulaModel->getAllWithMemberCountAndRole($filtroCelulas)),
+            'totalPersonas' => $totalPersonas,
+            'totalCelulas' => count(is_array($celulasVisibles) ? $celulasVisibles : []),
+            'totalPersonasCelulas' => $totalPersonasCelulas,
             'totalLideresCelula' => $personaModel->getTotalLideresCelulaWithRole($filtroPersonas),
             'eventosProximos' => $eventoModel->getUpcomingWithRole($filtroEventos),
-            'totalConsolidar' => (int)$totalConsolidarPanel,
-            'totalDiscipular' => (int)($resumenInscripciones['bautismo'] ?? 0)
-                + (int)($resumenInscripciones['capacitacion_destino_nivel_1'] ?? 0)
-                + (int)($resumenInscripciones['capacitacion_destino_nivel_2'] ?? 0)
-                + (int)($resumenInscripciones['capacitacion_destino_nivel_3'] ?? 0),
+            'totalGanarConsolidar' => $totalGanarConsolidar,
+            'totalDiscipular' => (int)($totalesEscalera['Discipular'] ?? 0) > 0
+                ? (int)$totalesEscalera['Discipular']
+                : count(is_array($inscritosCap) ? $inscritosCap : []),
+            'totalTeens' => count($teenModel->getMenoresRegistrados()),
+            'totalProgramas' => count($clavesProgramas),
         ];
 
         $this->view('home/dashboard', $data);
@@ -4709,7 +4724,6 @@ class HomeController extends BaseController {
 
         $this->view('programas/landing', [
             'submodulosProgramas' => $this->obtenerSubmodulosProgramas(),
-            'resumenProgramas' => $this->obtenerResumenProgramasLanding(),
         ]);
     }
 
@@ -4790,7 +4804,117 @@ class HomeController extends BaseController {
             exit;
         }
 
-        $this->view('programas/asistencias', []);
+        require_once APP . '/Helpers/SegmentoRedUv.php';
+        $redAsistencia = SegmentoRedUv::normalizarRed((string)($_GET['red'] ?? ''));
+        if ($redAsistencia === '') {
+            $conteosRed = $this->contarInscritosUniversidadVidaPorRed();
+            require_once APP . '/Helpers/PeriodoSemestre.php';
+            $this->view('programas/asistencias_redes', [
+                'conteos_red' => $conteosRed,
+                'tarjetas_red' => $this->tarjetasAsistenciasUniversidadVidaPorRed($conteosRed),
+                'periodo_semestre' => PeriodoSemestre::resolver(),
+            ]);
+            return;
+        }
+
+        $this->view('programas/asistencias', [
+            'red_asistencia' => $redAsistencia,
+            'url_hub_redes' => $this->urlAsistenciasUniversidadVida(['red' => null]),
+        ]);
+    }
+
+    /**
+     * @param array<string, string|null> $extra
+     */
+    private function urlAsistenciasUniversidadVida(array $extra = []): string
+    {
+        $params = $_GET;
+        $url = trim((string)($params['url'] ?? 'programas/asistencias'));
+        if ($url === '') {
+            $url = 'programas/asistencias';
+        }
+        $params['url'] = $url;
+        if (trim((string)($params['insc_programa'] ?? '')) === '') {
+            $params['insc_programa'] = 'universidad_vida';
+        }
+
+        foreach ($extra as $clave => $valor) {
+            if ($valor === null || $valor === '') {
+                unset($params[$clave]);
+            } else {
+                $params[$clave] = $valor;
+            }
+        }
+
+        return rtrim((string)PUBLIC_URL, '/') . '/?' . http_build_query($params);
+    }
+
+    /**
+     * @param array{hombres?:int,mujeres?:int,jovenes?:int,teens?:int,otros?:int,total?:int} $conteos
+     * @return array<int, array<string, mixed>>
+     */
+    private function tarjetasAsistenciasUniversidadVidaPorRed(array $conteos): array
+    {
+        $defs = [
+            'hombres' => [
+                'titulo' => 'Hombres',
+                'subtitulo' => 'Red adulta (29+ o segmento hombres)',
+                'icono' => '👨',
+                'color' => '#1e4a89',
+                'avatar_class' => 'gender-avatar-male',
+            ],
+            'mujeres' => [
+                'titulo' => 'Mujeres',
+                'subtitulo' => 'Red adulta (29+ o segmento mujeres)',
+                'icono' => '👩',
+                'color' => '#8b1c62',
+                'avatar_class' => 'gender-avatar-female',
+            ],
+            'jovenes' => [
+                'titulo' => 'Jóvenes',
+                'subtitulo' => '14–28 años o segmento jóvenes',
+                'icono' => '🧑',
+                'color' => '#1e6b3c',
+                'avatar_class' => '',
+            ],
+            'teens' => [
+                'titulo' => 'Teens',
+                'subtitulo' => '9–13 años o segmento teens',
+                'icono' => '🧒',
+                'color' => '#7b3fa0',
+                'avatar_class' => '',
+            ],
+        ];
+
+        $tarjetas = [];
+        foreach ($defs as $red => $def) {
+            $tarjetas[] = array_merge($def, [
+                'red' => $red,
+                'total' => (int)($conteos[$red] ?? 0),
+                'url' => $this->urlAsistenciasUniversidadVida(['red' => $red]),
+            ]);
+        }
+
+        return $tarjetas;
+    }
+
+    /**
+     * @return array{hombres:int,mujeres:int,jovenes:int,teens:int,otros:int,total:int}
+     */
+    private function contarInscritosUniversidadVidaPorRed(): array
+    {
+        require_once APP . '/Models/EscuelaFormacionInscripcion.php';
+        require_once APP . '/Helpers/SegmentoRedUv.php';
+
+        $inscripcionModel = new EscuelaFormacionInscripcion();
+        $personas = $inscripcionModel->getInscritosBasicos('universidad_vida', '', 2000);
+        require_once APP . '/Helpers/PeriodoSemestre.php';
+        $rango = PeriodoSemestre::resolver();
+        $personas = array_values(array_filter(is_array($personas) ? $personas : [], static function ($persona) use ($rango) {
+            return PeriodoSemestre::fechaEnRango((string)($persona['Fecha_Registro'] ?? ''), $rango);
+        }));
+
+        return SegmentoRedUv::contarPorRed($personas);
     }
 
     private function exportarProgramasConsolidar(): void {

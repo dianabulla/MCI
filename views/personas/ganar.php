@@ -54,16 +54,14 @@ $filtroAnioHistorialPendiente = (int)($filtroAnioHistorialActual ?? (int)date('Y
 $anioActualCalendario = (int)date('Y');
 $historialAnioDistintoDelActual = $verHistorialGanar && ($filtroAnioHistorialPendiente !== $anioActualCalendario);
 $historialPendiente = $verHistorialGanar ? '1' : '';
-$hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || ($filtroLiderPendiente !== '') || $filtroSinLiderPendiente || $filtroSinCelulaPendiente || ($filtroNombrePendiente !== '') || (!$filtroSemanaRefEsDefaultPendiente && $filtroSemanaRefPendiente !== '');
+$hayFiltrosPendiente = ($filtroMinisterioPendiente !== '') || $filtroSinLiderPendiente || $filtroSinCelulaPendiente || ($filtroNombrePendiente !== '') || ($filtroLiderPendiente !== '') || (!$filtroSemanaRefEsDefaultPendiente && $filtroSemanaRefPendiente !== '');
 $hayFiltrosPendiente = $hayFiltrosPendiente || $verHistorialGanar || $historialAnioDistintoDelActual;
 
 $queryBasePendientes = [
     'url' => 'personas/ganar',
     'ministerio' => $filtroMinisterioPendiente,
-    'lider' => $filtroLiderPendiente,
     'sin_lider' => $filtroSinLiderPendiente ? '1' : '',
     'sin_celula' => $filtroSinCelulaPendiente ? '1' : '',
-    'buscar' => $filtroNombrePendiente,
     'semana_ref' => $verHistorialGanar ? '' : $filtroSemanaRefPendiente,
     'historial' => $historialPendiente,
 ];
@@ -89,7 +87,7 @@ $historialToggleUrl = $verHistorialGanar
 
 <div class="card" style="margin-bottom: 16px;">
     <div class="card-body">
-        <form method="GET" action="<?= PUBLIC_URL ?>" class="filters-inline" id="filtrosPendientesForm">
+        <form method="GET" action="<?= PUBLIC_URL ?>" class="ganar-filtros" id="filtrosPendientesForm">
             <input type="hidden" name="url" value="personas/ganar">
             <?php if (($filtroOrigenActual ?? '') !== ''): ?>
             <input type="hidden" name="origen" value="<?= htmlspecialchars((string)$filtroOrigenActual) ?>">
@@ -98,95 +96,72 @@ $historialToggleUrl = $verHistorialGanar
             <input type="hidden" name="historial" value="1">
             <?php endif; ?>
 
-            <?php
-            $lideresFiltradosPendiente = array_values(array_filter(($lideres ?? []), static function($lider) use ($filtroMinisterioPendiente) {
-                if ($filtroMinisterioPendiente === '') {
-                    return true;
-                }
+            <div class="ganar-filtros-row">
+                <div class="form-group ganar-filtros-campo">
+                    <label for="filtro_ministerio">Ministerio</label>
+                    <div class="ganar-filtros-control">
+                        <select id="filtro_ministerio" name="ministerio" class="form-control">
+                            <option value="" <?= $filtroMinisterioPendiente === '' ? 'selected' : '' ?>>Todos</option>
+                            <option value="0" <?= $filtroMinisterioPendiente === '0' ? 'selected' : '' ?>>Sin ministerio</option>
+                            <?php foreach (($ministerios ?? []) as $ministerio): ?>
+                            <option value="<?= (int)$ministerio['Id_Ministerio'] ?>" <?= $filtroMinisterioPendiente === (string)$ministerio['Id_Ministerio'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars((string)$ministerio['Nombre_Ministerio']) ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
 
-                $idMinisterioLider = isset($lider['Id_Ministerio']) ? trim((string)$lider['Id_Ministerio']) : '';
-                if ($filtroMinisterioPendiente === '0') {
-                    return $idMinisterioLider === '' || $idMinisterioLider === '0';
-                }
-
-                return $idMinisterioLider === $filtroMinisterioPendiente;
-            }));
-            ?>
-            <div class="form-group" style="min-width: 240px;">
-                <label for="filtro_ministerio" style="font-size: 14px; margin-bottom: 5px;">Filtrar por ministerio</label>
-                <select id="filtro_ministerio" name="ministerio" class="form-control">
-                    <option value="" <?= $filtroMinisterioPendiente === '' ? 'selected' : '' ?>>Todos</option>
-                    <option value="0" <?= $filtroMinisterioPendiente === '0' ? 'selected' : '' ?>>Sin ministerio</option>
-                    <?php foreach (($ministerios ?? []) as $ministerio): ?>
-                    <option value="<?= (int)$ministerio['Id_Ministerio'] ?>" <?= $filtroMinisterioPendiente === (string)$ministerio['Id_Ministerio'] ? 'selected' : '' ?>>
-                        <?= htmlspecialchars((string)$ministerio['Nombre_Ministerio']) ?>
-                    </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="form-group" style="min-width: 240px;">
-                <label for="filtro_lider" style="font-size: 14px; margin-bottom: 5px;">Filtrar por líder</label>
-                <select id="filtro_lider" name="lider" class="form-control">
-                    <option value="">Todos</option>
-                    <?php foreach ($lideresFiltradosPendiente as $lider): ?>
-                    <option value="<?= (int)$lider['Id_Persona'] ?>" data-ministerio="<?= htmlspecialchars((string)($lider['Id_Ministerio'] ?? '')) ?>" <?= $filtroLiderPendiente === (string)$lider['Id_Persona'] ? 'selected' : '' ?>>
-                        <?= htmlspecialchars(trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? ''))) ?>
-                    </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="form-group" style="min-width: 280px;">
-                <label for="filtro_buscar" style="font-size: 14px; margin-bottom: 5px;">Buscar persona</label>
-                <input type="text" id="filtro_buscar" name="buscar" class="form-control" placeholder="Nombre, cédula o teléfono" value="<?= htmlspecialchars($filtroNombrePendiente) ?>">
-                <small style="display:block;margin-top:4px;color:#637087;">Coincidencias en la base visible por tu rol (no filtra por semana). Solo personas <strong>nuevas</strong> (Almas ganadas).</small>
-            </div>
-
-            <div class="form-group" style="align-self:flex-end; margin-bottom: 8px; min-width: 250px;">
-                <label style="display:block; font-size: 14px; margin-bottom: 5px;">Filtros rápidos</label>
-                <label style="display:block; margin: 0 0 4px 0; font-weight: 500;">
-                    <input type="checkbox" name="sin_lider" value="1" <?= $filtroSinLiderPendiente ? 'checked' : '' ?>> Sin líder
-                </label>
-                <label style="display:block; margin: 0; font-weight: 500;">
-                    <input type="checkbox" name="sin_celula" value="1" <?= $filtroSinCelulaPendiente ? 'checked' : '' ?>> Sin célula
-                </label>
-            </div>
-
-            <?php if ($verHistorialGanar): ?>
-            <div class="form-group" style="min-width: 140px;">
-                <label for="filtro_anio_historial" style="font-size: 14px; margin-bottom: 5px;">Año</label>
-                <select id="filtro_anio_historial" name="anio" class="form-control">
-                    <?php for ($y = $anioActualCalendario + 1; $y >= 2020; $y--): ?>
-                    <option value="<?= $y ?>" <?= $filtroAnioHistorialPendiente === $y ? 'selected' : '' ?>><?= $y ?></option>
-                    <?php endfor; ?>
-                </select>
-            </div>
-            <?php else: ?>
-            <div class="form-group" style="min-width: 240px;">
-                <label for="filtro_semana_ref" style="font-size: 14px; margin-bottom: 5px;">Semana (por fecha de registro)</label>
-                <input type="date" id="filtro_semana_ref" name="semana_ref" class="form-control" value="<?= htmlspecialchars($filtroSemanaRefPendiente) ?>">
-                <?php if (($filtroFechaInicioActual ?? '') !== '' && ($filtroFechaFinActual ?? '') !== ''): ?>
-                <small style="display:block; margin-top:4px; color:#637087;">Del <?= htmlspecialchars((string)$filtroFechaInicioActual) ?> al <?= htmlspecialchars((string)$filtroFechaFinActual) ?> · Lun–Dom</small>
+                <?php if ($verHistorialGanar): ?>
+                <div class="form-group ganar-filtros-campo">
+                    <label for="filtro_anio_historial">Año</label>
+                    <div class="ganar-filtros-control">
+                        <select id="filtro_anio_historial" name="anio" class="form-control">
+                            <?php for ($y = $anioActualCalendario + 1; $y >= 2020; $y--): ?>
+                            <option value="<?= $y ?>" <?= $filtroAnioHistorialPendiente === $y ? 'selected' : '' ?>><?= $y ?></option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                </div>
+                <?php else: ?>
+                <div class="form-group ganar-filtros-campo">
+                    <label for="filtro_semana_ref">Semana (fecha de registro)</label>
+                    <div class="ganar-filtros-control">
+                        <input type="date" id="filtro_semana_ref" name="semana_ref" class="form-control" value="<?= htmlspecialchars($filtroSemanaRefPendiente) ?>">
+                    </div>
+                    <?php if (($filtroFechaInicioActual ?? '') !== '' && ($filtroFechaFinActual ?? '') !== ''): ?>
+                    <small class="ganar-filtros-hint">Del <?= htmlspecialchars((string)$filtroFechaInicioActual) ?> al <?= htmlspecialchars((string)$filtroFechaFinActual) ?> · Lun–Dom</small>
+                    <?php endif; ?>
+                </div>
                 <?php endif; ?>
-                <?php if ($filtroSemanaRefEsDefaultPendiente): ?>
-                <small style="display:block; margin-top:4px; color:#b45309;">Solo se muestran almas registradas esta semana. Las ya ubicadas en célula salen de pendientes; usa Historial para ver semanas anteriores.</small>
-                <?php endif; ?>
-            </div>
-            <?php endif; ?>
 
-            <div class="filters-actions" style="align-self:flex-end;">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-funnel"></i> Filtrar
-                </button>
-                <a href="<?= htmlspecialchars($historialToggleUrl) ?>" class="btn <?= $verHistorialGanar ? 'btn-secondary' : 'btn-info' ?>">
-                    <i class="bi bi-clock-history"></i> Historial
-                </a>
-                <?php if ($hayFiltrosPendiente): ?>
-                <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-secondary">
-                    <i class="bi bi-x-circle"></i> Limpiar
-                </a>
-                <?php endif; ?>
+                <div class="form-group ganar-filtros-rapidos">
+                    <span class="ganar-filtros-rapidos-label">Pendientes</span>
+                    <div class="ganar-filtros-control">
+                        <label class="ganar-filtro-chip">
+                            <input type="checkbox" name="sin_lider" value="1" <?= $filtroSinLiderPendiente ? 'checked' : '' ?>>
+                            Sin líder
+                        </label>
+                        <label class="ganar-filtro-chip">
+                            <input type="checkbox" name="sin_celula" value="1" <?= $filtroSinCelulaPendiente ? 'checked' : '' ?>>
+                            Sin célula
+                        </label>
+                    </div>
+                </div>
+
+                <div class="ganar-filtros-acciones">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-funnel"></i> Filtrar
+                    </button>
+                    <a href="<?= htmlspecialchars($historialToggleUrl) ?>" class="btn <?= $verHistorialGanar ? 'btn-secondary' : 'btn-info' ?>">
+                        <i class="bi bi-clock-history"></i> Historial
+                    </a>
+                    <?php if ($hayFiltrosPendiente): ?>
+                    <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-secondary">
+                        <i class="bi bi-x-circle"></i> Limpiar
+                    </a>
+                    <?php endif; ?>
+                </div>
             </div>
         </form>
     </div>
@@ -582,6 +557,99 @@ $historialToggleUrl = $verHistorialGanar
     border-color: #1f5ea8;
     color: #ffffff;
     box-shadow: 0 1px 3px rgba(20, 58, 101, 0.28);
+}
+
+.ganar-filtros-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 16px 20px;
+}
+
+.ganar-filtros-campo,
+.ganar-filtros-rapidos {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+}
+
+.ganar-filtros-campo {
+    flex: 1 1 200px;
+    max-width: 280px;
+}
+
+.ganar-filtros-campo label,
+.ganar-filtros-rapidos-label {
+    display: block;
+    height: 20px;
+    line-height: 20px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #2a4a73;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ganar-filtros-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 42px;
+}
+
+.ganar-filtros-hint {
+    display: block;
+    margin-top: 4px;
+    color: #637087;
+    font-size: 12px;
+    line-height: 1.3;
+}
+
+.ganar-filtros-rapidos {
+    flex: 1 1 220px;
+}
+
+.ganar-filtro-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    height: 42px;
+    padding: 0 14px;
+    border: 1px solid #d5e2f3;
+    border-radius: 999px;
+    background: #f8fbff;
+    font-weight: 500;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.ganar-filtros-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    padding-top: 26px;
+    min-height: 42px;
+}
+
+.ganar-filtros-acciones .btn {
+    min-height: 42px;
+}
+
+@media (max-width: 768px) {
+    .ganar-filtros-campo {
+        max-width: none;
+    }
+
+    .ganar-filtros-acciones {
+        margin-left: 0;
+        width: 100%;
+        padding-top: 0;
+    }
 }
 
 .proceso-tag {
@@ -1865,67 +1933,22 @@ $historialToggleUrl = $verHistorialGanar
 
 <script>
 (function() {
-    const ministerioSelect = document.getElementById('filtro_ministerio');
-    const liderSelect = document.getElementById('filtro_lider');
-    const semanaRefInput = document.getElementById('filtro_semana_ref');
     const filtrosForm = document.getElementById('filtrosPendientesForm');
-    if (!ministerioSelect || !liderSelect) {
+    if (!filtrosForm) {
         return;
     }
-
-    const lideresDisponibles = [
-        <?php foreach (($lideres ?? []) as $index => $lider): ?>
-        {
-            id: '<?= htmlspecialchars((string)($lider['Id_Persona'] ?? ''), ENT_QUOTES) ?>',
-            nombre: '<?= htmlspecialchars(trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? '')), ENT_QUOTES) ?>',
-            ministerio: '<?= htmlspecialchars(trim((string)($lider['Id_Ministerio'] ?? '')), ENT_QUOTES) ?>'
-        }<?= $index < count(($lideres ?? [])) - 1 ? ',' : '' ?>
-        <?php endforeach; ?>
-    ];
-
-    function refrescarFiltroLider() {
-        const ministerioSeleccionado = String(ministerioSelect.value || '').trim();
-        const liderSeleccionado = String(liderSelect.value || '').trim();
-        const lideresFiltrados = lideresDisponibles.filter(function(lider) {
-            const ministerioLider = String(lider.ministerio || '').trim();
-            if (ministerioSeleccionado === '') {
-                return true;
-            }
-            if (ministerioSeleccionado === '0') {
-                return !ministerioLider || ministerioLider === '0';
-            }
-            return ministerioLider === ministerioSeleccionado;
-        });
-
-        liderSelect.innerHTML = '';
-        const optionTodos = document.createElement('option');
-        optionTodos.value = '';
-        optionTodos.textContent = 'Todos';
-        liderSelect.appendChild(optionTodos);
-
-        lideresFiltrados.forEach(function(lider) {
-            const option = document.createElement('option');
-            option.value = lider.id;
-            option.textContent = lider.nombre;
-            option.setAttribute('data-ministerio', String(lider.ministerio || '').trim());
-            liderSelect.appendChild(option);
-        });
-
-        const existeSeleccion = Array.from(liderSelect.options).some(function(option) {
-            return option.value === liderSeleccionado;
-        });
-        liderSelect.value = existeSeleccion ? liderSeleccionado : '';
-    }
-
-    ministerioSelect.addEventListener('change', refrescarFiltroLider);
-
-    if (semanaRefInput && filtrosForm) {
+    const semanaRefInput = document.getElementById('filtro_semana_ref');
+    const anioSelect = document.getElementById('filtro_anio_historial');
+    if (semanaRefInput) {
         semanaRefInput.addEventListener('change', function() {
             filtrosForm.submit();
         });
     }
-
-    refrescarFiltroLider();
+    if (anioSelect) {
+        anioSelect.addEventListener('change', function() {
+            filtrosForm.submit();
+        });
+    }
 })();
 </script>
 

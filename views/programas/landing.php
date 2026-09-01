@@ -2,76 +2,136 @@
 require_once APP . '/Helpers/PermisosProgramasAccess.php';
 include VIEWS . '/layout/header.php';
 
-require_once APP . '/Helpers/ProgramasNavegacion.php';
-ProgramasNavegacion::incluirPartial(['modo' => 'hub']);
-
 $submodulosProgramas = is_array($submodulosProgramas ?? null) ? $submodulosProgramas : [];
-$resumenProgramas = is_array($resumenProgramas ?? null) ? $resumenProgramas : [];
+$lineaMenu = strtolower(trim((string)($_GET['linea'] ?? '')));
+if (!in_array($lineaMenu, ['universidad_vida', 'capacitacion_destino'], true)) {
+    $lineaMenu = '';
+}
+
+$clavesPermitidas = array_column($submodulosProgramas, 'clave');
+if ($lineaMenu !== '' && !in_array($lineaMenu, $clavesPermitidas, true)) {
+    $lineaMenu = '';
+}
+
+$submoduloActivo = null;
+if ($lineaMenu !== '') {
+    foreach ($submodulosProgramas as $sub) {
+        if ((string)($sub['clave'] ?? '') === $lineaMenu) {
+            $submoduloActivo = $sub;
+            break;
+        }
+    }
+}
+
+require_once APP . '/Helpers/ProgramasNavegacion.php';
+ProgramasNavegacion::incluirPartial([
+    'modo' => $submoduloActivo ? 'menu' : 'hub',
+    'linea' => $submoduloActivo ? $lineaMenu : '',
+]);
+
+$modulosLinea = [];
+if (is_array($submoduloActivo)) {
+    $catalogoModulos = [
+        [
+            'clave' => 'asistencias',
+            'label' => 'Asistencias',
+            'descripcion' => 'Registro y consulta de asistencia.',
+            'icono' => 'bi bi-calendar-check',
+            'href' => $submoduloActivo['asistencias_href'] ?? '',
+            'visible' => !empty($submoduloActivo['puede_asistencias']) && !empty($submoduloActivo['asistencias_href']),
+        ],
+        [
+            'clave' => 'dashboard',
+            'label' => 'Dashboard',
+            'descripcion' => 'Indicadores y reportes del programa.',
+            'icono' => 'bi bi-bar-chart-line',
+            'href' => $submoduloActivo['dashboard_href'] ?? '',
+            'visible' => !empty($submoduloActivo['puede_dashboard']) && !empty($submoduloActivo['dashboard_href']),
+        ],
+        [
+            'clave' => 'pagos',
+            'label' => 'Pagos',
+            'descripcion' => 'Pago total, abonos y recaudo.',
+            'icono' => 'bi bi-cash-coin',
+            'href' => $submoduloActivo['pagos_href'] ?? '',
+            'visible' => !empty($submoduloActivo['puede_pagos']) && !empty($submoduloActivo['pagos_href']),
+        ],
+        [
+            'clave' => 'formulario',
+            'label' => 'Formulario',
+            'descripcion' => 'Inscripción pública del programa.',
+            'icono' => 'bi bi-ui-checks',
+            'href' => $submoduloActivo['formulario_href'] ?? '',
+            'visible' => !empty($submoduloActivo['puede_formulario']) && !empty($submoduloActivo['formulario_href']),
+            'externa' => true,
+        ],
+        [
+            'clave' => 'material',
+            'label' => 'Material',
+            'descripcion' => 'Contenido y material de apoyo.',
+            'icono' => 'bi bi-journal-richtext',
+            'href' => $submoduloActivo['material_href'] ?? '',
+            'visible' => !empty($submoduloActivo['puede_material']) && !empty($submoduloActivo['material_href']),
+        ],
+    ];
+    foreach ($catalogoModulos as $mod) {
+        if (!empty($mod['visible'])) {
+            $modulosLinea[] = $mod;
+        }
+    }
+}
 ?>
 
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center; margin-bottom: 16px;">
     <div>
+        <?php if ($submoduloActivo): ?>
+        <h2 style="margin:0;"><?= htmlspecialchars((string)$submoduloActivo['titulo']) ?></h2>
+        <small style="color:#637087;">Elige el módulo que quieres abrir.</small>
+        <?php else: ?>
         <h2 style="margin:0;">Programas</h2>
-        <small style="color:#637087;">Solo aparecen los accesos que tu rol tiene permitidos. Los datos se limitan a personas vinculadas a tu usuario.</small>
+        <small style="color:#637087;">Entra a Universidad de la Vida o Capacitación Destino.</small>
+        <?php endif; ?>
     </div>
 </div>
 
-<?php if (!empty($submodulosProgramas)): ?>
-<div class="programas-resumen-dash card" style="margin-bottom:18px; padding:16px;">
-    <h3 style="margin:0 0 12px; font-size:1rem;">Resumen (tu alcance)</h3>
-    <div class="programas-resumen-grid">
-        <?php foreach ($submodulosProgramas as $sub):
-            $clave = (string)($sub['clave'] ?? '');
-            $total = (int)($resumenProgramas[$clave] ?? 0);
-        ?>
-        <div class="programas-resumen-item">
-            <span class="programas-resumen-label"><?= htmlspecialchars((string)($sub['titulo'] ?? '')) ?></span>
-            <strong class="programas-resumen-value"><?= $total ?></strong>
-            <span class="programas-resumen-hint">inscritos visibles</span>
-            <?php if (!empty($sub['puede_dashboard']) && !empty($sub['dashboard_href'])): ?>
-            <a href="<?= htmlspecialchars((string)$sub['dashboard_href'], ENT_QUOTES, 'UTF-8') ?>" class="programas-resumen-link">Dashboard</a>
-            <?php endif; ?>
+<?php if ($submoduloActivo): ?>
+<div class="programas-grid programas-grid--modulos">
+    <?php foreach ($modulosLinea as $modulo): ?>
+    <a href="<?= htmlspecialchars((string)$modulo['href'], ENT_QUOTES, 'UTF-8') ?>"
+       class="programas-card programas-card--link"
+       style="--programa-gradiente: <?= htmlspecialchars((string)($submoduloActivo['gradiente'] ?? 'linear-gradient(135deg, #1e4a89 0%, #3f73be 100%)'), ENT_QUOTES, 'UTF-8') ?>;"
+       <?= !empty($modulo['externa']) ? 'target="_blank" rel="noopener"' : '' ?>>
+        <div class="programas-card-head">
+            <span class="programas-card-icon"><i class="<?= htmlspecialchars((string)$modulo['icono']) ?>"></i></span>
         </div>
-        <?php endforeach; ?>
-    </div>
+        <h3><?= htmlspecialchars((string)$modulo['label']) ?></h3>
+        <p><?= htmlspecialchars((string)$modulo['descripcion']) ?></p>
+        <span class="programas-card-cta">Abrir<?= !empty($modulo['externa']) ? ' <i class="bi bi-box-arrow-up-right"></i>' : '' ?></span>
+    </a>
+    <?php endforeach; ?>
+</div>
+<?php if (empty($modulosLinea)): ?>
+<div class="alert alert-warning">
+    No tienes módulos activos en este programa. Revisa los permisos de Programas.
 </div>
 <?php endif; ?>
 
-<div class="programas-grid">
+<?php elseif (!empty($submodulosProgramas)): ?>
+<div class="programas-grid programas-grid--hub">
     <?php foreach ($submodulosProgramas as $submodulo): ?>
-    <article class="programas-card" style="--programa-gradiente: <?= htmlspecialchars((string)($submodulo['gradiente'] ?? 'linear-gradient(135deg, #1e4a89 0%, #3f73be 100%)'), ENT_QUOTES, 'UTF-8') ?>;">
+    <a href="<?= htmlspecialchars(PUBLIC_URL . '?url=programas&linea=' . rawurlencode((string)$submodulo['clave']), ENT_QUOTES, 'UTF-8') ?>"
+       class="programas-card programas-card--link programas-card--hub"
+       style="--programa-gradiente: <?= htmlspecialchars((string)($submodulo['gradiente'] ?? 'linear-gradient(135deg, #1e4a89 0%, #3f73be 100%)'), ENT_QUOTES, 'UTF-8') ?>;">
         <div class="programas-card-head">
             <span class="programas-card-icon"><i class="<?= htmlspecialchars((string)($submodulo['icono'] ?? 'bi bi-grid-1x2-fill')) ?>"></i></span>
         </div>
-
         <h3><?= htmlspecialchars((string)($submodulo['titulo'] ?? 'Submódulo')) ?></h3>
         <p><?= htmlspecialchars((string)($submodulo['descripcion'] ?? '')) ?></p>
-
-        <div class="programas-card-footer">
-            <?php if (!empty($submodulo['puede_consolidar']) && !empty($submodulo['href'])): ?>
-            <a href="<?= htmlspecialchars((string)$submodulo['href'], ENT_QUOTES, 'UTF-8') ?>" class="programas-chip">Consolidado</a>
-            <?php endif; ?>
-            <?php if (!empty($submodulo['puede_asistencias']) && !empty($submodulo['asistencias_href'])): ?>
-            <a href="<?= htmlspecialchars((string)$submodulo['asistencias_href'], ENT_QUOTES, 'UTF-8') ?>" class="programas-chip">Asistencias</a>
-            <?php endif; ?>
-            <?php if (!empty($submodulo['puede_dashboard']) && !empty($submodulo['dashboard_href'])): ?>
-            <a href="<?= htmlspecialchars((string)$submodulo['dashboard_href'], ENT_QUOTES, 'UTF-8') ?>" class="programas-chip">Dashboard</a>
-            <?php endif; ?>
-            <?php if (!empty($submodulo['puede_pagos']) && !empty($submodulo['pagos_href'])): ?>
-            <a href="<?= htmlspecialchars((string)$submodulo['pagos_href'], ENT_QUOTES, 'UTF-8') ?>" class="programas-chip">Pagos</a>
-            <?php endif; ?>
-            <?php if (!empty($submodulo['puede_formulario']) && !empty($submodulo['formulario_href'])): ?>
-            <a href="<?= htmlspecialchars((string)$submodulo['formulario_href'], ENT_QUOTES, 'UTF-8') ?>" class="programas-chip" target="_blank" rel="noopener">Formulario</a>
-            <?php endif; ?>
-            <?php if (!empty($submodulo['puede_material']) && !empty($submodulo['material_href'])): ?>
-            <a href="<?= htmlspecialchars((string)$submodulo['material_href'], ENT_QUOTES, 'UTF-8') ?>" class="programas-chip">Material</a>
-            <?php endif; ?>
-        </div>
-    </article>
+        <span class="programas-card-cta">Entrar</span>
+    </a>
     <?php endforeach; ?>
 </div>
-
-<?php if (empty($submodulosProgramas)): ?>
+<?php else: ?>
 <div class="alert alert-warning">
     No tienes ninguna línea de Programas activa. En <strong>Permisos → Programas → Acciones permitidas</strong> active al menos
     «Ver consolidado Universidad de la Vida» o «Ver consolidado Capacitación Destino», y las acciones que necesite (dashboard, pagos, formulario, etc.).
@@ -79,23 +139,20 @@ $resumenProgramas = is_array($resumenProgramas ?? null) ? $resumenProgramas : []
 <?php endif; ?>
 
 <style>
-.programas-resumen-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-.programas-resumen-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; }
-.programas-resumen-label { display: block; font-size: 13px; color: #64748b; }
-.programas-resumen-value { display: block; font-size: 1.6rem; color: #1e3a8a; margin: 4px 0; }
-.programas-resumen-hint { font-size: 12px; color: #94a3b8; }
-.programas-resumen-link { display: inline-block; margin-top: 8px; font-size: 13px; font-weight: 600; }
 .programas-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.programas-grid--hub { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); max-width: 920px; }
+.programas-grid--modulos { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .programas-card { position: relative; border-radius: 18px; padding: 20px; background: #fff; border: 1px solid #d7e3f4; box-shadow: 0 10px 26px rgba(22, 46, 79, 0.12); overflow: hidden; }
 .programas-card::before { content: ''; position: absolute; inset: 0; background: var(--programa-gradiente); opacity: .08; pointer-events: none; }
+.programas-card--link { display: block; text-decoration: none; color: inherit; transition: transform .15s, box-shadow .15s, border-color .15s; }
+.programas-card--link:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(22, 46, 79, 0.16); border-color: #93c5fd; }
+.programas-card--hub { min-height: 220px; padding: 28px 24px; }
 .programas-card-head { position: relative; z-index: 1; margin-bottom: 12px; }
 .programas-card-icon { width: 46px; height: 46px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.3rem; color: #fff; background: var(--programa-gradiente); }
-.programas-card h3, .programas-card p, .programas-card-footer { position: relative; z-index: 1; }
+.programas-card h3, .programas-card p, .programas-card-cta { position: relative; z-index: 1; }
 .programas-card h3 { margin: 0 0 8px; font-size: 1.12rem; }
-.programas-card p { margin: 0; color: #4d6281; line-height: 1.45; min-height: 44px; }
-.programas-card-footer { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
-.programas-chip { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #eef4ff; color: #1e4a89; font-size: 12px; font-weight: 600; text-decoration: none; border: 1px solid #c7d9f5; }
-.programas-chip:hover { background: #dbeafe; }
+.programas-card p { margin: 0; color: #4d6281; line-height: 1.45; }
+.programas-card-cta { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px; font-size: 0.85rem; font-weight: 700; color: #1e4a89; }
 </style>
 
 <?php require_once VIEWS . '/layout/footer.php'; ?>

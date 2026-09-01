@@ -252,7 +252,104 @@ class TallerPersonaSync {
 
     }
 
+    /**
+     * @param array<string, mixed> $json
+     * @return array<string, string>
+     */
+    public function jsonAPost(array $json): array {
+        $extras = is_array($json['_persona_extra'] ?? null) ? $json['_persona_extra'] : [];
+        return [
+            'persona_nombre' => trim((string)($json['persona_nombre'] ?? '')),
+            'persona_apellido' => trim((string)($json['persona_apellido'] ?? $extras['persona_apellido'] ?? '')),
+            'persona_documento' => (string)($json['persona_documento'] ?? ''),
+            'persona_tipo_documento' => (string)($json['persona_tipo_documento'] ?? ''),
+            'persona_fecha_nacimiento' => (string)($json['persona_fecha_nacimiento'] ?? ''),
+            'persona_edad' => (string)($json['persona_edad'] ?? ''),
+            'persona_telefono' => (string)($json['persona_telefono'] ?? ''),
+            'persona_email' => (string)($json['persona_email'] ?? ''),
+            'persona_direccion' => (string)($json['persona_direccion'] ?? ''),
+            'persona_estado_civil' => (string)($json['persona_estado_civil'] ?? $extras['estado_civil'] ?? ''),
+            'persona_ocupacion' => (string)($json['persona_ocupacion'] ?? $extras['ocupacion'] ?? ''),
+            'persona_lider' => (string)($json['persona_lider'] ?? $extras['persona_lider'] ?? ''),
+            'persona_ministerio' => (string)($json['persona_ministerio'] ?? $extras['persona_ministerio'] ?? ''),
+        ];
+    }
 
+    /**
+     * Crea o localiza la ficha a partir de los datos guardados en la inscripción.
+     *
+     * @param array<string, mixed> $json
+     */
+    public function asegurarPersonaDesdeJson(array $json, bool $esTourLevantate = false): int {
+        $post = $this->jsonAPost($json);
+        $resultado = $this->procesarDesdePost($post);
+        $idExistente = (int)($resultado['id_persona'] ?? 0);
+        if ($idExistente > 0) {
+            return $idExistente;
+        }
+
+        $documento = preg_replace('/\D+/', '', (string)($post['persona_documento'] ?? ''));
+        $telefono = preg_replace('/\D+/', '', (string)($post['persona_telefono'] ?? ''));
+        $email = strtolower(trim((string)($post['persona_email'] ?? '')));
+        $tipoDocumento = trim((string)($post['persona_tipo_documento'] ?? ''));
+        $existente = $this->buscarPersonaExistente($documento, $telefono, $email, $tipoDocumento);
+        $idBuscado = (int)($existente['Id_Persona'] ?? 0);
+        if ($idBuscado > 0) {
+            return $idBuscado;
+        }
+
+        if (trim((string)($post['persona_nombre'] ?? '')) === '') {
+            return 0;
+        }
+
+        return $this->crearPersonaDesdePost($post, $esTourLevantate);
+    }
+
+    /**
+     * Rellena en la ficha solo campos vacíos usando lo que escribió la persona en el taller.
+     *
+     * @param array<string, mixed> $json
+     */
+    public function completarCamposVaciosDesdeJson(int $idPersona, array $json): void {
+        if ($idPersona <= 0) {
+            return;
+        }
+        $persona = $this->personaModel->getById($idPersona);
+        if (!is_array($persona)) {
+            return;
+        }
+        $post = $this->jsonAPost($json);
+        $data = [];
+
+        $email = strtolower(trim((string)($post['persona_email'] ?? '')));
+        if ($email !== '' && $this->personaModel->tieneColumna('Email') && trim((string)($persona['Email'] ?? '')) === '') {
+            $data['Email'] = $email;
+        }
+        $direccion = trim((string)($post['persona_direccion'] ?? ''));
+        if ($direccion !== '' && $this->personaModel->tieneColumna('Direccion') && trim((string)($persona['Direccion'] ?? '')) === '') {
+            $data['Direccion'] = $direccion;
+        }
+        $telefono = preg_replace('/\D+/', '', (string)($post['persona_telefono'] ?? ''));
+        if ($telefono !== '' && trim((string)($persona['Telefono'] ?? '')) === '') {
+            $data['Telefono'] = $telefono;
+        }
+        $fechaNac = trim((string)($post['persona_fecha_nacimiento'] ?? ''));
+        if (
+            $fechaNac !== ''
+            && $this->personaModel->tieneColumna('Fecha_Nacimiento')
+            && (trim((string)($persona['Fecha_Nacimiento'] ?? '')) === '' || (string)($persona['Fecha_Nacimiento'] ?? '') === '0000-00-00')
+        ) {
+            $data['Fecha_Nacimiento'] = $fechaNac;
+        }
+
+        if ($data !== []) {
+            try {
+                $this->personaModel->update($idPersona, $data);
+            } catch (Throwable $e) {
+                error_log('TallerPersonaSync completar campos: ' . $e->getMessage());
+            }
+        }
+    }
 
     /**
 

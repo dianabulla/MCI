@@ -1,5 +1,5 @@
 <?php include VIEWS . '/layout/header.php'; ?>
-<link rel="stylesheet" href="<?= ASSETS_URL ?>/css/discipular-equipo.css?v=20260819g">
+<link rel="stylesheet" href="<?= ASSETS_URL ?>/css/discipular-equipo.css?v=20260828a">
 
 <?php
 $idMinisterioFiltro = (int)($id_ministerio_filtro ?? 0);
@@ -354,6 +354,25 @@ if ($generoEnUrl !== null && in_array($generoEnUrl, ['todos', 'hombres', 'mujere
         : 'todos';
 }
 
+$filtroLiderRaw = trim((string)($_GET['lider'] ?? ''));
+$filtroLiderGet = '';
+if ($filtroLiderRaw === '0') {
+    $filtroLiderGet = '0';
+} elseif ($filtroLiderRaw !== '' && ctype_digit($filtroLiderRaw) && (int)$filtroLiderRaw > 0) {
+    $filtroLiderGet = (string)((int)$filtroLiderRaw);
+}
+
+$filaPasaFiltroLider = static function (array $row) use ($filtroLiderGet): bool {
+    if ($filtroLiderGet === '') {
+        return true;
+    }
+    $idLiderFila = (int)($row['id_lider_actual'] ?? 0);
+    if ($filtroLiderGet === '0') {
+        return $idLiderFila <= 0;
+    }
+    return $idLiderFila === (int)$filtroLiderGet;
+};
+
 $labelsTabDiscipular = [
     'equipo_principal' => 'Equipo principal',
     'lideres_144' => 'Líderes de 144',
@@ -374,6 +393,9 @@ if ($buscarRetorno !== '') {
     $returnQueryDiscipular['buscar'] = $buscarRetorno;
 }
 $returnQueryDiscipular['genero'] = $filtroGeneroGet;
+if ($filtroLiderGet !== '') {
+    $returnQueryDiscipular['lider'] = $filtroLiderGet;
+}
 $coberturaRetorno = trim((string)($_GET['cobertura_principal'] ?? ''));
 if ($coberturaRetorno !== '') {
     $returnQueryDiscipular['cobertura_principal'] = $coberturaRetorno;
@@ -563,7 +585,7 @@ $mapearLiderazgoAFilaTabla = static function (array $liderRow) use ($normalizarG
     ];
 };
 
-$filaCumpleFiltrosGeneroBusqueda = static function (array $row) use ($filtroGeneroGet, $filaCoincideBusqueda, $tabActivo, $coberturaPrincipalActual, $hayBusquedaActiva): bool {
+$filaCumpleFiltrosGeneroBusqueda = static function (array $row) use ($filtroGeneroGet, $filaCoincideBusqueda, $tabActivo, $coberturaPrincipalActual, $hayBusquedaActiva, $filaPasaFiltroLider): bool {
     $generoRow = strtolower(trim((string)($row['genero'] ?? 'sin_genero')));
     $okGenero = $filtroGeneroGet === 'todos' || $generoRow === $filtroGeneroGet;
     $okBuscar = $filaCoincideBusqueda($row);
@@ -573,7 +595,7 @@ $filaCumpleFiltrosGeneroBusqueda = static function (array $row) use ($filtroGene
         $okCobertura = (string)($row['id_lider_actual'] ?? '0') === $coberturaPrincipalActual;
     }
 
-    return $okGenero && $okBuscar && $okCobertura;
+    return $okGenero && $okBuscar && $okCobertura && $filaPasaFiltroLider($row);
 };
 
 if ($vistaPastoralRedSoloLectura && in_array($tabActivo, ['lideres_144', 'lideres_celula'], true) && !$hayBusquedaActiva) {
@@ -599,7 +621,7 @@ if ($vistaPastoralRedSoloLectura && in_array($tabActivo, ['lideres_144', 'lidere
         return strcasecmp($na, $nb);
     });
 } else {
-$rowsTablaFiltradas = array_values(array_filter($rowsTabla, static function($row) use ($tabActivo, $filtroGeneroGet, $filaCoincideBusqueda, $coberturaPrincipalActual, $idsLideresPrincipalesCupo, $hayFiltroMinisterio, $idsLideres12CupoMinisterio, $vistaPastoralRedSoloLectura, $hayBusquedaActiva) {
+$rowsTablaFiltradas = array_values(array_filter($rowsTabla, static function($row) use ($tabActivo, $filtroGeneroGet, $filaCoincideBusqueda, $coberturaPrincipalActual, $idsLideresPrincipalesCupo, $hayFiltroMinisterio, $idsLideres12CupoMinisterio, $vistaPastoralRedSoloLectura, $hayBusquedaActiva, $filaPasaFiltroLider) {
     $okTab = true;
     if (!$hayBusquedaActiva) {
         if ($tabActivo === 'equipo_principal') {
@@ -630,7 +652,7 @@ $rowsTablaFiltradas = array_values(array_filter($rowsTabla, static function($row
         $okCobertura = (string)($row['id_lider_actual'] ?? '0') === $coberturaPrincipalActual;
     }
 
-    return $okTab && $okGenero && $okBuscar && $okCobertura;
+    return $okTab && $okGenero && $okBuscar && $okCobertura && $filaPasaFiltroLider($row);
 }));
 }
 
@@ -657,6 +679,9 @@ foreach ($rowsTabla as $filaEtapa) {
     }
     $generoEtapa = strtolower(trim((string)($filaEtapa['genero'] ?? 'sin_genero')));
     if ($filtroGeneroGet !== 'todos' && $generoEtapa !== $filtroGeneroGet) {
+        continue;
+    }
+    if (!$filaPasaFiltroLider($filaEtapa)) {
         continue;
     }
     if (!$filaCoincideBusqueda($filaEtapa)) {
@@ -1210,7 +1235,13 @@ $usarFilasCuposFijas144 = !$vistaPastoralRedSoloLectura
 $tabMuestraColumnaCupo = !$vistaPastoralRedSoloLectura || $tabActivo === 'equipo_principal';
 $tablaDiscipulosCompacta = ($tabActivo === 'discipulos');
 $tablaLideresPorMinisterio = !$tablaDiscipulosCompacta && !$tabMuestraColumnaCupo;
-$colspanTabla = ($tablaDiscipulosCompacta || $tablaLideresPorMinisterio) ? 6 : ($tabMuestraColumnaCupo ? 7 : 8);
+if ($tablaDiscipulosCompacta) {
+    $colspanTabla = 7;
+} elseif ($tablaLideresPorMinisterio) {
+    $colspanTabla = 6;
+} else {
+    $colspanTabla = $tabMuestraColumnaCupo ? 7 : 8;
+}
 if ($usarFilasCuposFijas144) {
     $personaPorLiderCupo144 = [];
     $rowsTablaPorId = [];
@@ -1348,7 +1379,7 @@ $totalKpiIzquierdo = $kpiTotalVista > 0 ? $kpiTotalVista : $totalPersonasMiniste
 $kpiIzquierdoHombres = $kpiTotalVista > 0 ? $kpiHombresVista : $totalPersonasMinisterioHombres;
 $kpiIzquierdoMujeres = $kpiTotalVista > 0 ? $kpiMujeresVista : $totalPersonasMinisterioMujeres;
 
-$buildEquipoUrl = static function(array $override = []) use ($idMinisterioFiltro, $tabActivo, $filtroGeneroGet, $buscarGet, $coberturaPrincipalActual, $vistaAvanzadaActiva, $etapaEscaleraFiltro, $generoRedActual) {
+$buildEquipoUrl = static function(array $override = []) use ($idMinisterioFiltro, $tabActivo, $filtroGeneroGet, $buscarGet, $coberturaPrincipalActual, $vistaAvanzadaActiva, $etapaEscaleraFiltro, $generoRedActual, $filtroLiderGet) {
     $params = [
         'url' => 'discipular/ministerios/equipo-principal',
         'tab' => $tabActivo,
@@ -1377,6 +1408,10 @@ $buildEquipoUrl = static function(array $override = []) use ($idMinisterioFiltro
 
     if ($generoRedActual !== '') {
         $params['genero_red'] = $generoRedActual;
+    }
+
+    if ($filtroLiderGet !== '') {
+        $params['lider'] = $filtroLiderGet;
     }
 
     foreach ($override as $k => $v) {
@@ -1780,17 +1815,69 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
             <?php if ($generoRedActual !== ''): ?>
             <input type="hidden" name="genero_red" value="<?= htmlspecialchars($generoRedActual) ?>">
             <?php endif; ?>
+            <input type="hidden" id="filtroGenero" name="genero" value="<?= htmlspecialchars($filtroGeneroGet) ?>">
+
+            <?php
+            $lideresOpcionesFiltro = [];
+            $haySinLiderEnLista = false;
+            foreach ($rowsTabla as $rowOptLider) {
+                if (!$hayBusquedaActiva) {
+                    $okTabOpt = true;
+                    if ($tabActivo === 'equipo_principal') {
+                        $idLiderOptTab = (int)($rowOptLider['id_lider_actual'] ?? 0);
+                        $okTabOpt = $idLiderOptTab > 0 && in_array($idLiderOptTab, $idsLideresPrincipalesCupo, true);
+                    } elseif ($tabActivo === 'lideres_144') {
+                        $okTabOpt = !empty($rowOptLider['es_lider_144']);
+                        if ($hayFiltroMinisterio) {
+                            $idSup144Opt = (int)($rowOptLider['id_lider_actual'] ?? 0);
+                            $okTabOpt = $okTabOpt && $idSup144Opt > 0 && in_array($idSup144Opt, $idsLideres12CupoMinisterio, true);
+                        }
+                    } elseif ($tabActivo === 'lideres_celula') {
+                        $okTabOpt = !empty($rowOptLider['es_lider_celula']);
+                    } elseif ($tabActivo === 'discipulos') {
+                        $okTabOpt = !empty($rowOptLider['es_discipulo']);
+                        if ($vistaPastoralRedSoloLectura) {
+                            $okTabOpt = $okTabOpt && empty($rowOptLider['es_lider_144']) && empty($rowOptLider['es_lider_celula']);
+                        }
+                    }
+                    if (!$okTabOpt) {
+                        continue;
+                    }
+                }
+                $generoOptLider = strtolower(trim((string)($rowOptLider['genero'] ?? 'sin_genero')));
+                if ($filtroGeneroGet !== 'todos' && $generoOptLider !== $filtroGeneroGet) {
+                    continue;
+                }
+                $idLiderOpt = (int)($rowOptLider['id_lider_actual'] ?? 0);
+                if ($idLiderOpt <= 0) {
+                    $haySinLiderEnLista = true;
+                    continue;
+                }
+                $nombreLiderOpt = trim((string)($rowOptLider['nombre_lider_actual'] ?? ''));
+                $lideresOpcionesFiltro[$idLiderOpt] = $nombreLiderOpt !== '' ? $nombreLiderOpt : ('Líder #' . $idLiderOpt);
+            }
+            if ($filtroLiderGet !== '' && $filtroLiderGet !== '0' && !isset($lideresOpcionesFiltro[(int)$filtroLiderGet])) {
+                $lideresOpcionesFiltro[(int)$filtroLiderGet] = 'Líder #' . $filtroLiderGet;
+            }
+            natcasesort($lideresOpcionesFiltro);
+            ?>
 
             <div class="equipo-filtro-genero" role="group" aria-label="Filtrar por género">
                 <a class="equipo-filtro-genero-btn<?= $filtroGeneroGet === 'todos' ? ' is-active' : '' ?>" href="<?= htmlspecialchars($buildEquipoUrl(['genero' => 'todos'])) ?>">Todos</a>
                 <a class="equipo-filtro-genero-btn<?= $filtroGeneroGet === 'hombres' ? ' is-active' : '' ?>" href="<?= htmlspecialchars($buildEquipoUrl(['genero' => 'hombres'])) ?>">Hombres</a>
                 <a class="equipo-filtro-genero-btn<?= $filtroGeneroGet === 'mujeres' ? ' is-active' : '' ?>" href="<?= htmlspecialchars($buildEquipoUrl(['genero' => 'mujeres'])) ?>">Mujeres</a>
             </div>
-            <select id="filtroGenero" name="genero" class="visually-hidden" tabindex="-1" aria-hidden="true">
-                <option value="todos" <?= $filtroGeneroGet === 'todos' ? 'selected' : '' ?>>Todos</option>
-                <option value="hombres" <?= $filtroGeneroGet === 'hombres' ? 'selected' : '' ?>>Hombres</option>
-                <option value="mujeres" <?= $filtroGeneroGet === 'mujeres' ? 'selected' : '' ?>>Mujeres</option>
-            </select>
+            <label class="equipo-filtro-lider">
+                <select id="filtroLider" name="lider" class="form-control form-control-sm equipo-filtro-lider-select" aria-label="Filtrar por líder">
+                    <option value="">Todos los líderes</option>
+                    <option value="0" <?= $filtroLiderGet === '0' ? 'selected' : '' ?>>Sin líder</option>
+                    <?php foreach ($lideresOpcionesFiltro as $idLiderOpt => $nombreLiderOpt): ?>
+                    <option value="<?= (int)$idLiderOpt ?>" <?= $filtroLiderGet === (string)$idLiderOpt ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($nombreLiderOpt) ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
             <input id="busquedaUniversal" name="buscar" class="form-control form-control-sm" type="search" value="<?= htmlspecialchars((string)($_GET['buscar'] ?? '')) ?>" placeholder="Escribe nombre o apellido… Enter busca en toda la red" autocomplete="off">
             <button type="submit" class="btn btn-sm btn-secondary">Buscar</button>
             <button
@@ -1877,6 +1964,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                     <th>Apellido</th>
                     <th>Cédula</th>
                     <th>Teléfono</th>
+                    <th class="lider-directo-col">Líder directo</th>
                     <th class="escalera-inline-col">Escalera rápida</th>
                     <th>Opciones</th>
                     <?php elseif (!empty($tablaLideresPorMinisterio)): ?>
@@ -2262,6 +2350,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                             data-cupos-disponibles="<?= $cuposDisponibles ?>"
                             data-search="<?= htmlspecialchars($textoBusqueda) ?>"
                             data-search-digits="<?= htmlspecialchars($digitosBusqueda) ?>"
+                            data-lider-id="<?= (int)$idLiderActualFila ?>"
                         >
                             <?php if (!empty($tablaDiscipulosCompacta)): ?>
                             <td data-label="Nombre">
@@ -2273,6 +2362,9 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                             <td data-label="Apellido"><?= htmlspecialchars($apellido !== '' ? $apellido : '-') ?></td>
                             <td data-label="Cédula"><?= htmlspecialchars($documento !== '' ? $documento : '-') ?></td>
                             <td data-label="Teléfono"><?= htmlspecialchars($telefono !== '' ? $telefono : '-') ?></td>
+                            <td class="lider-directo-col" data-label="Líder directo" title="<?= htmlspecialchars($nombreLiderActualFila) ?>">
+                                <?= htmlspecialchars($nombreLiderActualFila !== '' ? $nombreLiderActualFila : '—') ?>
+                            </td>
                             <td class="escalera-inline-col" data-label="Escalera rápida">
                                 <?php
                                     $asignadoALiderMinisterioFila = ((int)($row['id_lider_actual'] ?? 0) > 0) && ((int)($row['id_ministerio'] ?? 0) > 0);
@@ -3332,9 +3424,39 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
 }
 
 .equipo-filtros-row {
-    display: grid;
-    grid-template-columns: minmax(210px, auto) minmax(180px, 1fr) repeat(3, auto);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 10px;
+}
+
+.equipo-filtro-lider {
+    margin: 0;
+    flex: 0 1 240px;
+    min-width: 180px;
+    max-width: 280px;
+}
+
+.equipo-filtro-lider-select {
+    width: 100%;
+    height: 38px;
+    min-height: 38px;
+    padding: 0 10px;
+    box-sizing: border-box;
+}
+
+#busquedaUniversal {
+    flex: 1 1 220px;
+    min-width: 180px;
+    height: 38px;
+    min-height: 38px;
+    box-sizing: border-box;
+}
+
+.equipo-filtros-row .btn {
+    height: 38px;
+    min-height: 38px;
+    display: inline-flex;
     align-items: center;
 }
 
@@ -3427,6 +3549,15 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
 .table-container .data-table.tabla-discipulos-compacta {
     table-layout: auto !important;
     overflow: visible;
+}
+
+.tabla-discipulos-compacta th.lider-directo-col,
+.tabla-discipulos-compacta td.lider-directo-col {
+    max-width: 148px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
 }
 
 .tabla-discipulos-compacta th.escalera-inline-col,
@@ -3791,6 +3922,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     const filasCuposFijos = Array.from(document.querySelectorAll('.ministerios-equipo-table tbody tr[data-cupo-fijo="1"]'));
     const tabs = Array.from(document.querySelectorAll('.equipo-tab'));
     const filtroGenero = document.getElementById('filtroGenero');
+    const filtroLider = document.getElementById('filtroLider');
     const buscador = document.getElementById('busquedaUniversal');
     const resumen = document.getElementById('resumenFiltrado');
     const ministerioSelect = document.getElementById('ministerioSelect');
@@ -4275,6 +4407,13 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
             params.set('genero_red', generoRedActualPagina);
         }
 
+        const lider = opts.lider !== undefined
+            ? String(opts.lider)
+            : (filtroLider ? String(filtroLider.value || '') : '<?= htmlspecialchars($filtroLiderGet, ENT_QUOTES, 'UTF-8') ?>');
+        if (lider !== '') {
+            params.set('lider', lider);
+        }
+
         if (idMinisterioFiltroPagina && idMinisterioFiltroPagina !== '0') {
             params.set('id_ministerio', idMinisterioFiltroPagina);
         }
@@ -4459,6 +4598,10 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
             const digitosFila = String(fila.dataset.searchDigits || '');
 
             const okGenero = genero === 'todos' || genero === generoFila;
+            const liderFiltro = filtroLider ? String(filtroLider.value || '') : '';
+            const liderFila = String(fila.dataset.liderId || '0');
+            const okLider = liderFiltro === ''
+                || (liderFiltro === '0' ? (liderFila === '0' || liderFila === '') : liderFila === liderFiltro);
             const okTab = busquedaGlobal || coincideTab(fila, tabActual);
 
             const esCupoLibre = String(fila.dataset.cupoLibre || '0') === '1';
@@ -4466,7 +4609,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                 ? (texto === '')
                 : textoCoincideBusqueda(textoFila, digitosFila, texto, textoDigitos);
 
-            const mostrar = okGenero && okTab && okTexto;
+            const mostrar = okGenero && okTab && okTexto && okLider;
 
             fila.style.display = mostrar ? '' : 'none';
             if (mostrar) {
@@ -4512,9 +4655,9 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
         });
     });
 
-    if (filtroGenero) {
-        filtroGenero.addEventListener('change', function() {
-            irADiscipularEquipo({ genero: generoFiltroActual(), tab: tabActual });
+    if (filtroLider) {
+        filtroLider.addEventListener('change', function() {
+            irADiscipularEquipo({ lider: String(filtroLider.value || ''), tab: tabActual });
         });
     }
 
@@ -4606,7 +4749,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                 return;
             }
 
-            const lineas = ['sep=;', csvCeldaExcel('Nombre') + ';' + csvCeldaExcel('Apellido') + ';' + csvCeldaExcel('Cedula') + ';' + csvCeldaExcel('Telefono') + ';' + csvCeldaExcel('Peldano')];
+            const lineas = ['sep=;', csvCeldaExcel('Nombre') + ';' + csvCeldaExcel('Apellido') + ';' + csvCeldaExcel('Cedula') + ';' + csvCeldaExcel('Telefono') + ';' + csvCeldaExcel('Lider directo') + ';' + csvCeldaExcel('Peldano')];
             filas.forEach(function(tr) {
                 const celdas = tr.querySelectorAll('td');
                 const etapaFila = String(tr.dataset.etapa || '').toLowerCase();
@@ -4616,6 +4759,7 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
                     csvCeldaExcel(textoCeldaLimpia(celdas[1])),
                     csvCeldaExcel(textoCeldaLimpia(celdas[2])),
                     csvCeldaExcel(textoCeldaLimpia(celdas[3])),
+                    csvCeldaExcel(textoCeldaLimpia(celdas[4])),
                     csvCeldaExcel(peldano)
                 ].join(';'));
             });

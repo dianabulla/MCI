@@ -17,6 +17,14 @@ $puedeExportar = !empty($permisosTaller['exportar_excel']);
 $puedeGraficas = !empty($permisosTaller['ver_graficas']);
 $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
 $puedeRegistrarPago = !empty($permisosTaller['ver_respuestas']) || !empty($permisosTaller['editar']);
+$puedeEliminarInscripcion = !empty($permisosTaller['eliminar_inscripcion']);
+$puedeAsignarMinisterio = !empty($permisosTaller['asignar_ministerio']);
+$ministeriosAsignacion = is_array($ministerios_asignacion ?? null) ? $ministerios_asignacion : [];
+$abrirMinisterio = trim((string)($_GET['abrir_ministerio'] ?? ''));
+if ($abrirMinisterio === '' && (string)($_GET['abrir'] ?? '') === 'sin-ministerio') {
+    $abrirMinisterio = 'Sin ministerio asignado';
+}
+$idResaltar = (int)($_GET['resaltar'] ?? 0);
 $esPresentacionNinos = !empty($es_presentacion_ninos);
 $aceptaPago = true;
 $esTourLevantate = !empty($es_tour_levantate);
@@ -56,9 +64,9 @@ function taller_resp_valor(array $valores, string $clave): string {
     overflow: hidden;
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
-.taller-resp-item[open] {
-    border-color: #93c5fd;
-    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.1);
+.taller-resp-item.taller-resp-resaltado {
+    border-color: #15803d;
+    box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.25);
 }
 .taller-resp-item > summary {
     list-style: none;
@@ -203,9 +211,87 @@ function taller_resp_valor(array $valores, string $clave): string {
     border: 1px dashed #cbd5e1;
 }
 .taller-resp-resumen-ministerios {
-    margin-top: 28px;
-    padding-top: 24px;
-    border-top: 2px solid #e2e8f0;
+    margin: 0 0 22px;
+    padding: 16px 18px 18px;
+    border: 1px solid #dbeafe;
+    border-radius: 12px;
+    background: #f8fbff;
+}
+.taller-min-header {
+    display: grid;
+    grid-template-columns: 48px 1fr 110px auto;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 16px;
+    background: linear-gradient(180deg, #f8fbff 0%, #f1f5f9 100%);
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-bottom: 1px solid #e2e8f0;
+}
+.taller-min-header.taller-min-total {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.92rem;
+    background: #eff6ff;
+    border-top: 2px solid #bfdbfe;
+    border-bottom: none;
+    color: #0f172a;
+}
+.taller-min-header .col-total,
+.taller-min-acordeon .col-total {
+    text-align: center;
+    font-weight: 700;
+    color: #1e40af;
+}
+.taller-min-acordeon:last-child {
+    border-bottom: none;
+}
+.taller-min-acordeon > summary {
+    list-style: none;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: 48px 1fr 110px auto;
+    gap: 10px;
+    align-items: center;
+    padding: 12px 16px;
+    background: #fff;
+}
+.taller-min-acordeon > summary::-webkit-details-marker { display: none; }
+.taller-min-acordeon > summary:hover {
+    background: #eff6ff;
+}
+.taller-min-acordeon[open] > summary {
+    background: #dbeafe;
+}
+.taller-min-num {
+    color: #94a3b8;
+    font-weight: 700;
+}
+.taller-min-nombre {
+    font-weight: 600;
+    color: #0f172a;
+}
+.taller-min-hint {
+    font-size: 0.78rem;
+    color: #2563eb;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.taller-min-acordeon[open] .taller-min-hint::after {
+    content: ' Ocultar ▴';
+}
+.taller-min-acordeon:not([open]) .taller-min-hint::after {
+    content: ' Ver inscritos ▾';
+}
+.taller-min-lista {
+    padding: 10px 12px 14px;
+    background: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 .taller-resp-resumen-ministerios h3 {
     margin: 0 0 6px;
@@ -258,7 +344,8 @@ function taller_resp_valor(array $valores, string $clave): string {
     color: #0f172a;
     border-top: 2px solid #bfdbfe;
 }
-.taller-resp-item.hidden-by-filter { display: none; }
+.taller-resp-item.hidden-by-filter,
+.taller-min-acordeon.hidden-by-filter { display: none; }
 .taller-resp-pago {
     display: flex;
     flex-direction: column;
@@ -278,6 +365,21 @@ function taller_resp_valor(array $valores, string $clave): string {
     text-decoration: none;
     font-size: 1.1rem;
     box-shadow: 0 2px 6px rgba(15, 118, 110, 0.25);
+    border: 0;
+    cursor: pointer;
+    padding: 0;
+}
+.taller-resp-pago-btn.eliminar {
+    background: #b91c1c;
+    box-shadow: 0 2px 6px rgba(185, 28, 28, 0.25);
+}
+.taller-resp-pago-btn.eliminar:hover {
+    background: #991b1b;
+    color: #fff;
+}
+.taller-resp-pago-acciones {
+    display: flex;
+    gap: 6px;
 }
 .taller-resp-pago-btn:hover { background: #0d5f58; color: #fff; }
 .taller-resp-pago-status {
@@ -286,6 +388,58 @@ function taller_resp_valor(array $valores, string $clave): string {
     white-space: nowrap;
 }
 .taller-resp-pago-status.ok { color: #0f766e; font-weight: 600; }
+.taller-asig-min {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px dashed #cbd5e1;
+}
+.taller-asig-min span.taller-asig-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.taller-asig-min select {
+    min-width: 180px;
+    flex: 1 1 180px;
+    max-width: 280px;
+    height: 36px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 0 10px;
+    font-size: 0.88rem;
+    background: #fff;
+}
+.taller-asig-min button {
+    height: 36px;
+    border: 0;
+    border-radius: 8px;
+    padding: 0 14px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: #fff;
+}
+.taller-asig-min .btn-antiguo {
+    background: #475569;
+}
+.taller-asig-min .btn-antiguo:hover { background: #334155; }
+.taller-asig-min .btn-nuevo {
+    background: #15803d;
+}
+.taller-asig-min .btn-nuevo:hover { background: #166534; }
+.taller-asig-min .taller-asig-hint {
+    flex: 1 1 100%;
+    font-size: 0.78rem;
+    color: #64748b;
+    margin: 0;
+}
 .taller-resp-tabs {
     display: flex;
     gap: 8px;
@@ -422,9 +576,25 @@ unset($_SESSION['talleres_flash_ok'], $_SESSION['talleres_flash_error']);
 <?php if (!$soloGraficas): ?>
 <div id="panel-lista" class="taller-resp-panel <?= $tabActiva === 'lista' ? 'active' : '' ?>">
 <p class="text-muted">
-    <?= $total ?> respuesta(s). Use la lista para revisar cada inscripción; pulse una fila para ver todas las respuestas por bloque.
+    <?= $total ?> respuesta(s). Pulse un ministerio para ver sus inscritos y luego una persona para ver el detalle.
     Para análisis masivo, descargue Excel o consulte la pestaña Gráficas.
 </p>
+
+<?php
+$inscritosPorMinisterio = [];
+foreach ($listaRespuestas as $respGrupo) {
+    $claveMin = trim((string)($respGrupo['ministerio'] ?? ''));
+    if ($claveMin === '') {
+        $claveMin = 'Sin ministerio asignado';
+    }
+    $inscritosPorMinisterio[$claveMin][] = $respGrupo;
+}
+if ($resumenPorMinisterio === [] && $inscritosPorMinisterio !== []) {
+    foreach ($inscritosPorMinisterio as $nombreMin => $listaMin) {
+        $resumenPorMinisterio[] = ['ministerio' => $nombreMin, 'total' => count($listaMin)];
+    }
+}
+?>
 
 <?php if ($total > 0): ?>
 <div class="taller-resp-toolbar">
@@ -436,8 +606,39 @@ unset($_SESSION['talleres_flash_ok'], $_SESSION['talleres_flash_error']);
 <?php if (empty($listaRespuestas)): ?>
 <div class="taller-resp-empty">Aún no hay respuestas para este formulario.</div>
 <?php else: ?>
-<div class="taller-resp-list" id="lista-respuestas">
-    <?php foreach ($listaRespuestas as $idx => $resp): ?>
+<section class="taller-resp-resumen-ministerios" aria-label="Inscritos por ministerio">
+    <h3>Inscritos por ministerio</h3>
+    <p class="subtitulo">Haga clic en un ministerio para ver las personas inscritas. En «Sin ministerio asignado» puede asignar ministerio y si es antigua o nueva con un clic.</p>
+    <div class="table-container">
+        <div class="taller-min-header" aria-hidden="true">
+            <span>#</span>
+            <span>Ministerio</span>
+            <span class="col-total">Inscritos</span>
+            <span></span>
+        </div>
+        <div id="lista-respuestas">
+            <?php foreach ($resumenPorMinisterio as $i => $filaResumen): ?>
+                <?php
+                $nombreMinisterio = (string)($filaResumen['ministerio'] ?? 'Sin ministerio asignado');
+                $inscritosMin = $inscritosPorMinisterio[$nombreMinisterio] ?? [];
+                $totalMin = count($inscritosMin);
+                if ($totalMin === 0) {
+                    continue;
+                }
+                $esSinMinisterio = strcasecmp($nombreMinisterio, 'Sin ministerio asignado') === 0;
+                $abrirEsteGrupo = $abrirMinisterio !== ''
+                    ? strcasecmp($nombreMinisterio, $abrirMinisterio) === 0
+                    : $esSinMinisterio;
+                ?>
+                <details class="taller-min-acordeon"<?= $abrirEsteGrupo ? ' open' : '' ?>>
+                    <summary>
+                        <span class="taller-min-num"><?= (int)$i + 1 ?></span>
+                        <span class="taller-min-nombre"><?= htmlspecialchars($nombreMinisterio, ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="col-total"><?= $totalMin ?></span>
+                        <span class="taller-min-hint"></span>
+                    </summary>
+                    <div class="taller-min-lista taller-resp-list">
+                        <?php foreach ($inscritosMin as $idx => $resp): ?>
         <?php
         $valores = is_array($resp['valores'] ?? null) ? $resp['valores'] : [];
         $nombre = $esPresentacionNinos ? taller_resp_valor($valores, 'nino_nombre') : taller_resp_valor($valores, 'persona_nombre');
@@ -449,15 +650,16 @@ unset($_SESSION['talleres_flash_ok'], $_SESSION['talleres_flash_error']);
             ? taller_resp_valor($valores, 'padres_telefono')
             : taller_resp_valor($valores, 'persona_telefono');
         $fecha = substr((string)($resp['fecha'] ?? ''), 0, 16);
-        $busqueda = strtolower($nombre . ' ' . $documento . ' ' . $telefono);
+        $busqueda = strtolower($nombre . ' ' . $documento . ' ' . $telefono . ' ' . $nombreMinisterio);
         $firmaImg = (string)($resp['firma_imagen'] ?? '');
         $idRespuesta = (int)($resp['id'] ?? 0);
         $totalPagado = (float)($resp['total_pagado'] ?? 0);
         $documentosPresentacion = is_array($resp['documentos_presentacion'] ?? null) ? $resp['documentos_presentacion'] : [];
         $totalDocumentos = count($documentosPresentacion);
         $urlPago = $urlPagoBase . '&id_respuesta=' . $idRespuesta;
+        $esResaltado = $idResaltar > 0 && $idResaltar === $idRespuesta;
         ?>
-        <details class="taller-resp-item" data-busqueda="<?= htmlspecialchars($busqueda, ENT_QUOTES, 'UTF-8') ?>">
+        <details class="taller-resp-item<?= $esResaltado ? ' taller-resp-resaltado' : '' ?>" <?= $esResaltado ? 'open ' : '' ?>data-busqueda="<?= htmlspecialchars($busqueda, ENT_QUOTES, 'UTF-8') ?>" id="inscripcion-<?= (int)$idRespuesta ?>">
             <summary>
                 <span class="taller-resp-num">#<?= (int)($resp['id'] ?? ($idx + 1)) ?></span>
                 <div class="taller-resp-resumen">
@@ -489,15 +691,46 @@ unset($_SESSION['talleres_flash_ok'], $_SESSION['talleres_flash_error']);
                     </div>
                     <?php endif; ?>
                 </div>
-                <?php if ($puedeRegistrarPago && $aceptaPago): ?>
-                <div class="taller-resp-pago">
+                <?php if (($puedeRegistrarPago && $aceptaPago) || $puedeEliminarInscripcion): ?>
+                <div class="taller-resp-pago" onclick="event.stopPropagation();">
+                    <div class="taller-resp-pago-acciones">
+                    <?php if ($puedeRegistrarPago && $aceptaPago): ?>
                     <a class="taller-resp-pago-btn" href="<?= htmlspecialchars($urlPago, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" title="Registrar pago/abono" aria-label="Registrar pago">💳</a>
+                    <?php endif; ?>
+                    <?php if ($puedeEliminarInscripcion): ?>
+                    <form method="post" action="<?= PUBLIC_URL ?>?url=talleres/respuestas/eliminar" style="margin:0;" onsubmit="return confirm('¿Eliminar esta inscripción del taller? La persona no se borra de Personas, solo sale de este listado.');">
+                        <input type="hidden" name="id" value="<?= (int)$id ?>">
+                        <input type="hidden" name="id_respuesta" value="<?= (int)$idRespuesta ?>">
+                        <button type="submit" class="taller-resp-pago-btn eliminar" title="Eliminar inscripción" aria-label="Eliminar inscripción">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                    <?php endif; ?>
+                    </div>
+                    <?php if ($puedeRegistrarPago && $aceptaPago): ?>
                     <?php if ($totalPagado > 0): ?>
                     <span class="taller-resp-pago-status ok">$<?= number_format($totalPagado, 0, ',', '.') ?></span>
                     <?php else: ?>
                     <span class="taller-resp-pago-status">Sin pago</span>
                     <?php endif; ?>
+                    <?php endif; ?>
                 </div>
+                <?php endif; ?>
+                <?php if ($puedeAsignarMinisterio && !$esPresentacionNinos && $esSinMinisterio && $ministeriosAsignacion !== []): ?>
+                <form class="taller-asig-min" method="post" action="<?= PUBLIC_URL ?>?url=talleres/respuestas/asignar-ministerio" onclick="event.stopPropagation();" onsubmit="if(!this.id_ministerio.value){alert('Elija el ministerio.');return false;}">
+                    <input type="hidden" name="id" value="<?= (int)$id ?>">
+                    <input type="hidden" name="id_respuesta" value="<?= (int)$idRespuesta ?>">
+                    <span class="taller-asig-label">Asignar</span>
+                    <select name="id_ministerio" required aria-label="Ministerio">
+                        <option value="">Ministerio…</option>
+                        <?php foreach ($ministeriosAsignacion as $minAsig): ?>
+                        <option value="<?= (int)$minAsig['id'] ?>"><?= htmlspecialchars((string)$minAsig['nombre'], ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit" name="tipo_persona" value="antiguo" class="btn-antiguo" title="Guardar como persona antigua">Antiguo</button>
+                    <button type="submit" name="tipo_persona" value="nuevo" class="btn-nuevo" title="Guardar como persona nueva">Nuevo</button>
+                    <p class="taller-asig-hint">Se usan los datos de esta inscripción. Un clic define antiguo o nuevo.</p>
+                </form>
                 <?php endif; ?>
             </summary>
             <div class="taller-resp-body">
@@ -560,39 +793,17 @@ unset($_SESSION['talleres_flash_ok'], $_SESSION['talleres_flash_error']);
                 <?php endif; ?>
             </div>
         </details>
-    <?php endforeach; ?>
-</div>
-<?php endif; ?>
-
-<?php if ($esTourLevantate && $resumenPorMinisterio !== []): ?>
-<section class="taller-resp-resumen-ministerios" aria-label="Resumen por ministerio">
-    <h3>Resumen por ministerio</h3>
-    <p class="subtitulo">Cantidad de inscritas en el Tour Levántate y Resplandece agrupadas por ministerio.</p>
-    <div class="table-container">
-        <table class="taller-resp-tabla-ministerios">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Ministerio</th>
-                    <th class="col-total">Inscritas</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($resumenPorMinisterio as $i => $filaResumen): ?>
-                <tr>
-                    <td style="color:#94a3b8;font-weight:600;"><?= (int)$i + 1 ?></td>
-                    <td><?= htmlspecialchars((string)($filaResumen['ministerio'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                    <td class="col-total"><?= (int)($filaResumen['total'] ?? 0) ?></td>
-                </tr>
-                <?php endforeach; ?>
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="2">Total inscritas</td>
-                    <td class="col-total"><?= (int)$totalResumenMinisterios ?></td>
-                </tr>
-            </tfoot>
-        </table>
+                        <?php endforeach; ?>
+                    </div>
+                </details>
+            <?php endforeach; ?>
+        </div>
+        <div class="taller-min-header taller-min-total">
+            <span></span>
+            <span>Total inscritos</span>
+            <span class="col-total"><?= (int)$total ?></span>
+            <span></span>
+        </div>
     </div>
 </section>
 <?php endif; ?>
@@ -647,6 +858,7 @@ unset($_SESSION['talleres_flash_ok'], $_SESSION['talleres_flash_error']);
     const input = document.getElementById('filtro-respuestas');
     const contador = document.getElementById('filtro-contador');
     const items = document.querySelectorAll('.taller-resp-item');
+    const grupos = document.querySelectorAll('.taller-min-acordeon');
     if (!input || !items.length) return;
 
     function filtrar() {
@@ -657,12 +869,28 @@ unset($_SESSION['talleres_flash_ok'], $_SESSION['talleres_flash_error']);
             el.classList.toggle('hidden-by-filter', !ok);
             if (ok) visibles++;
         });
+        grupos.forEach(function(grupo) {
+            const hayVisibles = Array.from(grupo.querySelectorAll('.taller-resp-item')).some(function(el) {
+                return !el.classList.contains('hidden-by-filter');
+            });
+            grupo.classList.toggle('hidden-by-filter', q !== '' && !hayVisibles);
+            if (q !== '' && hayVisibles) {
+                grupo.open = true;
+            }
+        });
         if (contador) {
             contador.textContent = visibles + ' mostradas';
         }
     }
 
     input.addEventListener('input', filtrar);
+})();
+</script>
+<script>
+(function() {
+    const marcado = document.querySelector('.taller-resp-resaltado');
+    if (!marcado) return;
+    marcado.scrollIntoView({ behavior: 'smooth', block: 'center' });
 })();
 </script>
 

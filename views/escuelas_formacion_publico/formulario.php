@@ -550,10 +550,10 @@
 <div class="container">
     <?php
     $programaActualFormulario = trim((string)($programa_actual ?? ''));
-    $subtituloPrograma = 'Registra personas para Universidad de la Vida o Capacitación Destino.';
-    if ($programaActualFormulario === 'universidad_vida') {
-        $subtituloPrograma = 'Registra personas para Universidad de la Vida.';
-    } elseif ($programaActualFormulario === 'capacitacion_destino') {
+        $subtituloPrograma = 'Registra personas para Universidad de la Vida o Capacitación Destino.';
+        if ($programaActualFormulario === 'universidad_vida') {
+            $subtituloPrograma = 'Formulario único de inscripción a Universidad de la Vida, Un encuentro con Jesús.';
+        } elseif ($programaActualFormulario === 'capacitacion_destino') {
         $subtituloPrograma = 'Registra personas para Capacitación Destino.';
     }
     ?>
@@ -780,7 +780,7 @@
                                 <div style="display:flex; flex-direction:column; gap:10px; margin-top:6px;">
                                     <label style="display:flex; align-items:flex-start; gap:10px; font-weight:500; cursor:pointer;">
                                         <input type="radio" name="tipo_inscripcion_uv" value="universidad_vida" <?= $tipoInscripcionUv !== 'bautismo' ? 'checked' : '' ?> style="margin-top:3px;">
-                                        <span><strong>Universidad de la Vida</strong> — Un encuentro de jóvenes</span>
+                                        <span><strong>Universidad de la Vida</strong> — Un encuentro con Jesús</span>
                                     </label>
                                     <label style="display:flex; align-items:flex-start; gap:10px; font-weight:500; cursor:pointer;">
                                         <input type="radio" name="tipo_inscripcion_uv" value="bautismo" <?= $tipoInscripcionUv === 'bautismo' ? 'checked' : '' ?> style="margin-top:3px;">
@@ -823,7 +823,7 @@
                             <div style="display:flex; flex-direction:column; gap:10px; margin-top:6px;">
                                 <label style="display:flex; align-items:flex-start; gap:10px; font-weight:500; cursor:pointer;">
                                     <input type="radio" name="tipo_inscripcion_uv" value="universidad_vida" <?= $tipoInscripcionUv !== 'bautismo' ? 'checked' : '' ?> style="margin-top:3px;">
-                                    <span><strong>Universidad de la Vida</strong> — Un encuentro de jóvenes</span>
+                                    <span><strong>Universidad de la Vida</strong> — Un encuentro con Jesús</span>
                                 </label>
                                 <label style="display:flex; align-items:flex-start; gap:10px; font-weight:500; cursor:pointer;">
                                     <input type="radio" name="tipo_inscripcion_uv" value="bautismo" <?= $tipoInscripcionUv === 'bautismo' ? 'checked' : '' ?> style="margin-top:3px;">

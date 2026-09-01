@@ -13,7 +13,17 @@ $programa   = (string)($programa   ?? 'universidad_vida');
 $titulo     = (string)($titulo     ?? 'Inscritos Universidad de la Vida');
 $publicUrl  = rtrim((string)($public_url ?? PUBLIC_URL), '/');
 $urlPagosEscuelaUv = $publicUrl . '/?url=escuelas_formacion/pagos/consolidar';
-$returnUrlInscritos = '?url=escuelas_formacion/inscritos';
+if (!isset($returnUrlInscritos) || trim((string)$returnUrlInscritos) === '') {
+    $returnUrlInscritos = '?url=escuelas_formacion/inscritos';
+}
+require_once APP . '/Helpers/SegmentoRedUv.php';
+require_once APP . '/Helpers/PeriodoSemestre.php';
+$redAsistenciaListado = SegmentoRedUv::normalizarRed((string)($redAsistencia ?? ($_GET['red'] ?? '')));
+$periodoListado = PeriodoSemestre::resolver();
+$urlHubRedesListado = trim((string)($urlHubRedes ?? ''));
+$etiquetaRedListado = SegmentoRedUv::etiquetaCompleta($redAsistenciaListado);
+$modoRedAsistencia = $redAsistenciaListado !== '';
+$colspanTablaUv = $modoRedAsistencia ? 18 : 21;
 
 // Permisos: si la vista se incluye desde programas/asistencias puede no venir del controlador.
 $esAdminSesion = class_exists('AuthController') && AuthController::esAdministrador();
@@ -176,6 +186,8 @@ $puedeEliminar      = !empty($puede_eliminar);
 .li-table.li-table--compact td.col-pago { width: 10%; }
 .li-table.li-table--compact th.col-acciones,
 .li-table.li-table--compact td.col-acciones { width: 56px; }
+.li-table.li-table--modo-red.li-table--compact th.col-acciones,
+.li-table.li-table--modo-red.li-table--compact td.col-acciones { width: 96px; }
 .li-table.li-table--compact th[class*="col-pre-"],
 .li-table.li-table--compact th[class*="col-enc-"],
 .li-table.li-table--compact th[class*="col-post-"],
@@ -322,7 +334,8 @@ $puedeEliminar      = !empty($puede_eliminar);
 }
 .li-acc-btn i { font-size: 13px; line-height: 1; }
 .li-acc-btn:hover { background: #f1f7ff; border-color: #93c5fd; color: #1e40af; }
-.li-acc-btn--edit:hover { color: #1d4ed8; }
+.li-acc-btn--red { border-color: #bfdbfe; color: #1d4ed8; }
+.li-acc-btn--red:hover { background: #eff6ff; border-color: #60a5fa; color: #1e40af; }
 .li-acc-btn--del { border-color: #fecaca; color: #b91c1c; }
 .li-acc-btn--del:hover { background: #fef2f2; border-color: #f87171; color: #991b1b; }
 .li-acc-btn:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
@@ -413,7 +426,10 @@ $puedeEliminar      = !empty($puede_eliminar);
   <div class="li-head">
     <h2>📋 <?= htmlspecialchars($titulo) ?></h2>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <?php if ($programa === 'universidad_vida'): ?>
+      <?php if ($redAsistenciaListado !== '' && $urlHubRedesListado !== ''): ?>
+        <a href="<?= htmlspecialchars($urlHubRedesListado, ENT_QUOTES, 'UTF-8') ?>" class="btn-pago" style="text-decoration:none;background:#1e4a89;">← Cambiar red</a>
+      <?php endif; ?>
+      <?php if ($programa === 'universidad_vida' && !$modoRedAsistencia): ?>
         <a href="<?= htmlspecialchars($urlPagosEscuelaUv, ENT_QUOTES, 'UTF-8') ?>" class="btn-pago" style="text-decoration:none;background:#0f766e;">Ir a pagos</a>
       <?php endif; ?>
       <div id="li-estado" style="font-size:0.78rem;color:#64748b;">Cargando…</div>
@@ -427,6 +443,22 @@ $puedeEliminar      = !empty($puede_eliminar);
       <input type="search" id="li-buscar" placeholder="Nombre, cédula o teléfono…" autocomplete="off">
     </div>
     <div>
+      <label for="li-anio">Año</label>
+      <select id="li-anio">
+        <?php for ($y = (int)date('Y') + 1; $y >= 2023; $y--): ?>
+        <option value="<?= $y ?>" <?= $y === (int)$periodoListado['anio'] ? 'selected' : '' ?>><?= $y ?></option>
+        <?php endfor; ?>
+      </select>
+    </div>
+    <div>
+      <label for="li-semestre">Semestre</label>
+      <select id="li-semestre">
+        <option value="1" <?= (int)$periodoListado['semestre'] === 1 ? 'selected' : '' ?>>Semestre 1 (Ene – Jun)</option>
+        <option value="2" <?= (int)$periodoListado['semestre'] === 2 ? 'selected' : '' ?>>Semestre 2 (Jul – Dic)</option>
+      </select>
+    </div>
+    <?php if ($redAsistenciaListado === ''): ?>
+    <div>
       <label for="li-genero">Segmento / Género</label>
       <select id="li-genero">
         <option value="todos">Todos</option>
@@ -436,6 +468,10 @@ $puedeEliminar      = !empty($puede_eliminar);
         <option value="teens">Teens (9–13 años)</option>
       </select>
     </div>
+    <?php else: ?>
+    <input type="hidden" id="li-genero" value="todos">
+    <?php endif; ?>
+    <?php if (!$modoRedAsistencia): ?>
     <div>
       <label for="li-pago">Pago / Abono</label>
       <select id="li-pago">
@@ -444,6 +480,9 @@ $puedeEliminar      = !empty($puede_eliminar);
         <option value="sin_pago">Sin pago</option>
       </select>
     </div>
+    <?php else: ?>
+    <input type="hidden" id="li-pago" value="todos">
+    <?php endif; ?>
     <div>
       <label for="li-encuentro">Asistencia encuentro</label>
       <select id="li-encuentro" title="Filtra por asistencia a los días del encuentro (clases 5 y 6)">
@@ -501,6 +540,7 @@ $puedeEliminar      = !empty($puede_eliminar);
       <strong id="li-total-personas">–</strong>
       <span>Total inscritos</span>
     </div>
+    <?php if ($redAsistenciaListado === ''): ?>
     <div class="li-stat li-stat--filtro" id="li-stat-visible">
       <strong id="li-total-visibles">–</strong>
       <span id="li-label-visibles">Personas mostradas</span>
@@ -529,26 +569,31 @@ $puedeEliminar      = !empty($puede_eliminar);
         </span>
       </div>
     </div>
+    <?php endif; ?>
   </div>
   <p id="li-resumen-filtro" class="li-resumen-filtro" hidden></p>
 
   <!-- Tabla -->
   <div class="li-card" id="li-export-zone">
     <div class="li-table-wrap" id="li-table-wrap">
-      <table class="li-table" id="li-table">
+      <table class="li-table<?= $modoRedAsistencia ? ' li-table--modo-red' : '' ?>" id="li-table">
         <thead>
           <tr>
             <!-- Datos básicos -->
             <th class="t-left col-nombre" rowspan="2" style="min-width:160px;">Nombre</th>
+            <?php if (!$modoRedAsistencia): ?>
             <th class="col-genero" rowspan="2">Género</th>
             <th class="col-segmento" rowspan="2">Segmento</th>
+            <?php endif; ?>
             <th class="col-edad" rowspan="2">Edad</th>
             <th class="col-cedula" rowspan="2">Cédula</th>
             <th class="col-telefono" rowspan="2">Teléfono</th>
             <th class="t-left col-lider" rowspan="2" style="min-width:120px;">Líder</th>
             <th class="col-documentos" rowspan="2">Documentos</th>
+            <?php if (!$modoRedAsistencia): ?>
             <th class="col-pago" rowspan="2">Pago / Abono</th>
-            <th class="col-acciones" rowspan="2" style="min-width:64px;">Acciones</th>
+            <?php endif; ?>
+            <th class="col-acciones" rowspan="2" style="min-width:<?= $modoRedAsistencia ? '110' : '64' ?>px;">Acciones</th>
             <th colspan="4" class="th-pre col-pre-group col-pre-1 col-pre-2 col-pre-3 col-pre-4" data-col-group="pre">Clases Pre-Encuentro</th>
             <th colspan="2" class="th-enc col-enc-group col-enc-1 col-enc-2" data-col-group="enc">Encuentro</th>
             <th colspan="4" class="th-post col-post-group col-post-1 col-post-2 col-post-3 col-post-4" data-col-group="post">Clases Post-Encuentro</th>
@@ -568,7 +613,7 @@ $puedeEliminar      = !empty($puede_eliminar);
           </tr>
         </thead>
         <tbody id="li-tbody">
-          <tr><td colspan="21" class="li-loading">Cargando datos…</td></tr>
+          <tr><td colspan="<?= (int)$colspanTablaUv ?>" class="li-loading">Cargando datos…</td></tr>
         </tbody>
         <tfoot id="li-tfoot"></tfoot>
       </table>
@@ -580,15 +625,53 @@ $puedeEliminar      = !empty($puede_eliminar);
 <!-- Indicador de guardado -->
 <div class="li-save-indicator" id="li-save-indicator">✓ Guardado</div>
 
+<?php if ($modoRedAsistencia): ?>
+<div id="li-modal-cambio-red" class="segmento-modal" hidden>
+  <div class="modal-backdrop" id="li-modal-cambio-red-backdrop"></div>
+  <div class="modal-content" style="width:90%;max-width:420px;margin:80px auto;padding:20px;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:9999;position:relative;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid #eee;padding-bottom:12px;">
+      <h3 style="margin:0;">Cambiar de red</h3>
+      <button type="button" class="js-cerrar-modal-red" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;">×</button>
+    </div>
+    <div style="margin-bottom:16px;">
+      <p><strong>Persona:</strong> <span id="li-modal-red-nombre" style="color:#0a6e6a;">-</span></p>
+      <div style="margin-top:12px;">
+        <label for="li-modal-red-nueva" style="display:block;margin-bottom:6px;font-weight:500;color:#333;">Nueva red:</label>
+        <select id="li-modal-red-nueva" class="form-control" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;">
+          <option value="hombres_adultos">Hombres</option>
+          <option value="mujeres_adultas">Mujeres</option>
+          <option value="jovenes">Jóvenes</option>
+          <option value="teens">Teens</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:12px;border-top:1px solid #eee;">
+      <button type="button" class="btn btn-secondary js-cerrar-modal-red">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="li-btn-guardar-red">Guardar</button>
+    </div>
+  </div>
+</div>
+<style>
+.segmento-modal { position: fixed; inset: 0; z-index: 4000; }
+.segmento-modal[hidden] { display: none !important; }
+.segmento-modal:not([hidden]) { display: block; }
+.segmento-modal .modal-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); }
+</style>
+<?php endif; ?>
+
 <script>
 (function () {
   'use strict';
 
   const PROGRAMA   = <?= json_encode($programa) ?>;
+  const RED_BLOQUEADA = <?= json_encode($redAsistenciaListado) ?>;
+  const MODO_RED = <?= $modoRedAsistencia ? 'true' : 'false' ?>;
+  const COLSPAN_TABLA = <?= (int)$colspanTablaUv ?>;
   const BASE_URL   = <?= json_encode(rtrim($publicUrl, '/') . '/?url=') ?>;
   const ABONO_URL    = BASE_URL + 'escuelas_formacion/inscritos/abono-admin';
   const ASIST_URL    = BASE_URL + 'escuelas_formacion/inscritos/guardar-asistencia';
   const ELIMINAR_URL = BASE_URL + 'escuelas_formacion/inscritos/eliminar';
+  const CAMBIO_RED_URL = BASE_URL + 'home/cambiar-segmento-inscripcion';
   const DATOS_URL    = BASE_URL + 'escuelas_formacion/inscritos&ajax=1';
   const EDITAR_URL   = BASE_URL + 'personas/editar';
   const REGISTRO_UV_URL = BASE_URL + 'escuelas_formacion/registro-publico/universidad-vida';
@@ -608,13 +691,21 @@ $puedeEliminar      = !empty($puede_eliminar);
     setEstado('Cargando…');
     const buscar = document.getElementById('li-buscar').value.trim();
     const qs = buscar ? '&buscar=' + encodeURIComponent(buscar) : '';
+    const anio = document.getElementById('li-anio') ? document.getElementById('li-anio').value : '';
+    const semestre = document.getElementById('li-semestre') ? document.getElementById('li-semestre').value : '';
+    const periodoQs = (anio ? '&anio=' + encodeURIComponent(anio) : '') + (semestre ? '&semestre=' + encodeURIComponent(semestre) : '');
     try {
-      const resp = await fetch(DATOS_URL + qs + '&programa=' + encodeURIComponent(PROGRAMA), {
+      const resp = await fetch(DATOS_URL + qs + periodoQs + '&programa=' + encodeURIComponent(PROGRAMA), {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
       });
       const json = await resp.json();
       if (!json.success) throw new Error('Respuesta errónea del servidor');
       todosLosDatos = json.datos || [];
+      if (RED_BLOQUEADA) {
+        todosLosDatos = todosLosDatos.filter(function (p) {
+          return coincideRedBloqueada(p, RED_BLOQUEADA);
+        });
+      }
       poblarFiltroLideres();
       renderTabla();
       if (json.limite && todosLosDatos.length >= json.limite) {
@@ -623,7 +714,7 @@ $puedeEliminar      = !empty($puede_eliminar);
     } catch (e) {
       setEstado('Error al cargar datos');
       document.getElementById('li-tbody').innerHTML =
-        '<tr><td colspan="21" class="li-empty">No se pudieron cargar los datos. Intenta de nuevo.</td></tr>';
+        '<tr><td colspan="' + COLSPAN_TABLA + '" class="li-empty">No se pudieron cargar los datos. Intenta de nuevo.</td></tr>';
     }
   }
 
@@ -661,6 +752,15 @@ $puedeEliminar      = !empty($puede_eliminar);
     const g = normalizar(p.Genero || '');
     if (g.includes('joven')) return 'jovenes';
     return 'otros';
+  }
+
+  function coincideRedBloqueada(p, red) {
+    const segmento = resolverSegmento(p);
+    if (red === 'hombres') return segmento === 'hombres_adultos';
+    if (red === 'mujeres') return segmento === 'mujeres_adultas';
+    if (red === 'jovenes') return segmento === 'jovenes';
+    if (red === 'teens') return segmento === 'teens';
+    return true;
   }
 
   function coincideFiltroSegmento(p, filtroGenero) {
@@ -711,7 +811,23 @@ $puedeEliminar      = !empty($puede_eliminar);
       }
 
       return coincideFiltroSegmento(p, genero);
-    });
+    }).sort(ordenarPorLiderLuegoNombre);
+  }
+
+  function claveLiderOrden(p) {
+    const lider = normalizar((p.Lider || '').trim());
+    if (lider === '' || lider === '-') {
+      return '\uffff';
+    }
+    return lider;
+  }
+
+  function ordenarPorLiderLuegoNombre(a, b) {
+    const porLider = claveLiderOrden(a).localeCompare(claveLiderOrden(b), 'es', { sensitivity: 'base' });
+    if (porLider !== 0) {
+      return porLider;
+    }
+    return normalizar(a.Nombre || '').localeCompare(normalizar(b.Nombre || ''), 'es', { sensitivity: 'base' });
   }
 
   function normalizar(s) {
@@ -900,47 +1016,57 @@ $puedeEliminar      = !empty($puede_eliminar);
     const visibles = filas.length;
     const filtrosActivos = hayFiltrosActivos();
 
-    document.getElementById('li-total-personas').textContent = String(total);
-    document.getElementById('li-total-visibles').textContent = String(visibles);
+    const elTotalPersonas = document.getElementById('li-total-personas');
+    if (elTotalPersonas) {
+      elTotalPersonas.textContent = String(total);
+    }
+
+    const elTotalVisibles = document.getElementById('li-total-visibles');
+    if (elTotalVisibles) {
+      elTotalVisibles.textContent = String(visibles);
+    }
 
     const statVisible = document.getElementById('li-stat-visible');
     const labelVisible = document.getElementById('li-label-visibles');
     const subVisible = document.getElementById('li-sub-visibles');
 
-    if (filtrosActivos) {
-      statVisible.classList.add('is-active');
-      labelVisible.textContent = 'Personas con filtro';
-      subVisible.textContent = visibles === total
-        ? 'Coincide con el total'
-        : ('de ' + total + ' inscritos');
-      subVisible.hidden = false;
-    } else {
-      statVisible.classList.remove('is-active');
-      labelVisible.textContent = 'Personas mostradas';
-      subVisible.textContent = 'Sin filtros activos';
-      subVisible.hidden = false;
+    if (statVisible && labelVisible && subVisible) {
+      if (filtrosActivos) {
+        statVisible.classList.add('is-active');
+        labelVisible.textContent = 'Personas con filtro';
+        subVisible.textContent = visibles === total
+          ? 'Coincide con el total'
+          : ('de ' + total + ' inscritos');
+        subVisible.hidden = false;
+      } else {
+        statVisible.classList.remove('is-active');
+        labelVisible.textContent = 'Personas mostradas';
+        subVisible.textContent = 'Sin filtros activos';
+        subVisible.hidden = false;
+      }
     }
 
     const pagadosGlobal = contarConPago(todosLosDatos);
     const pagadosVista = contarConPago(filas);
-    const sinPagoGlobal = contarSinPago(todosLosDatos);
     const sinPagoVista = contarSinPago(filas);
 
     const elPagados = document.getElementById('li-total-pagados');
     const labelPagados = document.getElementById('li-label-pagados');
     const subPagados = document.getElementById('li-sub-pagados');
 
-    if (filtrosActivos) {
-      elPagados.textContent = String(pagadosVista);
-      labelPagados.textContent = 'Con pago (filtro)';
-      subPagados.textContent = pagadosVista === pagadosGlobal
-        ? 'en esta vista'
-        : ('de ' + pagadosGlobal + ' en total');
-      subPagados.hidden = false;
-    } else {
-      elPagados.textContent = String(pagadosGlobal);
-      labelPagados.textContent = 'Con pago';
-      subPagados.hidden = true;
+    if (elPagados && labelPagados && subPagados) {
+      if (filtrosActivos) {
+        elPagados.textContent = String(pagadosVista);
+        labelPagados.textContent = 'Con pago (filtro)';
+        subPagados.textContent = pagadosVista === pagadosGlobal
+          ? 'en esta vista'
+          : ('de ' + pagadosGlobal + ' en total');
+        subPagados.hidden = false;
+      } else {
+        elPagados.textContent = String(pagadosGlobal);
+        labelPagados.textContent = 'Con pago';
+        subPagados.hidden = true;
+      }
     }
 
     actualizarEncuentroCard(filas);
@@ -985,7 +1111,7 @@ $puedeEliminar      = !empty($puede_eliminar);
     actualizarEstadoCarga(filas);
 
     if (filas.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="21" class="li-empty">Sin resultados para este filtro.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="' + COLSPAN_TABLA + '" class="li-empty">Sin resultados para este filtro.</td></tr>';
       return;
     }
 
@@ -997,14 +1123,13 @@ $puedeEliminar      = !empty($puede_eliminar);
       // Datos básicos
       tr.innerHTML = `
         <td class="t-left col-nombre"><strong>${esc(p.Nombre)}</strong></td>
-        <td class="col-genero">${badgeGenero(p.Genero)}</td>
-        <td class="col-segmento">${badgeSegmento(p)}</td>
+        ${MODO_RED ? '' : `<td class="col-genero">${badgeGenero(p.Genero)}</td><td class="col-segmento">${badgeSegmento(p)}</td>`}
         <td class="col-edad">${esc(p.Edad || '–')}</td>
         <td class="col-cedula"><span style="font-family:monospace;font-size:0.78rem;">${esc(p.Cedula || '–')}</span></td>
         <td class="col-telefono">${esc(p.Telefono || '–')}</td>
         <td class="t-left col-lider" style="color:#475569;">${esc(p.Lider || '–')}</td>
         <td class="col-documentos">${celdaDocumentos(p)}</td>
-        <td class="col-pago">${btnPago(p)}</td>
+        ${MODO_RED ? '' : `<td class="col-pago">${btnPago(p)}</td>`}
         <td class="col-acciones">${btnAcciones(p)}</td>
       `;
 
@@ -1132,6 +1257,20 @@ $puedeEliminar      = !empty($puede_eliminar);
       } else {
         html += '<button type="button" class="li-acc-btn li-acc-btn--edit" disabled title="Sin registro para editar" aria-label="Editar">'
           + '<i class="bi bi-pencil-square" aria-hidden="true"></i></button>';
+      }
+
+      if (MODO_RED) {
+        if (idInscripcion > 0) {
+          html += '<button type="button" class="li-acc-btn li-acc-btn--red js-li-cambio-red"'
+            + ' data-id-inscripcion="' + idInscripcion + '"'
+            + ' data-nombre="' + nombre + '"'
+            + ' data-segmento-actual="' + esc(resolverSegmento(p)) + '"'
+            + ' title="Cambiar de red" aria-label="Cambiar de red">'
+            + '<i class="bi bi-arrow-left-right" aria-hidden="true"></i></button>';
+        } else {
+          html += '<button type="button" class="li-acc-btn li-acc-btn--red" disabled title="Inscripción inválida" aria-label="Cambiar de red">'
+            + '<i class="bi bi-arrow-left-right" aria-hidden="true"></i></button>';
+        }
       }
     }
 
@@ -1290,8 +1429,10 @@ $puedeEliminar      = !empty($puede_eliminar);
     clearTimeout(searchTimer);
     searchTimer = setTimeout(renderTabla, 280);
   });
-  document.getElementById('li-genero').addEventListener('change', renderTabla);
-  document.getElementById('li-pago').addEventListener('change', renderTabla);
+  document.getElementById('li-genero')?.addEventListener('change', renderTabla);
+  document.getElementById('li-anio')?.addEventListener('change', cargarDatos);
+  document.getElementById('li-semestre')?.addEventListener('change', cargarDatos);
+  document.getElementById('li-pago')?.addEventListener('change', renderTabla);
   document.getElementById('li-encuentro')?.addEventListener('change', renderTabla);
   document.getElementById('li-bautismo')?.addEventListener('change', renderTabla);
   const selectLider = document.getElementById('li-lider');
@@ -1329,7 +1470,10 @@ $puedeEliminar      = !empty($puede_eliminar);
     { id: 'post-3', label: 'Post-encuentro — C3', grupo: 'Clases post-encuentro' },
     { id: 'post-4', label: 'Post-encuentro — C4', grupo: 'Clases post-encuentro' },
     { id: 'bautismo', label: 'Bautismo', grupo: 'Consolidar' }
-  ];
+  ].filter(function (col) {
+    if (!MODO_RED) return true;
+    return col.id !== 'genero' && col.id !== 'segmento' && col.id !== 'pago';
+  });
 
   const columnasVisibles = {};
   COLUMNAS_DEF.forEach(function (col) {
@@ -1493,6 +1637,11 @@ $puedeEliminar      = !empty($puede_eliminar);
   }
 
   document.getElementById('li-tbody').addEventListener('click', (ev) => {
+    const btnRed = ev.target.closest('.js-li-cambio-red');
+    if (btnRed) {
+      abrirModalCambioRed(btnRed);
+      return;
+    }
     const btn = ev.target.closest('.js-li-eliminar');
     if (!btn) return;
     const idInscripcion = Number(btn.dataset.idInscripcion || 0);
@@ -1501,6 +1650,84 @@ $puedeEliminar      = !empty($puede_eliminar);
       eliminarInscripcion(idInscripcion, nombre);
     }
   });
+
+  let idInscripcionCambioRed = 0;
+  const modalCambioRed = document.getElementById('li-modal-cambio-red');
+  const modalRedNombre = document.getElementById('li-modal-red-nombre');
+  const modalRedNueva = document.getElementById('li-modal-red-nueva');
+  const btnGuardarRed = document.getElementById('li-btn-guardar-red');
+
+  function cerrarModalCambioRed() {
+    if (modalCambioRed) {
+      modalCambioRed.setAttribute('hidden', 'hidden');
+    }
+    idInscripcionCambioRed = 0;
+  }
+
+  function abrirModalCambioRed(btn) {
+    if (!modalCambioRed) return;
+    idInscripcionCambioRed = Number(btn.dataset.idInscripcion || 0);
+    if (modalRedNombre) {
+      modalRedNombre.textContent = btn.dataset.nombre || '-';
+    }
+    if (modalRedNueva) {
+      const actual = String(btn.dataset.segmentoActual || '');
+      modalRedNueva.value = ['hombres_adultos', 'mujeres_adultas', 'jovenes', 'teens'].includes(actual)
+        ? actual
+        : 'hombres_adultos';
+    }
+    modalCambioRed.removeAttribute('hidden');
+  }
+
+  if (modalCambioRed) {
+    modalCambioRed.querySelectorAll('.js-cerrar-modal-red, .modal-backdrop').forEach(function (el) {
+      el.addEventListener('click', cerrarModalCambioRed);
+    });
+  }
+
+  if (btnGuardarRed) {
+    btnGuardarRed.addEventListener('click', async function () {
+      if (idInscripcionCambioRed <= 0) {
+        alert('Inscripción inválida');
+        return;
+      }
+      const segmentoNuevo = modalRedNueva ? String(modalRedNueva.value || '') : '';
+      if (!segmentoNuevo) {
+        alert('Selecciona una red');
+        return;
+      }
+
+      btnGuardarRed.disabled = true;
+      const fd = new FormData();
+      fd.append('id_inscripcion', String(idInscripcionCambioRed));
+      fd.append('segmento_nuevo', segmentoNuevo);
+
+      try {
+        const resp = await fetch(CAMBIO_RED_URL, {
+          method: 'POST',
+          body: fd,
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const raw = await resp.text();
+        let data = null;
+        try {
+          data = JSON.parse(raw);
+        } catch (e) {
+          throw new Error('El servidor devolvió una respuesta inválida.');
+        }
+        if (!resp.ok || !data.ok) {
+          throw new Error((data && data.error) || 'No se pudo cambiar de red');
+        }
+        cerrarModalCambioRed();
+        mostrarIndicador('Red actualizada', false);
+        await cargarDatos();
+      } catch (e) {
+        alert(e.message || 'Error al cambiar de red');
+      } finally {
+        btnGuardarRed.disabled = false;
+      }
+    });
+  }
 
   function etiquetaSegmentoExport(p) {
     const seg = resolverSegmento(p);

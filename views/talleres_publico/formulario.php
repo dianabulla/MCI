@@ -900,9 +900,7 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
             </div>
             <?php endif; ?>
 
-            <?php if ($esTourLevantate): ?>
-            <div id="panel-ya-inscrito-tour" class="persona-aviso" style="display:none;background:#fef3c7;border-color:#fcd34d;color:#92400e;margin-top:12px;"></div>
-            <?php endif; ?>
+            <div id="panel-ya-inscrito-taller" class="persona-aviso" style="display:none;background:#fef3c7;border-color:#fcd34d;color:#92400e;margin-top:12px;"></div>
 
             <button type="submit" class="btn btn-primary w-100" id="btn-enviar-formulario-taller" style="background:#325fa9;border-color:#325fa9;padding:12px;margin-top:12px;">
 
@@ -926,7 +924,7 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
 
     const urlBuscar = <?= json_encode($urlBuscarPersona) ?>;
 
-    const slugFormularioTour = <?= $esTourLevantate ? json_encode($slug) : 'null' ?>;
+    const slugFormulario = <?= json_encode($slug) ?>;
 
     const btnBuscar = document.getElementById('btn-buscar-persona');
 
@@ -938,6 +936,12 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
 
     const msg = document.getElementById('buscar-persona-msg');
 
+    const panelYaInscrito = document.getElementById('panel-ya-inscrito-taller');
+
+    const btnEnviarTaller = document.getElementById('btn-enviar-formulario-taller');
+
+    const formTallerPublico = document.getElementById('form-taller-publico');
+
     const MIN_DOC_BUSQUEDA = 5;
 
     const MIN_TEL_BUSQUEDA = 9;
@@ -945,6 +949,36 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
     let buscarPersonaSeq = 0;
 
     let buscarPersonaTimer = null;
+
+    let yaInscritoBloqueado = false;
+
+    function marcarYaInscritoTaller(mensaje) {
+        const bloqueado = String(mensaje || '').trim() !== '';
+        yaInscritoBloqueado = bloqueado;
+        if (panelYaInscrito) {
+            panelYaInscrito.style.display = bloqueado ? '' : 'none';
+            panelYaInscrito.textContent = bloqueado ? mensaje : '';
+        }
+        if (btnEnviarTaller) {
+            btnEnviarTaller.disabled = bloqueado;
+            btnEnviarTaller.style.opacity = bloqueado ? '0.65' : '';
+        }
+    }
+
+    window.marcarYaInscritoTaller = marcarYaInscritoTaller;
+    window.marcarYaInscritoTour = marcarYaInscritoTaller;
+
+    if (formTallerPublico) {
+        formTallerPublico.addEventListener('submit', function(e) {
+            if (!yaInscritoBloqueado) {
+                return;
+            }
+            e.preventDefault();
+            alert(panelYaInscrito && panelYaInscrito.textContent
+                ? panelYaInscrito.textContent
+                : 'Ya está inscrito(a) en este taller. No puede registrarse otra vez.');
+        });
+    }
 
 
 
@@ -1062,9 +1096,9 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
 
         }
 
-        if (slugFormularioTour) {
+        if (slugFormulario) {
 
-            params.set('slug', slugFormularioTour);
+            params.set('slug', slugFormulario);
 
         }
 
@@ -1088,13 +1122,9 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
 
                 if (data.ya_inscrito) {
 
-                    if (typeof marcarYaInscritoTour === 'function') {
+                    marcarYaInscritoTaller(data.mensaje || 'Ya está inscrito(a) en este taller.');
 
-                        marcarYaInscritoTour(data.mensaje || 'Esta cédula ya está inscrita.');
-
-                    }
-
-                    if (msg) msg.textContent = data.mensaje || 'Ya inscrita.';
+                    if (msg) msg.textContent = data.mensaje || 'Ya inscrito(a).';
 
                     if (data.ok && data.persona) {
 
@@ -1106,11 +1136,7 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
 
                 }
 
-                if (typeof marcarYaInscritoTour === 'function') {
-
-                    marcarYaInscritoTour('');
-
-                }
+                marcarYaInscritoTaller('');
 
 
 
@@ -1566,20 +1592,6 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
     const radiosLibro = document.querySelectorAll('input[name="ya_tiene_el_libro"]');
     const radiosComprar = document.querySelectorAll('input[name="desea_comprar_libro"]');
     const form = document.getElementById('form-taller-publico');
-    const panelYaInscrito = document.getElementById('panel-ya-inscrito-tour');
-    const btnEnviar = document.getElementById('btn-enviar-formulario-taller');
-
-    window.marcarYaInscritoTour = function(mensaje) {
-        const bloqueado = String(mensaje || '').trim() !== '';
-        if (panelYaInscrito) {
-            panelYaInscrito.style.display = bloqueado ? '' : 'none';
-            panelYaInscrito.textContent = bloqueado ? mensaje : '';
-        }
-        if (btnEnviar) {
-            btnEnviar.disabled = bloqueado;
-            btnEnviar.style.opacity = bloqueado ? '0.65' : '';
-        }
-    };
 
     function sinLibroSeleccionado() {
         let sinLibro = false;

@@ -1,7 +1,28 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 
 <?php
-$cardsDashboard = [];
+$indicadoresDashboard = [
+    'ganar' => [
+        'valor' => (int)($totalGanarConsolidar ?? $totalPersonas ?? 0),
+        'etiqueta' => 'personas',
+    ],
+    'discipular' => [
+        'valor' => (int)($totalDiscipular ?? 0),
+        'etiqueta' => 'personas',
+    ],
+    'enviar' => [
+        'valor' => (int)($totalPersonasCelulas ?? 0),
+        'etiqueta' => 'personas en células',
+    ],
+    'teens' => [
+        'valor' => (int)($totalTeens ?? 0),
+        'etiqueta' => 'menores',
+    ],
+    'programas' => [
+        'valor' => (int)($totalProgramas ?? 0),
+        'etiqueta' => 'inscritos',
+    ],
+];
 $esDiscipuloSoloDiscipular = AuthController::usaVistaDiscipuloCapacitacionDestino()
     && !AuthController::esAdministrador();
 $esContextoMaestro = AuthController::esContextoMaestro();
@@ -11,7 +32,6 @@ if ($esDiscipuloSoloDiscipular) {
     $cardsDashboard[] = [
         'titulo' => 'Discipular',
         'subtitulo' => 'Formacion y crecimiento',
-        'valor' => (int)($totalDiscipular ?? 0),
         'accion' => 'Ver modulo',
         'href' => PUBLIC_URL . '?url=programas/evaluaciones',
         'icono' => 'bi-journal-richtext',
@@ -25,7 +45,6 @@ if (!$esDiscipuloSoloDiscipular && AuthController::puedeAccederAreaGanarConsolid
         'subtitulo' => AuthController::puedeVerModuloPersonasGanar()
             ? 'Almas ganadas y discípulos'
             : 'Discípulos de tu red',
-        'valor' => (int)($totalPersonas ?? 0),
         'accion' => 'Abrir',
         'href' => PUBLIC_URL . '?url=' . AuthController::urlEntradaGanarConsolidarRelativa(),
         'icono' => 'bi-person-heart',
@@ -40,7 +59,6 @@ if (!$esPerfilMenuReducido
     $cardsDashboard[] = [
         'titulo' => 'Discipular',
         'subtitulo' => 'Formacion y crecimiento',
-        'valor' => (int)($totalDiscipular ?? 0),
         'accion' => 'Ver modulo',
         'href' => PUBLIC_URL . '?url=discipular/ministerios/equipo-principal',
         'icono' => 'bi-journal-richtext',
@@ -56,7 +74,6 @@ if (!$esPerfilMenuReducido
     $cardsDashboard[] = [
         'titulo' => 'Discipular',
         'subtitulo' => 'Formacion y crecimiento',
-        'valor' => (int)($totalDiscipular ?? 0),
         'accion' => 'Ver modulo',
         'href' => PUBLIC_URL . '?url=programas/evaluaciones',
         'icono' => 'bi-journal-richtext',
@@ -68,7 +85,6 @@ if (!$esPerfilMenuReducido && !$esDiscipuloSoloDiscipular && (AuthController::es
     $cardsDashboard[] = [
         'titulo' => 'Enviar',
         'subtitulo' => 'Celulas activas en mision',
-        'valor' => (int)($totalCelulas ?? 0),
         'accion' => 'Ver todas',
         'href' => PUBLIC_URL . '?url=celulas',
         'icono' => 'bi-send-check',
@@ -80,7 +96,6 @@ if (!$esPerfilMenuReducido && !$esDiscipuloSoloDiscipular && (AuthController::es
     $cardsDashboard[] = [
         'titulo' => 'Teens',
         'subtitulo' => 'Acompanamiento de nuevas generaciones',
-        'valor_html' => '<i class="bi bi-balloon-heart"></i>',
         'accion' => 'Abrir registro',
         'href' => PUBLIC_URL . '?url=teen/registro-menores',
         'icono' => 'bi-balloon-heart',
@@ -100,7 +115,6 @@ if (!$esPerfilMenuReducido
     $cardsDashboard[] = [
         'titulo' => 'Programas',
         'subtitulo' => 'Universidad de la Vida y Capacitación Destino',
-        'valor_html' => '<i class="bi bi-mortarboard"></i>',
         'accion' => 'Ver programas',
         'href' => PUBLIC_URL . '?url=programas',
         'icono' => 'bi-mortarboard',
@@ -125,13 +139,15 @@ if (!$esPerfilMenuReducido
                 <p><?= htmlspecialchars((string)$card['subtitulo']) ?></p>
             </div>
         </div>
-        <div class="value">
-            <?php if (isset($card['valor_html'])): ?>
-                <?= $card['valor_html'] ?>
-            <?php else: ?>
-                <?= (int)($card['valor'] ?? 0) ?>
-            <?php endif; ?>
+        <?php
+        $kpiCard = $indicadoresDashboard[(string)($card['clase'] ?? '')] ?? null;
+        ?>
+        <?php if (is_array($kpiCard)): ?>
+        <div class="home-dashboard-kpi">
+            <strong><?= (int)($kpiCard['valor'] ?? 0) ?></strong>
+            <span><?= htmlspecialchars((string)($kpiCard['etiqueta'] ?? 'personas')) ?></span>
         </div>
+        <?php endif; ?>
         <span class="home-dashboard-cta"><?= htmlspecialchars((string)$card['accion']) ?></span>
     </a>
     <?php endforeach; ?>
@@ -166,7 +182,7 @@ if (!$esPerfilMenuReducido
 <style>
 .home-dashboard-card {
     border-top: 1px solid #d7e4f4;
-    min-height: 210px;
+    min-height: 168px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -220,12 +236,28 @@ if (!$esPerfilMenuReducido
     line-height: 1.35;
 }
 
-.home-dashboard-card .value {
+.home-dashboard-kpi {
     position: relative;
     z-index: 1;
-    font-size: 3rem;
+    margin: 12px 0 10px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.home-dashboard-kpi strong {
+    font-size: 1.55rem;
+    font-weight: 800;
+    color: #1e3a5f;
     line-height: 1;
-    margin: 20px 0 16px;
+}
+
+.home-dashboard-kpi span {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: .03em;
 }
 
 .home-dashboard-card-link {
@@ -254,7 +286,6 @@ if (!$esPerfilMenuReducido
     border-top-color: #d8d7ff;
 }
 
-.home-dashboard-card--ganar .value,
 .home-dashboard-card--ganar .home-dashboard-avatar {
     color: #5b5ce1;
 }
@@ -264,7 +295,6 @@ if (!$esPerfilMenuReducido
     border-top-color: #ead6b4;
 }
 
-.home-dashboard-card--discipular .value,
 .home-dashboard-card--discipular .home-dashboard-avatar {
     color: #7a4e08;
 }
@@ -273,7 +303,6 @@ if (!$esPerfilMenuReducido
     border-top-color: #cdebd6;
 }
 
-.home-dashboard-card--enviar .value,
 .home-dashboard-card--enviar .home-dashboard-avatar {
     color: #28a745;
 }
@@ -282,7 +311,6 @@ if (!$esPerfilMenuReducido
     border-top-color: #ffd4e7;
 }
 
-.home-dashboard-card--teens .value,
 .home-dashboard-card--teens .home-dashboard-avatar {
     color: #e83e8c;
 }

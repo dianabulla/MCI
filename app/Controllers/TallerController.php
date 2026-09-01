@@ -143,6 +143,10 @@ class TallerController extends BaseController {
 
                 'gestionar_enlace' => false,
 
+                'eliminar_inscripcion' => false,
+
+                'asignar_ministerio' => false,
+
                 'solo_graficas' => true,
 
             ];
@@ -164,6 +168,10 @@ class TallerController extends BaseController {
             'exportar_excel' => $this->puedeTaller('exportar_excel', ['ver_respuestas', 'ver']),
 
             'gestionar_enlace' => $this->puedeTaller('gestionar_enlace', ['editar', 'ver']),
+
+            'eliminar_inscripcion' => $this->puedeTaller('editar') || $this->puedeTaller('eliminar'),
+
+            'asignar_ministerio' => $this->puedeTaller('editar') || $this->puedeTaller('eliminar'),
 
             'solo_graficas' => false,
 
@@ -710,6 +718,138 @@ class TallerController extends BaseController {
 
 
 
+    public function eliminarRespuesta(): void {
+        $this->requiereAccesoRespuestas();
+        if (!$this->puedeTaller('editar') && !$this->puedeTaller('eliminar')) {
+            header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $idFormulario = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
+        $idRespuesta = (int)($_POST['id_respuesta'] ?? $_GET['id_respuesta'] ?? 0);
+        $respuesta = $idRespuesta > 0 ? $this->model->getRespuestaPorId($idRespuesta) : null;
+
+        if (!$respuesta || (int)($respuesta['Id_Formulario'] ?? 0) !== $idFormulario) {
+            $_SESSION['talleres_flash_error'] = 'No se encontró la inscripción a eliminar.';
+            header('Location: ' . PUBLIC_URL . '?url=talleres/respuestas&id=' . $idFormulario);
+            exit;
+        }
+
+        $this->model->eliminarRespuesta($idRespuesta);
+        $dirDocs = TallerPresentacionDocumentos::directorioRespuesta($idRespuesta);
+        if (is_dir($dirDocs)) {
+            foreach (glob($dirDocs . '/*') ?: [] as $archivoDoc) {
+                if (is_file($archivoDoc)) {
+                    @unlink($archivoDoc);
+                }
+            }
+            @rmdir($dirDocs);
+        }
+
+        $_SESSION['talleres_flash_ok'] = 'Inscripción eliminada. Esa persona ya puede volver a registrarse en este taller si hace falta.';
+        header('Location: ' . PUBLIC_URL . '?url=talleres/respuestas&id=' . $idFormulario);
+        exit;
+    }
+
+    public function asignarMinisterioInscripcion(): void {
+        $this->requiereAccesoRespuestas();
+        if (!$this->puedeTaller('editar') && !$this->puedeTaller('eliminar')) {
+            header('Location: ' . PUBLIC_URL . '?url=auth/acceso-denegado');
+            exit;
+        }
+
+        $idFormulario = (int)($_POST['id'] ?? 0);
+        $idRespuesta = (int)($_POST['id_respuesta'] ?? 0);
+        $idMinisterio = (int)($_POST['id_ministerio'] ?? 0);
+        $tipoPersona = strtolower(trim((string)($_POST['tipo_persona'] ?? '')));
+        $esAntiguo = in_array($tipoPersona, ['antiguo', 'antigua', '1'], true) ? 1 : 0;
+        if (!in_array($tipoPersona, ['antiguo', 'antigua', 'nuevo', 'nueva', '1', '0'], true)) {
+            $esAntiguo = 0;
+        }
+
+        $redirBase = PUBLIC_URL . '?url=talleres/respuestas&id=' . $idFormulario;
+
+        if ($idMinisterio <= 0) {
+            $_SESSION['talleres_flash_error'] = 'Elija el ministerio antes de asignar.';
+            header('Location: ' . $redirBase . '&abrir=sin-ministerio');
+            exit;
+        }
+
+        $formulario = $idFormulario > 0 ? $this->model->getById($idFormulario) : null;
+        $respuesta = $idRespuesta > 0 ? $this->model->getRespuestaPorId($idRespuesta) : null;
+        if (!$formulario || !$respuesta || (int)($respuesta['Id_Formulario'] ?? 0) !== $idFormulario) {
+            $_SESSION['talleres_flash_error'] = 'No se encontró la inscripción.';
+            header('Location: ' . $redirBase);
+            exit;
+        }
+
+        if ($this->model->esPresentacionNinos($formulario)) {
+            $_SESSION['talleres_flash_error'] = 'Esta asignación no aplica a presentación de niños.';
+            header('Location: ' . $redirBase);
+            exit;
+        }
+
+        require_once APP . '/Models/Ministerio.php';
+        $ministerioModel = new Ministerio();
+        $ministerio = $ministerioModel->getById($idMinisterio);
+        $nombreMinisterio = trim((string)($ministerio['Nombre_Ministerio'] ?? ''));
+        if ($nombreMinisterio === '') {
+            $_SESSION['talleres_flash_error'] = 'El ministerio elegido no existe.';
+            header('Location: ' . $redirBase . '&abrir=sin-ministerio');
+            exit;
+        }
+
+        $json = $this->decodificarDatosJsonRespuesta($respuesta['Datos_JSON'] ?? null);
+
+        $esTour = $this->model->esTourLevantate($formulario);
+        $idPersona = (int)($respuesta['Id_Persona'] ?? 0);
+        if ($idPersona <= 0) {
+            $idPersona = $this->personaSync->asegurarPersonaDesdeJson($json, $esTour);
+        }
+        if ($idPersona <= 0) {
+            $_SESSION['talleres_flash_error'] = 'No se pudo crear o localizar la ficha: la inscripción no tiene nombre, documento y teléfono suficientes.';
+            header('Location: ' . $redirBase . '&abrir=sin-ministerio');
+            exit;
+        }
+
+        $this->personaSync->completarCamposVaciosDesdeJson($idPersona, $json);
+
+        require_once APP . '/Models/Persona.php';
+        $personaModel = new Persona();
+        $personaModel->ensureEsAntiguoColumnExists();
+        $datosPersona = ['Id_Ministerio' => $idMinisterio];
+        if ($personaModel->tieneColumna('Es_Antiguo')) {
+            $datosPersona['Es_Antiguo'] = $esAntiguo;
+        }
+        $actualizoPersona = (bool)$personaModel->update($idPersona, $datosPersona);
+        if (!$actualizoPersona) {
+            $_SESSION['talleres_flash_error'] = 'No se pudo guardar el ministerio en la ficha de la persona.';
+            header('Location: ' . $redirBase . '&abrir=sin-ministerio');
+            exit;
+        }
+
+        $this->model->vincularPersonaRespuesta($idRespuesta, $idPersona);
+
+        $extras = is_array($json['_persona_extra'] ?? null) ? $json['_persona_extra'] : [];
+        $json['persona_ministerio'] = $nombreMinisterio;
+        $json['ministerio'] = $nombreMinisterio;
+        $extras['persona_ministerio'] = $nombreMinisterio;
+        $extras['Nombre_Ministerio'] = $nombreMinisterio;
+        $json['_persona_extra'] = $extras;
+        $json['_asignacion_ministerio'] = [
+            'id_ministerio' => $idMinisterio,
+            'nombre_ministerio' => $nombreMinisterio,
+            'es_antiguo' => $esAntiguo,
+            'fecha' => date('Y-m-d H:i:s'),
+        ];
+        $this->model->actualizarDatosJsonRespuesta($idRespuesta, $json);
+
+        $etiquetaTipo = $esAntiguo === 1 ? 'antigua' : 'nueva';
+        $_SESSION['talleres_flash_ok'] = 'Ya no está en Sin ministerio: pasó a ' . $nombreMinisterio . ' como persona ' . $etiquetaTipo . '.';
+        header('Location: ' . $redirBase . '&abrir_ministerio=' . rawurlencode($nombreMinisterio) . '&resaltar=' . $idRespuesta);
+        exit;
+    }
+
     public function respuestas(): void {
 
         $this->requiereAccesoRespuestas();
@@ -750,19 +890,17 @@ class TallerController extends BaseController {
 
             $totalesPagos = $this->model->getTotalesPagosPorRespuestas($idsRespuesta);
 
+            $personaModelResumen = null;
+            $cachePersonasResumen = [];
+
             foreach ($respuestasRaw as $fila) {
 
-                $json = json_decode((string)($fila['Datos_JSON'] ?? '{}'), true);
-
-                if (!is_array($json)) {
-
-                    $json = [];
-
-                }
+                $json = $this->decodificarDatosJsonRespuesta($fila['Datos_JSON'] ?? null);
 
                 $idRespuesta = (int)($fila['Id_Respuesta'] ?? 0);
+                $idPersonaRespuesta = (int)($fila['Id_Persona'] ?? 0);
 
-                $valores = $this->construirValoresRespuesta($campos, $json, (int)($fila['Id_Persona'] ?? 0));
+                $valores = $this->construirValoresRespuesta($campos, $json, $idPersonaRespuesta);
 
                 $auth = is_array($json['_autorizacion'] ?? null) ? $json['_autorizacion'] : [];
 
@@ -784,7 +922,15 @@ class TallerController extends BaseController {
 
                     'ip' => (string)($fila['Ip_Origen'] ?? ''),
 
-                    'id_persona' => (int)($fila['Id_Persona'] ?? 0),
+                    'id_persona' => $idPersonaRespuesta,
+
+                    'ministerio' => $this->resolverMinisterioInscripcion(
+                        $json,
+                        $campos,
+                        $idPersonaRespuesta,
+                        $personaModelResumen,
+                        $cachePersonasResumen
+                    ),
 
                     'valores' => $valores,
 
@@ -826,8 +972,8 @@ class TallerController extends BaseController {
 
         $esTourLevantate = $this->model->esTourLevantate($formulario);
 
-        $resumenPorMinisterio = $esTourLevantate && !$soloGraficas
-            ? $this->construirResumenPorMinisterioTour($respuestasRaw)
+        $resumenPorMinisterio = !$soloGraficas
+            ? $this->construirResumenPorMinisterio($respuestas)
             : [];
 
 
@@ -862,6 +1008,8 @@ class TallerController extends BaseController {
 
             'resumen_por_ministerio' => $resumenPorMinisterio,
 
+            'ministerios_asignacion' => $this->listarMinisteriosAsignacion(),
+
         ]);
 
     }
@@ -869,101 +1017,203 @@ class TallerController extends BaseController {
 
 
     /**
-     * Agrupa inscripciones del Tour Levántate por ministerio.
+     * Agrupa inscripciones ya etiquetadas por ministerio.
      *
-     * @param array<int, array<string, mixed>> $respuestasRaw
+     * @param array<int, array<string, mixed>> $respuestas
      * @return array<int, array{ministerio: string, total: int}>
      */
-    private function construirResumenPorMinisterioTour(array $respuestasRaw): array {
-
+    private function construirResumenPorMinisterio(array $respuestas): array {
         $conteo = [];
-
-        $personaModel = null;
-
-
-
-        foreach ($respuestasRaw as $fila) {
-
-            $json = json_decode((string)($fila['Datos_JSON'] ?? '{}'), true);
-
-            if (!is_array($json)) {
-
-                $json = [];
-
-            }
-
-
-
-            $extras = is_array($json['_persona_extra'] ?? null) ? $json['_persona_extra'] : [];
-
-            $ministerio = trim((string)($json['persona_ministerio'] ?? $extras['persona_ministerio'] ?? ''));
-
-
-
-            if ($ministerio === '' && (int)($fila['Id_Persona'] ?? 0) > 0) {
-
-                if ($personaModel === null) {
-
-                    require_once APP . '/Models/Persona.php';
-
-                    $personaModel = new Persona();
-
-                }
-
-                $persona = $personaModel->getById((int)$fila['Id_Persona']);
-
-                if (is_array($persona)) {
-
-                    $ministerio = trim((string)($persona['Nombre_Ministerio'] ?? ''));
-
-                }
-
-            }
-
-
-
+        foreach ($respuestas as $fila) {
+            $ministerio = trim((string)($fila['ministerio'] ?? ''));
             if ($ministerio === '') {
-
                 $ministerio = 'Sin ministerio asignado';
-
             }
-
-
-
             $conteo[$ministerio] = ($conteo[$ministerio] ?? 0) + 1;
-
         }
-
-
 
         $filas = [];
-
         foreach ($conteo as $ministerio => $total) {
-
             $filas[] = ['ministerio' => (string)$ministerio, 'total' => (int)$total];
-
         }
 
-
-
         usort($filas, static function (array $a, array $b): int {
-
-            $cmp = $b['total'] <=> $a['total'];
-
-            if ($cmp !== 0) {
-
-                return $cmp;
-
+            $aSin = strcasecmp((string)$a['ministerio'], 'Sin ministerio asignado') === 0;
+            $bSin = strcasecmp((string)$b['ministerio'], 'Sin ministerio asignado') === 0;
+            if ($aSin !== $bSin) {
+                return $aSin ? 1 : -1;
             }
-
+            $cmp = $b['total'] <=> $a['total'];
+            if ($cmp !== 0) {
+                return $cmp;
+            }
             return strcasecmp($a['ministerio'], $b['ministerio']);
-
         });
 
-
-
         return $filas;
+    }
 
+    /**
+     * @return array<int, array{id: int, nombre: string}>
+     */
+    private function listarMinisteriosAsignacion(): array {
+        require_once APP . '/Models/Ministerio.php';
+        $filas = [];
+        $todos = (new Ministerio())->getAll();
+        if (!is_array($todos)) {
+            return [];
+        }
+        foreach ($todos as $fila) {
+            $id = (int)($fila['Id_Ministerio'] ?? 0);
+            $nombre = trim((string)($fila['Nombre_Ministerio'] ?? ''));
+            if ($id <= 0 || $nombre === '') {
+                continue;
+            }
+            $filas[] = ['id' => $id, 'nombre' => $nombre];
+        }
+        usort($filas, static fn(array $a, array $b): int => strcasecmp($a['nombre'], $b['nombre']));
+        return $filas;
+    }
+
+    /**
+     * @param mixed $raw
+     * @return array<string, mixed>
+     */
+    private function decodificarDatosJsonRespuesta($raw): array {
+        if (is_array($raw)) {
+            return $raw;
+        }
+        $texto = trim((string)$raw);
+        if ($texto === '') {
+            return [];
+        }
+        $json = json_decode($texto, true);
+        return is_array($json) ? $json : [];
+    }
+
+    private function esNombreMinisterioVacio(string $nombre): bool {
+        $texto = trim($nombre);
+        if ($texto === '') {
+            return true;
+        }
+        $normal = mb_strtolower($texto);
+        $normal = strtr($normal, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u']);
+        $vacios = [
+            'sin ministerio',
+            'sin ministerio asignado',
+            'ninguno',
+            'ninguna',
+            'n/a',
+            'na',
+            '-',
+            'no',
+            'no aplica',
+        ];
+        return in_array($normal, $vacios, true);
+    }
+
+    private function nombreMinisterioPorId(int $idMinisterio): string {
+        if ($idMinisterio <= 0) {
+            return '';
+        }
+        require_once APP . '/Models/Ministerio.php';
+        $ministerio = (new Ministerio())->getById($idMinisterio);
+        return is_array($ministerio) ? trim((string)($ministerio['Nombre_Ministerio'] ?? '')) : '';
+    }
+
+    /**
+     * @param array<string, mixed> $json
+     * @param array<int, array<string, mixed>> $campos
+     * @param object|null $personaModel
+     * @param array<int, array<string, mixed>|null> $cachePersonas
+     */
+    private function resolverMinisterioInscripcion(
+        array $json,
+        array $campos,
+        int $idPersona,
+        &$personaModel,
+        array &$cachePersonas
+    ): string {
+        $asig = is_array($json['_asignacion_ministerio'] ?? null) ? $json['_asignacion_ministerio'] : [];
+        $idAsig = (int)($asig['id_ministerio'] ?? 0);
+        $nombreAsig = trim((string)($asig['nombre_ministerio'] ?? ''));
+        if ($idAsig > 0) {
+            $nombreDb = $this->nombreMinisterioPorId($idAsig);
+            if ($nombreDb !== '') {
+                return $nombreDb;
+            }
+            if ($nombreAsig !== '' && !$this->esNombreMinisterioVacio($nombreAsig)) {
+                return $nombreAsig;
+            }
+        }
+        if ($nombreAsig !== '' && !$this->esNombreMinisterioVacio($nombreAsig)) {
+            return $nombreAsig;
+        }
+
+        if ($idPersona > 0) {
+            if (!array_key_exists($idPersona, $cachePersonas)) {
+                if ($personaModel === null) {
+                    require_once APP . '/Models/Persona.php';
+                    $personaModel = new Persona();
+                }
+                $persona = $personaModel->getById($idPersona);
+                $cachePersonas[$idPersona] = is_array($persona) ? $persona : null;
+            }
+            $persona = $cachePersonas[$idPersona];
+            if (is_array($persona)) {
+                $idMinPersona = (int)($persona['Id_Ministerio'] ?? 0);
+                $nombrePersona = trim((string)($persona['Nombre_Ministerio'] ?? ''));
+                if ($idMinPersona > 0 && ($nombrePersona === '' || $this->esNombreMinisterioVacio($nombrePersona))) {
+                    $nombrePersona = $this->nombreMinisterioPorId($idMinPersona);
+                }
+                if ($nombrePersona !== '' && !$this->esNombreMinisterioVacio($nombrePersona)) {
+                    return $nombrePersona;
+                }
+            }
+        }
+
+        $ministerio = $this->extraerMinisterioDeRespuestaTaller($json, $campos);
+        if ($ministerio !== '' && !$this->esNombreMinisterioVacio($ministerio)) {
+            return $ministerio;
+        }
+
+        return 'Sin ministerio asignado';
+    }
+
+    /**
+     * @param array<string, mixed> $json
+     * @param array<int, array<string, mixed>> $campos
+     */
+    private function extraerMinisterioDeRespuestaTaller(array $json, array $campos): string {
+        $extras = is_array($json['_persona_extra'] ?? null) ? $json['_persona_extra'] : [];
+        $candidatos = [
+            $json['persona_ministerio'] ?? '',
+            $extras['persona_ministerio'] ?? '',
+            $json['ministerio'] ?? '',
+            $extras['ministerio'] ?? '',
+            $extras['Nombre_Ministerio'] ?? '',
+        ];
+
+        foreach ($campos as $campo) {
+            $nombreCampo = trim((string)($campo['Nombre_Campo'] ?? ''));
+            if ($nombreCampo === '' || stripos($nombreCampo, 'ministerio') === false) {
+                continue;
+            }
+            $valorCampo = $json[$nombreCampo] ?? '';
+            if (is_array($valorCampo)) {
+                $valorCampo = implode(', ', array_map('strval', $valorCampo));
+            }
+            $candidatos[] = $valorCampo;
+        }
+
+        foreach ($candidatos as $candidato) {
+            $texto = trim((string)$candidato);
+            if ($texto !== '' && !$this->esNombreMinisterioVacio($texto)) {
+                return $texto;
+            }
+        }
+
+        return '';
     }
 
 
@@ -1524,29 +1774,22 @@ class TallerController extends BaseController {
 
         if (
             $idFormulario > 0
-            && $documento !== ''
             && !in_array($modo, ['padres', 'nino'], true)
             && is_array($formularioBusqueda)
-            && $this->model->esTourLevantate($formularioBusqueda)
         ) {
-            $inscripcionTour = $this->model->buscarInscripcionPorDocumentoPersona($idFormulario, $documento);
-            if ($inscripcionTour) {
-                $fechaPrev = substr((string)($inscripcionTour['fecha'] ?? ''), 0, 10);
-                $nombrePrev = trim((string)($inscripcionTour['persona_nombre'] ?? ''));
-                $mensaje = 'Esta cédula ya está inscrita en el Tour Levántate y Resplandece';
-                if ($fechaPrev !== '') {
-                    $mensaje .= ' (registro del ' . $fechaPrev . ')';
-                }
-                if ($nombrePrev !== '') {
-                    $mensaje .= '. Nombre registrado: ' . $nombrePrev . '.';
-                }
-
+            $idPersonaEncontrada = (int)($persona['id_persona'] ?? 0);
+            $inscripcionPreviaPersona = $this->model->buscarInscripcionPorDocumentoPersona(
+                $idFormulario,
+                $documento,
+                $idPersonaEncontrada
+            );
+            if ($inscripcionPreviaPersona) {
                 echo json_encode([
                     'ok' => $persona !== null,
                     'persona' => $persona,
                     'ya_inscrito' => true,
-                    'inscripcion' => $inscripcionTour,
-                    'mensaje' => $mensaje,
+                    'inscripcion' => $inscripcionPreviaPersona,
+                    'mensaje' => $this->mensajeInscripcionDuplicadaTaller($formularioBusqueda, $inscripcionPreviaPersona),
                 ], JSON_UNESCAPED_UNICODE);
 
                 return;
@@ -1565,7 +1808,26 @@ class TallerController extends BaseController {
 
     }
 
-
+    /**
+     * @param array<string, mixed> $formulario
+     * @param array<string, mixed> $inscripcion
+     */
+    private function mensajeInscripcionDuplicadaTaller(array $formulario, array $inscripcion): string {
+        $titulo = trim((string)($formulario['Titulo'] ?? 'este taller'));
+        if ($titulo === '') {
+            $titulo = 'este taller';
+        }
+        $fechaPrev = substr((string)($inscripcion['fecha'] ?? ''), 0, 10);
+        $nombrePrev = trim((string)($inscripcion['persona_nombre'] ?? ''));
+        $mensaje = 'Ya está inscrito(a) en «' . $titulo . '». No puede registrarse otra vez con el mismo documento.';
+        if ($fechaPrev !== '') {
+            $mensaje .= ' Inscripción del ' . $fechaPrev . '.';
+        }
+        if ($nombrePrev !== '') {
+            $mensaje .= ' Nombre registrado: ' . $nombrePrev . '.';
+        }
+        return $mensaje;
+    }
 
     private function generarReferenciaCorta(): string {
         $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -2011,7 +2273,12 @@ class TallerController extends BaseController {
                     $errores['desea_comprar_libro'] = 'Indique si desea comprar el libro.';
                 }
             }
+        }
 
+        if (!$esPresentacionNinos) {
+            if (!is_array($errores ?? null)) {
+                $errores = [];
+            }
             $docPersona = preg_replace('/\D+/', '', (string)(
                 ($_POST['persona_documento'] ?? '')
                 ?: ($_POST['buscar_documento'] ?? '')
@@ -2019,11 +2286,7 @@ class TallerController extends BaseController {
             if ($docPersona !== '' || $idPersona > 0) {
                 $inscripcionPrevia = $this->model->buscarInscripcionPorDocumentoPersona($id, $docPersona, $idPersona);
                 if ($inscripcionPrevia) {
-                    $fechaPrev = substr((string)($inscripcionPrevia['fecha'] ?? ''), 0, 10);
-                    $nombrePrev = trim((string)($inscripcionPrevia['persona_nombre'] ?? ''));
-                    $errores['persona_documento'] = 'Ya existe una inscripción con esta cédula en el Tour Levántate y Resplandece'
-                        . ($fechaPrev !== '' ? ' (registro del ' . $fechaPrev . ')' : '')
-                        . ($nombrePrev !== '' ? '. Nombre registrado: ' . $nombrePrev . '.' : '.');
+                    $errores['persona_documento'] = $this->mensajeInscripcionDuplicadaTaller($formulario, $inscripcionPrevia);
                 }
             }
         }

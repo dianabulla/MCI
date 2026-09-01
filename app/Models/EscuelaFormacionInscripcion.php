@@ -1274,6 +1274,42 @@ class EscuelaFormacionInscripcion extends BaseModel {
         }
     }
 
+    public function getMovimientoPagoPorReferencia($referencia) {
+        $referencia = trim((string)$referencia);
+        if ($referencia === '') {
+            return null;
+        }
+
+        $sql = "SELECT
+                    s.Id_Inscripcion,
+                    s.Nombre,
+                    s.Cedula,
+                    s.Telefono,
+                    s.Programa,
+                    s.Metodo_Pago,
+                    s.Recibido_Por,
+                    s.Tipo_Pago,
+                    s.Valor_Pago,
+                    s.Entrego_Libro,
+                    s.Referencia_Pago,
+                    s.Fecha_Registro
+                FROM {$this->tablePagos} s
+                WHERE TRIM(s.Referencia_Pago) = ?
+                ORDER BY s.Fecha_Registro DESC, s.Id_Inscripcion DESC
+                LIMIT 1";
+
+        try {
+            $rows = $this->query($sql, [$referencia]);
+            if (!empty($rows) && is_array($rows[0])) {
+                return $rows[0];
+            }
+        } catch (Throwable $e) {
+            error_log('Fallo buscando movimiento de pago por referencia: ' . $e->getMessage());
+        }
+
+        return null;
+    }
+
     public function getDetallePagosPorCedula($cedula, $limit = 100, $programa = '') {
         $cedula = trim((string)$cedula);
         $programa = trim((string)$programa);
