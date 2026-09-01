@@ -220,10 +220,16 @@ return [
     'talleres/guardar-pago' => 'TallerController@guardarPago',
     'talleres/ticket-pago' => 'TallerController@ticketPago',
 
+    'comunidad/pagos' => 'ComunidadPagosController@index',
+    'comunidad/pagos/buscar' => 'ComunidadPagosController@buscar',
+    'comunidad/pagos/guardar' => 'ComunidadPagosController@guardar',
+    'comunidad/pagos/reenviar-ticket' => 'ComunidadPagosController@reenviarTicket',
+
     // Talleres — Servicio Social (agendamiento)
     'talleres/servicio-social' => 'TallerServicioSocialController@index',
     'talleres/servicio-social/ver' => 'TallerServicioSocialController@ver',
     'talleres/servicio-social/actualizar' => 'TallerServicioSocialController@actualizar',
+    'talleres/servicio-social/agendar-nueva' => 'TallerServicioSocialController@agendarNueva',
     'talleres/servicio-social/horarios' => 'TallerServicioSocialController@horariosSabado',
     'talleres/servicio-social/horarios/guardar' => 'TallerServicioSocialController@guardarHorariosSabado',
     'talleres/servicio-social/guardar-historia' => 'TallerServicioSocialController@guardarHistoriaClinica',

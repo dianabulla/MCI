@@ -14,36 +14,113 @@ $puedeSoloGraficas = !empty($permisosTaller['solo_graficas']);
 $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
 ?>
 
-<div class="page-header">
-    <h2>Talleres</h2>
-    <p class="text-muted" style="margin:4px 0 0;">
-        <?php if ($puedeSoloGraficas): ?>
-            Consulte las gráficas estadísticas de cada formulario de taller.
-        <?php else: ?>
-            Cree formularios, comparta el enlace y vea las respuestas en una tabla.
-        <?php endif; ?>
-    </p>
-    <?php if ($puedeCrear): ?>
-    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-        <a href="<?= PUBLIC_URL ?>?url=talleres/crear" class="btn btn-primary">
+<style>
+.talleres-lista-head {
+    display: flex !important;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px 20px;
+    margin-bottom: 22px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e2e9f8;
+}
+.talleres-lista-title {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+.talleres-lista-title h2 {
+    display: block;
+    margin: 0;
+    width: 100%;
+}
+.talleres-lista-title p {
+    display: block;
+    margin: 6px 0 0;
+    max-width: 28rem;
+    line-height: 1.4;
+}
+.talleres-lista-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: stretch;
+    flex: 0 0 auto;
+}
+.talleres-btn-nuevo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: 12px;
+    background: #1e4a89;
+    color: #fff !important;
+    font-weight: 700;
+    font-size: 0.95rem;
+    text-decoration: none;
+    border: 0;
+    box-shadow: 0 4px 12px rgba(30, 74, 137, 0.22);
+    white-space: nowrap;
+}
+.talleres-btn-nuevo:hover { background: #163a6e; color: #fff !important; }
+.talleres-btn-ss {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px 8px 8px;
+    border-radius: 12px;
+    text-decoration: none;
+    color: #9f1239 !important;
+    background: linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%);
+    border: 1px solid #fecdd3;
+    box-shadow: 0 4px 12px rgba(190, 24, 93, 0.12);
+}
+.talleres-btn-ss:hover {
+    background: linear-gradient(180deg, #ffe4e6 0%, #fecdd3 100%);
+    color: #881337 !important;
+}
+.talleres-btn-ss i {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #e11d48;
+    color: #fff;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+.talleres-btn-ss .talleres-btn-ss-copy { display: flex; flex-direction: column; gap: 1px; }
+.talleres-btn-ss strong { font-size: 0.92rem; line-height: 1.15; }
+.talleres-btn-ss small { font-size: 0.72rem; font-weight: 600; color: #be123c; }
+</style>
+
+<div class="talleres-lista-head">
+    <div class="talleres-lista-title">
+        <h2>Talleres</h2>
+        <p class="text-muted">
+            <?php if ($puedeSoloGraficas): ?>
+                Consulte las gráficas estadísticas de cada formulario de taller.
+            <?php else: ?>
+                Cree formularios, comparta el enlace y vea las respuestas.
+            <?php endif; ?>
+        </p>
+    </div>
+    <div class="talleres-lista-actions">
+        <?php if ($puedeCrear): ?>
+        <a href="<?= PUBLIC_URL ?>?url=talleres/crear" class="talleres-btn-nuevo">
             <i class="bi bi-plus-lg"></i> Nuevo formulario
         </a>
-        <a href="<?= PUBLIC_URL ?>?url=talleres/crear-presentacion-ninos" class="btn btn-outline-primary">
-            <i class="bi bi-people"></i> Presentación de niños
-        </a>
-        <a href="<?= PUBLIC_URL ?>?url=talleres/crear-tour-levantate" class="btn btn-outline-primary">
-            <i class="bi bi-book"></i> Tour Levántate y Resplandece
-        </a>
-        <?php if ($puedeEditar): ?>
-        <a href="<?= PUBLIC_URL ?>?url=talleres/corregir-personas-tour" class="btn btn-outline-warning">
-            <i class="bi bi-wrench"></i> Corregir personas Tour
-        </a>
         <?php endif; ?>
-    </div>
-    <?php endif; ?>
-    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-        <a href="<?= PUBLIC_URL ?>?url=talleres/servicio-social" class="btn btn-outline-success">
-            <i class="bi bi-heart-pulse"></i> Servicio Social
+        <a href="<?= PUBLIC_URL ?>?url=talleres/servicio-social" class="talleres-btn-ss">
+            <i class="bi bi-heart-pulse"></i>
+            <span class="talleres-btn-ss-copy">
+                <strong>Servicio social</strong>
+                <small>Citas y atención</small>
+            </span>
         </a>
     </div>
 </div>
@@ -60,11 +137,9 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
         <thead>
             <tr>
                 <th>Nombre</th>
-                <th>Enlace para compartir</th>
                 <th>Preguntas</th>
                 <th>Respuestas</th>
                 <th>Estado</th>
-                <th>Creado</th>
                 <th>Acciones</th>
             </tr>
         </thead>
@@ -80,18 +155,6 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
                     <tr>
                         <td>
                             <strong><?= htmlspecialchars((string)($f['Titulo'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
-                            <span class="badge bg-teal" style="background:#0f766e;margin-left:6px;">Pagos</span>
-                        </td>
-                        <td>
-                            <?php if ($puedeGestionarEnlace && !empty($f['Activo'])): ?>
-                                <a href="<?= htmlspecialchars($urlPublica, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" title="Abrir formulario">
-                                    Abrir enlace
-                                </a>
-                            <?php elseif (!empty($f['Activo'])): ?>
-                                <span class="text-muted">Activo</span>
-                            <?php else: ?>
-                                <span class="text-muted">No publicado</span>
-                            <?php endif; ?>
                         </td>
                         <td><?= (int)($f['Total_Campos'] ?? 0) ?></td>
                         <td><?= (int)($f['Total_Respuestas'] ?? 0) ?></td>
@@ -102,7 +165,6 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
                                 <span class="badge bg-secondary">Inactivo</span>
                             <?php endif; ?>
                         </td>
-                        <td><?= htmlspecialchars(substr((string)($f['Fecha_Creacion'] ?? ''), 0, 16), ENT_QUOTES, 'UTF-8') ?></td>
                         <td style="white-space:nowrap;">
                             <?php if ($puedeVerRespuestas): ?>
                             <a href="<?= PUBLIC_URL ?>?url=talleres/respuestas&id=<?= $id ?>" class="btn btn-sm btn-outline-primary" title="Ver respuestas">
@@ -139,7 +201,7 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="7">No hay formularios creados. Use «Nuevo formulario» para empezar.</td>
+                    <td colspan="5">No hay formularios creados. Use «Nuevo formulario» para empezar.</td>
                 </tr>
             <?php endif; ?>
         </tbody>

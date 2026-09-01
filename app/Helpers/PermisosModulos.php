@@ -266,6 +266,24 @@ class PermisosModulos {
 
             ],
 
+            'comunidad_pagos' => [
+
+                'label' => 'Pagos Comunidad',
+
+                'descripcion' => 'Caja unificada: buscar por cédula e registrar pagos de Universidad de la Vida, Capacitación Destino y talleres.',
+
+                'grupo' => 'Comunidad',
+
+                'solo_ver' => true,
+
+                'crud_labels' => [
+
+                    'puede_ver' => 'Registrar y consultar pagos unificados',
+
+                ],
+
+            ],
+
             'transmisiones' => [
 
                 'label' => 'Transmisiones',

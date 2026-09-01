@@ -2019,6 +2019,38 @@ class EscuelaFormacionInscripcion extends BaseModel {
     }
 
     /**
+     * Personas únicas inscritas en UV y/o Capacitación Destino (sin tope de filas).
+     */
+    public function contarPersonasUnicasInscritas(array $programas = []): int {
+        $filtroPrograma = '';
+        if ($programas !== []) {
+            $partes = [];
+            foreach ($programas as $programa) {
+                $programa = trim((string)$programa);
+                if ($programa === 'capacitacion_destino') {
+                    $partes[] = "i.Programa IN ('capacitacion_destino','capacitacion_destino_nivel_1','capacitacion_destino_nivel_2','capacitacion_destino_nivel_3')";
+                } elseif ($programa !== '') {
+                    $partes[] = 'i.Programa = ' . $this->db->quote($programa);
+                }
+            }
+            if ($partes !== []) {
+                $filtroPrograma = 'WHERE (' . implode(' OR ', $partes) . ')';
+            }
+        }
+        $sql = "SELECT COUNT(*) AS Total FROM (
+                    SELECT DISTINCT CASE
+                        WHEN i.Id_Persona IS NOT NULL AND i.Id_Persona > 0 THEN CONCAT('id:', i.Id_Persona)
+                        WHEN TRIM(COALESCE(i.Cedula, '')) <> '' THEN CONCAT('cc:', TRIM(i.Cedula))
+                        ELSE CONCAT('ins:', i.Id_Inscripcion)
+                    END AS clave
+                    FROM {$this->table} i
+                    {$filtroPrograma}
+                ) t";
+        $rows = $this->query($sql);
+        return (int)($rows[0]['Total'] ?? 0);
+    }
+
+    /**
      * Retorna lista de personas únicas inscritas en un programa,
      * con datos básicos actualizados desde la tabla persona.
      * Deduplicación por Cedula_Clave (Cedula o SIN-CEDULA-{Id_Persona}).

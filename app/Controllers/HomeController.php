@@ -1211,48 +1211,24 @@ class HomeController extends BaseController {
         $filtroCelulas = DataIsolation::generarFiltroCelulas();
         $filtroEventos = DataIsolation::generarFiltroEventos();
 
-        $personasVisibles = $personaModel->getAllActivosWithRole($filtroPersonas);
-        $totalPersonas = count($personasVisibles);
-
-        $totalesEscalera = $personaModel->getTotalesEscalera($filtroPersonas);
-        $totalGanarConsolidar = (int)($totalesEscalera['Ganar'] ?? 0) + (int)($totalesEscalera['Consolidar'] ?? 0);
-        if ($totalGanarConsolidar <= 0) {
-            $totalGanarConsolidar = $totalPersonas;
-        }
-
-        $celulasVisibles = $celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
-        $idsCelulas = array_map(static function ($celula) {
-            return (int)($celula['Id_Celula'] ?? 0);
-        }, is_array($celulasVisibles) ? $celulasVisibles : []);
-        $totalPersonasCelulas = $celulaModel->contarMiembrosActivosUnicosEnCelulas($idsCelulas);
-
-        $inscritosUv = $inscripcionModel->getInscritosBasicos('universidad_vida', '', 2500);
-        $inscritosCap = $inscripcionModel->getInscritosBasicos('capacitacion_destino', '', 2500);
-        $clavesProgramas = [];
-        foreach (array_merge(is_array($inscritosUv) ? $inscritosUv : [], is_array($inscritosCap) ? $inscritosCap : []) as $inscrito) {
-            $idPersona = (int)($inscrito['Id_Persona'] ?? 0);
-            $cedula = preg_replace('/\D+/', '', (string)($inscrito['Cedula'] ?? ''));
-            if ($idPersona > 0) {
-                $clavesProgramas['id:' . $idPersona] = true;
-            } elseif ($cedula !== '') {
-                $clavesProgramas['cc:' . $cedula] = true;
-            } else {
-                $clavesProgramas['ins:' . (int)($inscrito['Id_Inscripcion'] ?? 0)] = true;
-            }
-        }
+        $totalPersonas = $personaModel->contarTodasEnBase($filtroPersonas);
+        $totalCelulas = $celulaModel->contarCelulas($filtroCelulas, true);
+        $totalDiscipular = $personaModel->contarPersonasRedDiscipular($filtroPersonas);
+        $totalProgramas = $inscripcionModel->contarPersonasUnicasInscritas([
+            'universidad_vida',
+            'capacitacion_destino',
+        ]);
 
         $data = [
             'totalPersonas' => $totalPersonas,
-            'totalCelulas' => count(is_array($celulasVisibles) ? $celulasVisibles : []),
-            'totalPersonasCelulas' => $totalPersonasCelulas,
+            'totalCelulas' => $totalCelulas,
+            'totalPersonasCelulas' => $totalCelulas,
             'totalLideresCelula' => $personaModel->getTotalLideresCelulaWithRole($filtroPersonas),
             'eventosProximos' => $eventoModel->getUpcomingWithRole($filtroEventos),
-            'totalGanarConsolidar' => $totalGanarConsolidar,
-            'totalDiscipular' => (int)($totalesEscalera['Discipular'] ?? 0) > 0
-                ? (int)$totalesEscalera['Discipular']
-                : count(is_array($inscritosCap) ? $inscritosCap : []),
+            'totalGanarConsolidar' => $totalPersonas,
+            'totalDiscipular' => $totalDiscipular,
             'totalTeens' => count($teenModel->getMenoresRegistrados()),
-            'totalProgramas' => count($clavesProgramas),
+            'totalProgramas' => $totalProgramas,
         ];
 
         $this->view('home/dashboard', $data);

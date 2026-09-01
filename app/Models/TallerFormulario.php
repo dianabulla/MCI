@@ -130,6 +130,7 @@ class TallerFormulario extends BaseModel {
         $this->ensureColumn('talleres_formulario', 'Acepta_Pago', 'TINYINT(1) NOT NULL DEFAULT 1 AFTER Tipo_Plantilla');
         $this->ensureTipoBloqueAutorizacion();
         $this->ensureTablaPagos();
+        $this->ensureColumn('talleres_formulario_pago', 'Entrego_Material', 'TINYINT(1) NULL AFTER Recibido_Por');
         $this->activarPagoEnTodosLosFormularios();
     }
 
@@ -1487,11 +1488,64 @@ class TallerFormulario extends BaseModel {
         return $out;
     }
 
+    /**
+     * Pagos de un taller, del más reciente al más antiguo.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getPagosPorFormulario(int $idFormulario): array {
+        $idFormulario = (int)$idFormulario;
+        if ($idFormulario <= 0) {
+            return [];
+        }
+        $sql = "SELECT p.Id_Pago, p.Id_Respuesta, p.Metodo_Pago, p.Recibido_Por, p.Tipo_Pago,
+                    p.Valor_Pago, p.Referencia_Pago, p.Fecha_Registro,
+                    r.Datos_JSON, r.Id_Persona
+             FROM talleres_formulario_pago p
+             INNER JOIN talleres_formulario_respuesta r ON r.Id_Respuesta = p.Id_Respuesta
+             WHERE p.Id_Formulario = ?
+             ORDER BY p.Fecha_Registro DESC, p.Id_Pago DESC";
+        try {
+            $rows = $this->query($sql, [$idFormulario]);
+        } catch (Throwable $e) {
+            return [];
+        }
+        if (!is_array($rows)) {
+            return [];
+        }
+        $out = [];
+        foreach ($rows as $row) {
+            $json = json_decode((string)($row['Datos_JSON'] ?? '{}'), true);
+            if (!is_array($json)) {
+                $json = [];
+            }
+            $nombre = trim((string)($json['nino_nombre'] ?? ''));
+            if ($nombre === '') {
+                $nombre = trim((string)($json['persona_nombre'] ?? '') . ' ' . (string)($json['persona_apellido'] ?? ''));
+            }
+            $documento = trim((string)($json['nino_documento'] ?? $json['persona_documento'] ?? ''));
+            $tipo = strtolower(trim((string)($row['Tipo_Pago'] ?? '')));
+            $out[] = [
+                'id_pago' => (int)($row['Id_Pago'] ?? 0),
+                'id_respuesta' => (int)($row['Id_Respuesta'] ?? 0),
+                'nombre' => $nombre !== '' ? $nombre : 'Sin nombre',
+                'documento' => $documento,
+                'metodo' => (string)($row['Metodo_Pago'] ?? ''),
+                'tipo' => $tipo === 'completo' ? 'Pago total' : ($tipo === 'abono' ? 'Abono' : (string)($row['Tipo_Pago'] ?? '')),
+                'valor' => (float)($row['Valor_Pago'] ?? 0),
+                'referencia' => (string)($row['Referencia_Pago'] ?? ''),
+                'recibido_por' => (string)($row['Recibido_Por'] ?? ''),
+                'fecha' => substr((string)($row['Fecha_Registro'] ?? ''), 0, 16),
+            ];
+        }
+        return $out;
+    }
+
     public function registrarPago(int $idRespuesta, int $idFormulario, array $datos): int {
         if ($idRespuesta <= 0 || $idFormulario <= 0) {
             return 0;
         }
-        return $this->insertEnTabla('talleres_formulario_pago', [
+        $payload = [
             'Id_Respuesta' => $idRespuesta,
             'Id_Formulario' => $idFormulario,
             'Metodo_Pago' => trim((string)($datos['metodo_pago'] ?? 'Efectivo')),
@@ -1499,7 +1553,99 @@ class TallerFormulario extends BaseModel {
             'Tipo_Pago' => trim((string)($datos['tipo_pago'] ?? 'completo')),
             'Valor_Pago' => (float)($datos['valor_pago'] ?? 0),
             'Referencia_Pago' => trim((string)($datos['referencia_pago'] ?? '')) ?: null,
-        ]);
+        ];
+        if (array_key_exists('entrego_material', $datos)) {
+            $payload['Entrego_Material'] = ((int)$datos['entrego_material'] === 1) ? 1 : 0;
+        }
+        return $this->insertEnTabla('talleres_formulario_pago', $payload);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function buscarRespuestasPorDocumento(string $documento, int $limit = 40): array {
+        $documento = preg_replace('/\D+/', '', trim($documento));
+        $limit = max(1, min(80, (int)$limit));
+        if ($documento === '') {
+            return [];
+        }
+
+        $like = '%' . $documento . '%';
+        $rows = $this->query(
+            "SELECT r.Id_Respuesta, r.Id_Formulario, r.Id_Persona, r.Fecha_Registro, r.Datos_JSON,
+                    f.Titulo, f.Slug, f.Tipo_Plantilla
+             FROM talleres_formulario_respuesta r
+             INNER JOIN talleres_formulario f ON f.Id_Formulario = r.Id_Formulario
+             LEFT JOIN persona p ON p.Id_Persona = r.Id_Persona
+             WHERE REPLACE(REPLACE(REPLACE(COALESCE(p.Numero_Documento, ''), '.', ''), '-', ''), ' ', '') = ?
+                OR r.Datos_JSON LIKE ?
+             ORDER BY r.Fecha_Registro DESC
+             LIMIT 80",
+            [$documento, $like]
+        );
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $row) {
+            $json = json_decode((string)($row['Datos_JSON'] ?? '{}'), true);
+            if (!is_array($json)) {
+                $json = [];
+            }
+            $docPersona = preg_replace('/\D+/', '', (string)($json['persona_documento'] ?? ''));
+            $docNino = preg_replace('/\D+/', '', (string)($json['nino_documento'] ?? ''));
+            $idPersona = (int)($row['Id_Persona'] ?? 0);
+            $matchJson = ($docPersona !== '' && $docPersona === $documento) || ($docNino !== '' && $docNino === $documento);
+            if (!$matchJson && $idPersona <= 0) {
+                continue;
+            }
+            if (!$matchJson && $docPersona === '' && $docNino === '') {
+                // Coincide por ficha de persona (LEFT JOIN).
+            } elseif (!$matchJson) {
+                continue;
+            }
+
+            $nombre = trim((string)($json['nino_nombre'] ?? ''));
+            if ($nombre === '') {
+                $nombre = trim((string)($json['persona_nombre'] ?? '') . ' ' . (string)($json['persona_apellido'] ?? ''));
+            }
+            $telefono = trim((string)($json['persona_telefono'] ?? $json['padres_telefono'] ?? ''));
+            $out[] = [
+                'Id_Respuesta' => (int)($row['Id_Respuesta'] ?? 0),
+                'Id_Formulario' => (int)($row['Id_Formulario'] ?? 0),
+                'Id_Persona' => $idPersona,
+                'Fecha_Registro' => (string)($row['Fecha_Registro'] ?? ''),
+                'Titulo' => (string)($row['Titulo'] ?? 'Taller'),
+                'nombre' => $nombre,
+                'documento' => $docNino !== '' ? $docNino : ($docPersona !== '' ? $docPersona : $documento),
+                'telefono' => $telefono,
+                'Datos_JSON' => $json,
+            ];
+            if (count($out) >= $limit) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    public function getPagoPorReferencia(string $referencia): ?array {
+        $referencia = trim($referencia);
+        if ($referencia === '') {
+            return null;
+        }
+        $rows = $this->query(
+            "SELECT p.*, r.Datos_JSON, r.Id_Persona, f.Titulo
+             FROM talleres_formulario_pago p
+             INNER JOIN talleres_formulario_respuesta r ON r.Id_Respuesta = p.Id_Respuesta
+             INNER JOIN talleres_formulario f ON f.Id_Formulario = p.Id_Formulario
+             WHERE TRIM(p.Referencia_Pago) = ?
+             ORDER BY p.Fecha_Registro DESC
+             LIMIT 1",
+            [$referencia]
+        );
+        return !empty($rows[0]) ? (array)$rows[0] : null;
     }
 
     public function getRespuestaPorId(int $idRespuesta): ?array {

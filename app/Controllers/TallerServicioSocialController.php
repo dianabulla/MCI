@@ -40,6 +40,10 @@ class TallerServicioSocialController extends BaseController {
     public function index() {
         $this->requiereAccesoAdmin();
 
+        $sabadoFiltro = array_key_exists('sabado', $_GET)
+            ? trim((string)$_GET['sabado'])
+            : (string)((TallerServicioSocial::proximosSabados(1)[0]['fecha'] ?? ''));
+
         $filtros = [
             'estado' => trim((string)($_GET['estado'] ?? '')),
             'tipo' => trim((string)($_GET['tipo'] ?? '')),
@@ -47,10 +51,11 @@ class TallerServicioSocialController extends BaseController {
             'buscar' => trim((string)($_GET['buscar'] ?? '')),
             'desde' => trim((string)($_GET['desde'] ?? '')),
             'hasta' => trim((string)($_GET['hasta'] ?? '')),
+            'sabado' => $sabadoFiltro,
         ];
 
         $citas = $this->model->listar($filtros);
-        $conteos = $this->model->contarPorEstado();
+        $conteos = TallerServicioSocial::contarEstadosDeCitas($citas);
 
         $flashOk = (string)($_SESSION['ss_flash_ok'] ?? '');
         $flashError = (string)($_SESSION['ss_flash_error'] ?? '');
@@ -67,6 +72,7 @@ class TallerServicioSocialController extends BaseController {
             'url_publico' => public_app_url('talleres_publico/servicio-social'),
             'flash_ok' => $flashOk,
             'flash_error' => $flashError,
+            'sabados_filtro' => TallerServicioSocial::sabadosParaFiltroAgenda(),
         ]);
     }
 
@@ -87,11 +93,11 @@ class TallerServicioSocialController extends BaseController {
 
         $tipoDoc = trim((string)($cita['Tipo_Documento'] ?? ''));
         $documento = trim((string)($cita['Documento'] ?? ''));
-        $historiaClinica = ($tipoDoc !== '' && $documento !== '')
+        $historiaClinica = $documento !== ''
             ? $this->model->listarHistoriaPaciente($tipoDoc, $documento)
             : [];
-        $citasPaciente = ($tipoDoc !== '' && $documento !== '')
-            ? $this->model->listarCitasPaciente($tipoDoc, $documento, 0)
+        $citasPaciente = $documento !== ''
+            ? $this->model->listarCitasPaciente($tipoDoc, $documento, $id)
             : [];
         $documentosRemision = ServicioSocialDocumentos::obtenerParaCita($id, $cita['Documentos_Remision'] ?? null);
 
@@ -105,6 +111,7 @@ class TallerServicioSocialController extends BaseController {
             'citas_paciente' => $citasPaciente,
             'documentos_remision' => $documentosRemision,
             'horarios_sabado' => TallerServicioSocial::catalogoHorariosSabado(),
+            'proximos_sabados' => TallerServicioSocial::proximosSabados(8),
             'puede_gestionar' => $this->puedeGestionar(),
             'flash_ok' => $flashOk,
             'flash_error' => $flashError,
@@ -125,13 +132,38 @@ class TallerServicioSocialController extends BaseController {
         }
 
         $id = (int)($_POST['id_cita'] ?? 0);
+        $estado = trim((string)($_POST['estado'] ?? ''));
+        $motivo = trim((string)($_POST['motivo_consulta'] ?? ''));
+        $diagnostico = trim((string)($_POST['diagnostico'] ?? ''));
+        $formula = trim((string)($_POST['formula'] ?? ''));
+        $recomendaciones = trim((string)($_POST['recomendaciones'] ?? ''));
+        $obsClinica = trim((string)($_POST['observaciones_hc'] ?? ''));
+        $hayClinica = ($diagnostico !== '' || $formula !== '' || $recomendaciones !== '' || $obsClinica !== '');
+        if ($hayClinica && ($estado === '' || $estado === 'pendiente' || $estado === 'confirmada')) {
+            $estado = 'atendida';
+        }
+
         $resultado = $this->model->actualizarGestion($id, [
-            'estado' => $_POST['estado'] ?? '',
+            'estado' => $estado,
             'notas_internas' => $_POST['notas_internas'] ?? '',
-            'fecha_atencion' => $_POST['fecha_atencion'] ?? '',
             'fecha_preferida' => $_POST['fecha_preferida'] ?? '',
             'hora_preferida' => $_POST['hora_preferida'] ?? '',
         ], $this->idUsuarioSesion());
+
+        if ($resultado['ok'] && $hayClinica) {
+            $historia = $this->model->crearEntradaHistoria($id, [
+                'motivo_consulta' => $motivo,
+                'diagnostico' => $diagnostico,
+                'formula' => $formula,
+                'recomendaciones' => $recomendaciones,
+                'observaciones' => $obsClinica,
+            ], $this->idUsuarioSesion());
+            if ($historia['ok']) {
+                $resultado['message'] = trim($resultado['message'] . ' ' . $historia['message']);
+            } elseif (!empty($historia['message'])) {
+                $_SESSION['ss_flash_error'] = $historia['message'];
+            }
+        }
 
         if ($resultado['ok']) {
             $_SESSION['ss_flash_ok'] = $resultado['message'];
@@ -140,6 +172,38 @@ class TallerServicioSocialController extends BaseController {
         }
 
         header('Location: ' . public_app_url('talleres/servicio-social/ver', ['id' => $id]));
+        exit;
+    }
+
+    public function agendarNueva() {
+        $this->requiereAccesoAdmin();
+
+        if (!$this->puedeGestionar()) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('talleres/servicio-social');
+            return;
+        }
+
+        $idOrigen = (int)($_POST['id_cita'] ?? 0);
+        $resultado = $this->model->crearCitaSeguimiento($idOrigen, [
+            'fecha_preferida' => $_POST['fecha_preferida'] ?? '',
+            'hora_preferida' => $_POST['hora_preferida'] ?? '',
+            'tipo_cita' => $_POST['tipo_cita'] ?? '',
+            'necesidad_principal' => $_POST['necesidad_principal'] ?? '',
+        ]);
+
+        if ($resultado['ok'] && !empty($resultado['id'])) {
+            $_SESSION['ss_flash_ok'] = $resultado['message'];
+            header('Location: ' . public_app_url('talleres/servicio-social/ver', ['id' => (int)$resultado['id']]));
+            exit;
+        }
+
+        $_SESSION['ss_flash_error'] = $resultado['message'] ?? 'No se pudo agendar la cita.';
+        header('Location: ' . public_app_url('talleres/servicio-social/ver', ['id' => $idOrigen]));
         exit;
     }
 
@@ -206,6 +270,7 @@ class TallerServicioSocialController extends BaseController {
             'buscar' => trim((string)($_GET['buscar'] ?? '')),
             'desde' => trim((string)($_GET['desde'] ?? '')),
             'hasta' => trim((string)($_GET['hasta'] ?? '')),
+            'sabado' => trim((string)($_GET['sabado'] ?? '')),
         ];
 
         $citas = $this->model->listar($filtros);

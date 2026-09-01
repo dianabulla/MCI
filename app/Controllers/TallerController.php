@@ -1010,6 +1010,8 @@ class TallerController extends BaseController {
 
             'ministerios_asignacion' => $this->listarMinisteriosAsignacion(),
 
+            'lista_pagos' => $soloGraficas ? [] : $this->model->getPagosPorFormulario($id),
+
         ]);
 
     }

@@ -3293,6 +3293,35 @@ class Persona extends BaseModel {
     }
 
     /**
+     * Total de filas en persona (toda la base visible según aislamiento).
+     */
+    public function contarTodasEnBase(string $filtroRol = '1=1'): int {
+        $filtroRol = trim($filtroRol) !== '' ? $filtroRol : '1=1';
+        $sql = "SELECT COUNT(*) AS Total
+                FROM {$this->table} p
+                WHERE {$filtroRol}";
+        $rows = $this->query($sql);
+        return (int)($rows[0]['Total'] ?? 0);
+    }
+
+    /**
+     * Personas activas en la red de Discipular (con ministerio o líder asignado).
+     */
+    public function contarPersonasRedDiscipular(string $filtroRol = '1=1'): int {
+        $filtroRol = trim($filtroRol) !== '' ? $filtroRol : '1=1';
+        $sql = "SELECT COUNT(*) AS Total
+                FROM {$this->table} p
+                WHERE (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                  AND {$filtroRol}
+                  AND (
+                        (p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0)
+                     OR (p.Id_Lider IS NOT NULL AND p.Id_Lider > 0)
+                  )";
+        $rows = $this->query($sql);
+        return (int)($rows[0]['Total'] ?? 0);
+    }
+
+    /**
      * Total de lÃ­deres de cÃ©lula visibles segÃºn aislamiento.
      */
     public function getTotalLideresCelulaWithRole($filtroRol) {

@@ -5,7 +5,7 @@
  */
 class MenuBuilder {
     /** Incrementar al cambiar estructura del menú lateral (invalida caché en sesión). */
-    public const SIDEBAR_MENU_VERSION = 10;
+    public const SIDEBAR_MENU_VERSION = 11;
 
     /**
      * Sincroniza permisos planos y menú en $_SESSION.
@@ -399,7 +399,10 @@ class MenuBuilder {
         }
 
         $comunidad = [];
-        if (AuthController::puedeVerModulo('talleres')) {
+        if (AuthController::puedeAccederPagosComunidad()) {
+            $comunidad[] = ['id' => 'comunidad_pagos', 'label' => 'Pagos', 'ruta' => 'comunidad/pagos', 'icon' => 'bi-cash-coin'];
+        }
+        if (AuthController::puedeVerModulo('talleres') || AuthController::puedeAccederModuloTalleres()) {
             $comunidad[] = ['id' => 'talleres', 'label' => 'Talleres', 'ruta' => 'talleres', 'icon' => 'bi-ui-checks-grid'];
         }
         if (AuthController::puedeVerModulo('eventos')) {

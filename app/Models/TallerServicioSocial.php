@@ -203,6 +203,38 @@ class TallerServicioSocial extends BaseModel {
         return self::TIPOS_DOCUMENTO[$clave] ?? ($clave !== '' ? $clave : '—');
     }
 
+    /**
+     * Si hay cédula pero no tipo (citas viejas o copiadas), se asume cédula de ciudadanía.
+     *
+     * @param array<string, mixed> $cita
+     * @return array{ok:bool,tipo:string,documento:string,message:string}
+     */
+    public function resolverIdentidadPaciente(array $cita, bool $persistir = false): array {
+        $documento = trim((string)($cita['Documento'] ?? ''));
+        $tipo = self::normalizarTipoDocumento(trim((string)($cita['Tipo_Documento'] ?? '')));
+        if ($documento === '') {
+            return [
+                'ok' => false,
+                'tipo' => '',
+                'documento' => '',
+                'message' => 'La cita no tiene documento registrado.',
+            ];
+        }
+        if ($tipo === '' || !isset(self::TIPOS_DOCUMENTO[$tipo])) {
+            $tipo = 'Cedula de Ciudadania';
+            $id = (int)($cita['Id_Cita'] ?? 0);
+            if ($persistir && $id > 0) {
+                try {
+                    $this->update($id, ['Tipo_Documento' => $tipo]);
+                } catch (Throwable $e) {
+                    error_log('Servicio Social resolverIdentidadPaciente: ' . $e->getMessage());
+                }
+            }
+        }
+
+        return ['ok' => true, 'tipo' => $tipo, 'documento' => $documento, 'message' => ''];
+    }
+
     public static function normalizarTipoDocumento(string $valor): string {
         $valor = trim($valor);
         if ($valor === '') {
@@ -337,6 +369,36 @@ class TallerServicioSocial extends BaseModel {
 
         $out = [];
         for ($i = 0; $i < $cantidad; $i++) {
+            $fecha = $base->format('Y-m-d');
+            $out[] = [
+                'fecha' => $fecha,
+                'label' => self::etiquetaSabado($fecha),
+            ];
+            $base->modify('+7 days');
+        }
+
+        return $out;
+    }
+
+    /**
+     * Sábados para filtrar la agenda del listado (pasados y próximos).
+     *
+     * @return array<int, array{fecha:string,label:string}>
+     */
+    public static function sabadosParaFiltroAgenda(int $atras = 10, int $adelante = 12): array {
+        $atras = max(0, min(52, $atras));
+        $adelante = max(0, min(52, $adelante));
+        $base = new DateTime('today');
+        while ((int)$base->format('N') !== 6) {
+            $base->modify('+1 day');
+        }
+        if ($atras > 0) {
+            $base->modify('-' . ($atras * 7) . ' days');
+        }
+
+        $out = [];
+        $total = $atras + $adelante + 1;
+        for ($i = 0; $i < $total; $i++) {
             $fecha = $base->format('Y-m-d');
             $out[] = [
                 'fecha' => $fecha,
@@ -528,6 +590,22 @@ class TallerServicioSocial extends BaseModel {
     public static function etiquetaHora(string $hora): string {
         $hora = self::normalizarHora($hora);
         return self::catalogoHorariosSabado()[$hora] ?? ($hora !== '' ? $hora : '—');
+    }
+
+    /**
+     * Fecha y hora de atención = día y cupo agendados (no un campo aparte).
+     */
+    public static function fechaHoraDesdeAgenda(?string $fecha, ?string $hora): string {
+        $fecha = trim((string)$fecha);
+        $hora = self::normalizarHora((string)$hora);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+            return date('Y-m-d H:i:s');
+        }
+        $hm = '08:00';
+        if ($hora !== '' && preg_match('/^(\d{2}:\d{2})/', $hora, $m)) {
+            $hm = $m[1];
+        }
+        return $fecha . ' ' . $hm . ':00';
     }
 
     /**
@@ -850,6 +928,43 @@ class TallerServicioSocial extends BaseModel {
     }
 
     /**
+     * El equipo puede agendar cualquier sábado futuro (no solo el de esta semana).
+     *
+     * @return array{ok:bool,error?:string}
+     */
+    public function validarAgendamientoInterno(string $fecha, string $hora, string $documento = ''): array {
+        if ($fecha === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+            return ['ok' => false, 'error' => 'Indica un sábado válido.'];
+        }
+        if (!self::esSabado($fecha)) {
+            return ['ok' => false, 'error' => 'Las citas solo se agendan los sábados.'];
+        }
+        if ($fecha < date('Y-m-d')) {
+            return ['ok' => false, 'error' => 'No se puede agendar en una fecha pasada.'];
+        }
+        if ($documento !== '' && $this->tieneCitaActivaEnFecha($documento, $fecha)) {
+            return ['ok' => false, 'error' => 'Esta persona ya tiene una cita activa ese sábado.'];
+        }
+
+        $horaNorm = self::normalizarHora($hora);
+        if ($horaNorm === '' || !isset(self::catalogoHorariosSabado()[$horaNorm])) {
+            return ['ok' => false, 'error' => 'Selecciona un horario.'];
+        }
+
+        $catalogo = $this->horasDisponiblesCatalogo($fecha);
+        if (!in_array($horaNorm, $catalogo, true)) {
+            return ['ok' => false, 'error' => 'Ese horario no está habilitado ese sábado.'];
+        }
+
+        $ocupadas = $this->horasOcupadas($fecha);
+        if (in_array($horaNorm, $ocupadas, true)) {
+            return ['ok' => false, 'error' => 'Ese horario ya está ocupado. Elige otra hora.'];
+        }
+
+        return ['ok' => true];
+    }
+
+    /**
      * @param array{estado?:string,tipo?:string,remitido?:string,buscar?:string,desde?:string,hasta?:string} $filtros
      * @return array<int, array<string, mixed>>
      */
@@ -888,29 +1003,119 @@ class TallerServicioSocial extends BaseModel {
             $params[] = $hasta;
         }
 
+        $sabado = trim((string)($filtros['sabado'] ?? ''));
+        if ($sabado !== '' && self::esSabado($sabado)) {
+            $sql .= ' AND Fecha_Preferida = ?';
+            $params[] = $sabado;
+        }
+
         $buscar = trim((string)($filtros['buscar'] ?? ''));
         if ($buscar !== '') {
             $docNorm = self::normalizarDocumento($buscar);
+            $telNorm = preg_replace('/\D+/', '', $buscar) ?? '';
             $exprDoc = self::sqlExprDocumentoNorm('Documento');
-            $sql .= " AND (
-                Nombre LIKE ?
-                OR Apellido LIKE ?
-                OR Documento LIKE ?
-                OR {$exprDoc} LIKE ?
-                OR Tipo_Documento LIKE ?
-                OR Nombre_Eps LIKE ?
-                OR Telefono LIKE ?
-                OR Email LIKE ?
-                OR Necesidad_Principal LIKE ?
-            )";
-            $like = '%' . $buscar . '%';
-            $likeDoc = '%' . ($docNorm !== '' ? $docNorm : strtoupper($buscar)) . '%';
-            $params = array_merge($params, [$like, $like, $like, $likeDoc, $like, $like, $like, $like, $like]);
+            $exprTel = "REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(Telefono, ''), ' ', ''), '-', ''), '(', ''), ')', '')";
+            $exprNombre = "CONCAT_WS(' ', COALESCE(Nombre, ''), COALESCE(Apellido, ''))";
+
+            $tokens = preg_split('/\s+/u', $buscar) ?: [$buscar];
+            $tokens = array_values(array_filter($tokens, static function ($t) {
+                return mb_strlen(trim((string)$t), 'UTF-8') >= 2;
+            }));
+            if ($tokens === []) {
+                $tokens = [$buscar];
+            }
+
+            $sql .= ' AND (';
+            $partes = [];
+            if ($docNorm !== '' && preg_match('/[0-9A-Z]/', $docNorm)) {
+                $partes[] = "({$exprDoc} LIKE ? OR Documento LIKE ?)";
+                $likeDoc = '%' . $docNorm . '%';
+                $params[] = $likeDoc;
+                $params[] = '%' . $buscar . '%';
+            }
+            if ($telNorm !== '' && strlen($telNorm) >= 4) {
+                $partes[] = "({$exprTel} LIKE ? OR Telefono LIKE ?)";
+                $params[] = '%' . $telNorm . '%';
+                $params[] = '%' . $buscar . '%';
+            }
+            $nombreAnd = [];
+            foreach ($tokens as $tok) {
+                $nombreAnd[] = "{$exprNombre} LIKE ?";
+                $params[] = '%' . $tok . '%';
+            }
+            $partes[] = '(' . implode(' AND ', $nombreAnd) . ')';
+            $partes[] = 'Email LIKE ?';
+            $params[] = '%' . $buscar . '%';
+            $partes[] = 'Necesidad_Principal LIKE ?';
+            $params[] = '%' . $buscar . '%';
+            $sql .= implode(' OR ', $partes) . ')';
         }
 
         $sql .= ' ORDER BY Fecha_Preferida DESC, Fecha_Creacion DESC, Id_Cita DESC';
 
-        return $this->query($sql, $params);
+        return self::quedarseUltimaCitaPorPersona($this->query($sql, $params));
+    }
+
+    /**
+     * @param array<string, mixed> $cita
+     */
+    public static function clavePersonaCita(array $cita): string {
+        $doc = self::normalizarDocumento((string)($cita['Documento'] ?? ''));
+        if ($doc !== '') {
+            return 'd:' . $doc;
+        }
+        $tel = preg_replace('/\D+/', '', (string)($cita['Telefono'] ?? '')) ?? '';
+        $nombre = mb_strtolower(trim((string)($cita['Nombre'] ?? '') . ' ' . (string)($cita['Apellido'] ?? '')), 'UTF-8');
+        if ($tel !== '' || $nombre !== '') {
+            return 'p:' . $tel . '|' . $nombre;
+        }
+
+        return 'id:' . (int)($cita['Id_Cita'] ?? 0);
+    }
+
+    /**
+     * Una fila por persona: se conserva la cita más reciente (ya ordenada desc).
+     *
+     * @param array<int, array<string, mixed>> $citas
+     * @return array<int, array<string, mixed>>
+     */
+    public static function quedarseUltimaCitaPorPersona(array $citas): array {
+        $visto = [];
+        $out = [];
+        foreach ($citas as $cita) {
+            $clave = self::clavePersonaCita($cita);
+            if (isset($visto[$clave])) {
+                continue;
+            }
+            $visto[$clave] = true;
+            $out[] = $cita;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $citas
+     * @return array{pendiente:int,confirmada:int,atendida:int,cancelada:int,no_asistio:int,total:int}
+     */
+    public static function contarEstadosDeCitas(array $citas): array {
+        $out = [
+            'pendiente' => 0,
+            'confirmada' => 0,
+            'atendida' => 0,
+            'cancelada' => 0,
+            'no_asistio' => 0,
+            'total' => 0,
+        ];
+        foreach ($citas as $cita) {
+            $est = self::normalizarEstado((string)($cita['Estado'] ?? ''));
+            if (isset($out[$est])) {
+                $out[$est]++;
+            }
+            $out['total']++;
+        }
+
+        return $out;
     }
 
     /**
@@ -1032,6 +1237,62 @@ class TallerServicioSocial extends BaseModel {
     }
 
     /**
+     * Nueva cita para la misma persona (seguimiento), desde el detalle.
+     *
+     * @param array<string, mixed> $datos
+     * @return array{ok:bool,message:string,id?:int}
+     */
+    public function crearCitaSeguimiento(int $idCitaOrigen, array $datos): array {
+        $origen = $this->getById($idCitaOrigen);
+        if (empty($origen)) {
+            return ['ok' => false, 'message' => 'No se encontró la cita de origen.'];
+        }
+
+        $fechaPref = trim((string)($datos['fecha_preferida'] ?? ''));
+        $horaPref = trim((string)($datos['hora_preferida'] ?? ''));
+        $tipo = trim((string)($datos['tipo_cita'] ?? ''));
+        $necesidad = trim((string)($datos['necesidad_principal'] ?? ''));
+        $identidad = $this->resolverIdentidadPaciente($origen, true);
+        $documento = $identidad['documento'];
+        $tipoDocumento = $identidad['ok'] ? $identidad['tipo'] : trim((string)($origen['Tipo_Documento'] ?? ''));
+
+        $validacion = $this->validarAgendamientoInterno($fechaPref, $horaPref, $documento);
+        if (!$validacion['ok']) {
+            return ['ok' => false, 'message' => (string)($validacion['error'] ?? 'No se pudo agendar.')];
+        }
+        if ($tipo === '' || !isset(self::TIPOS_CITA[$tipo])) {
+            return ['ok' => false, 'message' => 'Selecciona el tipo de cita.'];
+        }
+        if ($necesidad === '') {
+            $necesidad = 'Seguimiento';
+        }
+
+        $id = $this->create([
+            'Nombre' => $origen['Nombre'] ?? '',
+            'Apellido' => $origen['Apellido'] ?? '',
+            'Tipo_Documento' => $tipoDocumento !== '' ? $tipoDocumento : null,
+            'Documento' => $documento,
+            'Nombre_Eps' => $origen['Nombre_Eps'] ?? null,
+            'Telefono' => $origen['Telefono'] ?? '',
+            'Email' => $origen['Email'] ?? null,
+            'Fecha_Preferida' => $fechaPref,
+            'Hora_Preferida' => self::normalizarHora($horaPref),
+            'Tipo_Cita' => $tipo,
+            'Necesidad_Principal' => $necesidad,
+            'Remitido_Por' => $origen['Remitido_Por'] ?? 'ninguno',
+            'Remitido_Detalle' => $origen['Remitido_Detalle'] ?? null,
+            'Observaciones' => null,
+            'Estado' => 'confirmada',
+        ]);
+
+        if (!$id) {
+            return ['ok' => false, 'message' => 'No se pudo guardar la nueva cita.'];
+        }
+
+        return ['ok' => true, 'message' => 'Cita nueva agendada.', 'id' => (int)$id];
+    }
+
+    /**
      * @param mixed $filesInput
      * @return array{ok:bool,errors:array<int,string>}
      */
@@ -1071,17 +1332,17 @@ class TallerServicioSocial extends BaseModel {
      * @return array<int, array<string, mixed>>
      */
     public function listarHistoriaPaciente(string $tipoDocumento, string $documento): array {
-        $tipoDocumento = self::normalizarTipoDocumento(trim($tipoDocumento));
-        $documento = trim($documento);
-        if ($tipoDocumento === '' || $documento === '') {
+        $docNorm = self::normalizarDocumento($documento);
+        if ($docNorm === '') {
             return [];
         }
 
+        $exprDoc = self::sqlExprDocumentoNorm('Documento');
         return $this->query(
             "SELECT * FROM {$this->tablaHistoria}
-             WHERE Tipo_Documento = ? AND Documento = ?
+             WHERE {$exprDoc} = ?
              ORDER BY Fecha_Atencion DESC, Id_Entrada DESC",
-            [$tipoDocumento, $documento]
+            [$docNorm]
         );
     }
 
@@ -1095,29 +1356,27 @@ class TallerServicioSocial extends BaseModel {
             return ['ok' => false, 'message' => 'La cita no existe.'];
         }
 
-        $tipoDocumento = self::normalizarTipoDocumento(trim((string)($cita['Tipo_Documento'] ?? '')));
-        $documento = trim((string)($cita['Documento'] ?? ''));
-        if ($tipoDocumento === '' || $documento === '') {
-            return ['ok' => false, 'message' => 'La cita no tiene documento registrado.'];
+        $identidad = $this->resolverIdentidadPaciente($cita, true);
+        if (!$identidad['ok']) {
+            return ['ok' => false, 'message' => $identidad['message']];
         }
+        $tipoDocumento = $identidad['tipo'];
+        $documento = $identidad['documento'];
 
         $motivo = trim((string)($datos['motivo_consulta'] ?? ''));
         $diagnostico = trim((string)($datos['diagnostico'] ?? ''));
         $formula = trim((string)($datos['formula'] ?? ''));
         $recomendaciones = trim((string)($datos['recomendaciones'] ?? ''));
         $observaciones = trim((string)($datos['observaciones'] ?? ''));
-        $fechaAtencion = trim((string)($datos['fecha_atencion'] ?? ''));
 
-        if ($motivo === '' && $diagnostico === '' && $formula === '') {
-            return ['ok' => false, 'message' => 'Registra al menos motivo, diagnóstico o fórmula.'];
+        if ($motivo === '' && $diagnostico === '' && $formula === '' && $recomendaciones === '' && $observaciones === '') {
+            return ['ok' => false, 'message' => 'Registra al menos motivo, diagnóstico, plan o recomendaciones.'];
         }
 
-        if ($fechaAtencion !== '') {
-            $ts = strtotime($fechaAtencion);
-            $fechaSql = $ts ? date('Y-m-d H:i:s', $ts) : date('Y-m-d H:i:s');
-        } else {
-            $fechaSql = date('Y-m-d H:i:s');
-        }
+        $fechaSql = self::fechaHoraDesdeAgenda(
+            (string)($cita['Fecha_Preferida'] ?? ''),
+            (string)($cita['Hora_Preferida'] ?? '')
+        );
 
         $id = $this->createHistoria([
             'Tipo_Documento' => $tipoDocumento,
@@ -1162,7 +1421,6 @@ class TallerServicioSocial extends BaseModel {
      * @return array<int, array<string, mixed>>
      */
     public function listarCitasPaciente(string $tipoDocumento, string $documento, int $excluirId = 0): array {
-        $tipoDocumento = self::normalizarTipoDocumento(trim($tipoDocumento));
         $docNorm = self::normalizarDocumento($documento);
         if ($docNorm === '') {
             return [];
@@ -1171,10 +1429,6 @@ class TallerServicioSocial extends BaseModel {
         $exprDoc = self::sqlExprDocumentoNorm('Documento');
         $sql = "SELECT * FROM {$this->table} WHERE {$exprDoc} = ?";
         $params = [$docNorm];
-        if ($tipoDocumento !== '') {
-            $sql .= ' AND Tipo_Documento = ?';
-            $params[] = $tipoDocumento;
-        }
         if ($excluirId > 0) {
             $sql .= ' AND Id_Cita <> ?';
             $params[] = $excluirId;
@@ -1201,7 +1455,6 @@ class TallerServicioSocial extends BaseModel {
         }
 
         $notas = trim((string)($datos['notas_internas'] ?? ''));
-        $fechaAtencion = trim((string)($datos['fecha_atencion'] ?? ''));
         $fechaPref = trim((string)($datos['fecha_preferida'] ?? ''));
         $horaPref = trim((string)($datos['hora_preferida'] ?? ''));
 
@@ -1215,13 +1468,6 @@ class TallerServicioSocial extends BaseModel {
 
         if ($idUsuario > 0) {
             $update['Actualizado_Por'] = $idUsuario;
-        }
-
-        if ($fechaAtencion !== '') {
-            $ts = strtotime($fechaAtencion);
-            $update['Fecha_Atencion'] = $ts ? date('Y-m-d H:i:s', $ts) : null;
-        } elseif ($estado === 'atendida' && trim((string)($citaActual['Fecha_Atencion'] ?? '')) === '') {
-            $update['Fecha_Atencion'] = date('Y-m-d H:i:s');
         }
 
         $avisos = [];
@@ -1249,6 +1495,12 @@ class TallerServicioSocial extends BaseModel {
                     $update['Hora_Preferida'] = $horaNorm;
                 }
             }
+        }
+
+        $fechaFinal = (string)($update['Fecha_Preferida'] ?? $fechaActual);
+        $horaFinal = (string)($update['Hora_Preferida'] ?? $horaActual);
+        if ($estado === 'atendida') {
+            $update['Fecha_Atencion'] = self::fechaHoraDesdeAgenda($fechaFinal, $horaFinal);
         }
 
         try {

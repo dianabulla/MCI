@@ -239,6 +239,22 @@ class Celula extends BaseModel {
     }
 
     /**
+     * Cantidad de células (no de personas) visibles según aislamiento.
+     */
+    public function contarCelulas(string $filtroRol = '1=1', bool $soloActivas = true): int {
+        $filtroRol = trim($filtroRol) !== '' ? $filtroRol : '1=1';
+        $where = ["({$filtroRol})"];
+        if ($soloActivas && $this->columnExists('Estado_Celula')) {
+            $where[] = "(c.Estado_Celula = 'Activa' OR c.Estado_Celula IS NULL OR c.Estado_Celula = '')";
+        }
+        $sql = "SELECT COUNT(*) AS Total
+                FROM {$this->table} c
+                WHERE " . implode(' AND ', $where);
+        $rows = $this->query($sql);
+        return (int)($rows[0]['Total'] ?? 0);
+    }
+
+    /**
      * Verifica si una célula existe dentro del alcance de un filtro de rol.
      */
     public function existsByIdWithRole($idCelula, $filtroRol) {

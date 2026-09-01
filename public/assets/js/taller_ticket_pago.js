@@ -69,9 +69,35 @@
         ctx.fillText(val, width - 24 - textWidth, y);
     }
 
+    function tituloMciDeData(data) {
+        if (data && data.titulo_mci) {
+            return String(data.titulo_mci).trim();
+        }
+        const formulario = data && data.formulario ? String(data.formulario).trim() : '';
+        const origen = data && data.origen ? String(data.origen).toLowerCase() : '';
+        if (origen === 'taller') {
+            return formulario ? ('MCI Taller ' + formulario) : 'MCI Taller';
+        }
+        return formulario ? ('MCI ' + formulario) : 'MCI';
+    }
+
+    function telefonoWhatsappDeData(data) {
+        if (!data) {
+            return '';
+        }
+        let digits = String(data.telefono || '').replace(/\D+/g, '');
+        if (digits.length === 10 && digits.charAt(0) === '3') {
+            digits = '57' + digits;
+        }
+        if (digits.length >= 11 && digits.length <= 15) {
+            return digits;
+        }
+        return '';
+    }
+
     function dibujarTicketEnCanvas(data) {
         const width = 400;
-        const height = 520;
+        const height = 580;
         const scale = 2;
         const canvas = document.createElement('canvas');
         canvas.width = width * scale;
@@ -84,30 +110,49 @@
 
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, height);
-        ctx.strokeStyle = '#0a6e6a';
-        ctx.lineWidth = 2;
         if (typeof ctx.roundRect === 'function') {
             ctx.beginPath();
-            ctx.roundRect(8, 8, width - 16, height - 16, 14);
-            ctx.stroke();
-        } else {
-            ctx.strokeRect(8, 8, width - 16, height - 16);
+            ctx.roundRect(0, 0, width, height, 18);
+            ctx.clip();
         }
 
-        let y = 36;
-        ctx.fillStyle = '#0a6e6a';
+        const headerH = 118;
+        const grad = ctx.createLinearGradient(0, 0, width, headerH);
+        grad.addColorStop(0, '#0a6e6a');
+        grad.addColorStop(0.55, '#0f766e');
+        grad.addColorStop(1, '#134e4a');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, headerH);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
         ctx.font = 'bold 11px Arial, sans-serif';
-        ctx.fillText('MCI MADRID COLOMBIA', 24, y);
-        y += 22;
-        ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 20px Arial, sans-serif';
-        ctx.fillText('Ticket de pago', 24, y);
-        y += 28;
+        ctx.textAlign = 'center';
+        ctx.fillText('MCI MADRID COLOMBIA', width / 2, 28);
 
-        if (data.formulario) {
-            dibujarLinea(ctx, 'Formulario', data.formulario, y, width);
-            y += 22;
-        }
+        const titulo = tituloMciDeData(data);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px Arial, sans-serif';
+        const palabras = titulo.split(' ');
+        let linea = '';
+        let yTitulo = 56;
+        palabras.forEach(function (palabra, idx) {
+            const prueba = linea ? (linea + ' ' + palabra) : palabra;
+            if (ctx.measureText(prueba).width > width - 40 && linea) {
+                ctx.fillText(linea, width / 2, yTitulo);
+                linea = palabra;
+                yTitulo += 24;
+            } else {
+                linea = prueba;
+            }
+            if (idx === palabras.length - 1) {
+                ctx.fillText(linea, width / 2, yTitulo);
+            }
+        });
+        ctx.font = 'bold 11px Arial, sans-serif';
+        ctx.fillText('TICKET DE PAGO', width / 2, headerH - 16);
+        ctx.textAlign = 'left';
+
+        let y = headerH + 28;
         dibujarLinea(ctx, 'Fecha', data.fecha || '', y, width);
         y += 22;
         dibujarLinea(ctx, data.etiqueta_nombre || 'Inscrito', data.nombre, y, width);
@@ -134,16 +179,25 @@
         dibujarLinea(ctx, 'Tipo', data.tipo_pago, y, width);
         y += 22;
         dibujarLinea(ctx, 'Valor', '$' + (data.valor_pago || '0'), y, width);
-        y += 28;
+        y += 22;
+        if (data.entrego_material === 1 || data.entrego_material === '1' || data.entrego_material === true) {
+            dibujarLinea(ctx, 'Material', 'Sí', y, width);
+            y += 22;
+        } else if (data.entrego_material === 0 || data.entrego_material === '0') {
+            dibujarLinea(ctx, 'Material', 'No', y, width);
+            y += 22;
+        }
 
+        y += 8;
         ctx.fillStyle = '#64748b';
         ctx.font = '12px Arial, sans-serif';
-        ctx.fillText('Referencia', 24, y);
-        y += 8;
+        ctx.textAlign = 'center';
+        ctx.fillText('Referencia', width / 2, y);
         ctx.fillStyle = '#0a6e6a';
         ctx.font = 'bold 32px "Courier New", monospace';
-        ctx.fillText(data.referencia_pago || '—', 24, y + 28);
-        y += 48;
+        ctx.fillText(data.referencia_pago || '—', width / 2, y + 36);
+        ctx.textAlign = 'left';
+        y += 56;
 
         ctx.strokeStyle = '#cbd5e1';
         ctx.setLineDash([4, 4]);
@@ -153,10 +207,10 @@
         ctx.stroke();
         ctx.setLineDash([]);
         y += 16;
-        ctx.fillStyle = '#94a3b8';
+        ctx.fillStyle = '#64748b';
         ctx.font = '11px Arial, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(data.pie_comprobante || ('Comprobante de pago — ' + (data.formulario || 'Taller')), width / 2, y);
+        ctx.fillText(data.pie_comprobante || ('Gracias por tu ofrenda · ' + titulo), width / 2, y);
         ctx.textAlign = 'left';
 
         return canvas;
@@ -169,6 +223,10 @@
 
         const clone = node.cloneNode(true);
         clone.style.margin = '0';
+        clone.style.position = 'static';
+        clone.style.left = 'auto';
+        clone.style.top = 'auto';
+        clone.id = 'ticket-pago-export-clone';
         wrap.appendChild(clone);
         document.body.appendChild(wrap);
 
@@ -240,31 +298,48 @@
         return blob;
     }
 
+    async function copiarImagenPortapapeles(blob) {
+        if (!navigator.clipboard || !window.ClipboardItem) {
+            return false;
+        }
+        try {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function abrirWhatsappWeb(data, texto) {
+        const phone = telefonoWhatsappDeData(data);
+        const encoded = encodeURIComponent(texto);
+        const url = phone
+            ? ('https://web.whatsapp.com/send?phone=' + phone + '&text=' + encoded)
+            : 'https://web.whatsapp.com/';
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
     async function compartirTicketWhatsapp() {
         const blob = await generarTicketPng();
+        const data = leerTicketData() || {};
         const referencia = getReferencia();
         const filename = 'ticket-' + referencia + '.png';
-        const file = new File([blob], filename, { type: 'image/png' });
-        const shareData = {
-            files: [file],
-            title: 'Ticket de pago MCI Madrid',
-            text: 'Ticket de pago — Referencia: ' + referencia,
-        };
+        const titulo = tituloMciDeData(data);
+        const texto = titulo + ' — Ticket de pago. Referencia: ' + (data.referencia_pago || referencia);
 
-        if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-            try {
-                await navigator.share(shareData);
-                return;
-            } catch (err) {
-                if (err && err.name === 'AbortError') {
-                    return;
-                }
-            }
-        }
-
+        const copiado = await copiarImagenPortapapeles(blob);
         descargarBlob(blob, filename);
-        alert('Se descargó la imagen del ticket.\n\n1. Abre WhatsApp\n2. Elige el contacto\n3. Adjunta la imagen descargada');
-        window.open('https://wa.me/', '_blank', 'noopener,noreferrer');
+        abrirWhatsappWeb(data, texto);
+
+        const estado = document.getElementById('ticket-wa-estado');
+        const aviso = copiado
+            ? 'Se abrió WhatsApp Web. La imagen quedó copiada: péguela en el chat con Ctrl+V (o adjunte el archivo descargado).'
+            : 'Se abrió WhatsApp Web. Adjunte en el chat la imagen del ticket que se acaba de descargar.';
+        if (estado) {
+            estado.textContent = aviso;
+        } else {
+            alert(aviso);
+        }
     }
 
     async function mostrarVistaPrevia() {

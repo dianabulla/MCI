@@ -4,15 +4,15 @@
 $indicadoresDashboard = [
     'ganar' => [
         'valor' => (int)($totalGanarConsolidar ?? $totalPersonas ?? 0),
-        'etiqueta' => 'personas',
+        'etiqueta' => 'personas en la base',
     ],
     'discipular' => [
         'valor' => (int)($totalDiscipular ?? 0),
-        'etiqueta' => 'personas',
+        'etiqueta' => 'personas en red',
     ],
     'enviar' => [
-        'valor' => (int)($totalPersonasCelulas ?? 0),
-        'etiqueta' => 'personas en células',
+        'valor' => (int)($totalCelulas ?? $totalPersonasCelulas ?? 0),
+        'etiqueta' => 'células',
     ],
     'teens' => [
         'valor' => (int)($totalTeens ?? 0),

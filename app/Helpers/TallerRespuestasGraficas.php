@@ -72,6 +72,15 @@ class TallerRespuestasGraficas {
 
                 if ($tipo === 'number') {
                     $graficas[] = $this->graficaNumero($clave, $etiqueta, $jsonFilas);
+                    continue;
+                }
+
+                if (($tipo === 'text' || $tipo === 'textarea')
+                    && !$this->esCampoIdentidadAbierta($clave, $etiqueta)) {
+                    $graficaAbierta = $this->graficaRespuestasAbiertas($clave, $etiqueta, $jsonFilas);
+                    if ($graficaAbierta !== null) {
+                        $graficas[] = $graficaAbierta;
+                    }
                 }
             }
         }
@@ -262,6 +271,349 @@ class TallerRespuestasGraficas {
             'labels' => array_keys($conteo),
             'data' => array_values($conteo),
         ];
+    }
+
+    /**
+     * Tabula texto libre y agrupa frases que significan lo mismo.
+     *
+     * @param array<int, array<string, mixed>> $jsonFilas
+     * @return array<string, mixed>|null
+     */
+    private function graficaRespuestasAbiertas(string $clave, string $etiqueta, array $jsonFilas): ?array {
+        $textos = $this->extraerTextosCampoAbierto($clave, $jsonFilas);
+        if ($textos === []) {
+            return null;
+        }
+
+        $usarTemas = $this->esPreguntaExpectativa($clave, $etiqueta);
+        $grupos = $this->agruparTextosSimilares($textos, $usarTemas);
+        if ($grupos === []) {
+            return null;
+        }
+
+        $labels = [];
+        $data = [];
+        $filas = [];
+        foreach ($grupos as $grupo) {
+            $labels[] = (string)$grupo['label'];
+            $data[] = (int)$grupo['count'];
+            $variantes = [];
+            foreach ($grupo['variantes'] as $frase => $n) {
+                $variantes[] = $n > 1 ? $frase . ' (' . $n . ')' : $frase;
+            }
+            $filas[] = [
+                'grupo' => (string)$grupo['label'],
+                'total' => (int)$grupo['count'],
+                'variantes' => $variantes,
+            ];
+        }
+
+        $labelsChart = array_slice($labels, 0, 12);
+        $dataChart = array_slice($data, 0, 12);
+
+        return [
+            'id' => $this->idGrafica($clave),
+            'titulo' => $etiqueta,
+            'tipo' => 'abierta',
+            'horizontal' => true,
+            'labels' => $labelsChart,
+            'data' => $dataChart,
+            'filas' => $filas,
+            'total_respuestas' => count($textos),
+        ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $jsonFilas
+     * @return list<string>
+     */
+    private function extraerTextosCampoAbierto(string $clave, array $jsonFilas): array {
+        $out = [];
+        foreach ($jsonFilas as $json) {
+            $raw = $json[$clave] ?? '';
+            if (is_array($raw)) {
+                foreach ($raw as $item) {
+                    $t = trim((string)$item);
+                    if ($t !== '') {
+                        $out[] = $t;
+                    }
+                }
+                continue;
+            }
+            $t = trim((string)$raw);
+            if ($t !== '') {
+                $out[] = $t;
+            }
+        }
+        return $out;
+    }
+
+    private function esCampoIdentidadAbierta(string $clave, string $etiqueta): bool {
+        $n = $this->sinAcentos(mb_strtolower($clave . ' ' . $etiqueta, 'UTF-8'));
+        $patrones = [
+            'nombre', 'apellido', 'documento', 'cedula', 'identidad', 'telefono',
+            'celular', 'whatsapp', 'correo', 'email', 'direccion', 'firma',
+            'fecha de nacimiento', 'fecha_nacimiento',
+        ];
+        foreach ($patrones as $p) {
+            if (str_contains($n, $p)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function esPreguntaExpectativa(string $clave, string $etiqueta): bool {
+        $n = $this->sinAcentos(mb_strtolower($clave . ' ' . $etiqueta, 'UTF-8'));
+        return str_contains($n, 'espera')
+            || str_contains($n, 'expectativ')
+            || str_contains($n, 'motivo')
+            || str_contains($n, 'por que')
+            || str_contains($n, 'que busca')
+            || str_contains($n, 'que desea');
+    }
+
+    /**
+     * @param list<string> $textos
+     * @return list<array{label: string, count: int, variantes: array<string, int>, clave: string}>
+     */
+    private function agruparTextosSimilares(array $textos, bool $usarTemas): array {
+        $grupos = [];
+        foreach ($textos as $texto) {
+            $norm = $this->normalizarTextoAbierto($texto);
+            if ($norm === '') {
+                continue;
+            }
+            $tema = $usarTemas ? $this->clasificarTemaAbierto($norm) : null;
+            $idx = $this->indiceGrupoSimilar($grupos, $norm, $tema);
+            if ($idx === null) {
+                $grupos[] = [
+                    'clave' => $norm,
+                    'tema' => $tema,
+                    'label' => $tema !== null ? $tema : $this->capitalizarEtiquetaAbierta($texto),
+                    'count' => 1,
+                    'variantes' => [$texto => 1],
+                ];
+            } else {
+                $grupos[$idx]['count']++;
+                $grupos[$idx]['variantes'][$texto] = ($grupos[$idx]['variantes'][$texto] ?? 0) + 1;
+                if ($grupos[$idx]['tema'] === null && $tema !== null) {
+                    $grupos[$idx]['tema'] = $tema;
+                    $grupos[$idx]['label'] = $tema;
+                }
+            }
+        }
+
+        $grupos = $this->fusionarGruposCercanos($grupos);
+        usort($grupos, static function (array $a, array $b): int {
+            return ((int)$b['count'] <=> (int)$a['count']);
+        });
+
+        foreach ($grupos as &$grupo) {
+            arsort($grupo['variantes']);
+            if ($grupo['tema'] === null) {
+                $masComun = (string)array_key_first($grupo['variantes']);
+                $grupo['label'] = $this->capitalizarEtiquetaAbierta($masComun);
+            }
+        }
+        unset($grupo);
+
+        return $grupos;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $grupos
+     */
+    private function indiceGrupoSimilar(array $grupos, string $norm, ?string $tema): ?int {
+        foreach ($grupos as $i => $grupo) {
+            if ($tema !== null && ($grupo['tema'] ?? null) === $tema) {
+                return $i;
+            }
+            $clave = (string)($grupo['clave'] ?? '');
+            if ($clave === $norm) {
+                return $i;
+            }
+            if ($this->textosAbiertosEquivalentes($clave, $norm)) {
+                return $i;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $grupos
+     * @return list<array<string, mixed>>
+     */
+    private function fusionarGruposCercanos(array $grupos): array {
+        $n = count($grupos);
+        if ($n < 2) {
+            return $grupos;
+        }
+        $usado = array_fill(0, $n, false);
+        $out = [];
+        for ($i = 0; $i < $n; $i++) {
+            if ($usado[$i]) {
+                continue;
+            }
+            $base = $grupos[$i];
+            for ($j = $i + 1; $j < $n; $j++) {
+                if ($usado[$j]) {
+                    continue;
+                }
+                $temaA = $base['tema'] ?? null;
+                $temaB = $grupos[$j]['tema'] ?? null;
+                $mismoTema = $temaA !== null && $temaA === $temaB;
+                if ($mismoTema || $this->textosAbiertosEquivalentes((string)$base['clave'], (string)$grupos[$j]['clave'])) {
+                    $base['count'] += (int)$grupos[$j]['count'];
+                    foreach ($grupos[$j]['variantes'] as $frase => $cant) {
+                        $base['variantes'][$frase] = ($base['variantes'][$frase] ?? 0) + (int)$cant;
+                    }
+                    if (mb_strlen((string)$grupos[$j]['clave'], 'UTF-8') < mb_strlen((string)$base['clave'], 'UTF-8')) {
+                        $base['clave'] = $grupos[$j]['clave'];
+                    }
+                    $usado[$j] = true;
+                }
+            }
+            $out[] = $base;
+        }
+        return $out;
+    }
+
+    private function textosAbiertosEquivalentes(string $a, string $b): bool {
+        if ($a === '' || $b === '') {
+            return false;
+        }
+        if ($a === $b) {
+            return true;
+        }
+        if (str_contains($a, $b) || str_contains($b, $a)) {
+            $corta = mb_strlen($a, 'UTF-8') <= mb_strlen($b, 'UTF-8') ? $a : $b;
+            return mb_strlen($corta, 'UTF-8') >= 8;
+        }
+        $ta = $this->tokensAbiertos($a);
+        $tb = $this->tokensAbiertos($b);
+        if ($ta === [] || $tb === []) {
+            return $this->distanciaRelativa($a, $b) <= 0.22;
+        }
+        $inter = count(array_intersect($ta, $tb));
+        $union = count(array_unique(array_merge($ta, $tb)));
+        if ($union > 0 && ($inter / $union) >= 0.5) {
+            return true;
+        }
+        if ($inter >= 2 && (count(array_diff($ta, $tb)) === 0 || count(array_diff($tb, $ta)) === 0)) {
+            return true;
+        }
+        return $this->distanciaRelativa($a, $b) <= 0.2;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function tokensAbiertos(string $norm): array {
+        $stop = [
+            'el', 'la', 'los', 'las', 'de', 'del', 'un', 'una', 'unos', 'unas', 'y', 'o', 'u',
+            'que', 'este', 'esta', 'estos', 'estas', 'taller', 'espero', 'espera', 'esperamos',
+            'me', 'mi', 'mis', 'a', 'en', 'para', 'con', 'por', 'al', 'lo', 'como', 'mas',
+            'muy', 'tambien', 'quiero', 'quisiera', 'deseo', 'poder', 'algo', 'alguna',
+            'su', 'sus', 'se', 'es', 'son', 'ser', 'hay', 'sobre', 'hacia', 'desde',
+            'entre', 'sin', 'si', 'no', 'ya', 'solo', 'pues', 'porque', 'este',
+        ];
+        $parts = preg_split('/\s+/', $norm) ?: [];
+        $out = [];
+        foreach ($parts as $p) {
+            if ($p === '' || in_array($p, $stop, true) || mb_strlen($p, 'UTF-8') < 3) {
+                continue;
+            }
+            $out[] = $p;
+        }
+        return array_values(array_unique($out));
+    }
+
+    private function distanciaRelativa(string $a, string $b): float {
+        $a = mb_substr($a, 0, 48, 'UTF-8');
+        $b = mb_substr($b, 0, 48, 'UTF-8');
+        $max = max(mb_strlen($a, 'UTF-8'), mb_strlen($b, 'UTF-8'), 1);
+        if (!function_exists('levenshtein')) {
+            return $a === $b ? 0.0 : 1.0;
+        }
+        return levenshtein($a, $b) / $max;
+    }
+
+    private function clasificarTemaAbierto(string $norm): ?string {
+        $temas = [
+            'Aprender más de Dios / la Palabra' => [
+                'conocer a dios', 'mas de dios', 'palabra de dios', 'la palabra', 'biblia',
+                'aprender', 'conocimiento', 'ensenanza', 'estudio biblico', 'estudio',
+            ],
+            'Crecimiento espiritual' => [
+                'crecimiento espiritual', 'crecer espiritual', 'crecer', 'crecimiento',
+                'madurar', 'fortalecer', 'fortaleza', 'mi fe', 'la fe', 'en fe',
+            ],
+            'Sanidad y restauración' => [
+                'sanidad', 'sanar', 'restauracion', 'restaurar', 'libertad', 'sanacion',
+            ],
+            'Comunión y nuevas amistades' => [
+                'conocer personas', 'conocer gente', 'amistad', 'amigos', 'hermanos',
+                'comunidad', 'comunion', 'compañia', 'integrarme',
+            ],
+            'Familia y matrimonio' => [
+                'familia', 'matrimonio', 'hijos', 'esposo', 'esposa', 'hogar',
+            ],
+            'Servir / liderazgo' => [
+                'servir', 'servicio', 'ministerio', 'liderazgo', 'lider',
+            ],
+            'Evangelizar / ganar almas' => [
+                'evangel', 'almas', 'predicar', 'ganar almas',
+            ],
+            'Bendición y milagros' => [
+                'bendicion', 'milagro', 'provision', 'favor de dios',
+            ],
+            'No indica / ninguna' => [
+                'ninguna', 'ninguno', 'nada', 'no se',
+            ],
+        ];
+        $mejor = null;
+        $mejorPuntos = 0;
+        foreach ($temas as $label => $claves) {
+            $puntos = 0;
+            foreach ($claves as $kw) {
+                if (str_contains($norm, $kw)) {
+                    $puntos += mb_strlen($kw, 'UTF-8');
+                }
+            }
+            if ($puntos > $mejorPuntos) {
+                $mejorPuntos = $puntos;
+                $mejor = $label;
+            }
+        }
+        return $mejorPuntos > 0 ? $mejor : null;
+    }
+
+    private function normalizarTextoAbierto(string $texto): string {
+        $t = trim(mb_strtolower($texto, 'UTF-8'));
+        $t = $this->sinAcentos($t);
+        $t = str_replace(['ñ'], ['n'], $t);
+        $t = preg_replace('/[^\p{L}\p{N}\s]+/u', ' ', $t) ?? $t;
+        $t = preg_replace('/\s+/', ' ', $t) ?? $t;
+        return trim($t);
+    }
+
+    private function sinAcentos(string $texto): string {
+        $map = [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u',
+            'Á' => 'a', 'É' => 'e', 'Í' => 'i', 'Ó' => 'o', 'Ú' => 'u', 'Ü' => 'u',
+            'ñ' => 'n', 'Ñ' => 'n',
+        ];
+        return strtr($texto, $map);
+    }
+
+    private function capitalizarEtiquetaAbierta(string $texto): string {
+        $texto = trim(preg_replace('/\s+/', ' ', $texto) ?? $texto);
+        if (mb_strlen($texto, 'UTF-8') > 80) {
+            return rtrim(mb_substr($texto, 0, 77, 'UTF-8')) . '…';
+        }
+        return mb_strtoupper(mb_substr($texto, 0, 1, 'UTF-8'), 'UTF-8')
+            . mb_substr($texto, 1, mb_strlen($texto, 'UTF-8'), 'UTF-8');
     }
 
     /**

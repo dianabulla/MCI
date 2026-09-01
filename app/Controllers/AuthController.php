@@ -1595,6 +1595,27 @@ class AuthController extends BaseController {
     }
 
     /**
+     * Caja unificada de pagos (UV, Cap. Destino y talleres) en Comunidad.
+     */
+    public static function puedeAccederPagosComunidad(): bool {
+        if (!self::estaAutenticado()) {
+            return false;
+        }
+        if (self::esAdministrador()) {
+            return true;
+        }
+        if (self::puede('comunidad_pagos:ver')) {
+            return true;
+        }
+        if (self::puedeAccederModuloTalleres()) {
+            return true;
+        }
+        return self::puede('programas:gestionar_pagos_universidad_vida')
+            || self::puede('programas:gestionar_pagos_capacitacion_destino')
+            || self::puede('escuelas_formacion:gestionar_pagos');
+    }
+
+    /**
      * Gestionar citas de Servicio Social (estado, horarios, eliminar).
      */
     public static function puedeGestionarServicioSocial(): bool {

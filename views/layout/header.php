@@ -62,6 +62,7 @@ $puedeVerRegistroTeensKids = $puedeVer('teen');
 $puedeVerEventosMenu = AuthController::esAdministrador() || AuthController::puede('eventos:ver');
 $puedeVerAsistencias = $puedeVer('asistencias');
 $puedeVerTalleres = AuthController::puedeAccederModuloTalleres();
+$puedeVerPagosComunidad = AuthController::puedeAccederPagosComunidad();
 $puedeVerObsequios = $puedeVer('entrega_obsequio');
 $puedeVerNehemias = $puedeVer('nehemias');
 $puedeVerReportes = $puedeVer('reportes') || AuthController::puedeVerDashboardGanar();
@@ -244,7 +245,7 @@ if ($esMenuMaestro) {
         $puedeFormularioPublicoRapido = AuthController::puedeVerModulo('personas_formulario_publico');
         $puedeAlgunAccesoRapido = $puedeNuevoDiscipuloRapido || $puedePlantillasWaRapido || $puedeFormularioPublicoRapido;
         ?>
-        <?php if (!$esMenuMaestro && !$esMenuDiscipulo && !$esMenuServicioSocial && ($puedeAlgunAccesoRapido || $puedeVerTalleres || $puedeVerEventosMenu)): ?>
+        <?php if (!$esMenuMaestro && !$esMenuDiscipulo && !$esMenuServicioSocial && ($puedeAlgunAccesoRapido || $puedeVerTalleres || $puedeVerEventosMenu || $puedeVerPagosComunidad)): ?>
         <div class="sidebar-quick-access">
             <?php if ($puedeAlgunAccesoRapido): ?>
             <details class="sidebar-quick-details">
@@ -276,8 +277,8 @@ if ($esMenuMaestro) {
             </details>
             <?php endif; ?>
             <?php
-            $puedeAlgunEnlaceComunidad = $puedeVerTalleres || $puedeVerEventosMenu;
-            $navComunidadActiva = $isActive(['talleres']) || $isActive(['eventos']);
+            $puedeAlgunEnlaceComunidad = $puedeVerTalleres || $puedeVerEventosMenu || $puedeVerPagosComunidad;
+            $navComunidadActiva = $isActive(['talleres']) || $isActive(['eventos']) || $isActive(['comunidad/pagos']);
             ?>
             <?php if ($puedeAlgunEnlaceComunidad): ?>
             <details class="sidebar-quick-details sidebar-quick-details--comunidad"<?= $navComunidadActiva ? ' open' : '' ?>>
@@ -287,6 +288,12 @@ if ($esMenuMaestro) {
                     <span class="sidebar-quick-caret"><i class="bi bi-chevron-down"></i></span>
                 </summary>
                 <div class="sidebar-quick-modules">
+                    <?php if ($puedeVerPagosComunidad): ?>
+                    <a class="sidebar-quick-text-link<?= $isActive(['comunidad/pagos']) ? ' is-active' : '' ?>" href="<?= PUBLIC_URL ?>?url=comunidad/pagos">
+                        <i class="bi bi-cash-coin"></i>
+                        <span>Pagos</span>
+                    </a>
+                    <?php endif; ?>
                     <?php if ($puedeVerTalleres): ?>
                     <a class="sidebar-quick-text-link<?= $isActive(['talleres']) ? ' is-active' : '' ?>" href="<?= PUBLIC_URL ?>?url=talleres">
                         <i class="bi bi-ui-checks-grid"></i>

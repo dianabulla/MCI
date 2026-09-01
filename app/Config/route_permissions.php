@@ -351,6 +351,7 @@ return [
     'talleres/servicio-social/ver' => ['checker' => 'puedeAccederModuloTalleres'],
 
     'talleres/servicio-social/actualizar' => ['checker' => 'puedeGestionarServicioSocial'],
+    'talleres/servicio-social/agendar-nueva' => ['checker' => 'puedeGestionarServicioSocial'],
 
     'talleres/servicio-social/eliminar' => ['checker' => 'puedeGestionarServicioSocial'],
 
@@ -363,6 +364,9 @@ return [
     'talleres/servicio-social/exportar' => ['any' => ['talleres:exportar_excel', 'talleres:ver_respuestas', 'talleres:ver']],
 
     'talleres/*' => ['modulo' => 'talleres', 'inferir_accion' => true],
+
+    'comunidad/pagos' => ['checker' => 'puedeAccederPagosComunidad'],
+    'comunidad/pagos/*' => ['checker' => 'puedeAccederPagosComunidad'],
 
 
 
