@@ -5,7 +5,7 @@
  */
 class MenuBuilder {
     /** Incrementar al cambiar estructura del menú lateral (invalida caché en sesión). */
-    public const SIDEBAR_MENU_VERSION = 11;
+    public const SIDEBAR_MENU_VERSION = 12;
 
     /**
      * Sincroniza permisos planos y menú en $_SESSION.
@@ -377,7 +377,7 @@ class MenuBuilder {
                 'label' => 'Administración',
                 'ruta' => 'cuentas',
                 'icon' => 'bi-people-fill',
-                'active_prefixes' => ['cuentas', 'roles', 'permisos'],
+                'active_prefixes' => ['cuentas', 'roles', 'permisos', 'auditoria'],
                 'visible' => static function () {
                     require_once APP . '/Helpers/GestionSistemaAccess.php';
                     return GestionSistemaAccess::puedeVerBloqueAdministracion();

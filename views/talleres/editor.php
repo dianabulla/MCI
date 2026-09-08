@@ -187,19 +187,38 @@ $configPlantillaPadres = TallerFormulario::getConfigPlantillaTallerPadres();
 
 
 
-        <div class="form-group">
+        </div>
 
-            <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer;">
 
-                <input type="checkbox" name="activo" value="1" <?= ($id === 0 || !empty($formulario['Activo'])) ? 'checked' : '' ?>>
 
-                Publicar formulario
+        <div class="form-group" style="background:#f8fbff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px;">
+
+            <label style="font-weight:700;margin-bottom:8px;">Estado del enlace público</label>
+
+            <label style="display:flex;align-items:flex-start;gap:8px;font-weight:500;cursor:pointer;margin-bottom:8px;">
+
+                <input type="radio" name="activo" value="1" <?= ($id === 0 || !empty($formulario['Activo'])) ? 'checked' : '' ?>>
+
+                <span>Activo — quien tenga el enlace puede llenar el formulario</span>
 
             </label>
 
+            <label style="display:flex;align-items:flex-start;gap:8px;font-weight:500;cursor:pointer;margin-bottom:12px;">
+
+                <input type="radio" name="activo" value="0" <?= ($id > 0 && empty($formulario['Activo'])) ? 'checked' : '' ?>>
+
+                <span>Cerrado — no se reciben más inscripciones</span>
+
+            </label>
+
+            <label for="mensaje_inactivo">Mensaje para quien abra el enlace cuando esté cerrado</label>
+
+            <textarea id="mensaje_inactivo" name="mensaje_inactivo" class="form-control" rows="3"
+                      placeholder="Ej.: Las inscripciones de este taller ya se cerraron. Gracias por su interés."><?= htmlspecialchars((string)($formulario['Mensaje_Inactivo'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+
             <small class="text-muted" style="display:block;margin-top:6px;">
 
-                En las respuestas de este enlace podrá registrar pagos o abonos y generar el ticket, igual que en Presentación de niños.
+                Si lo deja vacío, se mostrará un texto genérico. El enlace sigue funcionando: ven este mensaje en lugar del formulario.
 
             </small>
 

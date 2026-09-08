@@ -89,14 +89,26 @@ $urlVolver = $returnUrl !== ''
             <div class="form-row">
                 <div class="form-group">
                     <label for="fecha_nacimiento">Fecha de Nacimiento</label>
+                    <?php $fechaNacimientoForm = $post_data['fecha_nacimiento'] ?? ($persona['Fecha_Nacimiento'] ?? ''); ?>
                     <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" class="form-control" 
-                           value="<?= htmlspecialchars($post_data['fecha_nacimiento'] ?? $persona['Fecha_Nacimiento'] ?? '') ?>">
+                           value="<?= htmlspecialchars((string)$fechaNacimientoForm) ?>">
                 </div>
 
                 <div class="form-group">
                     <label for="edad">Edad</label>
-                    <input type="number" id="edad" name="edad" class="form-control" min="0" max="120"
-                           value="<?= htmlspecialchars($persona['Edad'] ?? '') ?>">
+                    <?php
+                    $edadCalculadaForm = '';
+                    if (trim((string)$fechaNacimientoForm) !== '') {
+                        try {
+                            $edadCalculadaForm = (string)((new DateTime((string)$fechaNacimientoForm))->diff(new DateTime('today'))->y);
+                        } catch (Exception $e) {
+                            $edadCalculadaForm = '';
+                        }
+                    }
+                    ?>
+                    <input type="number" id="edad" class="form-control" min="0" max="120" readonly
+                           value="<?= htmlspecialchars($edadCalculadaForm) ?>">
+                    <small class="form-text text-muted">Se calcula automáticamente con la fecha de nacimiento.</small>
                 </div>
 
                 <div class="form-group">
@@ -119,12 +131,6 @@ $urlVolver = $returnUrl !== ''
                     <label for="telefono">Teléfono</label>
                     <input type="tel" id="telefono" name="telefono" class="form-control" 
                            value="<?= htmlspecialchars($persona['Telefono'] ?? '') ?>">
-                </div>
-
-                <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" name="email" class="form-control" 
-                           value="<?= htmlspecialchars($persona['Email'] ?? '') ?>">
                 </div>
             </div>
 
@@ -224,6 +230,28 @@ $urlVolver = $returnUrl !== ''
                            value="<?= htmlspecialchars($post_data['invitado_por'] ?? ($persona['Invitado_Por'] ?? '')) ?>"
                            placeholder="Nombre de quien lo invitó">
                 </div>
+                <?php
+                $idRolMaestroCap = (int)($id_rol_maestro_cap ?? 0);
+                $idRolDiscipuloCap = (int)($id_rol_discipulo_cap ?? 0);
+                ?>
+                <?php if (!empty($soportaRolSecundario) && ($idRolMaestroCap > 0 || $idRolDiscipuloCap > 0)): ?>
+                <div class="form-group">
+                    <label for="id_rol_secundario">Rol secundario (Cap. Destino)</label>
+                    <?php
+                    $idRolSecundarioSel = (int)($post_data['id_rol_secundario'] ?? ($persona['Id_Rol_Secundario'] ?? 0));
+                    ?>
+                    <select id="id_rol_secundario" name="id_rol_secundario" class="form-control">
+                        <option value="">Ninguno</option>
+                        <?php if ($idRolMaestroCap > 0): ?>
+                        <option value="<?= $idRolMaestroCap ?>" <?= $idRolSecundarioSel === $idRolMaestroCap ? 'selected' : '' ?>>Maestro</option>
+                        <?php endif; ?>
+                        <?php if ($idRolDiscipuloCap > 0): ?>
+                        <option value="<?= $idRolDiscipuloCap ?>" <?= $idRolSecundarioSel === $idRolDiscipuloCap ? 'selected' : '' ?>>Estudiante</option>
+                        <?php endif; ?>
+                    </select>
+                    <small class="form-text text-muted">Permite entrar a Capacitación Destino como maestro o como estudiante, sin cambiar el rol de iglesia.</small>
+                </div>
+                <?php endif; ?>
 
                 <div id="ganado_en_section">
                     <div class="form-group">
@@ -284,15 +312,19 @@ $urlVolver = $returnUrl !== ''
                 <div class="form-row">
                     <?php if (AuthController::esAdministrador()): ?>
                     <div class="form-group">
-                        <label for="estado_cuenta">Estado de Cuenta</label>
+                        <label for="estado_cuenta">Estado en iglesia</label>
                         <select id="estado_cuenta" name="estado_cuenta" class="form-control">
-                            <?php $estadoCuentaSeleccionado = $post_data['estado_cuenta'] ?? ($persona['Estado_Cuenta'] ?? 'Activo'); ?>
-                            <option value="Activo" <?= $estadoCuentaSeleccionado == 'Activo' ? 'selected' : '' ?>>Activo</option>
-                            <option value="Inactivo" <?= $estadoCuentaSeleccionado == 'Inactivo' ? 'selected' : '' ?>>Inactivo</option>
-                            <option value="Bloqueado" <?= $estadoCuentaSeleccionado == 'Bloqueado' ? 'selected' : '' ?>>Bloqueado</option>
+                            <?php
+                            $estadoFichaSeleccionado = $post_data['estado_cuenta'] ?? ($persona['Estado_Cuenta'] ?? 'Activo');
+                            if ($estadoFichaSeleccionado === 'Bloqueado') {
+                                $estadoFichaSeleccionado = 'Inactivo';
+                            }
+                            ?>
+                            <option value="Activo" <?= $estadoFichaSeleccionado == 'Activo' ? 'selected' : '' ?>>Activo</option>
+                            <option value="Inactivo" <?= $estadoFichaSeleccionado == 'Inactivo' ? 'selected' : '' ?>>Inactivo</option>
                         </select>
                         <small class="form-text text-muted">
-                            Solo las cuentas activas pueden iniciar sesión
+                            Si está inactiva no aparece en células ni listados operativos. No quita el acceso al sistema; eso se gestiona en Cuentas.
                         </small>
                     </div>
                     <?php endif; ?>
@@ -315,14 +347,8 @@ $urlVolver = $returnUrl !== ''
             </div>
             </div>
 
-            <?php if (!empty($soportaConvencion) || !empty($soportaProceso)): ?>
+            <?php if (!empty($soportaProceso)): ?>
             <?php
-            $convencionesDisponibles = [
-                'Convencion Enero' => 'Convención Enero',
-                'Convencion Mujeres' => 'Convención Mujeres',
-                'Convencion Jovenes' => 'Convención Jóvenes',
-                'Convencion Hombres' => 'Convención Hombres'
-            ];
             $subprocesosEscaleraFormulario = [
                 'Ganar' => ['Primer contacto', 'Asignación a líderes y ministerio', 'Fonovisita', 'Visita', 'Asignación a una célula', 'No se dispone'],
                 'Consolidar' => ['Universidad de la Vida', 'Encuentro', 'Bautismo'],
@@ -385,68 +411,27 @@ $urlVolver = $returnUrl !== ''
                     }
                     if (!empty($checklistDecodificado['_meta']) && is_array($checklistDecodificado['_meta'])) {
                         $checklistFormulario['_meta']['no_disponible_observacion'] = (string)($checklistDecodificado['_meta']['no_disponible_observacion'] ?? '');
-                        $checklistFormulario['_meta']['convenciones'] = array_values(array_unique(array_filter((array)($checklistDecodificado['_meta']['convenciones'] ?? []))));
                     }
                 }
             }
 
-            $convencionesSeleccionadasFormulario = [];
-            if (!empty($post_data['convenciones']) && is_array($post_data['convenciones'])) {
-                $convencionesSeleccionadasFormulario = array_values(array_unique(array_filter(array_map('strval', $post_data['convenciones']))));
-            } elseif (!empty($checklistFormulario['_meta']['convenciones']) && is_array($checklistFormulario['_meta']['convenciones'])) {
-                $convencionesSeleccionadasFormulario = array_values(array_unique(array_filter(array_map('strval', $checklistFormulario['_meta']['convenciones']))));
-            } elseif (!empty($post_data['convencion'])) {
-                $convencionesSeleccionadasFormulario = [(string)$post_data['convencion']];
-            } elseif (!empty($persona['Convencion'])) {
-                $convencionesSeleccionadasFormulario = [(string)$persona['Convencion']];
-            }
-            $checklistFormulario['_meta']['convenciones'] = $convencionesSeleccionadasFormulario;
-
             $tieneAsignacionLiderMinisterioFormulario = !empty($liderIdSeleccionado) && !empty($ministerioSeleccionado) && (string)$ministerioSeleccionado !== 'otro';
             $checklistFormulario['Ganar'][1] = $tieneAsignacionLiderMinisterioFormulario;
             $checklistFormularioJson = json_encode($checklistFormulario, JSON_UNESCAPED_UNICODE);
-            $mostrarConvencionesPrimero = !empty($soportaConvencion);
-            if ($panelEventosProcesos === 'escalera' && !empty($soportaProceso)) {
-                $mostrarConvencionesPrimero = false;
-            } elseif ($panelEventosProcesos === 'convenciones' && !empty($soportaConvencion)) {
-                $mostrarConvencionesPrimero = true;
-            }
             ?>
             <div class="form-row">
                 <div class="form-group form-group-wide eventos-procesos-group" id="eventos-procesos">
-                    <input type="hidden" id="panel_eventos_procesos" name="panel_eventos_procesos" value="<?= $mostrarConvencionesPrimero ? 'convenciones' : 'escalera' ?>">
-                    <label>Eventos y procesos</label>
+                    <input type="hidden" id="panel_eventos_procesos" name="panel_eventos_procesos" value="escalera">
+                    <label>Escalera del Éxito</label>
                     <input type="hidden" id="escalera_checklist_payload" name="escalera_checklist" value="<?= htmlspecialchars((string)$checklistFormularioJson, ENT_QUOTES, 'UTF-8') ?>">
                     <input type="hidden" id="proceso" name="proceso" value="<?= htmlspecialchars((string)$procesoSeleccionado) ?>">
 
                     <div class="eventos-procesos-card">
                         <div class="eventos-procesos-tabs">
-                            <?php if (!empty($soportaConvencion)): ?>
-                                <button type="button" class="eventos-procesos-tab <?= $mostrarConvencionesPrimero ? 'active' : '' ?>" data-target="panel_convenciones">Convenciones</button>
-                            <?php endif; ?>
-                            <?php if (!empty($soportaProceso)): ?>
-                                <button type="button" class="eventos-procesos-tab <?= !$mostrarConvencionesPrimero ? 'active' : '' ?>" data-target="panel_escalera">Escalera del Éxito</button>
-                            <?php endif; ?>
-                            <div class="eventos-proceso-badge">Proceso actual: <strong id="proceso_actual_badge"><?= htmlspecialchars((string)$procesoSeleccionado ?: 'Ganar') ?></strong></div>
+                            <div class="eventos-proceso-badge">Proceso (sale de la escalera): <strong id="proceso_actual_badge"><?= htmlspecialchars((string)$procesoSeleccionado ?: 'Ganar') ?></strong></div>
                         </div>
 
-                        <?php if (!empty($soportaConvencion)): ?>
-                        <div class="eventos-tab-panel <?= $mostrarConvencionesPrimero ? 'active' : '' ?>" id="panel_convenciones">
-                            <div class="eventos-check-grid">
-                                <?php foreach ($convencionesDisponibles as $valorConvencion => $labelConvencion): ?>
-                                    <?php $convencionMarcada = in_array($valorConvencion, $convencionesSeleccionadasFormulario, true); ?>
-                                    <label class="eventos-check-item <?= $convencionMarcada ? 'checked' : '' ?>">
-                                        <input type="checkbox" class="js-convencion-check" name="convenciones[]" value="<?= htmlspecialchars($valorConvencion) ?>" <?= $convencionMarcada ? 'checked' : '' ?>>
-                                        <span><?= htmlspecialchars($labelConvencion) ?></span>
-                                    </label>
-                                <?php endforeach; ?>
-                            </div>
-                            <small class="form-text text-muted">Marca una o varias convenciones del año asociadas a esta persona.</small>
-                        </div>
-                        <?php endif; ?>
-
-                        <?php if (!empty($soportaProceso)): ?>
-                        <div class="eventos-tab-panel <?= !$mostrarConvencionesPrimero ? 'active' : '' ?>" id="panel_escalera">
+                        <div class="eventos-tab-panel active" id="panel_escalera">
                             <div class="eventos-stage-grid">
                                 <?php foreach ($subprocesosEscaleraFormulario as $etapaNombre => $itemsEtapa): ?>
                                     <div class="eventos-stage-card eventos-stage-<?= strtolower($etapaNombre) ?>">
@@ -481,7 +466,6 @@ $urlVolver = $returnUrl !== ''
 
                             <small class="form-text text-muted">Los checks de la escalera definen automáticamente el proceso actual de la persona.</small>
                         </div>
-                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -511,15 +495,6 @@ $urlVolver = $returnUrl !== ''
             </div>
         </div>
         <?php endif; ?>
-
-        <!-- Sección: Petición de Oración -->
-        <div class="form-section">
-            <h3 class="section-title">🙏 Petición de Oración</h3>
-            <div class="form-group">
-                <label for="peticion">Petición</label>
-                <textarea id="peticion" name="peticion" class="form-control" rows="4" placeholder="Escriba aquí la petición de oración..."><?= htmlspecialchars($post_data['peticion'] ?? $persona['Peticion'] ?? '') ?></textarea>
-            </div>
-        </div>
 
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Guardar</button>

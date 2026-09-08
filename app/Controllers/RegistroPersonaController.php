@@ -6,14 +6,12 @@
 
 require_once APP . '/Models/Persona.php';
 require_once APP . '/Models/Ministerio.php';
-require_once APP . '/Models/Peticion.php';
 require_once APP . '/Models/WhatsappLocalQueue.php';
 require_once APP . '/Models/WhatsappMensajeTemplate.php';
 
 class RegistroPersonaController extends BaseController {
     private $personaModel;
     private $ministerioModel;
-    private $peticionModel;
     private $whatsappLocalQueueModel;
     private $whatsappMensajeTemplateModel;
     private $soportaProceso = false;
@@ -28,7 +26,6 @@ class RegistroPersonaController extends BaseController {
     public function __construct() {
         $this->personaModel = new Persona();
         $this->ministerioModel = new Ministerio();
-        $this->peticionModel = new Peticion();
         $this->whatsappLocalQueueModel = new WhatsappLocalQueue();
         $this->whatsappMensajeTemplateModel = new WhatsappMensajeTemplate();
 
@@ -142,8 +139,6 @@ class RegistroPersonaController extends BaseController {
             return;
         }
 
-        $data['Usuario'] = $documento;
-        $data['Contrasena'] = password_hash($documento, PASSWORD_BCRYPT);
         $data['Estado_Cuenta'] = 'Activo';
     }
 
@@ -158,23 +153,32 @@ class RegistroPersonaController extends BaseController {
     }
 
     private function construirMensajeDuplicadoPersona(array $duplicado, $cedula, $telefono) {
+        $motivo = (string)($duplicado['_motivo'] ?? '');
+        $nombre = trim((string)($duplicado['Nombre'] ?? '') . ' ' . (string)($duplicado['Apellido'] ?? ''));
+        $sufijoNombre = $nombre !== '' ? ': ' . $nombre . '.' : '.';
+
+        if ($motivo === 'documento') {
+            return 'Ya existe una persona con ese número de documento' . $sufijoNombre;
+        }
+        if ($motivo === 'telefono') {
+            return 'Ya existe una persona con ese teléfono' . $sufijoNombre
+                . ' Solo un menor (Registro Civil o Tarjeta de Identidad) puede repetir un teléfono.';
+        }
+
         $cedula = preg_replace('/[^A-Z0-9]/', '', strtoupper(trim((string)$cedula)));
         $telefono = preg_replace('/\D+/', '', (string)$telefono);
         $duplicadoCedula = preg_replace('/[^A-Z0-9]/', '', strtoupper(trim((string)($duplicado['Numero_Documento'] ?? ''))));
         $duplicadoTelefono = preg_replace('/\D+/', '', (string)($duplicado['Telefono'] ?? ''));
 
-        $campos = [];
         if ($cedula !== '' && $duplicadoCedula !== '' && $cedula === $duplicadoCedula) {
-            $campos[] = 'la cédula';
+            return 'Ya existe una persona con ese número de documento' . $sufijoNombre;
         }
         if ($telefono !== '' && $duplicadoTelefono !== '' && $telefono === $duplicadoTelefono) {
-            $campos[] = 'el teléfono';
+            return 'Ya existe una persona con ese teléfono' . $sufijoNombre
+                . ' Solo un menor (Registro Civil o Tarjeta de Identidad) puede repetir un teléfono.';
         }
 
-        $nombre = trim((string)($duplicado['Nombre'] ?? '') . ' ' . (string)($duplicado['Apellido'] ?? ''));
-        $detalle = !empty($campos) ? implode(' y ', $campos) : 'los datos registrados';
-
-        return 'Ya existe una persona registrada con ' . $detalle . ($nombre !== '' ? ': ' . $nombre . '.' : '.');
+        return 'Ya existe una persona registrada con esos datos' . $sufijoNombre;
     }
 
     private function encolarMensajeBienvenida(array $personaNueva) {
@@ -203,7 +207,6 @@ class RegistroPersonaController extends BaseController {
             'persona_telefono' => $telefonoPersona,
             'persona_id' => $idPersona,
             'ministerio_nombre' => $nombreMinisterio,
-            'url_peticiones' => $this->buildAbsolutePublicUrl('peticiones/crear')
         ]);
 
         $this->whatsappLocalQueueModel->encolar(
@@ -214,32 +217,6 @@ class RegistroPersonaController extends BaseController {
             $payload['media_url'] ?? null,
             $payload['media_tipo'] ?? null
         );
-    }
-
-    private function registrarPeticionSiAplica($idPersona, $peticionTexto) {
-        $idPersona = (int)$idPersona;
-        $peticionTexto = trim((string)$peticionTexto);
-
-        if ($idPersona <= 0 || $peticionTexto === '') {
-            return;
-        }
-
-        $fechaHoy = date('Y-m-d');
-        $existe = $this->peticionModel->query(
-            "SELECT Id_Peticion FROM peticion WHERE Id_Persona = ? AND Descripcion_Peticion = ? AND Fecha_Peticion = ? LIMIT 1",
-            [$idPersona, $peticionTexto, $fechaHoy]
-        );
-
-        if (!empty($existe)) {
-            return;
-        }
-
-        $this->peticionModel->create([
-            'Id_Persona' => $idPersona,
-            'Descripcion_Peticion' => $peticionTexto,
-            'Fecha_Peticion' => $fechaHoy,
-            'Estado_Peticion' => 'Pendiente'
-        ]);
     }
 
     public function index() {
@@ -259,7 +236,6 @@ class RegistroPersonaController extends BaseController {
                 'ganado_en_otro_observacion' => (string)($_GET['ganado_en_otro_observacion'] ?? ''),
                 'fecha_nacimiento' => (string)($_GET['fecha_nacimiento'] ?? ''),
                 'barrio' => (string)($_GET['barrio'] ?? ''),
-                'peticion' => (string)($_GET['peticion'] ?? ''),
                 'cedula' => (string)($_GET['cedula'] ?? ''),
                 'tipo_documento' => (string)($_GET['tipo_documento'] ?? '')
             ]
@@ -284,7 +260,6 @@ class RegistroPersonaController extends BaseController {
         $ganadoEnOtroObservacion = $this->normalizarTextoMayusculas($_POST['ganado_en_otro_observacion'] ?? '');
         $fechaNacimiento = trim((string)($_POST['fecha_nacimiento'] ?? ''));
         $barrio = $this->normalizarTextoMayusculas($_POST['barrio'] ?? '');
-        $peticion = $this->normalizarTextoMayusculas($_POST['peticion'] ?? '');
         $tipoDocumento = $this->normalizarTipoDocumentoInput($_POST['tipo_documento'] ?? '');
         $cedula = $this->normalizarDocumentoInput($_POST['cedula'] ?? '');
         $tipoPersonaInput = 'nueva';
@@ -343,7 +318,6 @@ class RegistroPersonaController extends BaseController {
                 'ganado_en_otro_observacion' => $ganadoEnOtroObservacion,
                 'fecha_nacimiento' => $fechaNacimiento,
                 'barrio' => $barrio,
-                'peticion' => $peticion,
                 'cedula' => $cedula,
                 'tipo_documento' => $tipoDocumento
             ]);
@@ -365,12 +339,10 @@ class RegistroPersonaController extends BaseController {
             'Fecha_Nacimiento' => $fechaNacimiento !== '' ? $fechaNacimiento : null,
             'Telefono' => $telefono !== '' ? $telefono : null,
             'Barrio' => $barrio !== '' ? $barrio : null,
-            'Peticion' => $peticion !== '' ? $peticion : null,
             'Id_Ministerio' => $idMinisterio > 0 ? $idMinisterio : null,
             'Invitado_Por' => $invitadoPor !== '' ? $invitadoPor : null,
             'Tipo_Reunion' => $tipoReunion,
             'Fecha_Registro' => date('Y-m-d H:i:s'),
-            'Fecha_Registro_Unix' => time(),
             // Queda visible en filtros operativos por defecto.
             'Estado_Cuenta' => 'Activo'
         ];
@@ -425,6 +397,21 @@ class RegistroPersonaController extends BaseController {
         try {
             $idNuevaPersona = (int)$this->personaModel->create($data);
 
+            if ($idNuevaPersona > 0) {
+                $idRolNuevo = (int)($data['Id_Rol'] ?? 0);
+                $idRolDiscipulo = (int)$this->obtenerIdRolDiscipuloDefault();
+                $documento = trim((string)($data['Numero_Documento'] ?? ''));
+                if ($documento !== '' && $idRolNuevo > 0 && $idRolDiscipulo > 0 && $idRolNuevo === $idRolDiscipulo) {
+                    require_once APP . '/Models/UsuarioAcceso.php';
+                    (new UsuarioAcceso())->provisionarParaPersona(
+                        $idNuevaPersona,
+                        $documento,
+                        $documento,
+                        $idRolNuevo
+                    );
+                }
+            }
+
             if ($idNuevaPersona <= 0) {
                 $query = http_build_query([
                     'url' => 'registro_personas',
@@ -439,8 +426,6 @@ class RegistroPersonaController extends BaseController {
             if (!empty($personaCreada)) {
                 $this->encolarMensajeBienvenida($personaCreada);
             }
-
-            $this->registrarPeticionSiAplica($idNuevaPersona, $peticion);
 
             $query = http_build_query([
                 'url' => 'registro_personas',

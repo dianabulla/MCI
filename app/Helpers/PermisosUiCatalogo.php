@@ -51,9 +51,6 @@ class PermisosUiCatalogo {
         'eventos' => [
             'gestionar_contenido_publico' => 'Contenido y QR público',
         ],
-        'peticiones' => [
-            'moderar' => 'Moderar peticiones',
-        ],
         'discipular_evaluaciones' => [
             'calificar_terceros' => 'Calificar a otros',
         ],

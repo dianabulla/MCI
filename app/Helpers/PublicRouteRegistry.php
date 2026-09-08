@@ -31,8 +31,6 @@ class PublicRouteRegistry {
             'escuelas_formacion/asistencia-publica',
             'escuelas_formacion/asistencia-publica/buscar',
             'escuelas_formacion/asistencia-publica/guardar',
-            'peticiones_publica',
-            'peticiones_publica/guardar',
             'talleres_publico',
             'talleres_publico/guardar',
             'talleres_publico/buscar-persona',

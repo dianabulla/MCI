@@ -445,12 +445,14 @@ return [
     // --- Administración (Fase B: permisos/cuentas delegables) ---
 
     'cuentas' => 'cuentas:ver',
+    'auditoria' => 'cuentas:ver',
 
     'cuentas/crear' => 'cuentas:crear',
 
     'cuentas/editar' => 'cuentas:editar',
 
     'cuentas/asignar-segundo-rol' => 'cuentas:editar',
+    'cuentas/migrar-legacy' => 'cuentas:editar',
 
     'cuentas/*' => ['modulo' => 'cuentas', 'inferir_accion' => true],
 

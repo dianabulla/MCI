@@ -125,7 +125,8 @@ class TallerFormulario extends BaseModel {
         $this->ensureColumn('talleres_formulario_campo', 'Id_Bloque', 'INT UNSIGNED NULL AFTER Id_Formulario');
         $this->ensureColumn('talleres_formulario_respuesta', 'Id_Persona', 'INT UNSIGNED NULL AFTER Id_Formulario');
         $this->ensureColumn('talleres_formulario', 'Texto_Autorizacion', 'TEXT NULL AFTER Mensaje_Gracias');
-        $this->ensureColumn('talleres_formulario', 'Tipo_Plantilla', "VARCHAR(40) NOT NULL DEFAULT 'general' AFTER Texto_Autorizacion");
+        $this->ensureColumn('talleres_formulario', 'Mensaje_Inactivo', 'TEXT NULL AFTER Texto_Autorizacion');
+        $this->ensureColumn('talleres_formulario', 'Tipo_Plantilla', "VARCHAR(40) NOT NULL DEFAULT 'general' AFTER Mensaje_Inactivo");
         $this->ensureColumn('talleres_formulario', 'Imagen_Header', 'VARCHAR(255) NULL AFTER Descripcion');
         $this->ensureColumn('talleres_formulario', 'Acepta_Pago', 'TINYINT(1) NOT NULL DEFAULT 1 AFTER Tipo_Plantilla');
         $this->ensureTipoBloqueAutorizacion();
@@ -1545,6 +1546,7 @@ class TallerFormulario extends BaseModel {
         if ($idRespuesta <= 0 || $idFormulario <= 0) {
             return 0;
         }
+        $referencia = trim((string)($datos['referencia_pago'] ?? ''));
         $payload = [
             'Id_Respuesta' => $idRespuesta,
             'Id_Formulario' => $idFormulario,
@@ -1552,12 +1554,42 @@ class TallerFormulario extends BaseModel {
             'Recibido_Por' => trim((string)($datos['recibido_por'] ?? '')) ?: null,
             'Tipo_Pago' => trim((string)($datos['tipo_pago'] ?? 'completo')),
             'Valor_Pago' => (float)($datos['valor_pago'] ?? 0),
-            'Referencia_Pago' => trim((string)($datos['referencia_pago'] ?? '')) ?: null,
+            'Referencia_Pago' => $referencia !== '' ? $referencia : null,
         ];
         if (array_key_exists('entrego_material', $datos)) {
             $payload['Entrego_Material'] = ((int)$datos['entrego_material'] === 1) ? 1 : 0;
         }
-        return $this->insertEnTabla('talleres_formulario_pago', $payload);
+        try {
+            $idPago = $this->insertEnTabla('talleres_formulario_pago', $payload);
+        } catch (Throwable $e) {
+            error_log('No se pudo registrar el pago del taller: ' . $e->getMessage());
+            return 0;
+        }
+        $confirmado = $this->getPagoPorRespuestaYReferencia($idRespuesta, $referencia);
+        if ($confirmado === null) {
+            return 0;
+        }
+        $idConfirmado = (int)($confirmado['Id_Pago'] ?? 0);
+        return $idConfirmado > 0 ? $idConfirmado : (int)$idPago;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function getPagoPorRespuestaYReferencia(int $idRespuesta, string $referencia): ?array {
+        $idRespuesta = (int)$idRespuesta;
+        $referencia = trim($referencia);
+        if ($idRespuesta <= 0 || $referencia === '') {
+            return null;
+        }
+        $rows = $this->query(
+            'SELECT * FROM talleres_formulario_pago
+             WHERE Id_Respuesta = ? AND TRIM(Referencia_Pago) = ?
+             ORDER BY Id_Pago DESC
+             LIMIT 1',
+            [$idRespuesta, $referencia]
+        );
+        return !empty($rows[0]) ? (array)$rows[0] : null;
     }
 
     /**

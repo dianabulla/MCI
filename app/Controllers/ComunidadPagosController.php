@@ -128,7 +128,12 @@ class ComunidadPagosController extends BaseController
             }
             $metodoEscuela = strtolower($metodo);
             $this->escuelaModel->actualizarPagoInscripcion($id, $metodoEscuela, $tipoPago, $valor, $referencia, $recibidoPor, $entregoMaterial);
-            $this->escuelaModel->registrarMovimientoPago($inscripcion, $metodoEscuela, $tipoPago, $valor, $referencia, $recibidoPor, $entregoMaterial);
+            $okMovimiento = $this->escuelaModel->registrarMovimientoPago($inscripcion, $metodoEscuela, $tipoPago, $valor, $referencia, $recibidoPor, $entregoMaterial);
+            if ($okMovimiento === false) {
+                $_SESSION['comunidad_pagos_error'] = 'No se pudo guardar el movimiento de pago. No se generó ticket. Intente de nuevo.';
+                header('Location: ' . $redir);
+                exit;
+            }
             $titulo = $this->etiquetaPrograma((string)($inscripcion['Programa'] ?? ''));
             $nombre = trim((string)($inscripcion['Nombre'] ?? ''));
             $telefono = trim((string)($inscripcion['Telefono'] ?? ''));
@@ -147,7 +152,7 @@ class ComunidadPagosController extends BaseController
                 header('Location: ' . $redir);
                 exit;
             }
-            $this->tallerModel->registrarPago($id, $idFormulario, [
+            $idPago = $this->tallerModel->registrarPago($id, $idFormulario, [
                 'metodo_pago' => $metodo,
                 'tipo_pago' => $tipoPago,
                 'valor_pago' => $valor,
@@ -155,6 +160,11 @@ class ComunidadPagosController extends BaseController
                 'recibido_por' => $recibidoPor,
                 'entrego_material' => $entregoMaterial,
             ]);
+            if ($idPago <= 0 || $this->tallerModel->getPagoPorRespuestaYReferencia($id, $referencia) === null) {
+                $_SESSION['comunidad_pagos_error'] = 'No se pudo guardar el pago del taller. No se generó ticket. Intente de nuevo.';
+                header('Location: ' . $redir);
+                exit;
+            }
             $json = json_decode((string)($respuesta['Datos_JSON'] ?? '{}'), true);
             if (!is_array($json)) {
                 $json = [];

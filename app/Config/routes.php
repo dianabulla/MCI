@@ -159,9 +159,11 @@ return [
 
     // Cuentas
     'cuentas' => 'CuentaController@index',
+    'auditoria' => 'AuditoriaController@index',
     'cuentas/crear' => 'CuentaController@crear',
     'cuentas/editar' => 'CuentaController@editar',
     'cuentas/asignar-segundo-rol' => 'CuentaController@asignarSegundoRol',
+    'cuentas/migrar-legacy' => 'CuentaController@migrarLegacy',
     
     // Roles
     'roles' => 'RolController@index',
@@ -207,6 +209,7 @@ return [
     'talleres/crear' => 'TallerController@crear',
     'talleres/editar' => 'TallerController@editar',
     'talleres/guardar' => 'TallerController@guardar',
+    'talleres/estado' => 'TallerController@cambiarEstado',
     'talleres/eliminar' => 'TallerController@eliminar',
     'talleres/respuestas' => 'TallerController@respuestas',
     'talleres/respuestas/eliminar' => 'TallerController@eliminarRespuesta',

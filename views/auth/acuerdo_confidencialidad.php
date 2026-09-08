@@ -63,7 +63,7 @@
 
             <div class="acuerdo-texto mb-4">
                 <h2>Compromiso de confidencialidad y uso responsable de datos</h2>
-                <p>Como líder o administrador con acceso a MCI Madrid, manejas información personal sensible (nombres, documentos, teléfonos, direcciones, peticiones, asistencias, procesos de discipulado y datos de ministerio).</p>
+                <p>Como líder o administrador con acceso a MCI Madrid, manejas información personal sensible (nombres, documentos, teléfonos, direcciones, asistencias, procesos de discipulado y datos de ministerio).</p>
                 <p><strong>Te comprometes a:</strong></p>
                 <ul>
                     <li>Usar la información únicamente para fines pastorales, administrativos y de seguimiento autorizados por la iglesia.</li>

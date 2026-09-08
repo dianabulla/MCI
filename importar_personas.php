@@ -445,9 +445,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
         $columnasTabla = obtenerColumnasTablaImport($pdo, 'persona');
 
         $baseInsert = [
-            'Nombre', 'Apellido', 'Tipo_Documento', 'Numero_Documento', 'Fecha_Nacimiento', 'Edad',
-            'Genero', 'Telefono', 'Email', 'Hora_Llamada', 'Direccion', 'Barrio', 'Peticion',
-            'Tipo_Reunion', 'Id_Lider', 'Id_Celula', 'Id_Rol', 'Id_Ministerio', 'Fecha_Registro', 'Fecha_Registro_Unix'
+            'Nombre', 'Apellido', 'Tipo_Documento', 'Numero_Documento', 'Fecha_Nacimiento',
+            'Genero', 'Telefono', 'Email', 'Direccion', 'Barrio',
+            'Tipo_Reunion', 'Id_Lider', 'Id_Celula', 'Id_Rol', 'Id_Ministerio', 'Fecha_Registro'
         ];
         $insertColumns = array_values(array_filter($baseInsert, static function ($col) use ($columnasTabla) {
             return in_array($col, $columnasTabla, true);
@@ -505,12 +505,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
             $telefonoRaw = obtenerValorAliasImport($fila, $mapEncabezados, ['telefono', 'celular', 'movil'], 3);
             $emailRaw = obtenerValorAliasImport($fila, $mapEncabezados, ['email', 'correo', 'correo electronico']);
             $fechaNacimientoRaw = obtenerValorAliasImport($fila, $mapEncabezados, ['fecha nacimiento', 'fecha de nacimiento']);
-            $edadRaw = obtenerValorAliasImport($fila, $mapEncabezados, ['edad']);
             $generoRaw = obtenerValorAliasImport($fila, $mapEncabezados, ['genero', 'sexo']);
-            $horaLlamadaRaw = obtenerValorAliasImport($fila, $mapEncabezados, ['hora llamada', 'hora de llamada']);
             $direccionRaw = obtenerValorAliasImport($fila, $mapEncabezados, ['direccion']);
             $barrioRaw = obtenerValorAliasImport($fila, $mapEncabezados, ['barrio']);
-            $peticionRaw = obtenerValorAliasImport($fila, $mapEncabezados, ['peticion']);
             $tipoReunionRaw = obtenerValorAliasImport($fila, $mapEncabezados, ['tipo reunion', 'tipo de reunion']);
             $idLiderRaw = obtenerValorAliasImport($fila, $mapEncabezados, ['id lider']);
             $idCelulaRaw = obtenerValorAliasImport($fila, $mapEncabezados, ['id celula']);
@@ -583,13 +580,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
             }
 
             $fechaNacimiento = normalizarFechaImport($fechaNacimientoRaw);
-            $edad = is_numeric($edadRaw) ? (int)$edadRaw : null;
-            if ($edad !== null && $edad <= 0) {
-                $edad = null;
-            }
 
             $genero = normalizarGeneroImport($generoRaw);
-            $horaLlamada = normalizarHoraLlamadaImport($horaLlamadaRaw);
             $tipoDocFinal = normalizarTipoDocumentoImport($tipoDocumento);
             $tipoReunion = normalizarTipoReunionImport($tipoReunionRaw);
 
@@ -604,21 +596,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['archivo'])) {
                 'Tipo_Documento' => $tipoDocFinal,
                 'Numero_Documento' => $numeroDocumento !== '' ? $numeroDocumento : null,
                 'Fecha_Nacimiento' => $fechaNacimiento,
-                'Edad' => $edad,
                 'Genero' => $genero,
                 'Telefono' => $telefono !== '' ? $telefono : null,
                 'Email' => $email !== '' ? $email : null,
-                'Hora_Llamada' => $horaLlamada,
                 'Direccion' => trim((string)$direccionRaw) !== '' ? trim((string)$direccionRaw) : null,
                 'Barrio' => trim((string)$barrioRaw) !== '' ? trim((string)$barrioRaw) : null,
-                'Peticion' => trim((string)$peticionRaw) !== '' ? trim((string)$peticionRaw) : null,
                 'Tipo_Reunion' => $tipoReunion,
                 'Id_Lider' => $idLider,
                 'Id_Celula' => $idCelula,
                 'Id_Rol' => $idRol,
                 'Id_Ministerio' => $idMinisterio,
-                'Fecha_Registro' => date('Y-m-d H:i:s'),
-                'Fecha_Registro_Unix' => time()
+                'Fecha_Registro' => date('Y-m-d H:i:s')
             ];
 
             $params = [];

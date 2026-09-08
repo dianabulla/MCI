@@ -103,12 +103,12 @@ class EscuelaFormacionRegistroController extends BaseController {
     }
 
     /**
-     * Tras autenticar por credenciales: solo usuario_acceso sin Id_Persona, o persona con rol administrador protegido.
+     * Tras autenticar: usuario_acceso sin persona, o cuenta (acceso o ficha) con rol administrador protegido.
      */
     private function esCuentaUsuarioAutorizadaRecibirPagosDesdeCredenciales(array $user): bool {
         $idAcceso = (int)($user['Id_Usuario_Acceso'] ?? 0);
-        if ($idAcceso > 0) {
-            return (int)($user['Id_Persona'] ?? 0) <= 0;
+        if ($idAcceso > 0 && (int)($user['Id_Persona'] ?? 0) <= 0) {
+            return true;
         }
         return $this->esRolAdministradorSegunUsuario($user);
     }
@@ -221,10 +221,9 @@ class EscuelaFormacionRegistroController extends BaseController {
             return;
         }
 
-        $user = $this->personaModel->autenticar($usuario, $contrasena);
-        if (!$user && $this->usuarioAccesoModel->existeTabla()) {
-            $user = $this->usuarioAccesoModel->autenticar($usuario, $contrasena);
-        }
+        $user = $this->usuarioAccesoModel->existeTabla()
+            ? $this->usuarioAccesoModel->autenticarUnificado($usuario, $contrasena)
+            : null;
 
         if (!$user) {
             $this->json(['success' => false, 'mensaje' => 'Credenciales invalidas.'], 401);
@@ -1205,7 +1204,6 @@ class EscuelaFormacionRegistroController extends BaseController {
             'Invitado_Por' => $nombreLider !== '' ? $nombreLider : 'Escuelas Formacion',
             'Tipo_Reunion' => 'Domingo',
             'Fecha_Registro' => date('Y-m-d H:i:s'),
-            'Fecha_Registro_Unix' => time(),
             'Estado_Cuenta' => 'Activo'
         ];
 
@@ -3907,9 +3905,21 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         if ($idPersona <= 0 && empty($errores)) {
-            $idPersona = $this->crearPersonaNueva($nombre, $telefono, $cedula, $tipoDocumento, $idMinisterio, $idLider, $genero, $lider, $email, $direccion, $fechaNacimiento);
-            if ($idPersona <= 0) {
-                $errores[] = 'No se pudo crear la persona nueva en la lista de Personas.';
+            $duplicadoPersona = $this->personaModel->findDuplicateByCedulaOrTelefono(
+                $cedula,
+                $telefono,
+                null,
+                $tipoDocumento
+            );
+            if (is_array($duplicadoPersona) && (string)($duplicadoPersona['_motivo'] ?? '') === 'documento') {
+                $idPersona = (int)($duplicadoPersona['Id_Persona'] ?? 0);
+            } elseif (is_array($duplicadoPersona) && (string)($duplicadoPersona['_motivo'] ?? '') === 'telefono') {
+                $errores[] = 'Ya existe una persona con ese teléfono. Solo un menor (Registro Civil o Tarjeta de Identidad) puede repetir un teléfono.';
+            } else {
+                $idPersona = $this->crearPersonaNueva($nombre, $telefono, $cedula, $tipoDocumento, $idMinisterio, $idLider, $genero, $lider, $email, $direccion, $fechaNacimiento);
+                if ($idPersona <= 0) {
+                    $errores[] = 'No se pudo crear la persona nueva en la lista de Personas.';
+                }
             }
         }
 

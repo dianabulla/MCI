@@ -41,12 +41,11 @@ $urlBuscarProfesor = (string)($url_buscar_profesor ?? public_app_url('teen/busca
             </div>
 
             <div class="form-group" style="margin-bottom: 15px;">
-                <label for="profesor_busqueda"><strong>Maestro de la semana</strong></label>
+                <label for="profesor_busqueda"><strong>Nombre del maestro</strong></label>
                 <input type="hidden" id="id_profesor" name="id_profesor" value="<?= $idProfesor ?>">
-                <input type="text" id="profesor_busqueda" name="profesor_busqueda" class="form-control"
+                <input type="text" id="profesor_busqueda" name="profesor_nombre" class="form-control"
                        value="<?= htmlspecialchars($profesorNombre, ENT_QUOTES, 'UTF-8') ?>"
-                       placeholder="Buscar persona o escribir nombre" autocomplete="off">
-                <input type="hidden" id="profesor_nombre" name="profesor_nombre" value="<?= htmlspecialchars($profesorNombre, ENT_QUOTES, 'UTF-8') ?>">
+                       placeholder="Escribe el nombre o busca una persona" autocomplete="off">
                 <div id="profesor_sugerencias_editar"></div>
             </div>
 
@@ -91,7 +90,6 @@ $urlBuscarProfesor = (string)($url_buscar_profesor ?? public_app_url('teen/busca
     var urlBuscar = <?= json_encode($urlBuscarProfesor, JSON_UNESCAPED_UNICODE) ?>;
     var input = document.getElementById('profesor_busqueda');
     var hiddenId = document.getElementById('id_profesor');
-    var hiddenNombre = document.getElementById('profesor_nombre');
     var contenedor = document.getElementById('profesor_sugerencias_editar');
     if (!input || !contenedor) return;
 
@@ -103,7 +101,6 @@ $urlBuscarProfesor = (string)($url_buscar_profesor ?? public_app_url('teen/busca
     var timer = null;
     input.addEventListener('input', function () {
         if (hiddenId) hiddenId.value = '';
-        if (hiddenNombre) hiddenNombre.value = input.value.trim();
         var term = input.value.trim();
         if (term.length < 2) {
             lista.style.display = 'none';
@@ -128,7 +125,6 @@ $urlBuscarProfesor = (string)($url_buscar_profesor ?? public_app_url('teen/busca
                         btn.addEventListener('click', function () {
                             input.value = nombre;
                             if (hiddenId) hiddenId.value = String(p.Id_Persona || '');
-                            if (hiddenNombre) hiddenNombre.value = nombre;
                             lista.style.display = 'none';
                         });
                         lista.appendChild(btn);

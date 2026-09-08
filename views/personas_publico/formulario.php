@@ -323,10 +323,9 @@
                         <textarea id="ganado_en_otro_observacion" name="ganado_en_otro_observacion" rows="3" placeholder="Describe dónde fue ganado o la observación necesaria..."><?= htmlspecialchars((string)($old['ganado_en_otro_observacion'] ?? '')) ?></textarea>
                     </div>
 
-                    <div class="field full">
                     <?php if (!empty($soportaTratamientoDatos)): ?>
                     <?php $tratamientoOld = strtolower(trim((string)($old['tratamiento_datos'] ?? ''))); ?>
-                    <div class="field-group" style="grid-column: 1 / -1;">
+                    <div class="field full">
                         <label>Tratamiento de datos <span style="color:#b42318;">*</span></label>
                         <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px;">
                             <label style="font-weight:500;display:flex;align-items:center;gap:8px;">
@@ -340,10 +339,6 @@
                         </div>
                     </div>
                     <?php endif; ?>
-
-                        <label for="peticion">Petición</label>
-                        <input type="text" id="peticion" name="peticion" value="<?= htmlspecialchars((string)($old['peticion'] ?? '')) ?>" placeholder="Petición de oración (opcional)">
-                    </div>
                 </div>
 
                 <p class="hint">Obligatorio: nombre, apellidos, tipo de documento, número de documento y ganado en. Si eliges Otros, escribe también la observación.</p>

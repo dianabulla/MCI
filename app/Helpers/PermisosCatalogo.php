@@ -105,12 +105,6 @@ class PermisosCatalogo {
                     'descripcion' => 'Gestionar enlaces públicos, códigos y material difundido del módulo de eventos.',
                 ],
             ],
-            'peticiones' => [
-                'moderar' => [
-                    'label' => 'Moderar peticiones',
-                    'descripcion' => 'Ocultar, destacar o gestionar peticiones de terceros.',
-                ],
-            ],
             'discipular_evaluaciones' => [
                 'calificar_terceros' => [
                     'label' => 'Calificar a otros',

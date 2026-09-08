@@ -213,14 +213,19 @@ class TeenController extends BaseController {
         $nombreManual = trim((string)($post['profesor_nombre'] ?? ''));
         $busqueda = trim((string)($post['profesor_busqueda'] ?? ''));
 
-        if ($nombreManual === '' && $busqueda !== '') {
+        if ($busqueda !== '') {
             $nombreManual = $busqueda;
         }
 
-        if ($idProfesor > 0 && $nombreManual === '') {
+        if ($idProfesor > 0) {
             $persona = $this->personaModel->getById($idProfesor);
             if (!empty($persona)) {
-                $nombreManual = trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? ''));
+                $nombrePersona = trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? ''));
+                if ($nombreManual === '') {
+                    $nombreManual = $nombrePersona;
+                } elseif ($this->normalizarTextoMayusculas($nombreManual) !== $this->normalizarTextoMayusculas($nombrePersona)) {
+                    $idProfesor = 0;
+                }
             }
         }
 
@@ -1514,10 +1519,6 @@ class TeenController extends BaseController {
             $idMaterial = (int)($_POST['id_material'] ?? 0);
             $profesor = $this->normalizarProfesorMaterial($_POST);
 
-            if ($profesor['profesor_nombre'] === '') {
-                throw new Exception('Indica el nombre del maestro.');
-            }
-
             $material = null;
             if ($idMaterial > 0) {
                 $material = $this->teenModel->getById($idMaterial);
@@ -1527,6 +1528,9 @@ class TeenController extends BaseController {
             }
 
             if (empty($material)) {
+                if ($profesor['profesor_nombre'] === '') {
+                    throw new Exception('Indica el nombre del maestro.');
+                }
                 if ($anio <= 0 || $mes <= 0 || $semanaMes <= 0) {
                     throw new Exception('Indica año, mes y semana.');
                 }
@@ -1555,7 +1559,9 @@ class TeenController extends BaseController {
                 );
             }
 
-            $mensaje = 'Maestro asignado: ' . $profesor['profesor_nombre'] . '.';
+            $mensaje = $profesor['profesor_nombre'] !== ''
+                ? 'Maestro actualizado: ' . $profesor['profesor_nombre'] . '.'
+                : 'Se quitó el nombre del maestro.';
             $this->redirect('teen&anio=' . $anio . '&mes=' . $mes . '&semana=' . $semanaMes . '&mensaje=' . urlencode($mensaje) . '&tipo=success');
         } catch (Exception $e) {
             $this->redirect('teen&mensaje=' . urlencode($e->getMessage()) . '&tipo=error');
@@ -2589,10 +2595,8 @@ class TeenController extends BaseController {
                     'descripcion' => $descripcion !== '' ? $descripcion : null,
                     'archivos_pdf' => json_encode($archivosFinales),
                 ];
-                if ($profesor['profesor_nombre'] !== '' || $profesor['id_profesor'] > 0) {
-                    $dataUpdate['id_profesor'] = $profesor['id_profesor'] > 0 ? $profesor['id_profesor'] : null;
-                    $dataUpdate['profesor_nombre'] = $profesor['profesor_nombre'] !== '' ? $profesor['profesor_nombre'] : null;
-                }
+                $dataUpdate['id_profesor'] = $profesor['id_profesor'] > 0 ? $profesor['id_profesor'] : null;
+                $dataUpdate['profesor_nombre'] = $profesor['profesor_nombre'] !== '' ? $profesor['profesor_nombre'] : null;
 
                 $this->teenModel->updateTeen($id, $dataUpdate);
 

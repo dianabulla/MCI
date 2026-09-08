@@ -20,6 +20,7 @@ class CuentaController extends BaseController {
 
     public function __construct() {
         $this->personaModel = new Persona();
+        $this->personaModel->ensureIdRolSecundarioColumnExists();
         $this->usuarioAccesoModel = new UsuarioAcceso();
         $this->rolModel = new Rol();
         $this->userRoleModel = new UserRole();
@@ -32,14 +33,25 @@ class CuentaController extends BaseController {
         $cuentasAcceso = $this->usuarioAccesoModel->getAllWithRelations();
         $cuentasAccesoVinculadas = [];
         $cuentasAdministrativas = [];
+        $idsPersonaConAcceso = [];
 
         foreach ($cuentasAcceso as $cuenta) {
-            if (!empty($cuenta['Id_Persona'])) {
+            $idPersonaAcceso = (int)($cuenta['Id_Persona'] ?? 0);
+            if ($idPersonaAcceso > 0) {
                 $cuentasAccesoVinculadas[] = $cuenta;
+                $idsPersonaConAcceso[$idPersonaAcceso] = true;
             } else {
                 $cuentasAdministrativas[] = $cuenta;
             }
         }
+
+        $cuentasPersona = array_values(array_filter($cuentasPersona, static function ($cuentaPersona) use ($idsPersonaConAcceso) {
+            $idPersona = (int)($cuentaPersona['Id_Persona'] ?? 0);
+            return $idPersona <= 0 || empty($idsPersonaConAcceso[$idPersona]);
+        }));
+
+        $pendientesMigracion = $this->usuarioAccesoModel->listarCuentasLegacyPendientes();
+        $legacyAunEnPersona = $this->usuarioAccesoModel->contarLoginLegacyAunEnPersona();
 
         $idsPersona = [];
         foreach ($cuentasPersona as $cuentaPersona) {
@@ -65,6 +77,8 @@ class CuentaController extends BaseController {
             'tabla_usuario_acceso_disponible' => $this->usuarioAccesoModel->existeTabla(),
             'roles_por_persona' => $rolesPorPersona,
             'id_rol_maestro' => $idRolMaestro,
+            'pendientes_migracion' => $pendientesMigracion,
+            'legacy_aun_en_persona' => $legacyAunEnPersona,
             'mensaje' => (string)($_GET['mensaje'] ?? ''),
             'tipo' => (string)($_GET['tipo'] ?? ''),
         ]);
@@ -104,6 +118,9 @@ class CuentaController extends BaseController {
 
         if ($accion === 'asignar_maestro') {
             $this->userRoleModel->asignarMaestroSecundario($idPersona, $idRolMaestro);
+            if ($this->personaModel->tieneColumna('Id_Rol_Secundario')) {
+                $this->personaModel->update($idPersona, ['Id_Rol_Secundario' => $idRolMaestro]);
+            }
             $this->redirect('cuentas&tipo=success&mensaje=' . urlencode('Segundo rol Maestro asignado correctamente.'));
             return;
         }
@@ -114,7 +131,58 @@ class CuentaController extends BaseController {
         }
 
         $this->userRoleModel->quitarRol($idPersona, $idRolMaestro);
+        if ($this->personaModel->tieneColumna('Id_Rol_Secundario')) {
+            $this->personaModel->update($idPersona, ['Id_Rol_Secundario' => null]);
+        }
         $this->redirect('cuentas&tipo=success&mensaje=' . urlencode('Segundo rol Maestro removido correctamente.'));
+    }
+
+    public function migrarLegacy() {
+        PermisoGuard::exigir('cuentas:editar');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('cuentas');
+            return;
+        }
+
+        $accion = trim((string)($_POST['accion_migracion'] ?? 'copiar'));
+        require_once APP . '/Helpers/Auditoria.php';
+
+        if ($accion === 'desactivar') {
+            $resultado = $this->usuarioAccesoModel->desactivarLoginLegacyYaMigrado();
+            $limpiadas = (int)($resultado['limpiadas'] ?? 0);
+            Auditoria::ok('cuentas', 'desactivar_login_legacy', [
+                'entidad' => 'usuario_acceso',
+                'mensaje' => 'Se quitó usuario/clave de persona en ' . $limpiadas . ' ficha(s) ya migradas.',
+            ]);
+            $this->redirect('cuentas&tipo=success&mensaje=' . urlencode(
+                'Login viejo desactivado en ' . $limpiadas . ' persona(s). Siguen entrando por usuario_acceso con la misma clave.'
+            ));
+            return;
+        }
+
+        $resultado = $this->usuarioAccesoModel->migrarCuentasLegacyDesdePersona();
+        $copiadas = (int)($resultado['copiadas'] ?? 0);
+        $yaOk = (int)($resultado['ya_ok'] ?? 0);
+        $omitidas = (array)($resultado['omitidas'] ?? []);
+        $mensaje = 'Migración: ' . $copiadas . ' copiada(s), ' . $yaOk . ' ya estaban.';
+        if (!empty($omitidas)) {
+            $mensaje .= ' Omitidas: ' . implode(' | ', array_slice($omitidas, 0, 8));
+            if (count($omitidas) > 8) {
+                $mensaje .= ' (+' . (count($omitidas) - 8) . ' más)';
+            }
+        }
+
+        Auditoria::ok('cuentas', 'migrar_legacy', [
+            'entidad' => 'usuario_acceso',
+            'mensaje' => $mensaje,
+        ]);
+
+        $tipo = empty($omitidas) || $copiadas > 0 ? 'success' : 'error';
+        if ($copiadas === 0 && $yaOk === 0 && !empty($omitidas)) {
+            $tipo = 'error';
+        }
+        $this->redirect('cuentas&tipo=' . $tipo . '&mensaje=' . urlencode($mensaje));
     }
 
     public function crear() {
@@ -153,7 +221,7 @@ class CuentaController extends BaseController {
                         $error = 'Usuario, contraseña y rol son obligatorios.';
                     } elseif (strlen($contrasena) < 6) {
                         $error = 'La contraseña debe tener mínimo 6 caracteres.';
-                    } elseif ($this->personaModel->existeUsuario($usuario) || $this->usuarioAccesoModel->existeUsuario($usuario)) {
+                    } elseif ($this->usuarioAccesoModel->existeUsuario($usuario)) {
                         $error = 'Ese usuario ya existe en el sistema.';
                     } elseif ($tipoCreacion === 'ministerial' && empty($persona)) {
                         $error = 'No se encontró una persona con esa cédula.';
@@ -176,7 +244,6 @@ class CuentaController extends BaseController {
                             $idPersonaNueva = (int)$persona['Id_Persona'];
                             $this->usuarioAccesoModel->create($data);
                             $this->sincronizarRolMinisterialPersona($idPersonaNueva, $idRol);
-                            $this->deprecarCredencialesLegacyPersona($idPersonaNueva, $usuario);
                             $success = 'Cuenta ministerial creada correctamente para ' . trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? '')) . '.';
                         } else {
                             $data['Nombre_Mostrar'] = $nombreMostrar;
@@ -224,24 +291,26 @@ class CuentaController extends BaseController {
         }
 
         if ($tipo === 'persona') {
-            $persona = $this->personaModel->getById($id);
-            if (!$persona || trim((string)($persona['Usuario'] ?? '')) === '') {
-                $this->redirect('cuentas');
+            $accesoPorPersona = $this->usuarioAccesoModel->getByPersonaId($id);
+            if (!empty($accesoPorPersona)) {
+                $this->redirect('cuentas/editar&tipo=acceso&id=' . (int)$accesoPorPersona['Id_Usuario_Acceso']);
                 return;
             }
-        } else {
-            if (!$tablaDisponible) {
-                $this->redirect('cuentas');
-                return;
-            }
-            $cuentaAcceso = $this->usuarioAccesoModel->getById($id);
-            if (!$cuentaAcceso) {
-                $this->redirect('cuentas');
-                return;
-            }
-            if (!empty($cuentaAcceso['Id_Persona'])) {
-                $persona = $this->personaModel->getById((int)$cuentaAcceso['Id_Persona']);
-            }
+            $this->redirect('cuentas');
+            return;
+        }
+
+        if (!$tablaDisponible) {
+            $this->redirect('cuentas');
+            return;
+        }
+        $cuentaAcceso = $this->usuarioAccesoModel->getById($id);
+        if (!$cuentaAcceso) {
+            $this->redirect('cuentas');
+            return;
+        }
+        if (!empty($cuentaAcceso['Id_Persona'])) {
+            $persona = $this->personaModel->getById((int)$cuentaAcceso['Id_Persona']);
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -254,54 +323,23 @@ class CuentaController extends BaseController {
                 $error = 'Usuario y rol son obligatorios.';
             } elseif ($contrasena !== '' && strlen($contrasena) < 6) {
                 $error = 'La contraseña debe tener mínimo 6 caracteres.';
-            } elseif (
-                $this->personaModel->existeUsuario($usuario, $tipo === 'persona' ? $id : null)
-                || $this->usuarioAccesoModel->existeUsuario($usuario, $tipo === 'acceso' ? $id : null)
-            ) {
+            } elseif ($this->usuarioAccesoModel->existeUsuario($usuario, $id)) {
                 $error = 'Ese usuario ya existe en el sistema.';
             } else {
-                if ($tipo === 'persona') {
-                    $data = [
-                        'Usuario' => $usuario,
-                        'Id_Rol' => $idRol,
-                        'Estado_Cuenta' => $estadoCuenta,
-                    ];
-                    if ($contrasena !== '') {
-                        $data['Contrasena'] = password_hash($contrasena, PASSWORD_BCRYPT);
-                    }
-                    $this->personaModel->update($id, $data);
-                    $this->sincronizarRolMinisterialPersona($id, $idRol);
-                    $accesoVinculado = $this->usuarioAccesoModel->getByPersonaId($id);
-                    if (!empty($accesoVinculado)) {
-                        $dataAcceso = [
-                            'Usuario' => $usuario,
-                            'Id_Rol' => $idRol,
-                            'Estado_Cuenta' => $estadoCuenta,
-                        ];
-                        if ($contrasena !== '') {
-                            $dataAcceso['Contrasena'] = $data['Contrasena'];
-                        }
-                        $this->usuarioAccesoModel->update((int)$accesoVinculado['Id_Usuario_Acceso'], $dataAcceso);
-                    }
-                    $persona = $this->personaModel->getById($id);
-                } else {
-                    $data = [
-                        'Usuario' => $usuario,
-                        'Id_Rol' => $idRol,
-                        'Estado_Cuenta' => $estadoCuenta,
-                    ];
-                    if ($contrasena !== '') {
-                        $data['Contrasena'] = password_hash($contrasena, PASSWORD_BCRYPT);
-                    }
-                    $this->usuarioAccesoModel->update($id, $data);
-                    $cuentaAcceso = $this->usuarioAccesoModel->getById($id);
-                    if (!empty($cuentaAcceso['Id_Persona'])) {
-                        $idPersonaVinculada = (int)$cuentaAcceso['Id_Persona'];
-                        $this->sincronizarRolMinisterialPersona($idPersonaVinculada, $idRol);
-                        $this->sincronizarCredencialesAccesoAPersona($idPersonaVinculada, $usuario, $data['Contrasena'] ?? null);
-                        $this->deprecarCredencialesLegacyPersona($idPersonaVinculada, $usuario);
-                        $persona = $this->personaModel->getById($idPersonaVinculada);
-                    }
+                $data = [
+                    'Usuario' => $usuario,
+                    'Id_Rol' => $idRol,
+                    'Estado_Cuenta' => $estadoCuenta,
+                ];
+                if ($contrasena !== '') {
+                    $data['Contrasena'] = password_hash($contrasena, PASSWORD_BCRYPT);
+                }
+                $this->usuarioAccesoModel->update($id, $data);
+                $cuentaAcceso = $this->usuarioAccesoModel->getById($id);
+                if (!empty($cuentaAcceso['Id_Persona'])) {
+                    $idPersonaVinculada = (int)$cuentaAcceso['Id_Persona'];
+                    $this->sincronizarRolMinisterialPersona($idPersonaVinculada, $idRol);
+                    $persona = $this->personaModel->getById($idPersonaVinculada);
                 }
 
                 $success = 'Cuenta actualizada correctamente.';
@@ -337,52 +375,5 @@ class CuentaController extends BaseController {
         $this->personaModel->update($idPersona, ['Id_Rol' => $idRol]);
         $this->personaModel->ajustarEscaleraPorRol($idPersona, $idRol);
         $this->userRoleModel->sincronizarRolPrincipal($idPersona, $idRol);
-    }
-
-    private function sincronizarCredencialesAccesoAPersona(int $idPersona, string $usuarioAcceso, ?string $contrasenaHash): void {
-        if ($idPersona <= 0) {
-            return;
-        }
-
-        $persona = $this->personaModel->getById($idPersona);
-        if (empty($persona)) {
-            return;
-        }
-
-        $usuarioPersona = trim((string)($persona['Usuario'] ?? ''));
-        $update = [];
-        if ($contrasenaHash !== null && $contrasenaHash !== '') {
-            $update['Contrasena'] = $contrasenaHash;
-        }
-        if ($usuarioPersona !== '' && strcasecmp($usuarioPersona, trim($usuarioAcceso)) === 0 && $contrasenaHash !== null) {
-            $update['Usuario'] = $usuarioAcceso;
-        }
-
-        if ($update !== []) {
-            $this->personaModel->update($idPersona, $update);
-        }
-    }
-
-    /**
-     * Evita doble login legacy (persona) cuando la cuenta ministerial oficial está en usuario_acceso.
-     */
-    private function deprecarCredencialesLegacyPersona(int $idPersona, string $usuarioAcceso): void {
-        if ($idPersona <= 0) {
-            return;
-        }
-
-        $persona = $this->personaModel->getById($idPersona);
-        if (empty($persona)) {
-            return;
-        }
-
-        $usuarioPersona = trim((string)($persona['Usuario'] ?? ''));
-        $usuarioAcceso = trim($usuarioAcceso);
-        if ($usuarioPersona === '' || strcasecmp($usuarioPersona, $usuarioAcceso) === 0) {
-            $this->personaModel->update($idPersona, [
-                'Usuario' => '',
-                'Contrasena' => '',
-            ]);
-        }
     }
 }

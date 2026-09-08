@@ -10,7 +10,7 @@ class WhatsappMensajeTemplate extends BaseModel {
     protected $primaryKey = 'clave';
 
     private $defaults = [
-        'bienvenida_persona' => 'Hola {persona_nombre}, bienvenido(a) a MCI Madrid Colombia. Estamos felices de recibirte. Muy pronto te compartiremos información de crecimiento y eventos. 📍 Peticiones: {url_peticiones}',
+        'bienvenida_persona' => 'Hola {persona_nombre}, bienvenido(a) a MCI Madrid Colombia. Estamos felices de recibirte. Muy pronto te compartiremos información de crecimiento y eventos.',
         'felicitacion_cumpleanos' => 'Hoy celebramos tu vida y damos gracias a Dios por tu corazón tan dispuesto para servir.\n\nTu esfuerzo, tu amor por las personas y tu entrega han dejado huellas profundas en nuestra iglesia. Gracias por guiar, apoyar y nunca rendirte.\n\nOramos para que este nuevo año llegue lleno de bendición, fuerzas renovadas y mucha alegría.\n\n¡Feliz cumpleaños te desea MCI Madrid! 🎉 Te honramos y te agradecemos de corazón.',
         'asignacion_celula_universidad' => 'Hola {persona_nombre}, ¡bienvenido a tu célula {celula_nombre}! 
 
@@ -62,6 +62,33 @@ class WhatsappMensajeTemplate extends BaseModel {
                 "INSERT IGNORE INTO {$this->table} (clave, plantilla) VALUES (?, ?)",
                 [$clave, $plantilla]
             );
+        }
+        $this->retirarEnlacePeticionesEnPlantillas();
+    }
+
+    private function retirarEnlacePeticionesEnPlantillas(): void {
+        $rows = $this->query("SELECT clave, plantilla FROM {$this->table}");
+        foreach ($rows as $row) {
+            $clave = (string)($row['clave'] ?? '');
+            $plantilla = (string)($row['plantilla'] ?? '');
+            if ($clave === '' || $plantilla === '') {
+                continue;
+            }
+            if (strpos($plantilla, '{url_peticiones}') === false && stripos($plantilla, 'peticiones/crear') === false) {
+                continue;
+            }
+            $limpia = preg_replace('/\s*📍\s*Peticiones:\s*\{url_peticiones\}/u', '', $plantilla);
+            $limpia = str_replace('{url_peticiones}', '', (string)$limpia);
+            $limpia = trim((string)$limpia);
+            if ($limpia === '') {
+                $limpia = $this->defaults[$clave] ?? $plantilla;
+            }
+            if ($limpia !== $plantilla) {
+                $this->execute(
+                    "UPDATE {$this->table} SET plantilla = ? WHERE clave = ?",
+                    [$limpia, $clave]
+                );
+            }
         }
     }
 
@@ -213,7 +240,6 @@ class WhatsappMensajeTemplate extends BaseModel {
             '{celula_id}',
             '{fecha_hoy}',
             '{universidad_vida_info}',
-            '{url_peticiones}',
             '{url_universidad_vida}',
             '{url_capacitacion_destino}'
         ];

@@ -57,6 +57,59 @@ class UsuarioAcceso extends BaseModel {
     }
 
     /**
+     * Login oficial: solo usuario_acceso.
+     * Si aún hay clave en persona y no hay cuenta ligada, la copia una vez y entra por usuario_acceso.
+     */
+    public function autenticarUnificado(string $usuario, string $contrasena): ?array {
+        $usuario = trim($usuario);
+        if ($usuario === '' || $contrasena === '' || !$this->existeTabla()) {
+            return null;
+        }
+
+        $userAcceso = $this->autenticar($usuario, $contrasena);
+        if ($userAcceso) {
+            return $userAcceso;
+        }
+
+        if ($this->existeUsuario($usuario)) {
+            return null;
+        }
+
+        require_once APP . '/Models/Persona.php';
+        $personaModel = new Persona();
+        if (!$personaModel->tieneColumnasLoginLegacy()) {
+            return null;
+        }
+        $persona = $personaModel->autenticar($usuario, $contrasena);
+        if (empty($persona)) {
+            return null;
+        }
+
+        $idPersona = (int)($persona['Id_Persona'] ?? 0);
+        if ($idPersona <= 0) {
+            return null;
+        }
+
+        if (!empty($this->getByPersonaId($idPersona))) {
+            return null;
+        }
+
+        $idRol = (int)($persona['Id_Rol'] ?? 0);
+        if (!$this->provisionarParaPersona($idPersona, $usuario, $contrasena, $idRol)) {
+            return null;
+        }
+
+        if ($personaModel->tieneColumnasLoginLegacy()) {
+            $personaModel->update($idPersona, [
+                'Usuario' => null,
+                'Contrasena' => null,
+            ]);
+        }
+
+        return $this->autenticar($usuario, $contrasena);
+    }
+
+    /**
      * Actualizar timestamp de ultimo acceso de la cuenta.
      */
     public function actualizarUltimoAcceso($idUsuarioAcceso) {
@@ -209,5 +262,313 @@ class UsuarioAcceso extends BaseModel {
         $sql = "SELECT * FROM {$this->table} WHERE Id_Persona = ? LIMIT 1";
         $rows = $this->query($sql, [$idPersona]);
         return $rows[0] ?? null;
+    }
+
+    private function esHashPassword($valor): bool {
+        $valor = (string)$valor;
+        return (bool)preg_match('/^\$2[ayb]\$\d{2}\$/', $valor);
+    }
+
+    /**
+     * Personas con login en persona que aún no tienen fila vinculada en usuario_acceso.
+     */
+    public function listarCuentasLegacyPendientes(): array {
+        if (!$this->existeTabla()) {
+            return [];
+        }
+
+        require_once APP . '/Models/Persona.php';
+        if (!(new Persona())->tieneColumnasLoginLegacy()) {
+            return [];
+        }
+
+        $sql = "SELECT
+                    p.Id_Persona,
+                    p.Usuario,
+                    p.Id_Rol,
+                    p.Id_Ministerio,
+                    p.Estado_Cuenta,
+                    p.Nombre,
+                    p.Apellido,
+                    p.Numero_Documento,
+                    r.Nombre_Rol
+                FROM persona p
+                LEFT JOIN rol r ON r.Id_Rol = p.Id_Rol
+                LEFT JOIN {$this->table} ua_p ON ua_p.Id_Persona = p.Id_Persona
+                WHERE p.Usuario IS NOT NULL
+                  AND TRIM(p.Usuario) <> ''
+                  AND p.Contrasena IS NOT NULL
+                  AND TRIM(p.Contrasena) <> ''
+                  AND ua_p.Id_Usuario_Acceso IS NULL
+                ORDER BY p.Usuario ASC, p.Id_Persona ASC";
+
+        return $this->query($sql);
+    }
+
+    public function contarLoginLegacyAunEnPersona(): int {
+        if (!$this->existeTabla()) {
+            return 0;
+        }
+
+        require_once APP . '/Models/Persona.php';
+        if (!(new Persona())->tieneColumna('Usuario')) {
+            return 0;
+        }
+
+        $sql = "SELECT COUNT(*) AS total
+                FROM persona p
+                INNER JOIN {$this->table} ua ON ua.Id_Persona = p.Id_Persona
+                WHERE p.Usuario IS NOT NULL
+                  AND TRIM(p.Usuario) <> ''
+                  AND LOWER(TRIM(p.Usuario)) = LOWER(TRIM(ua.Usuario))";
+        $rows = $this->query($sql);
+        return (int)($rows[0]['total'] ?? 0);
+    }
+
+    /**
+     * Copia usuario/clave de persona a usuario_acceso. No borra el login viejo.
+     * Idempotente: se puede repetir en producción con 31 o 300 cuentas.
+     *
+     * @return array{copiadas:int, omitidas:array, ya_ok:int}
+     */
+    public function migrarCuentasLegacyDesdePersona(): array {
+        $reporte = [
+            'copiadas' => 0,
+            'ya_ok' => 0,
+            'omitidas' => [],
+        ];
+
+        if (!$this->existeTabla()) {
+            $reporte['omitidas'][] = 'La tabla usuario_acceso no existe.';
+            return $reporte;
+        }
+
+        require_once APP . '/Models/Persona.php';
+        if (!(new Persona())->tieneColumnasLoginLegacy()) {
+            return $reporte;
+        }
+
+        $this->ensureAcuerdoConfidencialidadColumnsExist();
+        $tieneAcuerdoAt = $this->tieneColumna('Acuerdo_Confidencialidad_At');
+        $tieneAcuerdoVer = $this->tieneColumna('Acuerdo_Confidencialidad_Version');
+
+        require_once APP . '/Models/Persona.php';
+        $personaModel = new Persona();
+        $selectAcuerdoAt = $personaModel->tieneColumna('Acuerdo_Confidencialidad_At')
+            ? 'p.Acuerdo_Confidencialidad_At'
+            : 'NULL AS Acuerdo_Confidencialidad_At';
+        $selectAcuerdoVer = $personaModel->tieneColumna('Acuerdo_Confidencialidad_Version')
+            ? 'p.Acuerdo_Confidencialidad_Version'
+            : 'NULL AS Acuerdo_Confidencialidad_Version';
+
+        $sql = "SELECT
+                    p.Id_Persona,
+                    p.Usuario,
+                    p.Contrasena,
+                    p.Id_Rol,
+                    p.Id_Ministerio,
+                    p.Estado_Cuenta,
+                    p.Ultimo_Acceso,
+                    p.Nombre,
+                    p.Apellido,
+                    {$selectAcuerdoAt},
+                    {$selectAcuerdoVer}
+                FROM persona p
+                WHERE p.Usuario IS NOT NULL
+                  AND TRIM(p.Usuario) <> ''
+                  AND p.Contrasena IS NOT NULL
+                  AND TRIM(p.Contrasena) <> ''
+                ORDER BY p.Id_Persona ASC";
+
+        $filas = $this->query($sql);
+        foreach ($filas as $fila) {
+            $idPersona = (int)($fila['Id_Persona'] ?? 0);
+            $usuario = trim((string)($fila['Usuario'] ?? ''));
+            $etiqueta = $usuario !== '' ? $usuario : ('persona #' . $idPersona);
+
+            if ($idPersona <= 0 || $usuario === '') {
+                continue;
+            }
+
+            if (!empty($this->getByPersonaId($idPersona))) {
+                $reporte['ya_ok']++;
+                continue;
+            }
+
+            $idRol = (int)($fila['Id_Rol'] ?? 0);
+            if ($idRol <= 0) {
+                $reporte['omitidas'][] = $etiqueta . ': no tiene rol de iglesia; asígnale rol y vuelve a migrar.';
+                continue;
+            }
+
+            $choque = $this->query(
+                "SELECT Id_Usuario_Acceso, Id_Persona FROM {$this->table} WHERE Usuario = ? LIMIT 1",
+                [$usuario]
+            );
+            if (!empty($choque)) {
+                $idPersonaChoque = (int)($choque[0]['Id_Persona'] ?? 0);
+                if ($idPersonaChoque === $idPersona) {
+                    $reporte['ya_ok']++;
+                    continue;
+                }
+                $reporte['omitidas'][] = $etiqueta . ': ese usuario ya existe en usuario_acceso'
+                    . ($idPersonaChoque > 0 ? ' (otra persona #' . $idPersonaChoque . ')' : ' (cuenta administrativa)');
+                continue;
+            }
+
+            $hash = (string)($fila['Contrasena'] ?? '');
+            if (!$this->esHashPassword($hash)) {
+                $hash = password_hash($hash, PASSWORD_BCRYPT);
+            }
+
+            $idMinisterio = (int)($fila['Id_Ministerio'] ?? 0);
+            $estado = trim((string)($fila['Estado_Cuenta'] ?? 'Activo')) ?: 'Activo';
+            $nombreMostrar = trim((string)($fila['Nombre'] ?? '') . ' ' . (string)($fila['Apellido'] ?? ''));
+            $ultimoAcceso = $fila['Ultimo_Acceso'] ?? null;
+            if ($ultimoAcceso === '') {
+                $ultimoAcceso = null;
+            }
+
+            $data = [
+                'Usuario' => $usuario,
+                'Contrasena' => $hash,
+                'Nombre_Mostrar' => $nombreMostrar !== '' ? $nombreMostrar : $usuario,
+                'Id_Rol' => $idRol,
+                'Id_Ministerio' => $idMinisterio > 0 ? $idMinisterio : null,
+                'Id_Persona' => $idPersona,
+                'Estado_Cuenta' => $estado,
+                'Ultimo_Acceso' => $ultimoAcceso,
+            ];
+            if ($tieneAcuerdoAt) {
+                $data['Acuerdo_Confidencialidad_At'] = $fila['Acuerdo_Confidencialidad_At'] ?? null;
+            }
+            if ($tieneAcuerdoVer) {
+                $data['Acuerdo_Confidencialidad_Version'] = $fila['Acuerdo_Confidencialidad_Version'] ?? null;
+            }
+
+            try {
+                $this->create($data);
+                $reporte['copiadas']++;
+            } catch (Throwable $e) {
+                if ($idMinisterio > 0) {
+                    try {
+                        $data['Id_Ministerio'] = null;
+                        $this->create($data);
+                        $reporte['copiadas']++;
+                        continue;
+                    } catch (Throwable $e2) {
+                        $reporte['omitidas'][] = $etiqueta . ': ' . $e2->getMessage();
+                        continue;
+                    }
+                }
+                $reporte['omitidas'][] = $etiqueta . ': ' . $e->getMessage();
+            }
+        }
+
+        return $reporte;
+    }
+
+    /**
+     * Quita Usuario/Contrasena de persona solo si ya hay cuenta vinculada con el mismo usuario.
+     * No tocar hasta comprobar login en producción.
+     *
+     * @return array{limpiadas:int}
+     */
+    public function desactivarLoginLegacyYaMigrado(): array {
+        $limpiadas = 0;
+        if (!$this->existeTabla()) {
+            return ['limpiadas' => 0];
+        }
+
+        require_once APP . '/Models/Persona.php';
+        $personaModel = new Persona();
+        if (!$personaModel->tieneColumnasLoginLegacy()) {
+            return ['limpiadas' => 0];
+        }
+
+        $sql = "SELECT p.Id_Persona, p.Usuario, ua.Usuario AS Usuario_Acceso
+                FROM persona p
+                INNER JOIN {$this->table} ua ON ua.Id_Persona = p.Id_Persona
+                WHERE p.Usuario IS NOT NULL
+                  AND TRIM(p.Usuario) <> ''";
+        $filas = $this->query($sql);
+        foreach ($filas as $fila) {
+            $usuarioPersona = trim((string)($fila['Usuario'] ?? ''));
+            $usuarioAcceso = trim((string)($fila['Usuario_Acceso'] ?? ''));
+            if ($usuarioPersona === '' || strcasecmp($usuarioPersona, $usuarioAcceso) !== 0) {
+                continue;
+            }
+            require_once APP . '/Models/Persona.php';
+            (new Persona())->update((int)$fila['Id_Persona'], [
+                'Usuario' => null,
+                'Contrasena' => null,
+            ]);
+            $limpiadas++;
+        }
+
+        return ['limpiadas' => $limpiadas];
+    }
+
+    /**
+     * Crea cuenta ministerial si la persona aún no tiene una. No pisa clave existente.
+     */
+    public function provisionarParaPersona(int $idPersona, string $usuario, string $clavePlano, int $idRol = 0): bool {
+        if (!$this->existeTabla() || $idPersona <= 0) {
+            return false;
+        }
+
+        $usuario = trim($usuario);
+        $clavePlano = trim($clavePlano);
+        if ($usuario === '' || $clavePlano === '') {
+            return false;
+        }
+
+        if (!empty($this->getByPersonaId($idPersona))) {
+            return true;
+        }
+
+        if ($this->existeUsuario($usuario)) {
+            return false;
+        }
+
+        if ($idRol <= 0) {
+            require_once APP . '/Models/Persona.php';
+            $persona = (new Persona())->getById($idPersona);
+            $idRol = (int)($persona['Id_Rol'] ?? 0);
+        }
+        if ($idRol <= 0) {
+            return false;
+        }
+
+        require_once APP . '/Models/Persona.php';
+        $persona = (new Persona())->getById($idPersona);
+        $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
+        $nombreMostrar = trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? ''));
+
+        $data = [
+            'Usuario' => $usuario,
+            'Contrasena' => $this->esHashPassword($clavePlano) ? $clavePlano : password_hash($clavePlano, PASSWORD_BCRYPT),
+            'Nombre_Mostrar' => $nombreMostrar !== '' ? $nombreMostrar : $usuario,
+            'Id_Rol' => $idRol,
+            'Id_Ministerio' => $idMinisterio > 0 ? $idMinisterio : null,
+            'Id_Persona' => $idPersona,
+            'Estado_Cuenta' => 'Activo',
+        ];
+
+        try {
+            return (bool)$this->create($data);
+        } catch (Throwable $e) {
+            if ($idMinisterio > 0) {
+                try {
+                    $data['Id_Ministerio'] = null;
+                    return (bool)$this->create($data);
+                } catch (Throwable $e2) {
+                    error_log('No se pudo provisionar usuario_acceso: ' . $e2->getMessage());
+                    return false;
+                }
+            }
+            error_log('No se pudo provisionar usuario_acceso: ' . $e->getMessage());
+            return false;
+        }
     }
 }

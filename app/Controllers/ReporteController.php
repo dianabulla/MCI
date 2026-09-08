@@ -1832,9 +1832,16 @@ class ReporteController extends BaseController {
                 $detalleLideres[$ministerio] = [];
             }
             if (!isset($detalleLideres[$ministerio][$lider])) {
-                $detalleLideres[$ministerio][$lider] = 0;
+                $detalleLideres[$ministerio][$lider] = [
+                    'cantidad' => 0,
+                    'ids_celula' => [],
+                ];
             }
-            $detalleLideres[$ministerio][$lider]++;
+            $detalleLideres[$ministerio][$lider]['cantidad']++;
+            $idCelulaAbierta = (int)($celula['Id_Celula'] ?? 0);
+            if ($idCelulaAbierta > 0) {
+                $detalleLideres[$ministerio][$lider]['ids_celula'][] = $idCelulaAbierta;
+            }
         }
 
         ksort($rowsMap);
@@ -1856,11 +1863,41 @@ class ReporteController extends BaseController {
             $totales['anual'] += (int)($row['anual'] ?? 0);
         }
 
+        $idsCelulasApertura = [];
+        foreach ($detalleLideres as $lideres) {
+            foreach ($lideres as $infoLider) {
+                foreach (($infoLider['ids_celula'] ?? []) as $idCelulaDetalle) {
+                    $idsCelulasApertura[] = (int)$idCelulaDetalle;
+                }
+            }
+        }
+        $conteoAsistentesPorCelula = $this->celulaModel->getConteoAsistentesYNuevosPorCelulas(
+            $idsCelulasApertura,
+            $this->personaModel->tieneColumna('Es_Antiguo')
+        );
+
         foreach ($detalleLideres as $ministerio => $lideres) {
-            arsort($lideres);
-            $detalleLideres[$ministerio] = array_map(static function($nombre, $cantidad) {
-                return ['lider' => $nombre, 'cantidad' => $cantidad];
-            }, array_keys($lideres), array_values($lideres));
+            uasort($lideres, static function($a, $b) {
+                return ((int)($b['cantidad'] ?? 0)) <=> ((int)($a['cantidad'] ?? 0));
+            });
+
+            $filasDetalle = [];
+            foreach ($lideres as $nombre => $infoLider) {
+                $asistentes = 0;
+                $nuevas = 0;
+                foreach (($infoLider['ids_celula'] ?? []) as $idCelulaDetalle) {
+                    $conteoCelula = $conteoAsistentesPorCelula[(int)$idCelulaDetalle] ?? [];
+                    $asistentes += (int)($conteoCelula['asistentes'] ?? 0);
+                    $nuevas += (int)($conteoCelula['nuevas'] ?? 0);
+                }
+                $filasDetalle[] = [
+                    'lider' => $nombre,
+                    'cantidad' => (int)($infoLider['cantidad'] ?? 0),
+                    'asistentes' => $asistentes,
+                    'nuevas' => $nuevas,
+                ];
+            }
+            $detalleLideres[$ministerio] = $filasDetalle;
         }
 
         return [

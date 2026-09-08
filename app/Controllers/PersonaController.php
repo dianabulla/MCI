@@ -7,19 +7,18 @@ require_once APP . '/Models/Persona.php';
 require_once APP . '/Models/Celula.php';
 require_once APP . '/Models/Ministerio.php';
 require_once APP . '/Models/Rol.php';
-require_once APP . '/Models/Peticion.php';
 require_once APP . '/Models/EscuelaFormacionInscripcion.php';
 require_once APP . '/Models/WhatsappLocalQueue.php';
 require_once APP . '/Models/WhatsappMensajeTemplate.php';
 require_once APP . '/Controllers/AuthController.php';
 require_once APP . '/Helpers/DataIsolation.php';
+require_once APP . '/Helpers/Auditoria.php';
 
 class PersonaController extends BaseController {
     private $personaModel;
     private $celulaModel;
     private $ministerioModel;
     private $rolModel;
-    private $peticionModel;
     private $whatsappLocalQueueModel;
     private $whatsappMensajeTemplateModel;
     private $soportaProceso = false;
@@ -30,6 +29,7 @@ class PersonaController extends BaseController {
     private $soportaCreadoPor = false;
     private $soportaCanalCreacion = false;
     private $soportaTratamientoDatos = false;
+    private $soportaRolSecundario = false;
     private $idRolAsistenteCache = null;
 
     public function __construct() {
@@ -37,7 +37,6 @@ class PersonaController extends BaseController {
         $this->celulaModel = new Celula();
         $this->ministerioModel = new Ministerio();
         $this->rolModel = new Rol();
-        $this->peticionModel = new Peticion();
         $this->whatsappLocalQueueModel = new WhatsappLocalQueue();
         $this->whatsappMensajeTemplateModel = new WhatsappMensajeTemplate();
 
@@ -52,9 +51,11 @@ class PersonaController extends BaseController {
         $this->personaModel->ensureCanalCreacionColumnExists();
         $this->personaModel->ensureEsAntiguoColumnExists();
         $this->personaModel->ensureTratamientoDatosColumnExists();
+        $this->personaModel->ensureIdRolSecundarioColumnExists();
         $this->soportaProceso = $this->personaModel->tieneColumna('Proceso');
         $this->soportaChecklistEscalera = $this->personaModel->tieneColumna('Escalera_Checklist');
-        $this->soportaConvencion = $this->personaModel->tieneColumna('Convencion');
+        $this->soportaConvencion = false;
+        $this->soportaRolSecundario = $this->personaModel->tieneColumna('Id_Rol_Secundario');
         $this->soportaFechaAsignacionLider = $this->personaModel->tieneColumna('Fecha_Asignacion_Lider');
         $this->soportaObservacionGanadoEn = $this->personaModel->tieneColumna('Observacion_Ganado_En');
         $this->soportaCreadoPor = $this->personaModel->tieneColumna('Creado_Por');
@@ -64,7 +65,60 @@ class PersonaController extends BaseController {
 
     private function enriquecerViewDataFormulario(array $viewData): array {
         $viewData['soportaTratamientoDatos'] = $this->soportaTratamientoDatos;
+        $viewData['soportaRolSecundario'] = $this->soportaRolSecundario;
+        require_once APP . '/Models/UserRole.php';
+        $userRoleModel = new UserRole();
+        $viewData['id_rol_maestro_cap'] = (int)$userRoleModel->buscarRolPorAlias('maestro');
+        $viewData['id_rol_discipulo_cap'] = (int)$userRoleModel->buscarRolPorAlias('discipulo');
         return $viewData;
+    }
+
+    private function sincronizarRolSecundarioCapDestino(int $idPersona, int $idRolPrincipal = 0): void {
+        if (!$this->soportaRolSecundario || $idPersona <= 0) {
+            return;
+        }
+
+        require_once APP . '/Models/UserRole.php';
+        $userRoleModel = new UserRole();
+        $idRolMaestro = (int)$userRoleModel->buscarRolPorAlias('maestro');
+        $idRolDiscipulo = (int)$userRoleModel->buscarRolPorAlias('discipulo');
+        $pedido = (int)($_POST['id_rol_secundario'] ?? 0);
+        $permitidos = array_values(array_filter([$idRolMaestro, $idRolDiscipulo], static function ($idRol) {
+            return (int)$idRol > 0;
+        }));
+        if ($pedido > 0 && !in_array($pedido, $permitidos, true)) {
+            $pedido = 0;
+        }
+        if ($pedido > 0 && $idRolPrincipal > 0 && $pedido === $idRolPrincipal) {
+            $pedido = 0;
+        }
+
+        $this->personaModel->update($idPersona, [
+            'Id_Rol_Secundario' => $pedido > 0 ? $pedido : null,
+        ]);
+
+        if ($pedido === $idRolMaestro && $idRolMaestro > 0) {
+            $userRoleModel->asignarMaestroSecundario($idPersona, $idRolMaestro);
+            if ($idRolDiscipulo > 0 && $idRolPrincipal !== $idRolDiscipulo) {
+                $userRoleModel->quitarRol($idPersona, $idRolDiscipulo);
+            }
+            return;
+        }
+
+        if ($pedido === $idRolDiscipulo && $idRolDiscipulo > 0) {
+            $userRoleModel->asignarDiscipuloSecundarioDirecto($idPersona);
+            if ($idRolMaestro > 0 && $idRolPrincipal !== $idRolMaestro) {
+                $userRoleModel->quitarRol($idPersona, $idRolMaestro);
+            }
+            return;
+        }
+
+        if ($idRolMaestro > 0 && $idRolPrincipal !== $idRolMaestro) {
+            $userRoleModel->quitarRol($idPersona, $idRolMaestro);
+        }
+        if ($idRolDiscipulo > 0 && $idRolPrincipal !== $idRolDiscipulo) {
+            $userRoleModel->quitarRol($idPersona, $idRolDiscipulo);
+        }
     }
 
     private function normalizarTratamientoDatosInput($valor): ?string {
@@ -188,14 +242,11 @@ class PersonaController extends BaseController {
             $nombreMinisterio = (string)($ministerio['Nombre_Ministerio'] ?? '');
         }
 
-        $urlPeticiones = $this->buildAbsolutePublicUrl('peticiones/crear');
-
         $varsBase = [
             'persona_nombre' => $nombrePersona,
             'persona_telefono' => $telefonoPersona,
             'persona_id' => $idPersona,
             'ministerio_nombre' => $nombreMinisterio,
-            'url_peticiones' => $urlPeticiones
         ];
 
         if ($telefonoPersona !== '' && $idPersona > 0) {
@@ -587,7 +638,7 @@ class PersonaController extends BaseController {
         if ($checklistNormalizado['Ganar'][4]) {
             $checklistNormalizado['Enviar'][2] = true;
         }
-        $checklistNormalizado['_meta']['convenciones'] = $this->normalizarConvencionesSeleccionadas($convencionesSeleccionadas);
+        $checklistNormalizado['_meta']['convenciones'] = [];
 
         return $checklistNormalizado;
     }
@@ -669,24 +720,59 @@ class PersonaController extends BaseController {
         return $mapa[$valorNormalizado] ?? '';
     }
 
+    private function resolverIdPersonaDesdeRequest(): int {
+        $idPost = (int)($_POST['id'] ?? 0);
+        $idGet = (int)($_GET['id'] ?? 0);
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && $idPost > 0) {
+            return $idPost;
+        }
+        if ($idGet > 0) {
+            return $idGet;
+        }
+        return $idPost > 0 ? $idPost : 0;
+    }
+
+    private function telefonosEquivalentes($telefonoA, $telefonoB): bool {
+        $a = preg_replace('/\D+/', '', (string)$telefonoA);
+        $b = preg_replace('/\D+/', '', (string)$telefonoB);
+        return $a !== '' && $a === $b;
+    }
+
+    private function normalizarEstadoFichaInput($valor): string {
+        $valor = strtolower(trim((string)$valor));
+        if (in_array($valor, ['inactivo', 'bloqueado'], true)) {
+            return 'Inactivo';
+        }
+        return 'Activo';
+    }
+
     private function construirMensajeDuplicadoPersona(array $duplicado, $numeroDocumento, $telefono) {
+        $motivo = (string)($duplicado['_motivo'] ?? '');
+        $nombreDuplicado = trim((string)($duplicado['Nombre'] ?? '') . ' ' . (string)($duplicado['Apellido'] ?? ''));
+        $sufijoNombre = $nombreDuplicado !== '' ? ': ' . $nombreDuplicado . '.' : '.';
+
+        if ($motivo === 'documento') {
+            return 'Ya existe una persona con ese número de documento' . $sufijoNombre;
+        }
+        if ($motivo === 'telefono') {
+            return 'Ya existe una persona con ese teléfono' . $sufijoNombre
+                . ' Solo un menor (Registro Civil o Tarjeta de Identidad) puede repetir un teléfono.';
+        }
+
         $numeroDocumento = preg_replace('/[^A-Z0-9]/', '', strtoupper(trim((string)$numeroDocumento)));
         $telefono = preg_replace('/\D+/', '', (string)$telefono);
         $duplicadoDocumento = preg_replace('/[^A-Z0-9]/', '', strtoupper(trim((string)($duplicado['Numero_Documento'] ?? ''))));
         $duplicadoTelefono = preg_replace('/\D+/', '', (string)($duplicado['Telefono'] ?? ''));
 
-        $camposDuplicados = [];
         if ($numeroDocumento !== '' && $duplicadoDocumento !== '' && $numeroDocumento === $duplicadoDocumento) {
-            $camposDuplicados[] = 'la cédula';
+            return 'Ya existe una persona con ese número de documento' . $sufijoNombre;
         }
         if ($telefono !== '' && $duplicadoTelefono !== '' && $telefono === $duplicadoTelefono) {
-            $camposDuplicados[] = 'el teléfono';
+            return 'Ya existe una persona con ese teléfono' . $sufijoNombre
+                . ' Solo un menor (Registro Civil o Tarjeta de Identidad) puede repetir un teléfono.';
         }
 
-        $nombreDuplicado = trim((string)($duplicado['Nombre'] ?? '') . ' ' . (string)($duplicado['Apellido'] ?? ''));
-        $detalleCampos = !empty($camposDuplicados) ? implode(' y ', $camposDuplicados) : 'los datos registrados';
-
-        return 'Ya existe una persona registrada con ' . $detalleCampos . ($nombreDuplicado !== '' ? ': ' . $nombreDuplicado . '.' : '.');
+        return 'Ya existe una persona registrada con esos datos' . $sufijoNombre;
     }
 
     private function normalizarObservacionGanadoEn($tipoReunion, $observacion) {
@@ -1068,9 +1154,26 @@ class PersonaController extends BaseController {
             return;
         }
 
-        $data['Usuario'] = $documento;
-        $data['Contrasena'] = password_hash($documento, PASSWORD_BCRYPT);
         $data['Estado_Cuenta'] = 'Activo';
+    }
+
+    private function provisionarAccesoMinisterialSiAplica(int $idPersona, array $data): void {
+        if ($idPersona <= 0 || !$this->debeAutoCrearAccesoDiscipuloPorIdRol((int)($data['Id_Rol'] ?? 0))) {
+            return;
+        }
+
+        $documento = trim((string)($data['Numero_Documento'] ?? ''));
+        if ($documento === '') {
+            return;
+        }
+
+        require_once APP . '/Models/UsuarioAcceso.php';
+        (new UsuarioAcceso())->provisionarParaPersona(
+            $idPersona,
+            $documento,
+            $documento,
+            (int)($data['Id_Rol'] ?? 0)
+        );
     }
 
     private function unirPersonasSinDuplicados(array $base, array $adicionales) {
@@ -1827,32 +1930,6 @@ class PersonaController extends BaseController {
         return ctype_digit($idMinisterioRaw) ? (int)$idMinisterioRaw : null;
     }
 
-    private function registrarPeticionSiAplica($idPersona, $peticionTexto) {
-        $idPersona = (int)$idPersona;
-        $peticionTexto = trim((string)$peticionTexto);
-
-        if ($idPersona <= 0 || $peticionTexto === '') {
-            return;
-        }
-
-        $fechaHoy = date('Y-m-d');
-        $existe = $this->peticionModel->query(
-            "SELECT Id_Peticion FROM peticion WHERE Id_Persona = ? AND Descripcion_Peticion = ? AND Fecha_Peticion = ? LIMIT 1",
-            [$idPersona, $peticionTexto, $fechaHoy]
-        );
-
-        if (!empty($existe)) {
-            return;
-        }
-
-        $this->peticionModel->create([
-            'Id_Persona' => $idPersona,
-            'Descripcion_Peticion' => $peticionTexto,
-            'Fecha_Peticion' => $fechaHoy,
-            'Estado_Peticion' => 'Pendiente'
-        ]);
-    }
-
     public function index() {
         if (AuthController::debeUsarSoloVistaProgramasPersonas()
             && !AuthController::puedeVerModuloPersonasGanar()
@@ -2002,7 +2079,6 @@ class PersonaController extends BaseController {
             'lider_nombre' => 'líder',
             'destinatario_nombre' => 'líder',
             'ministerio_nombre' => '',
-            'url_peticiones' => $this->buildAbsolutePublicUrl('peticiones/crear'),
             'url_universidad_vida' => $this->buildAbsolutePublicUrl('eventos/universidad-vida/publico'),
             'url_capacitacion_destino' => $this->buildAbsolutePublicUrl('eventos/capacitacion-destino/publico')
         ];
@@ -3324,7 +3400,6 @@ class PersonaController extends BaseController {
                 (string)($persona['Apellido'] ?? ''),
                 (string)($persona['Numero_Documento'] ?? ''),
                 (string)($persona['Telefono'] ?? ''),
-                (string)($persona['Email'] ?? ''),
                 (string)($persona['Nombre_Celula'] ?? ''),
                 (string)($persona['Nombre_Lider'] ?? ''),
                 (string)($persona['Nombre_Ministerio'] ?? ''),
@@ -3337,7 +3412,7 @@ class PersonaController extends BaseController {
 
         $this->exportCsv(
             $esModoGanar ? 'personas_pendiente_consolidar_' . date('Ymd_His') : 'personas_' . date('Ymd_His'),
-            ['Nombre', 'Apellido', 'Documento', 'Telefono', 'Email', 'Celula', 'Lider', 'Ministerio', 'Proceso', 'Rol', 'Estado', 'Fecha Registro'],
+            ['Nombre', 'Apellido', 'Documento', 'Telefono', 'Celula', 'Lider', 'Ministerio', 'Proceso', 'Rol', 'Estado', 'Fecha Registro'],
             $rows
         );
     }
@@ -3361,12 +3436,10 @@ class PersonaController extends BaseController {
             $_POST['numero_documento'] = (string)($this->normalizarDocumentoInput($_POST['numero_documento'] ?? null) ?? '');
             $_POST['direccion'] = (string)($this->normalizarTextoMayusculas($_POST['direccion'] ?? null) ?? '');
             $_POST['barrio'] = (string)($this->normalizarTextoMayusculas($_POST['barrio'] ?? null) ?? '');
-            $_POST['peticion'] = (string)($this->normalizarTextoMayusculas($_POST['peticion'] ?? null) ?? '');
             $_POST['invitado_por'] = (string)($this->normalizarTextoMayusculas($_POST['invitado_por'] ?? null) ?? '');
             $_POST['ganado_en_otro_observacion'] = (string)($this->normalizarTextoMayusculas($_POST['ganado_en_otro_observacion'] ?? null) ?? '');
             $_POST['telefono'] = trim((string)($_POST['telefono'] ?? ''));
             $_POST['email'] = trim((string)($_POST['email'] ?? ''));
-            $_POST['usuario'] = trim((string)($_POST['usuario'] ?? ''));
             $_POST['tipo_documento'] = $this->normalizarTipoDocumentoInput($_POST['tipo_documento'] ?? null);
 
             if ($_POST['tipo_documento'] === '') {
@@ -3547,21 +3620,17 @@ class PersonaController extends BaseController {
                 'Tipo_Documento' => $_POST['tipo_documento'] ?: null,
                 'Numero_Documento' => $_POST['numero_documento'] ?: null,
                 'Fecha_Nacimiento' => $_POST['fecha_nacimiento'] ?: null,
-                'Edad' => $_POST['edad'] ?: null,
                 'Genero' => $this->normalizarGeneroBinario($_POST['genero'] ?? null),
                 'Telefono' => $_POST['telefono'] ?: null,
-                'Email' => $_POST['email'] ?: null,
                 'Direccion' => $_POST['direccion'] ?: null,
                 'Barrio' => $_POST['barrio'] ?: null,
-                'Peticion' => $_POST['peticion'] ?: null,
                 'Invitado_Por' => $_POST['invitado_por'] ?: null,
                 'Tipo_Reunion' => $tipoReunionNormalizado,
                 'Id_Lider' => $idLiderNormalizado,
                 'Id_Celula' => $this->resolverIdCelulaDesdePost($_POST),
                 'Id_Rol' => $idRolSeleccionado,
                 'Id_Ministerio' => $idMinisterioNormalizado,
-                'Fecha_Registro' => date('Y-m-d H:i:s'),
-                'Fecha_Registro_Unix' => time()
+                'Fecha_Registro' => date('Y-m-d H:i:s')
             ];
 
             if ($this->soportaTratamientoDatos && $tratamientoDatosCrear !== null) {
@@ -3598,10 +3667,6 @@ class PersonaController extends BaseController {
                 ];
                 $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
                 return;
-            }
-
-            if ($this->soportaConvencion) {
-                $data['Convencion'] = $convencionesSeleccionadas[0] ?? null;
             }
 
             if ($this->soportaObservacionGanadoEn) {
@@ -3677,23 +3742,10 @@ class PersonaController extends BaseController {
                 return;
             }
             
-            // Agregar campos de acceso al sistema si se proporcionan (solo admin)
+            // Estado de la persona (activo/inactivo), no gestión de usuario/clave.
             if (AuthController::esAdministrador() && !$rolEsAsistente) {
-                if (!empty($_POST['usuario'])) {
-                    $data['Usuario'] = $_POST['usuario'];
-                }
-
                 if (isset($_POST['estado_cuenta'])) {
-                    $data['Estado_Cuenta'] = $_POST['estado_cuenta'];
-                }
-                
-                // Si se proporciona contraseña, hashearla
-                if (!empty($_POST['contrasena'])) {
-                    $data['Contrasena'] = password_hash($_POST['contrasena'], PASSWORD_BCRYPT);
-                    // Activar cuenta por defecto si se crea con contraseña y no se definió estado
-                    if (!isset($data['Estado_Cuenta'])) {
-                        $data['Estado_Cuenta'] = 'Activo';
-                    }
+                    $data['Estado_Cuenta'] = $this->normalizarEstadoFichaInput($_POST['estado_cuenta']);
                 }
             }
 
@@ -3704,12 +3756,17 @@ class PersonaController extends BaseController {
 
                 if ($idPersonaNueva > 0) {
                     $this->personaModel->ajustarEscaleraPorRol($idPersonaNueva, (int)($data['Id_Rol'] ?? 0));
+                    $this->sincronizarRolSecundarioCapDestino($idPersonaNueva, (int)($data['Id_Rol'] ?? 0));
+                    $this->provisionarAccesoMinisterialSiAplica($idPersonaNueva, $data);
+                    Auditoria::ok('personas', 'crear', [
+                        'entidad' => 'persona',
+                        'id_registro' => $idPersonaNueva,
+                        'mensaje' => trim((string)($data['Nombre'] ?? '') . ' ' . (string)($data['Apellido'] ?? '')),
+                    ]);
                     $personaCreada = $this->personaModel->getById($idPersonaNueva);
                     if (!empty($personaCreada)) {
                         $this->encolarMensajeBienvenidaYAsignacion($personaCreada);
                     }
-
-                    $this->registrarPeticionSiAplica($idPersonaNueva, $data['Peticion'] ?? '');
                 }
 
                 if ($returnTo === 'asistencia') {
@@ -3724,10 +3781,14 @@ class PersonaController extends BaseController {
             } catch (PDOException $e) {
                 // Detectar error de duplicado
                 if ($e->getCode() == 23000 || strpos($e->getMessage(), '1062') !== false) {
-                    $error = 'Ya existe una persona registrada con esa cédula o teléfono.';
+                    $error = 'Ya existe una persona con ese número de documento.';
                 } else {
                     $error = 'Error al guardar la persona: ' . $e->getMessage();
                 }
+                Auditoria::fallo('personas', 'crear', $error, [
+                    'entidad' => 'persona',
+                    'mensaje' => $error,
+                ]);
                 
                 $persona = $this->personaModel->getById($id);
                 $viewData = [
@@ -3774,9 +3835,9 @@ class PersonaController extends BaseController {
         $celulaRetorno = $_POST['celula_retorno'] ?? ($_GET['celula'] ?? null);
         $celulaRetorno = ($celulaRetorno !== null && $celulaRetorno !== '') ? (int) $celulaRetorno : null;
         
-        $id = $_GET['id'] ?? ($_POST['id'] ?? null);
+        $id = $this->resolverIdPersonaDesdeRequest();
         
-        if (!$id) {
+        if ($id <= 0) {
             $this->redirigirConRetorno($returnUrl, 'personas');
         }
 
@@ -3786,12 +3847,10 @@ class PersonaController extends BaseController {
             $_POST['numero_documento'] = (string)($this->normalizarDocumentoInput($_POST['numero_documento'] ?? null) ?? '');
             $_POST['direccion'] = (string)($this->normalizarTextoMayusculas($_POST['direccion'] ?? null) ?? '');
             $_POST['barrio'] = (string)($this->normalizarTextoMayusculas($_POST['barrio'] ?? null) ?? '');
-            $_POST['peticion'] = (string)($this->normalizarTextoMayusculas($_POST['peticion'] ?? null) ?? '');
             $_POST['invitado_por'] = (string)($this->normalizarTextoMayusculas($_POST['invitado_por'] ?? null) ?? '');
             $_POST['ganado_en_otro_observacion'] = (string)($this->normalizarTextoMayusculas($_POST['ganado_en_otro_observacion'] ?? null) ?? '');
             $_POST['telefono'] = trim((string)($_POST['telefono'] ?? ''));
             $_POST['email'] = trim((string)($_POST['email'] ?? ''));
-            $_POST['usuario'] = trim((string)($_POST['usuario'] ?? ''));
 
             $personaAntes = $this->personaModel->getById($id);
             $asignarUsuarioActivo = AuthController::esAdministrador() && ((string)($_POST['asignar_usuario_activo'] ?? '0') === '1');
@@ -3833,7 +3892,41 @@ class PersonaController extends BaseController {
                 return;
             }
 
-            // Regla de negocio: validación de duplicado por cédula/teléfono solo aplica en creación.
+            $_POST['tipo_documento'] = $this->normalizarTipoDocumentoInput($_POST['tipo_documento'] ?? null);
+
+            $telefonoParaDuplicado = $_POST['telefono'] ?? '';
+            if ($this->telefonosEquivalentes($telefonoParaDuplicado, $personaAntes['Telefono'] ?? '')) {
+                $telefonoParaDuplicado = '';
+            }
+
+            $duplicadoPersona = $this->personaModel->findDuplicateByCedulaOrTelefono(
+                $_POST['numero_documento'] ?? '',
+                $telefonoParaDuplicado,
+                $id,
+                $_POST['tipo_documento'] ?? ''
+            );
+            if (!empty($duplicadoPersona) && (int)($duplicadoPersona['Id_Persona'] ?? 0) === $id) {
+                $duplicadoPersona = null;
+            }
+            if (!empty($duplicadoPersona)) {
+                $persona = $this->personaModel->getById($id);
+                $viewData = [
+                    'persona' => $persona,
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => $this->construirMensajeDuplicadoPersona($duplicadoPersona, $_POST['numero_documento'] ?? '', $_POST['telefono'] ?? ''),
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'return_to' => $returnTo,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
+                return;
+            }
 
             $tratamientoDatosEditar = $this->soportaTratamientoDatos
                 ? $this->normalizarTratamientoDatosInput($_POST['tratamiento_datos'] ?? '')
@@ -3864,13 +3957,10 @@ class PersonaController extends BaseController {
                 'Tipo_Documento' => $_POST['tipo_documento'] ?: null,
                 'Numero_Documento' => $_POST['numero_documento'] ?: null,
                 'Fecha_Nacimiento' => $_POST['fecha_nacimiento'] ?: null,
-                'Edad' => $_POST['edad'] ?: null,
                 'Genero' => $this->normalizarGeneroBinario($_POST['genero'] ?? null),
                 'Telefono' => $_POST['telefono'] ?: null,
-                'Email' => $_POST['email'] ?: null,
                 'Direccion' => $_POST['direccion'] ?: null,
                 'Barrio' => $_POST['barrio'] ?: null,
-                'Peticion' => $_POST['peticion'] ?: null,
                 'Invitado_Por' => $_POST['invitado_por'] ?: null,
                 'Tipo_Reunion' => $tipoReunionNormalizado,
                 'Id_Lider' => $idLiderNormalizado,
@@ -3913,10 +4003,6 @@ class PersonaController extends BaseController {
                 return;
             }
 
-            if ($this->soportaConvencion) {
-                $data['Convencion'] = $convencionesSeleccionadas[0] ?? null;
-            }
-
             if ($this->soportaObservacionGanadoEn) {
                 $data['Observacion_Ganado_En'] = $observacionGanadoEn;
             }
@@ -3934,7 +4020,7 @@ class PersonaController extends BaseController {
             if ($this->soportaProceso) {
                 $data['Proceso'] = $checklistNormalizado !== null
                     ? $this->calcularProcesoPorChecklist($checklistNormalizado)
-                    : $this->normalizarProceso($_POST['proceso'] ?? null);
+                    : 'Ganar';
             }
 
             if ($this->soportaFechaAsignacionLider) {
@@ -3963,26 +4049,9 @@ class PersonaController extends BaseController {
             }
 
             $this->marcarReasignacionManualSiAplica($data, $personaAntes);
-            
-            // Agregar campos de acceso al sistema si se proporcionan (solo admin)
-            if (AuthController::esAdministrador() && !$rolEsAsistente) {
-                if (!empty($_POST['usuario'])) {
-                    $data['Usuario'] = $_POST['usuario'];
-                }
-                
-                // Si se proporciona contraseña, hashearla
-                if (!empty($_POST['contrasena'])) {
-                    $data['Contrasena'] = password_hash($_POST['contrasena'], PASSWORD_BCRYPT);
-                }
-                
-                // Estado de cuenta (solo al editar)
-                if (isset($_POST['estado_cuenta'])) {
-                    $data['Estado_Cuenta'] = $_POST['estado_cuenta'];
-                }
-            }
 
             if (AuthController::esAdministrador() && isset($_POST['estado_cuenta'])) {
-                $data['Estado_Cuenta'] = $_POST['estado_cuenta'];
+                $data['Estado_Cuenta'] = $this->normalizarEstadoFichaInput($_POST['estado_cuenta']);
             }
 
             $this->aplicarAccesoAutomaticoDiscipulo($data);
@@ -4016,16 +4085,17 @@ class PersonaController extends BaseController {
             
             try {
                 $this->personaModel->update($id, $data);
+                $this->sincronizarRolSecundarioCapDestino((int)$id, (int)($data['Id_Rol'] ?? 0));
+                $this->provisionarAccesoMinisterialSiAplica((int)$id, $data);
+                Auditoria::ok('personas', 'editar', [
+                    'entidad' => 'persona',
+                    'id_registro' => (int)$id,
+                    'mensaje' => trim((string)($data['Nombre'] ?? '') . ' ' . (string)($data['Apellido'] ?? '')),
+                ]);
                 $this->personaModel->ajustarEscaleraPorRol((int)$id, (int)($data['Id_Rol'] ?? 0));
 
                 // Reflejar cambios de la persona en el registro de Escuelas de Formación.
                 (new EscuelaFormacionInscripcion())->sincronizarDatosDesdePersona((int)$id);
-
-                $peticionAntes = trim((string)($personaAntes['Peticion'] ?? ''));
-                $peticionDespues = trim((string)($data['Peticion'] ?? ''));
-                if ($peticionDespues !== '' && $peticionDespues !== $peticionAntes) {
-                    $this->registrarPeticionSiAplica($id, $peticionDespues);
-                }
 
                 $personaDespues = $this->personaModel->getById($id);
                 if (!empty($personaAntes) && !empty($personaDespues)) {
@@ -4071,12 +4141,6 @@ class PersonaController extends BaseController {
                             // Reflejar cambios de la persona en el registro de Escuelas de Formación.
                             (new EscuelaFormacionInscripcion())->sincronizarDatosDesdePersona((int)$id);
 
-                            $peticionAntes = trim((string)($personaAntes['Peticion'] ?? ''));
-                            $peticionDespues = trim((string)($data['Peticion'] ?? ''));
-                            if ($peticionDespues !== '' && $peticionDespues !== $peticionAntes) {
-                                $this->registrarPeticionSiAplica($id, $peticionDespues);
-                            }
-
                             $personaDespues = $this->personaModel->getById($id);
                             if (!empty($personaAntes) && !empty($personaDespues)) {
                                 $this->encolarNotificacionCambiosAsignacion($personaAntes, $personaDespues);
@@ -4105,6 +4169,10 @@ class PersonaController extends BaseController {
                 } else {
                     $error = 'Error al actualizar la persona: ' . $e->getMessage();
                 }
+                Auditoria::fallo('personas', 'editar', $error, [
+                    'entidad' => 'persona',
+                    'id_registro' => (int)$id,
+                ]);
                 
                 $persona = $this->personaModel->getById($id);
                 $viewData = [
@@ -4178,7 +4246,14 @@ class PersonaController extends BaseController {
         $returnUrl = $_GET['return_url'] ?? null;
         
         if ($id) {
+            $personaBorrar = $this->personaModel->getById($id);
+            $nombreBorrar = trim((string)($personaBorrar['Nombre'] ?? '') . ' ' . (string)($personaBorrar['Apellido'] ?? ''));
             $this->personaModel->delete($id);
+            Auditoria::ok('personas', 'eliminar', [
+                'entidad' => 'persona',
+                'id_registro' => (int)$id,
+                'mensaje' => $nombreBorrar !== '' ? $nombreBorrar : ('ID ' . (int)$id),
+            ]);
         }
         
         $this->redirigirConRetorno($returnUrl, 'personas');

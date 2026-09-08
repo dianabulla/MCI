@@ -66,6 +66,45 @@ usort($cuentasMinisteriales, static function ($a, $b) {
     </div>
 <?php endif; ?>
 
+<?php
+$pendientesMigracion = is_array($pendientes_migracion ?? null) ? $pendientes_migracion : [];
+$legacyAunEnPersona = (int)($legacy_aun_en_persona ?? 0);
+?>
+<?php if ($tablaUsuarioAccesoDisponible && (!empty($pendientesMigracion) || $legacyAunEnPersona > 0)): ?>
+<div class="alert alert-info" style="margin:12px 0;">
+    <strong>Paso 2 — Cuentas en persona:</strong>
+    <?php if (!empty($pendientesMigracion)): ?>
+        Hay <strong><?= count($pendientesMigracion) ?></strong> ficha(s) con usuario/clave en persona que aún no están en usuario_acceso.
+        En producción el número puede ser mayor; el proceso es el mismo: se copia el hash (la gente no cambia de contraseña) y no se borra el login viejo todavía.
+        <form method="post" action="<?= PUBLIC_URL ?>?url=cuentas/migrar-legacy" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <input type="hidden" name="accion_migracion" value="copiar">
+            <button type="submit" class="btn btn-primary" onclick="return confirm('¿Copiar las cuentas de persona a usuario_acceso? Nadie pierde su contraseña. Se puede repetir si quedan pendientes.');">Copiar cuentas a usuario_acceso</button>
+        </form>
+        <details style="margin-top:8px;">
+            <summary>Ver pendientes (<?= count($pendientesMigracion) ?>)</summary>
+            <ul style="margin:8px 0 0; padding-left:18px;">
+                <?php foreach (array_slice($pendientesMigracion, 0, 40) as $pendiente): ?>
+                    <li><?= htmlspecialchars(trim((string)($pendiente['Nombre'] ?? '') . ' ' . (string)($pendiente['Apellido'] ?? '')) . ' · ' . (string)($pendiente['Usuario'] ?? '')) ?></li>
+                <?php endforeach; ?>
+                <?php if (count($pendientesMigracion) > 40): ?>
+                    <li>… y <?= count($pendientesMigracion) - 40 ?> más</li>
+                <?php endif; ?>
+            </ul>
+        </details>
+    <?php endif; ?>
+    <?php if ($legacyAunEnPersona > 0): ?>
+        <p style="margin:<?= !empty($pendientesMigracion) ? '12px 0 0' : '0' ?>;">
+            Hay <strong><?= $legacyAunEnPersona ?></strong> ficha(s) que ya tienen usuario_acceso y todavía guardan usuario/clave en persona.
+            Cuando hayas comprobado que entran, quita el login viejo (no borra la cuenta nueva).
+        </p>
+        <form method="post" action="<?= PUBLIC_URL ?>?url=cuentas/migrar-legacy" style="margin-top:10px;">
+            <input type="hidden" name="accion_migracion" value="desactivar">
+            <button type="submit" class="btn btn-secondary" onclick="return confirm('¿Quitar usuario y clave de persona en las fichas ya migradas? El login queda solo en usuario_acceso.');">Quitar login viejo de persona</button>
+        </form>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
 <div class="dashboard-grid cuentas-summary-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 320px)); margin:16px 0;">
     <button
         type="button"
@@ -75,7 +114,7 @@ usort($cuentasMinisteriales, static function ($a, $b) {
     >
         <h3>Cuentas ministeriales</h3>
         <div class="value" style="color:#0f5fca;"><?= count($cuentasMinisteriales) ?></div>
-        <small style="color:#637087;">Legacy + nuevo modelo unificados · Clic para ver detalle</small>
+                        <small style="color:#637087;">Ministeriales = acceso ligado a persona. El estado de esta tabla es de login, no de ficha.</small>
     </button>
     <button
         type="button"

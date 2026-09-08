@@ -29,6 +29,7 @@ require_once APP . '/Config/config.php';
 require_once APP . '/Helpers/AccesoDiscipuloCapDestino.php';
 require_once APP . '/Models/EscuelaFormacionInscripcion.php';
 require_once APP . '/Models/Persona.php';
+require_once APP . '/Models/UsuarioAcceso.php';
 require_once APP . '/Models/UserRole.php';
 
 $isCli = (PHP_SAPI === 'cli');
@@ -127,6 +128,7 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
 
 $inscripcionModel = new EscuelaFormacionInscripcion();
 $personaModel = new Persona();
+$accesoModel = new UsuarioAcceso();
 $userRoleModel = new UserRole();
 $userRoleModel->asegurarTabla();
 
@@ -167,6 +169,9 @@ foreach ($porPersona as $idPersona => $ins) {
     $roles = $userRoleModel->listarRolesPersona($idPersona);
     $nombresRoles = array_map(static fn($r) => (string)($r['Nombre_Rol'] ?? ''), $roles);
 
+    $acceso = $accesoModel->getByPersonaId($idPersona);
+    $usuarioAcceso = trim((string)($acceso['Usuario'] ?? ''));
+
     $filasPreview[] = [
         'Id_Persona' => $idPersona,
         'Nombre' => trim(
@@ -177,8 +182,8 @@ foreach ($porPersona as $idPersona => $ins) {
         'Programa' => (string)($ins['Programa'] ?? ''),
         'Rol_Principal' => (string)($persona['Nombre_Rol'] ?? ''),
         'Es_Liderazgo' => esLiderazgoPorPersona($personaModel, $persona),
-        'Tiene_Usuario' => trim((string)($persona['Usuario'] ?? '')) !== '',
-        'Usuario' => trim((string)($persona['Usuario'] ?? '')),
+        'Tiene_Usuario' => $usuarioAcceso !== '',
+        'Usuario' => $usuarioAcceso,
         'Roles_Actuales' => implode(' | ', array_filter($nombresRoles)),
         'Puede_Provisionar' => $cedula !== '',
     ];

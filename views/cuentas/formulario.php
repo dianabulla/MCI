@@ -17,7 +17,7 @@ $nombrePersona = $persona
     ? trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? ''))
     : trim((string)($cuentaAcceso['Nombre_Mostrar'] ?? ''));
 
-$usuarioActual = (string)($postData['usuario'] ?? ($cuentaAcceso['Usuario'] ?? ($persona['Usuario'] ?? '')));
+$usuarioActual = (string)($postData['usuario'] ?? ($cuentaAcceso['Usuario'] ?? ''));
 $rolActual = (string)($postData['id_rol'] ?? ($cuentaAcceso['Id_Rol'] ?? ($persona['Id_Rol'] ?? '')));
 $estadoActual = (string)($postData['estado_cuenta'] ?? ($cuentaAcceso['Estado_Cuenta'] ?? ($persona['Estado_Cuenta'] ?? 'Activo')));
 ?>
@@ -120,12 +120,13 @@ $estadoActual = (string)($postData['estado_cuenta'] ?? ($cuentaAcceso['Estado_Cu
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="estado_cuenta">Estado</label>
+                        <label for="estado_cuenta">Estado de acceso</label>
                         <select id="estado_cuenta" name="estado_cuenta" class="form-control">
                             <option value="Activo" <?= $estadoActual === 'Activo' ? 'selected' : '' ?>>Activo</option>
                             <option value="Inactivo" <?= $estadoActual === 'Inactivo' ? 'selected' : '' ?>>Inactivo</option>
                             <option value="Bloqueado" <?= $estadoActual === 'Bloqueado' ? 'selected' : '' ?>>Bloqueado</option>
                         </select>
+                        <small class="form-text text-muted">Solo afecta el inicio de sesión. No oculta a la persona en la iglesia.</small>
                     </div>
                 </div>
 
@@ -182,12 +183,13 @@ $estadoActual = (string)($postData['estado_cuenta'] ?? ($cuentaAcceso['Estado_Cu
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="estado_cuenta">Estado</label>
+                        <label for="estado_cuenta">Estado de acceso</label>
                         <select id="estado_cuenta" name="estado_cuenta" class="form-control">
                             <option value="Activo" <?= $estadoActual === 'Activo' ? 'selected' : '' ?>>Activo</option>
                             <option value="Inactivo" <?= $estadoActual === 'Inactivo' ? 'selected' : '' ?>>Inactivo</option>
                             <option value="Bloqueado" <?= $estadoActual === 'Bloqueado' ? 'selected' : '' ?>>Bloqueado</option>
                         </select>
+                        <small class="form-text text-muted">Solo afecta el inicio de sesión. No oculta a la persona en la iglesia.</small>
                     </div>
                 </div>
 

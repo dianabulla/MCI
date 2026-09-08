@@ -162,7 +162,16 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
                             <?php if (!empty($f['Activo'])): ?>
                                 <span class="badge bg-success">Activo</span>
                             <?php else: ?>
-                                <span class="badge bg-secondary">Inactivo</span>
+                                <span class="badge bg-secondary">Cerrado</span>
+                            <?php endif; ?>
+                            <?php if ($puedeEditar): ?>
+                            <form method="post" action="<?= PUBLIC_URL ?>?url=talleres/estado" style="display:inline;margin-left:6px;">
+                                <input type="hidden" name="id_formulario" value="<?= $id ?>">
+                                <input type="hidden" name="activo" value="<?= !empty($f['Activo']) ? '0' : '1' ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                    <?= !empty($f['Activo']) ? 'Cerrar' : 'Activar' ?>
+                                </button>
+                            </form>
                             <?php endif; ?>
                         </td>
                         <td style="white-space:nowrap;">
@@ -180,13 +189,15 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
                                 <i class="bi bi-pencil"></i>
                             </a>
                             <?php endif; ?>
-                            <?php if ($puedeGestionarEnlace && !empty($f['Activo'])): ?>
-                            <a href="<?= htmlspecialchars($urlPublica, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-sm btn-outline-info" target="_blank" rel="noopener" title="Abrir formulario público">
+                            <?php if ($puedeGestionarEnlace && $slug !== ''): ?>
+                            <a href="<?= htmlspecialchars($urlPublica, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-sm btn-outline-info" target="_blank" rel="noopener" title="<?= !empty($f['Activo']) ? 'Abrir formulario público' : 'Ver mensaje del enlace cerrado' ?>">
                                 <i class="bi bi-box-arrow-up-right"></i>
                             </a>
+                            <?php if (!empty($f['Activo'])): ?>
                             <a href="<?= htmlspecialchars($urlQr, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" title="Ver e imprimir QR">
                                 <i class="bi bi-qr-code"></i>
                             </a>
+                            <?php endif; ?>
                             <?php endif; ?>
                             <?php if ($puedeEliminar): ?>
                             <a href="<?= PUBLIC_URL ?>?url=talleres/eliminar&id=<?= $id ?>"

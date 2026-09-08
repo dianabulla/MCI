@@ -186,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $cl  = normalizeChecklist('');
             $clJ = json_encode($cl, JSON_UNESCAPED_UNICODE);
-            $stmt = $pdo->prepare("INSERT INTO persona (Nombre,Apellido,Tipo_Documento,Numero_Documento,Telefono,Estado_Cuenta,Tipo_Reunion,Proceso,Escalera_Checklist,Id_Celula,Id_Lider,Id_Ministerio,Fecha_Asignacion_Lider,Fecha_Registro,Fecha_Registro_Unix) VALUES (?,?,?,?,?,'Activo','Migrados','Ganar',?,?,?,?,NOW(),NOW(),UNIX_TIMESTAMP(NOW()))");
+            $stmt = $pdo->prepare("INSERT INTO persona (Nombre,Apellido,Tipo_Documento,Numero_Documento,Telefono,Estado_Cuenta,Tipo_Reunion,Proceso,Escalera_Checklist,Id_Celula,Id_Lider,Id_Ministerio,Fecha_Asignacion_Lider,Fecha_Registro) VALUES (?,?,?,?,?,'Activo','Migrados','Ganar',?,?,?,?,NOW(),NOW())");
             $stmt->execute([$nombre,$apellido,$tipoDoc,$numDoc!==''?$numDoc:null,$tel!==''?$tel:null,$clJ,$idCelula,$idLider,$idMin]);
             $pdo->commit();
             $mensaje = 'Persona creada con célula, líder, ministerio y Ganado en = Migrados.';

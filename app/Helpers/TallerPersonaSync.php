@@ -873,8 +873,6 @@ class TallerPersonaSync {
 
             'Fecha_Registro' => date('Y-m-d H:i:s'),
 
-            'Fecha_Registro_Unix' => time(),
-
             'Estado_Cuenta' => 'Activo',
 
         ];

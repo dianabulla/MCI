@@ -488,7 +488,9 @@ class TallerController extends BaseController {
 
         $textoAutorizacion = trim((string)($_POST['texto_autorizacion'] ?? ''));
 
-        $activo = !empty($_POST['activo']) ? 1 : 0;
+        $mensajeInactivo = trim((string)($_POST['mensaje_inactivo'] ?? ''));
+
+        $activo = ((string)($_POST['activo'] ?? '1') === '1') ? 1 : 0;
 
 
 
@@ -519,6 +521,8 @@ class TallerController extends BaseController {
             'Activo' => $activo,
 
             'Mensaje_Gracias' => $mensajeGracias !== '' ? $mensajeGracias : null,
+
+            'Mensaje_Inactivo' => $mensajeInactivo !== '' ? $mensajeInactivo : null,
 
             'Texto_Autorizacion' => $textoAutorizacion !== '' ? $textoAutorizacion : null,
 
@@ -557,6 +561,79 @@ class TallerController extends BaseController {
         header('Location: ' . PUBLIC_URL . '?url=talleres/editar&id=' . $id);
 
         exit;
+
+    }
+
+
+
+    public function cambiarEstado(): void {
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+
+            header('Location: ' . PUBLIC_URL . '?url=talleres');
+
+            exit;
+
+        }
+
+        $this->requierePermiso('editar');
+
+        $id = (int)($_POST['id_formulario'] ?? 0);
+
+        $formulario = $id > 0 ? $this->model->getById($id) : null;
+
+        if (!$formulario) {
+
+            $_SESSION['talleres_flash_error'] = 'No se encontró el formulario.';
+
+            header('Location: ' . PUBLIC_URL . '?url=talleres');
+
+            exit;
+
+        }
+
+        $activo = ((string)($_POST['activo'] ?? '0') === '1') ? 1 : 0;
+
+        $this->model->update($id, ['Activo' => $activo]);
+
+        $_SESSION['talleres_flash_ok'] = $activo === 1
+            ? 'El formulario quedó activo. Quien tenga el enlace puede inscribirse.'
+            : 'El formulario quedó cerrado. Quien tenga el enlace verá el mensaje configurado.';
+
+        header('Location: ' . PUBLIC_URL . '?url=talleres');
+
+        exit;
+
+    }
+
+
+
+    /**
+
+     * @param array<string, mixed> $formulario
+     */
+
+    private function mostrarFormularioCerrado(array $formulario, string $slug): void {
+
+        http_response_code(200);
+
+        $mensaje = trim((string)($formulario['Mensaje_Inactivo'] ?? ''));
+
+        if ($mensaje === '') {
+
+            $mensaje = 'Este formulario ya no está recibiendo inscripciones. Gracias por su interés.';
+
+        }
+
+        $this->view('talleres_publico/cerrado', [
+
+            'formulario' => $formulario,
+
+            'slug' => $slug,
+
+            'mensaje' => $mensaje,
+
+        ]);
 
     }
 
@@ -846,7 +923,10 @@ class TallerController extends BaseController {
 
         $etiquetaTipo = $esAntiguo === 1 ? 'antigua' : 'nueva';
         $_SESSION['talleres_flash_ok'] = 'Ya no está en Sin ministerio: pasó a ' . $nombreMinisterio . ' como persona ' . $etiquetaTipo . '.';
-        header('Location: ' . $redirBase . '&abrir_ministerio=' . rawurlencode($nombreMinisterio) . '&resaltar=' . $idRespuesta);
+        $cacheAsig = [];
+        $personaModelAsig = $personaModel;
+        $nombreLider12 = $this->resolverNombreLider12Inscripcion($idPersona, $personaModelAsig, $cacheAsig);
+        header('Location: ' . $redirBase . '&abrir_ministerio=' . rawurlencode($nombreMinisterio) . '&abrir_lider12=' . rawurlencode($nombreLider12) . '&resaltar=' . $idRespuesta);
         exit;
     }
 
@@ -932,6 +1012,20 @@ class TallerController extends BaseController {
                         $cachePersonasResumen
                     ),
 
+                    'lider_12' => $this->resolverNombreLider12Inscripcion(
+                        $idPersonaRespuesta,
+                        $personaModelResumen,
+                        $cachePersonasResumen
+                    ),
+
+                    'genero' => $this->clasificarGeneroInscripcionTaller(
+                        $idPersonaRespuesta,
+                        $json,
+                        $valores,
+                        $personaModelResumen,
+                        $cachePersonasResumen
+                    ),
+
                     'valores' => $valores,
 
                     'documentos_presentacion' => $documentosPresentacion,
@@ -972,8 +1066,8 @@ class TallerController extends BaseController {
 
         $esTourLevantate = $this->model->esTourLevantate($formulario);
 
-        $resumenPorMinisterio = !$soloGraficas
-            ? $this->construirResumenPorMinisterio($respuestas)
+        $resumenPorMinisterioLider12 = !$soloGraficas
+            ? $this->construirResumenPorMinisterioLider12($respuestas)
             : [];
 
 
@@ -1006,7 +1100,7 @@ class TallerController extends BaseController {
 
             'es_tour_levantate' => $esTourLevantate,
 
-            'resumen_por_ministerio' => $resumenPorMinisterio,
+            'resumen_por_ministerio_lider12' => $resumenPorMinisterioLider12,
 
             'ministerios_asignacion' => $this->listarMinisteriosAsignacion(),
 
@@ -1019,40 +1113,220 @@ class TallerController extends BaseController {
 
 
     /**
-     * Agrupa inscripciones ya etiquetadas por ministerio.
+     * Agrupa inscripciones por ministerio y, dentro de cada uno, por líder de 12.
      *
      * @param array<int, array<string, mixed>> $respuestas
-     * @return array<int, array{ministerio: string, total: int}>
+     * @return array<int, array{ministerio: string, hombres: int, mujeres: int, total: int, lideres: array<int, array{lider_12: string, hombres: int, mujeres: int, total: int}>}>
      */
-    private function construirResumenPorMinisterio(array $respuestas): array {
-        $conteo = [];
+    private function construirResumenPorMinisterioLider12(array $respuestas): array {
+        $map = [];
         foreach ($respuestas as $fila) {
             $ministerio = trim((string)($fila['ministerio'] ?? ''));
             if ($ministerio === '') {
                 $ministerio = 'Sin ministerio asignado';
             }
-            $conteo[$ministerio] = ($conteo[$ministerio] ?? 0) + 1;
+            $lider12 = trim((string)($fila['lider_12'] ?? ''));
+            if ($lider12 === '') {
+                $lider12 = 'Sin líder de 12';
+            }
+            $genero = (string)($fila['genero'] ?? '');
+
+            if (!isset($map[$ministerio])) {
+                $map[$ministerio] = [
+                    'ministerio' => $ministerio,
+                    'hombres' => 0,
+                    'mujeres' => 0,
+                    'total' => 0,
+                    'lideres' => [],
+                ];
+            }
+            if (!isset($map[$ministerio]['lideres'][$lider12])) {
+                $map[$ministerio]['lideres'][$lider12] = [
+                    'lider_12' => $lider12,
+                    'hombres' => 0,
+                    'mujeres' => 0,
+                    'total' => 0,
+                ];
+            }
+            if ($genero === 'hombre') {
+                $map[$ministerio]['hombres']++;
+                $map[$ministerio]['lideres'][$lider12]['hombres']++;
+            } elseif ($genero === 'mujer') {
+                $map[$ministerio]['mujeres']++;
+                $map[$ministerio]['lideres'][$lider12]['mujeres']++;
+            }
+            $map[$ministerio]['total']++;
+            $map[$ministerio]['lideres'][$lider12]['total']++;
         }
 
-        $filas = [];
-        foreach ($conteo as $ministerio => $total) {
-            $filas[] = ['ministerio' => (string)$ministerio, 'total' => (int)$total];
-        }
-
-        usort($filas, static function (array $a, array $b): int {
-            $aSin = strcasecmp((string)$a['ministerio'], 'Sin ministerio asignado') === 0;
-            $bSin = strcasecmp((string)$b['ministerio'], 'Sin ministerio asignado') === 0;
+        $ordenarGrupo = static function (array $a, array $b, string $claveVacio, string $campoNombre): int {
+            $aSin = strcasecmp((string)$a[$campoNombre], $claveVacio) === 0;
+            $bSin = strcasecmp((string)$b[$campoNombre], $claveVacio) === 0;
             if ($aSin !== $bSin) {
                 return $aSin ? 1 : -1;
             }
-            $cmp = $b['total'] <=> $a['total'];
+            $cmp = ((int)$b['total']) <=> ((int)$a['total']);
             if ($cmp !== 0) {
                 return $cmp;
             }
-            return strcasecmp($a['ministerio'], $b['ministerio']);
+            return strcasecmp((string)$a[$campoNombre], (string)$b[$campoNombre]);
+        };
+
+        $filas = [];
+        foreach ($map as $fila) {
+            $lideres = array_values($fila['lideres']);
+            usort($lideres, static function (array $a, array $b) use ($ordenarGrupo): int {
+                return $ordenarGrupo($a, $b, 'Sin líder de 12', 'lider_12');
+            });
+            $fila['lideres'] = $lideres;
+            $filas[] = $fila;
+        }
+        usort($filas, static function (array $a, array $b) use ($ordenarGrupo): int {
+            return $ordenarGrupo($a, $b, 'Sin ministerio asignado', 'ministerio');
         });
 
         return $filas;
+    }
+
+    /**
+     * @param object|null $personaModel
+     * @param array<int, array<string, mixed>|null> $cachePersonas
+     * @return array<string, mixed>|null
+     */
+    private function obtenerPersonaInscripcionCache(int $idPersona, &$personaModel, array &$cachePersonas): ?array {
+        if ($idPersona <= 0) {
+            return null;
+        }
+        if (!array_key_exists($idPersona, $cachePersonas)) {
+            if ($personaModel === null) {
+                require_once APP . '/Models/Persona.php';
+                $personaModel = new Persona();
+            }
+            $persona = $personaModel->getById($idPersona);
+            $cachePersonas[$idPersona] = is_array($persona) ? $persona : null;
+        }
+        $persona = $cachePersonas[$idPersona];
+        return is_array($persona) ? $persona : null;
+    }
+
+    private function nombreCompletoPersonaTaller(array $persona): string {
+        return trim(trim((string)($persona['Nombre'] ?? '')) . ' ' . trim((string)($persona['Apellido'] ?? '')));
+    }
+
+    /**
+     * @param object|null $personaModel
+     * @param array<int, array<string, mixed>|null> $cachePersonas
+     */
+    private function resolverNombreLider12Inscripcion(int $idPersona, &$personaModel, array &$cachePersonas): string {
+        if ($idPersona <= 0) {
+            return 'Sin líder de 12';
+        }
+
+        $visitados = [];
+        $actualId = $idPersona;
+        for ($i = 0; $i < 20 && $actualId > 0; $i++) {
+            if (!empty($visitados[$actualId])) {
+                break;
+            }
+            $visitados[$actualId] = true;
+
+            $persona = $this->obtenerPersonaInscripcionCache($actualId, $personaModel, $cachePersonas);
+            if ($persona === null) {
+                break;
+            }
+
+            if ($personaModel === null) {
+                require_once APP . '/Models/Persona.php';
+                $personaModel = new Persona();
+            }
+            $jerarquia = (string)$personaModel->getJerarquiaByRol((int)($persona['Id_Rol'] ?? 0));
+            if ($jerarquia === 'lider_12') {
+                $nombre = $this->nombreCompletoPersonaTaller($persona);
+                return $nombre !== '' ? $nombre : ('Líder de 12 #' . $actualId);
+            }
+
+            $siguiente = (int)($persona['Id_Lider'] ?? 0);
+            if ($siguiente <= 0 || $siguiente === $actualId) {
+                break;
+            }
+            $actualId = $siguiente;
+        }
+
+        return 'Sin líder de 12';
+    }
+
+    /**
+     * @param array<string, mixed> $json
+     * @param array<string, mixed> $valores
+     * @param object|null $personaModel
+     * @param array<int, array<string, mixed>|null> $cachePersonas
+     */
+    private function clasificarGeneroInscripcionTaller(
+        int $idPersona,
+        array $json,
+        array $valores,
+        &$personaModel,
+        array &$cachePersonas
+    ): string {
+        $candidatos = [];
+        $persona = $this->obtenerPersonaInscripcionCache($idPersona, $personaModel, $cachePersonas);
+        if (is_array($persona)) {
+            $candidatos[] = $persona['Genero'] ?? '';
+        }
+
+        $extras = is_array($json['_persona_extra'] ?? null) ? $json['_persona_extra'] : [];
+        $claves = [
+            'persona_genero', 'genero', 'sexo', 'persona_sexo',
+            'nino_genero', 'nino_sexo', 'Genero',
+        ];
+        foreach ($claves as $clave) {
+            $candidatos[] = $valores[$clave] ?? '';
+            $candidatos[] = $json[$clave] ?? '';
+            $candidatos[] = $extras[$clave] ?? '';
+        }
+
+        foreach ($valores as $clave => $valor) {
+            $nombreClave = strtolower((string)$clave);
+            if (strpos($nombreClave, 'genero') === false && strpos($nombreClave, 'sexo') === false) {
+                continue;
+            }
+            $candidatos[] = $valor;
+        }
+
+        foreach ($candidatos as $candidato) {
+            $genero = $this->normalizarGeneroTaller($candidato);
+            if ($genero !== '') {
+                return $genero;
+            }
+        }
+
+        return '';
+    }
+
+    private function normalizarGeneroTaller($valor): string {
+        $genero = strtolower(trim((string)$valor));
+        if ($genero === '') {
+            return '';
+        }
+        $genero = strtr($genero, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        ]);
+        if (
+            strpos($genero, 'mujer') !== false
+            || strpos($genero, 'femen') !== false
+            || in_array($genero, ['f', 'fem', 'female'], true)
+        ) {
+            return 'mujer';
+        }
+        if (
+            strpos($genero, 'hombre') !== false
+            || strpos($genero, 'mascul') !== false
+            || in_array($genero, ['m', 'h', 'masc', 'male'], true)
+        ) {
+            return 'hombre';
+        }
+
+        return '';
     }
 
     /**
@@ -1636,11 +1910,19 @@ class TallerController extends BaseController {
 
 
 
-        if (!$formulario || empty($formulario['Activo'])) {
+        if (!$formulario) {
 
             http_response_code(404);
 
             $this->view('talleres_publico/no_encontrado', ['slug' => $slug]);
+
+            return;
+
+        }
+
+        if (empty($formulario['Activo'])) {
+
+            $this->mostrarFormularioCerrado($formulario, $slug);
 
             return;
 
@@ -1720,6 +2002,11 @@ class TallerController extends BaseController {
             $idFormulario = (int)($formularioBusqueda['Id_Formulario'] ?? 0);
         } elseif ($idFormulario > 0) {
             $formularioBusqueda = $this->model->getById($idFormulario);
+        }
+
+        if (is_array($formularioBusqueda) && empty($formularioBusqueda['Activo'])) {
+            echo json_encode(['ok' => false, 'mensaje' => 'Este formulario está cerrado.'], JSON_UNESCAPED_UNICODE);
+            return;
         }
 
         $presentacionSync = new TallerPresentacionNinosSync();
@@ -1900,6 +2187,13 @@ class TallerController extends BaseController {
             header('Location: ' . PUBLIC_URL . '?url=talleres&tipo=error&mensaje=' . urlencode('No hay ticket disponible para mostrar.'));
             exit;
         }
+        $referencia = trim((string)($data['referencia_pago'] ?? ''));
+        $pagoDb = $referencia !== '' ? $this->model->getPagoPorReferencia($referencia) : null;
+        if ($pagoDb === null) {
+            unset($_SESSION['talleres_ticket']);
+            header('Location: ' . PUBLIC_URL . '?url=talleres&tipo=error&mensaje=' . urlencode('Ese ticket no tiene un pago guardado. No se puede mostrar.'));
+            exit;
+        }
         $this->view('talleres/ticket_pago', ['ticket' => $data]);
     }
 
@@ -1968,20 +2262,19 @@ class TallerController extends BaseController {
         $ticketDatos = null;
 
         if ($referenciaPago !== '') {
-            if (session_status() === PHP_SESSION_NONE) {
-                @session_start();
-            }
-            $ticket = $_SESSION['talleres_ticket'] ?? null;
-            if (is_array($ticket) && (string)($ticket['referencia_pago'] ?? '') === $referenciaPago) {
-                $ticketDatos = $ticket;
-            } else {
-                foreach ($pagos as $pago) {
-                    if (trim((string)($pago['Referencia_Pago'] ?? '')) === $referenciaPago) {
-                        $ticketDatos = $this->construirTicketPagoDesdeDatos($formulario, $json, $pago);
-                        break;
-                    }
+            foreach ($pagos as $pago) {
+                if (trim((string)($pago['Referencia_Pago'] ?? '')) === $referenciaPago) {
+                    $ticketDatos = $this->construirTicketPagoDesdeDatos($formulario, $json, $pago);
+                    break;
                 }
             }
+        }
+
+        $mensaje = trim((string)($_GET['mensaje'] ?? ''));
+        $tipoMensaje = trim((string)($_GET['tipo'] ?? ''));
+        if ($tipoMensaje === 'ok' && $referenciaPago !== '' && $ticketDatos === null) {
+            $tipoMensaje = 'error';
+            $mensaje = 'Esa referencia no está guardada en el sistema. No se muestra ticket.';
         }
 
         $usuarioNombre = '';
@@ -2004,9 +2297,9 @@ class TallerController extends BaseController {
 
             'documento_inscrito' => trim((string)($json['nino_documento'] ?? $json['persona_documento'] ?? '')),
 
-            'mensaje' => trim((string)($_GET['mensaje'] ?? '')),
+            'mensaje' => $mensaje,
 
-            'tipo_mensaje' => trim((string)($_GET['tipo'] ?? '')),
+            'tipo_mensaje' => $tipoMensaje,
 
             'referencia_pago' => $referenciaPago,
 
@@ -2091,7 +2384,7 @@ class TallerController extends BaseController {
 
         $tipoNormalizado = in_array($tipo, ['completo', 'abono'], true) ? $tipo : 'completo';
 
-        $this->model->registrarPago($idRespuesta, $idFormulario, [
+        $idPago = $this->model->registrarPago($idRespuesta, $idFormulario, [
 
             'metodo_pago' => $metodo !== '' ? $metodo : 'Efectivo',
 
@@ -2105,25 +2398,17 @@ class TallerController extends BaseController {
 
         ]);
 
-        $tipoEtiqueta = $tipoNormalizado === 'abono' ? 'Abono' : 'Pago total';
+        $pagoGuardado = $idPago > 0
+            ? $this->model->getPagoPorRespuestaYReferencia($idRespuesta, $referenciaPago)
+            : null;
 
-        $metaTicket = $this->metadatosTicketPago($formulario, $json);
+        if ($idPago <= 0 || $pagoGuardado === null) {
+            header('Location: ' . PUBLIC_URL . '?url=talleres/pago&id=' . $idFormulario . '&id_respuesta=' . $idRespuesta
+                . '&tipo=error&mensaje=' . urlencode('No se pudo guardar el pago. No se generó ticket. Intente de nuevo.'));
+            exit;
+        }
 
-        $_SESSION['talleres_ticket'] = [
-            'fecha' => date('Y-m-d H:i'),
-            'formulario' => (string)($formulario['Titulo'] ?? 'Taller'),
-            'nombre' => $metaTicket['nombre'],
-            'documento' => $metaTicket['documento'],
-            'acudiente' => $metaTicket['acudiente'],
-            'etiqueta_nombre' => $metaTicket['etiqueta_nombre'],
-            'pie_comprobante' => $metaTicket['pie_comprobante'],
-            'telefono_acudiente' => trim((string)($json['padres_telefono'] ?? '')),
-            'metodo_pago' => $metodo !== '' ? $metodo : 'Efectivo',
-            'recibido_por' => $recibidoPor,
-            'tipo_pago' => $tipoEtiqueta,
-            'valor_pago' => number_format($valor, 0, ',', '.'),
-            'referencia_pago' => $referenciaPago,
-        ];
+        $_SESSION['talleres_ticket'] = $this->construirTicketPagoDesdeDatos($formulario, $json, $pagoGuardado);
 
         header('Location: ' . PUBLIC_URL . '?url=talleres/pago&id=' . $idFormulario . '&id_respuesta=' . $idRespuesta
             . '&tipo=ok&mensaje=' . urlencode('Pago registrado correctamente.')
@@ -2153,11 +2438,19 @@ class TallerController extends BaseController {
 
 
 
-        if (!$formulario || empty($formulario['Activo'])) {
+        if (!$formulario) {
 
             http_response_code(404);
 
             $this->view('talleres_publico/no_encontrado', ['slug' => $slug]);
+
+            return;
+
+        }
+
+        if (empty($formulario['Activo'])) {
+
+            $this->mostrarFormularioCerrado($formulario, $slug);
 
             return;
 
@@ -2517,11 +2810,19 @@ class TallerController extends BaseController {
 
         $formulario = $slug !== '' ? $this->model->getBySlug($slug) : null;
 
-        if (!$formulario || empty($formulario['Activo'])) {
+        if (!$formulario) {
 
             http_response_code(404);
 
             $this->view('talleres_publico/no_encontrado', ['slug' => $slug]);
+
+            return;
+
+        }
+
+        if (empty($formulario['Activo'])) {
+
+            $this->mostrarFormularioCerrado($formulario, $slug);
 
             return;
 

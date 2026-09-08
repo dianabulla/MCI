@@ -12,6 +12,7 @@ require_once APP . '/Helpers/DataIsolation.php';
 require_once APP . '/Helpers/PermisosCatalogo.php';
 require_once APP . '/Helpers/PermisosRolService.php';
 require_once APP . '/Helpers/MenuBuilder.php';
+require_once APP . '/Helpers/Auditoria.php';
 
 class AuthController extends BaseController {
     private $personaModel;
@@ -31,7 +32,6 @@ class AuthController extends BaseController {
         $this->rolModel = new Rol();
 
         $this->personaModel->ensureTratamientoDatosColumnExists();
-        $this->personaModel->ensureAcuerdoConfidencialidadColumnsExist();
         $this->usuarioAccesoModel->ensureAcuerdoConfidencialidadColumnsExist();
     }
 
@@ -56,6 +56,10 @@ class AuthController extends BaseController {
 
             if (!empty($resultadoAuth['error'])) {
                 $error = (string)$resultadoAuth['error'];
+                Auditoria::fallo('auth', 'login', $error, [
+                    'usuario_actor' => $usuario,
+                    'id_actor' => 0,
+                ]);
                 $this->view('auth/login', [
                     'error' => $error,
                     'usuario' => $usuario,
@@ -69,6 +73,12 @@ class AuthController extends BaseController {
                 $estadoCuenta = strtolower(trim((string)($user['Estado_Cuenta'] ?? 'Activo')));
                 if ($estadoCuenta === 'inactivo' || $estadoCuenta === 'bloqueado') {
                     $error = 'Cuenta inactiva o bloqueada. Contacte al administrador.';
+                    Auditoria::fallo('auth', 'login', $error, [
+                        'usuario_actor' => $usuario,
+                        'id_actor' => (int)($user['Id_Persona'] ?? 0),
+                        'id_registro' => (int)($user['Id_Persona'] ?? 0),
+                        'entidad' => 'persona',
+                    ]);
                     $this->view('auth/login', [
                         'error' => $error,
                         'usuario' => $usuario,
@@ -88,6 +98,10 @@ class AuthController extends BaseController {
                 $this->redirigirPostLogin();
             } else {
                 $error = 'Usuario o contraseña incorrectos';
+                Auditoria::fallo('auth', 'login', $error, [
+                    'usuario_actor' => $usuario,
+                    'id_actor' => 0,
+                ]);
                 $this->view('auth/login', [
                     'error' => $error,
                     'usuario' => $usuario,
@@ -130,13 +144,18 @@ class AuthController extends BaseController {
             $this->redirect('home');
         }
 
-        $estadoCuenta = strtolower(trim((string)($cuentaDb['Estado_Cuenta'] ?? 'Activo')));
-        if ($estadoCuenta === 'inactivo' || $estadoCuenta === 'bloqueado') {
+        if (!$this->accesoPermiteIniciarSesionPorPersona($idUsuarioObjetivo, $cuentaDb)) {
             $_SESSION['flash_info'] = 'La cuenta seleccionada está inactiva o bloqueada.';
             $this->redirect('home');
         }
 
-        $this->iniciarSesionUsuario($cuentaDb, true);
+        $acceso = $this->usuarioAccesoModel->getByPersonaId($idUsuarioObjetivo);
+        if (empty($acceso)) {
+            $_SESSION['flash_info'] = 'Esa persona no tiene cuenta de acceso. Debe copiarse o crearse en Cuentas.';
+            $this->redirect('home');
+        }
+
+        $this->iniciarSesionUsuario($this->enriquecerUsuarioAccesoConPersona($acceso), true);
         $_SESSION['flash_info'] = 'Cambiaste a la cuenta de ' . (($cuentaDb['Nombre'] ?? '') . ' ' . ($cuentaDb['Apellido'] ?? '')) . '.';
         $this->redirigirPostLogin();
     }
@@ -174,13 +193,18 @@ class AuthController extends BaseController {
             $this->redirect('home');
         }
 
-        $estadoCuenta = strtolower(trim((string)($cuentaDb['Estado_Cuenta'] ?? 'Activo')));
-        if ($estadoCuenta === 'inactivo' || $estadoCuenta === 'bloqueado') {
+        if (!$this->accesoPermiteIniciarSesionPorPersona($idUsuarioObjetivo, $cuentaDb)) {
             $_SESSION['flash_info'] = 'La siguiente cuenta está inactiva o bloqueada.';
             $this->redirect('home');
         }
 
-        $this->iniciarSesionUsuario($cuentaDb, true);
+        $acceso = $this->usuarioAccesoModel->getByPersonaId($idUsuarioObjetivo);
+        if (empty($acceso)) {
+            $_SESSION['flash_info'] = 'Esa persona no tiene cuenta de acceso. Debe copiarse o crearse en Cuentas.';
+            $this->redirect('home');
+        }
+
+        $this->iniciarSesionUsuario($this->enriquecerUsuarioAccesoConPersona($acceso), true);
         $_SESSION['flash_info'] = 'Cuenta activa: ' . (($cuentaDb['Nombre'] ?? '') . ' ' . ($cuentaDb['Apellido'] ?? '')) . '.';
         $this->redirigirPostLogin();
     }
@@ -302,16 +326,23 @@ class AuthController extends BaseController {
             return;
         }
 
-        $origenCuenta = (string)($_SESSION['auth_user_source'] ?? 'persona');
+        $origenCuenta = (string)($_SESSION['auth_user_source'] ?? 'acceso');
         $idPersonaSesion = (int)($_SESSION['usuario_id'] ?? 0);
         $idAuthSesion = (int)($_SESSION['auth_user_id'] ?? 0);
 
         $cuentaActual = null;
-        if ($origenCuenta === 'acceso' && $idAuthSesion > 0) {
+        if ($idAuthSesion > 0) {
             $cuentaActual = $this->usuarioAccesoModel->getById($idAuthSesion);
-        } elseif ($idPersonaSesion > 0) {
-            $cuentaActual = $this->personaModel->getById($idPersonaSesion);
-            $origenCuenta = 'persona';
+            $origenCuenta = 'acceso';
+        }
+        if (empty($cuentaActual) && $idPersonaSesion > 0) {
+            $cuentaActual = $this->usuarioAccesoModel->getByPersonaId($idPersonaSesion);
+            if (!empty($cuentaActual)) {
+                $idAuthSesion = (int)($cuentaActual['Id_Usuario_Acceso'] ?? 0);
+                $origenCuenta = 'acceso';
+                $_SESSION['auth_user_id'] = $idAuthSesion;
+                $_SESSION['auth_user_source'] = 'acceso';
+            }
         }
 
         if (empty($cuentaActual)) {
@@ -351,13 +382,11 @@ class AuthController extends BaseController {
                 }
             }
 
-            $excludePersonaId = $origenCuenta === 'persona' ? $idPersonaSesion : null;
-            $excludeAccesoId = $origenCuenta === 'acceso' ? $idAuthSesion : null;
+            $excludeAccesoId = $idAuthSesion > 0 ? $idAuthSesion : null;
 
             if ($error === null) {
-                $usuarioDuplicadoPersona = $this->personaModel->existeUsuario($usuarioNuevo, $excludePersonaId);
                 $usuarioDuplicadoAcceso = $this->usuarioAccesoModel->existeUsuario($usuarioNuevo, $excludeAccesoId);
-                if ($usuarioDuplicadoPersona || $usuarioDuplicadoAcceso) {
+                if ($usuarioDuplicadoAcceso) {
                     $error = 'Ese usuario ya existe en el sistema.';
                 }
             }
@@ -371,25 +400,17 @@ class AuthController extends BaseController {
                     $dataUpdate['Contrasena'] = password_hash($contrasenaNueva, PASSWORD_BCRYPT);
                 }
 
-                if ($origenCuenta === 'acceso' && $idAuthSesion > 0) {
+                if ($idAuthSesion <= 0) {
+                    $error = 'No hay cuenta de acceso para actualizar. Vuelve a iniciar sesión.';
+                } else {
                     $this->usuarioAccesoModel->update($idAuthSesion, $dataUpdate);
                     $cuentaActual = $this->usuarioAccesoModel->getById($idAuthSesion);
                     $this->sincronizarCredencialesMinisterialesVinculadas($idPersonaSesion, $dataUpdate);
-                } else {
-                    $this->personaModel->update($idPersonaSesion, $dataUpdate);
-                    $cuentaActual = $this->personaModel->getById($idPersonaSesion);
-                    $accesoVinculado = $idPersonaSesion > 0
-                        ? $this->usuarioAccesoModel->getByPersonaId($idPersonaSesion)
-                        : null;
-                    if (!empty($accesoVinculado)) {
-                        $this->usuarioAccesoModel->update((int)$accesoVinculado['Id_Usuario_Acceso'], $dataUpdate);
-                    }
+                    $viewPersona['Usuario'] = (string)($cuentaActual['Usuario'] ?? $usuarioNuevo);
+                    $success = $contrasenaNueva !== ''
+                        ? 'Tus credenciales fueron actualizadas correctamente.'
+                        : 'Tu usuario fue actualizado correctamente.';
                 }
-
-                $viewPersona['Usuario'] = (string)($cuentaActual['Usuario'] ?? $usuarioNuevo);
-                $success = $contrasenaNueva !== ''
-                    ? 'Tus credenciales fueron actualizadas correctamente.'
-                    : 'Tu usuario fue actualizado correctamente.';
             } else {
                 $viewPersona['Usuario'] = $usuarioNuevo !== '' ? $usuarioNuevo : (string)($cuentaActual['Usuario'] ?? '');
             }
@@ -499,23 +520,19 @@ class AuthController extends BaseController {
             return ['user' => null, 'error' => null];
         }
 
-        if ($this->usuarioAccesoModel->existeUsuario($usuario)) {
-            $userAcceso = $this->usuarioAccesoModel->autenticar($usuario, $contrasena);
-            if ($userAcceso) {
-                return [
-                    'user' => $this->enriquecerUsuarioAccesoConPersona($userAcceso),
-                    'error' => null,
-                ];
-            }
+        $userAcceso = $this->usuarioAccesoModel->autenticarUnificado($usuario, $contrasena);
+        if ($userAcceso) {
+            return [
+                'user' => $this->enriquecerUsuarioAccesoConPersona($userAcceso),
+                'error' => null,
+            ];
+        }
 
+        if ($this->usuarioAccesoModel->existeUsuario($usuario)) {
             return ['user' => null, 'error' => null];
         }
 
         $userPersona = $this->personaModel->autenticar($usuario, $contrasena);
-        if (!$userPersona) {
-            return ['user' => null, 'error' => null];
-        }
-
         $idPersona = (int)($userPersona['Id_Persona'] ?? 0);
         if ($idPersona > 0 && $this->usuarioAccesoModel->getByPersonaId($idPersona)) {
             return [
@@ -525,7 +542,7 @@ class AuthController extends BaseController {
             ];
         }
 
-        return ['user' => $userPersona, 'error' => null];
+        return ['user' => null, 'error' => null];
     }
 
     private function enriquecerUsuarioAccesoConPersona(array $userAcceso): array {
@@ -547,12 +564,27 @@ class AuthController extends BaseController {
             }
         }
 
-        $estadoAcceso = trim((string)($userAcceso['Estado_Cuenta'] ?? ''));
-        if ($estadoAcceso === '') {
-            $userAcceso['Estado_Cuenta'] = $persona['Estado_Cuenta'] ?? 'Activo';
+        if (trim((string)($userAcceso['Estado_Cuenta'] ?? '')) === '') {
+            $userAcceso['Estado_Cuenta'] = 'Activo';
         }
 
         return $userAcceso;
+    }
+
+    /**
+     * Login se rige por usuario_acceso. La ficha inactiva no bloquea el acceso.
+     */
+    private function accesoPermiteIniciarSesionPorPersona(int $idPersona, array $persona = []): bool {
+        if ($idPersona > 0) {
+            $acceso = $this->usuarioAccesoModel->getByPersonaId($idPersona);
+            if (!empty($acceso)) {
+                $estado = strtolower(trim((string)($acceso['Estado_Cuenta'] ?? 'Activo')));
+                return $estado !== 'inactivo' && $estado !== 'bloqueado';
+            }
+        }
+
+        $estadoFicha = strtolower(trim((string)($persona['Estado_Cuenta'] ?? 'Activo')));
+        return $estadoFicha !== 'inactivo' && $estadoFicha !== 'bloqueado';
     }
 
     /**
@@ -691,26 +723,19 @@ class AuthController extends BaseController {
      * @param array<string, mixed> $dataUpdate
      */
     private function sincronizarCredencialesMinisterialesVinculadas(int $idPersona, array $dataUpdate): void {
-        if ($idPersona <= 0) {
+        if ($idPersona <= 0 || !$this->personaModel->tieneColumna('Usuario')) {
             return;
         }
 
-        $personaUpdate = [];
-        if (array_key_exists('Contrasena', $dataUpdate) && $dataUpdate['Contrasena'] !== '') {
-            $personaUpdate['Contrasena'] = $dataUpdate['Contrasena'];
-        }
-
         $acceso = $this->usuarioAccesoModel->getByPersonaId($idPersona);
-        if (!empty($acceso)) {
-            $usuarioAcceso = trim((string)($acceso['Usuario'] ?? ''));
-            $usuarioPersona = trim((string)($this->personaModel->getById($idPersona)['Usuario'] ?? ''));
-            if ($usuarioPersona !== '' && strcasecmp($usuarioPersona, $usuarioAcceso) !== 0) {
-                $personaUpdate['Usuario'] = '';
-            }
+        if (empty($acceso)) {
+            return;
         }
 
-        if ($personaUpdate !== []) {
-            $this->personaModel->update($idPersona, $personaUpdate);
+        $usuarioAcceso = trim((string)($acceso['Usuario'] ?? ''));
+        $usuarioPersona = trim((string)($this->personaModel->getById($idPersona)['Usuario'] ?? ''));
+        if ($usuarioPersona !== '' && strcasecmp($usuarioPersona, $usuarioAcceso) !== 0) {
+            $this->personaModel->update($idPersona, ['Usuario' => '']);
         }
     }
 
@@ -1041,14 +1066,6 @@ class AuthController extends BaseController {
             return 0;
         }
 
-        $personaPorUsuario = $personaModel->query(
-            'SELECT Id_Persona FROM persona WHERE Usuario = ? ORDER BY Id_Persona DESC LIMIT 1',
-            [$usuarioLogin]
-        );
-        if (!empty($personaPorUsuario)) {
-            return (int)($personaPorUsuario[0]['Id_Persona'] ?? 0);
-        }
-
         $personaPorDocumento = $personaModel->query(
             "SELECT Id_Persona FROM persona
              WHERE REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(Numero_Documento, ''))), ' ', ''), '.', ''), '-', '')
@@ -1123,7 +1140,7 @@ class AuthController extends BaseController {
     }
 
     /**
-     * Usuario de login en sesión (persona.Usuario o usuario_acceso.Usuario).
+     * Usuario de login en sesión (usuario_acceso.Usuario).
      */
     public static function getUsuarioLoginSesion(): string {
         $login = strtolower(trim((string)($_SESSION['usuario_login'] ?? '')));
@@ -1135,19 +1152,16 @@ class AuthController extends BaseController {
             return '';
         }
 
-        $origen = (string)($_SESSION['auth_user_source'] ?? 'persona');
-        if ($origen === 'acceso') {
-            $idAcceso = (int)($_SESSION['auth_user_id'] ?? 0);
-            if ($idAcceso > 0) {
-                $model = new UsuarioAcceso();
-                $fila = $model->getById($idAcceso);
-                $login = strtolower(trim((string)($fila['Usuario'] ?? '')));
-            }
-        } else {
+        $idAcceso = (int)($_SESSION['auth_user_id'] ?? 0);
+        $model = new UsuarioAcceso();
+        if ($idAcceso > 0) {
+            $fila = $model->getById($idAcceso);
+            $login = strtolower(trim((string)($fila['Usuario'] ?? '')));
+        }
+        if ($login === '') {
             $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
             if ($idPersona > 0) {
-                $model = new Persona();
-                $fila = $model->getById($idPersona);
+                $fila = $model->getByPersonaId($idPersona);
                 $login = strtolower(trim((string)($fila['Usuario'] ?? '')));
             }
         }
@@ -2179,44 +2193,40 @@ class AuthController extends BaseController {
         }
 
         $version = self::ACUERDO_CONFIDENCIALIDAD_VERSION;
-        $origen = (string)($_SESSION['auth_user_source'] ?? 'persona');
-        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
         $idAuth = (int)($_SESSION['auth_user_id'] ?? 0);
-
-        if ($origen === 'acceso' && $idPersona <= 0 && $idAuth > 0) {
-            $model = new UsuarioAcceso();
-            $model->ensureAcuerdoConfidencialidadColumnsExist();
-            return !$model->tieneAcuerdoConfidencialidadVigente($idAuth, $version);
+        if ($idAuth <= 0) {
+            $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+            if ($idPersona > 0) {
+                $ua = (new UsuarioAcceso())->getByPersonaId($idPersona);
+                $idAuth = (int)($ua['Id_Usuario_Acceso'] ?? 0);
+            }
+        }
+        if ($idAuth <= 0) {
+            return true;
         }
 
-        if ($idPersona > 0) {
-            $model = new Persona();
-            $model->ensureAcuerdoConfidencialidadColumnsExist();
-            return !$model->tieneAcuerdoConfidencialidadVigente($idPersona, $version);
-        }
-
-        return true;
+        $model = new UsuarioAcceso();
+        $model->ensureAcuerdoConfidencialidadColumnsExist();
+        return !$model->tieneAcuerdoConfidencialidadVigente($idAuth, $version);
     }
 
     public static function registrarAceptacionAcuerdoConfidencialidad(): bool {
         $version = self::ACUERDO_CONFIDENCIALIDAD_VERSION;
-        $origen = (string)($_SESSION['auth_user_source'] ?? 'persona');
-        $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
         $idAuth = (int)($_SESSION['auth_user_id'] ?? 0);
-
-        if ($origen === 'acceso' && $idPersona <= 0 && $idAuth > 0) {
-            $model = new UsuarioAcceso();
-            $model->ensureAcuerdoConfidencialidadColumnsExist();
-            return $model->registrarAcuerdoConfidencialidad($idAuth, $version);
+        if ($idAuth <= 0) {
+            $idPersona = (int)($_SESSION['usuario_id'] ?? 0);
+            if ($idPersona > 0) {
+                $ua = (new UsuarioAcceso())->getByPersonaId($idPersona);
+                $idAuth = (int)($ua['Id_Usuario_Acceso'] ?? 0);
+            }
+        }
+        if ($idAuth <= 0) {
+            return false;
         }
 
-        if ($idPersona > 0) {
-            $model = new Persona();
-            $model->ensureAcuerdoConfidencialidadColumnsExist();
-            return $model->registrarAcuerdoConfidencialidadPersona($idPersona, $version);
-        }
-
-        return false;
+        $model = new UsuarioAcceso();
+        $model->ensureAcuerdoConfidencialidadColumnsExist();
+        return $model->registrarAcuerdoConfidencialidad($idAuth, $version);
     }
 
     private static function rolNombreEsLider12(string $rolNombre): bool {
@@ -2270,6 +2280,20 @@ class AuthController extends BaseController {
                     'nombre_rol' => $nombre,
                     'context_key' => $this->resolverContextoPorRolNombre($nombre),
                 ];
+            }
+
+            $personaFicha = $this->personaModel->getById($idPersona);
+            $idRolSecundario = (int)($personaFicha['Id_Rol_Secundario'] ?? 0);
+            if ($idRolSecundario > 0 && !isset($roles[$idRolSecundario])) {
+                $filaSec = $this->rolModel->getById($idRolSecundario);
+                $nombreSec = trim((string)($filaSec['Nombre_Rol'] ?? ''));
+                if ($nombreSec !== '') {
+                    $roles[$idRolSecundario] = [
+                        'id_rol' => $idRolSecundario,
+                        'nombre_rol' => $nombreSec,
+                        'context_key' => $this->resolverContextoPorRolNombre($nombreSec),
+                    ];
+                }
             }
         }
 

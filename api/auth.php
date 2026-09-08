@@ -5,6 +5,7 @@
 
 require_once 'config.php';
 require_once APP . '/Models/Persona.php';
+require_once APP . '/Models/UsuarioAcceso.php';
 
 $method = getRequestMethod();
 
@@ -32,36 +33,31 @@ function login() {
         jsonResponse(false, null, 'Usuario y contraseña son requeridos', 400);
     }
     
-    $personaModel = new Persona();
-    
-    // Buscar usuario
-    $sql = "SELECT p.*, r.Nombre_Rol, r.Codigo_Rol 
-            FROM persona p 
-            INNER JOIN rol r ON p.Id_Rol = r.Id_Rol 
-            WHERE p.Usuario = ?";
-    
-    $result = $personaModel->query($sql, [$input['usuario']]);
-    
-    if (empty($result)) {
+    $usuarioAccesoModel = new UsuarioAcceso();
+    $user = $usuarioAccesoModel->autenticarUnificado((string)$input['usuario'], (string)$input['password']);
+
+    if (empty($user)) {
         jsonResponse(false, null, 'Credenciales inválidas', 401);
     }
-    
-    $user = $result[0];
-    
-    // Verificar contraseña
-    if (!password_verify($input['password'], $user['Password'])) {
-        jsonResponse(false, null, 'Credenciales inválidas', 401);
+
+    $idPersona = (int)($user['Id_Persona'] ?? 0);
+    $nombre = trim((string)($user['Nombre'] ?? '') . ' ' . (string)($user['Apellido'] ?? ''));
+    if ($nombre === '') {
+        $nombre = trim((string)($user['Nombre_Mostrar'] ?? ''));
     }
-    
-    // Crear sesión
+    if ($nombre === '') {
+        $nombre = trim((string)($user['Usuario'] ?? 'Usuario'));
+    }
+
     session_start();
-    $_SESSION['user_id'] = $user['Id_Persona'];
-    $_SESSION['user_name'] = $user['Nombre'] . ' ' . $user['Apellido'];
-    $_SESSION['user_role'] = $user['Codigo_Rol'];
-    $_SESSION['user_role_name'] = $user['Nombre_Rol'];
-    
-    // Retornar datos del usuario (sin password)
-    unset($user['Password']);
+    $_SESSION['user_id'] = $idPersona;
+    $_SESSION['auth_user_id'] = (int)($user['Id_Usuario_Acceso'] ?? 0);
+    $_SESSION['auth_user_source'] = 'acceso';
+    $_SESSION['user_name'] = $nombre;
+    $_SESSION['user_role'] = $user['Codigo_Rol'] ?? null;
+    $_SESSION['user_role_name'] = $user['Nombre_Rol'] ?? '';
+
+    unset($user['Contrasena'], $user['Password']);
     
     jsonResponse(true, [
         'user' => $user,
@@ -75,25 +71,47 @@ function login() {
 function checkSession() {
     session_start();
     
-    if (!isset($_SESSION['user_id'])) {
+    if (empty($_SESSION['auth_user_id']) && empty($_SESSION['user_id'])) {
         jsonResponse(false, null, 'No hay sesión activa', 401);
     }
-    
+
+    $idAcceso = (int)($_SESSION['auth_user_id'] ?? 0);
+    if ($idAcceso > 0) {
+        $usuarioAccesoModel = new UsuarioAcceso();
+        $user = $usuarioAccesoModel->getById($idAcceso);
+        if ($user) {
+            unset($user['Contrasena'], $user['Password']);
+            jsonResponse(true, [
+                'user' => $user,
+                'session' => [
+                    'id' => (int)($user['Id_Persona'] ?? $_SESSION['user_id'] ?? 0),
+                    'name' => $_SESSION['user_name'] ?? '',
+                    'role' => $_SESSION['user_role'] ?? null
+                ]
+            ], 'Sesión activa', 200);
+        }
+    }
+
+    $idPersona = (int)($_SESSION['user_id'] ?? 0);
+    if ($idPersona <= 0) {
+        jsonResponse(false, null, 'No hay sesión activa', 401);
+    }
+
     $personaModel = new Persona();
-    $user = $personaModel->getById($_SESSION['user_id']);
+    $user = $personaModel->getById($idPersona);
     
     if (!$user) {
         jsonResponse(false, null, 'Usuario no encontrado', 404);
     }
     
-    unset($user['Password']);
+    unset($user['Contrasena'], $user['Password']);
     
     jsonResponse(true, [
         'user' => $user,
         'session' => [
             'id' => $_SESSION['user_id'],
-            'name' => $_SESSION['user_name'],
-            'role' => $_SESSION['user_role']
+            'name' => $_SESSION['user_name'] ?? '',
+            'role' => $_SESSION['user_role'] ?? null
         ]
     ], 'Sesión activa', 200);
 }

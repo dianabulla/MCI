@@ -127,14 +127,10 @@ class AccesoDiscipuloCapDestino {
             $userRoleModel->asignarDiscipuloSecundario($idPersona, $idRolActual);
         }
 
-        $usuarioActual = trim((string)($persona['Usuario'] ?? ''));
-        if ($usuarioActual === '') {
-            $personaModel->setUsuario($idPersona, $cedula, $cedula);
-        }
-
-        $estadoCuenta = trim((string)($persona['Estado_Cuenta'] ?? ''));
-        if ($estadoCuenta === '' || strtolower($estadoCuenta) !== 'activo') {
-            $personaModel->update($idPersona, ['Estado_Cuenta' => 'Activo']);
+        require_once APP . '/Models/UsuarioAcceso.php';
+        $accesoModel = new UsuarioAcceso();
+        if (empty($accesoModel->getByPersonaId($idPersona))) {
+            $accesoModel->provisionarParaPersona($idPersona, $cedula, $cedula, $idRolActual);
         }
 
         return true;

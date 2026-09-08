@@ -1303,12 +1303,15 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
             <h4 id="detalleMinisterioCelulasTitulo" style="margin:0;">Líderes con aperturas</h4>
             <button type="button" id="detalleMinisterioCelulasCerrar" class="btn btn-secondary btn-sm">Cerrar</button>
         </div>
+        <small style="display:block; color:#60708a; margin-bottom:8px;">Asistentes = miembros activos de las células que abrió (sin contar al líder). Nuevas = personas con casilla Nuevo.</small>
         <div class="table-container">
             <table class="data-table data-table--compacta-celula">
                 <thead>
                     <tr>
                         <th>Líder</th>
                         <th style="width:120px;">Células abiertas</th>
+                        <th style="width:120px;">Asistentes</th>
+                        <th style="width:120px;">Nuevas</th>
                     </tr>
                 </thead>
                 <tbody id="detalleMinisterioCelulasBody"></tbody>
@@ -2819,9 +2822,12 @@ if (tipoReporte === 'personas') {
         tituloDetalle.textContent = `Líderes que abrieron células - ${ministerio}`;
 
         if (!detalle.length) {
-            bodyDetalle.innerHTML = '<tr><td colspan="2" class="text-center">Sin aperturas para este ministerio</td></tr>';
+            bodyDetalle.innerHTML = '<tr><td colspan="4" class="text-center">Sin aperturas para este ministerio</td></tr>';
         } else {
-            bodyDetalle.innerHTML = detalle.map((item) => {
+            let totalCelulas = 0;
+            let totalAsistentes = 0;
+            let totalNuevas = 0;
+            const filas = detalle.map((item) => {
                 const lider = String(item.lider || 'Sin líder')
                     .replace(/&/g, '&amp;')
                     .replace(/</g, '&lt;')
@@ -2829,8 +2835,15 @@ if (tipoReporte === 'personas') {
                     .replace(/"/g, '&quot;')
                     .replace(/'/g, '&#39;');
                 const cantidad = parseInt(item.cantidad || 0, 10);
-                return `<tr><td>${lider}</td><td><strong>${cantidad}</strong></td></tr>`;
-            }).join('');
+                const asistentes = parseInt(item.asistentes || 0, 10);
+                const nuevas = parseInt(item.nuevas || 0, 10);
+                totalCelulas += cantidad;
+                totalAsistentes += asistentes;
+                totalNuevas += nuevas;
+                return `<tr><td>${lider}</td><td><strong>${cantidad}</strong></td><td>${asistentes}</td><td>${nuevas}</td></tr>`;
+            });
+            filas.push(`<tr class="reporte-metas-total-row"><td><strong>TOTAL</strong></td><td><strong>${totalCelulas}</strong></td><td><strong>${totalAsistentes}</strong></td><td><strong>${totalNuevas}</strong></td></tr>`);
+            bodyDetalle.innerHTML = filas.join('');
         }
 
         panelDetalle.style.display = 'block';

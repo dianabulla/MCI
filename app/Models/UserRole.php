@@ -47,8 +47,8 @@ class UserRole extends BaseModel {
     }
 
     /**
-     * Deja el rol principal en user_roles y solo conserva segundos roles permitidos:
-     * Maestro (asignado explícitamente) y Discípulo (solo si está inscrito en Cap. Destino).
+     * Deja el rol principal en user_roles y conserva segundos roles de Cap. Destino:
+     * Maestro o Estudiante (Discípulo) si están en Id_Rol_Secundario, o Discípulo si está inscrito.
      */
     public function establecerRolUnico(int $idPersona, int $idRolPrincipal): bool {
         if ($idPersona <= 0 || $idRolPrincipal <= 0) {
@@ -75,18 +75,33 @@ class UserRole extends BaseModel {
 
         $idRolMaestro = $this->buscarRolPorAlias('maestro');
         $idRolDiscipulo = $this->buscarRolPorAlias('discipulo');
-        $conservarMaestroSecundario = false;
+        $idRolSecundarioFicha = 0;
+        require_once APP . '/Models/Persona.php';
+        $personaFicha = (new Persona())->getById($idPersona);
+        if (is_array($personaFicha)) {
+            $idRolSecundarioFicha = (int)($personaFicha['Id_Rol_Secundario'] ?? 0);
+        }
 
+        $conservarMaestroSecundario = false;
         if ($idRolMaestro > 0 && $idRolPrincipal !== $idRolMaestro) {
-            foreach ($this->listarRolesPersona($idPersona) as $rol) {
-                if ((int)($rol['Id_Rol'] ?? 0) === $idRolMaestro) {
-                    $conservarMaestroSecundario = true;
-                    break;
+            if ($idRolSecundarioFicha === $idRolMaestro) {
+                $conservarMaestroSecundario = true;
+            } else {
+                foreach ($this->listarRolesPersona($idPersona) as $rol) {
+                    if ((int)($rol['Id_Rol'] ?? 0) === $idRolMaestro) {
+                        $conservarMaestroSecundario = true;
+                        break;
+                    }
                 }
             }
         }
 
-        $conservarDiscipuloSecundario = $this->debeTenerDiscipuloSecundario($idPersona, $idRolPrincipal, $idRolDiscipulo);
+        $conservarDiscipuloSecundario = $idRolDiscipulo > 0
+            && $idRolPrincipal !== $idRolDiscipulo
+            && (
+                $idRolSecundarioFicha === $idRolDiscipulo
+                || $this->debeTenerDiscipuloSecundario($idPersona, $idRolPrincipal, $idRolDiscipulo)
+            );
 
         if (!$this->execute('DELETE FROM user_roles WHERE Id_Persona = ?', [$idPersona])) {
             return false;
@@ -167,6 +182,19 @@ class UserRole extends BaseModel {
         }
 
         if (!$this->debeTenerDiscipuloSecundario($idPersona, $idRolPrincipal, $idRolDiscipulo)) {
+            return false;
+        }
+
+        return $this->asignarDiscipuloSecundarioDirecto($idPersona);
+    }
+
+    public function asignarDiscipuloSecundarioDirecto(int $idPersona): bool {
+        if ($idPersona <= 0 || !$this->asegurarTabla()) {
+            return false;
+        }
+
+        $idRolDiscipulo = $this->buscarRolPorAlias('discipulo');
+        if ($idRolDiscipulo <= 0) {
             return false;
         }
 

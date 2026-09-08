@@ -61,7 +61,18 @@ if ($returnTo === 'celulas') {
 
             <div class="detail-item">
                 <span class="detail-label">Edad:</span>
-                <span class="detail-value"><?= htmlspecialchars($persona['Edad'] ?? 'No especificado') ?> años</span>
+                <?php
+                $edadDetalle = '';
+                $fechaNacimientoDetalle = trim((string)($persona['Fecha_Nacimiento'] ?? ''));
+                if ($fechaNacimientoDetalle !== '') {
+                    try {
+                        $edadDetalle = (string)((new DateTime($fechaNacimientoDetalle))->diff(new DateTime('today'))->y);
+                    } catch (Exception $e) {
+                        $edadDetalle = '';
+                    }
+                }
+                ?>
+                <span class="detail-value"><?= $edadDetalle !== '' ? htmlspecialchars($edadDetalle) . ' años' : 'No especificado' ?></span>
             </div>
 
             <div class="detail-item">
@@ -77,16 +88,6 @@ if ($returnTo === 'celulas') {
             <div class="detail-item">
                 <span class="detail-label">Teléfono:</span>
                 <span class="detail-value"><?= htmlspecialchars($persona['Telefono'] ?? 'No especificado') ?></span>
-            </div>
-
-            <div class="detail-item">
-                <span class="detail-label">Email:</span>
-                <span class="detail-value"><?= htmlspecialchars($persona['Email'] ?? 'No especificado') ?></span>
-            </div>
-
-            <div class="detail-item">
-                <span class="detail-label">Mejor Hora para Llamar:</span>
-                <span class="detail-value"><?= htmlspecialchars($persona['Hora_Llamada'] ?? 'No especificado') ?></span>
             </div>
 
             <div class="detail-item">
@@ -115,6 +116,11 @@ if ($returnTo === 'celulas') {
             </div>
 
             <div class="detail-item">
+                <span class="detail-label">Rol secundario (Cap. Destino):</span>
+                <span class="detail-value"><?= htmlspecialchars($persona['Nombre_Rol_Secundario'] ?? 'Ninguno') ?></span>
+            </div>
+
+            <div class="detail-item">
                 <span class="detail-label">Ministerio:</span>
                 <span class="detail-value"><?= htmlspecialchars($persona['Nombre_Ministerio'] ?? 'Sin ministerio') ?></span>
             </div>
@@ -140,29 +146,19 @@ if ($returnTo === 'celulas') {
             </div>
 
             <div class="detail-item">
-                <span class="detail-label">Estado de Cuenta:</span>
-                <span class="detail-value"><?= htmlspecialchars($persona['Estado_Cuenta'] ?? 'Activo') ?></span>
+                <span class="detail-label">Estado en iglesia:</span>
+                <?php
+                $estadoFichaDetalle = trim((string)($persona['Estado_Cuenta'] ?? 'Activo'));
+                if ($estadoFichaDetalle === 'Bloqueado') {
+                    $estadoFichaDetalle = 'Inactivo';
+                }
+                ?>
+                <span class="detail-value"><?= htmlspecialchars($estadoFichaDetalle !== '' ? $estadoFichaDetalle : 'Activo') ?></span>
             </div>
 
             <div class="detail-item">
                 <span class="detail-label">Tipo de persona:</span>
                 <span class="detail-value"><?= ((int)($persona['Es_Antiguo'] ?? 1) === 1) ? 'Antigua' : 'Nueva' ?></span>
-            </div>
-
-            <div class="detail-item">
-                <span class="detail-label">Usuario de acceso:</span>
-                <span class="detail-value"><?= htmlspecialchars($persona['Usuario'] ?? 'No asignado') ?></span>
-            </div>
-
-            <div class="detail-item">
-                <span class="detail-label">Última vez que ingresó:</span>
-                <span class="detail-value">
-                    <?php if (!empty($persona['Ultimo_Acceso'])): ?>
-                        <?= htmlspecialchars(date('d/m/Y H:i', strtotime((string)$persona['Ultimo_Acceso']))) ?>
-                    <?php else: ?>
-                        Sin registro
-                    <?php endif; ?>
-                </span>
             </div>
 
             <div class="detail-item">
@@ -178,12 +174,6 @@ if ($returnTo === 'celulas') {
         </div>
     </div>
 
-    <div class="detail-section">
-        <h3>Petición de Oración</h3>
-        <div class="detail-full">
-            <p><?= !empty($persona['Peticion']) ? nl2br(htmlspecialchars($persona['Peticion'])) : 'No especificada' ?></p>
-        </div>
-    </div>
 </div>
 
 <?php include VIEWS . '/layout/footer.php'; ?>

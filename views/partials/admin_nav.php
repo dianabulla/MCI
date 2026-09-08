@@ -21,6 +21,7 @@ if (!$puedeVerCuentasNav && !$puedeVerPermisosNav && !$puedeVerRolesNav) {
     <div class="card-body page-actions personas-mobile-stack" style="display:flex; gap:8px; flex-wrap:wrap;">
         <?php if ($puedeVerCuentasNav): ?>
         <a href="<?= PUBLIC_URL ?>index.php?url=cuentas" class="btn btn-nav-pill<?= $adminNavActive === 'cuentas' ? ' active' : '' ?>">Cuentas</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=auditoria" class="btn btn-nav-pill<?= $adminNavActive === 'auditoria' ? ' active' : '' ?>">Bitácora</a>
         <?php endif; ?>
         <?php if ($puedeVerRolesNav): ?>
         <a href="<?= PUBLIC_URL ?>index.php?url=roles" class="btn btn-nav-pill<?= $adminNavActive === 'roles' ? ' active' : '' ?>">Roles</a>

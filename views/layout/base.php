@@ -93,11 +93,6 @@
                                 <i class="fas fa-calendar-days"></i> Eventos
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="<?php echo APP_URL; ?>/peticiones">
-                                <i class="fas fa-hands-praying"></i> Peticiones
-                            </a>
-                        </li>
                     </ul>
                 </div>
             </nav>

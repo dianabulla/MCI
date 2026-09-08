@@ -752,9 +752,6 @@ class EscuelaFormacionInscripcion extends BaseModel {
             $cedulaNorm = $this->normalizarDocumentoParaComparacion(
                 (string)($persona['Numero_Documento'] ?? $persona['Cedula'] ?? '')
             );
-            if ($cedulaNorm === '') {
-                $cedulaNorm = $this->normalizarDocumentoParaComparacion((string)($persona['Usuario'] ?? ''));
-            }
             $telefonoNorm = $this->normalizarTelefonoParaComparacion((string)($persona['Telefono'] ?? ''));
         }
 
@@ -852,7 +849,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
         }
 
         $personas = $this->query(
-            "SELECT Id_Persona, Numero_Documento, Usuario, Telefono
+            "SELECT Id_Persona, Numero_Documento, Telefono
              FROM persona
              WHERE Id_Persona IN ({$inSql})"
         );
@@ -864,9 +861,6 @@ class EscuelaFormacionInscripcion extends BaseModel {
                 continue;
             }
             $cedulaNorm = $this->normalizarDocumentoParaComparacion((string)($persona['Numero_Documento'] ?? ''));
-            if ($cedulaNorm === '') {
-                $cedulaNorm = $this->normalizarDocumentoParaComparacion((string)($persona['Usuario'] ?? ''));
-            }
             $telefonoNorm = $this->normalizarTelefonoParaComparacion((string)($persona['Telefono'] ?? ''));
             if ($cedulaNorm !== '') {
                 $cedulaAIds[$cedulaNorm][$id] = $id;

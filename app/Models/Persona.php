@@ -229,9 +229,24 @@ class Persona extends BaseModel {
         }
     }
 
-    private function permiteTelefonoDuplicadoPorTipoDocumento($tipoDocumento) {
-        $tipoDocumento = strtoupper(trim((string)$tipoDocumento));
-        return in_array($tipoDocumento, ['TARJETA DE IDENTIDAD', 'REGISTRO CIVIL'], true);
+    private function normalizarClaveTipoDocumento($tipoDocumento): string {
+        $tipo = strtoupper(trim((string)$tipoDocumento));
+        if ($tipo === '') {
+            return '';
+        }
+        $tipo = strtr($tipo, [
+            'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ü' => 'U', 'Ñ' => 'N',
+        ]);
+        return preg_replace('/[^A-Z0-9]/', '', $tipo);
+    }
+
+    /**
+     * Menores (Registro Civil o Tarjeta de Identidad) pueden repetir un teléfono
+     * que ya esté en otra ficha. El número de documento nunca se puede repetir.
+     */
+    public function permiteTelefonoDuplicadoPorTipoDocumento($tipoDocumento): bool {
+        $clave = $this->normalizarClaveTipoDocumento($tipoDocumento);
+        return in_array($clave, ['TARJETADEIDENTIDAD', 'TI', 'REGISTROCIVIL', 'RC'], true);
     }
 
     public function findDuplicateByCedulaOrTelefono($numeroDocumento, $telefono, $excludeId = null, $tipoDocumento = null) {
@@ -240,26 +255,52 @@ class Persona extends BaseModel {
         $excludeId = $excludeId !== null ? (int)$excludeId : 0;
         $permiteTelefonoDuplicado = $this->permiteTelefonoDuplicadoPorTipoDocumento($tipoDocumento);
 
-        $condiciones = [];
-        $params = [];
-
-        if ($documentoNormalizado !== '') {
-            $condiciones[] = "REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(Numero_Documento, ''))), ' ', ''), '.', ''), '-', '') = ?";
-            $params[] = $documentoNormalizado;
+        $porDocumento = $this->buscarDuplicadoPorCampoNormalizado(
+            'documento',
+            $documentoNormalizado,
+            $excludeId
+        );
+        if (is_array($porDocumento)) {
+            $porDocumento['_motivo'] = 'documento';
+            return $porDocumento;
         }
 
         if ($telefonoNormalizado !== '' && !$permiteTelefonoDuplicado) {
-            $condiciones[] = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(Telefono, '')), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '') = ?";
-            $params[] = $telefonoNormalizado;
+            $porTelefono = $this->buscarDuplicadoPorCampoNormalizado(
+                'telefono',
+                $telefonoNormalizado,
+                $excludeId
+            );
+        if (is_array($porTelefono)) {
+            if ($excludeId > 0 && (int)($porTelefono['Id_Persona'] ?? 0) === $excludeId) {
+                return null;
+            }
+            $porTelefono['_motivo'] = 'telefono';
+            return $porTelefono;
+        }
         }
 
-        if (empty($condiciones)) {
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buscarDuplicadoPorCampoNormalizado(string $campo, string $valorNormalizado, int $excludeId): ?array {
+        if ($valorNormalizado === '') {
             return null;
         }
 
-        $sql = "SELECT Id_Persona, Nombre, Apellido, Numero_Documento, Telefono
+        if ($campo === 'documento') {
+            $sqlCondicion = "REPLACE(REPLACE(REPLACE(UPPER(TRIM(COALESCE(Numero_Documento, ''))), ' ', ''), '.', ''), '-', '') = ?";
+        } else {
+            $sqlCondicion = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(Telefono, '')), ' ', ''), '-', ''), '+', ''), '(', ''), ')', ''), '.', '') = ?";
+        }
+
+        $sql = "SELECT Id_Persona, Nombre, Apellido, Numero_Documento, Telefono, Tipo_Documento
                 FROM {$this->table}
-                WHERE (" . implode(' OR ', $condiciones) . ")";
+                WHERE {$sqlCondicion}";
+        $params = [$valorNormalizado];
 
         if ($excludeId > 0) {
             $sql .= " AND {$this->primaryKey} <> ?";
@@ -268,7 +309,7 @@ class Persona extends BaseModel {
 
         $sql .= " ORDER BY {$this->primaryKey} DESC LIMIT 1";
         $rows = $this->query($sql, $params);
-        return $rows[0] ?? null;
+        return !empty($rows[0]) ? (array)$rows[0] : null;
     }
 
     public function buscarParaInscripcionEscuela($numeroDocumento, $telefono, $nombreCompleto = '') {
@@ -509,6 +550,24 @@ class Persona extends BaseModel {
         }
     }
 
+    public function ensureIdRolSecundarioColumnExists() {
+        if ($this->tieneColumna('Id_Rol_Secundario')) {
+            return true;
+        }
+
+        try {
+            $after = $this->tieneColumna('Id_Rol') ? 'Id_Rol' : $this->primaryKey;
+            $sql = "ALTER TABLE {$this->table} ADD COLUMN Id_Rol_Secundario INT NULL AFTER {$after}";
+            $this->db->exec($sql);
+            $this->columnasCache['Id_Rol_Secundario'] = true;
+            return true;
+        } catch (Exception $e) {
+            error_log('No se pudo crear columna Id_Rol_Secundario en persona: ' . $e->getMessage());
+            $this->columnasCache['Id_Rol_Secundario'] = false;
+            return false;
+        }
+    }
+
     public function ensureNumeroCupoColumnExists() {
         if ($this->tieneColumna('Numero_Cupo')) {
             return true;
@@ -581,7 +640,7 @@ class Persona extends BaseModel {
         }
 
         try {
-            $sql = "ALTER TABLE {$this->table} ADD COLUMN Creado_Por INT NULL AFTER Fecha_Registro_Unix";
+            $sql = "ALTER TABLE {$this->table} ADD COLUMN Creado_Por INT NULL AFTER Fecha_Registro";
             $this->db->exec($sql);
             $this->columnasCache['Creado_Por'] = true;
             return true;
@@ -632,7 +691,7 @@ class Persona extends BaseModel {
         }
 
         try {
-            $sql = "ALTER TABLE {$this->table} ADD COLUMN Tratamiento_Datos ENUM('Acepta', 'No acepta') NULL AFTER Peticion";
+            $sql = "ALTER TABLE {$this->table} ADD COLUMN Tratamiento_Datos ENUM('Acepta', 'No acepta') NULL AFTER Barrio";
             $this->db->exec($sql);
             $this->columnasCache['Tratamiento_Datos'] = true;
             return true;
@@ -643,31 +702,16 @@ class Persona extends BaseModel {
         }
     }
 
+    /**
+     * El acuerdo vive en usuario_acceso. No recrear columnas en persona.
+     */
     public function ensureAcuerdoConfidencialidadColumnsExist() {
-        $ok = true;
-        if (!$this->tieneColumna('Acuerdo_Confidencialidad_At')) {
-            try {
-                $sql = "ALTER TABLE {$this->table} ADD COLUMN Acuerdo_Confidencialidad_At DATETIME NULL AFTER Tratamiento_Datos";
-                $this->db->exec($sql);
-                $this->columnasCache['Acuerdo_Confidencialidad_At'] = true;
-            } catch (Exception $e) {
-                error_log('No se pudo crear columna Acuerdo_Confidencialidad_At: ' . $e->getMessage());
-                $this->columnasCache['Acuerdo_Confidencialidad_At'] = false;
-                $ok = false;
-            }
-        }
-        if (!$this->tieneColumna('Acuerdo_Confidencialidad_Version')) {
-            try {
-                $sql = "ALTER TABLE {$this->table} ADD COLUMN Acuerdo_Confidencialidad_Version VARCHAR(32) NULL AFTER Acuerdo_Confidencialidad_At";
-                $this->db->exec($sql);
-                $this->columnasCache['Acuerdo_Confidencialidad_Version'] = true;
-            } catch (Exception $e) {
-                error_log('No se pudo crear columna Acuerdo_Confidencialidad_Version: ' . $e->getMessage());
-                $this->columnasCache['Acuerdo_Confidencialidad_Version'] = false;
-                $ok = false;
-            }
-        }
-        return $ok;
+        return $this->tieneColumna('Acuerdo_Confidencialidad_At')
+            && $this->tieneColumna('Acuerdo_Confidencialidad_Version');
+    }
+
+    public function tieneColumnasLoginLegacy(): bool {
+        return $this->tieneColumna('Usuario') && $this->tieneColumna('Contrasena');
     }
 
     public function registrarAcuerdoConfidencialidadPersona(int $idPersona, string $version): bool {
@@ -1091,6 +1135,7 @@ class Persona extends BaseModel {
      * Obtener persona por ID con relaciones
      */
     public function getById($id) {
+        $this->ensureIdRolSecundarioColumnExists();
         $joinReporte = '';
         $campoReporte = 'NULL AS Ultimo_Reporte_Celula';
 
@@ -1109,6 +1154,7 @@ class Persona extends BaseModel {
         $sql = "SELECT p.*, 
                 c.Nombre_Celula, 
                 r.Nombre_Rol, 
+                rs.Nombre_Rol AS Nombre_Rol_Secundario,
                 m.Nombre_Ministerio,
                 TRIM(CONCAT(COALESCE(lid.Nombre, ''), ' ', COALESCE(lid.Apellido, ''))) AS Nombre_Lider,
                 COALESCE(creador.Usuario, '') AS Usuario_Creador,
@@ -1117,6 +1163,7 @@ class Persona extends BaseModel {
                 FROM persona p
                 LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
                 LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
+                LEFT JOIN rol rs ON p.Id_Rol_Secundario = rs.Id_Rol
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
                 LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
                 LEFT JOIN persona creador ON p.Creado_Por = creador.Id_Persona
@@ -1987,6 +2034,10 @@ class Persona extends BaseModel {
      * Autenticar usuario
      */
     public function autenticar($usuario, $contrasena) {
+        if (!$this->tieneColumnasLoginLegacy()) {
+            return null;
+        }
+
         $sql = "SELECT p.*, r.Nombre_Rol, p.Id_Ministerio 
                 FROM persona p 
                 LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol 
@@ -2018,6 +2069,10 @@ class Persona extends BaseModel {
      * Actualizar Ãºltimo acceso
      */
     public function actualizarUltimoAcceso($idPersona) {
+        if (!$this->tieneColumna('Ultimo_Acceso')) {
+            return false;
+        }
+
         try {
             $sql = "UPDATE persona SET Ultimo_Acceso = NOW() WHERE Id_Persona = ?";
             $stmt = $this->db->prepare($sql);
@@ -2040,6 +2095,10 @@ class Persona extends BaseModel {
      * Crear o actualizar usuario
      */
     public function setUsuario($idPersona, $usuario, $contrasena = null) {
+        if (!$this->tieneColumnasLoginLegacy()) {
+            return false;
+        }
+
         if ($contrasena) {
             $hash = password_hash($contrasena, PASSWORD_BCRYPT);
             $sql = "UPDATE persona SET Usuario = ?, Contrasena = ? WHERE Id_Persona = ?";
@@ -2054,6 +2113,10 @@ class Persona extends BaseModel {
      * Listar personas que ya tienen cuenta de acceso en el modelo legado.
      */
     public function getPersonasConUsuario() {
+        if (!$this->tieneColumna('Usuario')) {
+            return [];
+        }
+
         $sql = "SELECT
                     p.Id_Persona,
                     p.Usuario,
@@ -2094,6 +2157,10 @@ class Persona extends BaseModel {
     }
 
     public function existeUsuario($usuario, $excludePersonaId = null) {
+        if (!$this->tieneColumna('Usuario')) {
+            return false;
+        }
+
         $usuario = trim((string)$usuario);
         if ($usuario === '') {
             return false;

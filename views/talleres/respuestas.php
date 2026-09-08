@@ -23,11 +23,11 @@ $abrirMinisterio = trim((string)($_GET['abrir_ministerio'] ?? ''));
 if ($abrirMinisterio === '' && (string)($_GET['abrir'] ?? '') === 'sin-ministerio') {
     $abrirMinisterio = 'Sin ministerio asignado';
 }
+$abrirLider12 = trim((string)($_GET['abrir_lider12'] ?? ''));
 $idResaltar = (int)($_GET['resaltar'] ?? 0);
 $esPresentacionNinos = !empty($es_presentacion_ninos);
 $esTourLevantate = !empty($es_tour_levantate);
-$resumenPorMinisterio = is_array($resumen_por_ministerio ?? null) ? $resumen_por_ministerio : [];
-$totalResumenMinisterios = array_sum(array_map(static fn(array $f): int => (int)($f['total'] ?? 0), $resumenPorMinisterio));
+$resumenPorMinisterioLider12 = is_array($resumen_por_ministerio_lider12 ?? null) ? $resumen_por_ministerio_lider12 : [];
 $soloGraficas = !empty($solo_graficas);
 $tabActiva = (string)($tab_activa ?? 'lista');
 $totalInscripciones = (int)($statsGraficas['total'] ?? $total);
@@ -57,14 +57,14 @@ function taller_resp_valor(array $valores, string $clave): string {
 .taller-resp-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 6px;
 }
 .taller-resp-item {
     border: 1px solid #dbeafe;
-    border-radius: 10px;
+    border-radius: 8px;
     background: #fff;
     overflow: hidden;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 .taller-resp-item.taller-resp-resaltado {
     border-color: #15803d;
@@ -73,42 +73,41 @@ function taller_resp_valor(array $valores, string $clave): string {
 .taller-resp-item > summary {
     list-style: none;
     cursor: pointer;
-    padding: 14px 16px;
+    padding: 4px 8px;
     display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 12px 16px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
     align-items: center;
-    background: linear-gradient(180deg, #f8fbff 0%, #f1f5f9 100%);
+    background: #fff;
 }
 .taller-resp-item > summary::-webkit-details-marker { display: none; }
-.taller-resp-item > summary::after {
-    content: 'Ver detalle ▾';
-    font-size: 0.82rem;
-    color: #2563eb;
-    font-weight: 600;
-    white-space: nowrap;
-}
-.taller-resp-item[open] > summary::after { content: 'Ocultar ▴'; }
 .taller-resp-num {
     font-weight: 700;
     color: #64748b;
-    font-size: 0.85rem;
-    min-width: 2rem;
+    font-size: 0.8rem;
+    min-width: 0;
 }
 .taller-resp-resumen {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px 20px;
-    align-items: baseline;
+    flex-direction: column;
+    gap: 1px;
     min-width: 0;
 }
 .taller-resp-resumen strong {
     color: #0f172a;
-    font-size: 1rem;
+    font-size: 0.84rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
 }
 .taller-resp-meta {
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .taller-resp-meta span + span::before {
     content: '·';
@@ -218,13 +217,29 @@ function taller_resp_valor(array $valores, string $clave): string {
     border: 1px solid #dbeafe;
     border-radius: 12px;
     background: #f8fbff;
+    --taller-min-cols: 40px minmax(0, 1fr) 128px;
+    --taller-min-gap: 8px;
+    --taller-min-pad-x: 16px;
+}
+.taller-resp-resumen-ministerios .table-container {
+    overflow-x: auto;
+}
+.taller-min-header,
+.taller-min-acordeon > summary,
+.taller-lider-acordeon > summary {
+    display: grid;
+    grid-template-columns: var(--taller-min-cols);
+    column-gap: var(--taller-min-gap);
+    align-items: center;
+    padding-left: var(--taller-min-pad-x);
+    padding-right: var(--taller-min-pad-x);
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
 }
 .taller-min-header {
-    display: grid;
-    grid-template-columns: 48px 1fr 110px auto;
-    gap: 10px;
-    align-items: center;
-    padding: 10px 16px;
+    padding-top: 10px;
+    padding-bottom: 10px;
     background: linear-gradient(180deg, #f8fbff 0%, #f1f5f9 100%);
     font-size: 0.78rem;
     font-weight: 700;
@@ -242,23 +257,44 @@ function taller_resp_valor(array $valores, string $clave): string {
     border-bottom: none;
     color: #0f172a;
 }
-.taller-min-header .col-total,
-.taller-min-acordeon .col-total {
-    text-align: center;
-    font-weight: 700;
-    color: #1e40af;
+.taller-min-resumen {
+    margin-top: 8px;
+    padding: 10px 12px;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    background: #fff;
 }
-.taller-min-acordeon:last-child {
-    border-bottom: none;
+.taller-min-resumen-kpis {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    font-size: 0.86rem;
+    color: #334155;
+}
+.taller-min-resumen-kpis strong { font-size: 1rem; }
+.taller-min-resumen-kpis .ok { color: #166534; }
+.taller-min-resumen-kpis .warn { color: #9a3412; }
+.taller-min-resumen-faltan {
+    margin: 8px 0 0;
+    font-size: 0.84rem;
+    color: #9a3412;
+    line-height: 1.4;
+}
+.taller-min-resumen-ok {
+    margin: 8px 0 0;
+    font-size: 0.84rem;
+    color: #166534;
+}
+.taller-min-acordeon,
+.taller-lider-acordeon {
+    width: 100%;
+    box-sizing: border-box;
 }
 .taller-min-acordeon > summary {
     list-style: none;
     cursor: pointer;
-    display: grid;
-    grid-template-columns: 48px 1fr 110px auto;
-    gap: 10px;
-    align-items: center;
-    padding: 12px 16px;
+    padding-top: 12px;
+    padding-bottom: 12px;
     background: #fff;
 }
 .taller-min-acordeon > summary::-webkit-details-marker { display: none; }
@@ -275,25 +311,77 @@ function taller_resp_valor(array $valores, string $clave): string {
 .taller-min-nombre {
     font-weight: 600;
     color: #0f172a;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
-.taller-min-hint {
+.taller-min-hint,
+.taller-lider-hint {
     font-size: 0.78rem;
     color: #2563eb;
     font-weight: 600;
     white-space: nowrap;
+    text-align: right;
+    justify-self: stretch;
 }
-.taller-min-acordeon[open] .taller-min-hint::after {
-    content: ' Ocultar ▴';
+.taller-min-acordeon[open] > summary .taller-min-hint::after {
+    content: 'Ocultar ▴';
 }
-.taller-min-acordeon:not([open]) .taller-min-hint::after {
-    content: ' Ver inscritos ▾';
+.taller-min-acordeon:not([open]) > summary .taller-min-hint::after {
+    content: 'Ver inscritos ▾';
+}
+.taller-lider-acordeon {
+    border: 1px solid #e2e8f0;
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+    background: #fff;
+    overflow: hidden;
+}
+.taller-lider-acordeon > summary {
+    list-style: none;
+    cursor: pointer;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    background: #fff;
+}
+.taller-lider-acordeon > summary::-webkit-details-marker { display: none; }
+.taller-lider-acordeon > summary:hover {
+    background: #f8fafc;
+}
+.taller-lider-acordeon[open] > summary {
+    background: #eef2ff;
+}
+.taller-lider-acordeon[open] > summary .taller-lider-hint::after {
+    content: 'Ocultar ▴';
+}
+.taller-lider-acordeon:not([open]) > summary .taller-lider-hint::after {
+    content: 'Ver inscritos ▾';
+}
+.taller-lider-acordeon.hidden-by-filter,
+.taller-min-acordeon.hidden-by-filter,
+.taller-resp-item.hidden-by-filter { display: none; }
+.taller-min-lista.taller-lideres-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    background: #f8fafc;
+}
+.taller-lider-acordeon .taller-min-nombre {
+    padding-left: 12px;
 }
 .taller-min-lista {
-    padding: 10px 12px 14px;
+    padding: 10px 16px 14px;
     background: #f8fafc;
     display: flex;
     flex-direction: column;
     gap: 10px;
+}
+.taller-min-lista.taller-resp-list {
+    padding: 8px 10px 10px;
+    gap: 6px;
 }
 .taller-resp-resumen-ministerios h3 {
     margin: 0 0 6px;
@@ -346,50 +434,66 @@ function taller_resp_valor(array $valores, string $clave): string {
     color: #0f172a;
     border-top: 2px solid #bfdbfe;
 }
-.taller-resp-item.hidden-by-filter,
-.taller-min-acordeon.hidden-by-filter { display: none; }
+.taller-resp-item > summary .taller-asig-min {
+    grid-column: 1 / -1;
+}
 .taller-resp-pago {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
+    flex-direction: row;
+    align-items: center;
     gap: 6px;
-    min-width: 110px;
+    min-width: 0;
 }
+.taller-resp-pago-acciones {
+    display: flex;
+    gap: 4px;
+}
+.taller-resp-pago-status {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #64748b;
+    white-space: nowrap;
+    min-width: 58px;
+    text-align: right;
+}
+.taller-resp-pago-status.ok { color: #15803d; }
+.taller-resp-pago-status.no { color: #b91c1c; }
 .taller-resp-pago-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    background: #0f766e;
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    background: #2563eb;
     color: #fff;
     text-decoration: none;
-    font-size: 1.1rem;
-    box-shadow: 0 2px 6px rgba(15, 118, 110, 0.25);
+    font-size: 0.72rem;
+    box-shadow: none;
     border: 0;
     cursor: pointer;
     padding: 0;
+    line-height: 1;
+}
+.taller-resp-pago-btn.ver {
+    background: #2563eb;
+}
+.taller-resp-pago-btn.ver:hover {
+    background: #1d4ed8;
+    color: #fff;
+}
+.taller-resp-item[open] .taller-resp-pago-btn.ver {
+    background: #1e40af;
 }
 .taller-resp-pago-btn.eliminar {
     background: #b91c1c;
-    box-shadow: 0 2px 6px rgba(185, 28, 28, 0.25);
+    box-shadow: none;
 }
 .taller-resp-pago-btn.eliminar:hover {
     background: #991b1b;
     color: #fff;
 }
-.taller-resp-pago-acciones {
-    display: flex;
-    gap: 6px;
-}
-.taller-resp-pago-btn:hover { background: #0d5f58; color: #fff; }
-.taller-resp-pago-status {
-    font-size: 0.78rem;
-    color: #64748b;
-    white-space: nowrap;
-}
-.taller-resp-pago-status.ok { color: #0f766e; font-weight: 600; }
+.taller-resp-pago-btn:hover { background: #1d4ed8; color: #fff; }
 .taller-uv-pagos { display:flex; flex-direction:column; gap:12px; margin: 0 0 22px; }
 .taller-uv-pagos h3 { margin:0; font-size:1.15rem; color:#1e3a5f; font-weight:800; }
 .taller-uv-pagos .subtitulo { margin:0; font-size:0.88rem; color:#64748b; }
@@ -413,6 +517,144 @@ function taller_resp_valor(array $valores, string $clave): string {
 .taller-uv-pagos .li-stat--warn strong { color:#92400e; }
 .taller-uv-pagos .li-stat--filtro { cursor:pointer; text-align:left; font:inherit; appearance:none; -webkit-appearance:none; }
 .taller-uv-pagos .li-stat--filtro.is-active { box-shadow:inset 0 0 0 2px #1e4a89; }
+.taller-pago-resumen-tabla {
+    margin: 0 0 18px;
+    padding: 14px 16px 16px;
+    border: 1px solid #dbeafe;
+    border-radius: 12px;
+    background: #fff;
+}
+.taller-pago-resumen-tabla h3 {
+    margin: 0 0 4px;
+    font-size: 1.02rem;
+    color: #0f172a;
+}
+.taller-pago-resumen-tabla .subtitulo {
+    margin: 0 0 10px;
+    font-size: 0.84rem;
+    color: #64748b;
+}
+.taller-pago-resumen-tabla table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.taller-pago-resumen-tabla th {
+    text-align: left;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #475569;
+    padding: 8px 10px;
+    border-bottom: 2px solid #dbeafe;
+    background: #f8fbff;
+}
+.taller-pago-resumen-tabla td {
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    border-bottom: 1px solid #eef2f7;
+    color: #1e293b;
+}
+.taller-pago-resumen-tabla td.num,
+.taller-pago-resumen-tabla th.num {
+    text-align: right;
+    white-space: nowrap;
+    font-weight: 700;
+}
+.taller-pago-resumen-tabla tfoot td {
+    border-bottom: none;
+    background: #eff6ff;
+    font-weight: 700;
+    color: #0f172a;
+}
+.taller-pago-medio-btn {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: #1d4ed8;
+    font: inherit;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+.taller-pago-medio-btn:hover { color: #1e3a8a; }
+.taller-pago-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+.taller-pago-modal.is-open { display: flex; }
+.taller-pago-modal-fondo {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+}
+.taller-pago-modal-caja {
+    position: relative;
+    z-index: 1;
+    width: min(520px, 100%);
+    max-height: min(80vh, 560px);
+    overflow: auto;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 18px 50px rgba(15, 23, 42, 0.22);
+}
+.taller-pago-modal-cabeza {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid #e2e8f0;
+}
+.taller-pago-modal-cabeza h4 {
+    margin: 0;
+    font-size: 1.02rem;
+    color: #0f172a;
+}
+.taller-pago-modal-cabeza p {
+    margin: 4px 0 0;
+    font-size: 0.82rem;
+    color: #64748b;
+}
+.taller-pago-modal-cerrar {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 8px;
+    background: #f1f5f9;
+    color: #334155;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.taller-pago-modal-cerrar:hover { background: #e2e8f0; }
+.taller-pago-modal-cuerpo { padding: 8px 16px 16px; }
+.taller-pago-modal-lista {
+    width: 100%;
+    border-collapse: collapse;
+}
+.taller-pago-modal-lista th {
+    text-align: left;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #64748b;
+    padding: 8px 6px;
+    border-bottom: 1px solid #e2e8f0;
+}
+.taller-pago-modal-lista td {
+    padding: 8px 6px;
+    font-size: 0.86rem;
+    border-bottom: 1px solid #f1f5f9;
+    color: #1e293b;
+}
+.taller-pago-modal-lista td.num { text-align: right; font-weight: 700; white-space: nowrap; }
 .taller-uv-pagos .li-resumen-filtro { margin:0; padding:8px 12px; font-size:0.78rem; color:#1e40af; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; }
 .taller-uv-pagos .li-card { background:#fff; border:1px solid #dbe7f3; border-radius:12px; box-shadow:0 1px 4px rgba(15,23,42,.08); overflow:hidden; }
 .taller-uv-pagos .li-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
@@ -599,10 +841,7 @@ function taller_resp_valor(array $valores, string $clave): string {
 }
 @media (max-width: 640px) {
     .taller-resp-item > summary {
-        grid-template-columns: 1fr;
-    }
-    .taller-resp-item > summary::after {
-        justify-self: start;
+        grid-template-columns: minmax(0, 1fr) auto;
     }
     .taller-graf-grid {
         grid-template-columns: 1fr;
@@ -664,32 +903,9 @@ unset($_SESSION['talleres_flash_ok'], $_SESSION['talleres_flash_error']);
 <?php if (!$soloGraficas): ?>
 <div id="panel-lista" class="taller-resp-panel <?= $tabActiva === 'lista' ? 'active' : '' ?>">
 <p class="text-muted">
-    <?= $total ?> respuesta(s). Pulse un ministerio para ver sus inscritos y luego una persona para ver el detalle.
+    <?= $total ?> respuesta(s). Pulse un ministerio para ver sus inscritos. El pago de cada persona queda en la misma ficha.
     Para análisis masivo, descargue Excel o consulte la pestaña Gráficas.
 </p>
-
-<?php
-$inscritosPorMinisterio = [];
-foreach ($listaRespuestas as $respGrupo) {
-    $claveMin = trim((string)($respGrupo['ministerio'] ?? ''));
-    if ($claveMin === '') {
-        $claveMin = 'Sin ministerio asignado';
-    }
-    $inscritosPorMinisterio[$claveMin][] = $respGrupo;
-}
-if ($resumenPorMinisterio === [] && $inscritosPorMinisterio !== []) {
-    foreach ($inscritosPorMinisterio as $nombreMin => $listaMin) {
-        $resumenPorMinisterio[] = ['ministerio' => $nombreMin, 'total' => count($listaMin)];
-    }
-}
-?>
-
-<?php if ($total > 0): ?>
-<div class="taller-resp-toolbar">
-    <input type="search" id="filtro-respuestas" class="form-control" placeholder="Buscar por nombre, documento o teléfono…" autocomplete="off">
-    <span class="text-muted" style="font-size:0.88rem;" id="filtro-contador"><?= $total ?> mostradas</span>
-</div>
-<?php endif; ?>
 
 <?php
 $ultimoPagoPorRespuesta = [];
@@ -699,76 +915,66 @@ foreach ($listaPagosTaller as $pagoFila) {
         $ultimoPagoPorRespuesta[$idPagoResp] = $pagoFila;
     }
 }
-$filasEstadoPago = [];
+
+$inscritosPorMinisterio = [];
 $nPagaron = 0;
 $nSinPago = 0;
-foreach ($listaRespuestas as $respPago) {
-    $valoresPago = is_array($respPago['valores'] ?? null) ? $respPago['valores'] : [];
-    $nombrePago = $esPresentacionNinos ? taller_resp_valor($valoresPago, 'nino_nombre') : taller_resp_valor($valoresPago, 'persona_nombre');
-    if ($nombrePago === '' && $esPresentacionNinos) {
-        $nombrePago = taller_resp_valor($valoresPago, 'padres_nombre');
+foreach ($listaRespuestas as $respGrupo) {
+    $claveMin = trim((string)($respGrupo['ministerio'] ?? ''));
+    if ($claveMin === '') {
+        $claveMin = 'Sin ministerio asignado';
     }
-    $documentoPago = $esPresentacionNinos ? taller_resp_valor($valoresPago, 'nino_documento') : taller_resp_valor($valoresPago, 'persona_documento');
-    $telefonoPago = $esPresentacionNinos
-        ? taller_resp_valor($valoresPago, 'padres_telefono')
-        : taller_resp_valor($valoresPago, 'persona_telefono');
-    $ministerioPago = trim((string)($respPago['ministerio'] ?? ''));
-    if ($ministerioPago === '') {
-        $ministerioPago = 'Sin ministerio asignado';
-    }
-    $idRespPago = (int)($respPago['id'] ?? 0);
-    $totalFilaPago = (float)($respPago['total_pagado'] ?? 0);
-    $pagadoFila = $totalFilaPago > 0;
-    if ($pagadoFila) {
+    $inscritosPorMinisterio[$claveMin][] = $respGrupo;
+    if ((float)($respGrupo['total_pagado'] ?? 0) > 0) {
         $nPagaron++;
     } else {
         $nSinPago++;
     }
-    $ultimo = $ultimoPagoPorRespuesta[$idRespPago] ?? [];
-    $filasEstadoPago[] = [
-        'nombre' => $nombrePago !== '' ? $nombrePago : 'Sin nombre',
-        'documento' => $documentoPago,
-        'telefono' => $telefonoPago,
-        'ministerio' => $ministerioPago,
-        'pagado' => $pagadoFila,
-        'total' => $totalFilaPago,
-        'tipo' => (string)($ultimo['tipo'] ?? ''),
-        'metodo' => (string)($ultimo['metodo'] ?? ''),
-        'fecha' => (string)($ultimo['fecha'] ?? ''),
-        'recibido_por' => (string)($ultimo['recibido_por'] ?? ''),
-        'busqueda' => strtolower($nombrePago . ' ' . $documentoPago . ' ' . $telefonoPago . ' ' . $ministerioPago),
-    ];
+}
+if ($resumenPorMinisterioLider12 === [] && $inscritosPorMinisterio !== []) {
+    foreach ($inscritosPorMinisterio as $nombreMinGrupo => $listaMin) {
+        $hombresGrupo = 0;
+        $mujeresGrupo = 0;
+        foreach ($listaMin as $filaGrupo) {
+            $generoFila = (string)($filaGrupo['genero'] ?? '');
+            if ($generoFila === 'hombre') {
+                $hombresGrupo++;
+            } elseif ($generoFila === 'mujer') {
+                $mujeresGrupo++;
+            }
+        }
+        $resumenPorMinisterioLider12[] = [
+            'ministerio' => $nombreMinGrupo,
+            'hombres' => $hombresGrupo,
+            'mujeres' => $mujeresGrupo,
+            'total' => count($listaMin),
+            'lideres' => [],
+        ];
+    }
 }
 ?>
-<section class="taller-uv-pagos" aria-label="Pagos de este taller">
-    <div>
-        <h3>Pagos del taller</h3>
-        <p class="subtitulo">Igual que Universidad de la Vida: un listado por inscrito. Los pagos se registran en Comunidad → Pagos.</p>
-    </div>
-    <div class="li-toolbar">
-        <div>
-            <label for="taller-pago-buscar">Búsqueda</label>
-            <input type="search" id="taller-pago-buscar" placeholder="Nombre, documento o teléfono…" autocomplete="off">
-        </div>
-        <div>
-            <label for="taller-pago-filtro">Pago / Abono</label>
-            <select id="taller-pago-filtro">
-                <option value="todos">Todos</option>
-                <option value="pagados">Pagados</option>
-                <option value="sin_pago">Sin pago</option>
-            </select>
-        </div>
-    </div>
+
+<?php if ($total > 0): ?>
+<div class="taller-resp-toolbar">
+    <input type="search" id="filtro-respuestas" class="form-control" placeholder="Buscar por nombre, documento o teléfono…" autocomplete="off">
+    <select id="taller-pago-filtro" class="form-control" style="max-width:180px;" aria-label="Filtro de pago">
+        <option value="todos">Todos los pagos</option>
+        <option value="pagados">Con pago</option>
+        <option value="sin_pago">Sin pago</option>
+    </select>
+    <span class="text-muted" style="font-size:0.88rem;" id="filtro-contador"><?= $total ?> mostradas</span>
+</div>
+<div class="taller-uv-pagos" style="margin-bottom:14px;">
     <div class="li-summary">
-        <button type="button" class="li-stat li-stat--filtro is-active" data-filtro-pago="todos" id="taller-pago-stat-todos">
-            <strong><?= count($filasEstadoPago) ?></strong>
-            <span>Total inscritos</span>
+        <button type="button" class="li-stat li-stat--filtro is-active" data-filtro-pago="todos" title="Ver todos los inscritos">
+            <strong><?= $total ?></strong>
+            <span>Inscritos</span>
         </button>
-        <button type="button" class="li-stat li-stat--ok li-stat--filtro" data-filtro-pago="pagados" id="taller-pago-stat-pagados">
+        <button type="button" class="li-stat li-stat--ok li-stat--filtro" data-filtro-pago="pagados" title="Ver quiénes pagaron">
             <strong><?= $nPagaron ?></strong>
             <span>Con pago</span>
         </button>
-        <button type="button" class="li-stat li-stat--warn li-stat--filtro" data-filtro-pago="sin_pago" id="taller-pago-stat-sin">
+        <button type="button" class="li-stat li-stat--warn li-stat--filtro" data-filtro-pago="sin_pago" title="Ver quiénes no han pagado">
             <strong><?= $nSinPago ?></strong>
             <span>Sin pago</span>
         </button>
@@ -777,79 +983,171 @@ foreach ($listaRespuestas as $respPago) {
             <span>Total recaudado</span>
         </div>
     </div>
-    <p id="taller-pago-resumen-filtro" class="li-resumen-filtro" hidden></p>
-    <div class="li-card">
-        <div class="li-table-wrap">
-            <table class="li-table" id="taller-pago-tabla">
-                <thead>
-                    <tr>
-                        <th class="t-left">Nombre</th>
-                        <th>Documento</th>
-                        <th>Teléfono</th>
-                        <th class="t-left">Ministerio</th>
-                        <th>Pago / Abono</th>
-                        <th>Tipo</th>
-                        <th>Método</th>
-                        <th>Responsable</th>
-                        <th>Fecha pago</th>
-                        <th>Valor</th>
-                    </tr>
-                </thead>
-                <tbody id="taller-pago-tbody">
-                    <?php if ($filasEstadoPago === []): ?>
-                    <tr class="taller-pago-empty"><td colspan="10" class="li-empty">Aún no hay inscritos en este taller.</td></tr>
-                    <?php else: ?>
-                    <?php foreach ($filasEstadoPago as $filaPago): ?>
-                    <tr class="taller-pago-fila"
-                        data-pago="<?= !empty($filaPago['pagado']) ? '1' : '0' ?>"
-                        data-valor="<?= htmlspecialchars((string)$filaPago['total'], ENT_QUOTES, 'UTF-8') ?>"
-                        data-busqueda="<?= htmlspecialchars($filaPago['busqueda'], ENT_QUOTES, 'UTF-8') ?>">
-                        <td class="t-left"><?= htmlspecialchars($filaPago['nombre'], ENT_QUOTES, 'UTF-8') ?></td>
-                        <td><?= htmlspecialchars($filaPago['documento'], ENT_QUOTES, 'UTF-8') ?></td>
-                        <td><?= htmlspecialchars($filaPago['telefono'], ENT_QUOTES, 'UTF-8') ?></td>
-                        <td class="t-left"><?= htmlspecialchars($filaPago['ministerio'], ENT_QUOTES, 'UTF-8') ?></td>
-                        <td>
-                            <?php if (!empty($filaPago['pagado'])): ?>
-                            <span class="pago-status ok">$<?= number_format($filaPago['total'], 0, ',', '.') ?></span>
-                            <?php else: ?>
-                            <span class="pago-status no">Sin pago</span>
-                            <?php endif; ?>
-                        </td>
-                        <td><?= htmlspecialchars($filaPago['tipo'] !== '' ? $filaPago['tipo'] : '—', ENT_QUOTES, 'UTF-8') ?></td>
-                        <td><?= htmlspecialchars($filaPago['metodo'] !== '' ? $filaPago['metodo'] : '—', ENT_QUOTES, 'UTF-8') ?></td>
-                        <td><?= htmlspecialchars($filaPago['recibido_por'] !== '' ? $filaPago['recibido_por'] : '—', ENT_QUOTES, 'UTF-8') ?></td>
-                        <td><?= htmlspecialchars($filaPago['fecha'] !== '' ? $filaPago['fecha'] : '—', ENT_QUOTES, 'UTF-8') ?></td>
-                        <td>$<?= number_format($filaPago['total'], 0, ',', '.') ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="9" class="t-left" id="taller-pago-tfoot-label">Total recaudado</td>
-                        <td id="taller-pago-tfoot-valor">$<?= number_format($totalPagosTaller, 0, ',', '.') ?></td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
+</div>
+<?php
+$resumenPagosResponsable = [];
+$pagosPorMedio = [];
+foreach ($listaPagosTaller as $pagoResumenFila) {
+    $responsablePago = trim((string)($pagoResumenFila['recibido_por'] ?? ''));
+    if ($responsablePago === '') {
+        $responsablePago = 'Sin responsable';
+    }
+    $medioPago = trim((string)($pagoResumenFila['metodo'] ?? ''));
+    if ($medioPago === '') {
+        $medioPago = 'Sin medio';
+    }
+    $claveResumenPago = strtolower($responsablePago) . '|' . strtolower($medioPago);
+    if (!isset($resumenPagosResponsable[$claveResumenPago])) {
+        $resumenPagosResponsable[$claveResumenPago] = [
+            'responsable' => $responsablePago,
+            'medio' => $medioPago,
+            'total' => 0.0,
+        ];
+    }
+    $resumenPagosResponsable[$claveResumenPago]['total'] += (float)($pagoResumenFila['valor'] ?? 0);
+
+    if (!isset($pagosPorMedio[$claveResumenPago])) {
+        $pagosPorMedio[$claveResumenPago] = [
+            'medio' => $medioPago,
+            'responsable' => $responsablePago,
+            'pagos' => [],
+        ];
+    }
+    $pagosPorMedio[$claveResumenPago]['pagos'][] = [
+        'nombre' => (string)($pagoResumenFila['nombre'] ?? 'Sin nombre'),
+        'valor' => (float)($pagoResumenFila['valor'] ?? 0),
+        'fecha' => (string)($pagoResumenFila['fecha'] ?? ''),
+    ];
+}
+uasort($resumenPagosResponsable, static function ($a, $b) {
+    $cmp = strcasecmp((string)$a['responsable'], (string)$b['responsable']);
+    if ($cmp !== 0) {
+        return $cmp;
+    }
+    return strcasecmp((string)$a['medio'], (string)$b['medio']);
+});
+?>
+<?php if ($resumenPagosResponsable !== []): ?>
+<section class="taller-pago-resumen-tabla" aria-label="Resumen de pagos">
+    <h3>Resumen de pagos</h3>
+    <p class="subtitulo">Total por quien recibió el pago y el medio usado. Clic en el medio para ver quiénes pagaron a esa persona por ese medio.</p>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Responsable</th>
+                    <th>Medio</th>
+                    <th class="num">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($resumenPagosResponsable as $filaResumenPago): ?>
+                <tr>
+                    <td><?= htmlspecialchars((string)$filaResumenPago['responsable'], ENT_QUOTES, 'UTF-8') ?></td>
+                    <td>
+                        <button type="button" class="taller-pago-medio-btn" data-clave="<?= htmlspecialchars(strtolower((string)$filaResumenPago['responsable']) . '|' . strtolower((string)$filaResumenPago['medio']), ENT_QUOTES, 'UTF-8') ?>">
+                            <?= htmlspecialchars((string)$filaResumenPago['medio'], ENT_QUOTES, 'UTF-8') ?>
+                        </button>
+                    </td>
+                    <td class="num">$<?= number_format((float)$filaResumenPago['total'], 0, ',', '.') ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="2">Total recaudado</td>
+                    <td class="num">$<?= number_format($totalPagosTaller, 0, ',', '.') ?></td>
+                </tr>
+            </tfoot>
+        </table>
     </div>
 </section>
+<div id="taller-pago-modal" class="taller-pago-modal" aria-hidden="true">
+    <div class="taller-pago-modal-fondo" data-cerrar-modal-pago></div>
+    <div class="taller-pago-modal-caja" role="dialog" aria-modal="true" aria-labelledby="taller-pago-modal-titulo">
+        <div class="taller-pago-modal-cabeza">
+            <div>
+                <h4 id="taller-pago-modal-titulo">Pagos</h4>
+                <p id="taller-pago-modal-sub"></p>
+            </div>
+            <button type="button" class="taller-pago-modal-cerrar" data-cerrar-modal-pago title="Cerrar" aria-label="Cerrar">×</button>
+        </div>
+        <div class="taller-pago-modal-cuerpo" id="taller-pago-modal-cuerpo"></div>
+    </div>
+</div>
+<script type="application/json" id="taller-pagos-por-medio"><?= json_encode($pagosPorMedio, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?></script>
+<script>
+(function() {
+    const modal = document.getElementById('taller-pago-modal');
+    const titulo = document.getElementById('taller-pago-modal-titulo');
+    const sub = document.getElementById('taller-pago-modal-sub');
+    const cuerpo = document.getElementById('taller-pago-modal-cuerpo');
+    const dataEl = document.getElementById('taller-pagos-por-medio');
+    if (!modal || !dataEl) return;
+    let datos = {};
+    try { datos = JSON.parse(dataEl.textContent || '{}') || {}; } catch (e) { datos = {}; }
+
+    function dinero(n) {
+        return '$' + Number(n || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 });
+    }
+    function cerrarModalPago() {
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+    function abrirModalPago(clave) {
+        const grupo = datos[clave];
+        if (!grupo) return;
+        const pagos = Array.isArray(grupo.pagos) ? grupo.pagos : [];
+        const medio = String(grupo.medio || 'Medio');
+        const responsable = String(grupo.responsable || '');
+        titulo.textContent = medio + ' · ' + responsable;
+        sub.textContent = pagos.length + ' pago' + (pagos.length === 1 ? '' : 's') + ' recibidos por ' + responsable;
+        let html = '<table class="taller-pago-modal-lista"><thead><tr><th>Nombre</th><th class="num">Valor</th></tr></thead><tbody>';
+        pagos.forEach(function(p) {
+            html += '<tr><td>' + escapeHtml(p.nombre || 'Sin nombre') + '</td><td class="num">' + dinero(p.valor) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        cuerpo.innerHTML = html;
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+    }
+    function escapeHtml(texto) {
+        return String(texto).replace(/[&<>"']/g, function(ch) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+        });
+    }
+    document.querySelectorAll('.taller-pago-medio-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            abrirModalPago(String(btn.getAttribute('data-clave') || ''));
+        });
+    });
+    modal.querySelectorAll('[data-cerrar-modal-pago]').forEach(function(el) {
+        el.addEventListener('click', cerrarModalPago);
+    });
+    document.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Escape' && modal.classList.contains('is-open')) {
+            cerrarModalPago();
+        }
+    });
+})();
+</script>
+<?php endif; ?>
+<?php endif; ?>
 
 <?php if (empty($listaRespuestas)): ?>
 <div class="taller-resp-empty">Aún no hay respuestas para este formulario.</div>
 <?php else: ?>
 <section class="taller-resp-resumen-ministerios" aria-label="Inscritos por ministerio">
     <h3>Inscritos por ministerio</h3>
-    <p class="subtitulo">Haga clic en un ministerio para ver las personas inscritas. En «Sin ministerio asignado» puede asignar ministerio y si es antigua o nueva con un clic.</p>
+    <p class="subtitulo" id="taller-filtro-aviso">Haga clic en <strong>Con pago</strong> o <strong>Sin pago</strong> para ver esas personas. También puede abrir un ministerio.</p>
     <div class="table-container">
         <div class="taller-min-header" aria-hidden="true">
             <span>#</span>
             <span>Ministerio</span>
-            <span class="col-total">Inscritos</span>
             <span></span>
         </div>
         <div id="lista-respuestas">
-            <?php foreach ($resumenPorMinisterio as $i => $filaResumen): ?>
+            <?php foreach ($resumenPorMinisterioLider12 as $i => $filaResumen): ?>
                 <?php
                 $nombreMinisterio = (string)($filaResumen['ministerio'] ?? 'Sin ministerio asignado');
                 $inscritosMin = $inscritosPorMinisterio[$nombreMinisterio] ?? [];
@@ -857,19 +1155,27 @@ foreach ($listaRespuestas as $respPago) {
                 if ($totalMin === 0) {
                     continue;
                 }
-                $esSinMinisterio = strcasecmp($nombreMinisterio, 'Sin ministerio asignado') === 0;
-                $abrirEsteGrupo = $abrirMinisterio !== ''
-                    ? strcasecmp($nombreMinisterio, $abrirMinisterio) === 0
-                    : $esSinMinisterio;
+                $abrirEsteMinisterio = $abrirMinisterio !== '' && strcasecmp($nombreMinisterio, $abrirMinisterio) === 0;
+                if (!$abrirEsteMinisterio && $idResaltar > 0) {
+                    foreach ($inscritosMin as $filaItem) {
+                        if ((int)($filaItem['id'] ?? 0) === $idResaltar) {
+                            $abrirEsteMinisterio = true;
+                            break;
+                        }
+                    }
+                }
                 ?>
-                <details class="taller-min-acordeon"<?= $abrirEsteGrupo ? ' open' : '' ?>>
+                <details class="taller-min-acordeon"<?= $abrirEsteMinisterio ? ' open' : '' ?>>
                     <summary>
                         <span class="taller-min-num"><?= (int)$i + 1 ?></span>
                         <span class="taller-min-nombre"><?= htmlspecialchars($nombreMinisterio, ENT_QUOTES, 'UTF-8') ?></span>
-                        <span class="col-total"><?= $totalMin ?></span>
                         <span class="taller-min-hint"></span>
                     </summary>
                     <div class="taller-min-lista taller-resp-list">
+                        <?php
+                        $nPagaronMin = 0;
+                        $nombresSinPagoMin = [];
+                        ?>
                         <?php foreach ($inscritosMin as $idx => $resp): ?>
         <?php
         $valores = is_array($resp['valores'] ?? null) ? $resp['valores'] : [];
@@ -882,51 +1188,49 @@ foreach ($listaRespuestas as $respPago) {
             ? taller_resp_valor($valores, 'padres_telefono')
             : taller_resp_valor($valores, 'persona_telefono');
         $fecha = substr((string)($resp['fecha'] ?? ''), 0, 16);
-        $busqueda = strtolower($nombre . ' ' . $documento . ' ' . $telefono . ' ' . $nombreMinisterio);
+        $ministerioPersona = trim((string)($resp['ministerio'] ?? ''));
+        if ($ministerioPersona === '') {
+            $ministerioPersona = 'Sin ministerio asignado';
+        }
+        $nombreLider12 = trim((string)($resp['lider_12'] ?? ''));
+        if ($nombreLider12 === '') {
+            $nombreLider12 = 'Sin líder de 12';
+        }
+        $esSinMinisterio = strcasecmp($ministerioPersona, 'Sin ministerio asignado') === 0;
+        $generoPersona = (string)($resp['genero'] ?? '');
+        $etiquetaGenero = $generoPersona === 'hombre' ? 'Hombre' : ($generoPersona === 'mujer' ? 'Mujer' : '');
+        $busqueda = strtolower($nombre . ' ' . $documento . ' ' . $telefono . ' ' . $nombreLider12 . ' ' . $ministerioPersona);
         $firmaImg = (string)($resp['firma_imagen'] ?? '');
         $idRespuesta = (int)($resp['id'] ?? 0);
         $totalPagado = (float)($resp['total_pagado'] ?? 0);
+        $pagadoFila = $totalPagado > 0;
+        if ($pagadoFila) {
+            $nPagaronMin++;
+        } else {
+            $nombresSinPagoMin[] = $nombre !== '' ? $nombre : 'Sin nombre';
+        }
+        $ultimoPago = $ultimoPagoPorRespuesta[$idRespuesta] ?? [];
+        $pagoTipo = trim((string)($ultimoPago['tipo'] ?? ''));
+        $pagoMetodo = trim((string)($ultimoPago['metodo'] ?? ''));
+        $pagoFecha = trim((string)($ultimoPago['fecha'] ?? ''));
+        $pagoRecibido = trim((string)($ultimoPago['recibido_por'] ?? ''));
         $documentosPresentacion = is_array($resp['documentos_presentacion'] ?? null) ? $resp['documentos_presentacion'] : [];
         $totalDocumentos = count($documentosPresentacion);
         $esResaltado = $idResaltar > 0 && $idResaltar === $idRespuesta;
         ?>
-        <details class="taller-resp-item<?= $esResaltado ? ' taller-resp-resaltado' : '' ?>" <?= $esResaltado ? 'open ' : '' ?>data-busqueda="<?= htmlspecialchars($busqueda, ENT_QUOTES, 'UTF-8') ?>" id="inscripcion-<?= (int)$idRespuesta ?>">
+        <details class="taller-resp-item<?= $esResaltado ? ' taller-resp-resaltado' : '' ?>" <?= $esResaltado ? 'open ' : '' ?>data-busqueda="<?= htmlspecialchars($busqueda, ENT_QUOTES, 'UTF-8') ?>" data-pago="<?= $pagadoFila ? '1' : '0' ?>" id="inscripcion-<?= (int)$idRespuesta ?>">
             <summary>
-                <span class="taller-resp-num">#<?= (int)($resp['id'] ?? ($idx + 1)) ?></span>
                 <div class="taller-resp-resumen">
                     <strong><?= htmlspecialchars($nombre !== '' ? $nombre : 'Sin nombre', ENT_QUOTES, 'UTF-8') ?></strong>
-                    <div class="taller-resp-meta">
-                        <?php if ($documento !== ''): ?><span>Doc. <?= htmlspecialchars($documento, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
-                        <?php if ($telefono !== ''): ?><span><?= htmlspecialchars($telefono, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
-                        <?php if ($fecha !== ''): ?><span><?= htmlspecialchars($fecha, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
-                        <?php if ((int)($resp['id_persona'] ?? 0) > 0): ?>
-                        <span>Persona #<?= (int)$resp['id_persona'] ?></span>
-                        <?php endif; ?>
-                        <?php if ($totalDocumentos > 0): ?>
-                        <span class="taller-resp-docs-badge" title="<?= $totalDocumentos ?> documento(s) adjunto(s)">📎 <?= $totalDocumentos ?> doc<?= $totalDocumentos === 1 ? '' : 's' ?></span>
-                        <?php endif; ?>
-                    </div>
-                    <?php if ($totalDocumentos > 0): ?>
-                    <div class="taller-resp-docs-quick">
-                        <?php foreach (array_slice($documentosPresentacion, 0, 3) as $docResumen): ?>
-                        <?php $urlDocRes = trim((string)($docResumen['url'] ?? '')); ?>
-                        <?php if ($urlDocRes !== ''): ?>
-                        <a href="<?= htmlspecialchars($urlDocRes, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" onclick="event.stopPropagation();" title="<?= htmlspecialchars((string)($docResumen['nombre'] ?? 'Documento'), ENT_QUOTES, 'UTF-8') ?>">
-                            <?= htmlspecialchars((string)($docResumen['nombre'] ?? 'Documento'), ENT_QUOTES, 'UTF-8') ?>
-                        </a>
-                        <?php endif; ?>
-                        <?php endforeach; ?>
-                        <?php if ($totalDocumentos > 3): ?>
-                        <span style="font-size:0.78rem;color:#64748b;">+<?= $totalDocumentos - 3 ?> más (ver detalle)</span>
-                        <?php endif; ?>
-                    </div>
-                    <?php endif; ?>
                 </div>
-                <?php if ($puedeEliminarInscripcion || $totalPagado > 0): ?>
-                <div class="taller-resp-pago" onclick="event.stopPropagation();">
+                <div class="taller-resp-pago">
+                    <span class="taller-resp-pago-status<?= $pagadoFila ? ' ok' : ' no' ?>"><?= $pagadoFila ? 'Pagó' : 'Sin pago' ?></span>
                     <div class="taller-resp-pago-acciones">
+                    <button type="button" class="taller-resp-pago-btn ver js-ver-detalle" title="Ver detalle" aria-label="Ver detalle">
+                        <i class="bi bi-eye"></i>
+                    </button>
                     <?php if ($puedeEliminarInscripcion): ?>
-                    <form method="post" action="<?= PUBLIC_URL ?>?url=talleres/respuestas/eliminar" style="margin:0;" onsubmit="return confirm('¿Eliminar esta inscripción del taller? La persona no se borra de Personas, solo sale de este listado.');">
+                    <form method="post" action="<?= PUBLIC_URL ?>?url=talleres/respuestas/eliminar" style="margin:0;" onclick="event.stopPropagation();" onsubmit="return confirm('¿Eliminar esta inscripción del taller? La persona no se borra de Personas, solo sale de este listado.');">
                         <input type="hidden" name="id" value="<?= (int)$id ?>">
                         <input type="hidden" name="id_respuesta" value="<?= (int)$idRespuesta ?>">
                         <button type="submit" class="taller-resp-pago-btn eliminar" title="Eliminar inscripción" aria-label="Eliminar inscripción">
@@ -935,11 +1239,7 @@ foreach ($listaRespuestas as $respPago) {
                     </form>
                     <?php endif; ?>
                     </div>
-                    <?php if ($totalPagado > 0): ?>
-                    <span class="taller-resp-pago-status ok">$<?= number_format($totalPagado, 0, ',', '.') ?></span>
-                    <?php endif; ?>
                 </div>
-                <?php endif; ?>
                 <?php if ($puedeAsignarMinisterio && !$esPresentacionNinos && $esSinMinisterio && $ministeriosAsignacion !== []): ?>
                 <form class="taller-asig-min" method="post" action="<?= PUBLIC_URL ?>?url=talleres/respuestas/asignar-ministerio" onclick="event.stopPropagation();" onsubmit="if(!this.id_ministerio.value){alert('Elija el ministerio.');return false;} if(!this.tipo_persona.value){alert('Elija si es antiguo o nuevo.');return false;}">
                     <input type="hidden" name="id" value="<?= (int)$id ?>">
@@ -1020,14 +1320,26 @@ foreach ($listaRespuestas as $respPago) {
             </div>
         </details>
                         <?php endforeach; ?>
+                        <?php $nSinPagoMin = count($nombresSinPagoMin); ?>
+                        <div class="taller-min-resumen">
+                            <div class="taller-min-resumen-kpis">
+                                <span><strong><?= (int)$totalMin ?></strong> inscritos</span>
+                                <span class="ok"><strong><?= (int)$nPagaronMin ?></strong> con pago</span>
+                                <span class="warn"><strong><?= (int)$nSinPagoMin ?></strong> faltan de pago</span>
+                            </div>
+                            <?php if ($nombresSinPagoMin !== []): ?>
+                            <p class="taller-min-resumen-faltan"><strong>Faltan de pago:</strong> <?= htmlspecialchars(implode(', ', $nombresSinPagoMin), ENT_QUOTES, 'UTF-8') ?></p>
+                            <?php else: ?>
+                            <p class="taller-min-resumen-ok">En este ministerio todos pagaron.</p>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </details>
             <?php endforeach; ?>
         </div>
         <div class="taller-min-header taller-min-total">
             <span></span>
-            <span>Total inscritos</span>
-            <span class="col-total"><?= (int)$total ?></span>
+            <span>Total inscritos: <?= (int)$total ?></span>
             <span></span>
         </div>
     </div>
@@ -1115,16 +1427,34 @@ foreach ($listaRespuestas as $respPago) {
 <script>
 (function() {
     const input = document.getElementById('filtro-respuestas');
+    const filtroPago = document.getElementById('taller-pago-filtro');
     const contador = document.getElementById('filtro-contador');
+    const aviso = document.getElementById('taller-filtro-aviso');
+    const lista = document.getElementById('lista-respuestas');
     const items = document.querySelectorAll('.taller-resp-item');
     const grupos = document.querySelectorAll('.taller-min-acordeon');
-    if (!input || !items.length) return;
+    const cards = document.querySelectorAll('.li-stat[data-filtro-pago]');
 
-    function filtrar() {
-        const q = input.value.trim().toLowerCase();
+    function textoAviso(modo, visibles) {
+        if (modo === 'pagados') {
+            return 'Mostrando ' + visibles + ' persona' + (visibles === 1 ? '' : 's') + ' con pago.';
+        }
+        if (modo === 'sin_pago') {
+            return 'Mostrando ' + visibles + ' persona' + (visibles === 1 ? '' : 's') + ' sin pago.';
+        }
+        return 'Haga clic en Con pago o Sin pago para ver esas personas. También puede abrir un ministerio.';
+    }
+
+    function filtrar(abrirCoincidencias) {
+        const q = input ? input.value.trim().toLowerCase() : '';
+        const modo = filtroPago ? String(filtroPago.value || 'todos') : 'todos';
         let visibles = 0;
         items.forEach(function(el) {
-            const ok = q === '' || (el.getAttribute('data-busqueda') || '').indexOf(q) >= 0;
+            const texto = (el.getAttribute('data-busqueda') || '');
+            const pagado = el.getAttribute('data-pago') === '1';
+            let ok = q === '' || texto.indexOf(q) >= 0;
+            if (ok && modo === 'pagados' && !pagado) ok = false;
+            if (ok && modo === 'sin_pago' && pagado) ok = false;
             el.classList.toggle('hidden-by-filter', !ok);
             if (ok) visibles++;
         });
@@ -1132,84 +1462,38 @@ foreach ($listaRespuestas as $respPago) {
             const hayVisibles = Array.from(grupo.querySelectorAll('.taller-resp-item')).some(function(el) {
                 return !el.classList.contains('hidden-by-filter');
             });
-            grupo.classList.toggle('hidden-by-filter', q !== '' && !hayVisibles);
-            if (q !== '' && hayVisibles) {
+            grupo.classList.toggle('hidden-by-filter', (q !== '' || modo !== 'todos') && !hayVisibles);
+            if (abrirCoincidencias && modo !== 'todos' && hayVisibles) {
+                grupo.setAttribute('open', 'open');
                 grupo.open = true;
             }
+        });
+        cards.forEach(function(card) {
+            card.classList.toggle('is-active', card.getAttribute('data-filtro-pago') === modo);
         });
         if (contador) {
             contador.textContent = visibles + ' mostradas';
         }
-    }
-
-    input.addEventListener('input', filtrar);
-})();
-</script>
-<script>
-(function() {
-    const buscar = document.getElementById('taller-pago-buscar');
-    const filtro = document.getElementById('taller-pago-filtro');
-    const filas = document.querySelectorAll('#taller-pago-tbody tr.taller-pago-fila');
-    const tfootLabel = document.getElementById('taller-pago-tfoot-label');
-    const tfootValor = document.getElementById('taller-pago-tfoot-valor');
-    const aviso = document.getElementById('taller-pago-resumen-filtro');
-    const cards = document.querySelectorAll('.taller-uv-pagos [data-filtro-pago]');
-    if (!filtro || !filas.length) return;
-
-    function formatoDinero(n) {
-        return '$' + Math.round(n).toLocaleString('es-CO');
-    }
-
-    function aplicarFiltro(origen) {
-        const q = buscar ? buscar.value.trim().toLowerCase() : '';
-        const modo = filtro.value;
-        let visibles = 0;
-        let suma = 0;
-        filas.forEach(function(tr) {
-            const pagado = tr.getAttribute('data-pago') === '1';
-            const texto = (tr.getAttribute('data-busqueda') || '');
-            let ok = true;
-            if (modo === 'pagados' && !pagado) ok = false;
-            if (modo === 'sin_pago' && pagado) ok = false;
-            if (q !== '' && texto.indexOf(q) === -1) ok = false;
-            tr.style.display = ok ? '' : 'none';
-            if (ok) {
-                visibles++;
-                suma += parseFloat(tr.getAttribute('data-valor') || '0') || 0;
-            }
-        });
-        if (tfootLabel) {
-            tfootLabel.textContent = 'Total recaudado (' + visibles + ' mostrada' + (visibles === 1 ? '' : 's') + ')';
-        }
-        if (tfootValor) {
-            tfootValor.textContent = formatoDinero(suma);
-        }
         if (aviso) {
-            if (modo === 'pagados') {
-                aviso.hidden = false;
-                aviso.textContent = 'Filtro: quién sí pagó';
-            } else if (modo === 'sin_pago') {
-                aviso.hidden = false;
-                aviso.textContent = 'Filtro: quién no pagó';
-            } else {
-                aviso.hidden = true;
-                aviso.textContent = '';
-            }
+            aviso.textContent = textoAviso(modo, visibles);
         }
-        cards.forEach(function(card) {
-            card.classList.toggle('is-active', card.getAttribute('data-filtro-pago') === modo);
-        });
     }
 
-    filtro.addEventListener('change', function() { aplicarFiltro('select'); });
-    if (buscar) buscar.addEventListener('input', function() { aplicarFiltro('buscar'); });
+    if (input) input.addEventListener('input', function() { filtrar(false); });
+    if (filtroPago) filtroPago.addEventListener('change', function() { filtrar(true); });
     cards.forEach(function(card) {
-        card.addEventListener('click', function() {
-            filtro.value = card.getAttribute('data-filtro-pago') || 'todos';
-            aplicarFiltro('card');
+        card.addEventListener('click', function(ev) {
+            ev.preventDefault();
+            const modo = card.getAttribute('data-filtro-pago') || 'todos';
+            if (filtroPago) {
+                filtroPago.value = modo;
+            }
+            filtrar(true);
+            if (lista && modo !== 'todos') {
+                lista.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         });
     });
-    aplicarFiltro('init');
 })();
 </script>
 <script>
@@ -1227,6 +1511,42 @@ foreach ($listaRespuestas as $respPago) {
                 el.classList.toggle('activo', el === btn);
             });
         });
+    });
+})();
+</script>
+<script>
+(function() {
+    function syncOjo(item) {
+        const btn = item.querySelector('.js-ver-detalle');
+        const icon = btn ? btn.querySelector('i') : null;
+        if (!btn || !icon) {
+            return;
+        }
+        icon.className = item.open ? 'bi bi-eye-slash' : 'bi bi-eye';
+        const etiqueta = item.open ? 'Ocultar detalle' : 'Ver detalle';
+        btn.setAttribute('title', etiqueta);
+        btn.setAttribute('aria-label', etiqueta);
+    }
+
+    document.querySelectorAll('.taller-resp-item').forEach(function(item) {
+        item.addEventListener('toggle', function() {
+            syncOjo(item);
+        });
+        syncOjo(item);
+    });
+
+    document.addEventListener('click', function(ev) {
+        const btn = ev.target.closest('.js-ver-detalle');
+        if (!btn) {
+            return;
+        }
+        ev.preventDefault();
+        ev.stopPropagation();
+        const item = btn.closest('.taller-resp-item');
+        if (!item) {
+            return;
+        }
+        item.open = !item.open;
     });
 })();
 </script>

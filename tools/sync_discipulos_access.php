@@ -1,6 +1,6 @@
- <?php
-// Sincroniza acceso para discipulos existentes sin usuario.
-// Regla: Usuario = Numero_Documento, Contrasena = hash bcrypt de Numero_Documento, Estado_Cuenta = Activo.
+<?php
+// Sincroniza acceso ministerial para discípulos sin fila en usuario_acceso.
+// Usuario = cédula, clave = hash de la cédula, estado de acceso = Activo.
 // Uso:
 //   php tools/sync_discipulos_access.php --dry-run
 //   php tools/sync_discipulos_access.php --apply
@@ -70,10 +70,12 @@ try {
     exit(1);
 }
 
-$sql = "SELECT p.Id_Persona, p.Numero_Documento, p.Usuario, p.Id_Rol, r.Nombre_Rol
+$sql = "SELECT p.Id_Persona, p.Numero_Documento, p.Id_Rol, p.Id_Ministerio, r.Nombre_Rol,
+               TRIM(CONCAT(COALESCE(p.Nombre, ''), ' ', COALESCE(p.Apellido, ''))) AS Nombre_Mostrar
         FROM persona p
         INNER JOIN rol r ON r.Id_Rol = p.Id_Rol
         INNER JOIN escuela_formacion_inscripcion efi ON efi.Id_Persona = p.Id_Persona
+        LEFT JOIN usuario_acceso ua ON ua.Id_Persona = p.Id_Persona
         WHERE (
             p.Id_Rol = 2
             OR LOWER(r.Nombre_Rol) LIKE '%discipul%'
@@ -81,15 +83,15 @@ $sql = "SELECT p.Id_Persona, p.Numero_Documento, p.Usuario, p.Id_Rol, r.Nombre_R
             OR LOWER(r.Nombre_Rol) LIKE '%discipl%'
             OR LOWER(r.Nombre_Rol) LIKE '%disipl%'
         )
-        AND (p.Usuario IS NULL OR TRIM(p.Usuario) = '')
+        AND ua.Id_Usuario_Acceso IS NULL
         AND (p.Numero_Documento IS NOT NULL AND TRIM(p.Numero_Documento) <> '')
-        GROUP BY p.Id_Persona, p.Numero_Documento, p.Usuario, p.Id_Rol, r.Nombre_Rol
+        GROUP BY p.Id_Persona, p.Numero_Documento, p.Id_Rol, p.Id_Ministerio, r.Nombre_Rol, p.Nombre, p.Apellido
         ORDER BY p.Id_Persona ASC";
 
 $rows = $pdo->query($sql)->fetchAll();
 $total = count($rows);
 
-echo "Discipulos sin usuario detectados: {$total}\n";
+echo "Discipulos sin cuenta de acceso: {$total}\n";
 
 if ($total === 0) {
     exit(0);
@@ -111,22 +113,50 @@ if ($dryRun) {
     exit(0);
 }
 
-$update = $pdo->prepare("UPDATE persona
-                        SET Usuario = ?,
-                            Contrasena = ?,
-                            Estado_Cuenta = 'Activo'
-                        WHERE Id_Persona = ?");
+$insert = $pdo->prepare("INSERT INTO usuario_acceso
+    (Usuario, Contrasena, Nombre_Mostrar, Id_Rol, Id_Ministerio, Id_Persona, Estado_Cuenta)
+    VALUES (?, ?, ?, ?, ?, ?, 'Activo')");
+$existeUsuario = $pdo->prepare("SELECT Id_Usuario_Acceso FROM usuario_acceso WHERE Usuario = ? LIMIT 1");
 
 $updated = 0;
+$omitidas = 0;
 $pdo->beginTransaction();
 try {
     foreach ($rows as $r) {
         $doc = trim((string)$r['Numero_Documento']);
-        if ($doc === '') {
+        $idPersona = (int)$r['Id_Persona'];
+        $idRol = (int)$r['Id_Rol'];
+        if ($doc === '' || $idPersona <= 0 || $idRol <= 0) {
+            $omitidas++;
             continue;
         }
+        $existeUsuario->execute([$doc]);
+        if ($existeUsuario->fetch()) {
+            $omitidas++;
+            continue;
+        }
+        $idMinisterio = (int)($r['Id_Ministerio'] ?? 0);
+        $nombre = trim((string)($r['Nombre_Mostrar'] ?? ''));
         $hash = password_hash($doc, PASSWORD_BCRYPT);
-        $ok = $update->execute([$doc, $hash, (int)$r['Id_Persona']]);
+        try {
+            $ok = $insert->execute([
+                $doc,
+                $hash,
+                $nombre !== '' ? $nombre : $doc,
+                $idRol,
+                $idMinisterio > 0 ? $idMinisterio : null,
+                $idPersona,
+            ]);
+        } catch (Throwable $e) {
+            $ok = $insert->execute([
+                $doc,
+                $hash,
+                $nombre !== '' ? $nombre : $doc,
+                $idRol,
+                null,
+                $idPersona,
+            ]);
+        }
         if ($ok) {
             $updated++;
         }
@@ -142,12 +172,14 @@ try {
     exit(1);
 }
 
-echo "Actualizados: {$updated}\n";
+echo "Creadas: {$updated}\n";
+echo "Omitidas: {$omitidas}\n";
 
 $verifySql = "SELECT COUNT(*) AS total
               FROM persona p
               INNER JOIN rol r ON r.Id_Rol = p.Id_Rol
               INNER JOIN escuela_formacion_inscripcion efi ON efi.Id_Persona = p.Id_Persona
+              LEFT JOIN usuario_acceso ua ON ua.Id_Persona = p.Id_Persona
               WHERE (
                   p.Id_Rol = 2
                   OR LOWER(r.Nombre_Rol) LIKE '%discipul%'
@@ -155,8 +187,8 @@ $verifySql = "SELECT COUNT(*) AS total
                   OR LOWER(r.Nombre_Rol) LIKE '%discipl%'
                   OR LOWER(r.Nombre_Rol) LIKE '%disipl%'
               )
-              AND (p.Usuario IS NULL OR TRIM(p.Usuario) = '')
+              AND ua.Id_Usuario_Acceso IS NULL
               AND (p.Numero_Documento IS NOT NULL AND TRIM(p.Numero_Documento) <> '')";
 
 $left = (int)$pdo->query($verifySql)->fetchColumn();
-echo "Pendientes sin usuario despues de sincronizar: {$left}\n";
+echo "Pendientes sin cuenta de acceso despues de sincronizar: {$left}\n";

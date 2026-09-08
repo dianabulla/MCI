@@ -214,6 +214,51 @@ class Celula extends BaseModel {
     }
 
     /**
+     * Miembros activos y personas nuevas (casilla Nuevo) por célula, sin contar al líder.
+     *
+     * @return array<int, array{asistentes:int, nuevas:int}>
+     */
+    public function getConteoAsistentesYNuevosPorCelulas(array $idsCelula, bool $contarNuevasPorEsAntiguo = true): array {
+        $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function($id) {
+            return $id > 0;
+        })));
+
+        if (empty($idsCelula)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));
+        $colNuevas = $contarNuevasPorEsAntiguo
+            ? 'COUNT(DISTINCT CASE WHEN COALESCE(p.Es_Antiguo, 1) = 0 THEN p.Id_Persona END)'
+            : '0';
+
+        $sql = "SELECT c.Id_Celula,
+                       COUNT(DISTINCT p.Id_Persona) AS Asistentes,
+                       {$colNuevas} AS Nuevas
+                FROM {$this->table} c
+                LEFT JOIN persona p
+                  ON p.Id_Celula = c.Id_Celula
+                 AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                 AND (c.Id_Lider IS NULL OR p.Id_Persona <> c.Id_Lider)
+                WHERE c.Id_Celula IN ({$placeholders})
+                GROUP BY c.Id_Celula";
+
+        $mapa = [];
+        foreach ($this->query($sql, $idsCelula) as $row) {
+            $idCelula = (int)($row['Id_Celula'] ?? 0);
+            if ($idCelula <= 0) {
+                continue;
+            }
+            $mapa[$idCelula] = [
+                'asistentes' => (int)($row['Asistentes'] ?? 0),
+                'nuevas' => (int)($row['Nuevas'] ?? 0),
+            ];
+        }
+
+        return $mapa;
+    }
+
+    /**
      * Personas activas únicas en un conjunto de células (sin duplicar entre células ni contar líderes).
      */
     public function contarMiembrosActivosUnicosEnCelulas(array $idsCelula): int {

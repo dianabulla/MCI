@@ -118,11 +118,10 @@ $mesActual = (int)($mes_actual ?? (int)date('n'));
                     </div>
 
                     <div class="form-group teen-profesor-field">
-                        <label for="profesor_busqueda">Maestro de la semana</label>
+                        <label for="profesor_busqueda">Nombre del maestro</label>
                         <input type="hidden" id="id_profesor" name="id_profesor" value="">
-                        <input type="text" id="profesor_busqueda" name="profesor_busqueda" class="form-control"
-                               placeholder="Buscar en personas o escribir nombre" autocomplete="off">
-                        <input type="hidden" id="profesor_nombre" name="profesor_nombre" value="">
+                        <input type="text" id="profesor_busqueda" name="profesor_nombre" class="form-control"
+                               placeholder="Escribe el nombre o busca una persona" autocomplete="off">
                         <div id="profesor_sugerencias" class="teen-sugerencias"></div>
                     </div>
 
@@ -392,7 +391,7 @@ $mesActual = (int)($mes_actual ?? (int)date('n'));
 
                                 <div class="teen-week-folder__body">
                                     <?php if ($puedeEditar && $gestionCompleta): ?>
-                                    <form method="POST" action="<?= PUBLIC_URL ?>index.php?url=teen/asignar-profesor" class="teen-week-prof-form">
+                                    <form method="POST" action="<?= PUBLIC_URL ?>index.php?url=teen/asignar-profesor" class="teen-week-prof-form" onclick="event.stopPropagation();">
                                         <input type="hidden" name="anio" value="<?= (int)$anioSeleccionado ?>">
                                         <input type="hidden" name="mes" value="<?= (int)$numMes ?>">
                                         <input type="hidden" name="semana_mes" value="<?= $s ?>">
@@ -400,10 +399,10 @@ $mesActual = (int)($mes_actual ?? (int)date('n'));
                                             <input type="hidden" name="id_material" value="<?= $idMaterial ?>">
                                         <?php endif; ?>
                                         <input type="hidden" name="id_profesor" value="<?= (int)($material['id_profesor'] ?? 0) ?>" class="js-id-profesor-semana">
-                                        <input type="text" name="profesor_busqueda" value="<?= htmlspecialchars($profesorNombre, ENT_QUOTES, 'UTF-8') ?>"
+                                        <label class="teen-week-prof-label">Nombre del maestro</label>
+                                        <input type="text" name="profesor_nombre" value="<?= htmlspecialchars($profesorNombre, ENT_QUOTES, 'UTF-8') ?>"
                                                class="form-control form-control-sm js-profesor-semana-input"
-                                               placeholder="Asignar maestro" autocomplete="off">
-                                        <input type="hidden" name="profesor_nombre" value="<?= htmlspecialchars($profesorNombre, ENT_QUOTES, 'UTF-8') ?>" class="js-profesor-nombre-semana">
+                                               placeholder="Escribe el nombre del maestro" autocomplete="off">
                                         <button type="submit" class="btn btn-xs btn-secondary">Guardar maestro</button>
                                     </form>
                                     <?php elseif ($profesorNombre !== ''): ?>
@@ -1441,7 +1440,21 @@ $mesActual = (int)($mes_actual ?? (int)date('n'));
     margin-bottom: 8px;
 }
 
-.teen-week-prof-form .form-control { max-width: 260px; }
+.teen-week-prof-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px;
+    margin: 10px 0 8px;
+}
+.teen-week-prof-label {
+    flex: 1 1 100%;
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #334155;
+}
+.teen-week-prof-form .form-control { max-width: 280px; flex: 1 1 180px; }
 
 .teen-week-files {
     list-style: none;
@@ -1664,7 +1677,6 @@ function preseleccionarSemana(mes, semana) {
 
         var form = input.closest('form');
         var hiddenId = form ? form.querySelector('.js-id-profesor-semana, #id_profesor') : null;
-        var hiddenNombre = form ? form.querySelector('.js-profesor-nombre-semana, #profesor_nombre') : null;
         var timer = null;
 
         function cerrarLista() {
@@ -1675,13 +1687,11 @@ function preseleccionarSemana(mes, semana) {
         function seleccionarPersona(id, nombre) {
             input.value = nombre;
             if (hiddenId) hiddenId.value = String(id || '');
-            if (hiddenNombre) hiddenNombre.value = nombre;
             cerrarLista();
         }
 
         input.addEventListener('input', function () {
             if (hiddenId) hiddenId.value = '';
-            if (hiddenNombre) hiddenNombre.value = input.value.trim();
             var term = input.value.trim();
             if (term.length < 2 || !urlBuscar) {
                 cerrarLista();
