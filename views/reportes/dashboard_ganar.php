@@ -196,6 +196,7 @@ $semaforoInfo = [
 .dash-celulas-rango-form input[type="date"] { padding:6px 10px; border-radius:8px; border:1px solid #d1d5db; font-size:.88rem; }
 .dash-cel-metrica-btn { border:none; background:none; padding:0; font:inherit; font-weight:600; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
 .dash-cel-metrica-btn.is-alerta { color:#dc2626; }
+.dash-cel-metrica-btn.is-personas { color:#1d4ed8; }
 .dash-cel-metrica-btn.is-neutral { color:#64748b; }
 .dash-cel-metrica-btn:hover { opacity:.85; }
 .dash-cel-detalle-modal { position:fixed; inset:0; z-index:1200; display:flex; align-items:center; justify-content:center; padding:16px; }
@@ -622,13 +623,8 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
     </form>
 
     <small style="color:#64748b; display:block; margin-bottom:12px;">
-        Agrupado por ministerio. Incluye líderes de célula y líderes de 12 que dirigen célula.
-        Datos del
-        <?= $reporteCelulasFechaDesde !== '' ? date('d/m/Y', strtotime($reporteCelulasFechaDesde)) : '—' ?>
-        al <?= $reporteCelulasFechaHasta !== '' ? date('d/m/Y', strtotime($reporteCelulasFechaHasta)) : '—' ?>.
-        Semanas sin entregar sobre = semanas con reporte de asistencia pero sin marcar la casilla de sobre entregado.
-        Semanas sin reportar = semanas consecutivas desde el último reporte de asistencia (marcar sobre no cuenta como reporte).
-        Clic en el número para ver el detalle por semana.
+        Agrupado por ministerio y célula. Nuevos / antiguas según la ficha. Frecuente = 3 o más reuniones asistidas en esa célula; Regular = menos de 3.
+        Clic en un número para ver las personas o el detalle de semanas. Cierre con la X.
     </small>
     <?php
     $renderMetricaCelulasClick = static function(int $valor, array $detalle, string $tituloModal, string $nombreLider, string $tipo) {
@@ -637,7 +633,7 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
         }
 
         $ayuda = $tipo === 'sin_sobre'
-            ? 'En estas semanas la célula sí reportó asistencia, pero en la pantalla de Asistencias no quedó marcada la casilla «Sobre entregado».'
+            ? 'En estas semanas la célula sí reportó asistencia, pero no quedó marcada la casilla «Sobre entregado» al reportar la célula.'
             : 'Estas son las semanas consecutivas sin reporte de asistencia de célula. Marcar solo el sobre no cuenta como reporte.';
 
         $payload = htmlspecialchars(json_encode([
@@ -652,16 +648,36 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
         return '<button type="button" class="dash-cel-metrica-btn is-alerta" data-detalle="' . $payload
             . '" title="Ver detalle de semanas">' . $valor . '</button>';
     };
+    $renderPersonasCelulasClick = static function(int $valor, array $personas, string $tituloModal, string $nombreCelula, string $nombreLider) {
+        if ($valor <= 0) {
+            return '<span style="color:#64748b;">0</span>';
+        }
+
+        $payload = htmlspecialchars(json_encode([
+            'titulo' => $tituloModal,
+            'celula' => $nombreCelula,
+            'lider' => $nombreLider,
+            'tipo' => 'personas',
+            'total' => $valor,
+            'items' => array_values($personas),
+        ], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+
+        return '<button type="button" class="dash-cel-metrica-btn is-personas" data-detalle="' . $payload
+            . '" title="Ver personas">' . $valor . '</button>';
+    };
     ?>
     <div class="table-container">
         <table class="dash-min-table">
             <thead>
                 <tr>
                     <th>#</th>
+                    <th>Célula</th>
                     <th>Líder</th>
-                    <th>Tipo</th>
-                    <th>Células</th>
                     <th>Asistentes</th>
+                    <th>Nuevos</th>
+                    <th>Antiguas</th>
+                    <th>Frecuentes</th>
+                    <th>Regulares</th>
                     <th>Sem. sin entregar sobre</th>
                     <th>Sem. sin reportar</th>
                 </tr>
@@ -672,42 +688,72 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
                 foreach ($reporteCelulasGrupos as $grupoCel):
                     $ministerioGrupo = (string)($grupoCel['ministerio'] ?? 'Sin ministerio');
                     $subtotalesGrupo = is_array($grupoCel['subtotales'] ?? null) ? $grupoCel['subtotales'] : [];
-                    $lideresGrupo = is_array($grupoCel['lideres'] ?? null) ? $grupoCel['lideres'] : [];
+                    $filasGrupo = is_array($grupoCel['filas'] ?? null) ? $grupoCel['filas'] : [];
+                    if ($filasGrupo === []) {
+                        foreach ((array)($grupoCel['lideres'] ?? []) as $rowLiderLegacy) {
+                            $filasGrupo[] = [
+                                'celula' => (string)($rowLiderLegacy['lider'] ?? ''),
+                                'lider' => (string)($rowLiderLegacy['lider'] ?? ''),
+                                'asistentes' => (int)($rowLiderLegacy['asistentes'] ?? 0),
+                                'nuevos' => 0,
+                                'antiguas' => 0,
+                                'frecuentes' => 0,
+                                'regulares' => 0,
+                                'asistentes_personas' => [],
+                                'nuevos_personas' => [],
+                                'antiguas_personas' => [],
+                                'frecuentes_personas' => [],
+                                'regulares_personas' => [],
+                                'semanas_sin_entregar_sobre' => (int)($rowLiderLegacy['semanas_sin_entregar_sobre'] ?? 0),
+                                'semanas_sin_reportar' => (int)($rowLiderLegacy['semanas_sin_reportar'] ?? 0),
+                                'detalle_sin_entregar_sobre' => $rowLiderLegacy['detalle_sin_entregar_sobre'] ?? [],
+                                'detalle_sin_reportar' => $rowLiderLegacy['detalle_sin_reportar'] ?? [],
+                            ];
+                        }
+                    }
                 ?>
                 <tr style="background:#eef2ff;">
-                    <td colspan="7" style="font-weight:700; color:#3730a3;">
+                    <td colspan="10" style="font-weight:700; color:#3730a3;">
                         Ministerio: <?= htmlspecialchars($ministerioGrupo) ?>
-                        · <?= count($lideresGrupo) ?> líder(es)
-                        · <?= (int)($subtotalesGrupo['celulas'] ?? 0) ?> célula(s)
+                        · <?= (int)($subtotalesGrupo['celulas'] ?? count($filasGrupo)) ?> célula(s)
                     </td>
                 </tr>
-                <?php foreach ($lideresGrupo as $rowCel): ?>
+                <?php foreach ($filasGrupo as $rowCel):
+                    $nombreCelulaFila = (string)($rowCel['celula'] ?? '');
+                    $nombreLiderFila = (string)($rowCel['lider'] ?? '');
+                ?>
                 <tr>
                     <td style="color:#94a3b8;"><?= $nReporteCel++ ?></td>
-                    <td style="font-weight:600;"><?= htmlspecialchars((string)($rowCel['lider'] ?? '')) ?></td>
-                    <td><?= htmlspecialchars((string)($rowCel['tipo'] ?? '')) ?></td>
-                    <td><?= (int)($rowCel['celulas'] ?? 0) ?></td>
-                    <td><?= (int)($rowCel['asistentes'] ?? 0) ?></td>
+                    <td style="font-weight:600;"><?= htmlspecialchars($nombreCelulaFila) ?></td>
+                    <td><?= htmlspecialchars($nombreLiderFila) ?></td>
+                    <td><?= $renderPersonasCelulasClick((int)($rowCel['asistentes'] ?? 0), is_array($rowCel['asistentes_personas'] ?? null) ? $rowCel['asistentes_personas'] : [], 'Asistentes', $nombreCelulaFila, $nombreLiderFila) ?></td>
+                    <td><?= $renderPersonasCelulasClick((int)($rowCel['nuevos'] ?? 0), is_array($rowCel['nuevos_personas'] ?? null) ? $rowCel['nuevos_personas'] : [], 'Asistentes nuevos', $nombreCelulaFila, $nombreLiderFila) ?></td>
+                    <td><?= $renderPersonasCelulasClick((int)($rowCel['antiguas'] ?? 0), is_array($rowCel['antiguas_personas'] ?? null) ? $rowCel['antiguas_personas'] : [], 'Asistentes antiguas', $nombreCelulaFila, $nombreLiderFila) ?></td>
+                    <td><?= $renderPersonasCelulasClick((int)($rowCel['frecuentes'] ?? 0), is_array($rowCel['frecuentes_personas'] ?? null) ? $rowCel['frecuentes_personas'] : [], 'Asistentes frecuentes', $nombreCelulaFila, $nombreLiderFila) ?></td>
+                    <td><?= $renderPersonasCelulasClick((int)($rowCel['regulares'] ?? 0), is_array($rowCel['regulares_personas'] ?? null) ? $rowCel['regulares_personas'] : [], 'Asistentes regulares', $nombreCelulaFila, $nombreLiderFila) ?></td>
                     <td><?= $renderMetricaCelulasClick(
                         (int)($rowCel['semanas_sin_entregar_sobre'] ?? 0),
                         is_array($rowCel['detalle_sin_entregar_sobre'] ?? null) ? $rowCel['detalle_sin_entregar_sobre'] : [],
                         'Semanas sin entregar sobre',
-                        (string)($rowCel['lider'] ?? ''),
+                        $nombreLiderFila,
                         'sin_sobre'
                     ) ?></td>
                     <td><?= $renderMetricaCelulasClick(
                         (int)($rowCel['semanas_sin_reportar'] ?? 0),
                         is_array($rowCel['detalle_sin_reportar'] ?? null) ? $rowCel['detalle_sin_reportar'] : [],
                         'Semanas sin reportar célula',
-                        (string)($rowCel['lider'] ?? ''),
+                        $nombreLiderFila,
                         'sin_reportar'
                     ) ?></td>
                 </tr>
                 <?php endforeach; ?>
                 <tr style="background:#f8fafc; font-weight:600;">
                     <td colspan="3" style="text-align:right;">Subtotal <?= htmlspecialchars($ministerioGrupo) ?></td>
-                    <td><?= (int)($subtotalesGrupo['celulas'] ?? 0) ?></td>
                     <td><?= (int)($subtotalesGrupo['asistentes'] ?? 0) ?></td>
+                    <td><?= (int)($subtotalesGrupo['nuevos'] ?? 0) ?></td>
+                    <td><?= (int)($subtotalesGrupo['antiguas'] ?? 0) ?></td>
+                    <td><?= (int)($subtotalesGrupo['frecuentes'] ?? 0) ?></td>
+                    <td><?= (int)($subtotalesGrupo['regulares'] ?? 0) ?></td>
                     <td><?= (int)($subtotalesGrupo['semanas_sin_entregar_sobre'] ?? 0) ?></td>
                     <td><?= (int)($subtotalesGrupo['semanas_sin_reportar'] ?? 0) ?></td>
                 </tr>
@@ -716,8 +762,11 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
             <tfoot>
                 <tr style="background:#f8fafc; font-weight:700;">
                     <td colspan="3">TOTAL GENERAL</td>
-                    <td><?= (int)($reporteCelulasTotales['celulas'] ?? 0) ?></td>
                     <td><?= (int)($reporteCelulasTotales['asistentes'] ?? 0) ?></td>
+                    <td><?= (int)($reporteCelulasTotales['nuevos'] ?? 0) ?></td>
+                    <td><?= (int)($reporteCelulasTotales['antiguas'] ?? 0) ?></td>
+                    <td><?= (int)($reporteCelulasTotales['frecuentes'] ?? 0) ?></td>
+                    <td><?= (int)($reporteCelulasTotales['regulares'] ?? 0) ?></td>
                     <td><?= (int)($reporteCelulasTotales['semanas_sin_entregar_sobre'] ?? 0) ?></td>
                     <td><?= (int)($reporteCelulasTotales['semanas_sin_reportar'] ?? 0) ?></td>
                 </tr>
@@ -777,6 +826,48 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
 
         function abrirModal(payload) {
             if (!payload || !Array.isArray(payload.items)) return;
+
+            if (payload.tipo === 'personas') {
+                var totalPers = payload.total || payload.items.length;
+                titulo.textContent = payload.titulo || 'Personas';
+                subtitulo.textContent = [payload.celula ? ('Célula: ' + payload.celula) : '', payload.lider ? ('Líder: ' + payload.lider) : '']
+                    .filter(Boolean).join(' · ');
+                ayuda.hidden = true;
+                ayuda.textContent = '';
+                resumen.textContent = totalPers === 1
+                    ? '1 persona'
+                    : (totalPers + ' personas');
+
+                if (payload.items.length === 0) {
+                    contenedor.innerHTML = '<div class="dash-cel-detalle-vacio">No hay personas para mostrar.</div>';
+                    modal.hidden = false;
+                    return;
+                }
+
+                var filasPers = payload.items.map(function(item, index) {
+                    return '<tr>'
+                        + '<td class="col-num">' + (index + 1) + '</td>'
+                        + '<td>' + escapeHtml(item.nombre || '') + '</td>'
+                        + '<td>' + escapeHtml(item.documento || 'N/A') + '</td>'
+                        + '<td>' + escapeHtml(item.telefono || 'N/A') + '</td>'
+                        + '<td>' + escapeHtml(item.tipo || '') + '</td>'
+                        + '<td>' + escapeHtml(item.frecuencia || '') + '</td>'
+                        + '<td>' + escapeHtml(String(item.asistencias != null ? item.asistencias : '')) + '</td>'
+                        + '</tr>';
+                }).join('');
+
+                contenedor.innerHTML = '<table class="dash-cel-detalle-table"><thead><tr>'
+                    + '<th class="col-num">#</th>'
+                    + '<th>Nombre</th>'
+                    + '<th>Documento</th>'
+                    + '<th>Teléfono</th>'
+                    + '<th>Tipo</th>'
+                    + '<th>Frecuencia</th>'
+                    + '<th>Asistencias</th>'
+                    + '</tr></thead><tbody>' + filasPers + '</tbody></table>';
+                modal.hidden = false;
+                return;
+            }
 
             var tipo = payload.tipo === 'sin_sobre' ? 'sin_sobre' : 'sin_reportar';
             var total = payload.total || payload.items.length;

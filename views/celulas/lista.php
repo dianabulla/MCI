@@ -46,6 +46,21 @@
             </select>
         </div>
 
+        <?php if (!empty($puede_marcar_entrego_sobre)): ?>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="semana_sobre">Semana del sobre (lun. a dom.)</label>
+            <input type="date" id="semana_sobre" name="semana_sobre" class="form-control"
+                   value="<?= htmlspecialchars((string)($semana_sobre_referencia ?? $semana_inicio_sobre ?? '')) ?>"
+                   max="<?= htmlspecialchars(date('Y-m-d')) ?>">
+            <small style="color:#637087; display:block; margin-top:4px;">
+                <?= !empty($semana_inicio_sobre) && !empty($semana_fin_sobre)
+                    ? (date('d/m/Y', strtotime((string)$semana_inicio_sobre)) . ' – ' . date('d/m/Y', strtotime((string)$semana_fin_sobre)))
+                    : '' ?>
+                <?= !empty($es_semana_vencida_sobre) ? ' · Semana vencida' : '' ?>
+            </small>
+        </div>
+        <?php endif; ?>
+
         <div class="form-group" style="margin-bottom: 0; display: flex; gap: 8px;">
             <button type="submit" class="btn btn-primary">Filtrar</button>
             <a href="<?= PUBLIC_URL ?>?url=celulas" class="btn btn-secondary">Limpiar</a>
@@ -53,6 +68,7 @@
     </form>
 </div>
 
+<?php if (!empty($puedeVerMaterialCelulasEnEnviar)): ?>
 <div class="enviar-submodules-cards" style="margin: 28px 0; padding: 0;">
     <div class="enviar-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px;">
         <?php if ($puedeVerMaterialCelulasEnEnviar): ?>
@@ -95,52 +111,14 @@
             </div>
         </a>
         <?php endif; ?>
-
-        <?php if ($puedeVerAsistenciasEnEnviar): ?>
-        <a href="<?= PUBLIC_URL ?>?url=asistencias" class="enviar-card-link" style="text-decoration: none; transition: transform 0.2s ease, box-shadow 0.2s ease;">
-            <div class="enviar-card" style="
-                background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%);
-                border: 2px solid #059669;
-                border-radius: 12px;
-                padding: 24px;
-                height: 100%;
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between;
-                cursor: pointer;
-                transition: all 0.2s ease;
-            ">
-                <div>
-                    <div class="enviar-card-icon" style="
-                        display: inline-flex;
-                        align-items: center;
-                        justify-content: center;
-                        width: 50px;
-                        height: 50px;
-                        background: #059669;
-                        color: white;
-                        border-radius: 10px;
-                        margin-bottom: 16px;
-                        font-size: 24px;
-                    ">
-                        <i class="bi bi-check2-square"></i>
-                    </div>
-                    <h3 style="margin: 0 0 8px 0; color: #1f2937; font-size: 18px; font-weight: 700;">Asistencias</h3>
-                    <p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.5;">
-                        Registra y visualiza la asistencia semanal de las células. Mantén el control de reportes.
-                    </p>
-                </div>
-                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(5, 150, 105, 0.2);">
-                    <span style="color: #059669; font-weight: 600; font-size: 13px;">Ver asistencias →</span>
-                </div>
-            </div>
-        </a>
-        <?php endif; ?>
     </div>
 </div>
+<?php endif; ?>
 
 <?php
 $sections = is_array($sections ?? null) ? $sections : [];
+$puedeMarcarEntregoSobre = !empty($puede_marcar_entrego_sobre);
+$semanaInicioSobre = (string)($semana_inicio_sobre ?? '');
 $ministerioGrupos = [];
 foreach ($sections as $section) {
     $ministerio = trim((string)($section['ministerio'] ?? ''));
@@ -201,6 +179,9 @@ $slugMinisterio = static function ($texto) {
                     <tr>
                         <th>Célula</th>
                         <th style="width:120px;">Asistentes</th>
+                        <?php if ($puedeMarcarEntregoSobre): ?>
+                            <th style="width:130px;">Sobre entregado</th>
+                        <?php endif; ?>
                         <th>Acción</th>
                     </tr>
                 </thead>
@@ -213,6 +194,22 @@ $slugMinisterio = static function ($texto) {
                                     <?= (int)($section['total_personas'] ?? 0) ?>
                                 </span>
                             </td>
+                            <?php if ($puedeMarcarEntregoSobre): ?>
+                            <td>
+                                <?php $entregoSobreCel = !empty($section['entrego_sobre']); ?>
+                                <div class="entrego-sobre-row entrego-sobre-row--table" data-id-celula="<?= (int)$section['id_celula'] ?>" data-semana-inicio="<?= htmlspecialchars($semanaInicioSobre) ?>">
+                                    <label class="entrego-sobre-opt is-si <?= $entregoSobreCel ? 'is-active' : '' ?>">
+                                        <input type="radio" name="entrego_sobre_<?= (int)$section['id_celula'] ?>" value="1" class="entrego-sobre-radio" <?= $entregoSobreCel ? 'checked' : '' ?>>
+                                        Sí
+                                    </label>
+                                    <label class="entrego-sobre-opt is-no <?= !$entregoSobreCel ? 'is-active' : '' ?>">
+                                        <input type="radio" name="entrego_sobre_<?= (int)$section['id_celula'] ?>" value="0" class="entrego-sobre-radio" <?= !$entregoSobreCel ? 'checked' : '' ?>>
+                                        No
+                                    </label>
+                                    <span class="entrego-sobre-status" aria-live="polite"></span>
+                                </div>
+                            </td>
+                            <?php endif; ?>
                             <td>
                                 <div class="celulas-actions-row">
                                     <a href="<?= PUBLIC_URL ?>?url=celulas/detalle&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon" title="Ver personas" aria-label="Ver personas">
@@ -375,10 +372,61 @@ $slugMinisterio = static function ($texto) {
 }
 
 .celulas-action-btn--delete {
-    background: #fff0f1;
-    border-color: #f0d0d4;
+    background: #fff1f1;
+    border-color: #f0c9c9;
     color: #9b2e3a;
 }
+
+.entrego-sobre-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.entrego-sobre-opt {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: 999px;
+    border: 1px solid #d6e1f0;
+    background: #f6f9ff;
+    color: #64748b;
+    font-weight: 700;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.entrego-sobre-opt input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.entrego-sobre-opt.is-si.is-active {
+    background: #e9f8ef;
+    border-color: #c6ebd4;
+    color: #1f7a44;
+}
+
+.entrego-sobre-opt.is-no.is-active {
+    background: #fff1f1;
+    border-color: #f0c9c9;
+    color: #9b2e3a;
+}
+
+.entrego-sobre-status {
+    font-size: 11px;
+    color: #64748b;
+    min-height: 14px;
+}
+
+.entrego-sobre-status.success { color: #1f7a44; }
+.entrego-sobre-status.error { color: #b42318; }
 
 .celulas-action-btn--delete:hover {
     background: #ffe4e7;
@@ -542,6 +590,81 @@ $slugMinisterio = static function ($texto) {
                 if (target !== '') {
                     activarMinisterio(target, true);
                 }
+            });
+        });
+    })();
+
+    (function() {
+        const radios = Array.from(document.querySelectorAll('.entrego-sobre-radio'));
+        radios.forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                const row = radio.closest('.entrego-sobre-row');
+                if (!row) return;
+                const idCelula = String(row.dataset.idCelula || '');
+                const semanaInicio = String(row.dataset.semanaInicio || '');
+                const entregoSobre = radio.value === '1' ? '1' : '0';
+                const status = row.querySelector('.entrego-sobre-status');
+                const radiosFila = Array.from(row.querySelectorAll('.entrego-sobre-radio'));
+                const valorPrevio = entregoSobre === '1' ? '0' : '1';
+
+                radiosFila.forEach(function(r) { r.disabled = true; });
+                row.querySelectorAll('.entrego-sobre-opt').forEach(function(opt) {
+                    const r = opt.querySelector('.entrego-sobre-radio');
+                    opt.classList.toggle('is-active', !!(r && r.checked));
+                });
+                if (status) {
+                    status.textContent = 'Guardando...';
+                    status.classList.remove('success', 'error');
+                }
+
+                fetch('<?= PUBLIC_URL ?>?url=asistencias/actualizarEntregoSobre', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json'
+                    },
+                    body: 'id_celula=' + encodeURIComponent(idCelula)
+                        + '&semana_inicio=' + encodeURIComponent(semanaInicio)
+                        + '&entrego_sobre=' + encodeURIComponent(entregoSobre)
+                })
+                .then(function(response) { return response.text(); })
+                .then(function(text) {
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        throw new Error('Respuesta invalida');
+                    }
+                })
+                .then(function(data) {
+                    radiosFila.forEach(function(r) { r.disabled = false; });
+                    if (!data || !data.success) {
+                        throw new Error((data && data.error) ? data.error : 'No se pudo guardar');
+                    }
+                    if (status) {
+                        status.textContent = 'Guardado';
+                        status.classList.remove('error');
+                        status.classList.add('success');
+                        setTimeout(function() {
+                            status.textContent = '';
+                            status.classList.remove('success');
+                        }, 1400);
+                    }
+                })
+                .catch(function() {
+                    radiosFila.forEach(function(r) {
+                        r.disabled = false;
+                        r.checked = r.value === valorPrevio;
+                    });
+                    row.querySelectorAll('.entrego-sobre-opt').forEach(function(opt) {
+                        const r = opt.querySelector('.entrego-sobre-radio');
+                        opt.classList.toggle('is-active', r && r.checked);
+                    });
+                    if (status) {
+                        status.textContent = 'Error';
+                        status.classList.remove('success');
+                        status.classList.add('error');
+                    }
+                });
             });
         });
     })();

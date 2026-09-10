@@ -611,7 +611,7 @@
             <div class="success-box" id="panel-exito-registro">
                 <strong>¡Registro completado!</strong>
                 <p style="margin:12px 0 0;"><?= htmlspecialchars((string)$mensaje) ?></p>
-                <p style="margin:8px 0 0; font-size:13px; color:#55706d;">Los datos se guardaron correctamente.</p>
+                <p style="margin:8px 0 0; font-size:13px; color:#55706d;">Inscripción y documentos procesados correctamente.</p>
                 <div class="success-actions">
                     <a class="btn" href="<?= htmlspecialchars($urlRegistrarOtra, ENT_QUOTES, 'UTF-8') ?>">Registrar otra respuesta</a>
                 </div>
@@ -654,9 +654,9 @@
             }
             $segmentoUvSeleccionado = (string)($old['segmento_preferido'] ?? '');
             $segmentosUvOpciones = [
-                'jovenes' => 'Encuentro de jóvenes',
-                'mujeres_adultas' => 'Mujeres',
                 'hombres_adultos' => 'Hombres',
+                'mujeres_adultas' => 'Mujeres',
+                'jovenes' => 'Jóvenes',
                 'teens' => 'Teens',
             ];
             ?>
@@ -798,7 +798,7 @@
                                     </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <p class="help" style="margin-top:6px;">Elija el grupo al que pertenece para el encuentro (jóvenes, mujeres, hombres o teens).</p>
+                                <p class="help" style="margin-top:6px;">Elija el grupo al que pertenece para el encuentro: hombres, mujeres, jóvenes o teens.</p>
                             </div>
                         <?php elseif ($ocultarSelectorPrograma): ?>
                             <div class="field full">
@@ -872,7 +872,7 @@
                         Puede seleccionar <strong>varios archivos a la vez</strong> (PDF, JPG, PNG, WEBP, DOC o DOCX; máx. 8 MB c/u).
                         Si la persona ya está inscrita en Universidad de la Vida, pulse «Guardar documentos»; si es inscripción nueva, se adjuntan al enviar el formulario.
                     </p>
-                    <div id="msg-documentos-exito" class="alert success" style="display:none; margin:0 0 12px;">Documentos cargados con éxito</div>
+                    <div id="msg-documentos-exito" class="alert success" style="display:none; margin:0 0 12px;">Inscripción con éxito y documentos cargados exitosamente.</div>
                     <input type="file" id="documentos_uv" name="documentos_uv[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,image/*,application/pdf" style="display:none;">
                     <div class="doc-upload-actions">
                         <button type="button" class="btn btn-secondary" id="btn-subir-documentos">+ Agregar archivos</button>
@@ -2916,7 +2916,7 @@
             }
             renderListaDocumentosSubidos(json.documentos || []);
             limpiarColaArchivosPendientes();
-            const mensajeExito = 'Documentos cargados con éxito';
+            const mensajeExito = 'Inscripción con éxito y documentos cargados exitosamente.';
             if (msgDocumentosExito) {
                 msgDocumentosExito.textContent = mensajeExito;
                 msgDocumentosExito.style.display = '';

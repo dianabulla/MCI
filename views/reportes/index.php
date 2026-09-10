@@ -484,10 +484,12 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
 
 </div>
 
+<?php if (!$esReporteCelulas): ?>
 <div class="report-top-strip" id="reportTopStrip" style="margin-bottom: 14px;">
     <button type="button" class="report-top-strip-tab" data-mode="resumen">Ver reporte</button>
     <button type="button" class="report-top-strip-tab" data-mode="tablas">Ver tablas</button>
 </div>
+<?php endif; ?>
 
 <div class="card report-card report-toolbar-card" style="margin-bottom: 18px; padding: 14px;">
     <div class="report-toolbar-actions" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
@@ -510,6 +512,14 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     <form method="GET" action="<?= PUBLIC_URL ?>index.php" class="filters-inline report-compact-form" style="padding: 18px;">
         <input type="hidden" name="url" value="reportes">
         <input type="hidden" name="tipo" value="<?= htmlspecialchars($tipoReporte) ?>">
+        <?php if ($esReporteCelulas): ?>
+            <?php if (!empty($cel_filtro_desde)): ?>
+                <input type="hidden" name="cel_desde" value="<?= htmlspecialchars((string)$cel_filtro_desde) ?>">
+            <?php endif; ?>
+            <?php if (!empty($cel_filtro_hasta)): ?>
+                <input type="hidden" name="cel_hasta" value="<?= htmlspecialchars((string)$cel_filtro_hasta) ?>">
+            <?php endif; ?>
+        <?php endif; ?>
 
         <div class="form-group report-date-group" style="margin: 0;">
             <label for="fecha_referencia">Semana a consultar (lun. a dom.)</label>
@@ -525,6 +535,136 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
         </div>
     </form>
 </div>
+
+<?php if ($esReporteCelulas): ?>
+<?php
+$tablaOperativaFormUrl = 'reportes';
+$anio = (int)($anio_reporte_celulas ?? date('Y'));
+$filtroMinisterio = (string)($filtro_ministerio ?? '');
+$filtroLider = (string)($filtro_lider ?? '');
+$celFiltroDesde = (string)($cel_filtro_desde ?? '');
+$celFiltroHasta = (string)($cel_filtro_hasta ?? '');
+$reporteCelulasPorLider = $reporte_celulas_por_lider ?? ['grupos' => [], 'totales' => [], 'fecha_desde' => '', 'fecha_hasta' => ''];
+$tablaOperativaHiddenExtras = ['tipo' => 'celulas'];
+if (!empty($fecha_referencia)) {
+    $tablaOperativaHiddenExtras['fecha_referencia'] = (string)$fecha_referencia;
+}
+$exportCelulasPorLiderUrl = PUBLIC_URL . 'index.php?url=reportes/dashboard-ganar/exportar-celulas-lider&anio=' . $anio;
+if ($filtroMinisterio !== '') {
+    $exportCelulasPorLiderUrl .= '&ministerio=' . urlencode($filtroMinisterio);
+}
+if ($filtroLider !== '') {
+    $exportCelulasPorLiderUrl .= '&lider=' . urlencode($filtroLider);
+}
+if ($celFiltroDesde !== '') {
+    $exportCelulasPorLiderUrl .= '&cel_desde=' . urlencode($celFiltroDesde);
+}
+if ($celFiltroHasta !== '') {
+    $exportCelulasPorLiderUrl .= '&cel_hasta=' . urlencode($celFiltroHasta);
+}
+$celFiltroResetUrl = PUBLIC_URL . 'index.php?url=reportes&tipo=celulas';
+if ($filtroMinisterio !== '') {
+    $celFiltroResetUrl .= '&ministerio=' . urlencode($filtroMinisterio);
+}
+if ($filtroLider !== '') {
+    $celFiltroResetUrl .= '&lider=' . urlencode($filtroLider);
+}
+if (!empty($fecha_referencia)) {
+    $celFiltroResetUrl .= '&fecha_referencia=' . urlencode((string)$fecha_referencia);
+}
+include VIEWS . '/reportes/partials/tabla_operativa_celulas.php';
+?>
+
+<div id="reporteCelulasAperturas" class="card report-card report-metas-card" style="margin-bottom: 22px;">
+    <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
+        <div>
+            <h3 style="margin-bottom:4px;">Células abiertas por ministerio (<?= (int)($tablaAperturasCelulas['anio'] ?? date('Y')) ?>)</h3>
+            <small style="color:#60708a;">Mes a mes con acumulados por semestre y total anual</small>
+        </div>
+        <?php if (!empty($tablaAperturasCelulas['rows'])): ?>
+            <button type="button" class="btn btn-secondary btn-sm js-export-tabla-celulas-imagen" data-tabla-id="tablaCelulasAbiertasMinisterio">Descargar tabla como imagen</button>
+        <?php endif; ?>
+    </div>
+
+    <?php if (!empty($tablaAperturasCelulas['rows'])): ?>
+        <div class="table-container table-container--always-visible reporte-metas-wrap">
+            <table class="data-table reporte-metas-table reporte-celulas-abiertas-table" id="tablaCelulasAbiertasMinisterio">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="width:48px;">N°</th>
+                        <th rowspan="2" style="width:240px;">MINISTERIO</th>
+                        <th colspan="12">MESES</th>
+                        <th rowspan="2" style="width:70px;">S1</th>
+                        <th rowspan="2" style="width:70px;">S2</th>
+                        <th rowspan="2" style="width:76px;">AÑO</th>
+                    </tr>
+                    <tr>
+                        <?php for ($m = 1; $m <= 12; $m++): ?>
+                            <th><?= htmlspecialchars((string)($tablaAperturasCelulas['meses'][$m] ?? '')) ?></th>
+                        <?php endfor; ?>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php $nroCel = 1; ?>
+                    <?php foreach (($tablaAperturasCelulas['rows'] ?? []) as $row): ?>
+                        <tr>
+                            <td><?= $nroCel++ ?></td>
+                            <td>
+                                <button type="button" class="report-link-button js-ministerio-celula" data-ministerio="<?= htmlspecialchars((string)($row['ministerio'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                    <?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio')) ?>
+                                </button>
+                            </td>
+                            <?php for ($m = 1; $m <= 12; $m++): ?>
+                                <td><?= (int)($row['meses'][$m] ?? 0) ?></td>
+                            <?php endfor; ?>
+                            <td><strong><?= (int)($row['s1'] ?? 0) ?></strong></td>
+                            <td><strong><?= (int)($row['s2'] ?? 0) ?></strong></td>
+                            <td><strong><?= (int)($row['anual'] ?? 0) ?></strong></td>
+                        </tr>
+                    <?php endforeach; ?>
+
+                    <tr class="reporte-metas-total-row">
+                        <td colspan="2"><strong>TOTAL</strong></td>
+                        <?php for ($m = 1; $m <= 12; $m++): ?>
+                            <td><strong><?= (int)($tablaAperturasCelulas['totales']['meses'][$m] ?? 0) ?></strong></td>
+                        <?php endfor; ?>
+                        <td><strong><?= (int)($tablaAperturasCelulas['totales']['s1'] ?? 0) ?></strong></td>
+                        <td><strong><?= (int)($tablaAperturasCelulas['totales']['s2'] ?? 0) ?></strong></td>
+                        <td><strong><?= (int)($tablaAperturasCelulas['totales']['anual'] ?? 0) ?></strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    <?php else: ?>
+        <div class="report-empty-state">
+            Sin aperturas registradas para este año.
+            <br>
+            <small>Tip: este cuadro usa la fecha de apertura de cada célula.</small>
+        </div>
+    <?php endif; ?>
+
+    <div id="detalleMinisterioCelulas" class="report-subpanel" style="display:none; margin-top:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+            <h4 id="detalleMinisterioCelulasTitulo" style="margin:0;">Líderes con aperturas</h4>
+            <button type="button" id="detalleMinisterioCelulasCerrar" class="btn btn-secondary btn-sm">Cerrar</button>
+        </div>
+        <small style="display:block; color:#60708a; margin-bottom:8px;">Asistentes = miembros activos de las células que abrió (sin contar al líder). Nuevas = personas con casilla Nuevo.</small>
+        <div class="table-container table-container--always-visible">
+            <table class="data-table data-table--compacta-celula">
+                <thead>
+                    <tr>
+                        <th>Líder</th>
+                        <th style="width:120px;">Células abiertas</th>
+                        <th style="width:120px;">Asistentes</th>
+                        <th style="width:120px;">Nuevas</th>
+                    </tr>
+                </thead>
+                <tbody id="detalleMinisterioCelulasBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <div id="reportesVisualContainer">
 
@@ -1233,93 +1373,6 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
     </div>
 </div>
 
-<div id="reporteCelulasAperturas" class="card report-card report-metas-card report-table-only" style="margin-bottom: 22px;">
-    <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
-        <div>
-            <h3 style="margin-bottom:4px;">Células abiertas por ministerio (<?= (int)($tablaAperturasCelulas['anio'] ?? date('Y')) ?>)</h3>
-            <small style="color:#60708a;">Mes a mes con acumulados por semestre y total anual</small>
-        </div>
-    </div>
-
-    <?php if (!empty($tablaAperturasCelulas['rows'])): ?>
-        <div class="table-container reporte-metas-wrap">
-            <table class="data-table reporte-metas-table reporte-celulas-abiertas-table">
-                <thead>
-                    <tr>
-                        <th rowspan="2" style="width:48px;">N°</th>
-                        <th rowspan="2" style="width:240px;">MINISTERIO</th>
-                        <th colspan="12">MESES</th>
-                        <th rowspan="2" style="width:70px;">S1</th>
-                        <th rowspan="2" style="width:70px;">S2</th>
-                        <th rowspan="2" style="width:76px;">AÑO</th>
-                    </tr>
-                    <tr>
-                        <?php for ($m = 1; $m <= 12; $m++): ?>
-                            <th><?= htmlspecialchars((string)($tablaAperturasCelulas['meses'][$m] ?? '')) ?></th>
-                        <?php endfor; ?>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php $nroCel = 1; ?>
-                    <?php foreach (($tablaAperturasCelulas['rows'] ?? []) as $row): ?>
-                        <tr>
-                            <td><?= $nroCel++ ?></td>
-                            <td>
-                                <button type="button" class="report-link-button js-ministerio-celula" data-ministerio="<?= htmlspecialchars((string)($row['ministerio'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                    <?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio')) ?>
-                                </button>
-                            </td>
-                            <?php for ($m = 1; $m <= 12; $m++): ?>
-                                <td><?= (int)($row['meses'][$m] ?? 0) ?></td>
-                            <?php endfor; ?>
-                            <td><strong><?= (int)($row['s1'] ?? 0) ?></strong></td>
-                            <td><strong><?= (int)($row['s2'] ?? 0) ?></strong></td>
-                            <td><strong><?= (int)($row['anual'] ?? 0) ?></strong></td>
-                        </tr>
-                    <?php endforeach; ?>
-
-                    <tr class="reporte-metas-total-row">
-                        <td colspan="2"><strong>TOTAL</strong></td>
-                        <?php for ($m = 1; $m <= 12; $m++): ?>
-                            <td><strong><?= (int)($tablaAperturasCelulas['totales']['meses'][$m] ?? 0) ?></strong></td>
-                        <?php endfor; ?>
-                        <td><strong><?= (int)($tablaAperturasCelulas['totales']['s1'] ?? 0) ?></strong></td>
-                        <td><strong><?= (int)($tablaAperturasCelulas['totales']['s2'] ?? 0) ?></strong></td>
-                        <td><strong><?= (int)($tablaAperturasCelulas['totales']['anual'] ?? 0) ?></strong></td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    <?php else: ?>
-        <div class="report-empty-state">
-            Sin aperturas registradas para este año.
-            <br>
-            <small>Tip: este cuadro usa la fecha de apertura de cada célula.</small>
-        </div>
-    <?php endif; ?>
-
-    <div id="detalleMinisterioCelulas" class="report-subpanel" style="display:none; margin-top:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-            <h4 id="detalleMinisterioCelulasTitulo" style="margin:0;">Líderes con aperturas</h4>
-            <button type="button" id="detalleMinisterioCelulasCerrar" class="btn btn-secondary btn-sm">Cerrar</button>
-        </div>
-        <small style="display:block; color:#60708a; margin-bottom:8px;">Asistentes = miembros activos de las células que abrió (sin contar al líder). Nuevas = personas con casilla Nuevo.</small>
-        <div class="table-container">
-            <table class="data-table data-table--compacta-celula">
-                <thead>
-                    <tr>
-                        <th>Líder</th>
-                        <th style="width:120px;">Células abiertas</th>
-                        <th style="width:120px;">Asistentes</th>
-                        <th style="width:120px;">Nuevas</th>
-                    </tr>
-                </thead>
-                <tbody id="detalleMinisterioCelulasBody"></tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
 <div id="reporteCelulasAsistencia" class="card report-card report-chart-only" style="margin-bottom: 22px;">
     <h3>Asistencia a células</h3>
     <div id="chartAsistencia"></div>
@@ -1453,7 +1506,9 @@ const aplicarModoReporte = (modo) => {
 
 let reporteModoInicial = 'resumen';
 
-if (reportModeButtons.length) {
+if (tipoReporte === 'celulas') {
+    reporteModoInicial = 'resumen';
+} else if (reportModeButtons.length) {
     reportModeButtons.forEach((btn) => {
         btn.addEventListener('click', () => {
             const modoSeleccionado = String(btn.dataset.mode || 'resumen');
@@ -1475,6 +1530,8 @@ if (reportModeButtons.length) {
         // Mantener valor por defecto.
     }
 }
+
+aplicarModoReporte(reporteModoInicial);
 
 const slugTexto = (valor) => String(valor || '')
     .toLowerCase()
@@ -1841,7 +1898,7 @@ document.addEventListener('click', (evento) => {
         contenedor,
         baseNombre,
         boton,
-        exigirVisible: true,
+        exigirVisible: tipoReporte !== 'celulas',
         mensajeNoVisible: 'Para descargar esta tabla, primero hazla visible en la vista de tablas.'
     });
 });

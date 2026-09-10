@@ -47,6 +47,26 @@ unset($_SESSION['asistencia_flash_error']);
                 <span>No se realizó</span>
             </label>
             <small class="form-text text-muted">Márcala cuando la célula no pudo reunirse; las asistencias quedarán en no asistió.</small>
+
+            <div id="motivo_no_realizo_wrap" class="motivo-no-realizo-wrap" hidden>
+                <p class="motivo-no-realizo-title">¿Por qué no se realizó?</p>
+                <label class="motivo-no-realizo-option">
+                    <input type="radio" name="motivo_no_realizo" value="convencion" disabled>
+                    <span>Convención</span>
+                </label>
+                <label class="motivo-no-realizo-option">
+                    <input type="radio" name="motivo_no_realizo" value="actividades_iglesia" disabled>
+                    <span>Actividades de la iglesia</span>
+                </label>
+                <label class="motivo-no-realizo-option">
+                    <input type="radio" name="motivo_no_realizo" value="otro" disabled>
+                    <span>Otro</span>
+                </label>
+                <div class="form-group" style="margin: 10px 0 0;">
+                    <label for="motivo_no_realizo_otro">Especifique</label>
+                    <input type="text" id="motivo_no_realizo_otro" name="motivo_no_realizo_otro" class="form-control" placeholder="Escriba el motivo" disabled>
+                </div>
+            </div>
         </div>
 
         <div class="form-group">
@@ -134,6 +154,30 @@ unset($_SESSION['asistencia_flash_error']);
     accent-color: #dc2626;
 }
 
+.motivo-no-realizo-wrap {
+    margin-top: 12px;
+    padding: 12px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.motivo-no-realizo-title {
+    margin: 0 0 8px;
+    font-weight: 700;
+    color: #1e3a5f;
+}
+
+.motivo-no-realizo-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+    font-weight: 500;
+    color: #334155;
+    cursor: pointer;
+}
+
 .no-disponible-modal {
     position: fixed;
     inset: 0;
@@ -182,6 +226,9 @@ const celulaAutocomplete = document.getElementById('celula_autocomplete');
 const personaNuevaLink = document.getElementById('persona_nueva_link');
 const noSeRealizoCheck = document.getElementById('no_se_realizo');
 const observacionesInput = document.getElementById('observaciones');
+const motivoNoRealizoWrap = document.getElementById('motivo_no_realizo_wrap');
+const motivoNoRealizoRadios = Array.from(document.querySelectorAll('input[name="motivo_no_realizo"]'));
+const motivoNoRealizoOtro = document.getElementById('motivo_no_realizo_otro');
 const urlMarcarNoDisponible = '<?= PUBLIC_URL ?>?url=asistencias/marcarNoDisponible';
 const modalNoDisponible = document.getElementById('modalNoDisponible');
 const modalNoDisponiblePersona = document.getElementById('noDisponiblePersona');
@@ -216,6 +263,16 @@ function cerrarModalNoDisponible() {
     }
 }
 
+function syncMotivoOtroState() {
+    const otroMarcado = motivoNoRealizoRadios.some((radio) => radio.checked && radio.value === 'otro');
+    if (motivoNoRealizoOtro) {
+        motivoNoRealizoOtro.disabled = !otroMarcado;
+        if (!otroMarcado) {
+            motivoNoRealizoOtro.value = '';
+        }
+    }
+}
+
 function syncNoSeRealizoState() {
     const checksAsistencia = document.querySelectorAll('#lista-miembros input[type="checkbox"][name^="asistencias["]');
     const bloqueado = !!(noSeRealizoCheck && noSeRealizoCheck.checked);
@@ -232,19 +289,24 @@ function syncNoSeRealizoState() {
         }
     });
 
-    if (observacionesInput) {
-        const valor = observacionesInput.value.trim();
-        if (bloqueado && valor === '') {
-            observacionesInput.value = 'No se realizó';
-        } else if (!bloqueado && valor === 'No se realizó') {
-            observacionesInput.value = '';
-        }
+    if (motivoNoRealizoWrap) {
+        motivoNoRealizoWrap.hidden = !bloqueado;
     }
+    motivoNoRealizoRadios.forEach((radio) => {
+        radio.disabled = !bloqueado;
+        if (!bloqueado) {
+            radio.checked = false;
+        }
+    });
+    syncMotivoOtroState();
 }
 
 if (noSeRealizoCheck) {
     noSeRealizoCheck.addEventListener('change', syncNoSeRealizoState);
 }
+motivoNoRealizoRadios.forEach((radio) => {
+    radio.addEventListener('change', syncMotivoOtroState);
+});
 
 function actualizarEnlacePersonaNueva(celulaId) {
     if (!personaNuevaLink) return;
@@ -618,6 +680,21 @@ if (formAsistencia) {
         if (!idCelula) {
             window.alert('Selecciona una célula para reportar.');
             return;
+        }
+
+        if (noSeRealizoCheck && noSeRealizoCheck.checked) {
+            const motivoElegido = motivoNoRealizoRadios.find((radio) => radio.checked);
+            if (!motivoElegido) {
+                window.alert('Indica por qué no se realizó la célula.');
+                return;
+            }
+            if (motivoElegido.value === 'otro' && !(motivoNoRealizoOtro && motivoNoRealizoOtro.value.trim())) {
+                window.alert('Escribe el motivo en Otro.');
+                if (motivoNoRealizoOtro) {
+                    motivoNoRealizoOtro.focus();
+                }
+                return;
+            }
         }
 
         const btn = formAsistencia.querySelector('button[type="submit"]');

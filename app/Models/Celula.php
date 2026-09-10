@@ -13,6 +13,7 @@ class Celula extends BaseModel {
         parent::__construct();
         $this->ensureCamposReporteCelulas();
         $this->ensureCampoTipoCelula();
+        $this->ensureCamposFichaDiagrama();
     }
 
     private function columnExists($columnName) {
@@ -57,6 +58,23 @@ class Celula extends BaseModel {
     }
 
     /**
+     * Campos de ficha alineados al diagrama (INT, no UUID). Sin valor_sobre.
+     * Entrego_sobre / reportó se quedan en asistencias por semana.
+     */
+    private function ensureCamposFichaDiagrama() {
+        try {
+            if (!$this->columnExists('Id_Ministerio')) {
+                $this->execute("ALTER TABLE {$this->table} ADD COLUMN Id_Ministerio INT NULL AFTER Id_Lider");
+            }
+            if (!$this->columnExists('Id_Pastor')) {
+                $this->execute("ALTER TABLE {$this->table} ADD COLUMN Id_Pastor INT NULL AFTER Pastor_Principal");
+            }
+        } catch (Throwable $e) {
+            error_log('No fue posible asegurar Id_Ministerio/Id_Pastor en celula: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Crear célula estableciendo metadatos de apertura cuando existen las columnas.
      */
     public function create($data) {
@@ -75,14 +93,32 @@ class Celula extends BaseModel {
      * Obtener célula por ID con nombre del líder
      */
     public function getById($id) {
+        $joinPastor = $this->columnExists('Id_Pastor')
+            ? 'LEFT JOIN persona pa ON c.Id_Pastor = pa.Id_Persona'
+            : '';
+        $selectPastor = $this->columnExists('Id_Pastor')
+            ? "CONCAT(pa.Nombre, ' ', pa.Apellido) as Nombre_Pastor,"
+            : 'NULL as Nombre_Pastor,';
+        $joinMinisterio = $this->columnExists('Id_Ministerio')
+            ? 'LEFT JOIN ministerio minc ON c.Id_Ministerio = minc.Id_Ministerio'
+            : '';
+        $selectMinisterio = $this->columnExists('Id_Ministerio')
+            ? 'minc.Nombre_Ministerio as Nombre_Ministerio,'
+            : 'NULL as Nombre_Ministerio,';
+
         $sql = "SELECT c.*, 
                 CONCAT(p.Nombre, ' ', p.Apellido) as Nombre_Lider,
                 CONCAT(li.Nombre, ' ', li.Apellido) as Nombre_Lider_Inmediato,
-                CONCAT(an.Nombre, ' ', an.Apellido) as Nombre_Anfitrion
+                CONCAT(an.Nombre, ' ', an.Apellido) as Nombre_Anfitrion,
+                {$selectPastor}
+                {$selectMinisterio}
+                an.Telefono as Telefono_Persona_Anfitrion
                 FROM {$this->table} c
                 LEFT JOIN persona p ON c.Id_Lider = p.Id_Persona
                 LEFT JOIN persona li ON c.Id_Lider_Inmediato = li.Id_Persona
                 LEFT JOIN persona an ON c.Id_Anfitrion = an.Id_Persona
+                {$joinPastor}
+                {$joinMinisterio}
                 WHERE c.{$this->primaryKey} = ?";
         $result = $this->query($sql, [$id]);
         return $result[0] ?? null;
@@ -117,7 +153,7 @@ class Celula extends BaseModel {
                 LEFT JOIN persona p ON c.Id_Celula = p.Id_Celula
                 LEFT JOIN persona l ON c.Id_Lider = l.Id_Persona
                 LEFT JOIN persona an ON c.Id_Anfitrion = an.Id_Persona
-                WHERE l.Id_Ministerio = ?
+                WHERE COALESCE(c.Id_Ministerio, l.Id_Ministerio) = ?
                 GROUP BY c.Id_Celula
                 ORDER BY c.Nombre_Celula";
         return $this->query($sql, [$idMinisterio]);
@@ -146,13 +182,13 @@ class Celula extends BaseModel {
                 COUNT(CASE WHEN p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL THEN 1 END) as Total_Miembros,
                 CONCAT(l.Nombre, ' ', l.Apellido) as Nombre_Lider,
                 CONCAT(an.Nombre, ' ', an.Apellido) as Nombre_Anfitrion,
-                l.Id_Ministerio as Id_Ministerio_Lider,
+                COALESCE(c.Id_Ministerio, l.Id_Ministerio) as Id_Ministerio_Lider,
                 m.Nombre_Ministerio as Nombre_Ministerio_Lider
                 FROM {$this->table} c
                 LEFT JOIN persona p ON c.Id_Celula = p.Id_Celula
                 LEFT JOIN persona l ON c.Id_Lider = l.Id_Persona
                 LEFT JOIN persona an ON c.Id_Anfitrion = an.Id_Persona
-                LEFT JOIN ministerio m ON l.Id_Ministerio = m.Id_Ministerio
+                LEFT JOIN ministerio m ON m.Id_Ministerio = COALESCE(c.Id_Ministerio, l.Id_Ministerio)
                 WHERE $filtroRol";
 
         $params = [];
@@ -160,7 +196,7 @@ class Celula extends BaseModel {
         $idLider = $idLider !== null && $idLider !== '' ? (int)$idLider : null;
 
         if ($idMinisterio !== null && $idMinisterio > 0) {
-            $sql .= " AND l.Id_Ministerio = ?";
+            $sql .= " AND COALESCE(c.Id_Ministerio, l.Id_Ministerio) = ?";
             $params[] = $idMinisterio;
         }
 
@@ -253,6 +289,42 @@ class Celula extends BaseModel {
                 'asistentes' => (int)($row['Asistentes'] ?? 0),
                 'nuevas' => (int)($row['Nuevas'] ?? 0),
             ];
+        }
+
+        return $mapa;
+    }
+
+    /**
+     * Miembros activos por célula (sin líder), con documento y tipo nuevo/antiguo.
+     *
+     * @return array<int, list<array<string, mixed>>>
+     */
+    public function getMiembrosActivosDetallePorCelulas(array $idsCelula): array {
+        $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function($id) {
+            return $id > 0;
+        })));
+
+        if (empty($idsCelula)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));
+        $sql = "SELECT p.Id_Persona, p.Id_Celula, p.Nombre, p.Apellido, p.Telefono, p.Numero_Documento,
+                       COALESCE(p.Es_Antiguo, 1) AS Es_Antiguo
+                FROM persona p
+                INNER JOIN {$this->table} c ON c.Id_Celula = p.Id_Celula
+                WHERE p.Id_Celula IN ({$placeholders})
+                  AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                  AND (c.Id_Lider IS NULL OR p.Id_Persona <> c.Id_Lider)
+                ORDER BY p.Apellido, p.Nombre";
+
+        $mapa = [];
+        foreach ($this->query($sql, $idsCelula) as $row) {
+            $idCelula = (int)($row['Id_Celula'] ?? 0);
+            if ($idCelula <= 0) {
+                continue;
+            }
+            $mapa[$idCelula][] = $row;
         }
 
         return $mapa;

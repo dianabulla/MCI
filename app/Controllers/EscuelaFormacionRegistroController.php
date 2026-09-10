@@ -445,39 +445,7 @@ class EscuelaFormacionRegistroController extends BaseController {
     }
 
     private function calcularProcesoPorChecklist(array $checklistNormalizado) {
-        if (!empty($checklistNormalizado['Ganar'][5])) {
-            return 'Ganar';
-        }
-
-        $etapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
-        $completadasSeguidas = 0;
-
-        foreach ($etapas as $etapa) {
-            $valores = $checklistNormalizado[$etapa] ?? [false, false, false];
-            if ($etapa === 'Ganar') {
-                $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]) && !empty($valores[3]);
-            } elseif ($etapa === 'Enviar') {
-                $completa = !empty($valores[2]);
-            } else {
-                $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]);
-            }
-
-            if (!$completa) {
-                break;
-            }
-
-            $completadasSeguidas++;
-        }
-
-        if ($completadasSeguidas === 0) {
-            return 'Ganar';
-        }
-
-        if ($completadasSeguidas >= count($etapas)) {
-            return 'Enviar';
-        }
-
-        return $etapas[$completadasSeguidas];
+        return $this->personaModel->calcularProcesoDesdeChecklist($checklistNormalizado);
     }
 
     private function marcarProgramaConsolidarEnEscalera($idPersona, $programa) {
@@ -3824,7 +3792,7 @@ class EscuelaFormacionRegistroController extends BaseController {
         if ($programa === 'universidad_vida' && $tipoInscripcionUv === 'universidad_vida') {
             $segmentosUvValidos = ['jovenes', 'teens', 'hombres_adultos', 'mujeres_adultas'];
             if (!in_array($segmentoPreferido, $segmentosUvValidos, true)) {
-                $errores[] = 'Seleccione el encuentro al que asistirá (jóvenes, mujeres, hombres o teens).';
+                $errores[] = 'Seleccione el encuentro al que asistirá (hombres, mujeres, jóvenes o teens).';
             }
         }
 
@@ -4089,9 +4057,9 @@ class EscuelaFormacionRegistroController extends BaseController {
 
             if (in_array($programaObjetivo, ['universidad_vida', 'encuentro'], true)) {
                 if ($documentosGuardados > 0) {
-                    $mensaje = 'Documentos cargados con éxito';
+                    $mensaje = 'Inscripción con éxito y documentos cargados exitosamente.';
                     if ($erroresDocumentos !== []) {
-                        $mensaje .= '. Algunos archivos no se guardaron.';
+                        $mensaje .= ' Algunos archivos no se guardaron.';
                     }
                 } elseif ($teniaArchivosDocumentos && $erroresDocumentos !== []) {
                     $mensaje = 'No se pudieron guardar los documentos: ' . implode(' ', $erroresDocumentos);
@@ -4158,7 +4126,8 @@ class EscuelaFormacionRegistroController extends BaseController {
                 throw new Exception('No se pudo confirmar la inscripción en Escuelas de Formación.');
             }
 
-            $this->procesarDocumentosUvSubidos($idInscripcionCreada, $programa);
+            $resultadoDocumentosNuevos = $this->procesarDocumentosUvSubidos($idInscripcionCreada, $programa);
+            $documentosNuevosGuardados = (int)($resultadoDocumentosNuevos['guardados'] ?? 0);
 
             $this->encolarMensajeCapacitacionDestino($idPersona, $telefono, $nombre, $programa);
 
@@ -4216,7 +4185,9 @@ class EscuelaFormacionRegistroController extends BaseController {
             } else {
                 $query = http_build_query([
                     'url' => $rutaFormulario,
-                    'mensaje' => 'Inscrito satisfactoriamente.',
+                    'mensaje' => $documentosNuevosGuardados > 0
+                        ? 'Inscripción con éxito y documentos cargados exitosamente.'
+                        : 'Inscrito satisfactoriamente.',
                     'tipo' => 'success',
                     'tipo_exito' => 'inscripcion',
                 ]);

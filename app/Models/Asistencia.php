@@ -274,6 +274,38 @@ class Asistencia extends BaseModel {
         return $resultado;
     }
 
+    /**
+     * @param int[] $idsCelula
+     * @return array<int, array<int, int>> [Id_Celula][Id_Persona] => total
+     */
+    public function getConteoAsistenciasPorCelulas(array $idsCelula): array {
+        $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function($id) {
+            return $id > 0;
+        })));
+        if ($idsCelula === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));
+        $sql = "SELECT Id_Celula, Id_Persona,
+                       COUNT(DISTINCT CASE WHEN Asistio = 1 THEN Fecha_Asistencia END) AS Total
+                FROM {$this->table}
+                WHERE Id_Celula IN ({$placeholders})
+                GROUP BY Id_Celula, Id_Persona";
+
+        $resultado = [];
+        foreach ($this->query($sql, $idsCelula) as $row) {
+            $idCelula = (int)($row['Id_Celula'] ?? 0);
+            $idPersona = (int)($row['Id_Persona'] ?? 0);
+            if ($idCelula <= 0 || $idPersona <= 0) {
+                continue;
+            }
+            $resultado[$idCelula][$idPersona] = (int)($row['Total'] ?? 0);
+        }
+
+        return $resultado;
+    }
+
     public function getUltimaFechaReportePorCelula(array $idsCelula) {
         $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function($id) {
             return $id > 0;

@@ -6,6 +6,8 @@
 require_once APP . '/Models/Celula.php';
 require_once APP . '/Models/Persona.php';
 require_once APP . '/Models/Ministerio.php';
+require_once APP . '/Models/Asistencia.php';
+require_once APP . '/Models/EscuelaFormacionInscripcion.php';
 require_once APP . '/Controllers/AuthController.php';
 require_once APP . '/Helpers/DataIsolation.php';
 
@@ -13,11 +15,15 @@ class CelulaController extends BaseController {
     private $celulaModel;
     private $personaModel;
     private $ministerioModel;
+    private $asistenciaModel;
+    private $inscripcionFormacionModel;
 
     public function __construct() {
         $this->celulaModel = new Celula();
         $this->personaModel = new Persona();
         $this->ministerioModel = new Ministerio();
+        $this->asistenciaModel = new Asistencia();
+        $this->inscripcionFormacionModel = new EscuelaFormacionInscripcion();
     }
 
     /**
@@ -31,6 +37,113 @@ class CelulaController extends BaseController {
 
         $filtroCelulas = DataIsolation::generarFiltroCelulas();
         return $this->celulaModel->existsByIdWithRole($idCelula, $filtroCelulas);
+    }
+
+    /**
+     * Datos de ficha según diagrama. Sin valor_sobre.
+     * Entregó sobre / reportó célula se marcan en Asistencias (por semana).
+     */
+    private function datosFichaDesdePost(array $post, ?array $antes = null): array {
+        $idLider = trim((string)($post['id_lider'] ?? ''));
+        $idLider = $idLider !== '' ? (int)$idLider : null;
+        if ($idLider === null && $antes && !empty($antes['Id_Lider'])) {
+            $idLider = (int)$antes['Id_Lider'];
+        }
+        if (DataIsolation::esLiderCelula() && $antes === null) {
+            $idLider = (int)($_SESSION['usuario_id'] ?? $idLider);
+            if ($idLider <= 0) {
+                $idLider = null;
+            }
+        }
+
+        $idPastor = (int)($post['id_pastor'] ?? 0);
+        if ($idPastor <= 0 && $antes) {
+            $idPastor = (int)($antes['Id_Pastor'] ?? 0);
+        }
+        $nombrePastor = '';
+        if ($idPastor > 0) {
+            $pastor = $this->personaModel->getById($idPastor);
+            $nombrePastor = trim((string)($pastor['Nombre'] ?? '') . ' ' . (string)($pastor['Apellido'] ?? ''));
+        } elseif ($antes) {
+            $nombrePastor = trim((string)($antes['Pastor_Principal'] ?? ''));
+        }
+
+        $idAnfitrion = trim((string)($post['id_anfitrion'] ?? ''));
+        $idAnfitrion = $idAnfitrion !== '' ? (int)$idAnfitrion : null;
+        $anfitrionTexto = trim((string)($post['anfitrion_search'] ?? ''));
+        if ($idAnfitrion === null && $antes && !empty($antes['Id_Anfitrion']) && $anfitrionTexto !== '') {
+            $nombreAntes = trim((string)($antes['Nombre_Anfitrion'] ?? ''));
+            if ($nombreAntes !== '' && mb_strtolower($anfitrionTexto) === mb_strtolower($nombreAntes)) {
+                $idAnfitrion = (int)$antes['Id_Anfitrion'];
+            }
+        }
+        $telefonoAnfitrion = null;
+        if ($idAnfitrion > 0) {
+            $anfitrion = $this->personaModel->getById($idAnfitrion);
+            $tel = trim((string)($anfitrion['Telefono'] ?? ''));
+            $telefonoAnfitrion = $tel !== '' ? $tel : null;
+        }
+
+        $idMinisterio = (int)($post['id_ministerio'] ?? 0);
+        if ($idMinisterio <= 0 && $idLider) {
+            $lider = $this->personaModel->getById($idLider);
+            $idMinisterio = (int)($lider['Id_Ministerio'] ?? 0);
+        }
+
+        $estado = strtolower(trim((string)($post['estado_celula'] ?? 'activa')));
+        $estado = $estado === 'cerrada' ? 'Cerrada' : 'Activa';
+        $fechaApertura = trim((string)($post['fecha_apertura'] ?? ''));
+        $fechaCierre = trim((string)($post['fecha_cierre'] ?? ''));
+        if ($estado === 'Activa') {
+            $fechaCierre = null;
+        } elseif ($fechaCierre === '') {
+            $fechaCierre = date('Y-m-d');
+        }
+
+        $tipoCelulaInput = strtolower(trim((string)($post['tipo_celula'] ?? '')));
+        if ($tipoCelulaInput !== '') {
+            $esAntiguo = in_array($tipoCelulaInput, ['antigua', 'antiguo', '1'], true) ? 1 : 0;
+        } elseif ($antes !== null && isset($antes['Es_Antiguo'])) {
+            $esAntiguo = ((int)$antes['Es_Antiguo'] === 1) ? 1 : 0;
+        } else {
+            $esAntiguo = 0;
+        }
+
+        $data = [
+            'Nombre_Celula' => $post['nombre_celula'] ?? '',
+            'Direccion_Celula' => $post['direccion_celula'] ?? '',
+            'Dia_Reunion' => $post['dia_reunion'] ?? null,
+            'Hora_Reunion' => $post['hora_reunion'] ?? null,
+            'Id_Lider' => $idLider,
+            'Id_Pastor' => $idPastor > 0 ? $idPastor : null,
+            'Pastor_Principal' => $nombrePastor !== '' ? $nombrePastor : null,
+            'Id_Lider_Inmediato' => trim((string)($post['id_lider_inmediato'] ?? '')) !== ''
+                ? (int)$post['id_lider_inmediato']
+                : (($antes && !empty($antes['Id_Lider_Inmediato'])) ? (int)$antes['Id_Lider_Inmediato'] : null),
+            'Barrio' => trim((string)($post['barrio'] ?? '')) !== '' ? $post['barrio'] : null,
+            'Red' => trim((string)($post['red'] ?? '')) !== '' ? $post['red'] : null,
+            'Id_Anfitrion' => $idAnfitrion,
+            'Telefono_Anfitrion' => $telefonoAnfitrion,
+            'Es_Antiguo' => $esAntiguo,
+            'Estado_Celula' => $estado,
+            'Fecha_Cierre' => $fechaCierre,
+            'Id_Ministerio' => $idMinisterio > 0 ? $idMinisterio : null,
+        ];
+
+        if ($fechaApertura !== '') {
+            $data['Fecha_Apertura'] = $fechaApertura . ' 00:00:00';
+        } elseif ($antes === null) {
+            $data['Fecha_Apertura'] = date('Y-m-d H:i:s');
+        }
+
+        return $data;
+    }
+
+    private function datosFormularioCelula(?array $celula = null): array {
+        return [
+            'celula' => $celula,
+            'ministerios' => $this->ministerioModel->getAll(),
+        ];
     }
 
     /**
@@ -140,8 +253,44 @@ class CelulaController extends BaseController {
                 'dia' => (string)($celula['Dia_Reunion'] ?? ''),
                 'hora' => (string)($celula['Hora_Reunion'] ?? ''),
                 'rows' => $rows,
-                'total_personas' => count($rows)
+                'total_personas' => count($rows),
+                'entrego_sobre' => false,
             ];
+        }
+
+        $puedeMarcarEntregoSobre = DataIsolation::tieneAccesoTotal();
+        $diaNHoy = (int)date('N');
+        $lunesActualTs = strtotime('-' . ($diaNHoy - 1) . ' days');
+        $lunesVencidaTs = strtotime('-7 days', $lunesActualTs);
+        $semanaInicioPorDefecto = date('Y-m-d', $lunesVencidaTs);
+
+        $fechaSemanaSobre = trim((string)($_GET['semana_sobre'] ?? ''));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaSemanaSobre)) {
+            $fechaSemanaSobre = $semanaInicioPorDefecto;
+        }
+        $tsSemanaSobre = strtotime($fechaSemanaSobre);
+        if ($tsSemanaSobre === false) {
+            $tsSemanaSobre = $lunesVencidaTs;
+        }
+        $diaNSobre = (int)date('N', $tsSemanaSobre);
+        $semanaInicioSobreTs = strtotime('-' . ($diaNSobre - 1) . ' days', $tsSemanaSobre);
+        $semanaInicioSobre = date('Y-m-d', $semanaInicioSobreTs);
+        $semanaFinSobre = date('Y-m-d', strtotime('+6 days', $semanaInicioSobreTs));
+        $esSemanaVencidaSobre = $semanaInicioSobre === $semanaInicioPorDefecto;
+
+        if ($puedeMarcarEntregoSobre && $sections !== []) {
+            $this->asistenciaModel->ensureEntregaSobreTableExists();
+            $estadoEntregoSobre = $this->asistenciaModel->getEstadoEntregoSobrePorCelulaSemana(
+                array_map(static function ($section) {
+                    return (int)($section['id_celula'] ?? 0);
+                }, $sections),
+                $semanaInicioSobre
+            );
+            foreach ($sections as &$sectionSobre) {
+                $idCelulaSobre = (int)($sectionSobre['id_celula'] ?? 0);
+                $sectionSobre['entrego_sobre'] = !empty($estadoEntregoSobre[$idCelulaSobre]);
+            }
+            unset($sectionSobre);
         }
 
         $this->view('celulas/lista', [
@@ -150,7 +299,12 @@ class CelulaController extends BaseController {
             'ministerios_disponibles' => array_values($ministeriosDisponibles),
             'lideres_disponibles' => array_values($lideresDisponibles),
             'filtro_ministerio_actual' => (string)$filtroMinisterio,
-            'filtro_lider_actual' => (string)$filtroLider
+            'filtro_lider_actual' => (string)$filtroLider,
+            'puede_marcar_entrego_sobre' => $puedeMarcarEntregoSobre,
+            'semana_inicio_sobre' => $semanaInicioSobre,
+            'semana_fin_sobre' => $semanaFinSobre,
+            'semana_sobre_referencia' => $semanaInicioSobre,
+            'es_semana_vencida_sobre' => $esSemanaVencidaSobre,
         ]);
     }
 
@@ -162,36 +316,10 @@ class CelulaController extends BaseController {
         }
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $idLider = $_POST['id_lider'] ?: null;
-            $tipoCelulaInput = strtolower(trim((string)($_POST['tipo_celula'] ?? 'nueva')));
-            $esCelulaAntigua = in_array($tipoCelulaInput, ['antigua', 'antiguo', '1'], true) ? 1 : 0;
-
-            // Para líder de célula, forzar que la célula quede anclada al usuario logueado
-            if (DataIsolation::esLiderCelula()) {
-                $idLider = $_SESSION['usuario_id'] ?? $idLider;
-            }
-
-            $data = [
-                'Nombre_Celula' => $_POST['nombre_celula'],
-                'Direccion_Celula' => $_POST['direccion_celula'],
-                'Dia_Reunion' => $_POST['dia_reunion'],
-                'Hora_Reunion' => $_POST['hora_reunion'],
-                'Id_Lider' => $idLider,
-                'Pastor_Principal' => $_POST['pastor_principal'] ?: null,
-                'Id_Lider_Inmediato' => trim((string)($_POST['id_lider_inmediato'] ?? '')) !== ''
-                    ? (int)$_POST['id_lider_inmediato']
-                    : null,
-                'Barrio' => $_POST['barrio'] ?: null,
-                'Red' => $_POST['red'] ?: null,
-                'Id_Anfitrion' => $_POST['id_anfitrion'] ?: null,
-                'Telefono_Anfitrion' => $_POST['telefono_anfitrion'] ?: null,
-                'Es_Antiguo' => $esCelulaAntigua
-            ];
-            
-            $this->celulaModel->create($data);
+            $this->celulaModel->create($this->datosFichaDesdePost($_POST, null));
             $this->redirect('celulas&guardado=1');
         } else {
-            $this->view('celulas/formulario');
+            $this->view('celulas/formulario', $this->datosFormularioCelula());
         }
     }
 
@@ -214,63 +342,15 @@ class CelulaController extends BaseController {
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $tipoCelulaInput = strtolower(trim((string)($_POST['tipo_celula'] ?? '')));
             $celulaAntes = $this->celulaModel->getById($id);
             if (!$celulaAntes) {
                 $this->redirect('celulas');
             }
 
-            $idLiderPost = trim((string)($_POST['id_lider'] ?? ''));
-            $idAnfitrionPost = trim((string)($_POST['id_anfitrion'] ?? ''));
-            $anfitrionTextoPost = trim((string)($_POST['anfitrion_search'] ?? ''));
-
-            $data = [
-                'Nombre_Celula' => $_POST['nombre_celula'],
-                'Direccion_Celula' => $_POST['direccion_celula'],
-                'Dia_Reunion' => $_POST['dia_reunion'],
-                'Hora_Reunion' => $_POST['hora_reunion'],
-                'Id_Lider' => $idLiderPost !== '' ? (int)$idLiderPost : null,
-                'Pastor_Principal' => $_POST['pastor_principal'] ?: null,
-                'Id_Lider_Inmediato' => trim((string)($_POST['id_lider_inmediato'] ?? '')) !== ''
-                    ? (int)$_POST['id_lider_inmediato']
-                    : null,
-                'Barrio' => $_POST['barrio'] ?: null,
-                'Red' => $_POST['red'] ?: null,
-                'Id_Anfitrion' => $idAnfitrionPost !== '' ? (int)$idAnfitrionPost : null,
-                'Telefono_Anfitrion' => $_POST['telefono_anfitrion'] ?: null
-            ];
-
-            // Evitar perder líder/anfitrión si el autocompletado no envió el ID oculto.
-            if ($idLiderPost === '' && !empty($celulaAntes['Id_Lider'])) {
-                $data['Id_Lider'] = (int)$celulaAntes['Id_Lider'];
-            }
-            if ($idAnfitrionPost === '' && !empty($celulaAntes['Id_Anfitrion'])) {
-                $nombreAnfitrionAntes = trim((string)($celulaAntes['Nombre_Anfitrion'] ?? ''));
-                if ($anfitrionTextoPost !== '' && $nombreAnfitrionAntes !== ''
-                    && mb_strtolower($anfitrionTextoPost) === mb_strtolower($nombreAnfitrionAntes)) {
-                    $data['Id_Anfitrion'] = (int)$celulaAntes['Id_Anfitrion'];
-                    if (trim((string)($data['Telefono_Anfitrion'] ?? '')) === '') {
-                        $data['Telefono_Anfitrion'] = $celulaAntes['Telefono_Anfitrion'] ?? null;
-                    }
-                }
-            }
-            if (trim((string)($_POST['id_lider_inmediato'] ?? '')) === '' && !empty($celulaAntes['Id_Lider_Inmediato'])) {
-                $data['Id_Lider_Inmediato'] = (int)$celulaAntes['Id_Lider_Inmediato'];
-            }
-
-            if ($tipoCelulaInput !== '') {
-                $data['Es_Antiguo'] = in_array($tipoCelulaInput, ['antigua', 'antiguo', '1'], true) ? 1 : 0;
-            } elseif (isset($celulaAntes['Es_Antiguo'])) {
-                $data['Es_Antiguo'] = ((int)$celulaAntes['Es_Antiguo'] === 1) ? 1 : 0;
-            }
-            
-            $this->celulaModel->update($id, $data);
+            $this->celulaModel->update($id, $this->datosFichaDesdePost($_POST, $celulaAntes));
             $this->redirect('celulas&guardado=1');
         } else {
-            $data = [
-                'celula' => $this->celulaModel->getById($id)
-            ];
-            $this->view('celulas/formulario', $data);
+            $this->view('celulas/formulario', $this->datosFormularioCelula($this->celulaModel->getById($id)));
         }
     }
 
@@ -287,6 +367,44 @@ class CelulaController extends BaseController {
         }
 
         $celula = $this->celulaModel->getWithMembers($id);
+        if ($celula && !empty($celula['miembros'])) {
+            $idsPersona = array_column($celula['miembros'], 'Id_Persona');
+            $conteos = $this->asistenciaModel->getConteoAsistenciasPorPersonaYCelula(
+                $idsPersona,
+                (int)$id
+            );
+
+            $flagsFormacion = [];
+            try {
+                $flagsFormacion = $this->inscripcionFormacionModel->getFlagsFormacionPorIdsPersonas($idsPersona);
+            } catch (Throwable $e) {
+                $flagsFormacion = [];
+            }
+
+            $ordenProceso = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
+            foreach ($celula['miembros'] as &$miembro) {
+                $idPersona = (int)($miembro['Id_Persona'] ?? 0);
+                $total = (int)($conteos[$idPersona] ?? 0);
+                $miembro['Total_Asistencias'] = $total;
+                $miembro['Indicador_Asistencia'] = $total >= 3 ? 'Frecuente' : 'Regular';
+                $proceso = $this->personaModel->resolverProcesoVisible($miembro);
+                $flags = $flagsFormacion[$idPersona] ?? [];
+                if (!empty($flags['capacitacion_destino'])
+                    && array_search($proceso, $ordenProceso, true) < array_search('Discipular', $ordenProceso, true)
+                ) {
+                    $proceso = 'Discipular';
+                } elseif (
+                    (empty($flags['capacitacion_destino']))
+                    && (!empty($flags['universidad_vida']) || !empty($flags['encuentro']) || !empty($flags['bautismo']))
+                    && array_search($proceso, $ordenProceso, true) < array_search('Consolidar', $ordenProceso, true)
+                ) {
+                    $proceso = 'Consolidar';
+                }
+                $miembro['Proceso'] = $proceso;
+            }
+            unset($miembro);
+        }
+
         $this->view('celulas/detalle', ['celula' => $celula]);
     }
 
@@ -825,7 +943,10 @@ class CelulaController extends BaseController {
             $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono, r.Nombre_Rol as Rol
                     FROM persona p
                     LEFT JOIN rol r ON p.Id_Rol = r.Id_Rol
-                    WHERE p.Id_Rol = 6
+                    WHERE (
+                        p.Id_Rol = 6
+                        OR LOWER(COALESCE(r.Nombre_Rol, '')) LIKE '%pastor%'
+                    )
                     AND (p.Nombre LIKE ? OR p.Apellido LIKE ?)
                     AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
                     ORDER BY p.Nombre, p.Apellido

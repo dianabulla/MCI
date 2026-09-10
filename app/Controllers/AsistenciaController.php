@@ -548,10 +548,30 @@ class AsistenciaController extends BaseController {
                         $asistencias[$idPersona] = 0;
                     }
 
+                    $motivoNoRealizo = trim((string)($_POST['motivo_no_realizo'] ?? ''));
+                    $etiquetasMotivo = [
+                        'convencion' => 'Convención',
+                        'actividades_iglesia' => 'Actividades de la iglesia',
+                        'otro' => 'Otro',
+                    ];
+                    if (!isset($etiquetasMotivo[$motivoNoRealizo])) {
+                        throw new RuntimeException('Indica por qué no se realizó la célula.');
+                    }
+
+                    $detalleMotivo = $etiquetasMotivo[$motivoNoRealizo];
+                    if ($motivoNoRealizo === 'otro') {
+                        $otroMotivo = trim((string)($_POST['motivo_no_realizo_otro'] ?? ''));
+                        if ($otroMotivo === '') {
+                            throw new RuntimeException('Escribe el motivo en Otro.');
+                        }
+                        $detalleMotivo .= ': ' . $otroMotivo;
+                    }
+
+                    $prefijoMotivo = 'No se realizó. Motivo: ' . $detalleMotivo;
                     if ($observaciones === '') {
-                        $observaciones = 'No se realizó';
+                        $observaciones = $prefijoMotivo;
                     } elseif (stripos($observaciones, 'no se realiz') === false) {
-                        $observaciones = 'No se realizó. ' . $observaciones;
+                        $observaciones = $prefijoMotivo . '. ' . $observaciones;
                     }
                 }
 

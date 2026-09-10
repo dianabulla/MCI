@@ -714,6 +714,20 @@ class Persona extends BaseModel {
         return $this->tieneColumna('Usuario') && $this->tieneColumna('Contrasena');
     }
 
+    /**
+     * Login vive en usuario_acceso; persona.Usuario puede no existir.
+     */
+    private function sqlCampoUsuarioCreador(): string {
+        $desdeAcceso = $this->tieneTabla('usuario_acceso')
+            ? "(SELECT ua.Usuario FROM usuario_acceso ua WHERE ua.Id_Persona = creador.Id_Persona AND NULLIF(TRIM(ua.Usuario), '') IS NOT NULL ORDER BY ua.Id_Usuario_Acceso ASC LIMIT 1)"
+            : 'NULL';
+        $desdePersona = $this->tieneColumna('Usuario')
+            ? "NULLIF(TRIM(creador.Usuario), '')"
+            : 'NULL';
+
+        return "COALESCE({$desdeAcceso}, {$desdePersona}, '') AS Usuario_Creador";
+    }
+
     public function registrarAcuerdoConfidencialidadPersona(int $idPersona, string $version): bool {
         $idPersona = (int)$idPersona;
         if ($idPersona <= 0 || !$this->tieneColumna('Acuerdo_Confidencialidad_At')) {
@@ -1157,7 +1171,7 @@ class Persona extends BaseModel {
                 rs.Nombre_Rol AS Nombre_Rol_Secundario,
                 m.Nombre_Ministerio,
                 TRIM(CONCAT(COALESCE(lid.Nombre, ''), ' ', COALESCE(lid.Apellido, ''))) AS Nombre_Lider,
-                COALESCE(creador.Usuario, '') AS Usuario_Creador,
+                {$this->sqlCampoUsuarioCreador()},
                 TRIM(CONCAT(COALESCE(creador.Nombre, ''), ' ', COALESCE(creador.Apellido, ''))) AS Nombre_Creador,
                 {$campoReporte}
                 FROM persona p
@@ -1918,6 +1932,107 @@ class Persona extends BaseModel {
     }
 
     /**
+     * Proceso que ve la ficha (escalera), no solo la columna Proceso.
+     * Liderazgo = Enviar. Célula asignada marca Enviar[2], igual que el formulario.
+     */
+    public function resolverProcesoVisible(array $persona): string {
+        $permitidos = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
+        $idRol = (int)($persona['Id_Rol'] ?? 0);
+        if ($idRol > 0) {
+            $jerarquia = $this->getJerarquiaByRol($idRol);
+            if (in_array($jerarquia, ['pastor', 'lider_12', 'lider_celula'], true)) {
+                return 'Enviar';
+            }
+        }
+
+        $checklist = $this->normalizarChecklistParaProcesoVisible($persona['Escalera_Checklist'] ?? null);
+        $checklist['Ganar'][1] = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
+        $tieneCelula = !empty($persona['Id_Celula']);
+        $checklist['Ganar'][4] = $tieneCelula;
+        if ($tieneCelula) {
+            $checklist['Enviar'][2] = true;
+        }
+
+        $calculado = $this->calcularProcesoDesdeChecklist($checklist);
+        if (!in_array($calculado, $permitidos, true)) {
+            $calculado = 'Ganar';
+        }
+
+        $guardado = trim((string)($persona['Proceso'] ?? ''));
+        if (in_array($guardado, $permitidos, true)) {
+            $idxCalc = array_search($calculado, $permitidos, true);
+            $idxGuard = array_search($guardado, $permitidos, true);
+            if ($idxGuard !== false && $idxCalc !== false && $idxGuard > $idxCalc) {
+                return $guardado;
+            }
+        }
+
+        return $calculado;
+    }
+
+    private function normalizarChecklistParaProcesoVisible($checklistRaw): array {
+        $estructura = [
+            'Ganar' => 6,
+            'Consolidar' => 3,
+            'Discipular' => 3,
+            'Enviar' => 3,
+        ];
+        $normalizado = [];
+        foreach ($estructura as $etapa => $total) {
+            $normalizado[$etapa] = array_fill(0, $total, false);
+        }
+
+        $checklist = $checklistRaw;
+        if (is_string($checklistRaw) && trim($checklistRaw) !== '') {
+            $decoded = json_decode($checklistRaw, true);
+            $checklist = is_array($decoded) ? $decoded : [];
+        }
+        if (!is_array($checklist)) {
+            return $normalizado;
+        }
+
+        foreach ($estructura as $etapa => $total) {
+            $valores = $checklist[$etapa] ?? [];
+            if (!is_array($valores)) {
+                continue;
+            }
+            for ($i = 0; $i < $total; $i++) {
+                $normalizado[$etapa][$i] = !empty($valores[$i]);
+            }
+        }
+
+        return $normalizado;
+    }
+
+    public function calcularProcesoDesdeChecklist(array $checklist): string {
+        if (!empty($checklist['Ganar'][5])) {
+            return 'Ganar';
+        }
+
+        $discipular = $checklist['Discipular'] ?? [];
+        $consolidar = $checklist['Consolidar'] ?? [];
+        $ganar = $checklist['Ganar'] ?? [];
+
+        $hayDiscipular = !empty($discipular[0]) || !empty($discipular[1]) || !empty($discipular[2]);
+        $discipularCompleto = !empty($discipular[0]) && !empty($discipular[1]) && !empty($discipular[2]);
+        $hayConsolidar = !empty($consolidar[0]) || !empty($consolidar[1]) || !empty($consolidar[2]);
+        $consolidarCompleto = !empty($consolidar[0]) && !empty($consolidar[1]) && !empty($consolidar[2]);
+        $ganarCompleto = !empty($ganar[0]) && !empty($ganar[1]) && !empty($ganar[2]) && !empty($ganar[3]);
+
+        if ($hayDiscipular) {
+            return $discipularCompleto ? 'Enviar' : 'Discipular';
+        }
+        if ($hayConsolidar) {
+            return $consolidarCompleto ? 'Discipular' : 'Consolidar';
+        }
+        if ($ganarCompleto) {
+            return 'Consolidar';
+        }
+
+        return 'Ganar';
+    }
+
+    /**
      * Obtener personas con perfil de liderazgo/pastorado.
      */
     public function getLideresYPastores() {
@@ -2325,7 +2440,7 @@ class Persona extends BaseModel {
                 r.Nombre_Rol, 
                 m.Nombre_Ministerio,
                 TRIM(CONCAT(COALESCE(lid.Nombre, ''), ' ', COALESCE(lid.Apellido, ''))) AS Nombre_Lider,
-                COALESCE(creador.Usuario, '') AS Usuario_Creador,
+                {$this->sqlCampoUsuarioCreador()},
                 TRIM(CONCAT(COALESCE(creador.Nombre, ''), ' ', COALESCE(creador.Apellido, ''))) AS Nombre_Creador
                 FROM persona p
                 LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
@@ -2434,7 +2549,7 @@ class Persona extends BaseModel {
                 r.Nombre_Rol, 
                 m.Nombre_Ministerio,
                 TRIM(CONCAT(COALESCE(lid.Nombre, ''), ' ', COALESCE(lid.Apellido, ''))) AS Nombre_Lider,
-                COALESCE(creador.Usuario, '') AS Usuario_Creador,
+                {$this->sqlCampoUsuarioCreador()},
                 TRIM(CONCAT(COALESCE(creador.Nombre, ''), ' ', COALESCE(creador.Apellido, ''))) AS Nombre_Creador
                 FROM persona p
                 LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
@@ -2567,7 +2682,7 @@ class Persona extends BaseModel {
                 r.Nombre_Rol,
                 m.Nombre_Ministerio,
                 TRIM(CONCAT(COALESCE(lid.Nombre, ''), ' ', COALESCE(lid.Apellido, ''))) AS Nombre_Lider,
-                COALESCE(creador.Usuario, '') AS Usuario_Creador,
+                {$this->sqlCampoUsuarioCreador()},
                 TRIM(CONCAT(COALESCE(creador.Nombre, ''), ' ', COALESCE(creador.Apellido, ''))) AS Nombre_Creador
                 FROM persona p
                 LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula

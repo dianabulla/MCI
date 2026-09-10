@@ -36,6 +36,54 @@
             <small class="form-text text-muted">Marca si la célula es antigua o nueva.</small>
         </div>
 
+        <?php
+        $celula = is_array($celula ?? null) ? $celula : [];
+        $estadoCelulaSel = strtolower(trim((string)($_POST['estado_celula'] ?? ($celula['Estado_Celula'] ?? 'Activa'))));
+        $estadoCelulaSel = $estadoCelulaSel === 'cerrada' ? 'Cerrada' : 'Activa';
+        $fechaAperturaInput = substr((string)($_POST['fecha_apertura'] ?? ($celula['Fecha_Apertura'] ?? '')), 0, 10);
+        $fechaCierreInput = substr((string)($_POST['fecha_cierre'] ?? ($celula['Fecha_Cierre'] ?? '')), 0, 10);
+        $ministerios = is_array($ministerios ?? null) ? $ministerios : [];
+        $ministerioSel = (string)($_POST['id_ministerio'] ?? ($celula['Id_Ministerio'] ?? ''));
+        $idPastorSel = (string)($_POST['id_pastor'] ?? ($celula['Id_Pastor'] ?? ''));
+        $nombrePastorSel = trim((string)($celula['Nombre_Pastor'] ?? $celula['Pastor_Principal'] ?? ''));
+        $telefonoAnfitrionMostrar = (string)($celula['Telefono_Persona_Anfitrion'] ?? $celula['Telefono_Anfitrion'] ?? '');
+        ?>
+
+        <div class="form-group">
+            <label for="estado_celula">Estado</label>
+            <select id="estado_celula" name="estado_celula" class="form-control">
+                <option value="Activa" <?= $estadoCelulaSel === 'Activa' ? 'selected' : '' ?>>Activa</option>
+                <option value="Cerrada" <?= $estadoCelulaSel === 'Cerrada' ? 'selected' : '' ?>>Cerrada</option>
+            </select>
+        </div>
+
+        <div class="form-row-celula">
+            <div class="form-group">
+                <label for="fecha_apertura">Fecha de apertura</label>
+                <input type="date" id="fecha_apertura" name="fecha_apertura" class="form-control"
+                       value="<?= htmlspecialchars($fechaAperturaInput) ?>">
+            </div>
+            <div class="form-group" id="grupo_fecha_cierre" style="<?= $estadoCelulaSel === 'Cerrada' ? '' : 'display:none;' ?>">
+                <label for="fecha_cierre">Fecha de cierre</label>
+                <input type="date" id="fecha_cierre" name="fecha_cierre" class="form-control"
+                       value="<?= htmlspecialchars($fechaCierreInput) ?>">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="id_ministerio">Ministerio</label>
+            <select id="id_ministerio" name="id_ministerio" class="form-control">
+                <option value="">Sin ministerio</option>
+                <?php foreach ($ministerios as $ministerio): ?>
+                    <option value="<?= (int)$ministerio['Id_Ministerio'] ?>"
+                        <?= (string)$ministerioSel === (string)$ministerio['Id_Ministerio'] ? 'selected' : '' ?>>
+                        <?= htmlspecialchars((string)$ministerio['Nombre_Ministerio']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <small class="form-text text-muted">Si lo dejas vacío, se toma el ministerio del líder.</small>
+        </div>
+
         <div class="form-group">
             <label for="nombre_celula">Nombre de la Célula</label>
             <input type="text" id="nombre_celula" name="nombre_celula" class="form-control" 
@@ -104,18 +152,19 @@
         </div>
 
         <div class="form-group">
-            <label for="pastor_principal">Pastor Principal</label>
+            <label for="pastor_principal_search">Pastor</label>
             <div class="autocomplete-container">
                 <input type="text" 
                        id="pastor_principal_search" 
-                       name="pastor_principal"
                        class="form-control autocomplete-input" 
                        placeholder="Buscar pastor por nombre..."
                        autocomplete="off"
-                       value="<?= htmlspecialchars($celula['Pastor_Principal'] ?? '') ?>">
+                       value="<?= htmlspecialchars($nombrePastorSel) ?>">
+                <input type="hidden" id="id_pastor" name="id_pastor"
+                       value="<?= htmlspecialchars($idPastorSel) ?>">
                 <div id="pastor_principal_autocomplete_results" class="autocomplete-results"></div>
                 <small class="form-text text-muted">
-                    Escriba para buscar un pastor
+                    Escriba para buscar un pastor (persona, no texto suelto).
                 </small>
             </div>
         </div>
@@ -193,7 +242,7 @@
         <div class="form-group">
             <label for="telefono_anfitrion">Teléfono Anfitrión</label>
             <input type="text" id="telefono_anfitrion" name="telefono_anfitrion" class="form-control" 
-                   value="<?= htmlspecialchars($celula['Telefono_Anfitrion'] ?? '') ?>" readonly>
+                   value="<?= htmlspecialchars($telefonoAnfitrionMostrar) ?>" readonly>
         </div>
 
         <div class="form-actions">
@@ -219,6 +268,16 @@
     align-items: center;
     gap: 6px;
     font-weight: 500;
+}
+
+.form-row-celula {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.form-row-celula .form-group {
+    flex: 1 1 220px;
 }
 
 .autocomplete-results {
@@ -452,6 +511,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     initAutocomplete({
         inputId: 'pastor_principal_search',
+        hiddenId: 'id_pastor',
         resultsId: 'pastor_principal_autocomplete_results',
         searchUrl: '<?= PUBLIC_URL ?>index.php?url=celulas/buscarPastores&term='
     });
@@ -476,6 +536,26 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     actualizarNombreCelula();
+
+    const estadoSelect = document.getElementById('estado_celula');
+    const grupoCierre = document.getElementById('grupo_fecha_cierre');
+    const fechaCierreInput = document.getElementById('fecha_cierre');
+    function sincronizarCierre() {
+        if (!estadoSelect || !grupoCierre) return;
+        const cerrada = estadoSelect.value === 'Cerrada';
+        grupoCierre.style.display = cerrada ? '' : 'none';
+        if (cerrada && fechaCierreInput && !fechaCierreInput.value) {
+            const hoy = new Date();
+            const y = hoy.getFullYear();
+            const m = String(hoy.getMonth() + 1).padStart(2, '0');
+            const d = String(hoy.getDate()).padStart(2, '0');
+            fechaCierreInput.value = y + '-' + m + '-' + d;
+        }
+    }
+    if (estadoSelect) {
+        estadoSelect.addEventListener('change', sincronizarCierre);
+        sincronizarCierre();
+    }
 
     const formCelula = document.querySelector('.form-container form');
     if (formCelula) {

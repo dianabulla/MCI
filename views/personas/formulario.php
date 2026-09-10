@@ -919,32 +919,26 @@ function calcularProcesoDesdeChecklistFormulario(checklist) {
         return 'Ganar';
     }
 
-    let consecutivas = 0;
-    for (const etapa of etapasEventosProcesos) {
-        const valores = Array.isArray(checklist[etapa]) ? checklist[etapa] : [];
-        let completa = false;
-        if (etapa === 'Ganar') {
-            completa = !!(valores[0] && valores[1] && valores[2] && valores[3]);
-        } else if (etapa === 'Enviar') {
-            completa = !!valores[2];
-        } else {
-            completa = !!(valores[0] && valores[1] && valores[2]);
-        }
-        if (!completa) {
-            break;
-        }
-        consecutivas++;
+    const discipular = (checklist && Array.isArray(checklist.Discipular)) ? checklist.Discipular : [];
+    const consolidar = (checklist && Array.isArray(checklist.Consolidar)) ? checklist.Consolidar : [];
+    const ganar = (checklist && Array.isArray(checklist.Ganar)) ? checklist.Ganar : [];
+    const hayDiscipular = !!(discipular[0] || discipular[1] || discipular[2]);
+    const discipularCompleto = !!(discipular[0] && discipular[1] && discipular[2]);
+    const hayConsolidar = !!(consolidar[0] || consolidar[1] || consolidar[2]);
+    const consolidarCompleto = !!(consolidar[0] && consolidar[1] && consolidar[2]);
+    const ganarCompleto = !!(ganar[0] && ganar[1] && ganar[2] && ganar[3]);
+
+    if (hayDiscipular) {
+        return discipularCompleto ? 'Enviar' : 'Discipular';
+    }
+    if (hayConsolidar) {
+        return consolidarCompleto ? 'Discipular' : 'Consolidar';
+    }
+    if (ganarCompleto) {
+        return 'Consolidar';
     }
 
-    if (consecutivas === 0) {
-        return 'Ganar';
-    }
-
-    if (consecutivas >= etapasEventosProcesos.length) {
-        return 'Enviar';
-    }
-
-    return etapasEventosProcesos[consecutivas];
+    return 'Ganar';
 }
 
 function actualizarTabsEventosProcesos(tabActivo) {

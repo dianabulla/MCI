@@ -2883,30 +2883,7 @@ class PersonaController extends BaseController {
     }
 
     private function calcularProcesoPorChecklist(array $checklistNormalizado) {
-        if (!empty($checklistNormalizado['Ganar'][5])) {
-            return 'Ganar';
-        }
-
-        $etapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
-        $completadasSeguidas = 0;
-
-        foreach ($etapas as $etapa) {
-            $valores = $checklistNormalizado[$etapa] ?? [false, false, false];
-            if (!$this->etapaEscaleraCompleta($etapa, is_array($valores) ? $valores : [])) {
-                break;
-            }
-            $completadasSeguidas++;
-        }
-
-        if ($completadasSeguidas === 0) {
-            return 'Ganar';
-        }
-
-        if ($completadasSeguidas >= count($etapas)) {
-            return 'Enviar';
-        }
-
-        return $etapas[$completadasSeguidas];
+        return $this->personaModel->calcularProcesoDesdeChecklist($checklistNormalizado);
     }
 
     private function resolverProgramaCapacitacionDestinoPorIndiceChecklist(int $indice): string {
@@ -4226,6 +4203,7 @@ class PersonaController extends BaseController {
         $persona = $this->personaModel->getById($id);
         if (is_array($persona)) {
             $persona['Etiqueta_Celula'] = $this->resolverEtiquetaCelulaPersona($persona);
+            $persona['Proceso'] = $this->personaModel->resolverProcesoVisible($persona);
         }
         $esEscaleraAutoPorRol = $this->esRolLiderazgoPorIdRol((int)($persona['Id_Rol'] ?? 0));
         $this->view('personas/detalle', [

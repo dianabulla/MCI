@@ -1,14 +1,37 @@
-<?php include VIEWS . '/layout/header.php'; ?>
+<?php
+include VIEWS . '/layout/header.php';
+
+$fechaAperturaRaw = substr(trim((string)($celula['Fecha_Apertura'] ?? '')), 0, 10);
+$fechaAperturaVisible = 'No especificada';
+if ($fechaAperturaRaw !== '' && $fechaAperturaRaw !== '0000-00-00') {
+    $tsApertura = strtotime($fechaAperturaRaw);
+    $fechaAperturaVisible = $tsApertura ? date('d/m/Y', $tsApertura) : $fechaAperturaRaw;
+}
+
+$idCelulaDetalle = (int)($celula['Id_Celula'] ?? 0);
+$returnUrlCelula = PUBLIC_URL . 'index.php?url=celulas/detalle&id=' . $idCelulaDetalle;
+$puedeVerPersona = AuthController::esAdministrador() || AuthController::puede('personas:ver') || AuthController::puede('celulas:ver');
+$puedeEditarPersona = AuthController::puedeEditarPersonaDesdeDiscipular();
+$puedeEliminarPersona = AuthController::puedeEliminarPersonaDesdeDiscipular();
+?>
 
 <div class="page-header">
     <h2>Detalle de Célula</h2>
-    <div>
-        <a href="<?= PUBLIC_URL ?>index.php?url=personas/crear&return_to=celulas&return_url=<?= urlencode(PUBLIC_URL . 'index.php?url=celulas/detalle&id=' . (int)$celula['Id_Celula']) ?>&celula=<?= (int)$celula['Id_Celula'] ?>" class="btn btn-sm btn-primary">+ Nueva Persona</a>
+    <div class="celulas-actions-row">
+        <a href="<?= PUBLIC_URL ?>index.php?url=personas/crear&return_to=celulas&return_url=<?= urlencode($returnUrlCelula) ?>&celula=<?= $idCelulaDetalle ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon" title="Nueva persona" aria-label="Nueva persona">
+            <i class="bi bi-person-plus-fill" aria-hidden="true"></i>
+        </a>
         <?php if (AuthController::puede('asistencias:crear')): ?>
-        <a href="<?= PUBLIC_URL ?>index.php?url=asistencias/registrar&celula=<?= $celula['Id_Celula'] ?>" class="btn btn-sm btn-success">Asistencias</a>
+        <a href="<?= PUBLIC_URL ?>index.php?url=asistencias/registrar&celula=<?= $idCelulaDetalle ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--report">Reportar célula</a>
         <?php endif; ?>
-        <a href="<?= PUBLIC_URL ?>index.php?url=celulas/editar&id=<?= $celula['Id_Celula'] ?>" class="btn btn-sm btn-warning">Editar</a>
-        <a href="<?= PUBLIC_URL ?>index.php?url=celulas" class="btn btn-sm btn-secondary">Volver</a>
+        <?php if (AuthController::puede('celulas:editar')): ?>
+        <a href="<?= PUBLIC_URL ?>index.php?url=celulas/editar&id=<?= $idCelulaDetalle ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon celulas-action-btn--edit" title="Editar" aria-label="Editar">
+            <i class="bi bi-pencil-fill" aria-hidden="true"></i>
+        </a>
+        <?php endif; ?>
+        <a href="<?= PUBLIC_URL ?>index.php?url=celulas" class="btn btn-sm celulas-action-btn celulas-action-btn--icon" title="Volver" aria-label="Volver">
+            <i class="bi bi-arrow-left" aria-hidden="true"></i>
+        </a>
     </div>
 </div>
 
@@ -16,6 +39,11 @@
     <div class="detail-section">
         <h3>Información de la Célula</h3>
         <div class="detail-grid">
+            <div class="detail-item" style="grid-column: 1 / -1;">
+                <span class="detail-label">Fecha de apertura:</span>
+                <span class="detail-value" style="font-weight: 700; color: #1d4ed8;"><?= htmlspecialchars($fechaAperturaVisible) ?></span>
+            </div>
+
             <div class="detail-item">
                 <span class="detail-label">Nombre:</span>
                 <span class="detail-value"><?= htmlspecialchars($celula['Nombre_Celula']) ?></span>
@@ -35,11 +63,42 @@
                 <span class="detail-label">Hora de Reunión:</span>
                 <span class="detail-value"><?= htmlspecialchars($celula['Hora_Reunion'] ?? 'No especificada') ?></span>
             </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Estado:</span>
+                <span class="detail-value"><?= htmlspecialchars((string)($celula['Estado_Celula'] ?? 'Activa')) ?></span>
+            </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Ministerio:</span>
+                <span class="detail-value"><?= htmlspecialchars((string)($celula['Nombre_Ministerio'] ?? 'No especificado')) ?></span>
+            </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Líder:</span>
+                <span class="detail-value"><?= htmlspecialchars((string)($celula['Nombre_Lider'] ?? 'No especificado')) ?></span>
+            </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Pastor:</span>
+                <span class="detail-value"><?= htmlspecialchars(trim((string)($celula['Nombre_Pastor'] ?? $celula['Pastor_Principal'] ?? '')) ?: 'No especificado') ?></span>
+            </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Líder de 12:</span>
+                <span class="detail-value"><?= htmlspecialchars((string)($celula['Nombre_Lider_Inmediato'] ?? 'No especificado')) ?></span>
+            </div>
+
+            <div class="detail-item">
+                <span class="detail-label">Anfitrión:</span>
+                <span class="detail-value"><?= htmlspecialchars((string)($celula['Nombre_Anfitrion'] ?? 'No especificado')) ?></span>
+            </div>
         </div>
     </div>
 
     <div class="detail-section">
-        <h3>Miembros de la Célula (<?= count($celula['miembros'] ?? []) ?>)</h3>
+        <h3>Asistentes de la Célula (<?= count($celula['miembros'] ?? []) ?>)</h3>
+        <p style="margin: 0 0 12px; color: #5b6b86; font-size: 0.92em;">Regular: menos de 3 reuniones asistidas en esta célula. Frecuente: 3 o más.</p>
         
         <?php if (!empty($celula['miembros'])): ?>
             <div class="table-container">
@@ -47,21 +106,56 @@
                     <thead>
                         <tr>
                             <th>Nombre</th>
-                            <th>Apellido</th>
+                            <th>Documento</th>
                             <th>Teléfono</th>
-                            <th>Email</th>
+                            <th>Indicador</th>
+                            <th>Asistencias</th>
+                            <th>Proceso</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($celula['miembros'] as $miembro): ?>
+                            <?php
+                            $nombreCompleto = trim(($miembro['Nombre'] ?? '') . ' ' . ($miembro['Apellido'] ?? ''));
+                            $indicador = (string)($miembro['Indicador_Asistencia'] ?? 'Regular');
+                            $esFrecuente = $indicador === 'Frecuente';
+                            $documento = trim((string)($miembro['Numero_Documento'] ?? ''));
+                            if ($documento === '') {
+                                $documento = 'N/A';
+                            }
+                            $proceso = trim((string)($miembro['Proceso'] ?? ''));
+                            if ($proceso === '') {
+                                $proceso = 'Sin proceso';
+                            }
+                            ?>
                             <tr>
-                                <td><?= htmlspecialchars($miembro['Nombre']) ?></td>
-                                <td><?= htmlspecialchars($miembro['Apellido']) ?></td>
-                                <td><?= htmlspecialchars($miembro['Telefono'] ?? 'N/A') ?></td>
-                                <td><?= htmlspecialchars($miembro['Email'] ?? 'N/A') ?></td>
-                                <td>
-                                    <a href="<?= PUBLIC_URL ?>index.php?url=personas/detalle&id=<?= $miembro['Id_Persona'] ?>&return_to=celulas" class="btn btn-sm btn-info">Ver</a>
+                                <td data-label="Nombre"><?= htmlspecialchars($nombreCompleto) ?></td>
+                                <td data-label="Documento"><?= htmlspecialchars($documento) ?></td>
+                                <td data-label="Teléfono"><?= htmlspecialchars($miembro['Telefono'] ?? 'N/A') ?></td>
+                                <td data-label="Indicador">
+                                    <span class="badge <?= $esFrecuente ? 'badge-success' : 'badge-warning' ?>"><?= htmlspecialchars($indicador) ?></span>
+                                </td>
+                                <td data-label="Asistencias"><?= (int)($miembro['Total_Asistencias'] ?? 0) ?></td>
+                                <td data-label="Proceso"><?= htmlspecialchars($proceso) ?></td>
+                                <td data-label="Acciones">
+                                    <div class="action-buttons action-buttons-compact">
+                                        <?php if ($puedeVerPersona): ?>
+                                        <a href="<?= PUBLIC_URL ?>index.php?url=personas/detalle&id=<?= (int)$miembro['Id_Persona'] ?>&return_to=celulas&return_url=<?= urlencode($returnUrlCelula) ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <?php endif; ?>
+                                        <?php if ($puedeEditarPersona): ?>
+                                        <a href="<?= PUBLIC_URL ?>index.php?url=personas/editar&id=<?= (int)$miembro['Id_Persona'] ?>&return_to=celulas&return_url=<?= urlencode($returnUrlCelula) ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <?php endif; ?>
+                                        <?php if ($puedeEliminarPersona): ?>
+                                        <a href="<?= PUBLIC_URL ?>index.php?url=personas/eliminar&id=<?= (int)$miembro['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlCelula) ?>" class="action-icon-btn action-icon-danger" title="Eliminar de la base de datos" aria-label="Eliminar de la base de datos" onclick="return confirm('¿Eliminar de forma definitiva a <?= htmlspecialchars($nombreCompleto, ENT_QUOTES, 'UTF-8') ?>?\nSe borrará de la base de datos y no se puede deshacer.')">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                        <?php endif; ?>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -73,5 +167,84 @@
         <?php endif; ?>
     </div>
 </div>
+
+<style>
+.action-buttons-compact {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.action-icon-btn {
+    width: 27px;
+    height: 27px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    border: 1px solid transparent;
+    font-size: 13px;
+}
+.action-icon-info {
+    background: #e6f2ff;
+    color: #0d6efd;
+    border-color: #b7d7ff;
+}
+.action-icon-warning {
+    background: #fff4dd;
+    color: #9a6700;
+    border-color: #ffd98a;
+}
+.action-icon-danger {
+    background: #ffe8ea;
+    color: #c82333;
+    border-color: #ffc1c7;
+}
+.celulas-actions-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.celulas-action-btn {
+    border: 1px solid #d6e1f0;
+    background: #f6f9ff;
+    color: #2f4f7a;
+    font-weight: 600;
+}
+.celulas-action-btn:hover {
+    background: #edf3fc;
+    color: #274368;
+}
+.celulas-action-btn--icon {
+    min-width: 32px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8125rem;
+}
+.celulas-action-btn--report {
+    background: #e9f8ef;
+    border-color: #c6ebd4;
+    color: #1f7a44;
+}
+.celulas-action-btn--report:hover {
+    background: #def4e7;
+    color: #176a39;
+}
+.celulas-action-btn--edit {
+    background: #fff8e8;
+    border-color: #f1ddb1;
+    color: #8a6400;
+}
+.celulas-action-btn--edit:hover {
+    background: #fff1d8;
+    color: #7a5600;
+}
+</style>
 
 <?php include VIEWS . '/layout/footer.php'; ?>

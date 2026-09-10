@@ -336,36 +336,6 @@ class EscaleraAsistenciaSync {
     }
 
     private function calcularProcesoPorChecklist(array $checklistNormalizado): string {
-        if (!empty($checklistNormalizado['Ganar'][5])) {
-            return 'Ganar';
-        }
-
-        $etapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
-        $completadasSeguidas = 0;
-
-        foreach ($etapas as $etapa) {
-            $valores = $checklistNormalizado[$etapa] ?? [false, false, false];
-            if ($etapa === 'Ganar') {
-                $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]) && !empty($valores[3]);
-            } elseif ($etapa === 'Enviar') {
-                $completa = !empty($valores[2]);
-            } else {
-                $completa = !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]);
-            }
-
-            if (!$completa) {
-                break;
-            }
-            $completadasSeguidas++;
-        }
-
-        if ($completadasSeguidas === 0) {
-            return 'Ganar';
-        }
-        if ($completadasSeguidas >= count($etapas)) {
-            return 'Enviar';
-        }
-
-        return $etapas[$completadasSeguidas];
+        return $this->personaModel->calcularProcesoDesdeChecklist($checklistNormalizado);
     }
 }

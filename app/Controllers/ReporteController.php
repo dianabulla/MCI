@@ -2466,8 +2466,62 @@ class ReporteController extends BaseController {
         return [
             'celulas' => 0,
             'asistentes' => 0,
+            'nuevos' => 0,
+            'antiguas' => 0,
+            'frecuentes' => 0,
+            'regulares' => 0,
             'semanas_sin_entregar_sobre' => 0,
             'semanas_sin_reportar' => 0,
+        ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $miembros
+     * @param array<int, int> $conteosPersona
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function clasificarAsistentesReporteCelula(array $miembros, array $conteosPersona): array {
+        $asistentes = [];
+        $nuevos = [];
+        $antiguas = [];
+        $frecuentes = [];
+        $regulares = [];
+
+        foreach ($miembros as $miembro) {
+            $idPersona = (int)($miembro['Id_Persona'] ?? 0);
+            if ($idPersona <= 0) {
+                continue;
+            }
+            $asistencias = (int)($conteosPersona[$idPersona] ?? 0);
+            $esAntigua = ((int)($miembro['Es_Antiguo'] ?? 1) === 1);
+            $esFrecuente = $asistencias >= 3;
+            $item = [
+                'nombre' => trim((string)($miembro['Nombre'] ?? '') . ' ' . (string)($miembro['Apellido'] ?? '')),
+                'documento' => trim((string)($miembro['Numero_Documento'] ?? '')),
+                'telefono' => trim((string)($miembro['Telefono'] ?? '')),
+                'tipo' => $esAntigua ? 'Antigua' : 'Nueva',
+                'frecuencia' => $esFrecuente ? 'Frecuente' : 'Regular',
+                'asistencias' => $asistencias,
+            ];
+            $asistentes[] = $item;
+            if ($esAntigua) {
+                $antiguas[] = $item;
+            } else {
+                $nuevos[] = $item;
+            }
+            if ($esFrecuente) {
+                $frecuentes[] = $item;
+            } else {
+                $regulares[] = $item;
+            }
+        }
+
+        return [
+            'asistentes_personas' => $asistentes,
+            'nuevos_personas' => $nuevos,
+            'antiguas_personas' => $antiguas,
+            'frecuentes_personas' => $frecuentes,
+            'regulares_personas' => $regulares,
         ];
     }
 
@@ -2747,7 +2801,7 @@ class ReporteController extends BaseController {
     /**
      * Reporte operativo de células agrupado por ministerio y líder (célula o 12+célula).
      */
-    private function construirReporteOperativoCelulasPorLider(
+    public function construirReporteOperativoCelulasPorLider(
         int $anio,
         $filtroCelulas,
         $filtroMinisterio = '',
@@ -2797,6 +2851,8 @@ class ReporteController extends BaseController {
         );
         $ultimasFechasAnio = $this->asistenciaModel->getUltimaFechaReportePorCelulaEnRango($idsCelula, $fechaInicioAnio, $fechaFinAnio);
         $miembrosPorCelula = $this->celulaModel->getConteoMiembrosActivosPorCelulas($idsCelula);
+        $detalleMiembrosPorCelula = $this->celulaModel->getMiembrosActivosDetallePorCelulas($idsCelula);
+        $conteosAsistenciaPorCelula = $this->asistenciaModel->getConteoAsistenciasPorCelulas($idsCelula);
 
         $metricasPorCelula = [];
         foreach ($celulas as $celula) {
@@ -2811,6 +2867,11 @@ class ReporteController extends BaseController {
                 $ministerio = 'Sin ministerio';
             }
 
+            $clasificacion = $this->clasificarAsistentesReporteCelula(
+                $detalleMiembrosPorCelula[$idCelula] ?? [],
+                $conteosAsistenciaPorCelula[$idCelula] ?? []
+            );
+
             $metricasPorCelula[$idCelula] = [
                 'id_celula' => $idCelula,
                 'id_lider' => $idLider,
@@ -2818,7 +2879,16 @@ class ReporteController extends BaseController {
                 'ministerio' => $ministerio,
                 'nombre_lider' => trim((string)($celula['Nombre_Lider'] ?? '')) ?: 'Sin líder',
                 'nombre_celula' => trim((string)($celula['Nombre_Celula'] ?? '')) ?: ('Célula #' . $idCelula),
-                'miembros' => (int)($miembrosPorCelula[$idCelula] ?? 0),
+                'miembros' => (int)($miembrosPorCelula[$idCelula] ?? count($clasificacion['asistentes_personas'])),
+                'nuevos' => count($clasificacion['nuevos_personas']),
+                'antiguas' => count($clasificacion['antiguas_personas']),
+                'frecuentes' => count($clasificacion['frecuentes_personas']),
+                'regulares' => count($clasificacion['regulares_personas']),
+                'asistentes_personas' => $clasificacion['asistentes_personas'],
+                'nuevos_personas' => $clasificacion['nuevos_personas'],
+                'antiguas_personas' => $clasificacion['antiguas_personas'],
+                'frecuentes_personas' => $clasificacion['frecuentes_personas'],
+                'regulares_personas' => $clasificacion['regulares_personas'],
                 'semanas_sin_entregar_sobre' => $this->contarSobresPendientesCelulaAnio($idCelula, $semanasReportadas, $entregasSobre),
                 'semanas_sin_reportar' => $this->contarSemanasSinReportarCelula(
                     $celula,
@@ -2889,6 +2959,7 @@ class ReporteController extends BaseController {
                     'id_ministerio' => $idMinisterio,
                     'ministerio' => $ministerio,
                     'lideres' => [],
+                    'filas' => [],
                     'ids_celulas' => [],
                     'subtotales' => $this->vaciosTotalesReporteCelulasLider(),
                 ];
@@ -2905,6 +2976,29 @@ class ReporteController extends BaseController {
                 'detalle_sin_entregar_sobre' => $this->fusionarDetalleSemanasPorCelulas($celulasLider, 'detalle_sin_entregar_sobre'),
                 'detalle_sin_reportar' => $this->fusionarDetalleSemanasPorCelulas($celulasLider, 'detalle_sin_reportar'),
             ];
+
+            foreach ($celulasLider as $metricaFila) {
+                $gruposMap[$grupoKey]['filas'][] = [
+                    'id_celula' => (int)($metricaFila['id_celula'] ?? 0),
+                    'celula' => (string)($metricaFila['nombre_celula'] ?? ''),
+                    'lider' => $nombreLider,
+                    'tipo' => $tipoLider,
+                    'asistentes' => (int)($metricaFila['miembros'] ?? 0),
+                    'nuevos' => (int)($metricaFila['nuevos'] ?? 0),
+                    'antiguas' => (int)($metricaFila['antiguas'] ?? 0),
+                    'frecuentes' => (int)($metricaFila['frecuentes'] ?? 0),
+                    'regulares' => (int)($metricaFila['regulares'] ?? 0),
+                    'asistentes_personas' => $metricaFila['asistentes_personas'] ?? [],
+                    'nuevos_personas' => $metricaFila['nuevos_personas'] ?? [],
+                    'antiguas_personas' => $metricaFila['antiguas_personas'] ?? [],
+                    'frecuentes_personas' => $metricaFila['frecuentes_personas'] ?? [],
+                    'regulares_personas' => $metricaFila['regulares_personas'] ?? [],
+                    'semanas_sin_entregar_sobre' => (int)($metricaFila['semanas_sin_entregar_sobre'] ?? 0),
+                    'semanas_sin_reportar' => (int)($metricaFila['semanas_sin_reportar'] ?? 0),
+                    'detalle_sin_entregar_sobre' => $metricaFila['detalle_sin_entregar_sobre'] ?? [],
+                    'detalle_sin_reportar' => $metricaFila['detalle_sin_reportar'] ?? [],
+                ];
+            }
 
             $gruposMap[$grupoKey]['ids_celulas'] = array_values(array_unique(array_merge(
                 $gruposMap[$grupoKey]['ids_celulas'],
@@ -2927,6 +3021,13 @@ class ReporteController extends BaseController {
                 }
                 return strcmp((string)($a['lider'] ?? ''), (string)($b['lider'] ?? ''));
             });
+            usort($grupo['filas'], static function($a, $b) {
+                $cmpLider = strcmp((string)($a['lider'] ?? ''), (string)($b['lider'] ?? ''));
+                if ($cmpLider !== 0) {
+                    return $cmpLider;
+                }
+                return strcmp((string)($a['celula'] ?? ''), (string)($b['celula'] ?? ''));
+            });
 
             $idsCelulasGrupo = array_values(array_unique(array_map('intval', (array)($grupo['ids_celulas'] ?? []))));
             $semanasSinEntregarSobreGrupo = 0;
@@ -2942,12 +3043,22 @@ class ReporteController extends BaseController {
             $grupo['subtotales'] = [
                 'celulas' => count($idsCelulasGrupo),
                 'asistentes' => $this->celulaModel->contarMiembrosActivosUnicosEnCelulas($idsCelulasGrupo),
+                'nuevos' => 0,
+                'antiguas' => 0,
+                'frecuentes' => 0,
+                'regulares' => 0,
                 'semanas_sin_entregar_sobre' => $semanasSinEntregarSobreGrupo,
                 'semanas_sin_reportar' => $semanasSinReportarGrupo,
             ];
+            foreach ((array)($grupo['filas'] ?? []) as $filaCel) {
+                $grupo['subtotales']['nuevos'] += (int)($filaCel['nuevos'] ?? 0);
+                $grupo['subtotales']['antiguas'] += (int)($filaCel['antiguas'] ?? 0);
+                $grupo['subtotales']['frecuentes'] += (int)($filaCel['frecuentes'] ?? 0);
+                $grupo['subtotales']['regulares'] += (int)($filaCel['regulares'] ?? 0);
+            }
             unset($grupo['ids_celulas']);
 
-            foreach (['celulas', 'semanas_sin_entregar_sobre', 'semanas_sin_reportar'] as $campo) {
+            foreach (['celulas', 'nuevos', 'antiguas', 'frecuentes', 'regulares', 'semanas_sin_entregar_sobre', 'semanas_sin_reportar'] as $campo) {
                 $totales[$campo] += (int)($grupo['subtotales'][$campo] ?? 0);
             }
         }
@@ -4186,6 +4297,26 @@ class ReporteController extends BaseController {
             ($filtroLider !== '' && (int)$filtroLider > 0) ? (int)$filtroLider : null
         );
 
+        $celFiltroDesde = $this->normalizarFechaYmd($_GET['cel_desde'] ?? '');
+        $celFiltroHasta = $this->normalizarFechaYmd($_GET['cel_hasta'] ?? '');
+        $anioReporteCelulas = (int)date('Y');
+        $reporteCelulasPorLider = [
+            'grupos' => [],
+            'totales' => [],
+            'fecha_desde' => '',
+            'fecha_hasta' => '',
+        ];
+        if ($tipoReporte === 'celulas') {
+            $reporteCelulasPorLider = $this->construirReporteOperativoCelulasPorLider(
+                $anioReporteCelulas,
+                $filtroCelulas,
+                $filtroMinisterio,
+                $filtroLider,
+                $celFiltroDesde !== '' ? $celFiltroDesde : null,
+                $celFiltroHasta !== '' ? $celFiltroHasta : null
+            );
+        }
+
         $data = [
             'tipo_reporte' => $tipoReporte,
             'fecha_referencia' => $fechaReferencia,
@@ -4241,6 +4372,10 @@ class ReporteController extends BaseController {
             'tabla_escuelas_uv_ministerio_genero' => $tablaEscuelasUvMinisterioGenero,
             'filtro_escuela_programa' => $filtroProgramaEscuelas,
             'filtro_escuela_buscar' => $filtroBusquedaEscuelas,
+            'reporte_celulas_por_lider' => $reporteCelulasPorLider,
+            'cel_filtro_desde' => $celFiltroDesde,
+            'cel_filtro_hasta' => $celFiltroHasta,
+            'anio_reporte_celulas' => $anioReporteCelulas,
         ];
 
         $this->view('reportes/index', $data);
@@ -5523,10 +5658,13 @@ class ReporteController extends BaseController {
 
         $headers = [
             'Ministerio',
+            'Célula',
             'Líder',
-            'Tipo',
-            'Células',
             'Asistentes',
+            'Nuevos',
+            'Antiguas',
+            'Frecuentes',
+            'Regulares',
             'Semanas sin entregar sobre',
             'Semanas sin reportar',
         ];
@@ -5535,16 +5673,37 @@ class ReporteController extends BaseController {
 
         foreach ((array)($reporte['grupos'] ?? []) as $grupo) {
             $ministerio = (string)($grupo['ministerio'] ?? 'Sin ministerio');
-            foreach ((array)($grupo['lideres'] ?? []) as $lider) {
-                $rows[] = [
-                    $ministerio,
-                    (string)($lider['lider'] ?? ''),
-                    (string)($lider['tipo'] ?? ''),
-                    (string)(int)($lider['celulas'] ?? 0),
-                    (string)(int)($lider['asistentes'] ?? 0),
-                    (string)(int)($lider['semanas_sin_entregar_sobre'] ?? 0),
-                    (string)(int)($lider['semanas_sin_reportar'] ?? 0),
-                ];
+            $filasExport = (array)($grupo['filas'] ?? []);
+            if ($filasExport === []) {
+                foreach ((array)($grupo['lideres'] ?? []) as $lider) {
+                    $rows[] = [
+                        $ministerio,
+                        (string)($lider['lider'] ?? ''),
+                        (string)($lider['lider'] ?? ''),
+                        (string)(int)($lider['asistentes'] ?? 0),
+                        '0',
+                        '0',
+                        '0',
+                        '0',
+                        (string)(int)($lider['semanas_sin_entregar_sobre'] ?? 0),
+                        (string)(int)($lider['semanas_sin_reportar'] ?? 0),
+                    ];
+                }
+            } else {
+                foreach ($filasExport as $filaExp) {
+                    $rows[] = [
+                        $ministerio,
+                        (string)($filaExp['celula'] ?? ''),
+                        (string)($filaExp['lider'] ?? ''),
+                        (string)(int)($filaExp['asistentes'] ?? 0),
+                        (string)(int)($filaExp['nuevos'] ?? 0),
+                        (string)(int)($filaExp['antiguas'] ?? 0),
+                        (string)(int)($filaExp['frecuentes'] ?? 0),
+                        (string)(int)($filaExp['regulares'] ?? 0),
+                        (string)(int)($filaExp['semanas_sin_entregar_sobre'] ?? 0),
+                        (string)(int)($filaExp['semanas_sin_reportar'] ?? 0),
+                    ];
+                }
             }
 
             $sub = is_array($grupo['subtotales'] ?? null) ? $grupo['subtotales'] : [];
@@ -5552,8 +5711,11 @@ class ReporteController extends BaseController {
                 'Subtotal ' . $ministerio,
                 '',
                 '',
-                (string)(int)($sub['celulas'] ?? 0),
                 (string)(int)($sub['asistentes'] ?? 0),
+                (string)(int)($sub['nuevos'] ?? 0),
+                (string)(int)($sub['antiguas'] ?? 0),
+                (string)(int)($sub['frecuentes'] ?? 0),
+                (string)(int)($sub['regulares'] ?? 0),
                 (string)(int)($sub['semanas_sin_entregar_sobre'] ?? 0),
                 (string)(int)($sub['semanas_sin_reportar'] ?? 0),
             ];
@@ -5564,8 +5726,11 @@ class ReporteController extends BaseController {
             'TOTAL GENERAL',
             '',
             '',
-            (string)(int)($totales['celulas'] ?? 0),
             (string)(int)($totales['asistentes'] ?? 0),
+            (string)(int)($totales['nuevos'] ?? 0),
+            (string)(int)($totales['antiguas'] ?? 0),
+            (string)(int)($totales['frecuentes'] ?? 0),
+            (string)(int)($totales['regulares'] ?? 0),
             (string)(int)($totales['semanas_sin_entregar_sobre'] ?? 0),
             (string)(int)($totales['semanas_sin_reportar'] ?? 0),
         ];
