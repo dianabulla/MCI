@@ -43,45 +43,12 @@ foreach ($tablaUvAvanceRedes as $filaUvAv) {
     }
 }
 
-$indicadoresEscalera = is_array($indicadores_encuentro_uv ?? null) ? $indicadores_encuentro_uv : [];
-$kpiTotalPersonas = (int)($indicadoresEscalera['total_personas'] ?? 0);
-$kpiConUv = (int)($indicadoresEscalera['con_uv_escalera'] ?? 0);
-$kpiSinUv = (int)($indicadoresEscalera['sin_uv_escalera'] ?? 0);
-$kpiConEncuentro = (int)($indicadoresEscalera['con_encuentro_escalera'] ?? 0);
-$kpiConBautismo = (int)($indicadoresEscalera['con_bautismo_escalera'] ?? 0);
-$kpiConCapDestino = (int)($indicadoresEscalera['con_capacitacion_destino'] ?? 0);
-$kpiPctConUv = (float)($indicadoresEscalera['pct_con_uv'] ?? 0);
-$kpiPctSinUv = (float)($indicadoresEscalera['pct_sin_uv'] ?? 0);
-$kpiPctCapDestino = (float)($indicadoresEscalera['pct_capacitacion_destino'] ?? 0);
-$desglosePorLider12 = is_array($indicadoresEscalera['desglose_por_lider12'] ?? null)
-    ? $indicadoresEscalera['desglose_por_lider12']
+$indicadoresEscaleraSemestres = is_array($indicadores_encuentro_uv_semestres ?? null)
+    ? $indicadores_encuentro_uv_semestres
     : [];
-
-$kpiIndicadores = [
-    'total' => ['label' => 'Total personas', 'valor' => $kpiTotalPersonas, 'clase' => 'uv-kpi-total'],
-    'con_uv' => ['label' => 'Universidad de la Vida', 'valor' => $kpiConUv, 'clase' => 'uv-kpi-ok', 'pct' => $kpiPctConUv],
-    'sin_uv' => ['label' => 'Sin Universidad de la Vida', 'valor' => $kpiSinUv, 'clase' => 'uv-kpi-warn', 'pct' => $kpiPctSinUv],
-    'encuentro' => [
-        'label' => 'Encuentro',
-        'valor' => $kpiConEncuentro,
-        'clase' => 'uv-kpi-ok',
-        'style' => 'background:#ecfdf5;border-color:#6ee7b7;',
-    ],
-    'bautismo' => [
-        'label' => 'Bautismo',
-        'valor' => $kpiConBautismo,
-        'clase' => 'uv-kpi-ok',
-        'style' => 'background:#f5f3ff;border-color:#c4b5fd;',
-    ],
-    'cap_destino' => [
-        'label' => 'Capacitación Destino',
-        'valor' => $kpiConCapDestino,
-        'clase' => 'uv-kpi-ok',
-        'style' => 'background:#fffbeb;border-color:#e9c46a;',
-        'pct' => $kpiPctCapDestino,
-        'strong_style' => 'color:#7a4e08;',
-    ],
-];
+if ($indicadoresEscaleraSemestres === [] && is_array($indicadores_encuentro_uv ?? null) && $indicadores_encuentro_uv !== []) {
+    $indicadoresEscaleraSemestres = [$indicadores_encuentro_uv];
+}
 ?>
 
 <div class="dash-card uv-encuentro-kpis cap-dash-kpis">
@@ -229,28 +196,75 @@ $kpiIndicadores = [
 })();
 </script>
 
-<div class="dash-card uv-encuentro-kpis" id="uvIndicadoresEscalera">
+<?php
+foreach ($indicadoresEscaleraSemestres as $idxEscalera => $indicadoresEscalera):
+    $indicadoresEscalera = is_array($indicadoresEscalera) ? $indicadoresEscalera : [];
+    $kpiTotalPersonas = (int)($indicadoresEscalera['total_personas'] ?? 0);
+    $kpiConUv = (int)($indicadoresEscalera['con_uv_escalera'] ?? 0);
+    $kpiSinUv = (int)($indicadoresEscalera['sin_uv_escalera'] ?? 0);
+    $kpiConEncuentro = (int)($indicadoresEscalera['con_encuentro_escalera'] ?? 0);
+    $kpiConBautismo = (int)($indicadoresEscalera['con_bautismo_escalera'] ?? 0);
+    $kpiConCapDestino = (int)($indicadoresEscalera['con_capacitacion_destino'] ?? 0);
+    $kpiPctConUv = (float)($indicadoresEscalera['pct_con_uv'] ?? 0);
+    $kpiPctSinUv = (float)($indicadoresEscalera['pct_sin_uv'] ?? 0);
+    $kpiPctCapDestino = (float)($indicadoresEscalera['pct_capacitacion_destino'] ?? 0);
+    $desglosePorLider12 = is_array($indicadoresEscalera['desglose_por_lider12'] ?? null)
+        ? $indicadoresEscalera['desglose_por_lider12']
+        : [];
+    $etiquetaEscalera = trim((string)($indicadoresEscalera['etiqueta_periodo'] ?? $etiquetaPeriodoUvDash));
+    $fechaIniEscalera = trim((string)($indicadoresEscalera['fecha_inicio'] ?? $fechaIniUv));
+    $fechaFinEscalera = trim((string)($indicadoresEscalera['fecha_fin'] ?? $fechaFinUv));
+    $sufijoEscalera = (int)$idxEscalera;
+    $kpiIndicadores = [
+        'total' => ['label' => 'Total personas', 'valor' => $kpiTotalPersonas, 'clase' => 'uv-kpi-total'],
+        'con_uv' => ['label' => 'Universidad de la Vida', 'valor' => $kpiConUv, 'clase' => 'uv-kpi-ok', 'pct' => $kpiPctConUv],
+        'sin_uv' => ['label' => 'Sin Universidad de la Vida', 'valor' => $kpiSinUv, 'clase' => 'uv-kpi-warn', 'pct' => $kpiPctSinUv],
+        'encuentro' => [
+            'label' => 'Encuentro',
+            'valor' => $kpiConEncuentro,
+            'clase' => 'uv-kpi-ok',
+            'style' => 'background:#ecfdf5;border-color:#6ee7b7;',
+        ],
+        'bautismo' => [
+            'label' => 'Bautismo',
+            'valor' => $kpiConBautismo,
+            'clase' => 'uv-kpi-ok',
+            'style' => 'background:#f5f3ff;border-color:#c4b5fd;',
+        ],
+        'cap_destino' => [
+            'label' => 'Capacitación Destino',
+            'valor' => $kpiConCapDestino,
+            'clase' => 'uv-kpi-ok',
+            'style' => 'background:#fffbeb;border-color:#e9c46a;',
+            'pct' => $kpiPctCapDestino,
+            'strong_style' => 'color:#7a4e08;',
+        ],
+    ];
+?>
+<div class="dash-card uv-encuentro-kpis js-uv-escalera-bloque" id="uvIndicadoresEscalera-<?= $sufijoEscalera ?>" data-escalera-idx="<?= $sufijoEscalera ?>">
     <h4 class="section-title" style="margin-bottom:6px;">Escalera del éxito — Consolidar</h4>
     <p class="uv-dash-kpi-note">
+        Periodo: <strong><?= htmlspecialchars($etiquetaEscalera !== '' ? $etiquetaEscalera : $etiquetaPeriodoUvDash) ?></strong>
+        (<?= htmlspecialchars($fechaIniEscalera) ?> a <?= htmlspecialchars($fechaFinEscalera) ?>).
         <?php
         $alcanceKpi = (string)($indicadoresEscalera['alcance'] ?? 'toda_la_iglesia');
         if ($alcanceKpi === 'ministerio'): ?>
-            Personas <strong>nuevas</strong> (casilla Nuevo) <strong>registradas en este periodo</strong> del ministerio filtrado.
+            Personas <strong>nuevas</strong> (casilla Nuevo) <strong>registradas en este semestre</strong> del ministerio filtrado.
         <?php elseif ($alcanceKpi === 'lider'): ?>
-            Personas <strong>nuevas</strong> (casilla Nuevo) <strong>registradas en este periodo</strong> bajo el líder filtrado.
+            Personas <strong>nuevas</strong> (casilla Nuevo) <strong>registradas en este semestre</strong> bajo el líder filtrado.
         <?php elseif ($alcanceKpi === 'alcance_rol'): ?>
-            Personas <strong>nuevas</strong> visibles para tu rol, <strong>registradas en este periodo</strong>.
+            Personas <strong>nuevas</strong> visibles para tu rol, <strong>registradas en este semestre</strong>.
         <?php else: ?>
-            Personas <strong>nuevas</strong> (casilla Nuevo) <strong>registradas en este periodo</strong> en toda la iglesia.
+            Personas <strong>nuevas</strong> (casilla Nuevo) <strong>registradas en este semestre</strong> en toda la iglesia.
         <?php endif; ?>
-            <strong>UV</strong> = inscripción/asistencia de UV, peldaño de Universidad de la vida en la <strong>escalera rápida</strong>, o etapa Consolidar ya superada (Proceso en Discipular/Enviar).
+            No se mezclan con el semestre anterior. <strong>UV</strong> = inscripción/asistencia de UV, peldaño de Universidad de la vida en la <strong>escalera rápida</strong>, o etapa Consolidar ya superada (Proceso en Discipular/Enviar).
             <strong>Sin UV</strong> = no tiene ese peldaño ni inscripción UV ni etapas posteriores.
             <strong>Encuentro</strong> = lista de asistencias (clases 5–6).
             <strong>Bautismo</strong> = inscripción o asistencia de bautismo.
             <strong>Capacitación Destino</strong> = inscripción a un nivel.
     </p>
     <p class="uv-dash-kpi-hint">Clic en un indicador para ver cuántas personas tiene cada líder principal de 12.</p>
-    <div class="uv-kpi-row uv-kpi-row-encuentro" id="uvKpiRowEscalera">
+    <div class="uv-kpi-row uv-kpi-row-encuentro js-uv-kpi-row">
         <?php foreach ($kpiIndicadores as $kpiKey => $kpiMeta): ?>
             <?php
             $styleInline = trim((string)($kpiMeta['style'] ?? ''));
@@ -282,18 +296,18 @@ $kpiIndicadores = [
         <span class="uv-legend-pendiente">Sin Universidad de la Vida</span>
     </div>
     <?php else: ?>
-    <p class="uv-dash-kpi-empty">No hay personas en la base con los filtros actuales.</p>
+    <p class="uv-dash-kpi-empty">No hay personas nuevas registradas en este semestre con los filtros actuales.</p>
     <?php endif; ?>
 
-    <div id="uvKpiDesglosePanel" class="uv-kpi-desglose-panel" hidden>
+    <div class="uv-kpi-desglose-panel js-uv-desglose-panel" hidden>
         <div class="uv-kpi-desglose-head">
-            <h5 id="uvKpiDesgloseTitulo">Por líder principal de 12</h5>
-            <button type="button" class="uv-kpi-desglose-cerrar" id="uvKpiDesgloseCerrar" aria-label="Cerrar detalle">&times;</button>
+            <h5 class="js-uv-desglose-titulo">Por líder principal de 12</h5>
+            <button type="button" class="uv-kpi-desglose-cerrar js-uv-desglose-cerrar" aria-label="Cerrar detalle">&times;</button>
         </div>
         <p class="uv-dash-kpi-hint uv-kpi-desglose-note">Solo líderes principales de 12 del ministerio. Las personas de su red se suman a cada uno. Clic en el líder para ver el listado y abrir su ficha.</p>
-        <div id="uvKpiVistaLideres">
+        <div class="js-uv-vista-lideres">
             <div class="table-container">
-                <table class="dash-min-table" id="uvKpiDesgloseTabla">
+                <table class="dash-min-table">
                     <thead>
                         <tr>
                             <th>#</th>
@@ -302,26 +316,26 @@ $kpiIndicadores = [
                             <th>Personas</th>
                         </tr>
                     </thead>
-                    <tbody id="uvKpiDesgloseBody"></tbody>
+                    <tbody class="js-uv-desglose-body"></tbody>
                     <tfoot>
                         <tr style="background:#f8fafc; font-weight:700;">
                             <td colspan="3">TOTAL</td>
-                            <td id="uvKpiDesgloseTotal">0</td>
+                            <td class="js-uv-desglose-total">0</td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
-            <p id="uvKpiDesgloseVacio" class="uv-dash-kpi-empty" hidden>No hay personas en este indicador para los filtros actuales.</p>
+            <p class="uv-dash-kpi-empty js-uv-desglose-vacio" hidden>No hay personas en este indicador para los filtros actuales.</p>
         </div>
-        <div id="uvKpiVistaPersonas" hidden>
-            <button type="button" class="uv-kpi-desglose-volver" id="uvKpiPersonasVolver">
+        <div class="js-uv-vista-personas" hidden>
+            <button type="button" class="uv-kpi-desglose-volver js-uv-personas-volver">
                 <span class="uv-kpi-desglose-volver-icon" aria-hidden="true">←</span>
                 Volver a líderes
             </button>
-            <h5 id="uvKpiPersonasTitulo" class="uv-kpi-detalle-titulo">Personas</h5>
+            <h5 class="uv-kpi-detalle-titulo js-uv-personas-titulo">Personas</h5>
             <p class="uv-dash-kpi-hint">Clic en <strong>Editar ficha</strong> para actualizar esa persona.</p>
             <div class="table-container">
-                <table class="dash-min-table" id="uvKpiPersonasTabla">
+                <table class="dash-min-table">
                     <thead>
                         <tr>
                             <th>#</th>
@@ -329,35 +343,20 @@ $kpiIndicadores = [
                             <th>Ficha</th>
                         </tr>
                     </thead>
-                    <tbody id="uvKpiPersonasBody"></tbody>
+                    <tbody class="js-uv-personas-body"></tbody>
                 </table>
             </div>
-            <p id="uvKpiPersonasVacio" class="uv-dash-kpi-empty" hidden>Este líder no tiene personas en este indicador.</p>
+            <p class="uv-dash-kpi-empty js-uv-personas-vacio" hidden>Este líder no tiene personas en este indicador.</p>
         </div>
     </div>
+    <script type="application/json" class="js-uv-escalera-desglose"><?= json_encode($desglosePorLider12, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?></script>
 </div>
+<?php endforeach; ?>
 
 <script>
-window.UV_ESCALERA_DESGLOSE = <?= json_encode($desglosePorLider12, JSON_UNESCAPED_UNICODE) ?>;
 window.UV_URL_EDITAR_PERSONA = <?= json_encode(function_exists('public_app_url') ? public_app_url('personas/editar') : (rtrim((string)PUBLIC_URL, '/') . '/index.php?url=personas/editar'), JSON_UNESCAPED_UNICODE) ?>;
 (function () {
-    const desglose = window.UV_ESCALERA_DESGLOSE || {};
     const urlEditarBase = String(window.UV_URL_EDITAR_PERSONA || '');
-    const panel = document.getElementById('uvKpiDesglosePanel');
-    const titulo = document.getElementById('uvKpiDesgloseTitulo');
-    const body = document.getElementById('uvKpiDesgloseBody');
-    const totalEl = document.getElementById('uvKpiDesgloseTotal');
-    const vacio = document.getElementById('uvKpiDesgloseVacio');
-    const btnCerrar = document.getElementById('uvKpiDesgloseCerrar');
-    const vistaLideres = document.getElementById('uvKpiVistaLideres');
-    const vistaPersonas = document.getElementById('uvKpiVistaPersonas');
-    const personasTitulo = document.getElementById('uvKpiPersonasTitulo');
-    const personasBody = document.getElementById('uvKpiPersonasBody');
-    const personasVacio = document.getElementById('uvKpiPersonasVacio');
-    const btnVolverPersonas = document.getElementById('uvKpiPersonasVolver');
-    const botones = document.querySelectorAll('.uv-kpi-clickable[data-uv-kpi]');
-    let kpiActivo = '';
-    let filasKpi = [];
 
     function escHtml(texto) {
         const div = document.createElement('div');
@@ -375,134 +374,158 @@ window.UV_URL_EDITAR_PERSONA = <?= json_encode(function_exists('public_app_url')
             + '&return_url=' + encodeURIComponent(window.location.href);
     }
 
-    function mostrarVistaLideres() {
-        if (vistaLideres) {
-            vistaLideres.hidden = false;
-        }
-        if (vistaPersonas) {
-            vistaPersonas.hidden = true;
-        }
-    }
-
-    function renderPersonasLider(fila) {
-        const personas = Array.isArray(fila && fila.personas) ? fila.personas : [];
-        const nombreLider = (fila && fila.lider) ? fila.lider : 'Sin líder de 12';
-        if (personasTitulo) {
-            personasTitulo.textContent = 'Personas de ' + nombreLider + ' (' + personas.length + ')';
-        }
-        if (personasBody) {
-            personasBody.innerHTML = '';
-            personas.forEach(function (persona, idx) {
-                const idPersona = parseInt(persona.id, 10) || 0;
-                const nombre = persona.nombre || 'Sin nombre';
-                const href = urlEditarPersona(idPersona);
-                const tr = document.createElement('tr');
-                const celdaFicha = href
-                    ? '<a class="uv-kpi-ficha-link" href="' + escHtml(href) + '">Editar ficha</a>'
-                    : '—';
-                tr.innerHTML = '<td style="color:#94a3b8;">' + (idx + 1) + '</td>'
-                    + '<td>' + escHtml(nombre) + '</td>'
-                    + '<td>' + celdaFicha + '</td>';
-                personasBody.appendChild(tr);
-            });
-        }
-        if (personasVacio) {
-            personasVacio.hidden = personas.length > 0;
-        }
-        if (vistaLideres) {
-            vistaLideres.hidden = true;
-        }
-        if (vistaPersonas) {
-            vistaPersonas.hidden = false;
-        }
-        if (vistaPersonas && typeof vistaPersonas.scrollIntoView === 'function') {
-            vistaPersonas.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-    }
-
-    function renderDesglose(kpiKey, label) {
-        filasKpi = Array.isArray(desglose[kpiKey]) ? desglose[kpiKey] : [];
-        const total = filasKpi.reduce(function (acc, fila) {
-            return acc + (parseInt(fila.total, 10) || 0);
-        }, 0);
-
-        if (titulo) {
-            titulo.textContent = label + ' · por líder principal de 12';
-        }
-        if (body) {
-            body.innerHTML = '';
-            filasKpi.forEach(function (fila, idx) {
-                const cant = parseInt(fila.total, 10) || 0;
-                const lider = fila.lider || 'Sin líder de 12';
-                const ministerio = fila.ministerio || 'Sin ministerio';
-                const tr = document.createElement('tr');
-                const btnLider = cant > 0
-                    ? '<button type="button" class="uv-kpi-lider-link" data-uv-lider-idx="' + idx + '">' + escHtml(lider) + '</button>'
-                    : escHtml(lider);
-                tr.innerHTML = '<td style="color:#94a3b8;">' + (idx + 1) + '</td>'
-                    + '<td>' + btnLider + '</td>'
-                    + '<td>' + escHtml(ministerio) + '</td>'
-                    + '<td>' + (cant > 0 ? '<strong>' + cant + '</strong>' : '0') + '</td>';
-                body.appendChild(tr);
-            });
-            body.querySelectorAll('.uv-kpi-lider-link').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    const idx = parseInt(btn.getAttribute('data-uv-lider-idx') || '-1', 10);
-                    if (idx < 0 || !filasKpi[idx]) {
-                        return;
-                    }
-                    renderPersonasLider(filasKpi[idx]);
-                });
-            });
-        }
-        if (totalEl) {
-            totalEl.textContent = String(total);
-        }
-        if (vacio) {
-            vacio.hidden = filasKpi.length > 0;
-        }
-        mostrarVistaLideres();
-        if (panel) {
-            panel.hidden = false;
-        }
-    }
-
-    function cerrarDesglose() {
-        kpiActivo = '';
-        filasKpi = [];
-        botones.forEach(function (btn) {
-            btn.classList.remove('is-active');
-            btn.setAttribute('aria-pressed', 'false');
-        });
-        mostrarVistaLideres();
-        if (panel) {
-            panel.hidden = true;
-        }
-    }
-
-    botones.forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            const kpiKey = btn.getAttribute('data-uv-kpi') || '';
-            const label = btn.getAttribute('data-uv-kpi-label') || 'Indicador';
-            if (kpiActivo === kpiKey) {
-                cerrarDesglose();
-                return;
+    function initBloqueEscalera(bloque) {
+        let desglose = {};
+        const nodoJson = bloque.querySelector('.js-uv-escalera-desglose');
+        if (nodoJson) {
+            try {
+                desglose = JSON.parse(nodoJson.textContent || '{}') || {};
+            } catch (e) {
+                desglose = {};
             }
-            kpiActivo = kpiKey;
-            botones.forEach(function (otro) {
-                const activo = otro === btn;
-                otro.classList.toggle('is-active', activo);
-                otro.setAttribute('aria-pressed', activo ? 'true' : 'false');
-            });
-            renderDesglose(kpiKey, label);
-        });
-    });
+        }
+        const panel = bloque.querySelector('.js-uv-desglose-panel');
+        const titulo = bloque.querySelector('.js-uv-desglose-titulo');
+        const body = bloque.querySelector('.js-uv-desglose-body');
+        const totalEl = bloque.querySelector('.js-uv-desglose-total');
+        const vacio = bloque.querySelector('.js-uv-desglose-vacio');
+        const btnCerrar = bloque.querySelector('.js-uv-desglose-cerrar');
+        const vistaLideres = bloque.querySelector('.js-uv-vista-lideres');
+        const vistaPersonas = bloque.querySelector('.js-uv-vista-personas');
+        const personasTitulo = bloque.querySelector('.js-uv-personas-titulo');
+        const personasBody = bloque.querySelector('.js-uv-personas-body');
+        const personasVacio = bloque.querySelector('.js-uv-personas-vacio');
+        const btnVolverPersonas = bloque.querySelector('.js-uv-personas-volver');
+        const botones = bloque.querySelectorAll('.uv-kpi-clickable[data-uv-kpi]');
+        let kpiActivo = '';
+        let filasKpi = [];
 
-    if (btnCerrar) {
-        btnCerrar.addEventListener('click', cerrarDesglose);
+        function mostrarVistaLideres() {
+            if (vistaLideres) {
+                vistaLideres.hidden = false;
+            }
+            if (vistaPersonas) {
+                vistaPersonas.hidden = true;
+            }
+        }
+
+        function renderPersonasLider(fila) {
+            const personas = Array.isArray(fila && fila.personas) ? fila.personas : [];
+            const nombreLider = (fila && fila.lider) ? fila.lider : 'Sin líder de 12';
+            if (personasTitulo) {
+                personasTitulo.textContent = 'Personas de ' + nombreLider + ' (' + personas.length + ')';
+            }
+            if (personasBody) {
+                personasBody.innerHTML = '';
+                personas.forEach(function (persona, idx) {
+                    const idPersona = parseInt(persona.id, 10) || 0;
+                    const nombre = persona.nombre || 'Sin nombre';
+                    const href = urlEditarPersona(idPersona);
+                    const tr = document.createElement('tr');
+                    const celdaFicha = href
+                        ? '<a class="uv-kpi-ficha-link" href="' + escHtml(href) + '">Editar ficha</a>'
+                        : '—';
+                    tr.innerHTML = '<td style="color:#94a3b8;">' + (idx + 1) + '</td>'
+                        + '<td>' + escHtml(nombre) + '</td>'
+                        + '<td>' + celdaFicha + '</td>';
+                    personasBody.appendChild(tr);
+                });
+            }
+            if (personasVacio) {
+                personasVacio.hidden = personas.length > 0;
+            }
+            if (vistaLideres) {
+                vistaLideres.hidden = true;
+            }
+            if (vistaPersonas) {
+                vistaPersonas.hidden = false;
+            }
+        }
+
+        function renderDesglose(kpiKey, label) {
+            filasKpi = Array.isArray(desglose[kpiKey]) ? desglose[kpiKey] : [];
+            const total = filasKpi.reduce(function (acc, fila) {
+                return acc + (parseInt(fila.total, 10) || 0);
+            }, 0);
+            if (titulo) {
+                titulo.textContent = label + ' · por líder principal de 12';
+            }
+            if (body) {
+                body.innerHTML = '';
+                filasKpi.forEach(function (fila, idx) {
+                    const cant = parseInt(fila.total, 10) || 0;
+                    const lider = fila.lider || 'Sin líder de 12';
+                    const ministerio = fila.ministerio || 'Sin ministerio';
+                    const tr = document.createElement('tr');
+                    const btnLider = cant > 0
+                        ? '<button type="button" class="uv-kpi-lider-link" data-uv-lider-idx="' + idx + '">' + escHtml(lider) + '</button>'
+                        : escHtml(lider);
+                    tr.innerHTML = '<td style="color:#94a3b8;">' + (idx + 1) + '</td>'
+                        + '<td>' + btnLider + '</td>'
+                        + '<td>' + escHtml(ministerio) + '</td>'
+                        + '<td>' + (cant > 0 ? '<strong>' + cant + '</strong>' : '0') + '</td>';
+                    body.appendChild(tr);
+                });
+                body.querySelectorAll('.uv-kpi-lider-link').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        const idx = parseInt(btn.getAttribute('data-uv-lider-idx') || '-1', 10);
+                        if (idx < 0 || !filasKpi[idx]) {
+                            return;
+                        }
+                        renderPersonasLider(filasKpi[idx]);
+                    });
+                });
+            }
+            if (totalEl) {
+                totalEl.textContent = String(total);
+            }
+            if (vacio) {
+                vacio.hidden = filasKpi.length > 0;
+            }
+            mostrarVistaLideres();
+            if (panel) {
+                panel.hidden = false;
+            }
+        }
+
+        function cerrarDesglose() {
+            kpiActivo = '';
+            filasKpi = [];
+            botones.forEach(function (btn) {
+                btn.classList.remove('is-active');
+                btn.setAttribute('aria-pressed', 'false');
+            });
+            mostrarVistaLideres();
+            if (panel) {
+                panel.hidden = true;
+            }
+        }
+
+        botones.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const kpiKey = btn.getAttribute('data-uv-kpi') || '';
+                const label = btn.getAttribute('data-uv-kpi-label') || 'Indicador';
+                if (kpiActivo === kpiKey) {
+                    cerrarDesglose();
+                    return;
+                }
+                kpiActivo = kpiKey;
+                botones.forEach(function (otro) {
+                    const activo = otro === btn;
+                    otro.classList.toggle('is-active', activo);
+                    otro.setAttribute('aria-pressed', activo ? 'true' : 'false');
+                });
+                renderDesglose(kpiKey, label);
+            });
+        });
+        if (btnCerrar) {
+            btnCerrar.addEventListener('click', cerrarDesglose);
+        }
+        if (btnVolverPersonas) {
+            btnVolverPersonas.addEventListener('click', mostrarVistaLideres);
+        }
     }
-    if (btnVolverPersonas) {
-        btnVolverPersonas.addEventListener('click', mostrarVistaLideres);
-    }
+
+    document.querySelectorAll('.js-uv-escalera-bloque').forEach(initBloqueEscalera);
 })();
 </script>

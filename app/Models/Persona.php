@@ -728,6 +728,21 @@ class Persona extends BaseModel {
         return "COALESCE({$desdeAcceso}, {$desdePersona}, '') AS Usuario_Creador";
     }
 
+    /**
+     * Login/último acceso viven en usuario_acceso; persona.Ultimo_Acceso puede no existir (local).
+     */
+    private function sqlCampoUltimoAcceso(string $aliasPersona = 'p'): string {
+        $aliasPersona = preg_replace('/[^a-zA-Z0-9_]/', '', $aliasPersona) ?: 'p';
+        $desdeAcceso = $this->tieneTabla('usuario_acceso')
+            ? "(SELECT MAX(ua.Ultimo_Acceso) FROM usuario_acceso ua WHERE ua.Id_Persona = {$aliasPersona}.Id_Persona)"
+            : 'NULL';
+        $desdePersona = $this->tieneColumna('Ultimo_Acceso')
+            ? "{$aliasPersona}.Ultimo_Acceso"
+            : 'NULL';
+
+        return "COALESCE({$desdeAcceso}, {$desdePersona}) AS Ultimo_Acceso";
+    }
+
     public function registrarAcuerdoConfidencialidadPersona(int $idPersona, string $version): bool {
         $idPersona = (int)$idPersona;
         if ($idPersona <= 0 || !$this->tieneColumna('Acuerdo_Confidencialidad_At')) {
@@ -2236,7 +2251,7 @@ class Persona extends BaseModel {
                     p.Id_Persona,
                     p.Usuario,
                     p.Estado_Cuenta,
-                    p.Ultimo_Acceso,
+                    {$this->sqlCampoUltimoAcceso('p')},
                     p.Id_Rol,
                     p.Id_Ministerio,
                     p.Nombre,
@@ -3259,6 +3274,7 @@ class Persona extends BaseModel {
 
         $esIglesiaExpr = $this->sqlEsGanadoEnIglesia('p');
         $esCelulaExpr = $this->sqlEsGanadoEnCelula('p');
+        $tipo = $this->sqlTipoReunionNormalizado('p');
 
         $sql = "SELECT
                     p.Id_Persona,
@@ -3279,14 +3295,14 @@ class Persona extends BaseModel {
                     CASE
                         WHEN {$esCelulaExpr} THEN 'celula'
                         WHEN {$esIglesiaExpr} THEN 'iglesia'
-                        ELSE 'otro'
+                        ELSE 'iglesia'
                     END AS Origen_Clave
                 FROM persona p
                 LEFT JOIN ministerio m ON p.Id_Ministerio = m.Id_Ministerio
                 LEFT JOIN celula c ON p.Id_Celula = c.Id_Celula
                 LEFT JOIN persona l ON p.Id_Lider = l.Id_Persona
                 WHERE DATE(p.Fecha_Registro) BETWEEN ? AND ?
-                  AND ({$esIglesiaExpr} OR {$esCelulaExpr})
+                  AND {$tipo} NOT LIKE '%migrados%'
                   AND $filtroRol" . $filtroNuevas;
 
         $params = [$fechaInicio, $fechaFin];
@@ -3545,7 +3561,7 @@ class Persona extends BaseModel {
                     p.Id_Rol,
                     p.Numero_Cupo,
                     p.Proceso,
-                    p.Ultimo_Acceso,
+                    {$this->sqlCampoUltimoAcceso('p')},
                     m.Nombre_Ministerio,
                     COALESCE(r.Nombre_Rol, '') AS Nombre_Rol,
                     TRIM(CONCAT(COALESCE(lid.Nombre, ''), ' ', COALESCE(lid.Apellido, ''))) AS Nombre_Lider,

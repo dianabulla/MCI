@@ -401,6 +401,74 @@ class Asistencia extends BaseModel {
         return $estado;
     }
 
+    /**
+     * Asistentes distintos (Asistio = 1) y última observación por célula en un rango.
+     *
+     * @param array<int> $idsCelula
+     * @return array<int, array{asistieron:int, observaciones:string, tiene_registros:bool}>
+     */
+    public function getResumenAsistenciaPeriodoPorCelula(array $idsCelula, $fechaInicio, $fechaFin): array {
+        $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function ($id) {
+            return $id > 0;
+        })));
+        $fechaInicio = substr(trim((string)$fechaInicio), 0, 10);
+        $fechaFin = substr(trim((string)$fechaFin), 0, 10);
+        if ($idsCelula === [] || $fechaInicio === '' || $fechaFin === '') {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));
+        $sql = "SELECT Id_Celula, Id_Persona, Asistio, Observaciones, Fecha_Asistencia, {$this->primaryKey} AS Id_Fila
+                FROM {$this->table}
+                WHERE Id_Celula IN ({$placeholders})
+                  AND Fecha_Asistencia BETWEEN ? AND ?";
+        $rows = $this->query($sql, array_merge($idsCelula, [$fechaInicio, $fechaFin]));
+
+        $resumen = [];
+        foreach ($rows as $row) {
+            $idCelula = (int)($row['Id_Celula'] ?? 0);
+            if ($idCelula <= 0) {
+                continue;
+            }
+            if (!isset($resumen[$idCelula])) {
+                $resumen[$idCelula] = [
+                    'asistieron_ids' => [],
+                    'observaciones' => '',
+                    'obs_orden' => '',
+                    'tiene_registros' => true,
+                ];
+            }
+            if ((int)($row['Asistio'] ?? 0) === 1) {
+                $idPersona = (int)($row['Id_Persona'] ?? 0);
+                if ($idPersona > 0) {
+                    $resumen[$idCelula]['asistieron_ids'][$idPersona] = true;
+                }
+            }
+            $obs = trim((string)($row['Observaciones'] ?? ''));
+            if ($obs === '') {
+                continue;
+            }
+            $orden = substr((string)($row['Fecha_Asistencia'] ?? ''), 0, 10)
+                . '-'
+                . str_pad((string)((int)($row['Id_Fila'] ?? 0)), 12, '0', STR_PAD_LEFT);
+            if ($orden >= (string)$resumen[$idCelula]['obs_orden']) {
+                $resumen[$idCelula]['observaciones'] = $obs;
+                $resumen[$idCelula]['obs_orden'] = $orden;
+            }
+        }
+
+        $salida = [];
+        foreach ($resumen as $idCelula => $fila) {
+            $salida[(int)$idCelula] = [
+                'asistieron' => count($fila['asistieron_ids']),
+                'observaciones' => (string)$fila['observaciones'],
+                'tiene_registros' => true,
+            ];
+        }
+
+        return $salida;
+    }
+
     public function guardarEntregoSobreSemana($idCelula, $semanaInicio, $entregoSobre) {
         $idCelula = (int)$idCelula;
         $semanaInicio = trim((string)$semanaInicio);

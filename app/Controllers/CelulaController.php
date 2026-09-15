@@ -254,7 +254,7 @@ class CelulaController extends BaseController {
                 'hora' => (string)($celula['Hora_Reunion'] ?? ''),
                 'rows' => $rows,
                 'total_personas' => count($rows),
-                'entrego_sobre' => false,
+                'entrego_sobre' => null,
             ];
         }
 
@@ -288,7 +288,9 @@ class CelulaController extends BaseController {
             );
             foreach ($sections as &$sectionSobre) {
                 $idCelulaSobre = (int)($sectionSobre['id_celula'] ?? 0);
-                $sectionSobre['entrego_sobre'] = !empty($estadoEntregoSobre[$idCelulaSobre]);
+                $sectionSobre['entrego_sobre'] = array_key_exists($idCelulaSobre, $estadoEntregoSobre)
+                    ? (!empty($estadoEntregoSobre[$idCelulaSobre]) ? 1 : 0)
+                    : null;
             }
             unset($sectionSobre);
         }

@@ -21,42 +21,38 @@ class AsistenciaController extends BaseController {
         $this->asistenciaModel->ensureEntregaSobreTableExists();
     }
 
-    private function resolverSemanaFiltro($semanaParam = '') {
-        $semanaParam = trim((string)$semanaParam);
-
-        if (preg_match('/^(\d{4})-W(\d{2})$/', $semanaParam, $m)) {
-            $anio = (int)$m[1];
-            $semana = (int)$m[2];
-            if ($semana >= 1 && $semana <= 53) {
-                $inicio = (new DateTimeImmutable('today'))->setISODate($anio, $semana, 1);
-                $fin = $inicio->modify('+6 days');
-                return [$inicio, $fin, $inicio->format('o-\\WW')];
-            }
+    private function urlDestinoSinReporteSemanalAsistencias(): string {
+        if (AuthController::esAdministrador() || AuthController::puede('reportes:ver')) {
+            return PUBLIC_URL . '?url=reportes&tipo=celulas';
         }
 
-        $hoy = new DateTimeImmutable('today');
-        $inicio = $hoy->modify('monday this week');
-        $fin = $inicio->modify('+6 days');
+        return PUBLIC_URL . '?url=celulas';
+    }
 
-        return [$inicio, $fin, $inicio->format('o-\\WW')];
+    private function redirigirFueraDeReporteSemanalAsistencias(): void {
+        header('Location: ' . $this->urlDestinoSinReporteSemanalAsistencias());
+        exit;
     }
 
     private function resolverReturnUrlAsistencias($rawReturnUrl = '') {
-        $default = PUBLIC_URL . '?url=asistencias';
+        $default = PUBLIC_URL . '?url=celulas';
         $url = trim((string)$rawReturnUrl);
-        if ($url === '') {
+        if ($url === '' || strpos($url, PUBLIC_URL) !== 0) {
             return $default;
         }
 
-        if (strpos($url, PUBLIC_URL) !== 0) {
+        if (preg_match('/[?&]url=asistencias(?:&|#|$)/', $url)) {
             return $default;
         }
 
-        if (strpos($url, '?url=asistencias') === false) {
-            return $default;
+        if (strpos($url, '?url=celulas') !== false
+            || strpos($url, '?url=reportes') !== false
+            || strpos($url, '?url=asistencias/registrar') !== false
+        ) {
+            return $url;
         }
 
-        return $url;
+        return $default;
     }
 
     private function esPeticionAjaxAsistencia(): bool {
@@ -93,7 +89,7 @@ class AsistenciaController extends BaseController {
     }
 
     /**
-     * Miembros activos de una célula sin duplicar por cédula (JSON para reporte).
+     * Miembros activos de una cÃ©lula sin duplicar por cÃ©dula (JSON para reporte).
      */
     public function miembrosCelula() {
         header('Content-Type: application/json; charset=utf-8');
@@ -122,7 +118,7 @@ class AsistenciaController extends BaseController {
 
         if (!$celulaPermitida) {
             http_response_code(403);
-            echo json_encode(['ok' => false, 'error' => 'Célula no permitida']);
+            echo json_encode(['ok' => false, 'error' => 'CÃ©lula no permitida']);
             return;
         }
 
@@ -179,214 +175,15 @@ class AsistenciaController extends BaseController {
     }
 
     public function index() {
-        if (!AuthController::puede('asistencias:ver')) {
-            header('Location: ' . public_app_url('auth/acceso-denegado'));
-            exit;
-        }
+        $this->redirigirFueraDeReporteSemanalAsistencias();
+    }
 
-        // Generar filtro segun el rol del usuario
-        $filtroAsistencias = DataIsolation::generarFiltroAsistencias();
-        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+    private function fechaPorDefectoReporteCelula(): string {
+        $hoy = new DateTimeImmutable('today');
+        $inicioSemanaActual = $hoy->modify('monday this week');
+        $domingoVencida = $inicioSemanaActual->modify('-1 day');
 
-        $filtroMinisterio = $_GET['ministerio'] ?? '';
-        $filtroLider = $_GET['lider'] ?? '';
-        $filtroCelula = $_GET['celula'] ?? '';
-        $filtroReporte = $_GET['reporte'] ?? '';
-        $filtroReporte = in_array($filtroReporte, ['con', 'sin'], true) ? $filtroReporte : '';
-        
-        // Obtener asistencias con aislamiento de rol
-        $asistencias = $this->asistenciaModel->getAllWithInfoAndRole($filtroAsistencias);
-
-        // Semana seleccionada (lunes a domingo)
-        [$inicioSemana, $finSemana, $semanaSeleccionada] = $this->resolverSemanaFiltro($_GET['semana'] ?? '');
-        $inicioSemanaStr = $inicioSemana->format('Y-m-d');
-        $finSemanaStr = $finSemana->format('Y-m-d');
-
-        // Base de células visibles para el usuario (opciones de filtros)
-        $celulasBase = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
-
-        $ministeriosDisponibles = [];
-        $ministerioIdsPermitidos = [];
-        $lideresDisponibles = [];
-        $liderIdsPermitidos = [];
-
-        foreach ($celulasBase as $celulaBase) {
-            $idMinisterioLider = (int)($celulaBase['Id_Ministerio_Lider'] ?? 0);
-            $nombreMinisterioLider = trim((string)($celulaBase['Nombre_Ministerio_Lider'] ?? ''));
-            if ($idMinisterioLider > 0 && $nombreMinisterioLider !== '') {
-                $ministeriosDisponibles[$idMinisterioLider] = [
-                    'Id_Ministerio' => $idMinisterioLider,
-                    'Nombre_Ministerio' => $nombreMinisterioLider
-                ];
-                $ministerioIdsPermitidos[$idMinisterioLider] = true;
-            }
-
-            $idLider = (int)($celulaBase['Id_Lider'] ?? 0);
-            $nombreLider = trim((string)($celulaBase['Nombre_Lider'] ?? ''));
-            if ($idLider > 0 && $nombreLider !== '') {
-                $lideresDisponibles[$idLider] = [
-                    'Id_Persona' => $idLider,
-                    'Nombre_Completo' => $nombreLider,
-                    'Id_Ministerio' => $idMinisterioLider
-                ];
-                $liderIdsPermitidos[$idLider] = true;
-            }
-        }
-
-        ksort($ministeriosDisponibles);
-        ksort($lideresDisponibles);
-
-        $filtroMinisterio = ($filtroMinisterio !== '' && isset($ministerioIdsPermitidos[(int)$filtroMinisterio])) ? (int)$filtroMinisterio : '';
-        $filtroLider = ($filtroLider !== '' && isset($liderIdsPermitidos[(int)$filtroLider])) ? (int)$filtroLider : '';
-
-        $celulasDisponibles = [];
-        $celulaIdsPermitidos = [];
-        foreach ($celulasBase as $celulaBase) {
-            $idCelula = (int)($celulaBase['Id_Celula'] ?? 0);
-            if ($idCelula <= 0) {
-                continue;
-            }
-            $celulasDisponibles[] = [
-                'Id_Celula' => $idCelula,
-                'Nombre_Celula' => (string)($celulaBase['Nombre_Celula'] ?? ''),
-                'Id_Lider' => (int)($celulaBase['Id_Lider'] ?? 0),
-                'Id_Ministerio' => (int)($celulaBase['Id_Ministerio_Lider'] ?? 0)
-            ];
-            $celulaIdsPermitidos[$idCelula] = true;
-        }
-        $filtroCelula = ($filtroCelula !== '' && isset($celulaIdsPermitidos[(int)$filtroCelula])) ? (int)$filtroCelula : (($filtroCelula === '0') ? '0' : '');
-
-        // Células visibles con filtros aplicados
-        $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas, $filtroMinisterio, $filtroLider);
-
-        if ($filtroCelula !== '') {
-            if ((string)$filtroCelula === '0') {
-                $celulas = [];
-            } else {
-                $idCelulaFiltro = (int)$filtroCelula;
-                $celulas = array_values(array_filter($celulas, static function($celula) use ($idCelulaFiltro) {
-                    return (int)($celula['Id_Celula'] ?? 0) === $idCelulaFiltro;
-                }));
-            }
-        }
-
-        // Agrupar asistencias de la semana por célula
-        $asistenciasSemanaPorCelula = [];
-        foreach ($asistencias as $asistencia) {
-            $idCelula = (int)($asistencia['Id_Celula'] ?? 0);
-            if ($idCelula <= 0) {
-                continue;
-            }
-
-            $fechaAsistencia = substr((string)($asistencia['Fecha_Asistencia'] ?? ''), 0, 10);
-            if ($fechaAsistencia < $inicioSemanaStr || $fechaAsistencia > $finSemanaStr) {
-                continue;
-            }
-
-            if (!isset($asistenciasSemanaPorCelula[$idCelula])) {
-                $asistenciasSemanaPorCelula[$idCelula] = [];
-            }
-
-            $asistenciasSemanaPorCelula[$idCelula][] = $asistencia;
-        }
-
-        $sections = [];
-        $reportaron = [];
-        $noReportaron = [];
-        $estadoEntregoSobre = $this->asistenciaModel->getEstadoEntregoSobrePorCelulaSemana(array_map(static function($celula) {
-            return (int)($celula['Id_Celula'] ?? 0);
-        }, $celulas), $inicioSemanaStr);
-
-        foreach ($celulas as $celula) {
-            $idCelula = (int)($celula['Id_Celula'] ?? 0);
-            $rowsAsistencia = $asistenciasSemanaPorCelula[$idCelula] ?? [];
-
-            usort($rowsAsistencia, static function ($a, $b) {
-                return strcmp((string)($b['Fecha_Asistencia'] ?? ''), (string)($a['Fecha_Asistencia'] ?? ''));
-            });
-
-            $fechasReporteMap = [];
-            foreach ($rowsAsistencia as $registro) {
-                $fechaRegistro = substr((string)($registro['Fecha_Asistencia'] ?? ''), 0, 10);
-                if ($fechaRegistro !== '') {
-                    $fechasReporteMap[$fechaRegistro] = true;
-                }
-            }
-            $fechasReporte = array_keys($fechasReporteMap);
-            rsort($fechasReporte);
-
-            $rows = [];
-            $nro = 1;
-            $totalSi = 0;
-            $totalNo = 0;
-
-            foreach ($rowsAsistencia as $registro) {
-                $asistio = (int)($registro['Asistio'] ?? 0) === 1;
-                if ($asistio) {
-                    $totalSi++;
-                } else {
-                    $totalNo++;
-                }
-
-                $rows[] = [
-                    'nro' => $nro++,
-                    'id_persona' => (int)($registro['Id_Persona'] ?? 0),
-                    'persona' => (string)($registro['Nombre_Persona'] ?? 'Sin nombre'),
-                    'fecha' => (string)($registro['Fecha_Asistencia'] ?? ''),
-                    'asistio' => $asistio
-                ];
-            }
-
-            $siReportoSemana = !empty($rowsAsistencia);
-
-            $sectionData = [
-                'id_celula' => $idCelula,
-                'label' => (string)($celula['Nombre_Celula'] ?? 'Célula sin nombre'),
-                'ministerio' => (string)($celula['Nombre_Ministerio_Lider'] ?? 'Sin ministerio'),
-                'lider' => (string)($celula['Nombre_Lider'] ?? 'Sin líder'),
-                'anfitrion' => (string)($celula['Nombre_Anfitrion'] ?? 'Sin anfitrión'),
-                'entrego_sobre' => !empty($estadoEntregoSobre[$idCelula]),
-                'si_reporto_semana' => $siReportoSemana,
-                'fechas_reporte_semana' => $fechasReporte,
-                'total_registros' => count($rows),
-                'total_si' => $totalSi,
-                'total_no' => $totalNo,
-                'rows' => $rows
-            ];
-
-            $sections[] = $sectionData;
-
-            if ($siReportoSemana) {
-                $reportaron[] = $sectionData;
-            } else {
-                $noReportaron[] = $sectionData;
-            }
-        }
-
-        if ($filtroReporte !== '') {
-            $sections = array_values(array_filter($sections, static function($section) use ($filtroReporte) {
-                $tieneReporte = !empty($section['si_reporto_semana']);
-                return $filtroReporte === 'con' ? $tieneReporte : !$tieneReporte;
-            }));
-        }
-
-        $this->view('asistencias/lista', [
-            'asistencias' => $asistencias,
-            'sections' => $sections,
-            'reportaron' => $reportaron,
-            'no_reportaron' => $noReportaron,
-            'semana_actual' => $semanaSeleccionada,
-            'semana_inicio' => $inicioSemanaStr,
-            'semana_fin' => $finSemanaStr,
-            'ministerios_disponibles' => array_values($ministeriosDisponibles),
-            'lideres_disponibles' => array_values($lideresDisponibles),
-            'celulas_disponibles' => array_values($celulasDisponibles),
-            'filtro_ministerio_actual' => (string)$filtroMinisterio,
-            'filtro_lider_actual' => (string)$filtroLider,
-            'filtro_celula_actual' => (string)$filtroCelula,
-            'filtro_reporte_actual' => (string)$filtroReporte,
-            'puede_marcar_entrego_sobre' => DataIsolation::tieneAccesoTotal()
-        ]);
+        return $domingoVencida->format('Y-m-d');
     }
 
     public function actualizarEntregoSobre() {
@@ -400,7 +197,11 @@ class AsistenciaController extends BaseController {
 
         $idCelula = isset($_POST['id_celula']) ? (int)$_POST['id_celula'] : 0;
         $semanaInicio = trim((string)($_POST['semana_inicio'] ?? ''));
-        $entregoSobre = !empty($_POST['entrego_sobre']) ? 1 : 0;
+        $rawSobre = (string)($_POST['entrego_sobre'] ?? '');
+        if ($rawSobre !== '0' && $rawSobre !== '1') {
+            $this->json(['success' => false, 'error' => 'Datos invalidos'], 422);
+        }
+        $entregoSobre = $rawSobre === '1' ? 1 : 0;
 
         if ($idCelula <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $semanaInicio)) {
             $this->json(['success' => false, 'error' => 'Datos invalidos'], 422);
@@ -411,7 +212,14 @@ class AsistenciaController extends BaseController {
             $this->json(['success' => false, 'error' => 'No autorizado para esta celula'], 403);
         }
 
-        $ok = $this->asistenciaModel->guardarEntregoSobreSemana($idCelula, $semanaInicio, $entregoSobre);
+        try {
+            $this->asistenciaModel->ensureEntregaSobreTableExists();
+            $ok = $this->asistenciaModel->guardarEntregoSobreSemana($idCelula, $semanaInicio, $entregoSobre);
+        } catch (Throwable $e) {
+            error_log('Error al guardar entrego sobre: ' . $e->getMessage());
+            $this->json(['success' => false, 'error' => 'No se pudo guardar'], 500);
+        }
+
         if (!$ok) {
             $this->json(['success' => false, 'error' => 'No se pudo guardar'], 500);
         }
@@ -425,90 +233,7 @@ class AsistenciaController extends BaseController {
     }
 
     public function exportarExcel() {
-        if (!AuthController::puede('asistencias:ver')) {
-            header('Location: ' . public_app_url('auth/acceso-denegado'));
-            exit;
-        }
-
-        $filtroAsistencias = DataIsolation::generarFiltroAsistencias();
-        $filtroCelulas = DataIsolation::generarFiltroCelulas();
-
-        $filtroMinisterio = $_GET['ministerio'] ?? '';
-        $filtroLider = $_GET['lider'] ?? '';
-        $filtroCelula = $_GET['celula'] ?? '';
-        $filtroReporte = $_GET['reporte'] ?? '';
-        $filtroReporte = in_array($filtroReporte, ['con', 'sin'], true) ? $filtroReporte : '';
-
-        [$inicioSemana, $finSemana, $semanaSeleccionada] = $this->resolverSemanaFiltro($_GET['semana'] ?? '');
-        $inicioSemanaStr = $inicioSemana->format('Y-m-d');
-        $finSemanaStr = $finSemana->format('Y-m-d');
-
-        $asistencias = $this->asistenciaModel->getAllWithInfoAndRole($filtroAsistencias);
-        $asistencias = array_values(array_filter($asistencias, static function($asistencia) use ($inicioSemanaStr, $finSemanaStr) {
-            $fechaAsistencia = substr((string)($asistencia['Fecha_Asistencia'] ?? ''), 0, 10);
-            if ($fechaAsistencia === '') {
-                return false;
-            }
-
-            return $fechaAsistencia >= $inicioSemanaStr && $fechaAsistencia <= $finSemanaStr;
-        }));
-
-        $celulasFiltradas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas, $filtroMinisterio, $filtroLider);
-        $celulaIdsPermitidas = array_map(static function($celula) {
-            return (int)($celula['Id_Celula'] ?? 0);
-        }, $celulasFiltradas);
-
-        if ($filtroCelula !== '') {
-            if ((string)$filtroCelula === '0') {
-                $celulaIdsPermitidas = [];
-            } else {
-                $idCelulaFiltro = (int)$filtroCelula;
-                $celulaIdsPermitidas = in_array($idCelulaFiltro, $celulaIdsPermitidas, true) ? [$idCelulaFiltro] : [];
-            }
-        }
-
-        $asistencias = array_values(array_filter($asistencias, static function($asistencia) use ($celulaIdsPermitidas) {
-            $idCelula = (int)($asistencia['Id_Celula'] ?? 0);
-            return in_array($idCelula, $celulaIdsPermitidas, true);
-        }));
-
-        if ($filtroReporte !== '') {
-            $celulasConReporte = [];
-            foreach ($asistencias as $asistencia) {
-                $idCelulaAsistencia = (int)($asistencia['Id_Celula'] ?? 0);
-                if ($idCelulaAsistencia > 0) {
-                    $celulasConReporte[$idCelulaAsistencia] = true;
-                }
-            }
-
-            if ($filtroReporte === 'con') {
-                $asistencias = array_values(array_filter($asistencias, static function($asistencia) use ($celulasConReporte) {
-                    $idCelulaAsistencia = (int)($asistencia['Id_Celula'] ?? 0);
-                    return isset($celulasConReporte[$idCelulaAsistencia]);
-                }));
-            } else {
-                $asistencias = [];
-            }
-        }
-
-        $rows = [];
-        foreach ($asistencias as $asistencia) {
-            $rows[] = [
-                (string)($asistencia['Nombre_Celula'] ?? ''),
-                (string)($asistencia['Nombre_Persona'] ?? ''),
-                (string)($asistencia['Fecha_Asistencia'] ?? ''),
-                ((int)($asistencia['Asistio'] ?? 0) === 1) ? 'Si' : 'No',
-                (string)($asistencia['Tema'] ?? ''),
-                (string)($asistencia['Tipo_Celula'] ?? ''),
-                (string)($asistencia['Observaciones'] ?? '')
-            ];
-        }
-
-        $this->exportCsv(
-            'asistencias_' . str_replace('-W', 'W', $semanaSeleccionada) . '_' . date('Ymd_His'),
-            ['Celula', 'Persona', 'Fecha', 'Asistio', 'Tema', 'Tipo Celula', 'Observaciones'],
-            $rows
-        );
+        $this->redirigirFueraDeReporteSemanalAsistencias();
     }
 
     public function registrar() {
@@ -534,13 +259,13 @@ class AsistenciaController extends BaseController {
 
             try {
                 if ($idCelula <= 0) {
-                    throw new RuntimeException('Selecciona una célula para reportar.');
+                    throw new RuntimeException('Selecciona una cÃ©lula para reportar.');
                 }
                 if ($fecha === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
-                    throw new RuntimeException('Indica una fecha válida para el reporte.');
+                    throw new RuntimeException('Indica una fecha vÃ¡lida para el reporte.');
                 }
                 if (!is_array($asistencias) || $asistencias === []) {
-                    throw new RuntimeException('No se pudo reportar la célula. No hay miembros para registrar.');
+                    throw new RuntimeException('No se pudo reportar la cÃ©lula. No hay miembros para registrar.');
                 }
 
                 if ($noSeRealizo) {
@@ -550,12 +275,12 @@ class AsistenciaController extends BaseController {
 
                     $motivoNoRealizo = trim((string)($_POST['motivo_no_realizo'] ?? ''));
                     $etiquetasMotivo = [
-                        'convencion' => 'Convención',
+                        'convencion' => 'ConvenciÃ³n',
                         'actividades_iglesia' => 'Actividades de la iglesia',
                         'otro' => 'Otro',
                     ];
                     if (!isset($etiquetasMotivo[$motivoNoRealizo])) {
-                        throw new RuntimeException('Indica por qué no se realizó la célula.');
+                        throw new RuntimeException('Indica por quÃ© no se realizÃ³ la cÃ©lula.');
                     }
 
                     $detalleMotivo = $etiquetasMotivo[$motivoNoRealizo];
@@ -567,7 +292,7 @@ class AsistenciaController extends BaseController {
                         $detalleMotivo .= ': ' . $otroMotivo;
                     }
 
-                    $prefijoMotivo = 'No se realizó. Motivo: ' . $detalleMotivo;
+                    $prefijoMotivo = 'No se realizÃ³. Motivo: ' . $detalleMotivo;
                     if ($observaciones === '') {
                         $observaciones = $prefijoMotivo;
                     } elseif (stripos($observaciones, 'no se realiz') === false) {
@@ -597,22 +322,22 @@ class AsistenciaController extends BaseController {
                             $fallos++;
                         }
                     } catch (Throwable $eFila) {
-                        error_log('Error al registrar asistencia de célula: ' . $eFila->getMessage());
+                        error_log('Error al registrar asistencia de cÃ©lula: ' . $eFila->getMessage());
                         $fallos++;
                     }
                 }
 
                 if ($guardados <= 0) {
-                    throw new RuntimeException('No se pudo reportar la célula. Inténtalo de nuevo.');
+                    throw new RuntimeException('No se pudo reportar la cÃ©lula. IntÃ©ntalo de nuevo.');
                 }
 
-                $mensajeOk = 'Célula reportada con éxito. Fecha y hora: ' . $fechaHora;
+                $mensajeOk = 'CÃ©lula reportada con Ã©xito. Fecha y hora: ' . $fechaHora;
                 $this->responderRegistroCelula($esAjax, true, $mensajeOk, $returnUrl, $fechaHora);
             } catch (Throwable $e) {
-                error_log('Error al reportar célula: ' . $e->getMessage());
+                error_log('Error al reportar cÃ©lula: ' . $e->getMessage());
                 $mensajeError = $e instanceof RuntimeException
                     ? $e->getMessage()
-                    : 'Ocurrió un error y no se pudo reportar la célula. Inténtalo de nuevo.';
+                    : 'OcurriÃ³ un error y no se pudo reportar la cÃ©lula. IntÃ©ntalo de nuevo.';
                 $this->responderRegistroCelula($esAjax, false, $mensajeError, $returnUrl, $fechaHora);
             }
             return;
@@ -632,7 +357,7 @@ class AsistenciaController extends BaseController {
                 }
             }
 
-            $fechaPreseleccionada = date('Y-m-d');
+            $fechaPreseleccionada = $this->fechaPorDefectoReporteCelula();
             if (!empty($_GET['fecha'])) {
                 $fechaSolicitada = trim((string)$_GET['fecha']);
                 if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaSolicitada)) {

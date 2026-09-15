@@ -526,8 +526,29 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
             <input type="date" id="fecha_referencia" name="fecha_referencia" class="form-control" value="<?= htmlspecialchars((string)$fecha_referencia) ?>" required>
             <small style="color:#637087;">
                 Rango aplicado: <?= date('d/m/Y', strtotime($fecha_inicio)) ?> – <?= date('d/m/Y', strtotime($fecha_fin)) ?> (lun. a dom. según el día elegido).
+                <?php if ($esReporteCelulas && !empty($semanaVencidaPorDefecto)): ?>
+                    Por defecto se consulta la <strong>semana vencida</strong> (la anterior), no la semana en curso.
+                <?php endif; ?>
             </small>
         </div>
+
+        <?php if ($esReporteCelulas): ?>
+        <div class="form-group" style="margin: 0; min-width: 220px;">
+            <label for="filtro_ministerio_celulas">Ministerio</label>
+            <select id="filtro_ministerio_celulas" name="ministerio" class="form-control">
+                <option value="">Todos</option>
+                <?php foreach ($ministeriosDisponibles as $ministerioOpt): ?>
+                    <?php
+                    $idMinisterioOpt = (string)($ministerioOpt['Id_Ministerio'] ?? '');
+                    $nombreMinisterioOpt = (string)($ministerioOpt['Nombre_Ministerio'] ?? 'Sin ministerio');
+                    ?>
+                    <option value="<?= htmlspecialchars($idMinisterioOpt) ?>" <?= $filtroMinisterioSeleccionado === $idMinisterioOpt ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($nombreMinisterioOpt) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <?php endif; ?>
 
         <div class="filters-actions">
             <button type="submit" class="btn btn-primary">Aplicar</button>
@@ -802,7 +823,7 @@ include VIEWS . '/reportes/partials/tabla_operativa_celulas.php';
     <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
         <div>
             <h3 style="margin-bottom:4px;">Reporte de Ganados del fin de semana anterior</h3>
-            <small style="color:#60708a;">Rango: <?= htmlspecialchars((string)($reporteGanadosFinSemanaAnterior['inicio'] ?? '')) ?> a <?= htmlspecialchars((string)($reporteGanadosFinSemanaAnterior['fin'] ?? '')) ?></small>
+            <small style="color:#60708a;">Fin de semana (vie–dom): <?= htmlspecialchars((string)($reporteGanadosFinSemanaAnterior['inicio'] ?? '')) ?> a <?= htmlspecialchars((string)($reporteGanadosFinSemanaAnterior['fin'] ?? '')) ?></small>
         </div>
         <button type="button" id="toggleGanadosSemanaAnteriorBtn" class="btn btn-secondary">Ocultar detalle</button>
     </div>
@@ -813,7 +834,7 @@ include VIEWS . '/reportes/partials/tabla_operativa_celulas.php';
             <button type="button" class="rpt-ganados-filtro" data-genero="hombres">Red Hombres</button>
             <button type="button" class="rpt-ganados-filtro" data-genero="mujeres">Red Mujeres</button>
         </div>
-        <p class="rpt-ganados-semana-ayuda">Cada fila es un líder de 12 (red hombres o red mujeres del ministerio). Pulsa para desplegar los sublíderes que ganaron ese fin de semana. Iglesia y célula se cuentan por separado.</p>
+        <p class="rpt-ganados-semana-ayuda">Cada fila es un líder de 12 (red hombres o red mujeres del ministerio). Pulsa para desplegar los sublíderes que ganaron ese fin de semana. Se cuentan todos los ganados nuevos registrados viernes a domingo, aunque aún no estén en una célula. Iglesia y célula se muestran por separado según el origen, no según si ya los ubicaron.</p>
 
         <div class="table-container table-container--always-visible" style="margin-bottom: 12px; display:block;">
             <table class="data-table rpt-ganados-lideres12-table" id="tablaGanadosLideres12Semana">
@@ -2094,56 +2115,50 @@ document.querySelectorAll('.js-kpi-modal').forEach((btn) => {
         }
 
         if (tipoReporte === 'celulas') {
-            if (kpi === 'total_celulas') {
-                const rows = Object.entries(indicadoresCelulas.por_ministerio || {}).map(([ministerio, cantidad]) => [ministerio, cantidad]);
-                abrirModalTarjeta('Células · Total por ministerio', ['Ministerio', 'Cantidad'], rows);
+            const titulosKpiCelulas = {
+                total_celulas: 'Células abiertas',
+                nuevas_semestre: 'Células nuevas en el semestre',
+                cerradas_semestre: 'Células cerradas en el semestre',
+                reportadas_semana: 'Células reportadas en el período',
+                no_reportadas_semana: 'Células no reportadas en el período',
+                entregaron_sobre_sin_reportar: 'Entregaron sobre sin reportar célula',
+                reportaron_sin_entregar_sobre: 'Reportaron pero no entregaron sobre',
+                promedio_asistencia: 'Promedio de asistencia'
+            };
+            const detalleKpi = ((indicadoresCelulas && indicadoresCelulas.detalle) ? indicadoresCelulas.detalle : {})[kpi] || [];
+            if (kpi === 'promedio_asistencia') {
+                abrirModalTarjeta(titulosKpiCelulas[kpi], ['Indicador', 'Valor'], [['Promedio asistencia', String(<?= json_encode($promedioAsistencia) ?>) + '%']]);
                 return;
             }
-
-            if (kpi === 'nuevas_semestre') {
-                abrirModalTarjeta('Células · Nuevas en semestre', ['Indicador', 'Valor'], [['Nuevas en semestre', parseInt((indicadoresCelulas.totales || {}).nuevas_semestre || 0, 10)]]);
-                return;
+            const usaFecha = kpi === 'nuevas_semestre' || kpi === 'cerradas_semestre';
+            const usaSobre = kpi === 'reportadas_semana' || kpi === 'no_reportadas_semana'
+                || kpi === 'entregaron_sobre_sin_reportar' || kpi === 'reportaron_sin_entregar_sobre';
+            const headers = ['Célula', 'Ministerio', 'Asistentes'];
+            if (usaFecha) {
+                headers.push('Fecha');
             }
-
-            if (kpi === 'cerradas_semestre') {
-                abrirModalTarjeta('Células · Cerradas en semestre', ['Indicador', 'Valor'], [['Cerradas en semestre', parseInt((indicadoresCelulas.totales || {}).cerradas_semestre || 0, 10)]]);
-                return;
+            if (usaSobre) {
+                headers.push('Entregó sobre', 'Observaciones');
             }
-
-            const rowsAsistencia = (Array.isArray(asistencia) ? asistencia : [])
-                .filter((item) => {
-                    const reales = parseInt(item.Asistencias_Reales || 0, 10);
-                    const entregoSobre = parseInt(item.Entrego_Sobre || 0, 10) === 1;
-                    const reporto = reales > 0;
-                    if (kpi === 'reportadas_semana') {
-                        return reporto;
-                    }
-                    if (kpi === 'no_reportadas_semana') {
-                        return !reporto;
-                    }
-                    if (kpi === 'entregaron_sobre_sin_reportar') {
-                        return entregoSobre && !reporto;
-                    }
-                    if (kpi === 'reportaron_sin_entregar_sobre') {
-                        return reporto && !entregoSobre;
-                    }
-                    return true;
-                })
-                .map((item) => {
-                    const entregoSobreTxt = parseInt(item.Entrego_Sobre || 0, 10) === 1 ? 'Sí' : 'No';
-                    return [item.Nombre_Celula || 'Sin célula', entregoSobreTxt];
-                });
-
-            const tituloAsistencia = kpi === 'reportadas_semana'
-                ? 'Células · Reportadas esta semana'
-                : (kpi === 'no_reportadas_semana'
-                    ? 'Células · No reportadas esta semana'
-                    : (kpi === 'entregaron_sobre_sin_reportar'
-                        ? 'Células · Entregaron sobre sin reportar célula'
-                        : (kpi === 'reportaron_sin_entregar_sobre'
-                            ? 'Células · Reportaron pero no entregaron sobre'
-                            : 'Células · Promedio de asistencia')));
-            abrirModalTarjeta(tituloAsistencia, ['Célula', 'Entregó sobre'], rowsAsistencia);
+            const rows = (Array.isArray(detalleKpi) ? detalleKpi : []).map((item) => {
+                const resumenAsistentes = item.resumen_asistentes
+                    || ('De ' + String(item.asistentes != null ? item.asistentes : 0) + ', asistieron ' + String(item.asistieron != null ? item.asistieron : 0));
+                const fila = [
+                    item.celula || 'Sin nombre',
+                    item.ministerio || 'Sin ministerio',
+                    resumenAsistentes
+                ];
+                if (usaFecha) {
+                    fila.push(item.fecha || '');
+                }
+                if (usaSobre) {
+                    fila.push(item.entrego_sobre || 'No');
+                    fila.push(item.observaciones || 'Sin observaciones');
+                }
+                return fila;
+            });
+            abrirModalTarjeta(titulosKpiCelulas[kpi] || 'Células', headers, rows);
+            return;
         }
     });
 });
@@ -3968,6 +3983,16 @@ html.show-report-tables #reportesVisualContainer .ganar-extra-section {
     max-width: 140px;
     white-space: normal;
     word-break: break-word;
+}
+
+#reporteTarjetaModalTable td {
+    white-space: normal;
+    word-break: break-word;
+    vertical-align: top;
+}
+
+#reporteTarjetaModalTable td:last-child {
+    max-width: 320px;
 }
 
 .report-celulas-tabla-compacta {

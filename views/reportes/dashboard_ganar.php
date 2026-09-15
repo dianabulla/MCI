@@ -15,7 +15,8 @@ $dashModuloTitulo = DashboardSelector::etiquetaActivo($dashModuloActivo);
 $mesesLabels        = $meses_labels ?? [];
 $gananciasMensuales = $ganancias_mensuales ?? [];
 $porMinisterio      = $por_ministerio ?? [];
-$porEdades          = $por_edades ?? [];
+$porEdadesHombres  = $por_edades_hombres ?? [];
+$porEdadesMujeres  = $por_edades_mujeres ?? [];
 $totalS1            = (int)($total_s1 ?? 0);
 $totalS2            = (int)($total_s2 ?? 0);
 $totalAnual         = (int)($total_anual ?? 0);
@@ -83,7 +84,8 @@ $ganarIglesiaJson = json_encode(array_values(array_column($gananciasMensuales, '
 $ganarTotalJson   = json_encode(array_values(array_column($gananciasMensuales, 'total')));
 $ministerioNombresJson = json_encode(array_column($porMinisterio, 'nombre'), JSON_UNESCAPED_UNICODE);
 $ministerioTotalesJson = json_encode(array_column($porMinisterio, 'total'));
-$edadesJson        = json_encode(array_values($porEdades));
+$edadesHombresJson = json_encode(array_values($porEdadesHombres));
+$edadesMujeresJson = json_encode(array_values($porEdadesMujeres));
 
 // Semáforo helper - retorna clases CSS y texto
 $semaforoInfo = [
@@ -512,10 +514,14 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
         <h4>Distribución por ministerio</h4>
         <canvas id="chartMinisterio" height="200"></canvas>
     </div>
-    <!-- Distribución por edades -->
+    <!-- Distribución por edades · redes hombres / mujeres -->
     <div class="dash-chart-card">
-        <h4>Distribución por edades</h4>
-        <canvas id="chartEdades" height="200"></canvas>
+        <h4>Distribución por edades · Hombres</h4>
+        <canvas id="chartEdadesHombres" height="200"></canvas>
+    </div>
+    <div class="dash-chart-card">
+        <h4>Distribución por edades · Mujeres</h4>
+        <canvas id="chartEdadesMujeres" height="200"></canvas>
     </div>
 </div>
 
@@ -1111,21 +1117,22 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
         });
     }
 
-    // ── Gráfica por edades (barras horizontales) ─────────────────────────
+    // ── Gráficas por edades: red de hombres y red de mujeres ──────────────
     const edadesLabels = ['Kids (3-8)', 'Teens (9-12)', 'Rocas (13-17)', 'Jóvenes (18-30)', 'Adultos (31-59)', 'Adultos Mayores (60+)', 'Sin dato'];
-    const edadesDatos  = <?= $edadesJson ?>;
-    const ctxEd = document.getElementById('chartEdades');
-    if (ctxEd) {
-        new Chart(ctxEd, {
+    const edadesColores = ['#6366f1','#22c55e','#f59e0b','#3b82f6','#a855f7','#14b8a6','#94a3b8'];
+    const pintarEdades = (canvasId, datos, etiqueta) => {
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) {
+            return;
+        }
+        new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: edadesLabels,
                 datasets: [{
-                    label: 'Personas',
-                    data: edadesDatos,
-                    backgroundColor: [
-                        '#6366f1','#22c55e','#f59e0b','#3b82f6','#a855f7','#14b8a6','#94a3b8'
-                    ],
+                    label: etiqueta,
+                    data: datos,
+                    backgroundColor: edadesColores,
                     borderRadius: 6,
                     borderWidth: 0
                 }]
@@ -1137,7 +1144,9 @@ $pctMeta      = $metaTotal > 0 ? (int)round(($totalAnual / $metaTotal) * 100) : 
                 scales: { x: { beginAtZero: true } }
             }
         });
-    }
+    };
+    pintarEdades('chartEdadesHombres', <?= $edadesHombresJson ?>, 'Hombres');
+    pintarEdades('chartEdadesMujeres', <?= $edadesMujeresJson ?>, 'Mujeres');
 
     // ── Gráfica G12-GANAR (barras) ───────────────────────────────────────
     const ctxG12 = document.getElementById('chartG12Ganar');

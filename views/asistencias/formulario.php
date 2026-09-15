@@ -34,6 +34,7 @@ unset($_SESSION['asistencia_flash_error']);
         <div class="form-group">
             <label for="fecha">Fecha</label>
             <input type="date" id="fecha" name="fecha" class="form-control" value="<?= htmlspecialchars((string)($fecha_preseleccionada ?? date('Y-m-d'))) ?>" required>
+            <small class="form-text text-muted">Los indicadores cuentan el reporte según esta fecha (lunes a domingo de esa semana). Si reportas la semana pasada, no uses la fecha de hoy.</small>
         </div>
 
         <div class="form-group">

@@ -60,8 +60,24 @@ class ReporteController extends BaseController {
     }
 
     /**
-     * Semana calendario completa anterior (lunes–domingo) respecto a la fecha dada.
+     * Viernes–domingo del fin de semana que ya cerró respecto a la semana consultada.
+     * Si el viernes de esa semana aún no llega, usa el viernes–domingo anterior.
+     *
+     * @return array{0:string,1:string}
      */
+    private function calcularRangoFinDeSemanaAnterior(string $fechaReferencia): array {
+        [$lunes, $domingo] = $this->calcularRangoSemanaDomingoADomingo($fechaReferencia);
+        $viernesSemana = date('Y-m-d', strtotime($lunes . ' +4 days'));
+        $hoy = date('Y-m-d');
+        if (strcmp($viernesSemana, $hoy) <= 0) {
+            return [$viernesSemana, $domingo];
+        }
+
+        $viernesAnterior = date('Y-m-d', strtotime($lunes . ' -3 days'));
+        $domingoAnterior = date('Y-m-d', strtotime($lunes . ' -1 day'));
+
+        return [$viernesAnterior, $domingoAnterior];
+    }
     private function calcularRangoSemanaVencida($fechaReferencia = null) {
         $timestamp = strtotime((string)($fechaReferencia ?: date('Y-m-d')));
         if ($timestamp === false) {
@@ -142,11 +158,20 @@ class ReporteController extends BaseController {
             ];
         }
 
+        $semanaVencidaPorDefecto = false;
         $fechaReferencia = $fechaReferenciaExplicita;
         if ($fechaReferencia === '') {
-            $fechaReferencia = date('Y-m-d');
+            if ($tipoReporte === 'celulas') {
+                [$fechaInicio, $fechaFin] = $this->calcularRangoSemanaVencida();
+                $fechaReferencia = $fechaFin;
+                $semanaVencidaPorDefecto = true;
+            } else {
+                $fechaReferencia = date('Y-m-d');
+                [$fechaInicio, $fechaFin] = $this->calcularRangoSemanaDomingoADomingo($fechaReferencia);
+            }
+        } else {
+            [$fechaInicio, $fechaFin] = $this->calcularRangoSemanaDomingoADomingo($fechaReferencia);
         }
-        [$fechaInicio, $fechaFin] = $this->calcularRangoSemanaDomingoADomingo($fechaReferencia);
 
         $usarRangoPersonalizado = ($fechaInicioPersonalizada !== '' && $fechaFinPersonalizada !== '');
         if ($usarRangoPersonalizado) {
@@ -178,7 +203,7 @@ class ReporteController extends BaseController {
             'usar_rango_personalizado' => $usarRangoPersonalizado,
             'fecha_inicio_filtro' => $fechaInicioPersonalizada,
             'fecha_fin_filtro' => $fechaFinPersonalizada,
-            'semana_vencida_por_defecto' => false,
+            'semana_vencida_por_defecto' => $semanaVencidaPorDefecto,
         ];
     }
 
@@ -1158,10 +1183,7 @@ class ReporteController extends BaseController {
     }
 
     private function construirReporteGanadosFinSemanaAnterior($fechaInicioSemanaActual, $fechaFinSemanaActual, $filtroRol, $filtroMinisterio = '', $filtroLider = '') {
-        // El rango semanal recibido ya corresponde al contexto seleccionado en filtros.
-        // Evitamos restar otra semana para no dejar el reporte corrido dos semanas atrás.
-        $inicioAnterior = (string)$fechaInicioSemanaActual;
-        $finAnterior = (string)$fechaFinSemanaActual;
+        [$inicioAnterior, $finAnterior] = $this->calcularRangoFinDeSemanaAnterior((string)$fechaInicioSemanaActual);
 
         $resumen = $this->personaModel->getResumenGanadosFinSemanaAnteriorPorMinisterioWithRole(
             $inicioAnterior,
@@ -1659,98 +1681,171 @@ class ReporteController extends BaseController {
             }
         }
 
-        $totalCelulas = count($celulas);
-        $nuevasSemestre = 0;
-        $cerradasSemestre = 0;
         $porMinisterio = [];
         $porRed = [];
-
-        foreach ($celulas as $celula) {
-            $ministerio = trim((string)($celula['Nombre_Ministerio_Lider'] ?? ''));
-            if ($ministerio === '') {
-                $ministerio = 'Sin ministerio';
-            }
-            if (!isset($porMinisterio[$ministerio])) {
-                $porMinisterio[$ministerio] = 0;
-            }
-            $porMinisterio[$ministerio]++;
-
-            $red = $this->normalizarNombreRedReporteCelulas($celula['Red'] ?? '');
-            if (!isset($porRed[$red])) {
-                $porRed[$red] = 0;
-            }
-            $porRed[$red]++;
-
-            $fechaApertura = $celula['Fecha_Apertura'] ?? '';
-            if ($this->esCelulaNueva($celula) && $this->fechaDentroDeRango($fechaApertura, $semestre['inicio'], $semestre['fin'])) {
-                $nuevasSemestre++;
-            }
-
-            $estadoCelula = strtolower(trim((string)($celula['Estado_Celula'] ?? '')));
-            $fechaCierre = $celula['Fecha_Cierre'] ?? '';
-            if ($estadoCelula === 'cerrada') {
-                if ($this->fechaDentroDeRango($fechaCierre, $semestre['inicio'], $semestre['fin']) || trim((string)$fechaCierre) === '') {
-                    $cerradasSemestre++;
-                }
-            }
-        }
-
-        arsort($porMinisterio);
-        arsort($porRed);
-
-        $reportadasSemana = 0;
         $reportadasMap = [];
         foreach ($asistencia as $fila) {
             $idCelula = (int)($fila['Id_Celula'] ?? 0);
-            $reporto = (int)($fila['Reuniones_Realizadas'] ?? 0) > 0;
-            if ($idCelula > 0) {
-                $reportadasMap[$idCelula] = $reporto;
+            if ($idCelula <= 0) {
+                continue;
             }
-            if ($reporto) {
-                $reportadasSemana++;
+            if (!isset($reportadasMap[$idCelula])) {
+                $reportadasMap[$idCelula] = false;
+            }
+            if ((int)($fila['Reuniones_Realizadas'] ?? 0) > 0) {
+                $reportadasMap[$idCelula] = true;
             }
         }
-
-        $noReportadasSemana = max(0, $totalCelulas - $reportadasSemana);
 
         $celulaIds = array_map(static function($celula) {
             return (int)($celula['Id_Celula'] ?? 0);
         }, $celulas);
         $estadoEntregoSobre = $this->asistenciaModel->getEstadoEntregoSobrePorCelulaSemana($celulaIds, $fechaInicioSemana);
+        $resumenAsistenciaPeriodo = $this->asistenciaModel->getResumenAsistenciaPeriodoPorCelula(
+            $celulaIds,
+            $fechaInicioSemana,
+            $fechaFinSemana
+        );
 
-        $entregaronSobreSinReportar = 0;
-        $reportaronSinEntregarSobre = 0;
+        $detalleIndicadores = [
+            'total_celulas' => [],
+            'nuevas_semestre' => [],
+            'cerradas_semestre' => [],
+            'reportadas_semana' => [],
+            'no_reportadas_semana' => [],
+            'entregaron_sobre_sin_reportar' => [],
+            'reportaron_sin_entregar_sobre' => [],
+        ];
+
         foreach ($celulas as $celula) {
             $idCelula = (int)($celula['Id_Celula'] ?? 0);
             if ($idCelula <= 0) {
                 continue;
             }
 
+            $esActiva = $this->esCelulaActivaParaReporte($celula);
+            $filaDetalle = $this->filaDetalleIndicadorCelula($celula, $resumenAsistenciaPeriodo);
+
+            $ministerio = (string)$filaDetalle['ministerio'];
+            $red = $this->normalizarNombreRedReporteCelulas($celula['Red'] ?? '');
+            if ($esActiva) {
+                if (!isset($porMinisterio[$ministerio])) {
+                    $porMinisterio[$ministerio] = 0;
+                }
+                $porMinisterio[$ministerio]++;
+                if (!isset($porRed[$red])) {
+                    $porRed[$red] = 0;
+                }
+                $porRed[$red]++;
+                $detalleIndicadores['total_celulas'][] = $filaDetalle;
+            }
+
+            $fechaApertura = $celula['Fecha_Apertura'] ?? '';
+            if ($this->esCelulaNueva($celula) && $this->fechaDentroDeRango($fechaApertura, $semestre['inicio'], $semestre['fin'])) {
+                $detalleIndicadores['nuevas_semestre'][] = $filaDetalle + [
+                    'fecha' => substr((string)$fechaApertura, 0, 10),
+                ];
+            }
+
+            $fechaCierre = $celula['Fecha_Cierre'] ?? '';
+            if (!$esActiva) {
+                $estadoCerrada = strtolower(trim((string)($celula['Estado_Celula'] ?? '')));
+                if ($estadoCerrada === 'cerrada'
+                    && ($this->fechaDentroDeRango($fechaCierre, $semestre['inicio'], $semestre['fin']) || trim((string)$fechaCierre) === '')
+                ) {
+                    $detalleIndicadores['cerradas_semestre'][] = $filaDetalle + [
+                        'fecha' => substr((string)$fechaCierre, 0, 10),
+                    ];
+                }
+            }
+
+            if (!$esActiva) {
+                continue;
+            }
+
             $reporto = !empty($reportadasMap[$idCelula]);
             $entregoSobre = !empty($estadoEntregoSobre[$idCelula]);
+            $filaDetalleSemana = $filaDetalle + [
+                'entrego_sobre' => $entregoSobre ? 'Sí' : 'No',
+            ];
+
+            if ($reporto) {
+                $detalleIndicadores['reportadas_semana'][] = $filaDetalleSemana;
+            } else {
+                $detalleIndicadores['no_reportadas_semana'][] = $filaDetalleSemana;
+            }
 
             if ($entregoSobre && !$reporto) {
-                $entregaronSobreSinReportar++;
+                $detalleIndicadores['entregaron_sobre_sin_reportar'][] = $filaDetalleSemana;
             }
 
             if ($reporto && !$entregoSobre) {
-                $reportaronSinEntregarSobre++;
+                $detalleIndicadores['reportaron_sin_entregar_sobre'][] = $filaDetalleSemana;
             }
         }
+
+        $ordenarDetalle = static function(array &$lista): void {
+            usort($lista, static function($a, $b) {
+                $min = strcmp((string)($a['ministerio'] ?? ''), (string)($b['ministerio'] ?? ''));
+                if ($min !== 0) {
+                    return $min;
+                }
+                return strcmp((string)($a['celula'] ?? ''), (string)($b['celula'] ?? ''));
+            });
+        };
+        foreach ($detalleIndicadores as &$listaDetalle) {
+            $ordenarDetalle($listaDetalle);
+        }
+        unset($listaDetalle);
+
+        arsort($porMinisterio);
+        arsort($porRed);
 
         return [
             'semestre' => $semestre,
             'totales' => [
-                'total_celulas' => $totalCelulas,
-                'nuevas_semestre' => $nuevasSemestre,
-                'cerradas_semestre' => $cerradasSemestre,
-                'reportadas_semana' => $reportadasSemana,
-                'no_reportadas_semana' => $noReportadasSemana,
-                'entregaron_sobre_sin_reportar' => $entregaronSobreSinReportar,
-                'reportaron_sin_entregar_sobre' => $reportaronSinEntregarSobre
+                'total_celulas' => count($detalleIndicadores['total_celulas']),
+                'nuevas_semestre' => count($detalleIndicadores['nuevas_semestre']),
+                'cerradas_semestre' => count($detalleIndicadores['cerradas_semestre']),
+                'reportadas_semana' => count($detalleIndicadores['reportadas_semana']),
+                'no_reportadas_semana' => count($detalleIndicadores['no_reportadas_semana']),
+                'entregaron_sobre_sin_reportar' => count($detalleIndicadores['entregaron_sobre_sin_reportar']),
+                'reportaron_sin_entregar_sobre' => count($detalleIndicadores['reportaron_sin_entregar_sobre'])
             ],
+            'detalle' => $detalleIndicadores,
             'por_ministerio' => $porMinisterio,
             'por_red' => $porRed
+        ];
+    }
+
+    private function filaDetalleIndicadorCelula(array $celula, array $resumenPeriodo = []): array {
+        $ministerio = trim((string)($celula['Nombre_Ministerio_Lider'] ?? ''));
+        if ($ministerio === '') {
+            $ministerio = 'Sin ministerio';
+        }
+
+        $idCelula = (int)($celula['Id_Celula'] ?? 0);
+        $miembros = (int)($celula['Total_Miembros'] ?? 0);
+        $resumenCelula = is_array($resumenPeriodo[$idCelula] ?? null) ? $resumenPeriodo[$idCelula] : [];
+        $asistieron = (int)($resumenCelula['asistieron'] ?? 0);
+        $tieneRegistros = !empty($resumenCelula['tiene_registros']);
+        $observaciones = trim((string)($resumenCelula['observaciones'] ?? ''));
+        if ($observaciones === '') {
+            $observaciones = $tieneRegistros ? 'Sin observaciones' : 'Sin reporte en el período';
+        }
+
+        return [
+            'celula' => trim((string)($celula['Nombre_Celula'] ?? '')) !== ''
+                ? (string)$celula['Nombre_Celula']
+                : 'Sin nombre',
+            'lider' => trim((string)($celula['Nombre_Lider'] ?? '')) !== ''
+                ? (string)$celula['Nombre_Lider']
+                : 'Sin líder',
+            'ministerio' => $ministerio,
+            'asistentes' => $miembros,
+            'asistieron' => $asistieron,
+            'resumen_asistentes' => 'De ' . $miembros . ', asistieron ' . $asistieron,
+            'observaciones' => $observaciones,
         ];
     }
 
@@ -4648,8 +4743,9 @@ class ReporteController extends BaseController {
         // Acumulado por ministerio
         $porMinisterioMap = [];
 
-        // Datos por edades
-        $porEdades = ['Kids' => 0, 'Teens' => 0, 'Rocas' => 0, 'Jovenes' => 0, 'Adultos' => 0, 'Adultos_Mayores' => 0, 'Sin_Dato' => 0];
+        $porEdades = $this->vacioRangosEdadGanar();
+        $porEdadesHombres = $this->vacioRangosEdadGanar();
+        $porEdadesMujeres = $this->vacioRangosEdadGanar();
 
         foreach ($personasAnio as $persona) {
             if (!$this->esPersonaNueva($persona)) {
@@ -4676,22 +4772,13 @@ class ReporteController extends BaseController {
             $porMinisterioMap[$ministerio]['total']++;
             $porMinisterioMap[$ministerio][$col]++;
 
-            // Edades
-            $edad = (int)($persona['Edad'] ?? 0);
-            if ($edad >= 3 && $edad <= 8) {
-                $porEdades['Kids']++;
-            } elseif ($edad >= 9 && $edad <= 12) {
-                $porEdades['Teens']++;
-            } elseif ($edad >= 13 && $edad <= 17) {
-                $porEdades['Rocas']++;
-            } elseif ($edad >= 18 && $edad <= 30) {
-                $porEdades['Jovenes']++;
-            } elseif ($edad >= 31 && $edad <= 59) {
-                $porEdades['Adultos']++;
-            } elseif ($edad >= 60) {
-                $porEdades['Adultos_Mayores']++;
-            } else {
-                $porEdades['Sin_Dato']++;
+            $claveEdad = $this->claveRangoEdadGanar((int)($persona['Edad'] ?? 0));
+            $porEdades[$claveEdad]++;
+            $redGenero = $this->clasificarRedGeneroPersona($persona);
+            if ($redGenero === 'hombres') {
+                $porEdadesHombres[$claveEdad]++;
+            } elseif ($redGenero === 'mujeres') {
+                $porEdadesMujeres[$claveEdad]++;
             }
         }
 
@@ -4882,6 +4969,8 @@ class ReporteController extends BaseController {
             'ganancias_mensuales'    => $gananciasMensuales,
             'por_ministerio'         => array_values($porMinisterioMap),
             'por_edades'             => $porEdades,
+            'por_edades_hombres'     => $porEdadesHombres,
+            'por_edades_mujeres'     => $porEdadesMujeres,
             'total_s1'               => $totalS1,
             'total_s2'               => $totalS2,
             'total_anual'            => $totalAnual,
@@ -5019,6 +5108,41 @@ class ReporteController extends BaseController {
             'realizan_celula' => 0,
             'total' => 0,
         ];
+    }
+
+    private function vacioRangosEdadGanar(): array {
+        return [
+            'Kids' => 0,
+            'Teens' => 0,
+            'Rocas' => 0,
+            'Jovenes' => 0,
+            'Adultos' => 0,
+            'Adultos_Mayores' => 0,
+            'Sin_Dato' => 0,
+        ];
+    }
+
+    private function claveRangoEdadGanar(int $edad): string {
+        if ($edad >= 3 && $edad <= 8) {
+            return 'Kids';
+        }
+        if ($edad >= 9 && $edad <= 12) {
+            return 'Teens';
+        }
+        if ($edad >= 13 && $edad <= 17) {
+            return 'Rocas';
+        }
+        if ($edad >= 18 && $edad <= 30) {
+            return 'Jovenes';
+        }
+        if ($edad >= 31 && $edad <= 59) {
+            return 'Adultos';
+        }
+        if ($edad >= 60) {
+            return 'Adultos_Mayores';
+        }
+
+        return 'Sin_Dato';
     }
 
     private function clasificarRedGeneroPersona(array $persona): string {
@@ -6529,6 +6653,32 @@ class ReporteController extends BaseController {
     ): array {
         $fechaInicio = substr(trim((string)$fechaInicio), 0, 10);
         $fechaFin = substr(trim((string)$fechaFin), 0, 10);
+        if ($fechaInicio === '' || $fechaFin === '' || $fechaInicio === '0000-00-00' || $fechaFin === '0000-00-00') {
+            return [
+                'total_personas' => 0,
+                'con_uv_escalera' => 0,
+                'sin_uv_escalera' => 0,
+                'con_encuentro_escalera' => 0,
+                'con_bautismo_escalera' => 0,
+                'con_capacitacion_destino' => 0,
+                'pct_con_uv' => 0.0,
+                'pct_sin_uv' => 0.0,
+                'pct_capacitacion_destino' => 0.0,
+                'alcance' => 'toda_la_iglesia',
+                'asistieron_encuentro' => 0,
+                'sin_asistencia_encuentro' => 0,
+                'pct_asistieron' => 0.0,
+                'pct_sin_asistencia' => 0.0,
+                'desglose_por_lider12' => $this->formatearDesgloseEscaleraPorLider12([
+                    'total' => [],
+                    'con_uv' => [],
+                    'sin_uv' => [],
+                    'encuentro' => [],
+                    'bautismo' => [],
+                    'cap_destino' => [],
+                ], false),
+            ];
+        }
 
         [$condPersonas, $paramsPersonas] = $this->construirCondicionSqlPersonasDashboard(
             $filtroRol,
@@ -6536,27 +6686,18 @@ class ReporteController extends BaseController {
             $idLiderFiltro
         );
 
-        $personas = $this->personaModel->query(
-            "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Proceso, p.Escalera_Checklist, p.Id_Lider, p.Id_Ministerio, p.Fecha_Registro,
+        $sqlPersonas = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Proceso, p.Escalera_Checklist, p.Id_Lider, p.Id_Ministerio, p.Fecha_Registro,
                     COALESCE(p.Es_Antiguo, 1) AS Es_Antiguo,
                     COALESCE(NULLIF(TRIM(m.Nombre_Ministerio), ''), 'Sin ministerio') AS Nombre_Ministerio
              FROM persona p
              LEFT JOIN ministerio m ON m.Id_Ministerio = p.Id_Ministerio
              WHERE {$condPersonas}
-               AND COALESCE(p.Es_Antiguo, 1) = 0",
-            $paramsPersonas
-        );
+               AND COALESCE(p.Es_Antiguo, 1) = 0
+               AND DATE(p.Fecha_Registro) BETWEEN ? AND ?";
+        $paramsPersonas[] = $fechaInicio;
+        $paramsPersonas[] = $fechaFin;
 
-        if ($fechaInicio !== '' && $fechaFin !== '' && $fechaInicio !== '0000-00-00') {
-            $personas = array_values(array_filter((array)$personas, static function ($persona) use ($fechaInicio, $fechaFin) {
-                $fechaRegistro = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
-                if ($fechaRegistro === '' || $fechaRegistro === '0000-00-00') {
-                    return false;
-                }
-
-                return $fechaRegistro >= $fechaInicio && $fechaRegistro <= $fechaFin;
-            }));
-        }
+        $personas = $this->personaModel->query($sqlPersonas, $paramsPersonas);
 
         $personas = array_values(array_filter((array)$personas, function ($persona) {
             return $this->esPersonaNueva((array)$persona);
@@ -8100,7 +8241,12 @@ class ReporteController extends BaseController {
         if ($mes < 1 || $mes > 12) {
             $mes = (int)date('n');
         }
-        $semestreUv = (int)($_GET['semestre'] ?? 0);
+        $semestreGet = $_GET['semestre'] ?? null;
+        if ($semestreGet === null || $semestreGet === '' || (int)$semestreGet === 0) {
+            $semestreUv = ((int)date('n')) <= 6 ? 1 : 2;
+        } else {
+            $semestreUv = (int)$semestreGet;
+        }
         $etiquetaPeriodoUv = '';
 
         $filtroMinisterio = $_GET['ministerio'] ?? '';
@@ -8137,7 +8283,7 @@ class ReporteController extends BaseController {
         if ($linea === 'universidad_vida' || $linea === 'capacitacion_destino') {
             $rangoUv = $this->resolverRangoPeriodoDashboardEscuelas(
                 $anio,
-                $semestreUv > 0 ? $semestreUv : null,
+                $semestreUv,
                 true
             );
             $semestreUv = (int)$rangoUv['semestre'];
@@ -8568,16 +8714,45 @@ class ReporteController extends BaseController {
         $totalAsistenciasCap = 0;
         $totalPasaronCap = 0;
         $indicadoresEncuentroUv = [];
+        $indicadoresEncuentroUvSemestres = [];
         $detalleLideresMinisterioUv = [];
         $nombreMinisterioFiltrado = '';
         if ($linea === 'universidad_vida') {
-            $indicadoresEncuentroUv = $this->construirIndicadoresEncuentroUvModoConsolidar(
-                $filtroRol,
-                $idMinisterioFiltro,
-                $idLiderFiltro,
-                $fechaInicioMes,
-                $fechaFinMes
-            );
+            $rangosEscaleraUv = [];
+            if ($semestreUv === 3) {
+                $rangosEscaleraUv[] = $this->resolverRangoSemestreDashboardUv($anio, 1);
+                $rangosEscaleraUv[] = $this->resolverRangoSemestreDashboardUv($anio, 2);
+            } else {
+                $rangosEscaleraUv[] = [
+                    'semestre' => $semestreUv,
+                    'fecha_inicio' => $fechaInicioMes,
+                    'fecha_fin' => $fechaFinMes,
+                    'etiqueta' => $etiquetaPeriodoUv,
+                ];
+            }
+
+            $indicadoresEncuentroUvSemestres = [];
+            foreach ($rangosEscaleraUv as $rangoEscaleraUv) {
+                $indicadoresBloque = $this->construirIndicadoresEncuentroUvModoConsolidar(
+                    $filtroRol,
+                    $idMinisterioFiltro,
+                    $idLiderFiltro,
+                    (string)($rangoEscaleraUv['fecha_inicio'] ?? ''),
+                    (string)($rangoEscaleraUv['fecha_fin'] ?? '')
+                );
+                $indicadoresBloque['etiqueta_periodo'] = (string)($rangoEscaleraUv['etiqueta'] ?? $etiquetaPeriodoUv);
+                $indicadoresBloque['fecha_inicio'] = (string)($rangoEscaleraUv['fecha_inicio'] ?? $fechaInicioMes);
+                $indicadoresBloque['fecha_fin'] = (string)($rangoEscaleraUv['fecha_fin'] ?? $fechaFinMes);
+                $indicadoresEncuentroUvSemestres[] = $indicadoresBloque;
+            }
+
+            $idxEscaleraActual = ((int)date('n') <= 6) ? 0 : max(0, count($indicadoresEncuentroUvSemestres) - 1);
+            if ($semestreUv === 1) {
+                $idxEscaleraActual = 0;
+            } elseif ($semestreUv === 2) {
+                $idxEscaleraActual = max(0, count($indicadoresEncuentroUvSemestres) - 1);
+            }
+            $indicadoresEncuentroUv = $indicadoresEncuentroUvSemestres[$idxEscaleraActual] ?? ($indicadoresEncuentroUvSemestres[0] ?? []);
             $reporteUvMinisterios = $this->construirReporteUvMinisterioDashboard(
                 $filtroRol,
                 $idMinisterioFiltro,
@@ -8716,6 +8891,7 @@ class ReporteController extends BaseController {
             'total_asistencias_cap' => $totalAsistenciasCap,
             'total_pasaron_cap' => $totalPasaronCap,
             'indicadores_encuentro_uv' => $indicadoresEncuentroUv,
+            'indicadores_encuentro_uv_semestres' => $indicadoresEncuentroUvSemestres,
             'detalle_lideres_ministerio_uv' => $detalleLideresMinisterioUv,
             'nombre_ministerio_filtrado' => $nombreMinisterioFiltrado,
         ]);

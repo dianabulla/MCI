@@ -178,6 +178,8 @@ return [
 
     'asistencias' => 'asistencias:ver',
 
+    'asistencias/actualizarEntregoSobre' => ['checker' => 'puedeMarcarEntregoSobre'],
+
     'asistencias/*' => ['modulo' => 'asistencias', 'inferir_accion' => true],
 
 

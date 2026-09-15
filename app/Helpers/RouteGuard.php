@@ -268,6 +268,18 @@ class RouteGuard {
             return;
         }
 
+        $xhr = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''));
+        $accept = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
+        if ($xhr === 'xmlhttprequest' || strpos($accept, 'application/json') !== false) {
+            http_response_code(403);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'error' => 'No autorizado',
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
         header('Location: ' . (function_exists('public_app_url') ? public_app_url('auth/acceso-denegado') : '/?url=auth/acceso-denegado'));
         exit;
     }

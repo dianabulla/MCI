@@ -119,6 +119,8 @@
 $sections = is_array($sections ?? null) ? $sections : [];
 $puedeMarcarEntregoSobre = !empty($puede_marcar_entrego_sobre);
 $semanaInicioSobre = (string)($semana_inicio_sobre ?? '');
+$semanaFinSobre = (string)($semana_fin_sobre ?? '');
+$fechaReporteCelula = $semanaFinSobre !== '' ? $semanaFinSobre : $semanaInicioSobre;
 $ministerioGrupos = [];
 foreach ($sections as $section) {
     $ministerio = trim((string)($section['ministerio'] ?? ''));
@@ -180,7 +182,7 @@ $slugMinisterio = static function ($texto) {
                         <th>Célula</th>
                         <th style="width:120px;">Asistentes</th>
                         <?php if ($puedeMarcarEntregoSobre): ?>
-                            <th style="width:130px;">Sobre entregado</th>
+                            <th style="width:168px;">Sobre entregado</th>
                         <?php endif; ?>
                         <th>Acción</th>
                     </tr>
@@ -196,15 +198,21 @@ $slugMinisterio = static function ($texto) {
                             </td>
                             <?php if ($puedeMarcarEntregoSobre): ?>
                             <td>
-                                <?php $entregoSobreCel = !empty($section['entrego_sobre']); ?>
+                                <?php
+                                $estadoSobreCel = $section['entrego_sobre'] ?? null;
+                                $marcadoSi = ($estadoSobreCel === 1 || $estadoSobreCel === true || $estadoSobreCel === '1');
+                                $marcadoNo = ($estadoSobreCel === 0 || $estadoSobreCel === false || $estadoSobreCel === '0');
+                                ?>
                                 <div class="entrego-sobre-row entrego-sobre-row--table" data-id-celula="<?= (int)$section['id_celula'] ?>" data-semana-inicio="<?= htmlspecialchars($semanaInicioSobre) ?>">
-                                    <label class="entrego-sobre-opt is-si <?= $entregoSobreCel ? 'is-active' : '' ?>">
-                                        <input type="radio" name="entrego_sobre_<?= (int)$section['id_celula'] ?>" value="1" class="entrego-sobre-radio" <?= $entregoSobreCel ? 'checked' : '' ?>>
-                                        Sí
+                                    <label class="entrego-sobre-x-label is-si <?= $marcadoSi ? 'is-active' : '' ?>">
+                                        <span>Sí</span>
+                                        <span class="entrego-sobre-box" aria-hidden="true"><?= $marcadoSi ? 'X' : '' ?></span>
+                                        <input type="checkbox" class="entrego-sobre-x" value="1" <?= $marcadoSi ? 'checked' : '' ?>>
                                     </label>
-                                    <label class="entrego-sobre-opt is-no <?= !$entregoSobreCel ? 'is-active' : '' ?>">
-                                        <input type="radio" name="entrego_sobre_<?= (int)$section['id_celula'] ?>" value="0" class="entrego-sobre-radio" <?= !$entregoSobreCel ? 'checked' : '' ?>>
-                                        No
+                                    <label class="entrego-sobre-x-label is-no <?= $marcadoNo ? 'is-active' : '' ?>">
+                                        <span>No</span>
+                                        <span class="entrego-sobre-box" aria-hidden="true"><?= $marcadoNo ? 'X' : '' ?></span>
+                                        <input type="checkbox" class="entrego-sobre-x" value="0" <?= $marcadoNo ? 'checked' : '' ?>>
                                     </label>
                                     <span class="entrego-sobre-status" aria-live="polite"></span>
                                 </div>
@@ -219,7 +227,7 @@ $slugMinisterio = static function ($texto) {
                                         <i class="bi bi-person-plus-fill" aria-hidden="true"></i>
                                     </a>
                                     <?php if (AuthController::puede('asistencias:crear')): ?>
-                                        <a href="<?= PUBLIC_URL ?>?url=asistencias/registrar&celula=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--report">Reportar célula</a>
+                                        <a href="<?= PUBLIC_URL ?>?url=asistencias/registrar&celula=<?= (int)$section['id_celula'] ?><?= $fechaReporteCelula !== '' ? '&fecha=' . urlencode($fechaReporteCelula) : '' ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--report">Reportar célula</a>
                                     <?php endif; ?>
                                     <?php if (AuthController::puede('celulas:editar')): ?>
                                     <a href="<?= PUBLIC_URL ?>?url=celulas/editar&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon celulas-action-btn--edit" title="Editar" aria-label="Editar">
@@ -380,43 +388,56 @@ $slugMinisterio = static function ($texto) {
 .entrego-sobre-row {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
     flex-wrap: wrap;
 }
 
-.entrego-sobre-opt {
+.entrego-sobre-x-label {
     position: relative;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    min-width: 36px;
-    height: 26px;
-    padding: 0 8px;
-    border-radius: 999px;
-    border: 1px solid #d6e1f0;
-    background: #f6f9ff;
-    color: #64748b;
+    gap: 6px;
     font-weight: 700;
-    font-size: 0.75rem;
+    font-size: 0.8rem;
+    color: #475569;
     cursor: pointer;
+    user-select: none;
 }
 
-.entrego-sobre-opt input {
+.entrego-sobre-x-label input {
     position: absolute;
     opacity: 0;
-    pointer-events: none;
+    width: 1px;
+    height: 1px;
 }
 
-.entrego-sobre-opt.is-si.is-active {
-    background: #e9f8ef;
-    border-color: #c6ebd4;
-    color: #1f7a44;
+.entrego-sobre-box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 2px solid #64748b;
+    border-radius: 4px;
+    background: #fff;
+    color: #0f172a;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1;
 }
 
-.entrego-sobre-opt.is-no.is-active {
-    background: #fff1f1;
-    border-color: #f0c9c9;
-    color: #9b2e3a;
+.entrego-sobre-x-label.is-si.is-active { color: #166534; }
+.entrego-sobre-x-label.is-si.is-active .entrego-sobre-box {
+    border-color: #16a34a;
+    background: #f0fdf4;
+    color: #15803d;
+}
+
+.entrego-sobre-x-label.is-no.is-active { color: #991b1b; }
+.entrego-sobre-x-label.is-no.is-active .entrego-sobre-box {
+    border-color: #dc2626;
+    background: #fef2f2;
+    color: #b91c1c;
 }
 
 .entrego-sobre-status {
@@ -595,33 +616,54 @@ $slugMinisterio = static function ($texto) {
     })();
 
     (function() {
-        const radios = Array.from(document.querySelectorAll('.entrego-sobre-radio'));
-        radios.forEach(function(radio) {
-            radio.addEventListener('change', function() {
-                const row = radio.closest('.entrego-sobre-row');
+        const checks = Array.from(document.querySelectorAll('.entrego-sobre-x'));
+        checks.forEach(function(check) {
+            check.addEventListener('change', function() {
+                const row = check.closest('.entrego-sobre-row');
                 if (!row) return;
                 const idCelula = String(row.dataset.idCelula || '');
                 const semanaInicio = String(row.dataset.semanaInicio || '');
-                const entregoSobre = radio.value === '1' ? '1' : '0';
+                const checksFila = Array.from(row.querySelectorAll('.entrego-sobre-x'));
                 const status = row.querySelector('.entrego-sobre-status');
-                const radiosFila = Array.from(row.querySelectorAll('.entrego-sobre-radio'));
-                const valorPrevio = entregoSobre === '1' ? '0' : '1';
 
-                radiosFila.forEach(function(r) { r.disabled = true; });
-                row.querySelectorAll('.entrego-sobre-opt').forEach(function(opt) {
-                    const r = opt.querySelector('.entrego-sobre-radio');
-                    opt.classList.toggle('is-active', !!(r && r.checked));
-                });
+                if (check.checked) {
+                    checksFila.forEach(function(otro) {
+                        if (otro !== check) {
+                            otro.checked = false;
+                        }
+                    });
+                }
+
+                const marcado = checksFila.find(function(item) { return item.checked; });
+                if (!marcado) {
+                    check.checked = true;
+                }
+                const entregoSobre = (marcado || check).value === '1' ? '1' : '0';
+
+                function pintar() {
+                    row.querySelectorAll('.entrego-sobre-x-label').forEach(function(opt) {
+                        const input = opt.querySelector('.entrego-sobre-x');
+                        const box = opt.querySelector('.entrego-sobre-box');
+                        const activo = !!(input && input.checked);
+                        opt.classList.toggle('is-active', activo);
+                        if (box) box.textContent = activo ? 'X' : '';
+                    });
+                }
+                pintar();
+
+                checksFila.forEach(function(item) { item.disabled = true; });
                 if (status) {
                     status.textContent = 'Guardando...';
                     status.classList.remove('success', 'error');
                 }
 
-                fetch('<?= PUBLIC_URL ?>?url=asistencias/actualizarEntregoSobre', {
+                fetch(<?= json_encode(public_app_url('asistencias/actualizarEntregoSobre'), JSON_UNESCAPED_UNICODE) ?>, {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
-                        'Accept': 'application/json'
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
                     },
                     body: 'id_celula=' + encodeURIComponent(idCelula)
                         + '&semana_inicio=' + encodeURIComponent(semanaInicio)
@@ -636,7 +678,7 @@ $slugMinisterio = static function ($texto) {
                     }
                 })
                 .then(function(data) {
-                    radiosFila.forEach(function(r) { r.disabled = false; });
+                    checksFila.forEach(function(item) { item.disabled = false; });
                     if (!data || !data.success) {
                         throw new Error((data && data.error) ? data.error : 'No se pudo guardar');
                     }
@@ -651,14 +693,7 @@ $slugMinisterio = static function ($texto) {
                     }
                 })
                 .catch(function() {
-                    radiosFila.forEach(function(r) {
-                        r.disabled = false;
-                        r.checked = r.value === valorPrevio;
-                    });
-                    row.querySelectorAll('.entrego-sobre-opt').forEach(function(opt) {
-                        const r = opt.querySelector('.entrego-sobre-radio');
-                        opt.classList.toggle('is-active', r && r.checked);
-                    });
+                    checksFila.forEach(function(item) { item.disabled = false; });
                     if (status) {
                         status.textContent = 'Error';
                         status.classList.remove('success');

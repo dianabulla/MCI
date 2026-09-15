@@ -524,11 +524,13 @@ try {
                     status.classList.remove('success', 'error');
                 }
 
-                fetch('<?= PUBLIC_URL ?>?url=asistencias/actualizarEntregoSobre', {
+                fetch(<?= json_encode(public_app_url('asistencias/actualizarEntregoSobre'), JSON_UNESCAPED_UNICODE) ?>, {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
-                        'Accept': 'application/json'
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
                     },
                     body: 'id_celula=' + encodeURIComponent(idCelula)
                         + '&semana_inicio=' + encodeURIComponent(semanaInicio)

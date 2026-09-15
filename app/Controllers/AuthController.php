@@ -1402,6 +1402,10 @@ class AuthController extends BaseController {
         return self::puede('ministerios:ver');
     }
 
+    public static function puedeMarcarEntregoSobre(): bool {
+        return DataIsolation::tieneAccesoTotal();
+    }
+
     public static function puedeVerAsistenciasProgramaUv(): bool {
         require_once APP . '/Helpers/PermisosProgramasAccess.php';
         return PermisosProgramasAccess::puedeVerAsistenciasUniversidadVida();
