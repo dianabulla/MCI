@@ -225,6 +225,14 @@ $historialToggleUrl = $verHistorialGanar
                 </a>
                 <small class="ganar-shortcut-help">Personas no concretadas (inactivas)</small>
             </div>
+
+            <div class="ganar-shortcut-item">
+                <a href="<?= htmlspecialchars($buildPendientesUrl(['origen' => 'en_seguimiento'])) ?>" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'en_seguimiento') ? 'active' : '' ?>">
+                    <span class="ganar-shortcut-title"><i class="bi bi-signpost-2"></i> En seguimiento</span>
+                    <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['en_seguimiento'] ?? 0) ?></span>
+                </a>
+                <small class="ganar-shortcut-help">Todas las personas marcadas En seguimiento</small>
+            </div>
         </div>
     </div>
 </div>
@@ -234,6 +242,8 @@ $historialToggleUrl = $verHistorialGanar
     <i class="bi bi-check-circle"></i>
     <?php if ($filtroNombrePendiente !== ''): ?>
     Coincidencias de búsqueda: <strong><?= count($personas) ?></strong> persona(s)
+    <?php elseif (($filtroOrigenActual ?? '') === 'en_seguimiento'): ?>
+    Total en seguimiento: <strong><?= count($personas) ?></strong> persona(s)
     <?php else: ?>
     Total <?= $verHistorialGanar ? 'en historial' : 'pendientes' ?>: <strong><?= count($personas) ?></strong> persona(s)
     <?php endif; ?>
@@ -273,6 +283,10 @@ $historialToggleUrl = $verHistorialGanar
                     $ganarChecklist[4] = !empty($persona['Id_Celula']);
                     $checklistEscalera['Ganar'] = $ganarChecklist;
                     $checklistEscaleraJson = htmlspecialchars((string)json_encode($checklistEscalera, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                    $notasSeguimiento = (isset($checklistEscalera['_meta']['seguimiento_notas']) && is_array($checklistEscalera['_meta']['seguimiento_notas']))
+                        ? $checklistEscalera['_meta']['seguimiento_notas']
+                        : [];
+                    $enSeguimientoBtn = !empty($checklistEscalera['_meta']['en_seguimiento']) || $notasSeguimiento !== [];
                     $observacionNoDisponible = (string)($checklistEscalera['_meta']['no_disponible_observacion'] ?? '');
                     $asignadoALiderMinisterio = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
                     $tieneCelulaAsignada = !empty($persona['Id_Celula']);
@@ -435,6 +449,18 @@ $historialToggleUrl = $verHistorialGanar
                         <?php if ($mostrarAcciones): ?>
                         <td class="action-col">
                             <div class="action-buttons action-buttons-compact">
+                            <button
+                                type="button"
+                                class="action-seguimiento-btn js-seguimiento-btn<?= $enSeguimientoBtn ? ' is-active' : '' ?>"
+                                data-persona-id="<?= (int)($persona['Id_Persona'] ?? 0) ?>"
+                                data-persona-nombre="<?= htmlspecialchars(trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
+                                data-persona-telefono="<?= htmlspecialchars(trim((string)($persona['Telefono'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
+                                data-puede-editar="<?= !empty($puedeEditarPersona) ? '1' : '0' ?>"
+                                title="En seguimiento"
+                            >
+                                <i class="bi bi-signpost-2" aria-hidden="true"></i>
+                                <span>En seguimiento</span>
+                            </button>
                             <?php if (AuthController::puede('personas:ver')): ?>
                             <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlGanar) ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
                                 <i class="bi bi-eye"></i>
@@ -505,7 +531,7 @@ $historialToggleUrl = $verHistorialGanar
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="<?= $mostrarAcciones ? '8' : '7' ?>" class="text-center">No hay almas ganadas registradas</td>
+                    <td colspan="<?= $mostrarAcciones ? '8' : '7' ?>" class="text-center"><?= (($filtroOrigenActual ?? '') === 'en_seguimiento') ? 'No hay personas en seguimiento' : 'No hay almas ganadas registradas' ?></td>
                 </tr>
             <?php endif; ?>
         </tbody>
@@ -701,7 +727,7 @@ $historialToggleUrl = $verHistorialGanar
 }
 
 .ganar-table .action-buttons.action-buttons-compact {
-    flex-wrap: nowrap !important;
+    flex-wrap: wrap !important;
     justify-content: flex-start;
     margin-bottom: 6px;
 }
@@ -2194,5 +2220,6 @@ $historialToggleUrl = $verHistorialGanar
 })();
 </script>
 
+<?php include VIEWS . '/personas/partials/modal_seguimiento.php'; ?>
 <?php include VIEWS . '/layout/footer.php'; ?>
 

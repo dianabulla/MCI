@@ -267,6 +267,10 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
                         $checklistEscalera['Enviar'][$i] = !empty($checklistEscalera['Enviar'][$i]);
                     }
                     $checklistEscaleraJson = htmlspecialchars((string)json_encode($checklistEscalera, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                    $notasSeguimiento = (isset($checklistEscalera['_meta']['seguimiento_notas']) && is_array($checklistEscalera['_meta']['seguimiento_notas']))
+                        ? $checklistEscalera['_meta']['seguimiento_notas']
+                        : [];
+                    $enSeguimientoBtn = !empty($checklistEscalera['_meta']['en_seguimiento']) || $notasSeguimiento !== [];
                     $rowPerfilId = $resolverCategoriaPerfil((array)$persona);
                     $esFilaDiscipulo = ($rowPerfilId === 'discipulos');
                     $filaPendienteUbicacion = $esPendienteUbicacionRed((array)$persona);
@@ -344,6 +348,18 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
                         <?php if ($mostrarAcciones): ?>
                         <td class="action-col">
                             <div class="action-buttons action-buttons-compact">
+                                <button
+                                    type="button"
+                                    class="action-seguimiento-btn js-seguimiento-btn<?= $enSeguimientoBtn ? ' is-active' : '' ?>"
+                                    data-persona-id="<?= (int)($persona['Id_Persona'] ?? 0) ?>"
+                                    data-persona-nombre="<?= htmlspecialchars(trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
+                                    data-persona-telefono="<?= htmlspecialchars(trim((string)($persona['Telefono'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
+                                    data-puede-editar="<?= !empty($puedeEditarPersona) ? '1' : '0' ?>"
+                                    title="En seguimiento"
+                                >
+                                    <i class="bi bi-signpost-2" aria-hidden="true"></i>
+                                    <span>En seguimiento</span>
+                                </button>
                                 <?php if ($puedeVerPersona): ?>
                                 <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlPersonas) ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
                                     <i class="bi bi-eye"></i>
@@ -480,8 +496,8 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
 }
 
 .ganar-table .action-buttons.action-buttons-compact {
-    flex-wrap: nowrap !important;
-    justify-content: center;
+    flex-wrap: wrap !important;
+    justify-content: flex-start;
 }
 
 .ganar-table .action-buttons.action-buttons-compact .action-icon-btn {
@@ -1746,5 +1762,6 @@ if (filtroNombre && filtroPerfilForm) {
 })();
 </script>
 
+<?php include VIEWS . '/personas/partials/modal_seguimiento.php'; ?>
 <?php include VIEWS . '/layout/footer.php'; ?>
 

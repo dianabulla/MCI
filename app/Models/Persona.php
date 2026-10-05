@@ -3387,6 +3387,72 @@ class Persona extends BaseModel {
         return $this->query($sql, $celulaIds);
     }
 
+    public static function checklistIndicaEnSeguimiento($checklistRaw): bool {
+        if (is_array($checklistRaw)) {
+            $decoded = $checklistRaw;
+        } else {
+            $raw = trim((string)$checklistRaw);
+            if ($raw === '') {
+                return false;
+            }
+            $decoded = json_decode($raw, true);
+            if (!is_array($decoded)) {
+                return false;
+            }
+        }
+        $meta = is_array($decoded['_meta'] ?? null) ? $decoded['_meta'] : [];
+        if (!empty($meta['en_seguimiento'])) {
+            return true;
+        }
+        $notas = $meta['seguimiento_notas'] ?? [];
+        return is_array($notas) && $notas !== [];
+    }
+
+    /**
+     * Personas marcadas En seguimiento (checklist), con aislamiento de rol.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getEnSeguimientoWithRole($filtroRol, $idMinisterio = '', $idLider = '') {
+        $sql = "SELECT p.Id_Persona, p.Nombre, p.Apellido, p.Telefono, p.Id_Celula, p.Id_Ministerio, p.Id_Lider,
+                       p.Escalera_Checklist, p.Proceso, p.Fecha_Registro, p.Es_Antiguo,
+                       COALESCE(NULLIF(TRIM(m.Nombre_Ministerio), ''), 'Sin ministerio') AS Nombre_Ministerio,
+                       COALESCE(NULLIF(TRIM(c.Nombre_Celula), ''), 'Sin célula') AS Nombre_Celula,
+                       TRIM(CONCAT(COALESCE(lid.Nombre, ''), ' ', COALESCE(lid.Apellido, ''))) AS Nombre_Lider
+                FROM {$this->table} p
+                LEFT JOIN ministerio m ON m.Id_Ministerio = p.Id_Ministerio
+                LEFT JOIN celula c ON c.Id_Celula = p.Id_Celula
+                LEFT JOIN persona lid ON lid.Id_Persona = p.Id_Lider
+                WHERE {$filtroRol}
+                  AND p.Escalera_Checklist IS NOT NULL
+                  AND TRIM(p.Escalera_Checklist) <> ''
+                  AND p.Escalera_Checklist LIKE '%en_seguimiento%'";
+        $params = [];
+        if ($idMinisterio !== null && $idMinisterio !== '' && (int)$idMinisterio > 0) {
+            $sql .= ' AND p.Id_Ministerio = ?';
+            $params[] = (int)$idMinisterio;
+        } elseif ((string)$idMinisterio === '0') {
+            $sql .= ' AND (p.Id_Ministerio IS NULL OR p.Id_Ministerio = 0)';
+        }
+        if ($idLider !== null && $idLider !== '' && (int)$idLider > 0) {
+            $sql .= ' AND p.Id_Lider = ?';
+            $params[] = (int)$idLider;
+        } elseif ((string)$idLider === '0') {
+            $sql .= ' AND (p.Id_Lider IS NULL OR p.Id_Lider = 0)';
+        }
+        $sql .= ' ORDER BY Nombre_Ministerio ASC, Nombre_Celula ASC, p.Apellido ASC, p.Nombre ASC';
+
+        $filas = $this->query($sql, $params);
+        $salida = [];
+        foreach ((array)$filas as $fila) {
+            if (!self::checklistIndicaEnSeguimiento($fila['Escalera_Checklist'] ?? '')) {
+                continue;
+            }
+            $salida[] = $fila;
+        }
+        return $salida;
+    }
+
     /**
      * Obtener miembros activos agrupables por mÃºltiples ministerios
      */
@@ -4122,6 +4188,7 @@ class Persona extends BaseModel {
     }
 
     public function create($data) {
+        $data = $this->aplicarEdadDesdeFechaNacimiento($data);
         $data = $this->aplicarRolDiscipuloSoloEnAlta($data);
         $id = parent::create($data);
         if ($id && isset($data['Id_Rol'])) {
@@ -4131,11 +4198,84 @@ class Persona extends BaseModel {
     }
 
     public function update($id, $data) {
+        $data = $this->aplicarEdadDesdeFechaNacimiento($data);
         $result = parent::update($id, $data);
         if ($result && isset($data['Id_Rol'])) {
             $this->sincronizarUserRolesDesdePersona((int)$id, (int)$data['Id_Rol']);
         }
         return $result;
+    }
+
+    public static function calcularEdadDesdeFechaNacimiento($fechaNacimiento): ?int {
+        $fechaNacimiento = trim((string)$fechaNacimiento);
+        if ($fechaNacimiento === '' || strpos($fechaNacimiento, '0000-00-00') === 0) {
+            return null;
+        }
+
+        try {
+            $fecha = new DateTime(substr($fechaNacimiento, 0, 10));
+            $hoy = new DateTime('today');
+            if ($fecha > $hoy) {
+                return null;
+            }
+
+            return (int)$fecha->diff($hoy)->y;
+        } catch (Exception $e) {
+            return null;
+        }
+    }
+
+    private function aplicarEdadDesdeFechaNacimiento(array $data): array {
+        if (!$this->tieneColumna('Edad') || !array_key_exists('Fecha_Nacimiento', $data)) {
+            return $data;
+        }
+
+        $data['Edad'] = self::calcularEdadDesdeFechaNacimiento($data['Fecha_Nacimiento'] ?? null);
+
+        return $data;
+    }
+
+    /**
+     * Recalcula Edad para quienes tienen fecha de nacimiento y Edad vacía o desactualizada.
+     */
+    public function sincronizarEdadesDesdeFechaNacimiento(): int {
+        if (!$this->tieneColumna('Edad') || !$this->tieneColumna('Fecha_Nacimiento')) {
+            return 0;
+        }
+
+        $sql = "UPDATE {$this->table}
+                SET Edad = TIMESTAMPDIFF(YEAR, Fecha_Nacimiento, CURDATE())
+                WHERE Fecha_Nacimiento IS NOT NULL
+                  AND Fecha_Nacimiento > '1900-01-01'
+                  AND Fecha_Nacimiento <= CURDATE()
+                  AND (
+                        Edad IS NULL
+                        OR Edad <> TIMESTAMPDIFF(YEAR, Fecha_Nacimiento, CURDATE())
+                  )";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute();
+
+        return (int)$stmt->rowCount();
+    }
+
+    public function contarEdadesPendientesDeSincronizar(): int {
+        if (!$this->tieneColumna('Edad') || !$this->tieneColumna('Fecha_Nacimiento')) {
+            return 0;
+        }
+
+        $sql = "SELECT COUNT(*) AS total
+                FROM {$this->table}
+                WHERE Fecha_Nacimiento IS NOT NULL
+                  AND Fecha_Nacimiento > '1900-01-01'
+                  AND Fecha_Nacimiento <= CURDATE()
+                  AND (
+                        Edad IS NULL
+                        OR Edad <> TIMESTAMPDIFF(YEAR, Fecha_Nacimiento, CURDATE())
+                  )";
+        $stmt = $this->db->query($sql);
+        $row = $stmt ? $stmt->fetch() : null;
+
+        return (int)($row['total'] ?? 0);
     }
 
     private function sincronizarUserRolesDesdePersona(int $idPersona, int $idRol): void {

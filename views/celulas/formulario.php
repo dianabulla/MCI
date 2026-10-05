@@ -6,6 +6,9 @@
 </div>
 
 <div class="form-container">
+    <?php if (!empty($error_cierre)): ?>
+        <div class="alert alert-danger" style="margin-bottom:14px;"><?= htmlspecialchars((string)$error_cierre) ?></div>
+    <?php endif; ?>
     <form method="POST"<?= isset($celula['Id_Celula']) ? ' action="' . htmlspecialchars(PUBLIC_URL . 'index.php?url=celulas/editar&id=' . (int)$celula['Id_Celula']) . '"' : '' ?>>
         <?php if (isset($celula['Id_Celula'])): ?>
         <input type="hidden" name="id_celula" value="<?= (int)$celula['Id_Celula'] ?>">
@@ -42,6 +45,7 @@
         $estadoCelulaSel = $estadoCelulaSel === 'cerrada' ? 'Cerrada' : 'Activa';
         $fechaAperturaInput = substr((string)($_POST['fecha_apertura'] ?? ($celula['Fecha_Apertura'] ?? '')), 0, 10);
         $fechaCierreInput = substr((string)($_POST['fecha_cierre'] ?? ($celula['Fecha_Cierre'] ?? '')), 0, 10);
+        $observacionesCierreInput = (string)($_POST['observaciones_cierre'] ?? ($celula['Observaciones_Cierre'] ?? ''));
         $ministerios = is_array($ministerios ?? null) ? $ministerios : [];
         $ministerioSel = (string)($_POST['id_ministerio'] ?? ($celula['Id_Ministerio'] ?? ''));
         $idPastorSel = (string)($_POST['id_pastor'] ?? ($celula['Id_Pastor'] ?? ''));
@@ -68,6 +72,14 @@
                 <input type="date" id="fecha_cierre" name="fecha_cierre" class="form-control"
                        value="<?= htmlspecialchars($fechaCierreInput) ?>">
             </div>
+        </div>
+
+        <div class="form-group" id="grupo_observaciones_cierre" style="<?= $estadoCelulaSel === 'Cerrada' ? '' : 'display:none;' ?>">
+            <label for="observaciones_cierre">Motivo de cierre</label>
+            <textarea id="observaciones_cierre" name="observaciones_cierre" class="form-control" rows="3"
+                      placeholder="Indica por qué se cierra esta célula"
+                      <?= $estadoCelulaSel === 'Cerrada' ? 'required' : '' ?>><?= htmlspecialchars($observacionesCierreInput) ?></textarea>
+            <small class="form-text text-muted">Obligatorio al pasar la célula a Cerrada.</small>
         </div>
 
         <div class="form-group">
@@ -539,11 +551,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const estadoSelect = document.getElementById('estado_celula');
     const grupoCierre = document.getElementById('grupo_fecha_cierre');
+    const grupoObsCierre = document.getElementById('grupo_observaciones_cierre');
     const fechaCierreInput = document.getElementById('fecha_cierre');
+    const obsCierreInput = document.getElementById('observaciones_cierre');
     function sincronizarCierre() {
         if (!estadoSelect || !grupoCierre) return;
         const cerrada = estadoSelect.value === 'Cerrada';
         grupoCierre.style.display = cerrada ? '' : 'none';
+        if (grupoObsCierre) {
+            grupoObsCierre.style.display = cerrada ? '' : 'none';
+        }
+        if (obsCierreInput) {
+            obsCierreInput.required = cerrada;
+        }
         if (cerrada && fechaCierreInput && !fechaCierreInput.value) {
             const hoy = new Date();
             const y = hoy.getFullYear();

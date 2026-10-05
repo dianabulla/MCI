@@ -14,6 +14,18 @@ class TallerServicioSocial extends BaseModel {
     protected $primaryKey = 'Id_Cita';
     private string $tablaHistoria = 'talleres_servicio_social_historia_clinica';
     private string $tablaHorarioSabado = 'talleres_servicio_social_horario_sabado';
+    private string $tablaInscripcionDias = 'talleres_servicio_social_inscripcion_dias';
+
+    /** @var array<int, string> ISO 8601: 1 lunes … 7 domingo */
+    public const DIAS_SEMANA_INSCRIPCION = [
+        1 => 'Lunes',
+        2 => 'Martes',
+        3 => 'Miércoles',
+        4 => 'Jueves',
+        5 => 'Viernes',
+        6 => 'Sábado',
+        7 => 'Domingo',
+    ];
 
     /** @var array<string, string> */
     public const TIPOS_DOCUMENTO = [
@@ -100,6 +112,7 @@ class TallerServicioSocial extends BaseModel {
         $this->ensureSchema();
         $this->ensureHistoriaSchema();
         $this->ensureHorarioSabadoSchema();
+        $this->ensureInscripcionDiasSchema();
     }
 
     private function ensureSchema(): void {
@@ -153,6 +166,19 @@ class TallerServicioSocial extends BaseModel {
                 Actualizado_Por INT UNSIGNED NULL,
                 Fecha_Actualizacion DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (Fecha)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    }
+
+    private function ensureInscripcionDiasSchema(): void {
+        $this->db->exec("
+            CREATE TABLE IF NOT EXISTS {$this->tablaInscripcionDias} (
+                Id TINYINT UNSIGNED NOT NULL,
+                Dias_Habilitados JSON NOT NULL,
+                Notas VARCHAR(255) NULL,
+                Actualizado_Por INT UNSIGNED NULL,
+                Fecha_Actualizacion DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (Id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
     }
@@ -309,10 +335,122 @@ class TallerServicioSocial extends BaseModel {
         return (string)preg_replace('/[^A-Z0-9]/', '', $documento);
     }
 
-    /** Lunes (1) a viernes (5) se pueden enviar solicitudes. */
-    public static function puedeAgendarHoy(): bool {
+    /**
+     * @return array<int, int>
+     */
+    public static function diasInscripcionPorDefecto(): array {
+        return [1, 2, 3, 4, 5, 6, 7];
+    }
+
+    /**
+     * @param mixed $raw
+     * @return array<int, int>
+     */
+    public static function normalizarDiasInscripcion($raw): array {
+        if (!is_array($raw)) {
+            return [];
+        }
+        $dias = [];
+        foreach ($raw as $dia) {
+            $n = (int)$dia;
+            if ($n >= 1 && $n <= 7) {
+                $dias[] = $n;
+            }
+        }
+        $dias = array_values(array_unique($dias));
+        sort($dias);
+        return $dias;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    public function diasInscripcionHabilitados(): array {
+        $rows = $this->query("SELECT Dias_Habilitados FROM {$this->tablaInscripcionDias} WHERE Id = 1 LIMIT 1");
+        if (empty($rows[0]['Dias_Habilitados'])) {
+            return self::diasInscripcionPorDefecto();
+        }
+        $decoded = json_decode((string)$rows[0]['Dias_Habilitados'], true);
+        $dias = self::normalizarDiasInscripcion($decoded);
+        return $dias !== [] ? $dias : self::diasInscripcionPorDefecto();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function obtenerConfigInscripcionDias(): ?array {
+        $rows = $this->query("SELECT * FROM {$this->tablaInscripcionDias} WHERE Id = 1 LIMIT 1");
+        return !empty($rows[0]) ? $rows[0] : null;
+    }
+
+    /**
+     * @param array<int, mixed> $diasHabilitados
+     * @return array{ok:bool,message:string}
+     */
+    public function guardarInscripcionDias(array $diasHabilitados, string $notas = '', int $idUsuario = 0): array {
+        $dias = self::normalizarDiasInscripcion($diasHabilitados);
+        if ($dias === []) {
+            return ['ok' => false, 'message' => 'Debes habilitar al menos un día de inscripción.'];
+        }
+
+        $json = json_encode($dias, JSON_UNESCAPED_UNICODE);
+        $notas = trim($notas);
+        $params = [
+            1,
+            $json,
+            $notas !== '' ? mb_substr($notas, 0, 255) : null,
+            $idUsuario > 0 ? $idUsuario : null,
+        ];
+        $sql = "INSERT INTO {$this->tablaInscripcionDias} (Id, Dias_Habilitados, Notas, Actualizado_Por)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    Dias_Habilitados = VALUES(Dias_Habilitados),
+                    Notas = VALUES(Notas),
+                    Actualizado_Por = VALUES(Actualizado_Por)";
+        $stmt = $this->db->prepare($sql);
+        if (!$stmt || !$stmt->execute($params)) {
+            return ['ok' => false, 'message' => 'No se pudo guardar los días de inscripción.'];
+        }
+
+        return ['ok' => true, 'message' => 'Días de inscripción actualizados.'];
+    }
+
+    public function textoDiasInscripcionHabilitados(): string {
+        $nombres = [];
+        foreach ($this->diasInscripcionHabilitados() as $dia) {
+            if (isset(self::DIAS_SEMANA_INSCRIPCION[$dia])) {
+                $nombres[] = self::DIAS_SEMANA_INSCRIPCION[$dia];
+            }
+        }
+        if ($nombres === []) {
+            return '';
+        }
+        if (count($nombres) === 7) {
+            return 'todos los días';
+        }
+        if (count($nombres) === 1) {
+            return $nombres[0];
+        }
+        $ultimo = array_pop($nombres);
+        return implode(', ', $nombres) . ' y ' . $ultimo;
+    }
+
+    public function inscripcionesAbiertasHoy(): bool {
         $dow = (int)date('N');
-        return $dow >= 1 && $dow <= 5;
+        return in_array($dow, $this->diasInscripcionHabilitados(), true);
+    }
+
+    public function mensajeInscripcionesCerradas(): string {
+        $texto = $this->textoDiasInscripcionHabilitados();
+        if ($texto === '') {
+            return 'Las inscripciones están cerradas. Vuelve más adelante.';
+        }
+        return 'Hoy el formulario de inscripción está cerrado. Se habilita ' . $texto . '.';
+    }
+
+    /** El público puede enviar solicitudes según los días configurados. */
+    public function puedeAgendarHoy(): bool {
+        return $this->inscripcionesAbiertasHoy();
     }
 
     public static function esSabado(string $fecha): bool {
@@ -887,8 +1025,8 @@ class TallerServicioSocial extends BaseModel {
      * @return array{ok:bool,error?:string}
      */
     public function validarAgendamiento(string $fecha, string $hora, string $documento = ''): array {
-        if (!self::puedeAgendarHoy()) {
-            return ['ok' => false, 'error' => 'Las solicitudes de cita solo se reciben de lunes a viernes.'];
+        if (!$this->puedeAgendarHoy()) {
+            return ['ok' => false, 'error' => $this->mensajeInscripcionesCerradas()];
         }
         if ($fecha === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
             return ['ok' => false, 'error' => 'Indica una fecha preferida válida.'];

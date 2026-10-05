@@ -288,6 +288,23 @@ class ProgramasNavegacion
             ];
         }
 
+        if ($lineaActiva === 'universidad_vida' && !empty($perm['asistencias'])) {
+            $out[] = [
+                'id' => 'qr_asistencia',
+                'label' => 'QR asistencia',
+                'href' => self::urlPublic('escuelas_formacion/asistencia-publica/qr'),
+                'activa' => false,
+                'externa' => true,
+            ];
+            $out[] = [
+                'id' => 'tomar_asistencia',
+                'label' => 'Tomar asistencia',
+                'href' => self::urlPublic('escuelas_formacion/asistencia-publica'),
+                'activa' => false,
+                'externa' => true,
+            ];
+        }
+
         return $out;
     }
 

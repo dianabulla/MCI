@@ -29,6 +29,7 @@ class PublicRouteRegistry {
             'escuelas_formacion/registro-publico/subir-documentos',
             'escuelas_formacion/registro-publico/ticket',
             'escuelas_formacion/asistencia-publica',
+            'escuelas_formacion/asistencia-publica/qr',
             'escuelas_formacion/asistencia-publica/buscar',
             'escuelas_formacion/asistencia-publica/guardar',
             'talleres_publico',
@@ -53,6 +54,7 @@ class PublicRouteRegistry {
             'nehemias/testigos-electorales/formulario',
             'nehemias/testigos-electorales/guardar',
             'nehemias/whatsapp/webhook',
+            'personas/sincronizar-edades',
         ];
     }
 

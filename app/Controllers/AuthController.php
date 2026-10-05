@@ -1326,6 +1326,18 @@ class AuthController extends BaseController {
             || self::puede('personas_consulta:editar');
     }
 
+    public static function puedeUsarSeguimientoPersonaListado(): bool {
+        return self::puedeVerModuloPersonasGanar()
+            || self::puedeVerPersonasConsulta()
+            || self::puedeEditarPersonaDesdeDiscipular();
+    }
+
+    public static function puedeGuardarSeguimientoPersonaListado(): bool {
+        return self::esAdministrador()
+            || self::puede('personas:editar')
+            || self::puedeEditarPersonasConsulta();
+    }
+
     /**
      * Editar fichas desde Discipular / ministerios (misma regla que el botón en equipo-principal).
      */

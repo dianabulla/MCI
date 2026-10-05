@@ -89,7 +89,7 @@ class AsistenciaController extends BaseController {
     }
 
     /**
-     * Miembros activos de una cÃ©lula sin duplicar por cÃ©dula (JSON para reporte).
+     * Miembros activos de una célula sin duplicar por cédula (JSON para reporte).
      */
     public function miembrosCelula() {
         header('Content-Type: application/json; charset=utf-8');
@@ -118,7 +118,7 @@ class AsistenciaController extends BaseController {
 
         if (!$celulaPermitida) {
             http_response_code(403);
-            echo json_encode(['ok' => false, 'error' => 'CÃ©lula no permitida']);
+            echo json_encode(['ok' => false, 'error' => 'Célula no permitida']);
             return;
         }
 
@@ -180,10 +180,15 @@ class AsistenciaController extends BaseController {
 
     private function fechaPorDefectoReporteCelula(): string {
         $hoy = new DateTimeImmutable('today');
-        $inicioSemanaActual = $hoy->modify('monday this week');
-        $domingoVencida = $inicioSemanaActual->modify('-1 day');
+        $diaSemana = (int)$hoy->format('N');
 
-        return $domingoVencida->format('Y-m-d');
+        // Semana vencida = lunes a domingo. Si se reporta el domingo, esa fecha
+        // es el cierre de esa semana y el lunes ya se ve como vencida.
+        if ($diaSemana === 7) {
+            return $hoy->format('Y-m-d');
+        }
+
+        return $hoy->modify('monday this week')->modify('-1 day')->format('Y-m-d');
     }
 
     public function actualizarEntregoSobre() {
@@ -259,13 +264,13 @@ class AsistenciaController extends BaseController {
 
             try {
                 if ($idCelula <= 0) {
-                    throw new RuntimeException('Selecciona una cÃ©lula para reportar.');
+                    throw new RuntimeException('Selecciona una célula para reportar.');
                 }
                 if ($fecha === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
-                    throw new RuntimeException('Indica una fecha vÃ¡lida para el reporte.');
+                    throw new RuntimeException('Indica una fecha válida para el reporte.');
                 }
                 if (!is_array($asistencias) || $asistencias === []) {
-                    throw new RuntimeException('No se pudo reportar la cÃ©lula. No hay miembros para registrar.');
+                    throw new RuntimeException('No se pudo reportar la célula. No hay miembros para registrar.');
                 }
 
                 if ($noSeRealizo) {
@@ -275,12 +280,12 @@ class AsistenciaController extends BaseController {
 
                     $motivoNoRealizo = trim((string)($_POST['motivo_no_realizo'] ?? ''));
                     $etiquetasMotivo = [
-                        'convencion' => 'ConvenciÃ³n',
+                        'convencion' => 'Convención',
                         'actividades_iglesia' => 'Actividades de la iglesia',
                         'otro' => 'Otro',
                     ];
                     if (!isset($etiquetasMotivo[$motivoNoRealizo])) {
-                        throw new RuntimeException('Indica por quÃ© no se realizÃ³ la cÃ©lula.');
+                        throw new RuntimeException('Indica por qué no se realizó la célula.');
                     }
 
                     $detalleMotivo = $etiquetasMotivo[$motivoNoRealizo];
@@ -292,7 +297,7 @@ class AsistenciaController extends BaseController {
                         $detalleMotivo .= ': ' . $otroMotivo;
                     }
 
-                    $prefijoMotivo = 'No se realizÃ³. Motivo: ' . $detalleMotivo;
+                    $prefijoMotivo = 'No se realizó. Motivo: ' . $detalleMotivo;
                     if ($observaciones === '') {
                         $observaciones = $prefijoMotivo;
                     } elseif (stripos($observaciones, 'no se realiz') === false) {
@@ -322,22 +327,22 @@ class AsistenciaController extends BaseController {
                             $fallos++;
                         }
                     } catch (Throwable $eFila) {
-                        error_log('Error al registrar asistencia de cÃ©lula: ' . $eFila->getMessage());
+                        error_log('Error al registrar asistencia de célula: ' . $eFila->getMessage());
                         $fallos++;
                     }
                 }
 
                 if ($guardados <= 0) {
-                    throw new RuntimeException('No se pudo reportar la cÃ©lula. IntÃ©ntalo de nuevo.');
+                    throw new RuntimeException('No se pudo reportar la célula. Inténtalo de nuevo.');
                 }
 
-                $mensajeOk = 'CÃ©lula reportada con Ã©xito. Fecha y hora: ' . $fechaHora;
+                $mensajeOk = 'Célula reportada con éxito. Fecha y hora: ' . $fechaHora;
                 $this->responderRegistroCelula($esAjax, true, $mensajeOk, $returnUrl, $fechaHora);
             } catch (Throwable $e) {
-                error_log('Error al reportar cÃ©lula: ' . $e->getMessage());
+                error_log('Error al reportar célula: ' . $e->getMessage());
                 $mensajeError = $e instanceof RuntimeException
                     ? $e->getMessage()
-                    : 'OcurriÃ³ un error y no se pudo reportar la cÃ©lula. IntÃ©ntalo de nuevo.';
+                    : 'Ocurrió un error y no se pudo reportar la célula. Inténtalo de nuevo.';
                 $this->responderRegistroCelula($esAjax, false, $mensajeError, $returnUrl, $fechaHora);
             }
             return;
@@ -496,5 +501,140 @@ class AsistenciaController extends BaseController {
             'message' => 'Persona marcada como No se dispone',
             'id_persona' => $idPersona
         ]);
+    }
+
+    public function quitarDeCelula() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->json(['success' => false, 'message' => 'Método no permitido'], 405);
+        }
+        if (!$this->puedeGestionarAccionesReporteCelula()) {
+            $this->json(['success' => false, 'message' => 'No autorizado'], 403);
+        }
+
+        $idPersona = (int)($_POST['id_persona'] ?? 0);
+        $idCelula = (int)($_POST['id_celula'] ?? 0);
+        if ($idPersona <= 0 || $idCelula <= 0) {
+            $this->json(['success' => false, 'message' => 'Datos inválidos'], 422);
+        }
+
+        $persona = $this->obtenerPersonaAccionReporte($idPersona, $idCelula);
+        if ($persona === null) {
+            return;
+        }
+
+        $ok = $this->personaModel->update($idPersona, ['Id_Celula' => null]);
+        if (!$ok) {
+            $this->json(['success' => false, 'message' => 'No se pudo quitar a la persona de la célula'], 500);
+        }
+
+        $this->json([
+            'success' => true,
+            'message' => 'Persona eliminada de esta célula',
+            'id_persona' => $idPersona,
+        ]);
+    }
+
+    public function migrarCelula() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->json(['success' => false, 'message' => 'Método no permitido'], 405);
+        }
+        if (!$this->puedeGestionarAccionesReporteCelula()) {
+            $this->json(['success' => false, 'message' => 'No autorizado'], 403);
+        }
+
+        $idPersona = (int)($_POST['id_persona'] ?? 0);
+        $idCelulaOrigen = (int)($_POST['id_celula'] ?? $_POST['id_celula_origen'] ?? 0);
+        $idCelulaDestino = (int)($_POST['id_celula_destino'] ?? 0);
+        if ($idPersona <= 0 || $idCelulaOrigen <= 0 || $idCelulaDestino <= 0) {
+            $this->json(['success' => false, 'message' => 'Datos inválidos'], 422);
+        }
+        if ($idCelulaDestino === $idCelulaOrigen) {
+            $this->json(['success' => false, 'message' => 'Elige una célula distinta'], 422);
+        }
+
+        $persona = $this->obtenerPersonaAccionReporte($idPersona, $idCelulaOrigen);
+        if ($persona === null) {
+            return;
+        }
+
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
+        $origen = null;
+        $destino = null;
+        foreach ($celulas as $celula) {
+            $id = (int)($celula['Id_Celula'] ?? 0);
+            if ($id === $idCelulaOrigen) {
+                $origen = $celula;
+            }
+            if ($id === $idCelulaDestino) {
+                $destino = $celula;
+            }
+        }
+
+        if ($origen === null || $destino === null) {
+            $this->json(['success' => false, 'message' => 'No tienes acceso a una de las células'], 403);
+        }
+
+        $minOrigen = (int)($origen['Id_Ministerio_Lider'] ?? 0);
+        $minDestino = (int)($destino['Id_Ministerio_Lider'] ?? 0);
+        if ($minOrigen <= 0 || $minDestino !== $minOrigen) {
+            $this->json(['success' => false, 'message' => 'Solo se puede migrar a células del mismo ministerio'], 422);
+        }
+
+        $datos = ['Id_Celula' => $idCelulaDestino];
+        $idLiderDestino = (int)($destino['Id_Lider'] ?? 0);
+        if ($idLiderDestino > 0) {
+            $datos['Id_Lider'] = $idLiderDestino;
+        }
+        if ($minDestino > 0) {
+            $datos['Id_Ministerio'] = $minDestino;
+        }
+
+        $ok = $this->personaModel->update($idPersona, $datos);
+        if (!$ok) {
+            $this->json(['success' => false, 'message' => 'No se pudo migrar a la otra célula'], 500);
+        }
+
+        $this->json([
+            'success' => true,
+            'message' => 'Persona migrada a ' . (string)($destino['Nombre_Celula'] ?? 'la otra célula'),
+            'id_persona' => $idPersona,
+            'id_celula_destino' => $idCelulaDestino,
+        ]);
+    }
+
+    private function puedeGestionarAccionesReporteCelula(): bool {
+        return AuthController::puede('asistencias:crear')
+            || AuthController::puede('asistencias:editar');
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function obtenerPersonaAccionReporte(int $idPersona, int $idCelula): ?array {
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        if (!$this->celulaModel->existsByIdWithRole($idCelula, $filtroCelulas)) {
+            $this->json(['success' => false, 'message' => 'No autorizado para esta célula'], 403);
+            return null;
+        }
+
+        $filtroPersonas = DataIsolation::generarFiltroPersonas();
+        if (!$this->personaModel->puedeEditarEscaleraPorRol($idPersona, $filtroPersonas)) {
+            $this->json(['success' => false, 'message' => 'No tienes acceso a esta persona'], 403);
+            return null;
+        }
+
+        $persona = $this->personaModel->getById($idPersona);
+        if (!$persona) {
+            $this->json(['success' => false, 'message' => 'Persona no encontrada'], 404);
+            return null;
+        }
+
+        if ((int)($persona['Id_Celula'] ?? 0) !== $idCelula) {
+            $this->json(['success' => false, 'message' => 'La persona ya no pertenece a esta célula'], 422);
+            return null;
+        }
+
+        return $persona;
     }
 }

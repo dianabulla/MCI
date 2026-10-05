@@ -65,6 +65,7 @@ button.unified-pagos-summary-card { font: inherit; color: inherit; text-align: l
 .badge-pago-total.no { background:#fee2e2; color:#991b1b; border:1px solid #f4c5c5; }
 .mini-muted { color:#64748b; }
 .detail-modal { position:fixed; inset:0; z-index:9999; display:none; }
+#editar-pago-modal { z-index: 10020; }
 .detail-modal.is-open { display:block; }
 .detail-modal__backdrop { position:absolute; inset:0; background:rgba(15,23,42,0.55); }
 .detail-modal__panel { position:relative; width:min(980px, calc(100% - 24px)); margin:48px auto; background:#fff; border-radius:14px; box-shadow:0 20px 60px rgba(15,23,42,.25); padding:16px; max-height:calc(100vh - 96px); overflow:auto; }
@@ -234,6 +235,14 @@ button.unified-pagos-summary-card { font: inherit; color: inherit; text-align: l
                     <small>personas</small>
                 </div>
             </button>
+            <button type="button" class="unified-pagos-summary-card unified-pagos-summary-card--click" data-filtro-indicador="libro" aria-pressed="false">
+                <strong>Pagos de libro</strong>
+                <div class="unified-pagos-summary-metric">
+                    <span id="pagos-total-libros">0</span>
+                    <small>personas</small>
+                </div>
+                <p>Solo categoría libro. No se mezcla con el encuentro.</p>
+            </button>
         </div>
         <?php else: ?>
         <div id="resumen-genero-uv" class="unified-pagos-summary" hidden>
@@ -321,17 +330,74 @@ button.unified-pagos-summary-card { font: inherit; color: inherit; text-align: l
                         <th>Método</th>
                         <th>Quién recibió</th>
                         <th>Tipo</th>
+                        <th>Categoría</th>
                         <th>Libro</th>
                         <th>Valor</th>
                         <th>Referencia</th>
                         <th>Ticket</th>
+                        <th>Acciones</th>
                     </tr>
                 </thead>
                 <tbody id="detalle-modal-body">
-                    <tr><td colspan="9">Sin datos.</td></tr>
+                    <tr><td colspan="11">Sin datos.</td></tr>
                 </tbody>
             </table>
         </div>
+    </div>
+</div>
+
+<div id="editar-pago-modal" class="detail-modal" aria-hidden="true">
+    <div class="detail-modal__backdrop"></div>
+    <div class="detail-modal__panel" style="width:min(520px, calc(100% - 24px));">
+        <div class="detail-modal__head">
+            <div>
+                <h3 style="margin:0;">Editar pago</h3>
+                <small id="editar-pago-subtitulo" class="mini-muted"></small>
+            </div>
+            <button type="button" id="editar-pago-cerrar" class="btn btn-outline-secondary btn-sm">Cerrar</button>
+        </div>
+        <form id="editar-pago-form">
+            <input type="hidden" name="id_pago" id="edit-id-pago" value="">
+            <input type="hidden" name="cedula" id="edit-cedula" value="">
+            <div class="filtro-group" style="margin-bottom:10px;">
+                <label for="edit-metodo">Método</label>
+                <select id="edit-metodo" name="metodo_pago" required>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="consignacion">Consignación</option>
+                </select>
+            </div>
+            <div class="filtro-group" style="margin-bottom:10px;">
+                <label for="edit-tipo">Tipo</label>
+                <select id="edit-tipo" name="tipo_pago" required>
+                    <option value="abono">Abono</option>
+                    <option value="completo">Pago total</option>
+                </select>
+            </div>
+            <div class="filtro-group" id="edit-categoria-wrap" style="margin-bottom:10px;">
+                <label for="edit-categoria">Categoría</label>
+                <select id="edit-categoria" name="categoria_pago">
+                    <option value="encuentro">Encuentro</option>
+                    <option value="libro">Libro</option>
+                </select>
+            </div>
+            <div class="filtro-group" style="margin-bottom:10px;">
+                <label for="edit-valor">Valor</label>
+                <input type="text" id="edit-valor" name="valor_pago" required placeholder="Ej: 180000">
+            </div>
+            <div class="filtro-group" style="margin-bottom:10px;">
+                <label for="edit-recibido">Quién recibió</label>
+                <input type="text" id="edit-recibido" name="recibido_por" required>
+            </div>
+            <div class="filtro-group" style="margin-bottom:14px;">
+                <label for="edit-libro">Entregó libro</label>
+                <select id="edit-libro" name="entrego_libro">
+                    <option value="0">No</option>
+                    <option value="1">Sí</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Guardar y actualizar ticket</button>
+        </form>
     </div>
 </div>
 
@@ -415,6 +481,8 @@ $urlTicketJs = function_exists('asset_url')
 (function() {
     const baseUrl = <?= json_encode(PUBLIC_URL . '?url=' . ($esUv ? 'escuelas_formacion/pagos/consolidar' : 'escuelas_formacion/pagos')) ?>;
     const urlReenviarTicket = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/pagos/reenviar-ticket') ?>;
+    const urlEditarPago = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/pagos/editar') ?>;
+    const urlEliminarPagos = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/pagos/eliminar') ?>;
     const currentProgram = <?= json_encode($programa) ?>;
     const MODO_RED = <?= $modoRedPagos ? 'true' : 'false' ?>;
     const RED_PAGOS = <?= json_encode($redPagos) ?>;
@@ -440,6 +508,7 @@ $urlTicketJs = function_exists('asset_url')
     const resumenAbonosUvTitulo = document.getElementById('resumen-abonos-uv-titulo');
     const resumenAbonosUvCantidad = document.getElementById('resumen-abonos-uv-cantidad');
     const resumenAbonosUvDetalle = document.getElementById('resumen-abonos-uv-detalle');
+    const elFiltroRed = document.getElementById('pagos-resumen-filtro');
     const programaLabel = document.getElementById('programa-label');
     
     // Tabs
@@ -452,6 +521,10 @@ $urlTicketJs = function_exists('asset_url')
     const detalleModalTitulo = document.getElementById('detalle-modal-titulo');
     const detalleModalSubtitulo = document.getElementById('detalle-modal-subtitulo');
     const detalleModalCerrar = document.getElementById('detalle-modal-cerrar');
+    const editarPagoModal = document.getElementById('editar-pago-modal');
+    const editarPagoCerrar = document.getElementById('editar-pago-cerrar');
+    const editarPagoForm = document.getElementById('editar-pago-form');
+    const editarPagoSubtitulo = document.getElementById('editar-pago-subtitulo');
     const ticketModal = document.getElementById('ticket-modal');
     const ticketModalCerrar = document.getElementById('ticket-modal-cerrar');
     const ticketModalSubtitulo = document.getElementById('ticket-modal-subtitulo');
@@ -496,11 +569,24 @@ $urlTicketJs = function_exists('asset_url')
     }
 
     function money(value) {
-        const n = Number(value || 0);
-        if (!Number.isFinite(n)) {
-            return '$0';
-        }
+        const n = formatPesosNumero(value);
         return '$' + n.toLocaleString('es-CO');
+    }
+
+    function formatPesosNumero(value) {
+        const n = Number(value || 0);
+        if (!Number.isFinite(n) || n <= 0) {
+            return 0;
+        }
+        let entero = Math.round(n);
+        if (entero >= 1000 && entero % 1000 === 999) {
+            entero += 1;
+        }
+        return entero;
+    }
+
+    function formatPesos(value) {
+        return formatPesosNumero(value).toLocaleString('es-CO');
     }
 
     function etiquetaProgramaTicket(codigo) {
@@ -694,6 +780,60 @@ $urlTicketJs = function_exists('asset_url')
         }
     }
 
+    function categoriaPagoValue(row) {
+        const valor = row && (row.categoria_pago ?? row.Categoria_Pago ?? row.categoriaPago ?? row.CategoriaPago ?? '');
+        return String(valor || '').trim().toLowerCase();
+    }
+
+    function esFilaLibro(row) {
+        if (!row) {
+            return false;
+        }
+        const valorCategoria = categoriaPagoValue(row).replace(/[-_\s]/g, '');
+        if (['libro', 'book', 'sololibro', 'soloellibro', 'soloelbook'].includes(valorCategoria)) {
+            return true;
+        }
+        if (Number(row.tiene_libro ?? row.Tiene_Libro ?? 0) === 1) {
+            return true;
+        }
+        return Number(row.total_libros ?? row.Total_Libros ?? 0) > 0;
+    }
+
+    function tieneCategoriaLibro(row) {
+        return esFilaLibro(row);
+    }
+
+    function esFilaSoloLibro(row) {
+        if (!esFilaLibro(row)) {
+            return false;
+        }
+        const encuentro = Number(row.total_pagado || 0);
+        const abonoEncuentro = Number(row.total_abonos || 0);
+        return encuentro <= 0 && abonoEncuentro <= 0;
+    }
+
+    function filtrarFilasNoLibro(rows) {
+        return (rows || []).filter((row) => !esFilaSoloLibro(row));
+    }
+
+    function aplicarFiltroLiderPagos(rows) {
+        const liderSel = filtroLiderInput ? String(filtroLiderInput.value || '').trim() : '';
+        if (liderSel === '') {
+            return rows || [];
+        }
+        return (rows || []).filter((row) => String(row.lider || '').trim() === liderSel);
+    }
+
+    function filasLibroParaIndicador() {
+        let rows = (datosActuales && Array.isArray(datosActuales.resumen_libros) && datosActuales.resumen_libros.length)
+            ? datosActuales.resumen_libros.slice()
+            : ((datosActuales && datosActuales.resumen) || []).filter((row) => Number(row.total_libros || 0) > 0 || esFilaLibro(row));
+        if (MODO_RED) {
+            rows = aplicarFiltroLiderPagos(rows);
+        }
+        return rows;
+    }
+
     function calcularTotales(rows) {
         return (rows || []).reduce((acc, row) => {
             acc.pagado += Number(row.total_pagado || 0);
@@ -777,7 +917,10 @@ $urlTicketJs = function_exists('asset_url')
             + '<button type="button" class="unified-pagos-summary-card unified-pagos-summary-card--ok unified-pagos-summary-card--click" data-filtro-indicador="pago_total" aria-pressed="false"><strong>Pago completo UV (&ge; $180.000)</strong>'
             + '<div class="unified-pagos-summary-metric"><span id="pagos-total-pago-completo">0</span><small>personas</small></div></button>'
             + '<button type="button" class="unified-pagos-summary-card unified-pagos-summary-card--warn unified-pagos-summary-card--click" data-filtro-indicador="abono" aria-pressed="false"><strong>Solo abono (sin completar)</strong>'
-            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-abonos">0</span><small>personas</small></div></button>');
+            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-abonos">0</span><small>personas</small></div></button>'
+            + '<button type="button" class="unified-pagos-summary-card unified-pagos-summary-card--click" data-filtro-indicador="libro" aria-pressed="false"><strong>Pagos de libro</strong>'
+            + '<div class="unified-pagos-summary-metric"><span id="pagos-total-libros">0</span><small>personas</small></div>'
+            + '<p>Solo categoría libro. No se mezcla con el encuentro.</p></button>');
 
         const filtro = document.createElement('p');
         filtro.id = 'pagos-resumen-filtro';
@@ -793,20 +936,22 @@ $urlTicketJs = function_exists('asset_url')
 
         const esUv = String(programa) === 'universidad_vida';
         const filasNorm = esUv ? (rows || []).map((row) => normalizarFilaPagoUv(row)) : (rows || []);
+        const filasLibro = esUv ? filasLibroParaIndicador() : [];
         const statsIns = (datosActuales && datosActuales.stats_inscripciones) ? datosActuales.stats_inscripciones : null;
 
         const total = filasNorm.length;
         const conPago = filasNorm.filter((row) => tienePagoRegistradoRow(row)).length;
         const pagoCompleto = filasNorm.filter((row) => tienePagoTotalUv(row)).length;
         const conAbono = filasNorm.filter((row) => tieneSoloAbonoUv(row)).length;
+        const countLibro = filasLibro.length;
 
         if (MODO_RED) {
             const elAbonosRed = document.getElementById('pagos-total-abonos');
             const elCompletoRed = document.getElementById('pagos-total-pago-completo');
+            const elLibrosRed = document.getElementById('pagos-total-libros');
             if (elAbonosRed) elAbonosRed.textContent = String(conAbono);
             if (elCompletoRed) elCompletoRed.textContent = String(pagoCompleto);
-            if (resumenGeneroUv) resumenGeneroUv.hidden = true;
-            const elFiltroRed = document.getElementById('pagos-resumen-filtro');
+            if (elLibrosRed) elLibrosRed.textContent = String(countLibro);
             if (elFiltroRed) elFiltroRed.hidden = true;
             return;
         }
@@ -852,6 +997,11 @@ $urlTicketJs = function_exists('asset_url')
             } else {
                 elSubConPago.hidden = true;
             }
+        }
+
+        const elLibros = document.getElementById('pagos-total-libros');
+        if (elLibros) {
+            elLibros.textContent = String(countLibro);
         }
 
         if (elFiltro) {
@@ -928,6 +1078,9 @@ $urlTicketJs = function_exists('asset_url')
         if (filtroIndicador === 'abono') {
             return norm.filter((row) => tieneSoloAbonoUv(row));
         }
+        if (filtroIndicador === 'libro') {
+            return filasLibroParaIndicador();
+        }
         return norm;
     }
 
@@ -948,6 +1101,7 @@ $urlTicketJs = function_exists('asset_url')
             let extra = '';
             if (filtroIndicador === 'pago_total') extra = ' · filtro: pago total';
             if (filtroIndicador === 'abono') extra = ' · filtro: abono';
+            if (filtroIndicador === 'libro') extra = ' · filtro: pagos de libro';
             estadoCarga.textContent = 'Datos actualizados'
                 + (filas.length ? (' · ' + filas.length + ' en tabla') : '')
                 + extra;
@@ -970,9 +1124,9 @@ $urlTicketJs = function_exists('asset_url')
         if (isUv) {
             footElement.innerHTML = '<tr>' +
                 '<td colspan="' + (MODO_RED ? '4' : '5') + '">TOTAL RECAUDADO</td>' +
-                '<td>' + sumaAbonos.toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
-                '<td>' + sumaPagosCompletos.toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
-                '<td>' + sumaTodosPagos.toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
+                '<td>' + formatPesos(sumaAbonos) + '</td>' +
+                '<td>' + formatPesos(sumaPagosCompletos) + '</td>' +
+                '<td>' + formatPesos(sumaTodosPagos) + '</td>' +
                 '<td></td>' +
             '</tr>';
             return;
@@ -980,8 +1134,8 @@ $urlTicketJs = function_exists('asset_url')
 
         footElement.innerHTML = '<tr>' +
             '<td colspan="6">TOTAL RECAUDADO</td>' +
-            '<td>' + sumaTodosPagos.toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
-            '<td>' + sumaAbonos.toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
+            '<td>' + formatPesos(sumaTodosPagos) + '</td>' +
+            '<td>' + formatPesos(sumaAbonos) + '</td>' +
             '<td></td>' +
             '<td></td>' +
         '</tr>';
@@ -1116,7 +1270,7 @@ $urlTicketJs = function_exists('asset_url')
         }
 
         if (bodyElement) {
-            if (isUv) {
+            if (isUv && filtroIndicador !== 'libro') {
                 rowsFiltradas = rowsFiltradas.map((row) => normalizarFilaPagoUv(row));
             }
             bodyElement.innerHTML = rowsFiltradas.map((row) => {
@@ -1138,10 +1292,14 @@ $urlTicketJs = function_exists('asset_url')
                         '<td>' + escapeHtml(row.telefono || '') + '</td>' +
                         '<td>' + ministerioHtml + '</td>' +
                         celdaSegmento +
-                        '<td>' + Number(row.total_abonos || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
-                        '<td>' + Number(row.total_pago_completo || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
-                        '<td>' + Number(row.total_pagado || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
-                        '<td><button type="button" class="btn btn-outline-secondary btn-sm js-ver-detalle" data-cedula="' + detalleClave + '">Ver</button></td>' +
+                        '<td>' + formatPesos(row.total_abonos || 0) + '</td>' +
+                        '<td>' + formatPesos(row.total_pago_completo || 0) + '</td>' +
+                        '<td>' + formatPesos(row.total_pagado || 0) + '</td>' +
+                        '<td style="white-space:nowrap;">' +
+                            '<button type="button" class="btn btn-outline-secondary btn-sm js-ver-detalle" data-cedula="' + detalleClave + '">Ver</button> ' +
+                            '<button type="button" class="btn btn-outline-primary btn-sm js-editar-pagos" data-cedula="' + detalleClave + '">Editar</button> ' +
+                            '<button type="button" class="btn btn-outline-danger btn-sm js-eliminar-pagos" data-cedula="' + detalleClave + '" data-persona="' + escapeHtml(row.persona || '') + '">Eliminar</button>' +
+                        '</td>' +
                     '</tr>';
                 }
 
@@ -1152,10 +1310,13 @@ $urlTicketJs = function_exists('asset_url')
                     '<td>' + ministerioHtml + '</td>' +
                     '<td>' + escapeHtml(segmento) + '</td>' +
                     '<td>' + escapeHtml(row.programa_label || '') + '</td>' +
-                    '<td>' + Number(row.total_pagado || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
-                    '<td>' + Number(row.total_abonos || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 }) + '</td>' +
+                    '<td>' + formatPesos(row.total_pagado || 0) + '</td>' +
+                    '<td>' + formatPesos(row.total_abonos || 0) + '</td>' +
                     '<td>' + notaTxt + '</td>' +
-                    '<td><button type="button" class="btn btn-outline-secondary btn-sm js-ver-detalle" data-cedula="' + detalleClave + '">Ver</button></td>' +
+                    '<td style="white-space:nowrap;">' +
+                        '<button type="button" class="btn btn-outline-secondary btn-sm js-ver-detalle" data-cedula="' + detalleClave + '">Ver</button> ' +
+                        '<button type="button" class="btn btn-outline-danger btn-sm js-eliminar-pagos" data-cedula="' + detalleClave + '" data-persona="' + escapeHtml(row.persona || '') + '">Eliminar</button>' +
+                    '</td>' +
                 '</tr>';
             }).join('');
 
@@ -1165,6 +1326,24 @@ $urlTicketJs = function_exists('asset_url')
                     const cedula = String(btn.dataset.cedula || '');
                     if (!cedula) return;
                     await cargarDetalle(cedula);
+                });
+            });
+            document.querySelectorAll('.js-editar-pagos').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const cedula = String(btn.dataset.cedula || '');
+                    if (!cedula) return;
+                    const movimientos = await cargarDetalle(cedula);
+                    if (Array.isArray(movimientos) && movimientos.length === 1) {
+                        abrirFormularioEditarPago(movimientos[0], cedula);
+                    }
+                });
+            });
+            document.querySelectorAll('.js-eliminar-pagos').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const cedula = String(btn.dataset.cedula || '');
+                    const persona = String(btn.getAttribute('data-persona') || '').trim() || 'esta persona';
+                    if (!cedula) return;
+                    await eliminarPagosPersona(cedula, persona);
                 });
             });
 
@@ -1227,9 +1406,10 @@ $urlTicketJs = function_exists('asset_url')
             actualizarVisibilidadFiltroEncuentro(data.programa);
 
             let resumenTabla = data.resumen || [];
+            const resumenSinLibro = filtrarFilasNoLibro(resumenTabla);
             if (String(data.programa) === 'universidad_vida') {
-                resumenTabla = resumenTabla.filter((row) => tienePagoRegistradoRow(row) || Number(row.total_abonos || 0) > 0);
-                poblarFiltroLideresPagos(resumenTabla);
+                resumenTabla = resumenSinLibro.filter((row) => tienePagoRegistradoRow(row) || Number(row.total_abonos || 0) > 0);
+                poblarFiltroLideresPagos(resumenTabla.concat(data.resumen_libros || []));
                 const liderSel = filtroLiderInput ? String(filtroLiderInput.value || '').trim() : '';
                 if (liderSel !== '') {
                     resumenTabla = resumenTabla.filter((row) => String(row.lider || '').trim() === liderSel);
@@ -1241,16 +1421,18 @@ $urlTicketJs = function_exists('asset_url')
                     if (cmpL !== 0) return cmpL;
                     return String(a.persona || '').localeCompare(String(b.persona || ''), 'es', { sensitivity: 'base' });
                 });
+            } else {
+                resumenTabla = resumenSinLibro;
             }
 
             resumenTablaBase = resumenTabla;
 
             if (!MODO_RED) {
                 renderHead(data.programa, 'hombres');
-                renderRows(data.programa, data.resumen || [], 'hombres', 'hombres');
+                renderRows(data.programa, resumenTabla, 'hombres', 'hombres');
 
                 renderHead(data.programa, 'mujeres');
-                renderRows(data.programa, data.resumen || [], 'mujeres', 'mujeres');
+                renderRows(data.programa, resumenTabla, 'mujeres', 'mujeres');
             }
 
             const filasActivas = String(data.programa) === 'universidad_vida'
@@ -1286,6 +1468,51 @@ $urlTicketJs = function_exists('asset_url')
         }
     }
 
+    async function eliminarPagosPersona(cedula, persona) {
+        const programa = programSelect ? String(programSelect.value || currentProgram) : currentProgram;
+        const esUv = String(programa) === 'universidad_vida';
+        const alcance = esUv ? (filtroIndicador === 'libro' ? 'libro' : 'encuentro') : 'todos';
+        const etiquetaAlcance = alcance === 'libro'
+            ? 'pagos de libro'
+            : (alcance === 'encuentro' ? 'pagos de encuentro' : 'pagos');
+        const ok = window.confirm(
+            '¿Eliminar los ' + etiquetaAlcance + ' de ' + persona + '?\n\nEsta acción no se puede deshacer.'
+            + (alcance === 'encuentro' ? '\nLos pagos de libro de esta persona se conservan.' : '')
+            + (alcance === 'libro' ? '\nLos pagos de encuentro de esta persona se conservan.' : '')
+        );
+        if (!ok) {
+            return;
+        }
+
+        try {
+            const response = await fetch(urlEliminarPagos, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    cedula: cedula,
+                    programa: programa,
+                    alcance: alcance
+                })
+            });
+            const raw = await response.text();
+            let data = null;
+            try {
+                data = JSON.parse(raw);
+            } catch (parseError) {
+                throw new Error('No se pudo eliminar.');
+            }
+            if (!response.ok || !data || !data.ok) {
+                throw new Error((data && (data.mensaje || data.error)) || 'No se pudo eliminar.');
+            }
+            await cargarDatos();
+        } catch (error) {
+            alert(error.message || 'No se pudo eliminar el pago.');
+        }
+    }
+
     async function cargarDetalle(cedula) {
         const params = new URLSearchParams();
         params.set('ajax', '1');
@@ -1314,14 +1541,20 @@ $urlTicketJs = function_exists('asset_url')
 
             const detalle = data.detalle || [];
             if (!detalle.length) {
-                detalleModalBody.innerHTML = '<tr><td colspan="9">No hay movimientos para esta persona.</td></tr>';
+                detalleModalBody.innerHTML = '<tr><td colspan="11">No hay movimientos para esta persona.</td></tr>';
             } else {
                 detalleModalBody.innerHTML = detalle.map((mov) => {
                     const entregoLibroRaw = mov.Entrego_Libro ?? null;
                     const entregoLibroTxt = entregoLibroRaw === null || entregoLibroRaw === '' ? '-' : (Number(entregoLibroRaw) === 1 ? 'Sí' : 'No');
+                    const catPago = String(mov.Categoria_Pago || mov.categoria_pago || '').trim().toLowerCase();
+                    const catTxt = catPago === 'libro' ? 'Libro' : (catPago === 'encuentro' ? 'Encuentro' : (catPago || '—'));
                     const refPago = String(mov.Referencia_Pago || '').trim();
+                    const idPago = String(mov.Id_Pago || mov.id_pago || '');
                     const ticketBtn = refPago
                         ? '<button type="button" class="btn btn-outline-primary btn-sm js-ver-ticket" data-ref="' + escapeHtml(refPago) + '">Ver ticket</button>'
+                        : '<span class="mini-muted">—</span>';
+                    const editBtn = idPago
+                        ? '<button type="button" class="btn btn-outline-primary btn-sm js-editar-pago" data-id="' + escapeHtml(idPago) + '">Editar</button>'
                         : '<span class="mini-muted">—</span>';
                     return '<tr>' +
                         '<td>' + escapeHtml(mov.Fecha_Registro || '') + '</td>' +
@@ -1329,10 +1562,12 @@ $urlTicketJs = function_exists('asset_url')
                         '<td>' + escapeHtml(mov.Metodo_Pago || '') + '</td>' +
                         '<td>' + escapeHtml(mov.Recibido_Por || '-') + '</td>' +
                         '<td>' + escapeHtml(mov.Tipo_Pago || '') + '</td>' +
+                        '<td>' + escapeHtml(catTxt) + '</td>' +
                         '<td>' + escapeHtml(entregoLibroTxt) + '</td>' +
                         '<td>' + money(mov.Valor_Pago || 0) + '</td>' +
                         '<td style="font-family:monospace;">' + escapeHtml(refPago) + '</td>' +
                         '<td>' + ticketBtn + '</td>' +
+                        '<td>' + editBtn + '</td>' +
                     '</tr>';
                 }).join('');
                 detalleModalBody.querySelectorAll('.js-ver-ticket').forEach((btn) => {
@@ -1342,12 +1577,21 @@ $urlTicketJs = function_exists('asset_url')
                         if (mov) abrirTicket(mov);
                     });
                 });
+                detalleModalBody.querySelectorAll('.js-editar-pago').forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        const idPago = String(btn.getAttribute('data-id') || '');
+                        const mov = detalle.find((item) => String(item.Id_Pago || item.id_pago || '') === idPago);
+                        if (mov) abrirFormularioEditarPago(mov, cedula);
+                    });
+                });
             }
 
             detalleModal.classList.add('is-open');
             detalleModal.setAttribute('aria-hidden', 'false');
+            return detalle;
         } catch (error) {
             alert('Error: ' + error.message);
+            return [];
         }
     }
 
@@ -1382,6 +1626,91 @@ $urlTicketJs = function_exists('asset_url')
     function cerrarDetalle() {
         detalleModal.classList.remove('is-open');
         detalleModal.setAttribute('aria-hidden', 'true');
+    }
+
+    function cerrarEditarPago() {
+        if (!editarPagoModal) return;
+        editarPagoModal.classList.remove('is-open');
+        editarPagoModal.setAttribute('aria-hidden', 'true');
+    }
+
+    function abrirFormularioEditarPago(mov, cedula) {
+        const idPago = String(mov.Id_Pago || mov.id_pago || '');
+        if (!idPago) {
+            alert('Este pago no se puede editar.');
+            return;
+        }
+        const metodo = String(mov.Metodo_Pago || 'efectivo').toLowerCase();
+        const tipo = String(mov.Tipo_Pago || 'abono').toLowerCase();
+        const cat = String(mov.Categoria_Pago || mov.categoria_pago || 'encuentro').toLowerCase();
+        const metodoSelect = document.getElementById('edit-metodo');
+        if (metodoSelect && !Array.from(metodoSelect.options).some((opt) => opt.value === metodo) && metodo) {
+            const extra = document.createElement('option');
+            extra.value = metodo;
+            extra.textContent = metodo;
+            metodoSelect.appendChild(extra);
+        }
+        if (metodoSelect) metodoSelect.value = metodo || 'efectivo';
+        const tipoSelect = document.getElementById('edit-tipo');
+        if (tipoSelect) tipoSelect.value = tipo === 'completo' ? 'completo' : 'abono';
+        const catSelect = document.getElementById('edit-categoria');
+        const catWrap = document.getElementById('edit-categoria-wrap');
+        const esUv = String(programSelect ? programSelect.value : currentProgram) === 'universidad_vida';
+        if (catWrap) catWrap.style.display = esUv ? '' : 'none';
+        if (catSelect) catSelect.value = cat === 'libro' ? 'libro' : 'encuentro';
+        const valorInput = document.getElementById('edit-valor');
+        if (valorInput) valorInput.value = String(Math.round(Number(mov.Valor_Pago || 0)));
+        const recInput = document.getElementById('edit-recibido');
+        if (recInput) recInput.value = String(mov.Recibido_Por || '');
+        const libroSelect = document.getElementById('edit-libro');
+        if (libroSelect) libroSelect.value = Number(mov.Entrego_Libro || 0) === 1 ? '1' : '0';
+        const idInput = document.getElementById('edit-id-pago');
+        if (idInput) idInput.value = idPago;
+        const cedInput = document.getElementById('edit-cedula');
+        if (cedInput) cedInput.value = String(cedula || '');
+        if (editarPagoSubtitulo) {
+            editarPagoSubtitulo.textContent = (mov.Nombre || '') + ' · ' + (mov.Referencia_Pago || '');
+        }
+        editarPagoModal.classList.add('is-open');
+        editarPagoModal.setAttribute('aria-hidden', 'false');
+    }
+
+    async function guardarEditarPago(event) {
+        event.preventDefault();
+        const idPago = String((document.getElementById('edit-id-pago') || {}).value || '');
+        const cedula = String((document.getElementById('edit-cedula') || {}).value || '');
+        if (!idPago) return;
+        const payload = {
+            id_pago: idPago,
+            programa: programSelect ? String(programSelect.value || currentProgram) : currentProgram,
+            metodo_pago: String((document.getElementById('edit-metodo') || {}).value || ''),
+            tipo_pago: String((document.getElementById('edit-tipo') || {}).value || ''),
+            categoria_pago: String((document.getElementById('edit-categoria') || {}).value || ''),
+            valor_pago: String((document.getElementById('edit-valor') || {}).value || ''),
+            recibido_por: String((document.getElementById('edit-recibido') || {}).value || ''),
+            entrego_libro: String((document.getElementById('edit-libro') || {}).value || '0')
+        };
+        try {
+            const response = await fetch(urlEditarPago, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (!response.ok || !data || !data.ok) {
+                throw new Error((data && data.mensaje) || 'No se pudo guardar el pago.');
+            }
+            cerrarEditarPago();
+            await cargarDatos();
+            if (cedula) {
+                await cargarDetalle(cedula);
+            }
+            if (data.movimiento) {
+                abrirTicket(data.movimiento);
+            }
+        } catch (error) {
+            alert(error.message || 'No se pudo guardar el pago.');
+        }
     }
 
     function cerrarMinisterio() {
@@ -1523,6 +1852,19 @@ $urlTicketJs = function_exists('asset_url')
                 cerrarDetalle();
             }
         });
+    }
+    if (editarPagoCerrar) {
+        editarPagoCerrar.addEventListener('click', cerrarEditarPago);
+    }
+    if (editarPagoModal) {
+        editarPagoModal.addEventListener('click', (event) => {
+            if (event.target && event.target.classList.contains('detail-modal__backdrop')) {
+                cerrarEditarPago();
+            }
+        });
+    }
+    if (editarPagoForm) {
+        editarPagoForm.addEventListener('submit', guardarEditarPago);
     }
 
     if (ministerioModalCerrar) {

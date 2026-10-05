@@ -23,7 +23,7 @@ $periodoListado = PeriodoSemestre::resolver();
 $urlHubRedesListado = trim((string)($urlHubRedes ?? ''));
 $etiquetaRedListado = SegmentoRedUv::etiquetaCompleta($redAsistenciaListado);
 $modoRedAsistencia = $redAsistenciaListado !== '';
-$colspanTablaUv = $modoRedAsistencia ? 18 : 21;
+$colspanTablaUv = $modoRedAsistencia ? 19 : 21;
 
 // Permisos: si la vista se incluye desde programas/asistencias puede no venir del controlador.
 $esAdminSesion = class_exists('AuthController') && AuthController::esAdministrador();
@@ -54,6 +54,11 @@ if ($esAdminSesion) {
 $puedeEditar        = !empty($puede_editar);
 $puedeEditarPersona = !empty($puede_editar_persona);
 $puedeEliminar      = !empty($puede_eliminar);
+$puedeIrPagos = class_exists('AuthController') && (
+    AuthController::puedeRecibirPagosEscuelasFormacion()
+    || ($programa === 'universidad_vida' && AuthController::puedeGestionarPagosProgramaUv())
+    || (strpos((string)$programa, 'capacitacion_destino') === 0 && AuthController::puedeGestionarPagosProgramaCap())
+);
 ?>
 
 <style>
@@ -308,6 +313,12 @@ $puedeEliminar      = !empty($puede_eliminar);
   color:#166534;
 }
 
+.pago-status.no {
+  background:#fef2f2;
+  border-color:#fecaca;
+  color:#991b1b;
+}
+
 /* ── Acciones (editar / eliminar) ───────────────────────────────── */
 .li-acciones {
   display: inline-flex;
@@ -336,7 +347,8 @@ $puedeEliminar      = !empty($puede_eliminar);
 .li-acc-btn:hover { background: #f1f7ff; border-color: #93c5fd; color: #1e40af; }
 .li-acc-btn--red { border-color: #bfdbfe; color: #1d4ed8; }
 .li-acc-btn--red:hover { background: #eff6ff; border-color: #60a5fa; color: #1e40af; }
-.li-acc-btn--del { border-color: #fecaca; color: #b91c1c; }
+.li-acc-btn--pago { border-color: #99f6e4; color: #0f766e; }
+.li-acc-btn--pago:hover { background: #ecfdf5; border-color: #5eead4; color: #115e59; }
 .li-acc-btn--del:hover { background: #fef2f2; border-color: #f87171; color: #991b1b; }
 .li-acc-btn:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
 
@@ -429,8 +441,12 @@ $puedeEliminar      = !empty($puede_eliminar);
       <?php if ($redAsistenciaListado !== '' && $urlHubRedesListado !== ''): ?>
         <a href="<?= htmlspecialchars($urlHubRedesListado, ENT_QUOTES, 'UTF-8') ?>" class="btn-pago" style="text-decoration:none;background:#1e4a89;">← Cambiar red</a>
       <?php endif; ?>
-      <?php if ($programa === 'universidad_vida' && !$modoRedAsistencia): ?>
+      <?php if ($programa === 'universidad_vida'): ?>
+        <?php if (!$modoRedAsistencia): ?>
         <a href="<?= htmlspecialchars($urlPagosEscuelaUv, ENT_QUOTES, 'UTF-8') ?>" class="btn-pago" style="text-decoration:none;background:#0f766e;">Ir a pagos</a>
+        <?php endif; ?>
+        <a href="<?= htmlspecialchars($publicUrl . '/?url=escuelas_formacion/asistencia-publica/qr', ENT_QUOTES, 'UTF-8') ?>" class="btn-pago" style="text-decoration:none;background:#1d4ed8;" target="_blank" rel="noopener">QR asistencia</a>
+        <a href="<?= htmlspecialchars($publicUrl . '/?url=escuelas_formacion/asistencia-publica', ENT_QUOTES, 'UTF-8') ?>" class="btn-pago" style="text-decoration:none;background:#4338ca;" target="_blank" rel="noopener">Tomar asistencia</a>
       <?php endif; ?>
       <div id="li-estado" style="font-size:0.78rem;color:#64748b;">Cargando…</div>
     </div>
@@ -471,18 +487,14 @@ $puedeEliminar      = !empty($puede_eliminar);
     <?php else: ?>
     <input type="hidden" id="li-genero" value="todos">
     <?php endif; ?>
-    <?php if (!$modoRedAsistencia): ?>
     <div>
       <label for="li-pago">Pago / Abono</label>
       <select id="li-pago">
         <option value="todos">Todos</option>
-        <option value="pagados">Pagados</option>
+        <option value="pagados">Con pago</option>
         <option value="sin_pago">Sin pago</option>
       </select>
     </div>
-    <?php else: ?>
-    <input type="hidden" id="li-pago" value="todos">
-    <?php endif; ?>
     <div>
       <label for="li-encuentro">Asistencia encuentro</label>
       <select id="li-encuentro" title="Filtra por asistencia a los días del encuentro (clases 5 y 6)">
@@ -590,13 +602,12 @@ $puedeEliminar      = !empty($puede_eliminar);
             <th class="col-telefono" rowspan="2">Teléfono</th>
             <th class="t-left col-lider" rowspan="2" style="min-width:120px;">Líder</th>
             <th class="col-documentos" rowspan="2">Documentos</th>
-            <?php if (!$modoRedAsistencia): ?>
-            <th class="col-pago" rowspan="2">Pago / Abono</th>
-            <?php endif; ?>
-            <th class="col-acciones" rowspan="2" style="min-width:<?= $modoRedAsistencia ? '110' : '64' ?>px;">Acciones</th>
+            <th class="col-pago" rowspan="2">Pago</th>
+            <th class="col-acciones" rowspan="2" style="min-width:<?= $modoRedAsistencia ? '136' : '88' ?>px;">Acciones</th>
             <th colspan="4" class="th-pre col-pre-group col-pre-1 col-pre-2 col-pre-3 col-pre-4" data-col-group="pre">Clases Pre-Encuentro</th>
             <th colspan="2" class="th-enc col-enc-group col-enc-1 col-enc-2" data-col-group="enc">Encuentro</th>
-            <th colspan="4" class="th-post col-post-group col-post-1 col-post-2 col-post-3 col-post-4" data-col-group="post">Clases Post-Encuentro</th>
+            <th colspan="2" class="th-post col-post-group col-post-1 col-post-2" data-col-group="post">Refuerzo</th>
+            <th colspan="2" class="th-post col-post-group col-post-3 col-post-4" data-col-group="post">Post-encuentro</th>
             <th rowspan="2" class="th-baut col-bautismo">Bautismo</th>
           </tr>
           <tr>
@@ -608,8 +619,8 @@ $puedeEliminar      = !empty($puede_eliminar);
             <th class="th-enc col-enc-2">Día 2</th>
             <th class="th-post col-post-1">C1</th>
             <th class="th-post col-post-2">C2</th>
-            <th class="th-post col-post-3">C3</th>
-            <th class="th-post col-post-4">C4</th>
+            <th class="th-post col-post-3">C1</th>
+            <th class="th-post col-post-4">C2</th>
           </tr>
         </thead>
         <tbody id="li-tbody">
@@ -679,7 +690,8 @@ $puedeEliminar      = !empty($puede_eliminar);
   const PERMISOS     = {
     puedeEditar:        <?= $puedeEditar ? 'true' : 'false' ?>,
     puedeEditarPersona: <?= $puedeEditarPersona ? 'true' : 'false' ?>,
-    puedeEliminar:      <?= $puedeEliminar ? 'true' : 'false' ?>
+    puedeEliminar:      <?= $puedeEliminar ? 'true' : 'false' ?>,
+    puedeIrPagos:       <?= !empty($puedeIrPagos) ? 'true' : 'false' ?>
   };
 
   let todosLosDatos  = [];
@@ -1129,7 +1141,7 @@ $puedeEliminar      = !empty($puede_eliminar);
         <td class="col-telefono">${esc(p.Telefono || '–')}</td>
         <td class="t-left col-lider" style="color:#475569;">${esc(p.Lider || '–')}</td>
         <td class="col-documentos">${celdaDocumentos(p)}</td>
-        ${MODO_RED ? '' : `<td class="col-pago">${btnPago(p)}</td>`}
+        <td class="col-pago">${btnPago(p)}</td>
         <td class="col-acciones">${btnAcciones(p)}</td>
       `;
 
@@ -1225,9 +1237,22 @@ $puedeEliminar      = !empty($puede_eliminar);
     return '<span style="color:#64748b;font-size:0.75rem;">' + esc(g) + '</span>';
   }
 
+  function hrefPagoPersona(p) {
+    const qs = new URLSearchParams({
+      id_persona: p.Id_Persona || '',
+      id_inscripcion: p.Id_Inscripcion || '',
+      cedula:   p.Cedula   || '',
+      nombre:   p.Nombre   || '',
+      telefono: p.Telefono || '',
+      programa: PROGRAMA,
+      return_url: RETURN_URL
+    });
+    return ABONO_URL + '&' + qs.toString();
+  }
+
   // ── Acciones editar / eliminar ──────────────────────────────────
   function btnAcciones(p) {
-    if (!PERMISOS.puedeEditar && !PERMISOS.puedeEliminar) {
+    if (!PERMISOS.puedeEditar && !PERMISOS.puedeEliminar && !PERMISOS.puedeIrPagos) {
       return '<span style="color:#94a3b8;font-size:0.75rem;">–</span>';
     }
 
@@ -1235,6 +1260,11 @@ $puedeEliminar      = !empty($puede_eliminar);
     const idInscripcion = Number(p.Id_Inscripcion || 0);
     const nombre = esc(p.Nombre || 'esta persona');
     let html = '<div class="li-acciones" role="group" aria-label="Acciones">';
+
+    if (PERMISOS.puedeIrPagos) {
+      html += '<a href="' + hrefPagoPersona(p) + '" class="li-acc-btn li-acc-btn--pago" title="Registrar pago / abono" aria-label="Pagos">'
+        + '<i class="bi bi-cash-coin" aria-hidden="true"></i></a>';
+    }
 
     if (PERMISOS.puedeEditar) {
       if (idPersona > 0 && PERMISOS.puedeEditarPersona) {
@@ -1318,24 +1348,12 @@ $puedeEliminar      = !empty($puede_eliminar);
 
   // ── Botón pago ──────────────────────────────────────────────────
   function btnPago(p) {
-    const qs = new URLSearchParams({
-      id_persona: p.Id_Persona || '',
-      id_inscripcion: p.Id_Inscripcion || '',
-      cedula:   p.Cedula   || '',
-      nombre:   p.Nombre   || '',
-      telefono: p.Telefono || '',
-      genero: p.Genero || '',
-      edad: p.Edad || '',
-      lider: p.Lider || '',
-      id_ministerio: p.Id_Ministerio || '',
-      programa: PROGRAMA,
-    }).toString();
-    const href = ABONO_URL + '&' + qs;
+    const href = hrefPagoPersona(p);
     const totalPagado = Number(p.total_pagado || 0);
     const tienePago = tienePagoRegistrado(p);
     const estado = tienePago
-      ? `<span class="pago-status ok" title="Ya tiene pago registrado">$${formatNumber(totalPagado)}</span>`
-      : `<span class="pago-status" title="Sin pago registrado">Sin pago</span>`;
+      ? `<span class="pago-status ok" title="Ya tiene pago registrado">Con pago${totalPagado > 0 ? (' · $' + formatNumber(totalPagado)) : ''}</span>`
+      : `<span class="pago-status no" title="Sin pago registrado">Sin pago</span>`;
 
     return `<div class="pago-cell">`
       + `<a class="btn-pago-icon" href="${href}" target="_blank" title="Registrar pago/abono">💳</a>`
@@ -1465,14 +1483,14 @@ $puedeEliminar      = !empty($puede_eliminar);
     { id: 'pre-4', label: 'Pre-encuentro — C4', grupo: 'Clases pre-encuentro' },
     { id: 'enc-1', label: 'Encuentro — Día 1', grupo: 'Encuentro' },
     { id: 'enc-2', label: 'Encuentro — Día 2', grupo: 'Encuentro' },
-    { id: 'post-1', label: 'Post-encuentro — C1', grupo: 'Clases post-encuentro' },
-    { id: 'post-2', label: 'Post-encuentro — C2', grupo: 'Clases post-encuentro' },
-    { id: 'post-3', label: 'Post-encuentro — C3', grupo: 'Clases post-encuentro' },
-    { id: 'post-4', label: 'Post-encuentro — C4', grupo: 'Clases post-encuentro' },
+    { id: 'post-1', label: 'Refuerzo — C1', grupo: 'Refuerzo' },
+    { id: 'post-2', label: 'Refuerzo — C2', grupo: 'Refuerzo' },
+    { id: 'post-3', label: 'Post-encuentro — C1', grupo: 'Clases post-encuentro' },
+    { id: 'post-4', label: 'Post-encuentro — C2', grupo: 'Clases post-encuentro' },
     { id: 'bautismo', label: 'Bautismo', grupo: 'Consolidar' }
   ].filter(function (col) {
     if (!MODO_RED) return true;
-    return col.id !== 'genero' && col.id !== 'segmento' && col.id !== 'pago';
+    return col.id !== 'genero' && col.id !== 'segmento';
   });
 
   const columnasVisibles = {};

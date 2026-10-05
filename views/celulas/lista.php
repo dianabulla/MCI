@@ -133,6 +133,13 @@ foreach ($sections as $section) {
     }
     $ministerioGrupos[$ministerio][] = $section;
 }
+$seguimientoPorMinisterio = is_array($seguimientoPorMinisterio ?? null) ? $seguimientoPorMinisterio : [];
+$seguimientoPorCelula = is_array($seguimientoPorCelula ?? null) ? $seguimientoPorCelula : [];
+foreach ($seguimientoPorMinisterio as $ministerioSeguimiento => $_personasMinSeg) {
+    if (!isset($ministerioGrupos[$ministerioSeguimiento])) {
+        $ministerioGrupos[$ministerioSeguimiento] = [];
+    }
+}
 krsort($ministerioGrupos);
 
 $ministeriosOrdenados = array_keys($ministerioGrupos);
@@ -153,6 +160,7 @@ $slugMinisterio = static function ($texto) {
         foreach ($celulasMinisterio as $celulaMinisterio) {
             $totalPersonasMinisterio += (int)($celulaMinisterio['total_personas'] ?? 0);
         }
+        $totalSeguimientoMinisterio = count($seguimientoPorMinisterio[$ministerioNombre] ?? []);
         ?>
         <button
             type="button"
@@ -162,7 +170,7 @@ $slugMinisterio = static function ($texto) {
         >
             <h3><?= htmlspecialchars($ministerioNombre) ?></h3>
             <div class="value" style="color:#17a2b8;"><?= count($celulasMinisterio) ?></div>
-            <small style="color:#637087;">Personas: <?= number_format($totalPersonasMinisterio) ?> · Clic para ver detalle</small>
+            <small style="color:#637087;">Personas: <?= number_format($totalPersonasMinisterio) ?> · En seguimiento: <?= (int)$totalSeguimientoMinisterio ?> · Clic para ver detalle</small>
         </button>
     <?php endforeach; ?>
 </div>
@@ -172,7 +180,34 @@ $slugMinisterio = static function ($texto) {
     <div id="tabla-ministerio-<?= htmlspecialchars($ministerioKey) ?>" class="card celulas-detalle-card" <?= $ministerioActivoInicial === (string)$ministerioNombre ? '' : 'hidden' ?> style="margin-bottom: 18px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
             <h3 style="margin:0;">Ministerio: <?= htmlspecialchars($ministerioNombre) ?></h3>
-            <small style="color:#637087;">Células: <?= count($celulasMinisterio) ?></small>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <small style="color:#637087;">Células: <?= count($celulasMinisterio) ?></small>
+                <?php
+                $personasSegMin = $seguimientoPorMinisterio[$ministerioNombre] ?? [];
+                $payloadSegMin = [];
+                foreach ($personasSegMin as $pSegMin) {
+                    $payloadSegMin[] = [
+                        'id' => (int)($pSegMin['Id_Persona'] ?? 0),
+                        'nombre' => (string)($pSegMin['nombre'] ?? ''),
+                        'telefono' => (string)($pSegMin['telefono'] ?? ''),
+                        'celula' => (string)($pSegMin['celula'] ?? ''),
+                        'lider' => (string)($pSegMin['lider'] ?? ''),
+                    ];
+                }
+                ?>
+                <button
+                    type="button"
+                    class="btn btn-sm celulas-action-btn celulas-action-btn--seguimiento js-ver-seguimiento-celula"
+                    data-titulo="<?= htmlspecialchars('En seguimiento · ' . $ministerioNombre, ENT_QUOTES, 'UTF-8') ?>"
+                    data-mostrar-celula="1"
+                    data-personas="<?= htmlspecialchars(json_encode($payloadSegMin, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>"
+                    title="Ver personas en seguimiento del ministerio"
+                >
+                    <i class="bi bi-signpost-2" aria-hidden="true"></i>
+                    <span>En seguimiento</span>
+                    <span class="celulas-seguimiento-badge"><?= count($payloadSegMin) ?></span>
+                </button>
+            </div>
         </div>
 
         <div class="table-container">
@@ -223,6 +258,32 @@ $slugMinisterio = static function ($texto) {
                                     <a href="<?= PUBLIC_URL ?>?url=celulas/detalle&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon" title="Ver personas" aria-label="Ver personas">
                                         <i class="bi bi-people-fill" aria-hidden="true"></i>
                                     </a>
+                                    <?php
+                                    $idCelulaSegBtn = (int)($section['id_celula'] ?? 0);
+                                    $personasSegCel = $seguimientoPorCelula[$idCelulaSegBtn] ?? [];
+                                    $payloadSegCel = [];
+                                    foreach ($personasSegCel as $pSegCel) {
+                                        $payloadSegCel[] = [
+                                            'id' => (int)($pSegCel['Id_Persona'] ?? 0),
+                                            'nombre' => (string)($pSegCel['nombre'] ?? ''),
+                                            'telefono' => (string)($pSegCel['telefono'] ?? ''),
+                                            'celula' => (string)($pSegCel['celula'] ?? ''),
+                                            'lider' => (string)($pSegCel['lider'] ?? ''),
+                                        ];
+                                    }
+                                    ?>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm celulas-action-btn celulas-action-btn--seguimiento js-ver-seguimiento-celula"
+                                        data-titulo="<?= htmlspecialchars('En seguimiento · ' . (string)($section['label'] ?? 'Célula'), ENT_QUOTES, 'UTF-8') ?>"
+                                        data-mostrar-celula="0"
+                                        data-personas="<?= htmlspecialchars(json_encode($payloadSegCel, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>"
+                                        title="Ver personas en seguimiento"
+                                        aria-label="Ver personas en seguimiento"
+                                    >
+                                        <i class="bi bi-signpost-2" aria-hidden="true"></i>
+                                        <span class="celulas-seguimiento-badge"><?= count($payloadSegCel) ?></span>
+                                    </button>
                                     <a href="<?= PUBLIC_URL ?>?url=personas/crear&return_to=celulas&return_url=<?= urlencode(PUBLIC_URL . '?url=celulas') ?>&celula=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon" title="Nueva persona" aria-label="Nueva persona">
                                         <i class="bi bi-person-plus-fill" aria-hidden="true"></i>
                                     </a>
@@ -355,6 +416,39 @@ $slugMinisterio = static function ($texto) {
     align-items: center;
     justify-content: center;
     font-size: 0.8125rem;
+}
+
+.celulas-action-btn--seguimiento {
+    min-width: 32px;
+    width: auto;
+    height: 32px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    background: #ecfdf5;
+    border-color: #99f6e4;
+    color: #0f766e;
+}
+
+.celulas-action-btn--seguimiento:hover {
+    background: #ccfbf1;
+    color: #115e59;
+}
+
+.celulas-seguimiento-badge {
+    display: inline-flex;
+    min-width: 18px;
+    height: 18px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #0f766e;
+    color: #fff;
+    font-size: 10px;
+    padding: 0 5px;
+    line-height: 1;
 }
 
 .celulas-action-btn--report {
@@ -705,4 +799,6 @@ $slugMinisterio = static function ($texto) {
     })();
 </script>
 
+<?php include VIEWS . '/personas/partials/modal_seguimiento.php'; ?>
+<?php include VIEWS . '/celulas/partials/modal_lista_seguimiento.php'; ?>
 <?php include VIEWS . '/layout/footer.php'; ?>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Asistencia Escuelas de Formación - MCI Madrid</title>
+    <title>Asistencia Universidad de la Vida - MCI Madrid</title>
     <style>
         :root {
             --primary: #0f6a66;
@@ -15,9 +15,7 @@
             --err-bg: #fff1f1;
             --err-tx: #9c3434;
         }
-
         * { box-sizing: border-box; }
-
         body {
             margin: 0;
             font-family: "Segoe UI", Tahoma, sans-serif;
@@ -26,7 +24,6 @@
             padding: 20px 12px;
             color: #2d3c3b;
         }
-
         .container {
             max-width: 760px;
             margin: 0 auto;
@@ -36,28 +33,14 @@
             overflow: hidden;
             box-shadow: 0 14px 30px rgba(15, 77, 74, .12);
         }
-
         .header {
             padding: 22px;
             background: linear-gradient(135deg, #e8f4f2 0%, #fff 100%);
             border-bottom: 1px solid var(--border);
         }
-
-        .header h1 {
-            margin: 0;
-            font-size: 29px;
-            color: #1d2f2d;
-        }
-
-        .header p {
-            margin: 8px 0 0;
-            color: #4f6462;
-        }
-
-        .body {
-            padding: 22px;
-        }
-
+        .header h1 { margin: 0; font-size: 26px; color: #1d2f2d; }
+        .header p { margin: 8px 0 0; color: #4f6462; }
+        .body { padding: 22px; }
         .alert {
             border-radius: 10px;
             padding: 11px 13px;
@@ -65,19 +48,8 @@
             border: 1px solid transparent;
             font-size: 14px;
         }
-
-        .alert.success {
-            background: var(--ok-bg);
-            border-color: #cae7cf;
-            color: var(--ok-tx);
-        }
-
-        .alert.error {
-            background: var(--err-bg);
-            border-color: #f0d0d0;
-            color: var(--err-tx);
-        }
-
+        .alert.success { background: var(--ok-bg); border-color: #cae7cf; color: var(--ok-tx); }
+        .alert.error { background: var(--err-bg); border-color: #f0d0d0; color: var(--err-tx); }
         .help {
             margin: 0 0 14px;
             font-size: 13px;
@@ -87,124 +59,116 @@
             border-radius: 8px;
             padding: 10px 12px;
         }
-
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-
-        .field {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .field.full {
-            grid-column: 1 / -1;
-        }
-
-        label {
-            font-weight: 600;
-            color: #213432;
-            font-size: 14px;
-        }
-
-        input, select {
-            border: 1px solid #cedfdd;
+        .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+        label { font-size: 13px; font-weight: 700; color: #35504d; }
+        input[type=text] {
+            border: 1px solid #c9dddb;
             border-radius: 10px;
-            padding: 10px 12px;
-            font-size: 15px;
-            color: #2f4442;
-            outline: none;
-            background: #fff;
+            padding: 12px 13px;
+            font-size: 18px;
+            letter-spacing: 0.04em;
         }
-
-        input:focus, select:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(15, 106, 102, .14);
-        }
-
-        .readonly {
-            background: #f7fbfb;
-            color: #516362;
-        }
-
-        .status {
+        .persona {
             display: none;
-            margin-top: 8px;
-            border-radius: 8px;
-            padding: 10px 12px;
-            border: 1px solid transparent;
-            font-size: 13px;
+            border: 1px solid #d7e8e5;
+            border-radius: 12px;
+            padding: 14px;
+            background: #f8fcfb;
+            margin-bottom: 16px;
         }
-
+        .persona.visible { display: block; }
+        .persona h2 { margin: 0 0 6px; font-size: 22px; color: #16332f; }
+        .meta { color: #4f6462; font-size: 14px; line-height: 1.5; }
+        .status { display: none; margin: 0 0 14px; font-size: 14px; }
         .status.active { display: block; }
-        .status.info { background: #eef7ff; border-color: #c8dff8; color: #245384; }
-        .status.warn { background: #fff7e9; border-color: #f4db9b; color: #845500; }
-        .status.error { background: #fff2f2; border-color: #f1cccc; color: #8b3a3a; }
-
-        .actions {
-            margin-top: 16px;
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
+        .status.info { color: #1f6b66; }
+        .status.warn { color: #9a5b12; }
+        .status.error { color: #9c3434; }
+        .grupos { display: none; }
+        .grupos.visible { display: block; }
+        .grupo { margin-bottom: 14px; }
+        .grupo h3 {
+            margin: 0 0 8px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #4f6462;
         }
-
-        .btn {
-            border: none;
+        .clases {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .clase {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid #cfe3e0;
             border-radius: 10px;
-            padding: 12px 18px;
+            padding: 10px 12px;
+            background: #fff;
+            cursor: pointer;
+        }
+        .clase.sugerida { border-color: #0f6a66; box-shadow: 0 0 0 2px rgba(15, 106, 102, .18); }
+        .clase.asistio { background: #ecf8ef; border-color: #b7e0c0; }
+        .clase input { width: 18px; height: 18px; accent-color: var(--primary); }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+        .btn {
+            background: var(--primary);
+            color: #fff;
+            border: 0;
+            border-radius: 10px;
+            padding: 12px 16px;
             font-size: 15px;
             font-weight: 700;
             cursor: pointer;
-            color: #fff;
-            background: linear-gradient(135deg, var(--primary) 0%, #13908a 100%);
-            box-shadow: 0 10px 20px rgba(15, 106, 102, .18);
         }
-
-        .btn:disabled {
-            opacity: .6;
-            cursor: not-allowed;
+        .btn:disabled { opacity: .45; cursor: not-allowed; }
+        .btn-secondary { background: #2f4f4c; }
+        .btn-ghost {
+            background: #fff;
+            color: var(--primary-dark);
+            border: 1px solid #b7d4d0;
         }
-
-        .btn-secondary {
-            color: #2a5a56;
-            background: #eef7f6;
-            border: 1px solid #c8dfdc;
-            box-shadow: none;
+        .exito-box {
+            display: none;
+            margin: 0 0 16px;
+            padding: 16px 16px 14px;
+            border-radius: 12px;
+            border: 1px solid #b7e0c0;
+            background: #ecf8ef;
         }
-
-        .btn-secondary:hover {
-            background: #e4f1ef;
+        .exito-box.visible { display: block; }
+        .exito-box strong { display: block; font-size: 18px; color: #1f7a3c; margin-bottom: 6px; }
+        .exito-box p { margin: 0 0 12px; color: #2d5a3a; font-size: 14px; }
+        .enlace-registro {
+            display: none;
+            margin: 0 0 14px;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid #cfe3e0;
+            background: #f5fbfa;
+            font-size: 14px;
+            color: #35504d;
         }
-
+        .enlace-registro.visible { display: block; }
+        .enlace-registro a { color: #0f6a66; font-weight: 700; }
         .toast {
             position: fixed;
             left: 50%;
-            bottom: 22px;
-            transform: translateX(-50%) translateY(10px);
-            background: #1f4f4c;
+            bottom: 18px;
+            transform: translateX(-50%) translateY(12px);
+            background: #16332f;
             color: #fff;
-            border-radius: 999px;
             padding: 10px 14px;
-            font-size: 13px;
-            font-weight: 600;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+            border-radius: 10px;
             opacity: 0;
-            pointer-events: none;
-            transition: opacity .2s ease, transform .2s ease;
-            z-index: 1200;
+            transition: .2s;
+            z-index: 20;
         }
-
-        .toast.active {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-
+        .toast.active { opacity: 1; transform: translateX(-50%) translateY(0); }
         @media (max-width: 720px) {
-            .grid { grid-template-columns: 1fr; }
-            .actions { justify-content: stretch; }
+            .clases { grid-template-columns: 1fr; }
             .btn { width: 100%; }
         }
     </style>
@@ -212,82 +176,67 @@
 <body>
 <div class="container">
     <div class="header">
-        <h1>Asistencia a clase</h1>
-        <p>Escuelas de Formación - Registro público sin código.</p>
+        <h1>Asistencia Universidad de la Vida</h1>
+        <p>Consulta por cédula. Los días de Encuentro no se marcan en este formulario. Refuerzo marca las dos clases juntas.</p>
     </div>
-
     <div class="body">
         <?php if (!empty($mensaje)): ?>
             <div class="alert <?= ($tipo_mensaje ?? '') === 'success' ? 'success' : 'error' ?>">
                 <?= htmlspecialchars((string)$mensaje) ?>
             </div>
         <?php endif; ?>
-
-        <p class="help">Escribe teléfono o cédula. Si la persona ya está inscrita, se llenarán los datos automáticamente para registrar asistencia.</p>
-
+        <p class="help">Escribe el número de cédula. Verás pre-encuentro, refuerzo (marca las dos clases) y dos clases de post-encuentro. Los días de Encuentro no se marcan aquí.</p>
         <form method="POST" action="<?= PUBLIC_URL ?>?url=escuelas_formacion/asistencia-publica/guardar" id="form-asistencia-publica" autocomplete="off">
-            <div class="grid">
-                <div class="field">
-                    <label for="telefono">Teléfono</label>
-                    <input type="text" id="telefono" name="telefono" required inputmode="numeric" pattern="[0-9]{4,}" minlength="4" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="<?= htmlspecialchars((string)($old['telefono'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej: 3001234567">
-                </div>
-
-                <div class="field">
-                    <label for="cedula">Cédula</label>
-                    <input type="text" id="cedula" name="cedula" required inputmode="numeric" pattern="[0-9]{4,}" minlength="4" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="<?= htmlspecialchars((string)($old['cedula'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej: 12345678">
-                </div>
-
-                <div class="field full">
-                    <label for="nombre">Nombre</label>
-                    <input type="text" id="nombre" class="readonly" readonly>
-                </div>
-
-                <div class="field">
-                    <label for="genero">Género</label>
-                    <input type="text" id="genero" class="readonly" readonly>
-                </div>
-
-                <div class="field">
-                    <label for="ministerio">Ministerio</label>
-                    <input type="text" id="ministerio" class="readonly" readonly>
-                </div>
-
-                <div class="field full">
-                    <label for="id_inscripcion">Programa inscrito</label>
-                    <select id="id_inscripcion" name="id_inscripcion" required>
-                        <option value="">Busca primero por teléfono o cédula...</option>
-                    </select>
-                </div>
+            <div class="field">
+                <label for="cedula">Número de cédula</label>
+                <input type="text" id="cedula" name="cedula" required inputmode="numeric" pattern="[0-9]{4,}" minlength="4" autocomplete="off" value="<?= htmlspecialchars((string)($old['cedula'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej: 12345678">
             </div>
-
             <div id="estado-busqueda" class="status"></div>
-
+            <div id="enlace-registro" class="enlace-registro"></div>
+            <div id="exito-asistencia" class="exito-box">
+                <strong id="exito-asistencia-titulo">Asistencia guardada con éxito</strong>
+                <p id="exito-asistencia-texto"></p>
+                <button type="button" class="btn btn-ghost" id="btn-buscar-otra">Buscar otra persona</button>
+            </div>
+            <div id="ficha-persona" class="persona">
+                <h2 id="nombre-persona"></h2>
+                <div class="meta" id="datos-persona"></div>
+            </div>
+            <div id="grupos-clases" class="grupos"></div>
+            <input type="hidden" name="numero_clase" id="numero_clase" value="">
+            <input type="hidden" name="numeros_clase" id="numeros_clase" value="">
+            <input type="hidden" name="opcion_clase" id="opcion_clase" value="">
             <div class="actions">
-                <button type="button" class="btn btn-secondary" id="btn-limpiar-form">Limpiar formulario</button>
-                <button type="submit" class="btn" id="btn-guardar" disabled>Registrar asistencia</button>
+                <button type="button" class="btn btn-secondary" id="btn-limpiar-form">Limpiar</button>
+                <button type="submit" class="btn" id="btn-guardar" disabled>Marcar asistencia</button>
             </div>
         </form>
     </div>
 </div>
-
 <div id="toast-feedback" class="toast" aria-live="polite"></div>
-
 <script>
 (function () {
     const endpointBuscar = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/asistencia-publica/buscar') ?>;
-
-    const telefonoInput = document.getElementById('telefono');
+    const endpointGuardar = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/asistencia-publica/guardar') ?>;
+    const urlRegistroUv = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/registro-publico/universidad-vida') ?>;
     const cedulaInput = document.getElementById('cedula');
-    const nombreInput = document.getElementById('nombre');
-    const generoInput = document.getElementById('genero');
-    const ministerioInput = document.getElementById('ministerio');
-    const inscripcionSelect = document.getElementById('id_inscripcion');
     const form = document.getElementById('form-asistencia-publica');
     const estadoBusqueda = document.getElementById('estado-busqueda');
+    const enlaceRegistro = document.getElementById('enlace-registro');
+    const exitoBox = document.getElementById('exito-asistencia');
+    const exitoTitulo = document.getElementById('exito-asistencia-titulo');
+    const exitoTexto = document.getElementById('exito-asistencia-texto');
+    const btnBuscarOtra = document.getElementById('btn-buscar-otra');
+    const ficha = document.getElementById('ficha-persona');
+    const nombrePersona = document.getElementById('nombre-persona');
+    const datosPersona = document.getElementById('datos-persona');
+    const grupos = document.getElementById('grupos-clases');
+    const numeroClaseInput = document.getElementById('numero_clase');
+    const numerosClaseInput = document.getElementById('numeros_clase');
+    const opcionClaseInput = document.getElementById('opcion_clase');
     const btnGuardar = document.getElementById('btn-guardar');
-    const btnLimpiarForm = document.getElementById('btn-limpiar-form');
+    const btnLimpiar = document.getElementById('btn-limpiar-form');
     const toastFeedback = document.getElementById('toast-feedback');
-
     let debounceTimer = null;
     let toastTimer = null;
 
@@ -297,199 +246,253 @@
             estadoBusqueda.textContent = '';
             return;
         }
-
         estadoBusqueda.textContent = String(mensaje);
-        estadoBusqueda.classList.add('active');
-        if (tipo === 'warn') {
-            estadoBusqueda.classList.add('warn');
-        } else if (tipo === 'error') {
-            estadoBusqueda.classList.add('error');
-        } else {
-            estadoBusqueda.classList.add('info');
+        estadoBusqueda.classList.add('active', tipo || 'info');
+    }
+
+    function ocultarEnlaceRegistro() {
+        if (!enlaceRegistro) return;
+        enlaceRegistro.classList.remove('visible');
+        enlaceRegistro.innerHTML = '';
+    }
+
+    function mostrarEnlaceRegistro(cedula, mensaje, urlApi) {
+        if (!enlaceRegistro) return;
+        const url = urlApi || (urlRegistroUv + (cedula ? ('&cedula=' + encodeURIComponent(cedula)) : ''));
+        enlaceRegistro.innerHTML = (mensaje ? ('<div style="margin-bottom:8px;">' + mensaje + '</div>') : '')
+            + 'Si no está inscrita en este ciclo, <a href="' + url + '">regístrala en el formulario de Universidad de la Vida</a>.';
+        enlaceRegistro.classList.add('visible');
+    }
+
+    function ocultarExito() {
+        if (exitoBox) exitoBox.classList.remove('visible');
+        if (exitoTexto) exitoTexto.textContent = '';
+    }
+
+    function mostrarExito(mensaje, etiquetaClase) {
+        const texto = String(mensaje || '');
+        const claseTxt = String(etiquetaClase || '');
+        if (exitoTitulo) {
+            exitoTitulo.textContent = claseTxt
+                ? ('Asistencia guardada a ' + claseTxt + ' con éxito')
+                : 'Asistencia guardada con éxito';
         }
+        if (exitoTexto) {
+            exitoTexto.textContent = texto;
+        }
+        if (exitoBox) exitoBox.classList.add('visible');
     }
 
     function mostrarToast(mensaje) {
-        if (!toastFeedback) {
-            return;
-        }
-
-        if (toastTimer) {
-            clearTimeout(toastTimer);
-        }
-
         toastFeedback.textContent = String(mensaje || 'Listo');
         toastFeedback.classList.add('active');
-        toastTimer = setTimeout(function () {
-            toastFeedback.classList.remove('active');
-        }, 1500);
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toastFeedback.classList.remove('active'); }, 2800);
     }
 
-    function limpiarDatos() {
-        nombreInput.value = '';
-        generoInput.value = '';
-        ministerioInput.value = '';
-        inscripcionSelect.innerHTML = '<option value="">Busca primero por teléfono o cédula...</option>';
+    function resetearParaOtraPersona() {
+        form.reset();
+        limpiarResultado();
+        ocultarExito();
+        ocultarEnlaceRegistro();
+        setEstado('', '');
+        cedulaInput.focus();
+    }
+
+    function limpiarResultado() {
+        ficha.classList.remove('visible');
+        grupos.classList.remove('visible');
+        grupos.innerHTML = '';
+        numeroClaseInput.value = '';
+        if (numerosClaseInput) numerosClaseInput.value = '';
+        if (opcionClaseInput) opcionClaseInput.value = '';
         btnGuardar.disabled = true;
+        nombrePersona.textContent = '';
+        datosPersona.textContent = '';
     }
 
-    function poblarDatos(data) {
-        const persona = data.persona || {};
-        const programas = Array.isArray(data.programas) ? data.programas : [];
+    function seleccionarOpcion(opcion) {
+        const numeros = (opcion.numeros || []).map(function (n) { return Number(n); }).filter(function (n) { return n > 0; });
+        numeroClaseInput.value = numeros.length ? String(numeros[0]) : '';
+        if (numerosClaseInput) numerosClaseInput.value = numeros.join(',');
+        if (opcionClaseInput) opcionClaseInput.value = String(opcion.id || '');
+        btnGuardar.disabled = numeros.length === 0 || !!opcion.asistio;
+    }
 
-        const asignarSiFalta = function(input, valor) {
-            if (!input) {
-                return;
-            }
-
-            const actual = String(input.value || '').trim();
-            const nuevoValor = String(valor || '').trim();
-            if (actual === '' && nuevoValor !== '') {
-                input.value = nuevoValor;
-            }
-        };
-
-        asignarSiFalta(telefonoInput, persona.telefono || '');
-        asignarSiFalta(cedulaInput, persona.cedula || '');
-        asignarSiFalta(nombreInput, persona.nombre || '');
-        asignarSiFalta(generoInput, persona.genero || '');
-        asignarSiFalta(ministerioInput, persona.ministerio || '');
-
-        inscripcionSelect.innerHTML = '';
-        if (programas.length === 0) {
-            inscripcionSelect.innerHTML = '<option value="">No hay programas disponibles</option>';
-            btnGuardar.disabled = true;
-            return;
-        }
-
-        programas.forEach(function (item) {
-            const option = document.createElement('option');
-            option.value = String(item.id_inscripcion || '');
-            const yaAsistio = String(item.asistio_clase || '') === '1';
-            option.textContent = String(item.programa_label || item.programa || 'Programa') + (yaAsistio ? ' (ya registrada)' : '');
-            inscripcionSelect.appendChild(option);
+    function renderClases(clases, sugerida, opciones) {
+        const items = Array.isArray(opciones) && opciones.length
+            ? opciones
+            : (clases || []).filter(function (clase) {
+                const grupo = String(clase.grupo || '');
+                const numero = Number(clase.numero || 0);
+                return grupo !== 'Encuentro' && numero !== 5 && numero !== 6;
+            }).map(function (clase) {
+                return {
+                    id: String(clase.numero || ''),
+                    grupo: clase.grupo || 'Clases',
+                    label: clase.label || ('Clase ' + clase.numero),
+                    numeros: [Number(clase.numero || 0)],
+                    asistio: !!clase.asistio,
+                    parcial: false
+                };
+            });
+        const porGrupo = {};
+        items.forEach(function (opcion) {
+            const grupo = String(opcion.grupo || 'Clases');
+            if (!porGrupo[grupo]) porGrupo[grupo] = [];
+            porGrupo[grupo].push(opcion);
         });
-
-        btnGuardar.disabled = false;
+        grupos.innerHTML = '';
+        Object.keys(porGrupo).forEach(function (grupoNombre) {
+            const wrap = document.createElement('div');
+            wrap.className = 'grupo';
+            wrap.innerHTML = '<h3>' + grupoNombre + '</h3>';
+            const grid = document.createElement('div');
+            grid.className = 'clases';
+            porGrupo[grupoNombre].forEach(function (opcion) {
+                const label = document.createElement('label');
+                const yaAsistio = !!opcion.asistio;
+                const extra = yaAsistio ? ' (ya asistió)' : (opcion.parcial ? ' (parcial)' : '');
+                label.className = 'clase' + (yaAsistio ? ' asistio' : '');
+                label.innerHTML = '<input type="radio" name="clase_ui" value="' + String(opcion.id || '') + '"'
+                    + (yaAsistio ? ' disabled' : '') + '>'
+                    + '<span>' + String(opcion.label || '') + extra + '</span>';
+                const input = label.querySelector('input');
+                input.addEventListener('change', function () {
+                    if (input.checked) {
+                        seleccionarOpcion(opcion);
+                    }
+                });
+                grid.appendChild(label);
+            });
+            wrap.appendChild(grid);
+            grupos.appendChild(wrap);
+        });
+        grupos.classList.add('visible');
+        const sugeridaLibre = items.find(function (opcion) { return !opcion.asistio; });
+        if (sugeridaLibre) {
+            const radio = grupos.querySelector('input[value="' + sugeridaLibre.id + '"]');
+            if (radio) {
+                radio.checked = true;
+                seleccionarOpcion(sugeridaLibre);
+            }
+        } else {
+            btnGuardar.disabled = true;
+        }
     }
 
-    function buscar() {
-        const telefono = String(telefonoInput.value || '').trim();
-        const cedula = String(cedulaInput.value || '').trim();
-
-        if (telefono === '' && cedula === '') {
-            limpiarDatos();
-            setEstado('warn', 'Ingresa teléfono o cédula para buscar.');
+    function buscar(opciones) {
+        const mantenerExito = !!(opciones && opciones.mantenerExito);
+        const cedula = String(cedulaInput.value || '').replace(/\D+/g, '');
+        cedulaInput.value = cedula;
+        if (cedula.length < 4) {
+            limpiarResultado();
+            ocultarExito();
+            ocultarEnlaceRegistro();
+            setEstado('warn', 'Escribe al menos 4 números de la cédula.');
             return;
         }
-
-        fetch(endpointBuscar + '&telefono=' + encodeURIComponent(telefono) + '&cedula=' + encodeURIComponent(cedula), {
+        if (!mantenerExito) {
+            ocultarExito();
+        }
+        fetch(endpointBuscar + '&cedula=' + encodeURIComponent(cedula), {
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
             .then(function (res) { return res.json(); })
             .then(function (data) {
                 if (!data || data.encontrado !== true) {
-                    limpiarDatos();
-                    setEstado('warn', (data && data.mensaje) ? data.mensaje : 'No encontramos coincidencias.');
+                    limpiarResultado();
+                    ocultarExito();
+                    const mensaje = (data && data.mensaje) ? data.mensaje : 'No encontramos coincidencias.';
+                    setEstado('warn', mensaje);
+                    if (data && data.puede_registrar !== false && cedula.length >= 4) {
+                        mostrarEnlaceRegistro(cedula, mensaje, data.url_registro || '');
+                    } else {
+                        ocultarEnlaceRegistro();
+                    }
                     return;
                 }
-
-                poblarDatos(data);
-                setEstado('info', data.mensaje || 'Datos encontrados. Selecciona programa y registra asistencia.');
+                ocultarEnlaceRegistro();
+                const persona = data.persona || {};
+                nombrePersona.textContent = persona.nombre || 'Persona encontrada';
+                const partes = [];
+                if (persona.cedula) partes.push('Cédula: ' + persona.cedula);
+                if (persona.telefono) partes.push('Teléfono: ' + persona.telefono);
+                if (persona.genero) partes.push(persona.genero);
+                if (persona.ministerio) partes.push('Ministerio: ' + persona.ministerio);
+                if (persona.lider) partes.push('Líder: ' + persona.lider);
+                datosPersona.textContent = partes.join(' · ');
+                ficha.classList.add('visible');
+                renderClases(data.clases || [], data.clase_sugerida || 1, data.opciones || []);
+                if (!mantenerExito) {
+                    setEstado('info', data.mensaje || 'Marca la clase correspondiente.');
+                }
             })
             .catch(function () {
-                limpiarDatos();
+                limpiarResultado();
                 setEstado('error', 'No se pudo realizar la búsqueda en este momento.');
             });
     }
 
-    function programarBusqueda() {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(buscar, 300);
-    }
-
-    function esSoloDigitos(valor) {
-        return /^\d+$/.test(String(valor || '').trim());
-    }
-
     cedulaInput.addEventListener('input', function () {
         cedulaInput.value = String(cedulaInput.value || '').replace(/\D+/g, '');
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(buscar, 280);
     });
-
-    telefonoInput.addEventListener('input', function () {
-        telefonoInput.value = String(telefonoInput.value || '').replace(/\D+/g, '');
-    });
-
-    telefonoInput.addEventListener('input', programarBusqueda);
-    cedulaInput.addEventListener('input', programarBusqueda);
-    telefonoInput.addEventListener('blur', buscar);
     cedulaInput.addEventListener('blur', buscar);
 
-    form.addEventListener('submit', function (event) {
-        const telefono = String(telefonoInput.value || '').trim();
-        const cedula = String(cedulaInput.value || '').trim();
-
-        if (!telefono) {
-            event.preventDefault();
-            alert('El telefono es obligatorio.');
-            telefonoInput.focus();
-            return;
-        }
-
-        if (!cedula) {
-            event.preventDefault();
-            alert('La cedula es obligatoria.');
-            cedulaInput.focus();
-            return;
-        }
-
-        if (!esSoloDigitos(telefono)) {
-            event.preventDefault();
-            alert('El telefono solo puede contener numeros.');
-            telefonoInput.focus();
-            return;
-        }
-
-        if (!esSoloDigitos(cedula)) {
-            event.preventDefault();
-            alert('La cedula solo puede contener numeros.');
-            cedulaInput.focus();
-            return;
-        }
-
-        if (telefono.length < 4) {
-            event.preventDefault();
-            alert('El telefono debe tener al menos 4 numeros.');
-            telefonoInput.focus();
-            return;
-        }
-
-        if (cedula.length < 4) {
-            event.preventDefault();
-            alert('La cedula debe tener al menos 4 numeros.');
-            cedulaInput.focus();
-            return;
-        }
-    });
-
-    if (btnLimpiarForm) {
-        btnLimpiarForm.addEventListener('click', function () {
-            if (debounceTimer) {
-                clearTimeout(debounceTimer);
-                debounceTimer = null;
-            }
-
-            form.reset();
-            telefonoInput.value = '';
-            cedulaInput.value = '';
-            limpiarDatos();
-            setEstado('', '');
-            telefonoInput.focus();
-            mostrarToast('Formulario limpiado');
-        });
+    btnLimpiar.addEventListener('click', resetearParaOtraPersona);
+    if (btnBuscarOtra) {
+        btnBuscarOtra.addEventListener('click', resetearParaOtraPersona);
     }
 
-    if ((telefonoInput.value || '').trim() !== '' || (cedulaInput.value || '').trim() !== '') {
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        const cedula = String(cedulaInput.value || '').trim();
+        const numerosClase = String((numerosClaseInput && numerosClaseInput.value) || numeroClaseInput.value || '').trim();
+        if (cedula.length < 4 || !numerosClase) {
+            setEstado('warn', 'Busca la persona y selecciona el número de clase.');
+            return;
+        }
+        const body = new FormData();
+        body.append('cedula', cedula);
+        body.append('numero_clase', String(numeroClaseInput.value || '').trim());
+        body.append('numeros_clase', numerosClase);
+        if (opcionClaseInput && opcionClaseInput.value) {
+            body.append('opcion_clase', opcionClaseInput.value);
+        }
+        btnGuardar.disabled = true;
+        fetch(endpointGuardar, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: body
+        })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                const ok = !!(data && data.success);
+                const mensaje = (data && data.mensaje)
+                    ? data.mensaje
+                    : (ok ? 'Asistencia guardada con éxito.' : 'No se pudo guardar la asistencia.');
+                const etiqueta = (data && data.etiqueta_clase) ? data.etiqueta_clase : '';
+                mostrarToast(mensaje);
+                setEstado(ok ? 'info' : 'error', mensaje);
+                if (ok) {
+                    mostrarExito(mensaje, etiqueta);
+                    buscar({ mantenerExito: true });
+                } else {
+                    btnGuardar.disabled = false;
+                    if (/no encontramos|inscribirse de nuevo|no está inscrita/i.test(mensaje)) {
+                        mostrarEnlaceRegistro(cedula, mensaje);
+                    }
+                }
+            })
+            .catch(function () {
+                btnGuardar.disabled = false;
+                setEstado('error', 'No se pudo guardar la asistencia.');
+            });
+    });
+
+    if (String(cedulaInput.value || '').trim() !== '') {
         buscar();
     }
 })();

@@ -16,9 +16,9 @@ $celFiltroResetUrl = (string)($celFiltroResetUrl ?? (PUBLIC_URL . 'index.php?url
 $tablaOperativaHiddenExtras = is_array($tablaOperativaHiddenExtras ?? null) ? $tablaOperativaHiddenExtras : [];
 ?>
 <style>
-.dash-min-table { width:100%; border-collapse:collapse; font-size:.88rem; }
-.dash-min-table th { text-align:left; padding:8px 10px; background:#eef2ff; color:#3730a3; font-size:.75rem; text-transform:uppercase; letter-spacing:.03em; }
-.dash-min-table td { padding:8px 10px; border-bottom:1px solid #eef2f7; }
+.dash-cel-operativa .dash-min-table { width:100%; border-collapse:collapse; font-size:.88rem; }
+.dash-cel-operativa .dash-min-table th { text-align:left; padding:8px 10px; background:#eef2ff; color:#3730a3; font-size:.75rem; text-transform:uppercase; letter-spacing:.03em; }
+.dash-cel-operativa .dash-min-table td { padding:8px 10px; border-bottom:1px solid #eef2f7; }
 .dash-celulas-rango-form { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; }
 .dash-celulas-rango-form .form-group { margin:0; }
 .dash-celulas-rango-form label { font-size:.8rem; color:#475569; display:block; margin-bottom:4px; }
@@ -28,7 +28,7 @@ $tablaOperativaHiddenExtras = is_array($tablaOperativaHiddenExtras ?? null) ? $t
 .dash-cel-detalle-modal { position:fixed; inset:0; z-index:1200; display:flex; align-items:center; justify-content:center; padding:16px; }
 .dash-cel-detalle-modal[hidden] { display:none !important; }
 .dash-cel-detalle-backdrop { position:absolute; inset:0; background:rgba(15,23,42,.45); }
-.dash-cel-detalle-panel { position:relative; z-index:1; background:#fff; border-radius:12px; max-width:720px; width:100%; max-height:85vh; overflow:auto; padding:18px 20px; box-shadow:0 12px 40px rgba(15,23,42,.2); }
+.dash-cel-detalle-panel { position:relative; z-index:1; background:#fff; border-radius:12px; max-width:820px; width:100%; max-height:85vh; overflow:auto; padding:18px 20px; box-shadow:0 12px 40px rgba(15,23,42,.2); }
 .dash-cel-detalle-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px; }
 .dash-cel-detalle-head h4 { margin:0; font-size:1.05rem; color:#1e293b; }
 .dash-cel-detalle-sub { margin:4px 0 0; font-size:.84rem; color:#64748b; }
@@ -54,7 +54,7 @@ $tablaOperativaHiddenExtras = is_array($tablaOperativaHiddenExtras ?? null) ? $t
 .dash-cel-celula-row td:first-child { padding-left:28px; color:#64748b; }
 </style>
 
-<div class="card report-card" style="margin-bottom:22px; padding:18px;">
+<div class="card report-card dash-cel-operativa" style="margin-bottom:22px; padding:18px;">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
         <h4 style="margin:0; font-size:.97rem; color:#374151;">
             Reporte operativo de células por líder
@@ -195,37 +195,10 @@ $tablaOperativaHiddenExtras = is_array($tablaOperativaHiddenExtras ?? null) ? $t
                             $nCelLider = 0;
                             foreach ($filasPorLider as $nombreLiderFila => $celulasLider):
                                 $nCelLider++;
-                                $sumAsistentes = 0;
-                                $sumNuevos = 0;
-                                $sumAntiguas = 0;
-                                $sumFrecuentes = 0;
-                                $sumRegulares = 0;
-                                $sumSinSobre = 0;
-                                $sumSinReportar = 0;
-                                foreach ($celulasLider as $rowCel) {
-                                    $sumAsistentes += (int)($rowCel['asistentes'] ?? 0);
-                                    $sumNuevos += (int)($rowCel['nuevos'] ?? 0);
-                                    $sumAntiguas += (int)($rowCel['antiguas'] ?? 0);
-                                    $sumFrecuentes += (int)($rowCel['frecuentes'] ?? 0);
-                                    $sumRegulares += (int)($rowCel['regulares'] ?? 0);
-                                    $sumSinSobre += (int)($rowCel['semanas_sin_entregar_sobre'] ?? 0);
-                                    $sumSinReportar += (int)($rowCel['semanas_sin_reportar'] ?? 0);
-                                }
-                                $cantCelulasLider = count($celulasLider);
                             ?>
                             <tr class="dash-cel-lider-row">
                                 <td colspan="8">
                                     <?= $nCelLider ?>. <?= htmlspecialchars((string)$nombreLiderFila) ?>
-                                    · <?= $cantCelulasLider ?> célula(s)
-                                    · Asist. <?= $sumAsistentes ?>
-                                    · Nuevos <?= $sumNuevos ?>
-                                    · Ant. <?= $sumAntiguas ?>
-                                    · Frec. <?= $sumFrecuentes ?>
-                                    · Reg. <?= $sumRegulares ?>
-                                    <?php if ($sumSinSobre > 0 || $sumSinReportar > 0): ?>
-                                        · Sin sobre <?= $sumSinSobre ?>
-                                        · Sin reportar <?= $sumSinReportar ?>
-                                    <?php endif; ?>
                                 </td>
                             </tr>
                             <?php
@@ -233,14 +206,15 @@ $tablaOperativaHiddenExtras = is_array($tablaOperativaHiddenExtras ?? null) ? $t
                             foreach ($celulasLider as $rowCel):
                                 $nCelulaLider++;
                                 $etiquetaCelula = 'Célula ' . $nCelulaLider;
+                                $nombreCelulaReal = trim((string)($rowCel['celula'] ?? '')) ?: $etiquetaCelula;
                             ?>
                             <tr class="dash-cel-celula-row">
                                 <td><?= $etiquetaCelula ?></td>
-                                <td><?= $renderPersonasCelulasClick((int)($rowCel['asistentes'] ?? 0), is_array($rowCel['asistentes_personas'] ?? null) ? $rowCel['asistentes_personas'] : [], 'Asistentes', $etiquetaCelula, (string)$nombreLiderFila) ?></td>
-                                <td><?= $renderPersonasCelulasClick((int)($rowCel['nuevos'] ?? 0), is_array($rowCel['nuevos_personas'] ?? null) ? $rowCel['nuevos_personas'] : [], 'Asistentes nuevos', $etiquetaCelula, (string)$nombreLiderFila) ?></td>
-                                <td><?= $renderPersonasCelulasClick((int)($rowCel['antiguas'] ?? 0), is_array($rowCel['antiguas_personas'] ?? null) ? $rowCel['antiguas_personas'] : [], 'Asistentes antiguas', $etiquetaCelula, (string)$nombreLiderFila) ?></td>
-                                <td><?= $renderPersonasCelulasClick((int)($rowCel['frecuentes'] ?? 0), is_array($rowCel['frecuentes_personas'] ?? null) ? $rowCel['frecuentes_personas'] : [], 'Asistentes frecuentes', $etiquetaCelula, (string)$nombreLiderFila) ?></td>
-                                <td><?= $renderPersonasCelulasClick((int)($rowCel['regulares'] ?? 0), is_array($rowCel['regulares_personas'] ?? null) ? $rowCel['regulares_personas'] : [], 'Asistentes regulares', $etiquetaCelula, (string)$nombreLiderFila) ?></td>
+                                <td><?= $renderPersonasCelulasClick((int)($rowCel['asistentes'] ?? 0), is_array($rowCel['asistentes_personas'] ?? null) ? $rowCel['asistentes_personas'] : [], 'Asistentes', $nombreCelulaReal, (string)$nombreLiderFila) ?></td>
+                                <td><?= $renderPersonasCelulasClick((int)($rowCel['nuevos'] ?? 0), is_array($rowCel['nuevos_personas'] ?? null) ? $rowCel['nuevos_personas'] : [], 'Asistentes nuevos', $nombreCelulaReal, (string)$nombreLiderFila) ?></td>
+                                <td><?= $renderPersonasCelulasClick((int)($rowCel['antiguas'] ?? 0), is_array($rowCel['antiguas_personas'] ?? null) ? $rowCel['antiguas_personas'] : [], 'Asistentes antiguas', $nombreCelulaReal, (string)$nombreLiderFila) ?></td>
+                                <td><?= $renderPersonasCelulasClick((int)($rowCel['frecuentes'] ?? 0), is_array($rowCel['frecuentes_personas'] ?? null) ? $rowCel['frecuentes_personas'] : [], 'Asistentes frecuentes', $nombreCelulaReal, (string)$nombreLiderFila) ?></td>
+                                <td><?= $renderPersonasCelulasClick((int)($rowCel['regulares'] ?? 0), is_array($rowCel['regulares_personas'] ?? null) ? $rowCel['regulares_personas'] : [], 'Asistentes regulares', $nombreCelulaReal, (string)$nombreLiderFila) ?></td>
                                 <td><?= $renderMetricaCelulasClick((int)($rowCel['semanas_sin_entregar_sobre'] ?? 0), is_array($rowCel['detalle_sin_entregar_sobre'] ?? null) ? $rowCel['detalle_sin_entregar_sobre'] : [], 'Semanas sin entregar sobre', (string)$nombreLiderFila, 'sin_sobre') ?></td>
                                 <td><?= $renderMetricaCelulasClick((int)($rowCel['semanas_sin_reportar'] ?? 0), is_array($rowCel['detalle_sin_reportar'] ?? null) ? $rowCel['detalle_sin_reportar'] : [], 'Semanas sin reportar célula', (string)$nombreLiderFila, 'sin_reportar') ?></td>
                             </tr>
@@ -323,9 +297,10 @@ $tablaOperativaHiddenExtras = is_array($tablaOperativaHiddenExtras ?? null) ? $t
                 ayuda.hidden = true;
                 resumen.textContent = (payload.total || payload.items.length) + ' persona(s)';
                 var filasPers = payload.items.map(function(item, index) {
-                    return '<tr><td>' + (index + 1) + '</td><td>' + escapeHtml(item.nombre || '') + '</td><td>' + escapeHtml(item.documento || 'N/A') + '</td><td>' + escapeHtml(item.telefono || 'N/A') + '</td><td>' + escapeHtml(item.tipo || '') + '</td><td>' + escapeHtml(item.frecuencia || '') + '</td><td>' + escapeHtml(String(item.asistencias != null ? item.asistencias : '')) + '</td></tr>';
+                    var esNuevo = item.nuevo || ((item.tipo === 'Nueva' || item.tipo === 'Nuevo') ? 'Sí' : (item.tipo ? 'No' : ''));
+                    return '<tr><td>' + (index + 1) + '</td><td>' + escapeHtml(item.nombre || '') + '</td><td>' + escapeHtml(item.telefono || 'N/A') + '</td><td>' + escapeHtml(item.proceso || 'Ganar') + '</td><td>' + escapeHtml(esNuevo) + '</td><td>' + escapeHtml(item.frecuencia || '') + '</td></tr>';
                 }).join('');
-                contenedor.innerHTML = '<table class="dash-cel-detalle-table"><thead><tr><th>#</th><th>Nombre</th><th>Documento</th><th>Teléfono</th><th>Tipo</th><th>Frecuencia</th><th>Asistencias</th></tr></thead><tbody>' + filasPers + '</tbody></table>';
+                contenedor.innerHTML = '<table class="dash-cel-detalle-table"><thead><tr><th>#</th><th>Nombre</th><th>Teléfono</th><th>Proceso</th><th>Nuevo</th><th>Frecuencia</th></tr></thead><tbody>' + filasPers + '</tbody></table>';
                 modal.hidden = false;
                 return;
             }

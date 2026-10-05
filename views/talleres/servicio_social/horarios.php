@@ -53,6 +53,9 @@ $tieneConfig = $config !== null;
         <a href="<?= PUBLIC_URL ?>?url=talleres/servicio-social" class="btn btn-secondary btn-sm">
             <i class="bi bi-arrow-left"></i> Volver al listado
         </a>
+        <a href="<?= PUBLIC_URL ?>?url=talleres/servicio-social/inscripciones" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-calendar-check"></i> Días de inscripción
+        </a>
     </div>
 </div>
 

@@ -8,6 +8,14 @@ $remitidoPor = is_array($remitido_por ?? null) ? $remitido_por : [];
 $horariosSabado = is_array($horarios_sabado ?? null) ? $horarios_sabado : [];
 $proximosSabados = is_array($proximos_sabados ?? null) ? $proximos_sabados : [];
 $puedeAgendarHoy = !isset($puede_agendar_hoy) || !empty($puede_agendar_hoy);
+$textoDiasInscripcion = trim((string)($texto_dias_inscripcion ?? ''));
+if ($textoDiasInscripcion === '') {
+    $textoDiasInscripcion = 'los días configurados por Servicio Social';
+}
+$mensajeInscripcionesCerradas = trim((string)($mensaje_inscripciones_cerradas ?? ''));
+if ($mensajeInscripcionesCerradas === '') {
+    $mensajeInscripcionesCerradas = 'Hoy el formulario de inscripción está cerrado.';
+}
 $urlBuscarPersona = (string)($url_buscar_persona ?? '');
 $urlDisponibilidad = (string)($url_disponibilidad ?? '');
 
@@ -230,7 +238,7 @@ if ($fechaSel === '' && $proximosSabados !== []) {
     <div class="brand">
         <div class="pill"><i class="bi bi-heart-pulse"></i> MCI Madrid Colombia</div>
         <h1>Servicio Social</h1>
-        <p>Agenda una cita de <strong>atención psicológica</strong> para el <strong>sábado de esta semana</strong>. Las solicitudes se reciben de <strong>lunes a viernes</strong>.</p>
+        <p>Agenda una cita de <strong>atención psicológica</strong> para el <strong>sábado de esta semana</strong>. Las inscripciones se reciben <strong><?= htmlspecialchars($textoDiasInscripcion, ENT_QUOTES, 'UTF-8') ?></strong>.</p>
     </div>
 
     <?php if ($ok): ?>
@@ -244,7 +252,7 @@ if ($fechaSel === '' && $proximosSabados !== []) {
 
     <?php if (!$puedeAgendarHoy): ?>
     <div class="alert alert-warn">
-        <strong>Formulario cerrado hoy.</strong> Las solicitudes de cita solo se reciben de lunes a viernes. Vuelve a intentarlo en un día hábil.
+        <strong>Formulario cerrado hoy.</strong> <?= htmlspecialchars($mensajeInscripcionesCerradas, ENT_QUOTES, 'UTF-8') ?>
     </div>
     <?php endif; ?>
 

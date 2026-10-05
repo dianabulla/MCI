@@ -89,6 +89,21 @@ unset($_SESSION['asistencia_flash_error']);
     </form>
 </div>
 
+<div id="modalMigrarCelula" class="no-disponible-modal" aria-hidden="true">
+    <div class="no-disponible-modal__overlay" data-close-migrar-celula="1"></div>
+    <div class="no-disponible-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="migrarCelulaTitulo">
+        <h3 id="migrarCelulaTitulo" style="margin-top:0;">Migrar a otra célula</h3>
+        <p id="migrarCelulaPersona" style="margin:0 0 10px; color:#475569;"></p>
+        <label for="migrarCelulaSelect" style="display:block; font-weight:600; margin-bottom:6px;">Célula del mismo ministerio</label>
+        <select id="migrarCelulaSelect" class="form-control"></select>
+        <p id="migrarCelulaVacio" class="form-text text-muted" hidden>No hay otras células en el mismo ministerio.</p>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCancelarMigrarCelula">Cancelar</button>
+            <button type="button" class="btn btn-primary btn-sm" id="btnGuardarMigrarCelula">Migrar</button>
+        </div>
+    </div>
+</div>
+
 <div id="modalNoDisponible" class="no-disponible-modal" aria-hidden="true">
     <div class="no-disponible-modal__overlay" data-close-no-disponible="1"></div>
     <div class="no-disponible-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="noDisponibleTitulo">
@@ -206,6 +221,37 @@ unset($_SESSION['asistencia_flash_error']);
     padding: 16px;
     box-shadow: 0 24px 54px rgba(15, 23, 42, 0.28);
 }
+
+.asist-acciones {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.asist-acc-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 8px;
+    border: 1px solid #d6e1f0;
+    background: #f8fafc;
+    color: #334155;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    line-height: 1;
+}
+.asist-acc-btn i { font-size: 15px; }
+.asist-acc-btn:hover { background: #eef4fb; }
+.asist-acc-btn:disabled { opacity: .45; cursor: not-allowed; }
+.asist-acc-btn--del { border-color: #fecaca; color: #b91c1c; background: #fff1f2; }
+.asist-acc-btn--del:hover { background: #fee2e2; color: #991b1b; }
+.asist-acc-btn--nd { border-color: #fde68a; color: #b45309; background: #fffbeb; }
+.asist-acc-btn--nd:hover { background: #fef3c7; color: #92400e; }
+.asist-acc-btn--mig { border-color: #99f6e4; color: #0f766e; background: #ecfdf5; }
+.asist-acc-btn--mig:hover { background: #ccfbf1; color: #115e59; }
 </style>
 
 <script>
@@ -231,13 +277,104 @@ const motivoNoRealizoWrap = document.getElementById('motivo_no_realizo_wrap');
 const motivoNoRealizoRadios = Array.from(document.querySelectorAll('input[name="motivo_no_realizo"]'));
 const motivoNoRealizoOtro = document.getElementById('motivo_no_realizo_otro');
 const urlMarcarNoDisponible = '<?= PUBLIC_URL ?>?url=asistencias/marcarNoDisponible';
+const urlQuitarDeCelula = '<?= PUBLIC_URL ?>?url=asistencias/quitarDeCelula';
+const urlMigrarCelula = '<?= PUBLIC_URL ?>?url=asistencias/migrarCelula';
 const modalNoDisponible = document.getElementById('modalNoDisponible');
 const modalNoDisponiblePersona = document.getElementById('noDisponiblePersona');
 const modalNoDisponibleObservacion = document.getElementById('noDisponibleObservacion');
 const btnGuardarNoDisponible = document.getElementById('btnGuardarNoDisponible');
 const btnCancelarNoDisponible = document.getElementById('btnCancelarNoDisponible');
+const modalMigrarCelula = document.getElementById('modalMigrarCelula');
+const modalMigrarCelulaPersona = document.getElementById('migrarCelulaPersona');
+const migrarCelulaSelect = document.getElementById('migrarCelulaSelect');
+const migrarCelulaVacio = document.getElementById('migrarCelulaVacio');
+const btnGuardarMigrarCelula = document.getElementById('btnGuardarMigrarCelula');
+const btnCancelarMigrarCelula = document.getElementById('btnCancelarMigrarCelula');
 let currentFocus = -1;
 let noDisponiblePendiente = null;
+let migrarPendiente = null;
+
+function idCelulaActual() {
+    return parseInt(celulaHidden && celulaHidden.value ? celulaHidden.value : '0', 10) || 0;
+}
+
+function celulasMismoMinisterio(idCelulaActualNum) {
+    const actual = celulasDisponibles.find(function (c) {
+        return parseInt(c.Id_Celula, 10) === idCelulaActualNum;
+    });
+    const minActual = actual ? parseInt(actual.Id_Ministerio_Lider, 10) || 0 : 0;
+    if (minActual <= 0) {
+        return [];
+    }
+    return celulasDisponibles.filter(function (c) {
+        const id = parseInt(c.Id_Celula, 10) || 0;
+        const min = parseInt(c.Id_Ministerio_Lider, 10) || 0;
+        return id > 0 && id !== idCelulaActualNum && min === minActual;
+    });
+}
+
+function quitarFilaPersona(boton) {
+    const fila = boton ? boton.closest('tr') : null;
+    if (!fila) {
+        return;
+    }
+    fila.style.opacity = '0.55';
+    setTimeout(function () {
+        fila.remove();
+    }, 180);
+}
+
+function postAccionPersona(url, body) {
+    return fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: body.toString()
+    }).then(function (resp) {
+        return resp.json().then(function (data) {
+            return { resp: resp, data: data };
+        });
+    });
+}
+
+function abrirModalMigrarCelula(persona, boton) {
+    const actuales = celulasMismoMinisterio(idCelulaActual());
+    migrarPendiente = { persona: persona, boton: boton };
+    if (modalMigrarCelulaPersona) {
+        modalMigrarCelulaPersona.textContent = 'Persona: ' + persona.nombre;
+    }
+    if (migrarCelulaSelect) {
+        migrarCelulaSelect.innerHTML = '<option value="">Selecciona una célula…</option>';
+        actuales.forEach(function (c) {
+            const opt = document.createElement('option');
+            opt.value = String(c.Id_Celula);
+            opt.textContent = String(c.Nombre_Celula || 'Célula');
+            migrarCelulaSelect.appendChild(opt);
+        });
+        migrarCelulaSelect.disabled = actuales.length === 0;
+    }
+    if (migrarCelulaVacio) {
+        migrarCelulaVacio.hidden = actuales.length > 0;
+    }
+    if (btnGuardarMigrarCelula) {
+        btnGuardarMigrarCelula.disabled = actuales.length === 0;
+    }
+    if (modalMigrarCelula) {
+        modalMigrarCelula.classList.add('is-open');
+        modalMigrarCelula.setAttribute('aria-hidden', 'false');
+    }
+}
+
+function cerrarModalMigrarCelula() {
+    if (modalMigrarCelula) {
+        modalMigrarCelula.classList.remove('is-open');
+        modalMigrarCelula.setAttribute('aria-hidden', 'true');
+    }
+    migrarPendiente = null;
+}
 
 function abrirModalNoDisponible(persona, boton) {
     noDisponiblePendiente = { persona, boton };
@@ -496,8 +633,15 @@ async function cargarMiembrosCelula(celulaId) {
             bloque += '<input type="hidden" name="asistencias[' + miembro.Id_Persona + ']" value="0">';
             bloque += '<input type="checkbox" name="asistencias[' + miembro.Id_Persona + ']" value="1" style="width: 20px; height: 20px; cursor: pointer;">';
             bloque += '</td>';
-            bloque += '<td style="text-align: center; padding: 8px;">';
-            bloque += '<button type="button" class="btn btn-sm btn-danger js-no-disponible" data-id-persona="' + miembro.Id_Persona + '" data-nombre="' + escapeHtml(nombreCompleto.trim()) + '">No se dispuso</button>';
+            bloque += '<td style="text-align:center;padding:8px;">';
+            bloque += '<div class="asist-acciones">';
+            bloque += '<button type="button" class="asist-acc-btn asist-acc-btn--del js-quitar-celula" data-id-persona="' + miembro.Id_Persona + '" data-nombre="' + escapeHtml(nombreCompleto.trim()) + '" title="Eliminar de esta célula" aria-label="Eliminar de esta célula">';
+            bloque += '<i class="bi bi-trash" aria-hidden="true"></i></button>';
+            bloque += '<button type="button" class="asist-acc-btn asist-acc-btn--nd js-no-disponible" data-id-persona="' + miembro.Id_Persona + '" data-nombre="' + escapeHtml(nombreCompleto.trim()) + '" title="No se dispuso" aria-label="No se dispuso">';
+            bloque += '<i class="bi bi-person-x" aria-hidden="true"></i></button>';
+            bloque += '<button type="button" class="asist-acc-btn asist-acc-btn--mig js-migrar-celula" data-id-persona="' + miembro.Id_Persona + '" data-nombre="' + escapeHtml(nombreCompleto.trim()) + '" title="Migrar a otra célula del mismo ministerio" aria-label="Migrar a otra célula">';
+            bloque += '<i class="bi bi-arrow-left-right" aria-hidden="true"></i></button>';
+            bloque += '</div>';
             bloque += '</td>';
             bloque += '</tr>';
         });
@@ -532,26 +676,98 @@ async function cargarMiembrosCelula(celulaId) {
 }
 
 document.addEventListener('click', async function(e) {
-    const btn = e.target.closest('.js-no-disponible');
-    if (!btn) {
-        const closeTrigger = e.target.closest('[data-close-no-disponible="1"]');
-        if (closeTrigger) {
-            cerrarModalNoDisponible();
-        }
+    if (e.target.closest('[data-close-no-disponible="1"]')) {
+        cerrarModalNoDisponible();
+        return;
+    }
+    if (e.target.closest('[data-close-migrar-celula="1"]')) {
+        cerrarModalMigrarCelula();
         return;
     }
 
+    const btnNoDisp = e.target.closest('.js-no-disponible');
+    const btnQuitar = e.target.closest('.js-quitar-celula');
+    const btnMigrar = e.target.closest('.js-migrar-celula');
+    if (!btnNoDisp && !btnQuitar && !btnMigrar) {
+        return;
+    }
+
+    const btn = btnNoDisp || btnQuitar || btnMigrar;
     const idPersona = parseInt(btn.getAttribute('data-id-persona') || '0', 10);
     const nombre = String(btn.getAttribute('data-nombre') || '');
     if (!idPersona) {
         return;
     }
 
-    abrirModalNoDisponible({ idPersona, nombre }, btn);
+    if (btnNoDisp) {
+        abrirModalNoDisponible({ idPersona: idPersona, nombre: nombre }, btnNoDisp);
+        return;
+    }
+
+    if (btnMigrar) {
+        abrirModalMigrarCelula({ idPersona: idPersona, nombre: nombre }, btnMigrar);
+        return;
+    }
+
+    if (!window.confirm('¿Eliminar a ' + nombre + ' de esta célula?')) {
+        return;
+    }
+
+    btnQuitar.disabled = true;
+    try {
+        const body = new URLSearchParams();
+        body.append('id_persona', String(idPersona));
+        body.append('id_celula', String(idCelulaActual()));
+        const resultado = await postAccionPersona(urlQuitarDeCelula, body);
+        if (!resultado.resp.ok || !resultado.data || !resultado.data.success) {
+            throw new Error((resultado.data && resultado.data.message) ? resultado.data.message : 'No se pudo eliminar de la célula.');
+        }
+        quitarFilaPersona(btnQuitar);
+    } catch (err) {
+        btnQuitar.disabled = false;
+        window.alert(err.message || 'Error al eliminar de la célula.');
+    }
 });
 
 if (btnCancelarNoDisponible) {
     btnCancelarNoDisponible.addEventListener('click', cerrarModalNoDisponible);
+}
+
+if (btnCancelarMigrarCelula) {
+    btnCancelarMigrarCelula.addEventListener('click', cerrarModalMigrarCelula);
+}
+
+if (btnGuardarMigrarCelula) {
+    btnGuardarMigrarCelula.addEventListener('click', async function () {
+        if (!migrarPendiente) {
+            return;
+        }
+        const destino = migrarCelulaSelect ? parseInt(migrarCelulaSelect.value || '0', 10) : 0;
+        if (!destino) {
+            window.alert('Selecciona la célula de destino.');
+            return;
+        }
+        const { persona, boton } = migrarPendiente;
+        boton.disabled = true;
+        btnGuardarMigrarCelula.disabled = true;
+        try {
+            const body = new URLSearchParams();
+            body.append('id_persona', String(persona.idPersona));
+            body.append('id_celula', String(idCelulaActual()));
+            body.append('id_celula_destino', String(destino));
+            const resultado = await postAccionPersona(urlMigrarCelula, body);
+            if (!resultado.resp.ok || !resultado.data || !resultado.data.success) {
+                throw new Error((resultado.data && resultado.data.message) ? resultado.data.message : 'No se pudo migrar.');
+            }
+            quitarFilaPersona(boton);
+            cerrarModalMigrarCelula();
+        } catch (err) {
+            boton.disabled = false;
+            window.alert(err.message || 'Error al migrar a otra célula.');
+        } finally {
+            btnGuardarMigrarCelula.disabled = false;
+        }
+    });
 }
 
 if (btnGuardarNoDisponible) {
@@ -572,8 +788,6 @@ if (btnGuardarNoDisponible) {
         }
 
         boton.disabled = true;
-        const textoOriginal = boton.textContent;
-        boton.textContent = 'Guardando...';
         btnGuardarNoDisponible.disabled = true;
 
         try {
@@ -581,36 +795,15 @@ if (btnGuardarNoDisponible) {
             body.append('id_persona', String(persona.idPersona));
             body.append('observacion', observacionLimpia);
 
-            const resp = await fetch(urlMarcarNoDisponible, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
-                },
-                body: body.toString()
-            });
-
-            const data = await resp.json();
-            if (!resp.ok || !data || !data.success) {
-                throw new Error((data && data.message) ? data.message : 'No fue posible marcar No se dispuso.');
+            const resultado = await postAccionPersona(urlMarcarNoDisponible, body);
+            if (!resultado.resp.ok || !resultado.data || !resultado.data.success) {
+                throw new Error((resultado.data && resultado.data.message) ? resultado.data.message : 'No fue posible marcar No se dispuso.');
             }
 
-            const fila = boton.closest('tr');
-            if (fila) {
-                fila.style.opacity = '0.55';
-                fila.style.backgroundColor = '#fff1f2';
-                setTimeout(() => {
-                    fila.remove();
-                }, 180);
-            }
-
-            boton.textContent = 'Marcado';
-            boton.classList.remove('btn-danger');
-            boton.classList.add('btn-secondary');
+            quitarFilaPersona(boton);
             cerrarModalNoDisponible();
-            window.alert('Persona marcada en No se dispone.');
         } catch (err) {
             boton.disabled = false;
-            boton.textContent = textoOriginal;
             if (!navigator.onLine || /failed to fetch|networkerror|load failed/i.test(String(err.message || ''))) {
                 window.alert('No tienes conexión a internet. Sal del sistema e ingresa nuevamente.');
             } else {
@@ -623,8 +816,14 @@ if (btnGuardarNoDisponible) {
 }
 
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && modalNoDisponible && modalNoDisponible.classList.contains('is-open')) {
+    if (e.key !== 'Escape') {
+        return;
+    }
+    if (modalNoDisponible && modalNoDisponible.classList.contains('is-open')) {
         cerrarModalNoDisponible();
+    }
+    if (modalMigrarCelula && modalMigrarCelula.classList.contains('is-open')) {
+        cerrarModalMigrarCelula();
     }
 });
 

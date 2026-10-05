@@ -92,6 +92,7 @@ $tablaSeguimientoLideresCelula = $tabla_seguimiento_lideres_celula ?? [];
 $tablaEstadoSemanalCelulas = $tabla_estado_semanal_celulas ?? [];
 $tablaLideresPorRedTipo = $tabla_lideres_por_red_tipo ?? [];
 $tablaResumenLideresPorRed = $tabla_resumen_lideres_por_red ?? [];
+$resumenSemanasMinisterioRed = $resumen_semanas_ministerio_red ?? [];
 
 $normalizarNombreRed = static function($valor) {
     $texto = trim((string)$valor);
@@ -241,6 +242,19 @@ if (!in_array($tipoReporte, ['personas', 'celulas', 'escuelas'], true)) {
 }
 $ministeriosDisponibles = (array)($ministerios_disponibles ?? []);
 $filtroMinisterioSeleccionado = (string)($filtro_ministerio ?? '');
+$nombreMinisterioFiltroCelulas = '';
+if ($filtroMinisterioSeleccionado !== '') {
+    foreach ($ministeriosDisponibles as $ministerioOptNombre) {
+        if ((string)($ministerioOptNombre['Id_Ministerio'] ?? '') === $filtroMinisterioSeleccionado) {
+            $nombreMinisterioFiltroCelulas = trim((string)($ministerioOptNombre['Nombre_Ministerio'] ?? ''));
+            break;
+        }
+    }
+}
+$optionMinisterioTablaSelected = static function ($nombreOpcion) use ($nombreMinisterioFiltroCelulas) {
+    return $nombreMinisterioFiltroCelulas !== ''
+        && strcasecmp(trim((string)$nombreOpcion), $nombreMinisterioFiltroCelulas) === 0;
+};
 $esReportePersonas = $tipoReporte === 'personas';
 $esReporteCelulas = $tipoReporte === 'celulas';
 $esReporteEscuelas = $tipoReporte === 'escuelas';
@@ -527,7 +541,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
             <small style="color:#637087;">
                 Rango aplicado: <?= date('d/m/Y', strtotime($fecha_inicio)) ?> – <?= date('d/m/Y', strtotime($fecha_fin)) ?> (lun. a dom. según el día elegido).
                 <?php if ($esReporteCelulas && !empty($semanaVencidaPorDefecto)): ?>
-                    Por defecto se consulta la <strong>semana vencida</strong> (la anterior), no la semana en curso.
+                    Por defecto se consulta la <strong>semana vencida</strong> (lunes a domingo anterior), no la semana en curso.
                 <?php endif; ?>
             </small>
         </div>
@@ -535,7 +549,7 @@ $renderTablaMinisterial = static function(string $tablaKey, array $tabla, array 
         <?php if ($esReporteCelulas): ?>
         <div class="form-group" style="margin: 0; min-width: 220px;">
             <label for="filtro_ministerio_celulas">Ministerio</label>
-            <select id="filtro_ministerio_celulas" name="ministerio" class="form-control">
+            <select id="filtro_ministerio_celulas" name="ministerio" class="form-control" onchange="this.form.submit()">
                 <option value="">Todos</option>
                 <?php foreach ($ministeriosDisponibles as $ministerioOpt): ?>
                     <?php
@@ -603,7 +617,7 @@ include VIEWS . '/reportes/partials/tabla_operativa_celulas.php';
             <small style="color:#60708a;">Mes a mes con acumulados por semestre y total anual</small>
         </div>
         <?php if (!empty($tablaAperturasCelulas['rows'])): ?>
-            <button type="button" class="btn btn-secondary btn-sm js-export-tabla-celulas-imagen" data-tabla-id="tablaCelulasAbiertasMinisterio">Descargar tabla como imagen</button>
+            <button type="button" class="btn btn-secondary btn-sm js-export-tabla-celulas-imagen" data-tabla-id="tablaCelulasAbiertasMinisterio" data-export-title="Células abiertas por ministerio">Descargar tabla como imagen</button>
         <?php endif; ?>
     </div>
 
@@ -628,7 +642,7 @@ include VIEWS . '/reportes/partials/tabla_operativa_celulas.php';
                 <tbody>
                     <?php $nroCel = 1; ?>
                     <?php foreach (($tablaAperturasCelulas['rows'] ?? []) as $row): ?>
-                        <tr>
+                        <tr data-row-type="dato" data-ministerio="<?= htmlspecialchars((string)($row['ministerio'] ?? 'Sin ministerio'), ENT_QUOTES, 'UTF-8') ?>">
                             <td><?= $nroCel++ ?></td>
                             <td>
                                 <button type="button" class="report-link-button js-ministerio-celula" data-ministerio="<?= htmlspecialchars((string)($row['ministerio'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
@@ -1053,6 +1067,102 @@ include VIEWS . '/reportes/partials/tabla_operativa_celulas.php';
     </button>
 </div>
 
+<div class="card report-card report-chart-context" style="margin-bottom: 22px; padding: 16px;">
+    <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
+        <div>
+            <h3 style="margin:0 0 4px;">Semanas sin reportar</h3>
+            <small style="color:#64748b;">Solo células con 2 o más semanas sin reportar, cuando ya corresponde hacer seguimiento.</small>
+        </div>
+        <div class="report-table-filters">
+            <label for="reporteCelulasFiltroMinisterioSemanasRed">Ministerio</label>
+            <select id="reporteCelulasFiltroMinisterioSemanasRed" class="report-select-ministerio">
+                <option value="">Todos</option>
+                <?php foreach ($resumenSemanasMinisterioRed as $bloqueMinFiltro): ?>
+                    <?php $nombreMinFiltroSem = (string)($bloqueMinFiltro['ministerio'] ?? 'Sin ministerio'); ?>
+                    <option value="<?= htmlspecialchars($nombreMinFiltroSem, ENT_QUOTES, 'UTF-8') ?>"<?= $optionMinisterioTablaSelected($nombreMinFiltroSem) ? ' selected' : '' ?>>
+                        <?= htmlspecialchars($nombreMinFiltroSem) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <?php if (!empty($resumenSemanasMinisterioRed)): ?>
+                <button type="button" class="btn btn-secondary btn-sm js-export-semanas-sin-reportar" style="margin-top:18px;">Descargar tabla como imagen</button>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php if (!empty($resumenSemanasMinisterioRed)): ?>
+    <div class="sem-min-accordion" id="tablaResumenSemanasMinRedBody">
+        <?php foreach ($resumenSemanasMinisterioRed as $idxMinSem => $bloqueMin):
+            $nombreMinTabla = (string)($bloqueMin['ministerio'] ?? 'Sin ministerio');
+            $semaforoMin = (string)($bloqueMin['semaforo'] ?? 'verde');
+            $semanasMin = (int)($bloqueMin['semanas_max'] ?? 0);
+            $atrasadasMin = (int)($bloqueMin['atrasadas'] ?? 0);
+            $celulasAtrasadas = is_array($bloqueMin['celulas_atrasadas'] ?? null) ? $bloqueMin['celulas_atrasadas'] : [];
+        ?>
+        <div class="sem-min-item" data-row-type="ministerio" data-ministerio="<?= htmlspecialchars($nombreMinTabla, ENT_QUOTES, 'UTF-8') ?>">
+            <button type="button" class="sem-min-toggle" data-sem-min-toggle="1" aria-expanded="false">
+                <span>
+                    <span class="sem-min-chevron">▸</span>
+                    <strong><?= htmlspecialchars($nombreMinTabla) ?></strong>
+                    <span class="sem-min-meta"><?= $atrasadasMin ?> sin reportar</span>
+                </span>
+                <span class="seg-cel-badge seg-cel-<?= htmlspecialchars($semaforoMin, ENT_QUOTES, 'UTF-8') ?>"><?= $semanasMin ?> sem.</span>
+            </button>
+            <div class="sem-min-body">
+                <?php if ($celulasAtrasadas === []): ?>
+                    <p style="margin:0; padding:10px 12px; color:#64748b;">No hay células sin reportar.</p>
+                <?php else: ?>
+                <table class="data-table data-table--compacta-celula table-no-card sem-min-subtabla">
+                    <thead>
+                        <tr>
+                            <th>Célula</th>
+                            <th>Red</th>
+                            <th>Sem. sin reportar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($celulasAtrasadas as $filaCelAtr): ?>
+                        <tr>
+                            <td><?= htmlspecialchars((string)($filaCelAtr['celula'] ?? 'Sin nombre')) ?></td>
+                            <td><?= htmlspecialchars($normalizarNombreRed($filaCelAtr['red'] ?? 'Sin red')) ?></td>
+                            <td><span class="seg-cel-badge seg-cel-<?= htmlspecialchars((string)($filaCelAtr['semaforo'] ?? 'verde'), ENT_QUOTES, 'UTF-8') ?>"><?= (int)($filaCelAtr['semanas'] ?? 0) ?> sem.</span></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endforeach; ?>
+        <p data-row-type="empty-filtro" class="is-report-row-hidden" hidden style="display:none; margin:8px 0 0; color:#64748b;">No hay filas para el ministerio seleccionado.</p>
+    </div>
+    <script>
+    (function () {
+        var list = document.getElementById('tablaResumenSemanasMinRedBody');
+        if (!list) return;
+        list.addEventListener('click', function (ev) {
+            var btn = ev.target.closest('[data-sem-min-toggle="1"]');
+            if (!btn || !list.contains(btn)) return;
+            ev.preventDefault();
+            var item = btn.closest('.sem-min-item');
+            if (!item) return;
+            var abrir = !item.classList.contains('is-open');
+            list.querySelectorAll('.sem-min-item').forEach(function (el) {
+                el.classList.remove('is-open');
+                var t = el.querySelector('[data-sem-min-toggle="1"]');
+                if (t) t.setAttribute('aria-expanded', 'false');
+            });
+            if (abrir) {
+                item.classList.add('is-open');
+                btn.setAttribute('aria-expanded', 'true');
+            }
+        });
+    })();
+    </script>
+    <?php else: ?>
+        <p style="margin:0; color:#64748b;">No hay células sin reportar con los filtros actuales.</p>
+    <?php endif; ?>
+</div>
+
 <div class="card report-card report-chart-only" style="margin-bottom: 22px;">
     <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px;">
         <h3 style="margin:0;">Indicadores de células</h3>
@@ -1119,7 +1229,7 @@ include VIEWS . '/reportes/partials/tabla_operativa_celulas.php';
             <select id="reporteCelulasFiltroMinisterioSeguimiento" class="report-select-ministerio">
                 <option value="">Todos</option>
                 <?php foreach ($ministeriosTablasCelulas as $ministerioFiltro): ?>
-                    <option value="<?= htmlspecialchars((string)$ministerioFiltro, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$ministerioFiltro) ?></option>
+                    <option value="<?= htmlspecialchars((string)$ministerioFiltro, ENT_QUOTES, 'UTF-8') ?>"<?= $optionMinisterioTablaSelected($ministerioFiltro) ? ' selected' : '' ?>><?= htmlspecialchars((string)$ministerioFiltro) ?></option>
                 <?php endforeach; ?>
             </select>
             <label for="reporteCelulasFiltroRedSeguimiento">Red</label>
@@ -1134,7 +1244,7 @@ include VIEWS . '/reportes/partials/tabla_operativa_celulas.php';
 
     <div class="table-container" style="margin-top:0;">
         <div class="report-table-export-bar">
-            <button type="button" class="btn btn-secondary btn-sm js-export-tabla-celulas-imagen" data-tabla-id="tablaSeguimientoCelulas">Descargar tabla como imagen</button>
+            <button type="button" class="btn btn-secondary btn-sm js-export-tabla-celulas-imagen" data-tabla-id="tablaSeguimientoCelulas" data-export-title="Seguimiento de líderes por ministerio">Descargar tabla como imagen</button>
         </div>
         <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas table-no-card" id="tablaSeguimientoCelulas">
             <thead>
@@ -1192,7 +1302,7 @@ include VIEWS . '/reportes/partials/tabla_operativa_celulas.php';
                 <select id="reporteCelulasFiltroMinisterioResumenRed" class="report-select-ministerio">
                     <option value="">Todos</option>
                     <?php foreach ($ministeriosTablasCelulas as $ministerioFiltro): ?>
-                        <option value="<?= htmlspecialchars((string)$ministerioFiltro, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$ministerioFiltro) ?></option>
+                        <option value="<?= htmlspecialchars((string)$ministerioFiltro, ENT_QUOTES, 'UTF-8') ?>"<?= $optionMinisterioTablaSelected($ministerioFiltro) ? ' selected' : '' ?>><?= htmlspecialchars((string)$ministerioFiltro) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -1219,7 +1329,7 @@ include VIEWS . '/reportes/partials/tabla_operativa_celulas.php';
 
     <div class="table-container" style="margin-top:0;">
         <div class="report-table-export-bar">
-            <button type="button" class="btn btn-secondary btn-sm js-export-tabla-celulas-imagen" data-tabla-id="tablaResumenLideresPorRed">Descargar tabla como imagen</button>
+            <button type="button" class="btn btn-secondary btn-sm js-export-tabla-celulas-imagen" data-tabla-id="tablaResumenLideresPorRed" data-export-title="Resumen de líderes por red">Descargar tabla como imagen</button>
         </div>
         <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas table-no-card" id="tablaResumenLideresPorRed">
             <thead>
@@ -1305,7 +1415,7 @@ include VIEWS . '/reportes/partials/tabla_operativa_celulas.php';
                 <select id="reporteCelulasFiltroMinisterioEstado" class="report-select-ministerio">
                     <option value="">Todos</option>
                     <?php foreach ($ministeriosTablasCelulas as $ministerioFiltro): ?>
-                        <option value="<?= htmlspecialchars((string)$ministerioFiltro, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$ministerioFiltro) ?></option>
+                        <option value="<?= htmlspecialchars((string)$ministerioFiltro, ENT_QUOTES, 'UTF-8') ?>"<?= $optionMinisterioTablaSelected($ministerioFiltro) ? ' selected' : '' ?>><?= htmlspecialchars((string)$ministerioFiltro) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -1345,7 +1455,7 @@ include VIEWS . '/reportes/partials/tabla_operativa_celulas.php';
 
     <div class="table-container" style="margin-top:0;">
         <div class="report-table-export-bar">
-            <button type="button" class="btn btn-secondary btn-sm js-export-tabla-celulas-imagen" data-tabla-id="tablaEstadoSemanalCelulas">Descargar tabla como imagen</button>
+            <button type="button" class="btn btn-secondary btn-sm js-export-tabla-celulas-imagen" data-tabla-id="tablaEstadoSemanalCelulas" data-export-title="Estado semanal de células">Descargar tabla como imagen</button>
         </div>
         <table class="data-table data-table--compacta-celula data-table--seguimiento-celulas table-no-card" id="tablaEstadoSemanalCelulas">
             <thead>
@@ -1465,8 +1575,13 @@ include VIEWS . '/reportes/partials/tabla_operativa_celulas.php';
     </div>
 </div>
 
+<?php
+$urlHtml2canvasReportes = function_exists('asset_url')
+    ? asset_url('js/vendor/html2canvas.min.js')
+    : (rtrim(ASSETS_URL, '/') . '/js/vendor/html2canvas.min.js?v=' . date('Ymd'));
+?>
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="<?= htmlspecialchars($urlHtml2canvasReportes, ENT_QUOTES, 'UTF-8') ?>"></script>
 <script>
 const procesoGanar = <?= json_encode($procesoGanar) ?>;
 const resumenOrigen = <?= json_encode($resumenOrigen ?? []) ?>;
@@ -1597,17 +1712,14 @@ const clonarTablaSoloFilasVisibles = (tabla) => {
         clon.appendChild(grupo.cloneNode(true));
     });
 
-    ['thead', 'tbody', 'tfoot'].forEach((tag) => {
-        const seccion = tabla.querySelector(':scope > ' + tag);
-        if (!seccion) {
-            return;
-        }
-
+    tabla.querySelectorAll(':scope > thead, :scope > tbody, :scope > tfoot').forEach((seccion) => {
+        const tag = String(seccion.tagName || '').toLowerCase();
         const seccionClon = document.createElement(tag);
         let filasCopiadas = 0;
+        const siempreIncluir = tag === 'thead' || tag === 'tfoot';
 
         seccion.querySelectorAll(':scope > tr').forEach((fila) => {
-            if (!filaTablaEsVisible(fila)) {
+            if (!siempreIncluir && !filaTablaEsVisible(fila)) {
                 return;
             }
             seccionClon.appendChild(fila.cloneNode(true));
@@ -1618,6 +1730,20 @@ const clonarTablaSoloFilasVisibles = (tabla) => {
             clon.appendChild(seccionClon);
         }
     });
+
+    if (!clon.querySelector('tr')) {
+        const tbody = document.createElement('tbody');
+        tabla.querySelectorAll('tr').forEach((fila) => {
+            const enCabeza = !!(fila.closest('thead'));
+            if (!enCabeza && !filaTablaEsVisible(fila)) {
+                return;
+            }
+            tbody.appendChild(fila.cloneNode(true));
+        });
+        if (tbody.querySelector('tr')) {
+            clon.appendChild(tbody);
+        }
+    }
 
     return clon;
 };
@@ -1674,12 +1800,259 @@ const obtenerFiltrosActivosExportacion = (contenedor) => {
     return partes;
 };
 
-const descargarTablaComoImagen = async ({ tabla, contenedor, baseNombre, boton, exigirVisible = true, mensajeNoVisible = '' }) => {
-    if (typeof html2canvas !== 'function') {
-        alert('No fue posible cargar la librería de descarga de imagen.');
+const construirEncabezadoExportacionTabla = (titulo, filtrosActivos) => {
+    const caja = document.createElement('div');
+    caja.className = 'report-table-export-header';
+
+    const kicker = document.createElement('div');
+    kicker.className = 'report-table-export-kicker';
+    kicker.textContent = 'MCI Madrid · Reporte de células';
+    caja.appendChild(kicker);
+
+    const tituloEl = document.createElement('div');
+    tituloEl.className = 'report-table-export-caption';
+    tituloEl.textContent = titulo !== '' ? titulo : 'Tabla de células';
+    caja.appendChild(tituloEl);
+
+    if (filtrosActivos.length > 0) {
+        const filtrosEl = document.createElement('div');
+        filtrosEl.className = 'report-table-export-filters';
+        filtrosEl.textContent = filtrosActivos.join(' · ');
+        caja.appendChild(filtrosEl);
+    }
+
+    const fecha = document.createElement('div');
+    fecha.className = 'report-table-export-generated';
+    fecha.textContent = 'Generado: ' + new Date().toLocaleString('es-CO');
+    caja.appendChild(fecha);
+
+    return caja;
+};
+
+const resolverTituloExportacionTabla = (contenedor, fallback = '') => {
+    if (contenedor) {
+        const cardPadre = contenedor.closest('.card, .celula-modal__dialog');
+        if (cardPadre) {
+            const tituloCard = cardPadre.querySelector('h3, h4, .celula-modal__title');
+            const texto = tituloCard ? String(tituloCard.textContent || '').replace(/\s+/g, ' ').trim() : '';
+            if (texto !== '') {
+                return texto;
+            }
+        }
+    }
+    return String(fallback || '').trim();
+};
+
+const cssColorARgba = (color) => {
+    const valor = String(color || '').trim();
+    if (!valor || valor === 'transparent' || valor === 'none') {
+        return valor;
+    }
+    if (!/oklch|oklab|lab\(|lch\(|color\(|color-mix/i.test(valor)) {
+        return valor;
+    }
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, 1, 1);
+        ctx.fillStyle = '#000000';
+        ctx.fillStyle = valor;
+        ctx.fillRect(0, 0, 1, 1);
+        const px = ctx.getImageData(0, 0, 1, 1).data;
+        return 'rgba(' + px[0] + ',' + px[1] + ',' + px[2] + ',' + (px[3] / 255) + ')';
+    } catch (e) {
+        return '#111111';
+    }
+};
+
+const sanitizarColoresModernos = (raiz) => {
+    if (!raiz || !raiz.querySelectorAll) {
+        return;
+    }
+    const props = ['color', 'backgroundColor', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'outlineColor', 'textDecorationColor'];
+    const vista = raiz.ownerDocument && raiz.ownerDocument.defaultView ? raiz.ownerDocument.defaultView : window;
+    [raiz].concat(Array.from(raiz.querySelectorAll('*'))).forEach((nodo) => {
+        if (!nodo || nodo.nodeType !== 1) {
+            return;
+        }
+        const estilo = vista.getComputedStyle(nodo);
+        props.forEach((prop) => {
+            const actual = estilo[prop];
+            if (actual && /oklch|oklab|lab\(|lch\(|color\(|color-mix/i.test(actual)) {
+                nodo.style[prop] = cssColorARgba(actual);
+            }
+        });
+    });
+};
+
+const calcularEscalaCanvas = (ancho, alto) => {
+    const maxLado = 8192;
+    const maxPixeles = 14000000;
+    let escala = 2;
+    escala = Math.min(escala, maxLado / Math.max(ancho, 1), maxLado / Math.max(alto, 1));
+    escala = Math.min(escala, Math.sqrt(maxPixeles / Math.max(ancho * alto, 1)));
+    return Math.max(0.65, Math.min(2, escala));
+};
+
+const descargarCanvasPng = (canvas, nombreArchivo) => new Promise((resolve, reject) => {
+    const terminarConUrl = (href) => {
+        const enlace = document.createElement('a');
+        enlace.href = href;
+        enlace.download = nombreArchivo.endsWith('.png') ? nombreArchivo : (nombreArchivo + '.png');
+        document.body.appendChild(enlace);
+        enlace.click();
+        enlace.remove();
+        resolve();
+    };
+
+    if (typeof canvas.toBlob === 'function') {
+        canvas.toBlob((blob) => {
+            if (!blob) {
+                try {
+                    terminarConUrl(canvas.toDataURL('image/png'));
+                } catch (e) {
+                    reject(e);
+                }
+                return;
+            }
+            const url = URL.createObjectURL(blob);
+            terminarConUrl(url);
+            setTimeout(() => URL.revokeObjectURL(url), 4000);
+        }, 'image/png');
         return;
     }
 
+    try {
+        terminarConUrl(canvas.toDataURL('image/png'));
+    } catch (e) {
+        reject(e);
+    }
+});
+
+const dibujarTablaEnCanvas = (tabla, encabezadoHtml) => {
+    const filas = Array.from(tabla.querySelectorAll('tr')).map((tr) => (
+        Array.from(tr.children).map((celda) => String(celda.textContent || '').replace(/\s+/g, ' ').trim())
+    )).filter((cols) => cols.some((c) => c !== ''));
+
+    const cols = filas.reduce((max, row) => Math.max(max, row.length), 1);
+    const padding = 24;
+    const rowH = 28;
+    const headerExtra = encabezadoHtml ? 86 : 12;
+    const canvasW = Math.min(2200, Math.max(720, cols * 160));
+    const canvasH = padding * 2 + headerExtra + (filas.length * rowH) + 8;
+    const canvas = document.createElement('canvas');
+    const scale = calcularEscalaCanvas(canvasW, canvasH);
+    canvas.width = Math.ceil(canvasW * scale);
+    canvas.height = Math.ceil(canvasH * scale);
+    const ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    let y = padding;
+    ctx.fillStyle = '#1e3a5f';
+    ctx.font = 'bold 16px Arial, sans-serif';
+    if (encabezadoHtml) {
+        const kicker = encabezadoHtml.querySelector('.report-table-export-kicker');
+        const caption = encabezadoHtml.querySelector('.report-table-export-caption');
+        const filtros = encabezadoHtml.querySelector('.report-table-export-filters');
+        const generado = encabezadoHtml.querySelector('.report-table-export-generated');
+        ctx.fillStyle = '#3b6ea8';
+        ctx.font = 'bold 11px Arial, sans-serif';
+        ctx.fillText(String(kicker ? kicker.textContent : 'MCI Madrid · Reporte de células'), padding, y);
+        y += 18;
+        ctx.fillStyle = '#1e3a5f';
+        ctx.font = 'bold 18px Arial, sans-serif';
+        ctx.fillText(String(caption ? caption.textContent : 'Tabla'), padding, y);
+        y += 22;
+        ctx.fillStyle = '#475569';
+        ctx.font = '12px Arial, sans-serif';
+        if (filtros && filtros.textContent) {
+            ctx.fillText(String(filtros.textContent).slice(0, 140), padding, y);
+            y += 16;
+        }
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '11px Arial, sans-serif';
+        ctx.fillText(String(generado ? generado.textContent : ''), padding, y);
+        y += 18;
+    }
+
+    const colW = (canvasW - padding * 2) / cols;
+    filas.forEach((colsFila, idx) => {
+        ctx.fillStyle = idx === 0 ? '#f8f9fa' : '#ffffff';
+        ctx.fillRect(padding, y - 16, canvasW - padding * 2, rowH);
+        ctx.strokeStyle = '#dee2e6';
+        ctx.strokeRect(padding, y - 16, canvasW - padding * 2, rowH);
+        ctx.fillStyle = '#1e293b';
+        ctx.font = (idx === 0 ? 'bold ' : '') + '12px Arial, sans-serif';
+        colsFila.forEach((texto, c) => {
+            const recorte = texto.length > 42 ? (texto.slice(0, 40) + '…') : texto;
+            ctx.fillText(recorte, padding + 6 + (c * colW), y);
+        });
+        y += rowH;
+    });
+
+    return canvas;
+};
+
+const capturarNodoConHtml2canvas = async (nodo) => {
+    const ancho = Math.max(320, Math.ceil(nodo.scrollWidth || nodo.offsetWidth || 900));
+    const alto = Math.max(120, Math.ceil(nodo.scrollHeight || nodo.offsetHeight || 200));
+    const escala = calcularEscalaCanvas(ancho, alto);
+    sanitizarColoresModernos(nodo);
+    return html2canvas(nodo, {
+        backgroundColor: '#ffffff',
+        scale: escala,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        imageTimeout: 4000,
+        width: ancho,
+        height: alto,
+        windowWidth: ancho,
+        windowHeight: alto,
+        scrollX: 0,
+        scrollY: 0,
+        onclone: (docClon) => {
+            const clon = docClon.body ? docClon.body.firstElementChild : null;
+            if (clon) {
+                sanitizarColoresModernos(clon);
+            }
+            sanitizarColoresModernos(docClon.body);
+        }
+    });
+};
+
+const capturarEnIframeAislado = async (wrapOrigen) => {
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.cssText = 'position:fixed;left:-14000px;top:0;width:1400px;height:900px;border:0;opacity:1;background:#ffffff;pointer-events:none;';
+    document.body.appendChild(iframe);
+
+    try {
+        const idoc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+        if (!idoc) {
+            throw new Error('No se pudo crear el visor de exportación.');
+        }
+        idoc.open();
+        idoc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#fff;color:#1e293b;font-family:Arial,Helvetica,sans-serif;}*{box-shadow:none !important;text-shadow:none !important;}</style></head><body></body></html>');
+        idoc.close();
+        const importado = idoc.importNode(wrapOrigen, true);
+        idoc.body.appendChild(importado);
+        iframe.style.width = Math.max(900, importado.scrollWidth + 40) + 'px';
+        iframe.style.height = Math.max(200, importado.scrollHeight + 40) + 'px';
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        return await capturarNodoConHtml2canvas(importado);
+    } finally {
+        if (iframe.parentNode) {
+            iframe.parentNode.removeChild(iframe);
+        }
+    }
+};
+
+const descargarTablaComoImagen = async ({ tabla, contenedor, baseNombre, boton, titulo = '', exigirVisible = true, mensajeNoVisible = '' }) => {
     if (!tabla || !contenedor) {
         alert('No se encontró la tabla para exportar.');
         return;
@@ -1710,12 +2083,11 @@ const descargarTablaComoImagen = async ({ tabla, contenedor, baseNombre, boton, 
         const host = document.createElement('div');
         exportHost = host;
         host.style.position = 'fixed';
-        host.style.left = '-99999px';
+        host.style.left = '0';
         host.style.top = '0';
         host.style.width = (anchoRealTabla + 40) + 'px';
-        host.style.opacity = '0';
-        host.style.pointerEvents = 'none';
         host.style.zIndex = '-1';
+        host.style.pointerEvents = 'none';
 
         const wrap = document.createElement('div');
         wrap.className = 'report-table-export-wrap';
@@ -1752,43 +2124,46 @@ const descargarTablaComoImagen = async ({ tabla, contenedor, baseNombre, boton, 
             }
             .report-table-export-wrap td::before,
             .report-table-export-wrap td::after { content: none !important; display: none !important; }
-            .report-table-export-caption {
+            .report-table-export-header {
                 font-family: Arial, sans-serif;
-                font-size: 14px;
+                margin: 0 0 14px 0;
+                padding: 12px 14px 14px;
+                border: 1px solid #dbe4f0;
+                border-radius: 10px;
+                background: linear-gradient(180deg, #f4f8ff 0%, #ffffff 100%);
+            }
+            .report-table-export-kicker {
+                font-size: 11px;
                 font-weight: 700;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                color: #3b6ea8;
+                margin-bottom: 4px;
+            }
+            .report-table-export-caption {
+                font-size: 18px;
+                font-weight: 800;
                 color: #1e3a5f;
-                margin-bottom: 8px;
+                margin: 0 0 6px;
+                line-height: 1.25;
             }
             .report-table-export-filters {
-                font-family: Arial, sans-serif;
                 font-size: 12px;
                 color: #475569;
-                margin-bottom: 12px;
-                padding: 8px 10px;
-                background: #f8fafc;
-                border: 1px solid #e2e8f0;
-                border-radius: 8px;
+                line-height: 1.45;
+                margin: 0 0 6px;
+            }
+            .report-table-export-generated {
+                font-size: 11px;
+                color: #94a3b8;
             }
         `;
 
-        const cardPadre = contenedor.closest('.card');
-        const tituloCard = cardPadre ? cardPadre.querySelector('h3, h4') : null;
-        const tituloExport = tituloCard ? String(tituloCard.textContent || '').trim() : '';
+        const cardPadre = contenedor ? contenedor.closest('.card, .celula-modal__dialog') : null;
+        const tituloExport = String(titulo || '').trim() || resolverTituloExportacionTabla(contenedor, baseNombre);
         const filtrosActivos = obtenerFiltrosActivosExportacion(contenedor);
 
-        if (tituloExport !== '') {
-            const tituloEl = document.createElement('div');
-            tituloEl.className = 'report-table-export-caption';
-            tituloEl.textContent = tituloExport;
-            wrap.appendChild(tituloEl);
-        }
-
-        if (filtrosActivos.length > 0) {
-            const filtrosEl = document.createElement('div');
-            filtrosEl.className = 'report-table-export-filters';
-            filtrosEl.textContent = 'Filtros aplicados: ' + filtrosActivos.join(' · ');
-            wrap.appendChild(filtrosEl);
-        }
+        wrap.appendChild(construirEncabezadoExportacionTabla(tituloExport, filtrosActivos));
 
         const tablaClon = clonarTablaSoloFilasVisibles(tabla);
         if (!tablaClon.querySelector('tr')) {
@@ -1809,35 +2184,33 @@ const descargarTablaComoImagen = async ({ tabla, contenedor, baseNombre, boton, 
 
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-        const exportWidth = Math.ceil(host.offsetWidth);
-        const exportHeight = Math.ceil(wrap.scrollHeight);
+        let canvas = null;
+        if (typeof html2canvas === 'function') {
+            try {
+                canvas = await capturarEnIframeAislado(wrap);
+            } catch (errorHtml) {
+                console.warn('html2canvas (iframe) falló, intentando captura directa:', errorHtml);
+                try {
+                    canvas = await capturarNodoConHtml2canvas(wrap);
+                } catch (errorDirecto) {
+                    console.warn('html2canvas directo falló, usando dibujo de tabla:', errorDirecto);
+                }
+            }
+        }
 
-        const canvas = await html2canvas(wrap, {
-            backgroundColor: '#ffffff',
-            scale: 2,
-            useCORS: true,
-            logging: false,
-            width: exportWidth,
-            height: exportHeight,
-            windowWidth: exportWidth,
-            windowHeight: exportHeight,
-            scrollX: 0,
-            scrollY: 0
-        });
+        if (!canvas) {
+            canvas = dibujarTablaEnCanvas(tablaClon, wrap.querySelector('.report-table-export-header'));
+        }
 
         if (host.parentNode) {
             host.parentNode.removeChild(host);
         }
         exportHost = null;
 
-        const enlace = document.createElement('a');
-        enlace.href = canvas.toDataURL('image/png');
-        enlace.download = `${baseNombre}.png`;
-        document.body.appendChild(enlace);
-        enlace.click();
-        enlace.remove();
+        await descargarCanvasPng(canvas, `${baseNombre}.png`);
     } catch (error) {
-        alert('No se pudo generar la imagen de la tabla.');
+        console.error(error);
+        alert('No se pudo generar la imagen de la tabla. Prueba filtrar para que tenga menos filas e inténtalo de nuevo.');
     } finally {
         if (exportHost && exportHost.parentNode) {
             exportHost.parentNode.removeChild(exportHost);
@@ -1874,15 +2247,15 @@ const instalarBotonesDescargaTablas = () => {
         boton.textContent = 'Descargar tabla como imagen';
 
         boton.addEventListener('click', async () => {
-            const cardPadre = contenedor.closest('.card');
-            const titulo = cardPadre ? cardPadre.querySelector('h3, h4') : null;
-            const baseNombre = slugTexto(titulo ? titulo.textContent : '') || `tabla_${indice}`;
+            const titulo = resolverTituloExportacionTabla(contenedor, 'Tabla de células');
+            const baseNombre = slugTexto(titulo) || `tabla_${indice}`;
             await descargarTablaComoImagen({
                 tabla,
                 contenedor,
                 baseNombre,
+                titulo,
                 boton,
-                exigirVisible: true,
+                exigirVisible: tipoReporte !== 'celulas',
                 mensajeNoVisible: 'Para descargar esta tabla, primero hazla visible en la vista de tablas.'
             });
         });
@@ -1911,16 +2284,132 @@ document.addEventListener('click', (evento) => {
     if (!contenedor) {
         return;
     }
-    const cardPadre = contenedor.closest('.card');
-    const titulo = cardPadre ? cardPadre.querySelector('h3, h4') : null;
-    const baseNombre = slugTexto(titulo ? titulo.textContent : '') || tablaId;
+    const titulo = String(boton.getAttribute('data-export-title') || '').trim()
+        || resolverTituloExportacionTabla(contenedor, tablaId);
+    const baseNombre = slugTexto(titulo) || tablaId;
     window.descargarTablaComoImagen({
         tabla,
         contenedor,
         baseNombre,
+        titulo,
         boton,
         exigirVisible: tipoReporte !== 'celulas',
         mensajeNoVisible: 'Para descargar esta tabla, primero hazla visible en la vista de tablas.'
+    });
+});
+
+const construirTablaSemanasSinReportar = () => {
+    const list = document.getElementById('tablaResumenSemanasMinRedBody');
+    if (!list) {
+        return null;
+    }
+
+    const normMin = (typeof window.normFiltroMinisterioCelulas === 'function')
+        ? window.normFiltroMinisterioCelulas
+        : (valor) => String(valor || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+    let ministerioActivo = '';
+    if (typeof window.obtenerMinisterioCelulasActivo === 'function') {
+        ministerioActivo = String(window.obtenerMinisterioCelulasActivo('reporteCelulasFiltroMinisterioSemanasRed') || '').trim();
+    }
+    if (ministerioActivo === '') {
+        const local = document.getElementById('reporteCelulasFiltroMinisterioSemanasRed');
+        if (local && String(local.value || '').trim() !== '') {
+            ministerioActivo = String(local.value).trim();
+        } else {
+            const global = document.getElementById('filtro_ministerio_celulas');
+            if (global && String(global.value || '').trim() !== '' && global.selectedIndex >= 0) {
+                ministerioActivo = String(global.options[global.selectedIndex].textContent || '').trim();
+            }
+        }
+    }
+    const nMin = normMin(ministerioActivo);
+
+    const escapar = (valor) => String(valor ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const tabla = document.createElement('table');
+    tabla.className = 'data-table data-table--compacta-celula table-no-card';
+    tabla.innerHTML = '<thead><tr><th>Ministerio</th><th>Célula</th><th>Red</th><th>Sem. sin reportar</th></tr></thead><tbody></tbody>';
+    const tbody = tabla.querySelector('tbody');
+
+    list.querySelectorAll('.sem-min-item').forEach((item) => {
+        const ministerio = String(item.getAttribute('data-ministerio') || '').trim() || 'Sin ministerio';
+        if (nMin !== '' && normMin(ministerio) !== nMin) {
+            return;
+        }
+        if (item.classList.contains('is-report-row-hidden') || item.hidden || item.getAttribute('aria-hidden') === 'true') {
+            return;
+        }
+        const estilo = window.getComputedStyle(item);
+        if (estilo.display === 'none' || estilo.visibility === 'hidden') {
+            return;
+        }
+
+        const filas = item.querySelectorAll('.sem-min-subtabla tbody tr');
+        if (!filas.length) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + escapar(ministerio) + '</td><td colspan="3">No hay células sin reportar</td>';
+            tbody.appendChild(tr);
+            return;
+        }
+        filas.forEach((fila) => {
+            const celdas = fila.querySelectorAll('td');
+            const tr = document.createElement('tr');
+            const celula = celdas[0] ? String(celdas[0].textContent || '').trim() : '';
+            const red = celdas[1] ? String(celdas[1].textContent || '').trim() : '';
+            const semanas = celdas[2] ? String(celdas[2].textContent || '').trim() : '';
+            tr.innerHTML = '<td>' + escapar(ministerio) + '</td><td>' + escapar(celula) + '</td><td>' + escapar(red) + '</td><td>' + escapar(semanas) + '</td>';
+            tbody.appendChild(tr);
+        });
+    });
+
+    if (!tbody.querySelector('tr')) {
+        return null;
+    }
+    tabla.dataset.ministerioExport = ministerioActivo;
+    return tabla;
+};
+
+document.addEventListener('click', (evento) => {
+    const boton = evento.target.closest('.js-export-semanas-sin-reportar');
+    if (!boton || typeof window.descargarTablaComoImagen !== 'function') {
+        return;
+    }
+    const tabla = construirTablaSemanasSinReportar();
+    if (!tabla) {
+        alert('No hay filas para exportar con el filtro actual.');
+        return;
+    }
+    const ministerioImg = String(tabla.dataset.ministerioExport || '').trim();
+    const tituloImg = ministerioImg !== ''
+        ? ('Semanas sin reportar — ' + ministerioImg)
+        : 'Semanas sin reportar';
+    const baseNombre = ministerioImg !== ''
+        ? ('semanas_sin_reportar_' + slugTexto(ministerioImg))
+        : 'semanas_sin_reportar';
+    const contenedor = boton.closest('.card') || boton.parentElement;
+    const host = document.createElement('div');
+    host.className = 'table-container';
+    host.style.position = 'fixed';
+    host.style.left = '-99999px';
+    host.appendChild(tabla);
+    document.body.appendChild(host);
+    window.descargarTablaComoImagen({
+        tabla,
+        contenedor,
+        baseNombre,
+        titulo: tituloImg,
+        boton,
+        exigirVisible: false
+    }).finally(() => {
+        if (host.parentNode) {
+            host.parentNode.removeChild(host);
+        }
     });
 });
 
@@ -1989,6 +2478,7 @@ if (reporteTarjetaModalExportBtn) {
             tabla: reporteTarjetaModalTable,
             contenedor: reporteTarjetaModalTableContainer,
             baseNombre,
+            titulo,
             boton: reporteTarjetaModalExportBtn,
             exigirVisible: false
         });
@@ -3516,6 +4006,124 @@ html.show-report-tables #reportesVisualContainer .ganar-extra-section {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
 }
+
+.sem-min-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.sem-min-item {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fff;
+}
+.sem-min-toggle {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 0;
+    background: #eef2ff;
+    color: #1e293b;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.sem-min-toggle:hover { background: #e0e7ff; }
+.sem-min-meta {
+    margin-left: 8px;
+    color: #64748b;
+    font-weight: 600;
+    font-size: .84rem;
+}
+.sem-min-chevron {
+    display: inline-block;
+    width: 1em;
+    margin-right: 6px;
+    transition: transform .15s ease;
+    color: #6366f1;
+}
+.sem-min-item.is-open .sem-min-chevron {
+    transform: rotate(90deg);
+}
+.sem-min-body {
+    display: none;
+    padding: 0 0 8px;
+    background: #fff;
+}
+.sem-min-item.is-open .sem-min-body {
+    display: block !important;
+}
+.sem-min-subtabla {
+    margin: 0;
+    width: 100%;
+}
+
+.report-kpi-grid--celulas-min-red {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+}
+
+.kpi-celula-min-red {
+    min-height: 0;
+    gap: 8px;
+}
+
+.kpi-celula-min-red--verde { border-top: 4px solid #4cbf6e; }
+.kpi-celula-min-red--naranja { border-top: 4px solid #e6a93e; }
+.kpi-celula-min-red--rojo { border-top: 4px solid #ef4444; }
+
+.cel-min-red-meta {
+    font-size: .78rem;
+    color: #64748b;
+}
+
+.cel-min-red-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cel-min-red-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    column-gap: 8px;
+    align-items: center;
+    padding: 8px 10px;
+    border: 1px solid #e3ebf5;
+    border-radius: 8px;
+    background: #f8fbff;
+}
+
+.cel-min-red-name {
+    font-weight: 700;
+    color: #12335a;
+    font-size: .86rem;
+}
+
+.cel-min-red-count {
+    grid-column: 1;
+    font-size: .74rem;
+    color: #64748b;
+}
+
+.cel-min-red-semanas {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    font-size: 1.05rem;
+    font-weight: 800;
+    padding: 4px 8px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+
+.cel-min-red-semanas.seg-cel-verde { background: #dcfce7; color: #166534; }
+.cel-min-red-semanas.seg-cel-naranja { background: #ffedd5; color: #c2410c; }
+.cel-min-red-semanas.seg-cel-rojo { background: #fee2e2; color: #b91c1c; }
 
 .report-kpi-grid--escalera {
     grid-template-columns: repeat(5, minmax(0, 1fr));

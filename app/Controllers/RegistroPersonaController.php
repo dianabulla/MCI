@@ -237,7 +237,8 @@ class RegistroPersonaController extends BaseController {
                 'fecha_nacimiento' => (string)($_GET['fecha_nacimiento'] ?? ''),
                 'barrio' => (string)($_GET['barrio'] ?? ''),
                 'cedula' => (string)($_GET['cedula'] ?? ''),
-                'tipo_documento' => (string)($_GET['tipo_documento'] ?? '')
+                'tipo_documento' => (string)($_GET['tipo_documento'] ?? ''),
+                'genero' => (string)($_GET['genero'] ?? '')
             ]
         ];
 
@@ -262,16 +263,14 @@ class RegistroPersonaController extends BaseController {
         $barrio = $this->normalizarTextoMayusculas($_POST['barrio'] ?? '');
         $tipoDocumento = $this->normalizarTipoDocumentoInput($_POST['tipo_documento'] ?? '');
         $cedula = $this->normalizarDocumentoInput($_POST['cedula'] ?? '');
+        $genero = $this->normalizarGeneroBinario($_POST['genero'] ?? '');
         $tipoPersonaInput = 'nueva';
 
         $errores = [];
 
-        if ($nombre === '') {
-            $errores[] = 'El nombre es requerido';
-        }
-
-        if ($apellido === '') {
-            $errores[] = 'Los apellidos son requeridos';
+        $erroresNombreApellido = $this->validarNombreYApellidoPersona($nombre, $apellido);
+        if (!empty($erroresNombreApellido)) {
+            $errores = array_merge($errores, $erroresNombreApellido);
         }
 
         if ($tipoDocumento === '') {
@@ -282,8 +281,18 @@ class RegistroPersonaController extends BaseController {
             $errores[] = 'La cédula es obligatoria';
         }
 
-        if ($telefono !== '' && strlen(preg_replace('/\D+/', '', $telefono)) < 7) {
-            $errores[] = 'Si registra teléfono, debe tener al menos 7 dígitos';
+        if ($telefono === '') {
+            $errores[] = 'El teléfono es obligatorio';
+        } elseif (strlen(preg_replace('/\D+/', '', $telefono)) < 7) {
+            $errores[] = 'El teléfono debe tener al menos 7 dígitos';
+        }
+
+        if ($fechaNacimiento === '' || $fechaNacimiento === '0000-00-00') {
+            $errores[] = 'La fecha de nacimiento es obligatoria';
+        }
+
+        if ($genero === null || $genero === '') {
+            $errores[] = 'Debe seleccionar el género';
         }
 
         if (!in_array($ganadoEnRaw, ['domingo', 'somos_uno', 'celula', 'otro'], true)) {
@@ -319,7 +328,8 @@ class RegistroPersonaController extends BaseController {
                 'fecha_nacimiento' => $fechaNacimiento,
                 'barrio' => $barrio,
                 'cedula' => $cedula,
-                'tipo_documento' => $tipoDocumento
+                'tipo_documento' => $tipoDocumento,
+                'genero' => $genero ?? (string)($_POST['genero'] ?? '')
             ]);
         }
 
@@ -337,6 +347,7 @@ class RegistroPersonaController extends BaseController {
             'Tipo_Documento' => $tipoDocumento,
             'Numero_Documento' => $cedula,
             'Fecha_Nacimiento' => $fechaNacimiento !== '' ? $fechaNacimiento : null,
+            'Genero' => $genero,
             'Telefono' => $telefono !== '' ? $telefono : null,
             'Barrio' => $barrio !== '' ? $barrio : null,
             'Id_Ministerio' => $idMinisterio > 0 ? $idMinisterio : null,
@@ -465,6 +476,23 @@ class RegistroPersonaController extends BaseController {
         }
 
         return $telefono;
+    }
+
+    private function normalizarGeneroBinario($genero) {
+        $genero = trim((string)$genero);
+        if ($genero === '') {
+            return null;
+        }
+
+        $generoLower = strtolower($genero);
+        if (in_array($generoLower, ['hombre', 'joven hombre', 'joven_hombre', 'masculino', 'm'], true)) {
+            return 'Hombre';
+        }
+        if (in_array($generoLower, ['mujer', 'joven mujer', 'joven_mujer', 'femenino', 'f'], true)) {
+            return 'Mujer';
+        }
+
+        return null;
     }
 
     private function normalizarTipoDocumentoInput($valor) {

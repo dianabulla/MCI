@@ -330,7 +330,9 @@ class TallerServicioSocialController extends BaseController {
             'remitido_por' => TallerServicioSocial::REMITIDO_POR,
             'horarios_sabado' => TallerServicioSocial::catalogoHorariosSabado(),
             'proximos_sabados' => $sabadosPublicos,
-            'puede_agendar_hoy' => TallerServicioSocial::puedeAgendarHoy() && $sabadosPublicos !== [],
+            'puede_agendar_hoy' => $this->model->puedeAgendarHoy() && $sabadosPublicos !== [],
+            'texto_dias_inscripcion' => $this->model->textoDiasInscripcionHabilitados(),
+            'mensaje_inscripciones_cerradas' => $this->model->mensajeInscripcionesCerradas(),
             'url_buscar_persona' => public_app_url('talleres_publico/servicio-social/buscar-persona'),
             'url_disponibilidad' => public_app_url('talleres_publico/servicio-social/disponibilidad'),
         ]);
@@ -403,6 +405,54 @@ class TallerServicioSocialController extends BaseController {
 
         header('Location: ' . public_app_url('talleres/servicio-social/horarios', ['fecha' => $fecha]));
         exit;
+    }
+
+    public function inscripcionesDias() {
+        $this->requiereAccesoAdmin();
+
+        if (!$this->puedeGestionar()) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $config = $this->model->obtenerConfigInscripcionDias();
+        $dias = $this->model->diasInscripcionHabilitados();
+        $flashOk = (string)($_SESSION['ss_flash_ok'] ?? '');
+        $flashError = (string)($_SESSION['ss_flash_error'] ?? '');
+        unset($_SESSION['ss_flash_ok'], $_SESSION['ss_flash_error']);
+
+        $this->view('talleres/servicio_social/inscripciones', [
+            'dias_habilitados' => $dias,
+            'config' => $config,
+            'flash_ok' => $flashOk,
+            'flash_error' => $flashError,
+        ]);
+    }
+
+    public function guardarInscripcionesDias() {
+        $this->requiereAccesoAdmin();
+
+        if (!$this->puedeGestionar()) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('talleres/servicio-social/inscripciones');
+            return;
+        }
+
+        $notas = trim((string)($_POST['notas'] ?? ''));
+        $dias = is_array($_POST['dias'] ?? null) ? $_POST['dias'] : [];
+        $resultado = $this->model->guardarInscripcionDias($dias, $notas, $this->idUsuarioSesion());
+
+        if ($resultado['ok']) {
+            $_SESSION['ss_flash_ok'] = $resultado['message'];
+        } else {
+            $_SESSION['ss_flash_error'] = $resultado['message'];
+        }
+
+        $this->redirect('talleres/servicio-social/inscripciones');
     }
 
     public function buscarPersonaPublico(): void {
@@ -500,8 +550,8 @@ class TallerServicioSocialController extends BaseController {
             return;
         }
 
-        if (!TallerServicioSocial::puedeAgendarHoy()) {
-            $_SESSION['ss_pub_errors'] = ['Las solicitudes de cita solo se reciben de lunes a viernes.'];
+        if (!$this->model->puedeAgendarHoy()) {
+            $_SESSION['ss_pub_errors'] = [$this->model->mensajeInscripcionesCerradas()];
             $this->redirect('talleres_publico/servicio-social');
             return;
         }

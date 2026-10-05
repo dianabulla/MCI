@@ -515,10 +515,40 @@ $dashAttrsPagosRow = static function(array $fila) use ($dashSlugMinisterio) {
     max-width: none;
     gap: 4px 10px;
 }
+.uv-ciclo-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 4px;
+}
+.uv-ciclo-btn {
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #334155;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.uv-ciclo-btn:hover {
+    border-color: #0f766e;
+    color: #0f766e;
+}
+.uv-ciclo-btn.is-active {
+    background: #0f766e;
+    border-color: #0f766e;
+    color: #fff;
+}
+.uv-ciclo-btn--actual {
+    font-weight: 500;
+    background: #f1f5f9;
+}
 </style>
 
 <?php
-if (in_array($lineaDashboard, ['universidad_vida', 'capacitacion_destino'], true)) {
+if ($lineaDashboard === 'capacitacion_destino') {
     ProgramasNavegacion::incluirPartial([
         'linea' => $lineaDashboard,
         'seccion' => 'dashboard',
@@ -532,7 +562,7 @@ if (in_array($lineaDashboard, ['universidad_vida', 'capacitacion_destino'], true
         <div>
             <h2>Dashboard · <?= htmlspecialchars($dashModuloTitulo, ENT_QUOTES, 'UTF-8') ?></h2>
             <?php if ($lineaDashboard === 'universidad_vida'): ?>
-                <small style="color:#64748b;">Universidad de la Vida · Semestre 1, semestre 2 o año · Inscritos, asistencia y Encuentro por red</small>
+                <small style="color:#64748b;">Universidad de la Vida · Ciclo actual por defecto · Inscritos, asistencia y Encuentro por hombres, mujeres y jóvenes</small>
             <?php elseif ($lineaDashboard === 'capacitacion_destino'): ?>
                 <small style="color:#64748b;">Capacitación Destino · Semestre 1, semestre 2 o año · Inscritos, asistencia y avance por red</small>
             <?php else: ?>
@@ -557,10 +587,19 @@ if (in_array($lineaDashboard, ['universidad_vida', 'capacitacion_destino'], true
 
     <div class="dash-card">
         <?php if ($lineaDashboard === 'universidad_vida'): ?>
+            <?php
+            $semestreUvVista = (int)($semestre_uv ?? 0);
+            if ($semestreUvVista !== 1 && $semestreUvVista !== 2) {
+                $semestreUvVista = ((int)date('n')) <= 6 ? 1 : 2;
+            }
+            $cicloActualNum = ((int)date('n')) <= 6 ? 1 : 2;
+            $esCicloActualUv = ((int)$anio === (int)date('Y')) && $semestreUvVista === $cicloActualNum;
+            ?>
             <p style="margin:0 0 10px;font-size:0.86rem;color:#475569;">
-                Filtro por <strong>semestre 1</strong>, <strong>semestre 2</strong> o <strong>año</strong> (fecha de inscripción).
-                La red se toma del líder. Asistencia a clase y Encuentro salen de la <strong>lista de asistencias</strong> (clases 1–4 y días 5–6).
-                Pasar al Encuentro exige <strong>70% de las clases UV</strong> y al menos un día de Encuentro marcado.
+                Se muestra el <strong>ciclo seleccionado</strong> (inscripciones de ese semestre).
+                Por defecto es el ciclo actual<?= $esCicloActualUv ? ' (este)' : '' ?>.
+                Pulsa una fila para ver cada persona, las clases y si culminó los dos días de Encuentro.
+                El reporte se agrupa por <strong>hombres</strong>, <strong>mujeres</strong> y <strong>jóvenes</strong>.
             </p>
         <?php elseif ($lineaDashboard === 'capacitacion_destino'): ?>
             <p style="margin:0 0 10px;font-size:0.86rem;color:#475569;">
@@ -580,7 +619,28 @@ if (in_array($lineaDashboard, ['universidad_vida', 'capacitacion_destino'], true
                 </select>
             </div>
 
-            <?php if ($lineaDashboard === 'universidad_vida' || $lineaDashboard === 'capacitacion_destino'): ?>
+            <?php if ($lineaDashboard === 'universidad_vida'): ?>
+                <input type="hidden" name="semestre" id="dash-uv-semestre" value="<?= (int)$semestreUvVista ?>">
+                <div class="group" style="min-width:280px;">
+                    <span class="dash-group-label" style="font-size:0.72rem;font-weight:600;color:#64748b;">Ciclo</span>
+                    <div class="uv-ciclo-btns" role="group" aria-label="Seleccionar ciclo">
+                        <button type="button" class="uv-ciclo-btn<?= $semestreUvVista === 1 ? ' is-active' : '' ?>"
+                            onclick="document.getElementById('dash-uv-semestre').value='1'; this.form.submit();">
+                            Ciclo 1 (Ene – Jun)
+                        </button>
+                        <button type="button" class="uv-ciclo-btn<?= $semestreUvVista === 2 ? ' is-active' : '' ?>"
+                            onclick="document.getElementById('dash-uv-semestre').value='2'; this.form.submit();">
+                            Ciclo 2 (Jul – Dic)
+                        </button>
+                        <?php if (!((int)$anio === (int)date('Y') && $semestreUvVista === $cicloActualNum)): ?>
+                        <button type="button" class="uv-ciclo-btn uv-ciclo-btn--actual"
+                            onclick="var s=document.getElementById('dash-uv-semestre'); if(s) s.value='<?= (int)$cicloActualNum ?>'; var a=this.form.querySelector('select[name=anio]'); if(a) a.value='<?= (int)date('Y') ?>'; this.form.submit();">
+                            Ver ciclo actual
+                        </button>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php elseif ($lineaDashboard === 'capacitacion_destino'): ?>
                 <?php $semestreUv = (int)($semestre_uv ?? 0); ?>
                 <div class="group">
                     <label>Periodo</label>

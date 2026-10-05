@@ -162,6 +162,26 @@ class PersonaController extends BaseController {
         return null;
     }
 
+    private function mensajeErrorCamposIdentidadRequeridos(): ?string {
+        $errorNombreApellido = $this->primerErrorNombreYApellidoPersona($_POST['nombre'] ?? '', $_POST['apellido'] ?? '');
+        if ($errorNombreApellido !== null) {
+            return $errorNombreApellido;
+        }
+
+        if (trim((string)($_POST['telefono'] ?? '')) === '') {
+            return 'El teléfono es obligatorio.';
+        }
+        $fechaNacimiento = trim((string)($_POST['fecha_nacimiento'] ?? ''));
+        if ($fechaNacimiento === '' || $fechaNacimiento === '0000-00-00') {
+            return 'La fecha de nacimiento es obligatoria.';
+        }
+        if ($this->normalizarGeneroBinario($_POST['genero'] ?? null) === null) {
+            return 'Debe seleccionar el género.';
+        }
+
+        return null;
+    }
+
     private function tieneModuloPermisoExplicito($modulo) {
         return isset($_SESSION['permisos'][$modulo]) && is_array($_SESSION['permisos'][$modulo]);
     }
@@ -791,7 +811,7 @@ class PersonaController extends BaseController {
 
     private function normalizarOrigenFiltro($origen) {
         $origen = strtolower(trim((string)$origen));
-        return in_array($origen, ['domingo', 'celula', 'asignados', 'reasignados', 'no_disponible'], true) ? $origen : '';
+        return in_array($origen, ['domingo', 'celula', 'asignados', 'reasignados', 'no_disponible', 'en_seguimiento'], true) ? $origen : '';
     }
 
     private function resolverRangoSemanaLunesDomingo($fechaReferencia) {
@@ -870,30 +890,82 @@ class PersonaController extends BaseController {
         return 'Sin célula';
     }
 
-    /**
-     * Evita borrar Id_Celula al editar si el formulario no reenvió el ID oculto
-     * (autocompletado vacío o guardado parcial), siguiendo el patrón de celulas/editar.
-     */
-    private function resolverIdCelulaDesdePost(array $post, ?array $personaAntes = null) {
-        $idCelulaPost = trim((string)($post['id_celula'] ?? ''));
-        if ($idCelulaPost !== '') {
-            return ctype_digit($idCelulaPost) ? (int)$idCelulaPost : null;
+    private function normalizarNombreCelulaBusqueda($nombre): string {
+        $nombre = mb_strtolower(trim((string)$nombre), 'UTF-8');
+        if ($nombre === '') {
+            return '';
+        }
+        if (class_exists('Normalizer')) {
+            $nombre = Normalizer::normalize($nombre, Normalizer::FORM_D) ?: $nombre;
+        }
+        $nombre = preg_replace('/\p{Mn}+/u', '', $nombre);
+        $nombre = preg_replace('/\s+/', ' ', (string)$nombre);
+
+        return trim((string)$nombre);
+    }
+
+    private function resolverIdCelulaPorNombreBusqueda($nombreBusqueda): ?int {
+        $nombreNorm = $this->normalizarNombreCelulaBusqueda($nombreBusqueda);
+        if ($nombreNorm === '') {
+            return null;
         }
 
-        if (!is_array($personaAntes) || empty($personaAntes['Id_Celula'])) {
+        $celulas = $this->celulaModel->getAll();
+        $coincidencias = [];
+        foreach ((array)$celulas as $celula) {
+            $id = (int)($celula['Id_Celula'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $nombreCelula = $this->normalizarNombreCelulaBusqueda($celula['Nombre_Celula'] ?? '');
+            if ($nombreCelula !== '' && $nombreCelula === $nombreNorm) {
+                $coincidencias[] = $id;
+            }
+        }
+
+        $unicas = array_values(array_unique($coincidencias));
+        if (count($unicas) === 1) {
+            return (int)$unicas[0];
+        }
+
+        return null;
+    }
+
+    /**
+     * Resuelve Id_Celula del formulario. El autocomplete a veces envía el nombre
+     * pero pierde el ID oculto; si venimos de una célula, no debemos dejarla vacía.
+     */
+    private function resolverIdCelulaDesdePost(array $post, ?array $personaAntes = null, $celulaRetorno = null) {
+        $idCelulaPost = trim((string)($post['id_celula'] ?? ''));
+        if ($idCelulaPost !== '' && ctype_digit($idCelulaPost) && (int)$idCelulaPost > 0) {
+            return (int)$idCelulaPost;
+        }
+
+        $idPorNombre = $this->resolverIdCelulaPorNombreBusqueda($post['celula_search'] ?? '');
+        if ($idPorNombre !== null && $idPorNombre > 0) {
+            return $idPorNombre;
+        }
+
+        $idRetorno = (int)($celulaRetorno ?? ($post['celula_retorno'] ?? 0));
+        if ($idRetorno > 0) {
+            return $idRetorno;
+        }
+
+        if (!is_array($personaAntes) || (int)($personaAntes['Id_Celula'] ?? 0) <= 0) {
             return null;
         }
 
         $celulaSearch = trim((string)($post['celula_search'] ?? ''));
         $nombreCelulaAntes = trim((string)($personaAntes['Nombre_Celula'] ?? ''));
+        $idAntes = (int)$personaAntes['Id_Celula'];
 
         if ($celulaSearch === '') {
-            return (int)$personaAntes['Id_Celula'];
+            return $idAntes;
         }
 
         if ($nombreCelulaAntes !== ''
-            && mb_strtolower($celulaSearch) === mb_strtolower($nombreCelulaAntes)) {
-            return (int)$personaAntes['Id_Celula'];
+            && $this->normalizarNombreCelulaBusqueda($celulaSearch) === $this->normalizarNombreCelulaBusqueda($nombreCelulaAntes)) {
+            return $idAntes;
         }
 
         return null;
@@ -976,6 +1048,8 @@ class PersonaController extends BaseController {
         $persona['Seguimiento_Observacion'] = (string)($checklist['_meta']['no_disponible_observacion'] ?? '');
         $persona['Seguimiento_Reasignado'] = !empty($checklist['_meta']['reasignado_manual']) || !empty($checklist['_meta']['reasignado_automatico']);
         $persona['Seguimiento_Reasignado_At'] = (string)($checklist['_meta']['reasignado_manual_at'] ?? ($checklist['_meta']['reasignado_automatico_at'] ?? ''));
+        $notasSeguimiento = $this->normalizarNotasSeguimientoPersona($checklist['_meta']['seguimiento_notas'] ?? []);
+        $persona['En_Seguimiento'] = !empty($checklist['_meta']['en_seguimiento']) || $notasSeguimiento !== [];
         $persona['Etiqueta_Celula'] = $this->resolverEtiquetaCelulaPersona($persona);
 
         return $persona;
@@ -2355,7 +2429,7 @@ class PersonaController extends BaseController {
 
         // "No se dispone" y "Reasignados" listan todos los casos marcados (puede ser días
         // después del registro). Célula, iglesia y asignados respetan la semana/fecha seleccionada.
-        if (in_array($filtroOrigen, ['no_disponible', 'reasignados'], true)) {
+        if (in_array($filtroOrigen, ['no_disponible', 'reasignados', 'en_seguimiento'], true)) {
             $filtroFechaInicio = '';
             $filtroFechaFin = '';
             $filtroSemanaRef = '';
@@ -2416,6 +2490,16 @@ class PersonaController extends BaseController {
                 }
             }
             $totalesOrigenPendiente = $this->contarOrigenesPendientes($personas);
+            $totalesOrigenPendiente['en_seguimiento'] = count($this->personaModel->getEnSeguimientoWithRole(
+                DataIsolation::generarFiltroPersonas(),
+                $filtroMinisterio,
+                $filtroLider
+            ));
+            if ($filtroOrigen === 'en_seguimiento') {
+                $personas = array_values(array_filter($personas, static function ($persona) {
+                    return !empty($persona['En_Seguimiento']);
+                }));
+            }
             $ministerios = $contextoFiltros['ministerios'];
             $lideres = $contextoFiltros['lideres'];
 
@@ -2540,6 +2624,11 @@ class PersonaController extends BaseController {
         $totalesOrigenPendiente['reasignados'] = count(array_filter($personasBaseConteoNoDisponible, static function($persona) {
             return empty($persona['Seguimiento_No_Disponible']) && !empty($persona['Seguimiento_Reasignado']);
         }));
+        $totalesOrigenPendiente['en_seguimiento'] = count($this->personaModel->getEnSeguimientoWithRole(
+            DataIsolation::generarFiltroPersonas(),
+            $filtroMinisterio,
+            $filtroLider
+        ));
 
         // Para orígenes con pestaña propia no restringir por asignación incompleta en SQL;
         // el listado se afina por origen (PHP/SQL) y luego se excluyen ubicaciones completas.
@@ -2548,7 +2637,7 @@ class PersonaController extends BaseController {
             $soloGanarListado = null;
         }
 
-        $origenSql = $filtroOrigen;
+        $origenSql = $filtroOrigen === 'en_seguimiento' ? '' : $filtroOrigen;
 
         if ($hayFiltrosSinOrigen || ($filtroOrigen !== '')) {
             $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, $soloGanarListado, $filtroEstado, $filtroCelula, $filtroEtapa, $origenSql, $filtroFechaInicio, $filtroFechaFin);
@@ -2584,6 +2673,8 @@ class PersonaController extends BaseController {
                     && empty($persona['Seguimiento_Reasignado'])
                     && $this->obtenerCategoriaOrigenPendiente($persona) === 'asignados';
             }));
+        } elseif ($filtroOrigen === 'en_seguimiento') {
+            // El listado se carga más abajo: todas las personas marcadas En seguimiento.
         } else {
             // En la lista general de pendientes no deben aparecer
             // los casos marcados como "No se dispone".
@@ -2610,6 +2701,28 @@ class PersonaController extends BaseController {
                 }
                 return true;
             }));
+        }
+
+        if ($filtroOrigen === 'en_seguimiento') {
+            $personas = $this->personaModel->getEnSeguimientoWithRole(
+                DataIsolation::generarFiltroPersonas(),
+                $filtroMinisterio,
+                $filtroLider
+            );
+            $personas = $this->enriquecerChecklistPersonas($personas);
+            $personas = $this->filtrarPersonasPorNombreListado($personas, $filtroNombre);
+            if ($filtroCelula !== '') {
+                if ($filtroCelula === '0') {
+                    $personas = array_values(array_filter($personas, static function ($persona) {
+                        return empty($persona['Id_Celula']) || (int)($persona['Id_Celula'] ?? 0) <= 0;
+                    }));
+                } else {
+                    $idCelFiltroSeg = (int)$filtroCelula;
+                    $personas = array_values(array_filter($personas, static function ($persona) use ($idCelFiltroSeg) {
+                        return (int)($persona['Id_Celula'] ?? 0) === $idCelFiltroSeg;
+                    }));
+                }
+            }
         }
 
         $ministerios = $contextoFiltros['ministerios'];
@@ -2837,7 +2950,9 @@ class PersonaController extends BaseController {
             'reasignado_automatico_motivo' => '',
             'reasignado_manual' => false,
             'reasignado_manual_at' => '',
-            'reasignado_manual_motivo' => ''
+            'reasignado_manual_motivo' => '',
+            'en_seguimiento' => false,
+            'seguimiento_notas' => [],
         ];
 
         if (!is_array($checklist)) {
@@ -2864,6 +2979,8 @@ class PersonaController extends BaseController {
             $normalizado['_meta']['reasignado_manual'] = !empty($checklist['_meta']['reasignado_manual']);
             $normalizado['_meta']['reasignado_manual_at'] = trim((string)($checklist['_meta']['reasignado_manual_at'] ?? ''));
             $normalizado['_meta']['reasignado_manual_motivo'] = trim((string)($checklist['_meta']['reasignado_manual_motivo'] ?? ''));
+            $normalizado['_meta']['en_seguimiento'] = !empty($checklist['_meta']['en_seguimiento']);
+            $normalizado['_meta']['seguimiento_notas'] = $this->normalizarNotasSeguimientoPersona($checklist['_meta']['seguimiento_notas'] ?? []);
         }
 
         return $normalizado;
@@ -2898,6 +3015,148 @@ class PersonaController extends BaseController {
         }
 
         return '';
+    }
+
+    /**
+     * @param mixed $notas
+     * @return array<int, array{texto:string,fecha:string,usuario:string}>
+     */
+    private function normalizarNotasSeguimientoPersona($notas): array {
+        if (!is_array($notas)) {
+            return [];
+        }
+        $salida = [];
+        foreach ($notas as $nota) {
+            if (!is_array($nota)) {
+                continue;
+            }
+            $texto = trim((string)($nota['texto'] ?? ''));
+            if ($texto === '') {
+                continue;
+            }
+            $salida[] = [
+                'texto' => $texto,
+                'fecha' => trim((string)($nota['fecha'] ?? '')),
+                'usuario' => trim((string)($nota['usuario'] ?? '')),
+            ];
+            if (count($salida) >= 40) {
+                break;
+            }
+        }
+        return $salida;
+    }
+
+    public function notasSeguimiento() {
+        if (!AuthController::puedeUsarSeguimientoPersonaListado()) {
+            $this->json(['success' => false, 'message' => 'No autorizado'], 403);
+        }
+
+        $idPersona = (int)($_GET['id'] ?? 0);
+        if ($idPersona <= 0) {
+            $this->json(['success' => false, 'message' => 'Persona no indicada'], 422);
+        }
+
+        $filtroRol = DataIsolation::generarFiltroPersonas();
+        if (!$this->personaModel->puedeEditarEscaleraPorRol($idPersona, $filtroRol)) {
+            $this->json(['success' => false, 'message' => 'No tienes acceso a esta persona'], 403);
+        }
+
+        $persona = $this->personaModel->getById($idPersona);
+        if (!$persona) {
+            $this->json(['success' => false, 'message' => 'Persona no encontrada'], 404);
+        }
+
+        $checklist = $this->normalizarChecklistEscalera(
+            json_decode((string)($persona['Escalera_Checklist'] ?? ''), true)
+        );
+        $notas = $this->normalizarNotasSeguimientoPersona($checklist['_meta']['seguimiento_notas'] ?? []);
+
+        $this->json([
+            'success' => true,
+            'id_persona' => $idPersona,
+            'nombre' => trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? '')),
+            'telefono' => trim((string)($persona['Telefono'] ?? '')),
+            'en_seguimiento' => !empty($checklist['_meta']['en_seguimiento']) || $notas !== [],
+            'notas' => $notas,
+        ]);
+    }
+
+    public function guardarNotaSeguimiento() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->json(['success' => false, 'message' => 'Metodo no permitido'], 405);
+        }
+
+        if (!AuthController::puedeGuardarSeguimientoPersonaListado()) {
+            $this->json(['success' => false, 'message' => 'No autorizado'], 403);
+        }
+
+        if (!$this->soportaChecklistEscalera) {
+            $this->json(['success' => false, 'message' => 'No se puede guardar el seguimiento en esta base de datos'], 400);
+        }
+
+        $payload = $_POST;
+        if ($payload === []) {
+            $raw = file_get_contents('php://input');
+            if (is_string($raw) && trim($raw) !== '') {
+                $decoded = json_decode($raw, true);
+                if (is_array($decoded)) {
+                    $payload = $decoded;
+                }
+            }
+        }
+
+        $idPersona = (int)($payload['id_persona'] ?? 0);
+        $texto = trim((string)($payload['nota'] ?? ''));
+        if ($idPersona <= 0 || $texto === '') {
+            $this->json(['success' => false, 'message' => 'Escribe una nota de seguimiento'], 422);
+        }
+        if (strlen($texto) > 1000) {
+            $this->json(['success' => false, 'message' => 'La nota es demasiado larga'], 422);
+        }
+
+        $filtroRol = DataIsolation::generarFiltroPersonas();
+        if (!$this->personaModel->puedeEditarEscaleraPorRol($idPersona, $filtroRol)) {
+            $this->json(['success' => false, 'message' => 'No tienes acceso a esta persona'], 403);
+        }
+
+        $persona = $this->personaModel->getById($idPersona);
+        if (!$persona) {
+            $this->json(['success' => false, 'message' => 'Persona no encontrada'], 404);
+        }
+
+        $checklist = $this->normalizarChecklistEscalera(
+            json_decode((string)($persona['Escalera_Checklist'] ?? ''), true)
+        );
+        $notas = $this->normalizarNotasSeguimientoPersona($checklist['_meta']['seguimiento_notas'] ?? []);
+        $usuarioNombre = trim((string)($_SESSION['usuario_nombre'] ?? ($_SESSION['usuario'] ?? 'Usuario')));
+        $notas[] = [
+            'texto' => $texto,
+            'fecha' => date('Y-m-d H:i'),
+            'usuario' => $usuarioNombre !== '' ? $usuarioNombre : 'Usuario',
+        ];
+        if (count($notas) > 40) {
+            $notas = array_slice($notas, -40);
+        }
+        $checklist['_meta']['seguimiento_notas'] = $notas;
+        $checklist['_meta']['en_seguimiento'] = true;
+
+        $checklistJson = json_encode($checklist, JSON_UNESCAPED_UNICODE);
+        if ($checklistJson === false) {
+            $this->json(['success' => false, 'message' => 'No se pudo guardar'], 500);
+        }
+
+        $proceso = $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklist) : null;
+        $ok = $this->personaModel->updateEscaleraChecklistYProceso($idPersona, $checklistJson, $proceso);
+        if (!$ok) {
+            $this->json(['success' => false, 'message' => 'No se pudo guardar el seguimiento'], 500);
+        }
+
+        $this->json([
+            'success' => true,
+            'message' => 'Seguimiento guardado',
+            'en_seguimiento' => true,
+            'notas' => $notas,
+        ]);
     }
 
     public function actualizarChecklistEscalera() {
@@ -3498,6 +3757,26 @@ class PersonaController extends BaseController {
                 return;
             }
 
+            $errorIdentidad = $this->mensajeErrorCamposIdentidadRequeridos();
+            if ($errorIdentidad !== null) {
+                $viewData = [
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => $errorIdentidad,
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'return_to' => $returnTo,
+                    'return_url' => $returnUrl,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
+                return;
+            }
+
             $idRolAsistente = $this->obtenerIdRolAsistenteDefault();
             $idRolDiscipulo = $this->obtenerIdRolDiscipuloDefault();
             $asignarUsuarioActivo = AuthController::esAdministrador() && ((string)($_POST['asignar_usuario_activo'] ?? '0') === '1');
@@ -3604,7 +3883,7 @@ class PersonaController extends BaseController {
                 'Invitado_Por' => $_POST['invitado_por'] ?: null,
                 'Tipo_Reunion' => $tipoReunionNormalizado,
                 'Id_Lider' => $idLiderNormalizado,
-                'Id_Celula' => $this->resolverIdCelulaDesdePost($_POST),
+                'Id_Celula' => $this->resolverIdCelulaDesdePost($_POST, null, $celulaRetorno),
                 'Id_Rol' => $idRolSeleccionado,
                 'Id_Ministerio' => $idMinisterioNormalizado,
                 'Fecha_Registro' => date('Y-m-d H:i:s')
@@ -3667,11 +3946,17 @@ class PersonaController extends BaseController {
             }
 
             // Desde asistencias o desde la ficha/lista de una célula: ancla y marca Ganado en = Célula si no eligieron otro origen.
-            if ($returnTo === 'asistencia' || $returnTo === 'celulas') {
+            if ($celulaRetorno > 0 && ($returnTo === 'asistencia' || $returnTo === 'celulas')) {
                 $data = $this->resolverAnclajeDesdeAsistencia($celulaRetorno, $data);
+            } elseif ($celulaRetorno > 0 && (int)($data['Id_Celula'] ?? 0) <= 0) {
+                $data['Id_Celula'] = $celulaRetorno;
             }
 
+            $idCelulaExplicit = (int)($data['Id_Celula'] ?? 0);
             $validacionReglasRol = $this->validarYNormalizarReglasPorRol($data);
+            if ($idCelulaExplicit > 0 && (int)($data['Id_Celula'] ?? 0) <= 0) {
+                $data['Id_Celula'] = $idCelulaExplicit;
+            }
             if (!$validacionReglasRol['ok']) {
                 $viewData = [
                     'celulas' => $this->celulaModel->getAll(),
@@ -3730,6 +4015,13 @@ class PersonaController extends BaseController {
             
             try {
                 $idPersonaNueva = (int)$this->personaModel->create($data);
+
+                if ($idPersonaNueva > 0 && (int)($data['Id_Celula'] ?? 0) > 0) {
+                    $personaCreadaCheck = $this->personaModel->getById($idPersonaNueva);
+                    if ((int)($personaCreadaCheck['Id_Celula'] ?? 0) <= 0) {
+                        $this->personaModel->update($idPersonaNueva, ['Id_Celula' => (int)$data['Id_Celula']]);
+                    }
+                }
 
                 if ($idPersonaNueva > 0) {
                     $this->personaModel->ajustarEscaleraPorRol($idPersonaNueva, (int)($data['Id_Rol'] ?? 0));
@@ -3871,6 +4163,27 @@ class PersonaController extends BaseController {
 
             $_POST['tipo_documento'] = $this->normalizarTipoDocumentoInput($_POST['tipo_documento'] ?? null);
 
+            $errorIdentidad = $this->mensajeErrorCamposIdentidadRequeridos();
+            if ($errorIdentidad !== null) {
+                $persona = $this->personaModel->getById($id);
+                $viewData = [
+                    'persona' => $persona,
+                    'celulas' => $this->celulaModel->getAll(),
+                    'ministerios' => $this->ministerioModel->getAll(),
+                    'roles' => $this->rolModel->getAll(),
+                    'personas_invitadores' => $this->personaModel->getAll(),
+                    'personas_lideres' => $this->personaModel->getLideresYPastores(),
+                    'error' => $errorIdentidad,
+                    'post_data' => $_POST,
+                    'soportaConvencion' => $this->soportaConvencion,
+                    'soportaProceso' => $this->soportaProceso,
+                    'return_to' => $returnTo,
+                    'celula_retorno' => $celulaRetorno
+                ];
+                $this->view('personas/formulario', $this->enriquecerViewDataFormulario($viewData));
+                return;
+            }
+
             $telefonoParaDuplicado = $_POST['telefono'] ?? '';
             if ($this->telefonosEquivalentes($telefonoParaDuplicado, $personaAntes['Telefono'] ?? '')) {
                 $telefonoParaDuplicado = '';
@@ -3941,7 +4254,7 @@ class PersonaController extends BaseController {
                 'Invitado_Por' => $_POST['invitado_por'] ?: null,
                 'Tipo_Reunion' => $tipoReunionNormalizado,
                 'Id_Lider' => $idLiderNormalizado,
-                'Id_Celula' => $this->resolverIdCelulaDesdePost($_POST, is_array($personaAntes) ? $personaAntes : null),
+                'Id_Celula' => $this->resolverIdCelulaDesdePost($_POST, is_array($personaAntes) ? $personaAntes : null, $celulaRetorno),
                 'Id_Rol' => $idRolSeleccionado,
                 'Id_Ministerio' => $idMinisterioNormalizado
             ];
@@ -4004,7 +4317,16 @@ class PersonaController extends BaseController {
                 $data['Fecha_Asignacion_Lider'] = $this->resolverFechaAsignacionLider($data, $personaAntes);
             }
 
+            $idCelulaExplicit = (int)($data['Id_Celula'] ?? 0);
+            if ($celulaRetorno > 0 && $idCelulaExplicit <= 0) {
+                $data['Id_Celula'] = $celulaRetorno;
+                $idCelulaExplicit = $celulaRetorno;
+            }
+
             $validacionReglasRol = $this->validarYNormalizarReglasPorRol($data);
+            if ($idCelulaExplicit > 0 && (int)($data['Id_Celula'] ?? 0) <= 0) {
+                $data['Id_Celula'] = $idCelulaExplicit;
+            }
             if (!$validacionReglasRol['ok']) {
                 $persona = $this->personaModel->getById($id);
                 $viewData = [
@@ -4235,5 +4557,34 @@ class PersonaController extends BaseController {
         }
         
         $this->redirigirConRetorno($returnUrl, 'personas');
+    }
+
+    public function sincronizarEdades() {
+        $claveEsperada = 'mci_admin_2026';
+        $clave = trim((string)($_POST['clave'] ?? $_GET['clave'] ?? ''));
+        $claveOk = $clave !== '' && hash_equals($claveEsperada, $clave);
+
+        $mensaje = '';
+        $tipoMensaje = '';
+        $pendientes = 0;
+        if ($claveOk) {
+            if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['confirmar'] ?? '') === '1') {
+                $actualizadas = $this->personaModel->sincronizarEdadesDesdeFechaNacimiento();
+                $mensaje = 'Se actualizó la edad de ' . $actualizadas . ' persona(s).';
+                $tipoMensaje = 'success';
+            }
+            $pendientes = $this->personaModel->contarEdadesPendientesDeSincronizar();
+        } elseif ($clave !== '') {
+            $mensaje = 'La clave no es correcta.';
+            $tipoMensaje = 'error';
+        }
+
+        $this->view('personas/sincronizar_edades', [
+            'pendientes' => $pendientes,
+            'mensaje' => $mensaje,
+            'tipo_mensaje' => $tipoMensaje,
+            'clave_ok' => $claveOk,
+            'clave' => $claveOk ? $clave : '',
+        ]);
     }
 }

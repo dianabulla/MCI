@@ -958,6 +958,17 @@
                             <input type="text" id="recibido_por" name="recibido_por" maxlength="160" placeholder="Nombre de quien recibe" value="<?= htmlspecialchars($abonoNombreAuth !== '' ? $abonoNombreAuth : (string)($old['recibido_por'] ?? '')) ?>" readonly>
                         </div>
 
+                        <?php if ($programaActualFormulario === 'universidad_vida'): ?>
+                        <div class="field" id="wrap-categoria-pago">
+                            <label for="categoria_pago">Pago para <span class="req">*</span></label>
+                            <select id="categoria_pago" name="categoria_pago" <?= $abonoAutorizado ? '' : 'disabled' ?>>
+                                <option value="">-- Selecciona --</option>
+                                <option value="encuentro" <?= (string)($old['categoria_pago'] ?? '') === 'encuentro' ? 'selected' : '' ?>>Encuentro</option>
+                                <option value="libro" <?= (string)($old['categoria_pago'] ?? '') === 'libro' ? 'selected' : '' ?>>Solo el libro</option>
+                            </select>
+                        </div>
+                        <?php endif; ?>
+
                         <div class="field" id="wrap-entrego-libro">
                             <label for="entrego_libro">Entregó libro</label>
                             <select id="entrego_libro" name="entrego_libro" <?= $abonoAutorizado ? '' : 'disabled' ?>>
@@ -1038,6 +1049,7 @@
     const valorPago = document.getElementById('valor_pago');
     const wrapRecibidoPor = document.getElementById('wrap-recibido-por');
     const recibidoPor = document.getElementById('recibido_por');
+    const categoriaPago = document.getElementById('categoria_pago');
     const entregoLibro = document.getElementById('entrego_libro');
     const inputAccion = document.getElementById('input-accion');
     const inputIdInscripcionAsistencia = document.getElementById('input-id-inscripcion-asistencia');
@@ -1417,12 +1429,20 @@
             setModoSoloAsistencia(true);
         } else {
             listaInscripcionesExistentes.innerHTML = inscripciones.map(function(ins) {
+                const estado = String(ins.estado_ciclo_label || 'Inscripción existente');
+                const caducada = !!ins.caducada;
                 return '<div class="insc-card">' +
                     '<div class="insc-info">' +
                         '<strong>' + String(ins.programa_label || ins.programa || '') + '</strong>' +
-                        '<span class="insc-badge asistio">Inscripción existente</span>' +
+                        '<span class="insc-badge ' + (caducada ? 'no' : 'asistio') + '">' + estado + '</span>' +
                     '</div>' +
-                    '<div style="font-size:12px;color:#667775;">Programa registrado previamente.</div>' +
+                    '<div style="font-size:12px;color:#667775;">' +
+                        (caducada
+                            ? 'No completó los dos días de encuentro. Puede inscribirse de nuevo en este ciclo.'
+                            : (ins.permite_reinscripcion
+                                ? 'Ciclo anterior. Puede inscribirse de nuevo en este ciclo.'
+                                : 'Programa registrado en este ciclo.')) +
+                    '</div>' +
                 '</div>';
             }).join('');
             sectionInscripcionesExistentes.style.display = '';
@@ -1440,11 +1460,14 @@
         let fallback = null;
         for (let i = 0; i < inscripciones.length; i++) {
             const ins = inscripciones[i];
+            if (ins && ins.vigente_ciclo === false) {
+                continue;
+            }
             const prog = String(ins.programa || '');
-            if (prog === 'universidad_vida') {
+            if (prog === 'universidad_vida' && ins.vigente_ciclo) {
                 return ins;
             }
-            if (prog === 'encuentro' && !fallback) {
+            if (prog === 'encuentro' && ins.vigente_ciclo && !fallback) {
                 fallback = ins;
             }
         }
@@ -2204,9 +2227,10 @@
         const insPref = Array.isArray(prefillInicial.inscripciones) ? prefillInicial.inscripciones : [];
         if (insPref.length > 0) {
             const esUv = vincularInscripcionParaDocumentos(insPref);
-            const msgUv = esUv
-                ? 'Persona ya inscrita en Universidad de la Vida. Puede subir documentos en la sección de abajo.'
-                : 'Persona encontrada. Revisa sus inscripciones y completa los datos que falten.';
+            const msgUv = prefillInicial.mensaje
+                || (esUv
+                    ? 'Persona ya inscrita en Universidad de la Vida en este ciclo. Puede subir documentos en la sección de abajo.'
+                    : 'Persona encontrada. Revisa sus inscripciones y completa los datos que falten.');
             setEstadoBusqueda('info', msgUv);
         } else {
             setEstadoBusqueda('info', 'Persona encontrada. Completa el programa para registrar una nueva inscripción.');
@@ -2241,12 +2265,27 @@
         ministerio.addEventListener('change', sincronizarAbonoTrasDatosRegistro);
     }
 
+    function ajustarPesosCop(n) {
+        if (!Number.isFinite(n) || n <= 0) {
+            return 0;
+        }
+        let entero = Math.round(n);
+        if (entero >= 1000 && entero % 1000 === 999) {
+            entero += 1;
+        }
+        return entero;
+    }
+
     function normalizarValorPagoInput(valor) {
         let raw = String(valor || '').trim();
         if (!raw) {
             return 0;
         }
         raw = raw.replace(/\s+/g, '');
+
+        if (/^\d{1,3}([.]\d{3})+$/.test(raw) || /^\d{1,3}([,]\d{3})+$/.test(raw)) {
+            return ajustarPesosCop(Number(raw.replace(/[.,]/g, '')));
+        }
 
         const tieneComa = raw.indexOf(',') >= 0;
         const tienePunto = raw.indexOf('.') >= 0;
@@ -2260,20 +2299,21 @@
             }
         } else if (tieneComa && !tienePunto) {
             if (/\,\d{1,2}$/.test(raw)) {
-                raw = raw.replace(/\./g, '');
                 raw = raw.replace(',', '.');
             } else {
                 raw = raw.replace(/,/g, '');
             }
         } else if (tienePunto && !tieneComa) {
-            if (!/\.\d{1,2}$/.test(raw)) {
+            if (/\.\d{3}$/.test(raw)) {
+                raw = raw.replace(/\./g, '');
+            } else if (!/\.\d{1,2}$/.test(raw)) {
                 raw = raw.replace(/\./g, '');
             }
         }
 
         raw = raw.replace(/[^0-9.\-]/g, '');
         const n = Number(raw);
-        return Number.isFinite(n) ? n : 0;
+        return Number.isFinite(n) ? ajustarPesosCop(n) : 0;
     }
 
     if (valorPago) {

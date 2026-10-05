@@ -3,7 +3,8 @@
 $programaActual = (string)($programa_actual ?? 'universidad_vida');
 $programaLabel = (string)($programa_label ?? 'Abonos - Universidad de la Vida');
 $abonoRuta = (string)($abono_ruta ?? 'escuelas_formacion/abonos/universidad-vida');
-$urlVolverPagos = (string)($url_volver_pagos ?? (PUBLIC_URL . '?url=escuelas_formacion/pagos&programa=universidad_vida'));
+$urlVolverPagos = (string)($url_volver_pagos ?? (PUBLIC_URL . '?url=escuelas_formacion/pagos/consolidar'));
+$etiquetaVolverPagos = (string)($etiqueta_volver_pagos ?? 'Volver a pagos');
 $abonoAuth = is_array($abono_auth ?? null) ? $abono_auth : ['autorizado' => false, 'nombre' => ''];
 $abonoAutorizado = !empty($abonoAuth['autorizado']);
 $abonoNombre = (string)($abonoAuth['nombre'] ?? '');
@@ -49,7 +50,7 @@ $ticketWhatsappUrl = trim((string)($ticket_whatsapp_url ?? ''));
             <div class="abonos-muted">Sesión autorizada por: <strong><?= htmlspecialchars($abonoNombre !== '' ? $abonoNombre : 'USUARIO AUTORIZADO') ?></strong></div>
         </div>
         <div>
-            <a class="btn btn-outline-secondary btn-sm" href="<?= htmlspecialchars($urlVolverPagos, ENT_QUOTES, 'UTF-8') ?>">Volver a pagos</a>
+            <a class="btn btn-outline-secondary btn-sm" href="<?= htmlspecialchars($urlVolverPagos, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($etiquetaVolverPagos, ENT_QUOTES, 'UTF-8') ?></a>
         </div>
     </div>
 
@@ -76,6 +77,9 @@ $ticketWhatsappUrl = trim((string)($ticket_whatsapp_url ?? ''));
     <div class="abonos-card">
         <form method="GET" action="<?= PUBLIC_URL ?>" class="abonos-grid" style="margin-bottom:14px; align-items:end;">
             <input type="hidden" name="url" value="<?= htmlspecialchars($abonoRuta, ENT_QUOTES, 'UTF-8') ?>">
+            <?php if (trim((string)($_GET['return_url'] ?? '')) !== ''): ?>
+                <input type="hidden" name="return_url" value="<?= htmlspecialchars((string)$_GET['return_url'], ENT_QUOTES, 'UTF-8') ?>">
+            <?php endif; ?>
             <?php if ($programaActual !== 'universidad_vida'): ?>
                 <input type="hidden" name="programa" value="<?= htmlspecialchars($programaActual, ENT_QUOTES, 'UTF-8') ?>">
             <?php endif; ?>
@@ -126,6 +130,9 @@ $ticketWhatsappUrl = trim((string)($ticket_whatsapp_url ?? ''));
                 <input type="hidden" name="cedula" value="<?= htmlspecialchars($cedulaPersona ?: $cedulaBuscada) ?>">
                 <input type="hidden" name="telefono" value="<?= htmlspecialchars($telefonoPersona ?: $telefonoBuscado) ?>">
                 <input type="hidden" name="tipo_documento" value="Cedula de Ciudadania">
+                <?php if (trim((string)($_GET['return_url'] ?? '')) !== ''): ?>
+                <input type="hidden" name="return_url" value="<?= htmlspecialchars((string)$_GET['return_url'], ENT_QUOTES, 'UTF-8') ?>">
+                <?php endif; ?>
 
                 <div class="abonos-grid">
                     <div class="abonos-field">
@@ -150,6 +157,16 @@ $ticketWhatsappUrl = trim((string)($ticket_whatsapp_url ?? ''));
                             <option value="completo">Pago total</option>
                         </select>
                     </div>
+                    <?php if (strtolower((string)($programaPersona ?: $programaActual)) === 'universidad_vida'): ?>
+                    <div class="abonos-field">
+                        <label>Pago para</label>
+                        <select name="categoria_pago" required>
+                            <option value="">Seleccione...</option>
+                            <option value="encuentro">Encuentro</option>
+                            <option value="libro">Solo el libro</option>
+                        </select>
+                    </div>
+                    <?php endif; ?>
                     <div class="abonos-field">
                         <label>Valor pagado</label>
                         <input type="number" name="valor_pago" min="1" step="1" required placeholder="Ej: 25000">

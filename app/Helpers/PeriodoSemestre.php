@@ -50,4 +50,16 @@ class PeriodoSemestre
 
         return $fecha >= $inicio && $fecha <= $fin;
     }
+
+    /**
+     * Ciclo en curso según la fecha de hoy (no usa ?anio=&semestre= de la URL).
+     *
+     * @return array{anio:int,semestre:int,fecha_inicio:string,fecha_fin:string,etiqueta:string}
+     */
+    public static function actual(): array
+    {
+        $anio = (int)date('Y');
+        $semestre = ((int)date('n')) <= 6 ? 1 : 2;
+        return self::resolver($anio, $semestre);
+    }
 }

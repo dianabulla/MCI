@@ -121,6 +121,31 @@ class EscuelaFormacionAsistenciaClase extends BaseModel {
         return $this->execute($sql, [$idPersona, $modulo, $programa, $numeroClase, $asistio ? 1 : 0]);
     }
 
+    public function personaCompletoEncuentroUv(int $idPersona): bool
+    {
+        if ($idPersona <= 0) {
+            return false;
+        }
+        $map = $this->getAsistenciasPorPrograma([$idPersona], 'consolidar', 'universidad_vida');
+        $asistencias = $map[$idPersona] ?? [];
+        return !empty($asistencias[5]) && !empty($asistencias[6]);
+    }
+
+    public function resetearAsistenciasPrograma(int $idPersona, string $modulo, string $programa): bool
+    {
+        $idPersona = (int)$idPersona;
+        $modulo = trim($modulo);
+        $programa = trim($programa);
+        if ($idPersona <= 0 || $modulo === '' || $programa === '') {
+            return false;
+        }
+
+        return $this->execute(
+            "DELETE FROM {$this->table} WHERE Id_Persona = ? AND Modulo = ? AND Programa = ?",
+            [$idPersona, $modulo, $programa]
+        );
+    }
+
     public function getFechasClases(string $modulo, string $programa, int $totalClases = 5, ?string $grupo = 'general'): array {
         $modulo = trim($modulo);
         $programa = trim($programa);

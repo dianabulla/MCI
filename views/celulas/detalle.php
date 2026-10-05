@@ -18,6 +18,31 @@ $puedeEliminarPersona = AuthController::puedeEliminarPersonaDesdeDiscipular();
 <div class="page-header">
     <h2>Detalle de Célula</h2>
     <div class="celulas-actions-row">
+        <?php
+        $personasSegDetalle = is_array($personasEnSeguimiento ?? null) ? $personasEnSeguimiento : [];
+        $payloadSegDetalle = [];
+        foreach ($personasSegDetalle as $pSegDet) {
+            $payloadSegDetalle[] = [
+                'id' => (int)($pSegDet['Id_Persona'] ?? 0),
+                'nombre' => (string)($pSegDet['nombre'] ?? ''),
+                'telefono' => (string)($pSegDet['telefono'] ?? ''),
+                'celula' => (string)($pSegDet['celula'] ?? ''),
+                'lider' => (string)($pSegDet['lider'] ?? ''),
+            ];
+        }
+        ?>
+        <button
+            type="button"
+            class="btn btn-sm celulas-action-btn celulas-action-btn--seguimiento js-ver-seguimiento-celula"
+            data-titulo="<?= htmlspecialchars('En seguimiento · ' . (string)($celula['Nombre_Celula'] ?? 'Célula'), ENT_QUOTES, 'UTF-8') ?>"
+            data-mostrar-celula="0"
+            data-personas="<?= htmlspecialchars(json_encode($payloadSegDetalle, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>"
+            title="Ver personas en seguimiento"
+        >
+            <i class="bi bi-signpost-2" aria-hidden="true"></i>
+            <span>En seguimiento</span>
+            <span class="celulas-seguimiento-badge"><?= count($payloadSegDetalle) ?></span>
+        </button>
         <a href="<?= PUBLIC_URL ?>index.php?url=personas/crear&return_to=celulas&return_url=<?= urlencode($returnUrlCelula) ?>&celula=<?= $idCelulaDetalle ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon" title="Nueva persona" aria-label="Nueva persona">
             <i class="bi bi-person-plus-fill" aria-hidden="true"></i>
         </a>
@@ -68,6 +93,16 @@ $puedeEliminarPersona = AuthController::puedeEliminarPersonaDesdeDiscipular();
                 <span class="detail-label">Estado:</span>
                 <span class="detail-value"><?= htmlspecialchars((string)($celula['Estado_Celula'] ?? 'Activa')) ?></span>
             </div>
+            <?php
+            $estadoDetalleCel = strtolower(trim((string)($celula['Estado_Celula'] ?? 'Activa')));
+            $obsCierreDetalle = trim((string)($celula['Observaciones_Cierre'] ?? ''));
+            if ($estadoDetalleCel === 'cerrada' && $obsCierreDetalle !== ''):
+            ?>
+            <div class="detail-item" style="grid-column:1 / -1;">
+                <span class="detail-label">Motivo de cierre:</span>
+                <span class="detail-value"><?= nl2br(htmlspecialchars($obsCierreDetalle)) ?></span>
+            </div>
+            <?php endif; ?>
 
             <div class="detail-item">
                 <span class="detail-label">Ministerio:</span>
@@ -245,6 +280,39 @@ $puedeEliminarPersona = AuthController::puedeEliminarPersonaDesdeDiscipular();
     background: #fff1d8;
     color: #7a5600;
 }
+.celulas-action-btn--seguimiento {
+    min-width: 32px;
+    width: auto;
+    height: 32px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    background: #ecfdf5;
+    border-color: #99f6e4;
+    color: #0f766e;
+    font-weight: 700;
+}
+.celulas-action-btn--seguimiento:hover {
+    background: #ccfbf1;
+    color: #115e59;
+}
+.celulas-seguimiento-badge {
+    display: inline-flex;
+    min-width: 18px;
+    height: 18px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #0f766e;
+    color: #fff;
+    font-size: 10px;
+    padding: 0 5px;
+    line-height: 1;
+}
 </style>
 
+<?php include VIEWS . '/personas/partials/modal_seguimiento.php'; ?>
+<?php include VIEWS . '/celulas/partials/modal_lista_seguimiento.php'; ?>
 <?php include VIEWS . '/layout/footer.php'; ?>

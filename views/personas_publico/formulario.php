@@ -115,7 +115,44 @@
         }
 
         .req {
-            color: #DE6D6D;
+            color: #c62828;
+            font-weight: 700;
+        }
+
+        .form-req-note {
+            margin: 0 0 16px;
+            font-size: 14px;
+            color: #475569;
+        }
+
+        .field-hint {
+            display: block;
+            margin-top: 6px;
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.35;
+        }
+
+        .field-error {
+            display: block;
+            margin-top: 6px;
+            font-size: 13px;
+            color: #b91c1c;
+            font-weight: 600;
+        }
+
+        input.input-invalid,
+        select.input-invalid {
+            border-color: #dc2626;
+            background: #fff7f7;
+        }
+
+        .field-pair {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            align-items: start;
         }
 
         input,
@@ -210,6 +247,10 @@
                 grid-template-columns: 1fr;
             }
 
+            .field-pair {
+                grid-template-columns: 1fr;
+            }
+
             .actions {
                 justify-content: stretch;
             }
@@ -243,32 +284,62 @@
                 </div>
             </div>
         <?php else: ?>
-            <form method="POST" action="<?= PUBLIC_URL ?>?url=registro_personas/guardar">
+            <form method="POST" action="<?= PUBLIC_URL ?>?url=registro_personas/guardar" id="registro_persona_form">
+                <p class="form-req-note">Los campos marcados con <span class="req">*</span> son obligatorios. En <strong>Nombre</strong> escriba solo el o los nombres; en <strong>Apellidos</strong> el primer y segundo apellido, sin usar X ni valores de relleno.</p>
                 <div class="grid">
                     <div class="field">
                         <label for="nombre">Nombre <span class="req">*</span></label>
-                        <input type="text" id="nombre" name="nombre" required value="<?= htmlspecialchars((string)($old['nombre'] ?? '')) ?>">
+                        <input type="text" id="nombre" name="nombre" required autocomplete="given-name" maxlength="60"
+                               placeholder="Ej: JUAN CARLOS"
+                               value="<?= htmlspecialchars((string)($old['nombre'] ?? '')) ?>">
+                        <small class="field-hint">Solo nombres. No incluya apellidos.</small>
+                        <small class="field-error" id="nombre_error" hidden></small>
                     </div>
 
                     <div class="field">
                         <label for="apellido">Apellidos <span class="req">*</span></label>
-                        <input type="text" id="apellido" name="apellido" required value="<?= htmlspecialchars((string)($old['apellido'] ?? '')) ?>">
+                        <input type="text" id="apellido" name="apellido" required autocomplete="family-name" maxlength="80"
+                               placeholder="Ej: PÉREZ GÓMEZ"
+                               value="<?= htmlspecialchars((string)($old['apellido'] ?? '')) ?>">
+                        <small class="field-hint">Primer y segundo apellido. No use X, N/A ni un punto.</small>
+                        <small class="field-error" id="apellido_error" hidden></small>
+                    </div>
+
+                    <div class="field-pair">
+                        <div class="field">
+                            <label for="tipo_documento">Tipo de documento <span class="req">*</span></label>
+                            <?php $tipoDocumento = (string)($old['tipo_documento'] ?? ''); ?>
+                            <select id="tipo_documento" name="tipo_documento" required>
+                                <option value="">Seleccione...</option>
+                                <option value="Cedula de Ciudadania" <?= $tipoDocumento === 'Cedula de Ciudadania' ? 'selected' : '' ?>>Cédula de Ciudadanía</option>
+                                <option value="Cedula Extranjera" <?= $tipoDocumento === 'Cedula Extranjera' ? 'selected' : '' ?>>Cédula Extranjera</option>
+                                <option value="Tarjeta de Identidad" <?= $tipoDocumento === 'Tarjeta de Identidad' ? 'selected' : '' ?>>Tarjeta de Identidad</option>
+                                <option value="Registro Civil" <?= $tipoDocumento === 'Registro Civil' ? 'selected' : '' ?>>Registro Civil</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="cedula">Número de documento <span class="req">*</span></label>
+                            <input type="text" id="cedula" name="cedula" required value="<?= htmlspecialchars((string)($old['cedula'] ?? '')) ?>" placeholder="Número de documento">
+                        </div>
                     </div>
 
                     <div class="field">
-                        <label for="telefono">Teléfono</label>
-                        <input type="tel" id="telefono" name="telefono" value="<?= htmlspecialchars((string)($old['telefono'] ?? '')) ?>" placeholder="Ej: 3001234567">
+                        <label for="telefono">Teléfono <span class="req">*</span></label>
+                        <input type="tel" id="telefono" name="telefono" required value="<?= htmlspecialchars((string)($old['telefono'] ?? '')) ?>" placeholder="Ej: 3001234567">
                     </div>
 
                     <div class="field">
-                        <label for="tipo_documento">Tipo de documento <span class="req">*</span></label>
-                        <?php $tipoDocumento = (string)($old['tipo_documento'] ?? ''); ?>
-                        <select id="tipo_documento" name="tipo_documento" required>
+                        <label for="fecha_nacimiento">Fecha de nacimiento <span class="req">*</span></label>
+                        <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" required value="<?= htmlspecialchars((string)($old['fecha_nacimiento'] ?? '')) ?>">
+                    </div>
+
+                    <div class="field">
+                        <label for="genero">Género <span class="req">*</span></label>
+                        <?php $generoOld = (string)($old['genero'] ?? ''); ?>
+                        <select id="genero" name="genero" required>
                             <option value="">Seleccione...</option>
-                            <option value="Cedula de Ciudadania" <?= $tipoDocumento === 'Cedula de Ciudadania' ? 'selected' : '' ?>>Cédula de Ciudadanía</option>
-                            <option value="Cedula Extranjera" <?= $tipoDocumento === 'Cedula Extranjera' ? 'selected' : '' ?>>Cédula Extranjera</option>
-                            <option value="Tarjeta de Identidad" <?= $tipoDocumento === 'Tarjeta de Identidad' ? 'selected' : '' ?>>Tarjeta de Identidad</option>
-                            <option value="Registro Civil" <?= $tipoDocumento === 'Registro Civil' ? 'selected' : '' ?>>Registro Civil</option>
+                            <option value="Hombre" <?= $generoOld === 'Hombre' ? 'selected' : '' ?>>Hombre</option>
+                            <option value="Mujer" <?= $generoOld === 'Mujer' ? 'selected' : '' ?>>Mujer</option>
                         </select>
                     </div>
 
@@ -286,21 +357,11 @@
                     </div>
 
                     <div class="field">
-                        <label for="cedula">Número de documento <span class="req">*</span></label>
-                        <input type="text" id="cedula" name="cedula" required value="<?= htmlspecialchars((string)($old['cedula'] ?? '')) ?>" placeholder="Número de documento">
-                    </div>
-
-                    <div class="field">
-                        <label for="fecha_nacimiento">Fecha de nacimiento</label>
-                        <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" value="<?= htmlspecialchars((string)($old['fecha_nacimiento'] ?? '')) ?>">
-                    </div>
-
-                    <div class="field">
                         <label for="barrio">Barrio</label>
                         <input type="text" id="barrio" name="barrio" value="<?= htmlspecialchars((string)($old['barrio'] ?? '')) ?>" placeholder="Barrio (opcional)">
                     </div>
 
-                    <div class="field full">
+                    <div class="field">
                         <label for="invitado_por">Invitado por</label>
                         <input type="text" id="invitado_por" name="invitado_por" value="<?= htmlspecialchars((string)($old['invitado_por'] ?? '')) ?>" placeholder="Nombre de quien invitó (opcional)">
                     </div>
@@ -319,14 +380,14 @@
                     <input type="hidden" name="tipo_persona" value="nueva">
 
                     <div class="field full" id="ganado_en_otro_wrap" style="display:none;">
-                        <label for="ganado_en_otro_observacion">Observaciones</label>
+                        <label for="ganado_en_otro_observacion">Observaciones <span class="req">*</span></label>
                         <textarea id="ganado_en_otro_observacion" name="ganado_en_otro_observacion" rows="3" placeholder="Describe dónde fue ganado o la observación necesaria..."><?= htmlspecialchars((string)($old['ganado_en_otro_observacion'] ?? '')) ?></textarea>
                     </div>
 
                     <?php if (!empty($soportaTratamientoDatos)): ?>
                     <?php $tratamientoOld = strtolower(trim((string)($old['tratamiento_datos'] ?? ''))); ?>
                     <div class="field full">
-                        <label>Tratamiento de datos <span style="color:#b42318;">*</span></label>
+                        <label>Tratamiento de datos <span class="req">*</span></label>
                         <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px;">
                             <label style="font-weight:500;display:flex;align-items:center;gap:8px;">
                                 <input type="radio" name="tratamiento_datos" value="acepta" <?= $tratamientoOld === 'acepta' ? 'checked' : '' ?> required>
@@ -340,8 +401,6 @@
                     </div>
                     <?php endif; ?>
                 </div>
-
-                <p class="hint">Obligatorio: nombre, apellidos, tipo de documento, número de documento y ganado en. Si eliges Otros, escribe también la observación.</p>
 
                 <div class="actions">
                     <button type="submit" class="btn">Guardar registro</button>
@@ -392,6 +451,130 @@
     if (ganadoEn) {
         ganadoEn.addEventListener('change', actualizarObservacionOtros);
         actualizarObservacionOtros();
+    }
+
+    function normalizarClaveNombrePersona(texto) {
+        return String(texto || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z]/g, '');
+    }
+
+    function esParticulaNombrePersona(palabra) {
+        return ['de', 'del', 'la', 'las', 'los', 'y', 'da', 'do', 'dos', 'das', 'van', 'von', 'san', 'santa', 'di', 'el', 'e']
+            .indexOf(normalizarClaveNombrePersona(palabra)) !== -1;
+    }
+
+    function contarPalabrasSignificativasNombre(texto) {
+        const palabras = String(texto || '').trim().split(/\s+/).filter(Boolean);
+        let total = 0;
+        palabras.forEach(function(palabra) {
+            if (esParticulaNombrePersona(palabra)) {
+                return;
+            }
+            const letras = palabra.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g, '');
+            if (letras.length >= 2) {
+                total += 1;
+            }
+        });
+        return total;
+    }
+
+    function esMarcadorFalsoNombre(texto) {
+        const clave = normalizarClaveNombrePersona(texto);
+        const prohibidos = {
+            x: 1, xx: 1, xxx: 1, xxxx: 1, xxxxx: 1,
+            n: 1, na: 1, nd: 1, nn: 1, sn: 1, nna: 1, nde: 1,
+            no: 1, si: 1, ok: 1, asd: 1, qwe: 1, qwer: 1, abc: 1, xyz: 1,
+            aaa: 1, bbb: 1, ccc: 1, nnn: 1,
+            test: 1, prueba: 1, temp: 1, fake: 1, none: 1, null: 1,
+            nombre: 1, nombres: 1, apellido: 1, apellidos: 1,
+            noaplica: 1, sinapellido: 1, desconocido: 1, ninguno: 1, ninguna: 1,
+            pendiente: 1, completar: 1, tbd: 1, naa: 1
+        };
+        if (!clave || prohibidos[clave] || /^(x+|n+|a+|z+)$/.test(clave)) {
+            return true;
+        }
+        const letras = String(texto || '').replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g, '');
+        return letras.length < 2;
+    }
+
+    function mostrarErrorCampoNombre(idCampo, idError, mensaje) {
+        const campo = document.getElementById(idCampo);
+        const errorEl = document.getElementById(idError);
+        if (campo) {
+            if (mensaje) {
+                campo.classList.add('input-invalid');
+            } else {
+                campo.classList.remove('input-invalid');
+            }
+        }
+        if (errorEl) {
+            if (mensaje) {
+                errorEl.textContent = mensaje;
+                errorEl.hidden = false;
+            } else {
+                errorEl.textContent = '';
+                errorEl.hidden = true;
+            }
+        }
+    }
+
+    const registroForm = document.getElementById('registro_persona_form');
+    if (registroForm) {
+        registroForm.addEventListener('submit', function(e) {
+            const nombreInput = document.getElementById('nombre');
+            const apellidoInput = document.getElementById('apellido');
+            const nombre = nombreInput ? String(nombreInput.value || '').trim().replace(/\s+/g, ' ') : '';
+            const apellido = apellidoInput ? String(apellidoInput.value || '').trim().replace(/\s+/g, ' ') : '';
+            const regexLetras = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ'’\-\s]+$/;
+            let ok = true;
+
+            mostrarErrorCampoNombre('nombre', 'nombre_error', '');
+            mostrarErrorCampoNombre('apellido', 'apellido_error', '');
+
+            if (!nombre) {
+                mostrarErrorCampoNombre('nombre', 'nombre_error', 'El nombre es requerido.');
+                ok = false;
+            } else if (!regexLetras.test(nombre)) {
+                mostrarErrorCampoNombre('nombre', 'nombre_error', 'El nombre solo puede tener letras.');
+                ok = false;
+            } else if (esMarcadorFalsoNombre(nombre)) {
+                mostrarErrorCampoNombre('nombre', 'nombre_error', 'Escriba un nombre real. No use X, N/A o prueba.');
+                ok = false;
+            } else if (contarPalabrasSignificativasNombre(nombre) > 3) {
+                mostrarErrorCampoNombre('nombre', 'nombre_error', 'En Nombre escriba solo el o los nombres, no los apellidos.');
+                ok = false;
+            }
+
+            if (!apellido) {
+                mostrarErrorCampoNombre('apellido', 'apellido_error', 'Los apellidos son requeridos.');
+                ok = false;
+            } else if (!regexLetras.test(apellido)) {
+                mostrarErrorCampoNombre('apellido', 'apellido_error', 'Los apellidos solo pueden tener letras.');
+                ok = false;
+            } else if (esMarcadorFalsoNombre(apellido)) {
+                mostrarErrorCampoNombre('apellido', 'apellido_error', 'Escriba los apellidos reales. No use X, N/A ni un punto.');
+                ok = false;
+            } else if (contarPalabrasSignificativasNombre(apellido) < 1) {
+                mostrarErrorCampoNombre('apellido', 'apellido_error', 'Escriba al menos un apellido real (mínimo 2 letras).');
+                ok = false;
+            }
+
+            if (ok && normalizarClaveNombrePersona(nombre) === normalizarClaveNombrePersona(apellido)) {
+                mostrarErrorCampoNombre('apellido', 'apellido_error', 'Nombre y apellidos no pueden ser iguales.');
+                ok = false;
+            }
+
+            if (!ok) {
+                e.preventDefault();
+                const primerInvalido = registroForm.querySelector('.input-invalid');
+                if (primerInvalido) {
+                    primerInvalido.focus();
+                }
+            }
+        });
     }
 })();
 </script>

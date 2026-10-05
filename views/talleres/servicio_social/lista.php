@@ -117,6 +117,9 @@ $urlExport = PUBLIC_URL . '?url=talleres/servicio-social/exportar' . ($qExport !
             <a href="<?= PUBLIC_URL ?>?url=talleres/servicio-social/horarios" class="ss-btn ss-btn-soft">
                 <i class="bi bi-clock"></i> Horarios
             </a>
+            <a href="<?= PUBLIC_URL ?>?url=talleres/servicio-social/inscripciones" class="ss-btn ss-btn-soft">
+                <i class="bi bi-calendar-check"></i> Inscripciones
+            </a>
             <?php endif; ?>
             <?php if ($urlPublico !== ''): ?>
             <a href="<?= htmlspecialchars($urlPublico, ENT_QUOTES, 'UTF-8') ?>" class="ss-btn ss-btn-main" target="_blank" rel="noopener">

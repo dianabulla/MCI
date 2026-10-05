@@ -207,6 +207,59 @@ class EscuelaFormacionInscripcion extends BaseModel {
 
         try {
             $stmt = $this->db->prepare("SHOW COLUMNS FROM {$this->table} LIKE ?");
+            $stmt->execute(['Categoria_Pago']);
+            $col = $stmt->fetch();
+            if (empty($col)) {
+                $this->db->exec("ALTER TABLE {$this->table} ADD COLUMN Categoria_Pago VARCHAR(30) NULL AFTER Entrego_Libro");
+            }
+        } catch (Exception $e) {
+            error_log('No se pudo asegurar columna Categoria_Pago en escuela_formacion_inscripcion: ' . $e->getMessage());
+        }
+
+        try {
+            $stmt = $this->db->prepare("SHOW COLUMNS FROM {$this->tablePagos} LIKE ?");
+            $stmt->execute(['Categoria_Pago']);
+            $col = $stmt->fetch();
+            if (empty($col)) {
+                $this->db->exec("ALTER TABLE {$this->tablePagos} ADD COLUMN Categoria_Pago VARCHAR(30) NULL AFTER Entrego_Libro");
+            }
+        } catch (Exception $e) {
+            error_log('No se pudo asegurar columna Categoria_Pago en escuela_formacion_pago_movimiento: ' . $e->getMessage());
+        }
+
+        try {
+            $this->db->exec(
+                "UPDATE {$this->tablePagos}
+                 SET Valor_Pago = ROUND(Valor_Pago, 0)
+                 WHERE Valor_Pago IS NOT NULL
+                   AND Valor_Pago <> ROUND(Valor_Pago, 0)"
+            );
+            $this->db->exec(
+                "UPDATE {$this->tablePagos}
+                 SET Valor_Pago = Valor_Pago + 1
+                 WHERE Valor_Pago >= 1000
+                   AND MOD(ROUND(Valor_Pago), 1000) = 999"
+            );
+            if ($this->tableColumnExists($this->table, 'Valor_Pago')) {
+                $this->db->exec(
+                    "UPDATE {$this->table}
+                     SET Valor_Pago = ROUND(Valor_Pago, 0)
+                     WHERE Valor_Pago IS NOT NULL
+                       AND Valor_Pago <> ROUND(Valor_Pago, 0)"
+                );
+                $this->db->exec(
+                    "UPDATE {$this->table}
+                     SET Valor_Pago = Valor_Pago + 1
+                     WHERE Valor_Pago >= 1000
+                       AND MOD(ROUND(Valor_Pago), 1000) = 999"
+                );
+            }
+        } catch (Throwable $e) {
+            error_log('No se pudieron corregir pesos 999 en pagos UV: ' . $e->getMessage());
+        }
+
+        try {
+            $stmt = $this->db->prepare("SHOW COLUMNS FROM {$this->table} LIKE ?");
             $stmt->execute(['Documentos']);
             $col = $stmt->fetch();
             if (empty($col)) {
@@ -386,11 +439,14 @@ class EscuelaFormacionInscripcion extends BaseModel {
         return $out;
     }
 
-    public function actualizarPagoInscripcion($idInscripcion, $metodoPago, $tipoPago, $valorPago, $referenciaPago, $recibidoPor = '', $entregoLibro = null) {
+    public function actualizarPagoInscripcion($idInscripcion, $metodoPago, $tipoPago, $valorPago, $referenciaPago, $recibidoPor = '', $entregoLibro = null, $categoriaPago = null) {
         $idInscripcion = (int)$idInscripcion;
         if ($idInscripcion <= 0) {
             return false;
         }
+
+        $categoriaNormalizada = $this->normalizarCategoriaPagoPersistida($categoriaPago);
+        $valorPago = $valorPago !== null ? $this->ajustarPesosCop((float)$valorPago) : null;
 
         return $this->execute(
             "UPDATE {$this->table}
@@ -399,6 +455,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
                  Tipo_Pago = ?,
                  Valor_Pago = ?,
                  Entrego_Libro = ?,
+                 Categoria_Pago = ?,
                  Referencia_Pago = ?
              WHERE Id_Inscripcion = ?",
             [
@@ -407,13 +464,14 @@ class EscuelaFormacionInscripcion extends BaseModel {
                 trim((string)$tipoPago) !== '' ? trim((string)$tipoPago) : null,
                 $valorPago !== null ? (float)$valorPago : null,
                 $entregoLibro === null ? null : ((int)$entregoLibro === 1 ? 1 : 0),
+                $categoriaNormalizada,
                 trim((string)$referenciaPago) !== '' ? trim((string)$referenciaPago) : null,
                 $idInscripcion
             ]
         );
     }
 
-    public function registrarMovimientoPago(array $inscripcion, $metodoPago, $tipoPago, $valorPago, $referenciaPago, $recibidoPor = '', $entregoLibro = null) {
+    public function registrarMovimientoPago(array $inscripcion, $metodoPago, $tipoPago, $valorPago, $referenciaPago, $recibidoPor = '', $entregoLibro = null, $categoriaPago = null) {
         $idInscripcion = (int)($inscripcion['Id_Inscripcion'] ?? 0);
         if ($idInscripcion <= 0) {
             return false;
@@ -422,12 +480,18 @@ class EscuelaFormacionInscripcion extends BaseModel {
         $programa = trim((string)($inscripcion['Programa'] ?? ''));
         $cedula = trim((string)($inscripcion['Cedula'] ?? ''));
         $idPersona = (int)($inscripcion['Id_Persona'] ?? 0);
-        $tipoPago = $this->resolverTipoPagoTrasMovimiento($programa, (string)$tipoPago, (float)$valorPago, $cedula, $idPersona);
+        $categoriaNormalizada = $this->normalizarCategoriaPagoPersistida($categoriaPago);
+        $valorPago = $this->ajustarPesosCop((float)$valorPago);
+        if ($categoriaNormalizada === 'libro') {
+            $tipoPago = strtolower(trim((string)$tipoPago)) === 'completo' ? 'completo' : 'abono';
+        } else {
+            $tipoPago = $this->resolverTipoPagoTrasMovimiento($programa, (string)$tipoPago, (float)$valorPago, $cedula, $idPersona);
+        }
 
         $ok = $this->execute(
             "INSERT INTO {$this->tablePagos}
-             (Id_Inscripcion, Id_Persona, Nombre, Cedula, Telefono, Programa, Metodo_Pago, Recibido_Por, Tipo_Pago, Valor_Pago, Entrego_Libro, Referencia_Pago)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             (Id_Inscripcion, Id_Persona, Nombre, Cedula, Telefono, Programa, Metodo_Pago, Recibido_Por, Tipo_Pago, Valor_Pago, Entrego_Libro, Categoria_Pago, Referencia_Pago)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 $idInscripcion,
                 $idPersona > 0 ? $idPersona : null,
@@ -440,11 +504,12 @@ class EscuelaFormacionInscripcion extends BaseModel {
                 $tipoPago,
                 (float)$valorPago,
                 $entregoLibro === null ? null : ((int)$entregoLibro === 1 ? 1 : 0),
+                $categoriaNormalizada,
                 (string)$referenciaPago
             ]
         );
 
-        if ($ok && $this->programaUsaUmbralPagoCompletoUv($programa)) {
+        if ($ok && $categoriaNormalizada !== 'libro' && $this->programaUsaUmbralPagoCompletoUv($programa)) {
             $this->sincronizarTiposPagoAcumuladoCompleto($programa, 180000, $cedula, $idPersona);
         }
 
@@ -478,6 +543,8 @@ class EscuelaFormacionInscripcion extends BaseModel {
         } else {
             return 0.0;
         }
+
+        $where[] = $this->sqlExprCategoriaEsLibro('s') . ' = 0';
 
         $sql = "SELECT COALESCE(SUM(COALESCE(s.Valor_Pago, 0)), 0) AS Total
                 FROM {$this->tablePagos} s
@@ -538,12 +605,16 @@ class EscuelaFormacionInscripcion extends BaseModel {
         $exprProgSub = "COALESCE(NULLIF(TRIM(s.Programa), ''), 'SIN-PROGRAMA')";
         $exprProgMov = "COALESCE(NULLIF(TRIM(m.Programa), ''), 'SIN-PROGRAMA')";
 
+        $exprLibroSub = $this->sqlExprCategoriaEsLibro('s');
+        $exprLibroMov = $this->sqlExprCategoriaEsLibro('m');
+
         $sqlMovimientos = "UPDATE {$this->tablePagos} m
             INNER JOIN (
                 SELECT {$exprClaveSub} AS ClavePersona, {$exprProgSub} AS ClavePrograma
                 FROM {$this->tablePagos} s
                 WHERE {$whereProgramaSub}
                   AND COALESCE(s.Valor_Pago, 0) > 0
+                  AND {$exprLibroSub} = 0
                   {$filtroPersonaSub}
                 GROUP BY {$exprClaveSub}, {$exprProgSub}
                 HAVING SUM(COALESCE(s.Valor_Pago, 0)) >= ?
@@ -551,6 +622,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
             SET m.Tipo_Pago = 'completo'
             WHERE {$whereProgramaMov}
               AND COALESCE(m.Valor_Pago, 0) > 0
+              AND {$exprLibroMov} = 0
               AND COALESCE(LOWER(TRIM(m.Tipo_Pago)), '') <> 'completo'
               {$filtroPersonaMov}";
 
@@ -579,6 +651,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
                 FROM {$this->tablePagos} s
                 WHERE {$whereProgramaSub}
                   AND COALESCE(s.Valor_Pago, 0) > 0
+                  AND {$exprLibroSub} = 0
                   {$filtroPersonaSub}
                 GROUP BY {$exprClaveSub}, {$exprProgSub}
                 HAVING SUM(COALESCE(s.Valor_Pago, 0)) >= ?
@@ -661,6 +734,22 @@ class EscuelaFormacionInscripcion extends BaseModel {
         return $exists;
     }
 
+    private function normalizarCategoriaPagoPersistida($categoriaPago): ?string {
+        $valor = strtolower(trim((string)$categoriaPago));
+        $valorCanonico = preg_replace('/[^a-z0-9]+/', '', $valor);
+
+        if (in_array($valorCanonico, ['libro', 'book', 'sololibro', 'soloellibro', 'soloelbook'], true)
+            || in_array($valor, ['libro', 'book', 'solo libro', 'solo_libro', 'solo-el-libro', 'solo el libro', 'solo_el_libro', 'soloellibro'], true)) {
+            return 'libro';
+        }
+
+        if ($valor === 'encuentro' || $valor === 'encuentro_uv' || $valor === 'uv') {
+            return 'encuentro';
+        }
+
+        return null;
+    }
+
     public function getByIdInscripcion($idInscripcion) {
         $idInscripcion = (int)$idInscripcion;
         if ($idInscripcion <= 0) {
@@ -707,6 +796,61 @@ class EscuelaFormacionInscripcion extends BaseModel {
                 LIMIT {$limit}";
 
         return $this->query($sql, $params);
+    }
+
+    public function getInscripcionUniversidadVidaPorPersona($idPersona) {
+        $idPersona = (int)$idPersona;
+        if ($idPersona <= 0) {
+            return null;
+        }
+
+        $rows = $this->query(
+            "SELECT *
+             FROM {$this->table}
+             WHERE Id_Persona = ?
+               AND Programa IN ('universidad_vida', 'encuentro')
+             ORDER BY CASE WHEN Programa = 'universidad_vida' THEN 0 ELSE 1 END,
+                      Fecha_Registro DESC, Id_Inscripcion DESC
+             LIMIT 1",
+            [$idPersona]
+        );
+
+        return $rows[0] ?? null;
+    }
+
+    public function getInscripcionUniversidadVidaVigenteEnCiclo($idPersona) {
+        $idPersona = (int)$idPersona;
+        if ($idPersona <= 0) {
+            return null;
+        }
+
+        require_once APP . '/Helpers/PeriodoSemestre.php';
+        $ciclo = PeriodoSemestre::actual();
+
+        $rows = $this->query(
+            "SELECT *
+             FROM {$this->table}
+             WHERE Id_Persona = ?
+               AND Programa IN ('universidad_vida', 'encuentro')
+             ORDER BY CASE WHEN Programa = 'universidad_vida' THEN 0 ELSE 1 END,
+                      Fecha_Registro DESC, Id_Inscripcion DESC",
+            [$idPersona]
+        );
+
+        foreach ((array)$rows as $fila) {
+            $fecha = substr(trim((string)($fila['Fecha_Registro'] ?? '')), 0, 10);
+            if (PeriodoSemestre::fechaEnRango($fecha, $ciclo)) {
+                return $fila;
+            }
+        }
+
+        return null;
+    }
+
+    public function getIdInscripcionUniversidadVidaVigenteEnCiclo($idPersona): int
+    {
+        $fila = $this->getInscripcionUniversidadVidaVigenteEnCiclo($idPersona);
+        return (int)($fila['Id_Inscripcion'] ?? 0);
     }
 
     public function existeInscripcionPersonaPrograma($idPersona, $programa) {
@@ -1119,6 +1263,23 @@ class EscuelaFormacionInscripcion extends BaseModel {
         );
     }
 
+    private function ajustarPesosCop(float $valor): float
+    {
+        if ($valor <= 0) {
+            return 0.0;
+        }
+        $entero = (int)round($valor, 0);
+        if ($entero >= 1000 && ($entero % 1000) === 999) {
+            return (float)($entero + 1);
+        }
+        return (float)$entero;
+    }
+
+    private function sqlExprCategoriaEsLibro(string $alias = 's'): string
+    {
+        return "CASE WHEN LOWER(REPLACE(REPLACE(REPLACE(COALESCE({$alias}.Categoria_Pago, ''), '-', ''), '_', ''), ' ', '')) IN ('libro', 'book', 'sololibro', 'soloellibro', 'soloelbook') THEN 1 ELSE 0 END";
+    }
+
     public function getResumenPagosAbonos($buscar = '', $limit = 300, $programa = '') {
         $buscar = trim((string)$buscar);
         $programa = trim((string)$programa);
@@ -1142,6 +1303,9 @@ class EscuelaFormacionInscripcion extends BaseModel {
             $params[] = $like;
         }
 
+        $categoriaLibroExpr = $this->sqlExprCategoriaEsLibro('s');
+        $categoriaPagoExpr = "CASE WHEN {$categoriaLibroExpr} = 1 THEN 'libro' WHEN LOWER(REPLACE(REPLACE(REPLACE(COALESCE(s.Categoria_Pago, ''), '-', ''), '_', ''), ' ', '')) = 'encuentro' THEN 'encuentro' ELSE '' END";
+
         $sql = "SELECT
                     COALESCE(NULLIF(TRIM(s.Cedula), ''), CONCAT('SIN-CEDULA-', COALESCE(s.Id_Persona, 0))) AS Cedula_Clave,
                     MAX(COALESCE(NULLIF(TRIM(s.Cedula), ''), '')) AS Cedula,
@@ -1152,6 +1316,16 @@ class EscuelaFormacionInscripcion extends BaseModel {
                     SUM(CASE WHEN COALESCE(s.Tipo_Pago, '') = 'abono' THEN COALESCE(s.Valor_Pago, 0) ELSE 0 END) AS Total_Abonos,
                     SUM(CASE WHEN COALESCE(s.Tipo_Pago, '') = 'completo' THEN COALESCE(s.Valor_Pago, 0) ELSE 0 END) AS Total_Pago_Completo,
                     SUM(CASE WHEN COALESCE(s.Tipo_Pago, '') = 'abono' THEN 1 ELSE 0 END) AS Cantidad_Abonos,
+                    MAX({$categoriaLibroExpr}) AS Tiene_Libro,
+                    MAX({$categoriaPagoExpr}) AS Categoria_Pago,
+                    SUM(CASE WHEN {$categoriaLibroExpr} = 1 THEN COALESCE(s.Valor_Pago, 0) ELSE 0 END) AS Total_Libros,
+                    SUM(CASE WHEN {$categoriaLibroExpr} = 0 THEN COALESCE(s.Valor_Pago, 0) ELSE 0 END) AS Total_Pagado_Encuentro,
+                    SUM(CASE WHEN {$categoriaLibroExpr} = 0 AND COALESCE(s.Tipo_Pago, '') = 'abono' THEN COALESCE(s.Valor_Pago, 0) ELSE 0 END) AS Total_Abonos_Encuentro,
+                    SUM(CASE WHEN {$categoriaLibroExpr} = 0 AND COALESCE(s.Tipo_Pago, '') = 'completo' THEN COALESCE(s.Valor_Pago, 0) ELSE 0 END) AS Total_Pago_Completo_Encuentro,
+                    SUM(CASE WHEN {$categoriaLibroExpr} = 1 AND COALESCE(s.Tipo_Pago, '') = 'abono' THEN COALESCE(s.Valor_Pago, 0) ELSE 0 END) AS Total_Abonos_Libro,
+                    SUM(CASE WHEN {$categoriaLibroExpr} = 1 AND COALESCE(s.Tipo_Pago, '') = 'completo' THEN COALESCE(s.Valor_Pago, 0) ELSE 0 END) AS Total_Pago_Completo_Libro,
+                    SUM(CASE WHEN {$categoriaLibroExpr} = 0 THEN 1 ELSE 0 END) AS Registros_Encuentro,
+                    SUM(CASE WHEN {$categoriaLibroExpr} = 1 THEN 1 ELSE 0 END) AS Registros_Libro,
                     MAX(s.Fecha_Registro) AS Ultimo_Movimiento
                 FROM {$this->tablePagos} s
                 WHERE " . implode(' AND ', $where) . "
@@ -1191,6 +1365,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
         $exprMetodoPago = $hasMetodoPago ? "TRIM(COALESCE(s.Metodo_Pago, ''))" : "''";
         $exprReferenciaPago = $hasReferenciaPago ? "TRIM(COALESCE(s.Referencia_Pago, ''))" : "''";
         $exprTipoPago = $hasTipoPago ? "LOWER(COALESCE(s.Tipo_Pago, ''))" : "''";
+        $exprCategoriaPago = $this->tableColumnExists($this->table, 'Categoria_Pago') ? "LOWER(REPLACE(REPLACE(REPLACE(COALESCE(s.Categoria_Pago, ''), '-', ''), '_', ''), ' ', ''))" : "''";
         $exprPrograma = $hasPrograma ? "COALESCE(s.Programa, '')" : "''";
         $exprNombre = $hasNombre ? "COALESCE(NULLIF(TRIM(s.Nombre), ''), 'SIN NOMBRE')" : "'SIN NOMBRE'";
         $exprCedula = $hasCedula ? "COALESCE(NULLIF(TRIM(s.Cedula), ''), '')" : "''";
@@ -1253,6 +1428,16 @@ class EscuelaFormacionInscripcion extends BaseModel {
                     SUM(CASE WHEN {$exprTipoPago} = 'abono' THEN {$exprValorPago} ELSE 0 END) AS Total_Abonos,
                     SUM(CASE WHEN {$exprTipoPago} = 'completo' THEN {$exprValorPago} ELSE 0 END) AS Total_Pago_Completo,
                     SUM(CASE WHEN {$exprTipoPago} = 'abono' THEN 1 ELSE 0 END) AS Cantidad_Abonos,
+                    MAX(CASE WHEN {$exprCategoriaPago} IN ('libro', 'book', 'sololibro', 'soloellibro', 'soloelbook') THEN 1 ELSE 0 END) AS Tiene_Libro,
+                    MAX(CASE WHEN {$exprCategoriaPago} IN ('libro', 'book', 'sololibro', 'soloellibro', 'soloelbook') THEN 'libro' WHEN {$exprCategoriaPago} = 'encuentro' THEN 'encuentro' ELSE '' END) AS Categoria_Pago,
+                    SUM(CASE WHEN {$exprCategoriaPago} IN ('libro', 'book', 'sololibro', 'soloellibro', 'soloelbook') THEN {$exprValorPago} ELSE 0 END) AS Total_Libros,
+                    SUM(CASE WHEN {$exprCategoriaPago} NOT IN ('libro', 'book', 'sololibro', 'soloellibro', 'soloelbook') THEN {$exprValorPago} ELSE 0 END) AS Total_Pagado_Encuentro,
+                    SUM(CASE WHEN {$exprCategoriaPago} NOT IN ('libro', 'book', 'sololibro', 'soloellibro', 'soloelbook') AND {$exprTipoPago} = 'abono' THEN {$exprValorPago} ELSE 0 END) AS Total_Abonos_Encuentro,
+                    SUM(CASE WHEN {$exprCategoriaPago} NOT IN ('libro', 'book', 'sololibro', 'soloellibro', 'soloelbook') AND {$exprTipoPago} = 'completo' THEN {$exprValorPago} ELSE 0 END) AS Total_Pago_Completo_Encuentro,
+                    SUM(CASE WHEN {$exprCategoriaPago} IN ('libro', 'book', 'sololibro', 'soloellibro', 'soloelbook') AND {$exprTipoPago} = 'abono' THEN {$exprValorPago} ELSE 0 END) AS Total_Abonos_Libro,
+                    SUM(CASE WHEN {$exprCategoriaPago} IN ('libro', 'book', 'sololibro', 'soloellibro', 'soloelbook') AND {$exprTipoPago} = 'completo' THEN {$exprValorPago} ELSE 0 END) AS Total_Pago_Completo_Libro,
+                    SUM(CASE WHEN {$exprCategoriaPago} NOT IN ('libro', 'book', 'sololibro', 'soloellibro', 'soloelbook') THEN 1 ELSE 0 END) AS Registros_Encuentro,
+                    SUM(CASE WHEN {$exprCategoriaPago} IN ('libro', 'book', 'sololibro', 'soloellibro', 'soloelbook') THEN 1 ELSE 0 END) AS Registros_Libro,
                     MAX({$exprFechaRegistro}) AS Ultimo_Movimiento
                 FROM {$this->table} s
                 WHERE " . implode(' AND ', $where) . "
@@ -1275,6 +1460,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
         }
 
         $sql = "SELECT
+                    s.Id_Pago,
                     s.Id_Inscripcion,
                     s.Nombre,
                     s.Cedula,
@@ -1285,6 +1471,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
                     s.Tipo_Pago,
                     s.Valor_Pago,
                     s.Entrego_Libro,
+                    s.Categoria_Pago,
                     s.Referencia_Pago,
                     s.Fecha_Registro
                 FROM {$this->tablePagos} s
@@ -1319,6 +1506,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
         }
 
         $sql = "SELECT
+                    s.Id_Pago,
                     s.Id_Inscripcion,
                     s.Nombre,
                     s.Cedula,
@@ -1329,6 +1517,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
                     s.Tipo_Pago,
                     s.Valor_Pago,
                     s.Entrego_Libro,
+                    s.Categoria_Pago,
                     s.Referencia_Pago,
                     s.Fecha_Registro
                                 FROM {$this->tablePagos} s
@@ -1350,6 +1539,237 @@ class EscuelaFormacionInscripcion extends BaseModel {
         return $this->getDetallePagosPorCedulaLegacy($cedula, $limit, $programa);
     }
 
+    public function getMovimientoPagoPorId(int $idPago): ?array {
+        if ($idPago <= 0) {
+            return null;
+        }
+
+        $sql = "SELECT
+                    s.Id_Pago,
+                    s.Id_Inscripcion,
+                    s.Nombre,
+                    s.Cedula,
+                    s.Telefono,
+                    s.Programa,
+                    s.Metodo_Pago,
+                    s.Recibido_Por,
+                    s.Tipo_Pago,
+                    s.Valor_Pago,
+                    s.Entrego_Libro,
+                    s.Categoria_Pago,
+                    s.Referencia_Pago,
+                    s.Fecha_Registro
+                FROM {$this->tablePagos} s
+                WHERE s.Id_Pago = ?
+                LIMIT 1";
+        try {
+            $rows = $this->query($sql, [$idPago]);
+            if (!empty($rows) && is_array($rows[0])) {
+                return $rows[0];
+            }
+        } catch (Throwable $e) {
+            error_log('Fallo buscando movimiento de pago por id: ' . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    public function actualizarMovimientoPagoPorId(
+        int $idPago,
+        string $metodoPago,
+        string $tipoPago,
+        $valorPago,
+        string $recibidoPor = '',
+        $entregoLibro = null,
+        $categoriaPago = null
+    ): ?array {
+        $actual = $this->getMovimientoPagoPorId($idPago);
+        if (!is_array($actual)) {
+            return null;
+        }
+
+        $categoriaNormalizada = $this->normalizarCategoriaPagoPersistida($categoriaPago);
+        $valorPago = $this->ajustarPesosCop((float)$valorPago);
+        $tipoPago = strtolower(trim($tipoPago)) === 'completo' ? 'completo' : 'abono';
+        $metodoPago = trim($metodoPago);
+        $recibidoPor = trim($recibidoPor);
+        $referencia = trim((string)($actual['Referencia_Pago'] ?? ''));
+        $idInscripcion = (int)($actual['Id_Inscripcion'] ?? 0);
+
+        $ok = $this->execute(
+            "UPDATE {$this->tablePagos}
+             SET Metodo_Pago = ?,
+                 Recibido_Por = ?,
+                 Tipo_Pago = ?,
+                 Valor_Pago = ?,
+                 Entrego_Libro = ?,
+                 Categoria_Pago = ?
+             WHERE Id_Pago = ?",
+            [
+                $metodoPago !== '' ? $metodoPago : null,
+                $recibidoPor !== '' ? $recibidoPor : null,
+                $tipoPago,
+                (float)$valorPago,
+                $entregoLibro === null ? null : ((int)$entregoLibro === 1 ? 1 : 0),
+                $categoriaNormalizada,
+                $idPago,
+            ]
+        );
+        if (!$ok) {
+            return null;
+        }
+
+        if ($idInscripcion > 0 && $referencia !== '') {
+            $this->actualizarPagoInscripcion(
+                $idInscripcion,
+                $metodoPago,
+                $tipoPago,
+                $valorPago,
+                $referencia,
+                $recibidoPor,
+                $entregoLibro,
+                $categoriaPago
+            );
+        }
+
+        return $this->getMovimientoPagoPorId($idPago);
+    }
+
+    /**
+     * @return array{eliminados:int, inscripciones:int}
+     */
+    public function eliminarPagosPorCedulaClave(string $cedulaClave, string $programa, string $alcance = 'todos'): array
+    {
+        $cedulaClave = trim($cedulaClave);
+        $programa = trim($programa);
+        $alcance = strtolower(trim($alcance));
+        if (!in_array($alcance, ['todos', 'encuentro', 'libro'], true)) {
+            $alcance = 'todos';
+        }
+
+        if ($cedulaClave === '') {
+            return ['eliminados' => 0, 'inscripciones' => 0];
+        }
+
+        $exprClave = "COALESCE(NULLIF(TRIM(s.Cedula), ''), CONCAT('SIN-CEDULA-', COALESCE(s.Id_Persona, 0)))";
+        $where = ["{$exprClave} = ?"];
+        $params = [$cedulaClave];
+
+        $sqlPrograma = $this->getSqlFiltroProgramaPagos($programa, 's');
+        if ($sqlPrograma !== '') {
+            $where[] = $sqlPrograma;
+        }
+
+        if ($alcance === 'libro') {
+            $where[] = $this->sqlExprCategoriaEsLibro('s') . ' = 1';
+        } elseif ($alcance === 'encuentro') {
+            $where[] = $this->sqlExprCategoriaEsLibro('s') . ' = 0';
+        }
+
+        $whereSql = implode(' AND ', $where);
+        $filas = [];
+        try {
+            $filas = $this->query(
+                "SELECT s.Id_Inscripcion FROM {$this->tablePagos} s WHERE {$whereSql}",
+                $params
+            );
+        } catch (Throwable $e) {
+            error_log('No se pudieron listar pagos a eliminar: ' . $e->getMessage());
+            return ['eliminados' => 0, 'inscripciones' => 0];
+        }
+
+        $idsInscripcion = [];
+        foreach ((array)$filas as $fila) {
+            $idIns = (int)($fila['Id_Inscripcion'] ?? 0);
+            if ($idIns > 0) {
+                $idsInscripcion[$idIns] = $idIns;
+            }
+        }
+
+        $eliminados = 0;
+        $okDelete = true;
+        if (!empty($filas)) {
+            $okDelete = $this->execute("DELETE s FROM {$this->tablePagos} s WHERE {$whereSql}", $params);
+            if ($okDelete) {
+                $eliminados = count($filas);
+            }
+        }
+
+        if ($okDelete && $alcance !== 'libro') {
+            $this->limpiarPagoLegacyInscripcionPorClave($cedulaClave, $programa, $alcance === 'todos');
+        }
+
+        $inscripcionesLimpias = 0;
+        foreach ($idsInscripcion as $idInscripcion) {
+            if ($this->limpiarPagoInscripcionSiSinMovimientos($idInscripcion)) {
+                $inscripcionesLimpias++;
+            }
+        }
+
+        return ['eliminados' => $eliminados, 'inscripciones' => $inscripcionesLimpias];
+    }
+
+    private function limpiarPagoInscripcionSiSinMovimientos(int $idInscripcion): bool
+    {
+        if ($idInscripcion <= 0) {
+            return false;
+        }
+
+        $restantes = $this->query(
+            "SELECT COUNT(*) AS Total FROM {$this->tablePagos} WHERE Id_Inscripcion = ?",
+            [$idInscripcion]
+        );
+        if ((int)($restantes[0]['Total'] ?? 0) > 0) {
+            return false;
+        }
+
+        return $this->limpiarCamposPagoInscripcion($idInscripcion);
+    }
+
+    private function limpiarCamposPagoInscripcion(int $idInscripcion): bool
+    {
+        $sets = [];
+        foreach (['Metodo_Pago', 'Recibido_Por', 'Tipo_Pago', 'Valor_Pago', 'Entrego_Libro', 'Categoria_Pago', 'Referencia_Pago'] as $col) {
+            if ($this->tableColumnExists($this->table, $col)) {
+                $sets[] = "{$col} = NULL";
+            }
+        }
+        if ($sets === []) {
+            return false;
+        }
+
+        return $this->execute(
+            "UPDATE {$this->table} SET " . implode(', ', $sets) . " WHERE Id_Inscripcion = ?",
+            [$idInscripcion]
+        );
+    }
+
+    private function limpiarPagoLegacyInscripcionPorClave(string $cedulaClave, string $programa, bool $incluirLibro): void
+    {
+        if (!$this->tableColumnExists($this->table, 'Valor_Pago')) {
+            return;
+        }
+
+        $exprClave = "COALESCE(NULLIF(TRIM(s.Cedula), ''), CONCAT('SIN-CEDULA-', COALESCE(s.Id_Persona, 0)))";
+        $where = ["{$exprClave} = ?", 'COALESCE(s.Valor_Pago, 0) > 0'];
+        $params = [$cedulaClave];
+        $sqlPrograma = $this->getSqlFiltroProgramaPagos($programa, 's');
+        if ($sqlPrograma !== '') {
+            $where[] = $sqlPrograma;
+        }
+        if (!$incluirLibro && $this->tableColumnExists($this->table, 'Categoria_Pago')) {
+            $where[] = $this->sqlExprCategoriaEsLibro('s') . ' = 0';
+        }
+
+        $filas = $this->query(
+            "SELECT s.Id_Inscripcion FROM {$this->table} s WHERE " . implode(' AND ', $where),
+            $params
+        );
+        foreach ((array)$filas as $fila) {
+            $this->limpiarCamposPagoInscripcion((int)($fila['Id_Inscripcion'] ?? 0));
+        }
+    }
+
     private function getDetallePagosPorCedulaLegacy($cedula, $limit = 100, $programa = '') {
         $cedula = trim((string)$cedula);
         $programa = trim((string)$programa);
@@ -1368,6 +1788,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
         $hasTipoPago = $this->tableColumnExists($this->table, 'Tipo_Pago');
         $hasValorPago = $this->tableColumnExists($this->table, 'Valor_Pago');
         $hasEntregoLibro = $this->tableColumnExists($this->table, 'Entrego_Libro');
+        $hasCategoriaPago = $this->tableColumnExists($this->table, 'Categoria_Pago');
         $hasReferenciaPago = $this->tableColumnExists($this->table, 'Referencia_Pago');
         $hasFechaRegistro = $this->tableColumnExists($this->table, 'Fecha_Registro');
         $hasIdPersona = $this->tableColumnExists($this->table, 'Id_Persona');
@@ -1382,6 +1803,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
         $exprTipoPago = $hasTipoPago ? 's.Tipo_Pago' : "''";
         $exprValorPago = $hasValorPago ? 's.Valor_Pago' : '0';
         $exprEntregoLibro = $hasEntregoLibro ? 's.Entrego_Libro' : 'NULL';
+        $exprCategoriaPago = $hasCategoriaPago ? 'LOWER(COALESCE(s.Categoria_Pago, ""))' : "''";
         $exprReferenciaPago = $hasReferenciaPago ? 's.Referencia_Pago' : "''";
         $exprFechaRegistro = $hasFechaRegistro ? 's.Fecha_Registro' : 'NULL';
         $exprCedulaClave = $hasCedula
@@ -1409,6 +1831,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
                     {$exprTipoPago} AS Tipo_Pago,
                     {$exprValorPago} AS Valor_Pago,
                     {$exprEntregoLibro} AS Entrego_Libro,
+                    CASE WHEN {$exprCategoriaPago} = 'libro' THEN 'libro' WHEN {$exprCategoriaPago} = 'encuentro' THEN 'encuentro' ELSE '' END AS Categoria_Pago,
                     {$exprReferenciaPago} AS Referencia_Pago,
                     {$exprFechaRegistro} AS Fecha_Registro
                 FROM {$this->table} s
@@ -1434,7 +1857,11 @@ class EscuelaFormacionInscripcion extends BaseModel {
             return false;
         }
 
-        if ($this->getIdInscripcionPersonaPrograma($idPersona, $programa) > 0) {
+        if (in_array($programa, ['universidad_vida', 'encuentro'], true)) {
+            if ($this->getIdInscripcionUniversidadVidaVigenteEnCiclo($idPersona) > 0) {
+                return true;
+            }
+        } elseif ($this->getIdInscripcionPersonaPrograma($idPersona, $programa) > 0) {
             return true;
         }
 

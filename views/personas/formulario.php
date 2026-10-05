@@ -37,11 +37,12 @@ $urlVolver = $returnUrl !== ''
         <input type="hidden" name="id" value="<?= (int)$persona['Id_Persona'] ?>">
         <?php endif; ?>
 
+        <?php if ($returnToAsistencia || $returnToCelulas || (int)($celula_retorno ?? 0) > 0): ?>
         <?php if ($returnToAsistencia): ?>
         <input type="hidden" name="return_to" value="asistencia">
-        <input type="hidden" name="celula_retorno" value="<?= (int)($celula_retorno ?? 0) ?>">
         <?php elseif ($returnToCelulas): ?>
         <input type="hidden" name="return_to" value="celulas">
+        <?php endif; ?>
         <input type="hidden" name="celula_retorno" value="<?= (int)($celula_retorno ?? 0) ?>">
         <?php endif; ?>
         <?php if ($returnUrl !== ''): ?>
@@ -51,24 +52,33 @@ $urlVolver = $returnUrl !== ''
         <!-- Sección: Información Personal -->
         <div class="form-section">
             <h3 class="section-title">📋 Información Personal</h3>
+            <p class="form-req-note">Los campos marcados con <span class="req">*</span> son obligatorios. En <strong>Nombre</strong> escriba solo el o los nombres; en <strong>Apellidos</strong> el primer y segundo apellido, sin usar X ni valores de relleno.</p>
             
-            <div class="form-row">
+            <div class="form-row form-row-2">
                 <div class="form-group">
-                    <label for="nombre">Nombre *</label>
-                    <input type="text" id="nombre" name="nombre" class="form-control" 
+                    <label for="nombre">Nombre <span class="req">*</span></label>
+                    <input type="text" id="nombre" name="nombre" class="form-control"
+                           autocomplete="given-name" maxlength="60"
+                           placeholder="Ej: JUAN CARLOS"
                            value="<?= htmlspecialchars($post_data['nombre'] ?? $persona['Nombre'] ?? '') ?>" required>
+                    <small class="field-hint">Solo nombres. No incluya apellidos.</small>
+                    <small class="field-error" id="nombre_error" hidden></small>
                 </div>
 
                 <div class="form-group">
-                    <label for="apellido">Apellido *</label>
-                    <input type="text" id="apellido" name="apellido" class="form-control" 
+                    <label for="apellido">Apellidos <span class="req">*</span></label>
+                    <input type="text" id="apellido" name="apellido" class="form-control"
+                           autocomplete="family-name" maxlength="80"
+                           placeholder="Ej: PÉREZ GÓMEZ"
                            value="<?= htmlspecialchars($post_data['apellido'] ?? $persona['Apellido'] ?? '') ?>" required>
+                    <small class="field-hint">Primer y segundo apellido. No use X, N/A ni un punto.</small>
+                    <small class="field-error" id="apellido_error" hidden></small>
                 </div>
             </div>
 
-            <div class="form-row">
+            <div class="form-row form-row-2">
                 <div class="form-group">
-                    <label for="tipo_documento">Tipo de Documento</label>
+                    <label for="tipo_documento">Tipo de documento <span class="req">*</span></label>
                     <?php $tipoDocumentoSeleccionado = $post_data['tipo_documento'] ?? ($persona['Tipo_Documento'] ?? ''); ?>
                     <select id="tipo_documento" name="tipo_documento" class="form-control" required>
                         <option value="">Seleccionar...</option>
@@ -80,18 +90,18 @@ $urlVolver = $returnUrl !== ''
                 </div>
 
                 <div class="form-group">
-                    <label for="numero_documento">Número de Documento</label>
+                    <label for="numero_documento">Número de documento <span class="req">*</span></label>
                     <input type="text" id="numero_documento" name="numero_documento" class="form-control" 
                            value="<?= htmlspecialchars($post_data['numero_documento'] ?? $persona['Numero_Documento'] ?? '') ?>" required>
                 </div>
             </div>
 
-            <div class="form-row">
+            <div class="form-row form-row-2">
                 <div class="form-group">
-                    <label for="fecha_nacimiento">Fecha de Nacimiento</label>
+                    <label for="fecha_nacimiento">Fecha de nacimiento <span class="req">*</span></label>
                     <?php $fechaNacimientoForm = $post_data['fecha_nacimiento'] ?? ($persona['Fecha_Nacimiento'] ?? ''); ?>
                     <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" class="form-control" 
-                           value="<?= htmlspecialchars((string)$fechaNacimientoForm) ?>">
+                           value="<?= htmlspecialchars((string)$fechaNacimientoForm) ?>" required>
                 </div>
 
                 <div class="form-group">
@@ -110,14 +120,27 @@ $urlVolver = $returnUrl !== ''
                            value="<?= htmlspecialchars($edadCalculadaForm) ?>">
                     <small class="form-text text-muted">Se calcula automáticamente con la fecha de nacimiento.</small>
                 </div>
+            </div>
+
+            <div class="form-row form-row-2">
+                <div class="form-group">
+                    <label for="genero">Género <span class="req">*</span></label>
+                    <?php
+                    $generoSeleccionado = (string)($post_data['genero'] ?? ($persona['Genero'] ?? ''));
+                    $esHombreSel = in_array($generoSeleccionado, ['Hombre', 'Joven Hombre'], true);
+                    $esMujerSel = in_array($generoSeleccionado, ['Mujer', 'Joven Mujer'], true);
+                    ?>
+                    <select id="genero" name="genero" class="form-control" required>
+                        <option value="">Seleccionar...</option>
+                        <option value="Hombre" <?= $esHombreSel ? 'selected' : '' ?>>Hombre</option>
+                        <option value="Mujer" <?= $esMujerSel ? 'selected' : '' ?>>Mujer</option>
+                    </select>
+                </div>
 
                 <div class="form-group">
-                    <label for="genero">Género</label>
-                    <select id="genero" name="genero" class="form-control">
-                        <option value="">Seleccionar...</option>
-                        <option value="Hombre" <?= isset($persona) && in_array((string)($persona['Genero'] ?? ''), ['Hombre', 'Joven Hombre'], true) ? 'selected' : '' ?>>Hombre</option>
-                        <option value="Mujer" <?= isset($persona) && in_array((string)($persona['Genero'] ?? ''), ['Mujer', 'Joven Mujer'], true) ? 'selected' : '' ?>>Mujer</option>
-                    </select>
+                    <label for="telefono">Teléfono <span class="req">*</span></label>
+                    <input type="tel" id="telefono" name="telefono" class="form-control" required
+                           value="<?= htmlspecialchars($post_data['telefono'] ?? $persona['Telefono'] ?? '') ?>">
                 </div>
             </div>
         </div>
@@ -126,15 +149,7 @@ $urlVolver = $returnUrl !== ''
         <div class="form-section">
             <h3 class="section-title">📞 Información de Contacto</h3>
             
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="telefono">Teléfono</label>
-                    <input type="tel" id="telefono" name="telefono" class="form-control" 
-                           value="<?= htmlspecialchars($persona['Telefono'] ?? '') ?>">
-                </div>
-            </div>
-
-            <div class="form-row">
+            <div class="form-row form-row-2">
                 <div class="form-group">
                     <label for="direccion">Dirección</label>
                     <input type="text" id="direccion" name="direccion" class="form-control" 
@@ -177,7 +192,7 @@ $urlVolver = $returnUrl !== ''
                         }
                     }
                     ?>
-                    <input type="text" id="celula_search" class="form-control"
+                    <input type="text" id="celula_search" name="celula_search" class="form-control"
                            placeholder="Buscar célula..."
                            value="<?= htmlspecialchars((string)$celulaNombreSeleccionada) ?>"
                            autocomplete="off">
@@ -483,7 +498,7 @@ $urlVolver = $returnUrl !== ''
             <h3 class="section-title">🔒 Tratamiento de datos</h3>
             <p class="form-text text-muted mb-3">Indique si la persona autoriza el tratamiento de sus datos personales conforme a la política de la iglesia.</p>
             <div class="form-group">
-                <label class="d-block mb-2">Consentimiento <span class="text-danger">*</span></label>
+                <label class="d-block mb-2">Consentimiento <span class="req">*</span></label>
                 <div class="form-check">
                     <input class="form-check-input" type="radio" name="tratamiento_datos" id="tratamiento_acepta" value="acepta" <?= $tratamientoSeleccionado === 'acepta' ? 'checked' : '' ?> required>
                     <label class="form-check-label" for="tratamiento_acepta">Acepta el tratamiento de datos</label>
@@ -537,6 +552,46 @@ $urlVolver = $returnUrl !== ''
     margin: 0 0 20px 0;
     padding-bottom: 12px;
     border-bottom: 2px solid #f0f0f0;
+}
+
+.form-req-note {
+    margin: -8px 0 18px;
+    font-size: 0.92rem;
+    color: #475569;
+}
+
+.req {
+    color: #c62828;
+    font-weight: 700;
+}
+
+.field-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.8rem;
+    color: #64748b;
+    line-height: 1.35;
+}
+
+.field-error {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.82rem;
+    color: #b91c1c;
+    font-weight: 600;
+}
+
+.form-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+@media (max-width: 720px) {
+    .form-row-2 {
+        grid-template-columns: 1fr;
+    }
 }
 
 .form-section .form-row {
@@ -852,6 +907,122 @@ const edadInput = document.getElementById('edad');
 const liderSearchInput = document.getElementById('lider_search');
 const liderHiddenInput = document.getElementById('id_lider');
 const personaForm = document.getElementById('persona_form');
+
+function normalizarClaveNombrePersona(texto) {
+    return String(texto || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z]/g, '');
+}
+
+function esParticulaNombrePersona(palabra) {
+    return ['de', 'del', 'la', 'las', 'los', 'y', 'da', 'do', 'dos', 'das', 'van', 'von', 'san', 'santa', 'di', 'el', 'e']
+        .indexOf(normalizarClaveNombrePersona(palabra)) !== -1;
+}
+
+function contarPalabrasSignificativasNombre(texto) {
+    const palabras = String(texto || '').trim().split(/\s+/).filter(Boolean);
+    let total = 0;
+    palabras.forEach(function(palabra) {
+        if (esParticulaNombrePersona(palabra)) {
+            return;
+        }
+        const letras = palabra.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g, '');
+        if (letras.length >= 2) {
+            total += 1;
+        }
+    });
+    return total;
+}
+
+function esMarcadorFalsoNombre(texto) {
+    const clave = normalizarClaveNombrePersona(texto);
+    const prohibidos = {
+        x: 1, xx: 1, xxx: 1, xxxx: 1, xxxxx: 1,
+        n: 1, na: 1, nd: 1, nn: 1, sn: 1, nna: 1, nde: 1,
+        no: 1, si: 1, ok: 1, asd: 1, qwe: 1, qwer: 1, abc: 1, xyz: 1,
+        aaa: 1, bbb: 1, ccc: 1, nnn: 1,
+        test: 1, prueba: 1, temp: 1, fake: 1, none: 1, null: 1,
+        nombre: 1, nombres: 1, apellido: 1, apellidos: 1,
+        noaplica: 1, sinapellido: 1, desconocido: 1, ninguno: 1, ninguna: 1,
+        pendiente: 1, completar: 1, tbd: 1, naa: 1
+    };
+    if (!clave || prohibidos[clave] || /^(x+|n+|a+|z+)$/.test(clave)) {
+        return true;
+    }
+    const letras = String(texto || '').replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g, '');
+    return letras.length < 2;
+}
+
+function mostrarErrorCampoNombre(idCampo, idError, mensaje) {
+    const campo = document.getElementById(idCampo);
+    const errorEl = document.getElementById(idError);
+    if (campo) {
+        if (mensaje) {
+            campo.classList.add('input-invalid');
+        } else {
+            campo.classList.remove('input-invalid');
+        }
+    }
+    if (errorEl) {
+        if (mensaje) {
+            errorEl.textContent = mensaje;
+            errorEl.hidden = false;
+        } else {
+            errorEl.textContent = '';
+            errorEl.hidden = true;
+        }
+    }
+}
+
+function validarNombreYApellidoFormulario() {
+    const nombreInput = document.getElementById('nombre');
+    const apellidoInput = document.getElementById('apellido');
+    const nombre = nombreInput ? String(nombreInput.value || '').trim().replace(/\s+/g, ' ') : '';
+    const apellido = apellidoInput ? String(apellidoInput.value || '').trim().replace(/\s+/g, ' ') : '';
+    const regexLetras = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ'’\-\s]+$/;
+    let ok = true;
+
+    mostrarErrorCampoNombre('nombre', 'nombre_error', '');
+    mostrarErrorCampoNombre('apellido', 'apellido_error', '');
+
+    if (!nombre) {
+        mostrarErrorCampoNombre('nombre', 'nombre_error', 'El nombre es requerido.');
+        ok = false;
+    } else if (!regexLetras.test(nombre)) {
+        mostrarErrorCampoNombre('nombre', 'nombre_error', 'El nombre solo puede tener letras.');
+        ok = false;
+    } else if (esMarcadorFalsoNombre(nombre)) {
+        mostrarErrorCampoNombre('nombre', 'nombre_error', 'Escriba un nombre real. No use X, N/A o prueba.');
+        ok = false;
+    } else if (contarPalabrasSignificativasNombre(nombre) > 3) {
+        mostrarErrorCampoNombre('nombre', 'nombre_error', 'En Nombre escriba solo el o los nombres, no los apellidos.');
+        ok = false;
+    }
+
+    if (!apellido) {
+        mostrarErrorCampoNombre('apellido', 'apellido_error', 'Los apellidos son requeridos.');
+        ok = false;
+    } else if (!regexLetras.test(apellido)) {
+        mostrarErrorCampoNombre('apellido', 'apellido_error', 'Los apellidos solo pueden tener letras.');
+        ok = false;
+    } else if (esMarcadorFalsoNombre(apellido)) {
+        mostrarErrorCampoNombre('apellido', 'apellido_error', 'Escriba los apellidos reales. No use X, N/A ni un punto.');
+        ok = false;
+    } else if (contarPalabrasSignificativasNombre(apellido) < 1) {
+        mostrarErrorCampoNombre('apellido', 'apellido_error', 'Escriba al menos un apellido real (mínimo 2 letras).');
+        ok = false;
+    }
+
+    if (ok && normalizarClaveNombrePersona(nombre) === normalizarClaveNombrePersona(apellido)) {
+        mostrarErrorCampoNombre('apellido', 'apellido_error', 'Nombre y apellidos no pueden ser iguales.');
+        ok = false;
+    }
+
+    return ok;
+}
+
 const celulaError = document.getElementById('celula_error');
 const liderError = document.getElementById('lider_error');
 const tipoReunionSelect = document.getElementById('tipo_reunion');
@@ -1442,6 +1613,9 @@ function inicializarMayusculasAutomaticas() {
         if (!campo) {
             return;
         }
+        if (campo.id === 'celula_search' || campo.id === 'lider_search' || campo.classList.contains('autocomplete-input')) {
+            return;
+        }
 
         campo.style.textTransform = 'uppercase';
 
@@ -1533,9 +1707,19 @@ function actualizarAutocompleteCampo(input, hidden, items, listaEl, errorEl, foc
         return;
     }
 
-    const coincidenciaExacta = obtenerCoincidenciaExacta(items, value);
-    if (hidden && (!coincidenciaExacta || String(coincidenciaExacta.id) !== String(hidden.value || ''))) {
-        hidden.value = '';
+    if (hidden) {
+        const idActual = String(hidden.value || '').trim();
+        const itemActual = idActual !== ''
+            ? (items.find(function(item) { return String(item.id) === idActual; }) || null)
+            : null;
+        const coincidenciaExacta = obtenerCoincidenciaExacta(items, value);
+        if (itemActual && (normalizarTexto(itemActual.nombre) === normalizarTexto(value) || itemCoincideBusqueda(itemActual.nombre, value))) {
+            // Conservar el ID ya elegido aunque haya otra célula con nombre parecido.
+        } else if (coincidenciaExacta) {
+            hidden.value = String(coincidenciaExacta.id);
+        } else if (!itemActual) {
+            hidden.value = '';
+        }
     }
 
     focusState.value = -1;
@@ -1738,6 +1922,10 @@ if (personaForm) {
         sincronizarEventosProcesos();
         let valido = true;
 
+        if (!validarNombreYApellidoFormulario()) {
+            valido = false;
+        }
+
         if (celulaInput && !sincronizarSeleccionAutocomplete(celulaInput, celulaHidden, celulasDisponibles, celulaError, 'una célula')) {
             valido = false;
         }
@@ -1748,7 +1936,7 @@ if (personaForm) {
 
         if (!valido) {
             e.preventDefault();
-            const primerInvalido = document.querySelector('.input-invalid');
+            const primerInvalido = document.querySelector('.input-invalid') || document.getElementById('nombre');
             if (primerInvalido) {
                 primerInvalido.focus();
             }

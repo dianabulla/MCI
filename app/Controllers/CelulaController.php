@@ -94,8 +94,10 @@ class CelulaController extends BaseController {
         $estado = $estado === 'cerrada' ? 'Cerrada' : 'Activa';
         $fechaApertura = trim((string)($post['fecha_apertura'] ?? ''));
         $fechaCierre = trim((string)($post['fecha_cierre'] ?? ''));
+        $observacionesCierre = trim((string)($post['observaciones_cierre'] ?? ''));
         if ($estado === 'Activa') {
             $fechaCierre = null;
+            $observacionesCierre = null;
         } elseif ($fechaCierre === '') {
             $fechaCierre = date('Y-m-d');
         }
@@ -127,6 +129,7 @@ class CelulaController extends BaseController {
             'Es_Antiguo' => $esAntiguo,
             'Estado_Celula' => $estado,
             'Fecha_Cierre' => $fechaCierre,
+            'Observaciones_Cierre' => $observacionesCierre !== '' ? $observacionesCierre : null,
             'Id_Ministerio' => $idMinisterio > 0 ? $idMinisterio : null,
         ];
 
@@ -295,9 +298,46 @@ class CelulaController extends BaseController {
             unset($sectionSobre);
         }
 
+        $filasSeguimiento = $this->personaModel->getEnSeguimientoWithRole(
+            DataIsolation::generarFiltroPersonas(),
+            $filtroMinisterio,
+            $filtroLider
+        );
+        $ministerioPorCelula = [];
+        foreach ($sections as $sectionMinCel) {
+            $idCelMap = (int)($sectionMinCel['id_celula'] ?? 0);
+            if ($idCelMap <= 0) {
+                continue;
+            }
+            $minCel = trim((string)($sectionMinCel['ministerio'] ?? ''));
+            $ministerioPorCelula[$idCelMap] = $minCel !== '' ? $minCel : 'Sin ministerio';
+        }
+        $seguimientoPorMinisterio = [];
+        $seguimientoPorCelula = [];
+        foreach ($filasSeguimiento as $filaSeg) {
+            $itemSeg = $this->mapearPersonaEnSeguimiento($filaSeg);
+            $idCelSeg = (int)$itemSeg['id_celula'];
+            if ($idCelSeg > 0 && isset($ministerioPorCelula[$idCelSeg])) {
+                $itemSeg['ministerio'] = $ministerioPorCelula[$idCelSeg];
+            }
+            $minKey = (string)$itemSeg['ministerio'];
+            if (!isset($seguimientoPorMinisterio[$minKey])) {
+                $seguimientoPorMinisterio[$minKey] = [];
+            }
+            $seguimientoPorMinisterio[$minKey][] = $itemSeg;
+            if ($idCelSeg > 0) {
+                if (!isset($seguimientoPorCelula[$idCelSeg])) {
+                    $seguimientoPorCelula[$idCelSeg] = [];
+                }
+                $seguimientoPorCelula[$idCelSeg][] = $itemSeg;
+            }
+        }
+
         $this->view('celulas/lista', [
             'celulas' => $celulas,
             'sections' => $sections,
+            'seguimientoPorMinisterio' => $seguimientoPorMinisterio,
+            'seguimientoPorCelula' => $seguimientoPorCelula,
             'ministerios_disponibles' => array_values($ministeriosDisponibles),
             'lideres_disponibles' => array_values($lideresDisponibles),
             'filtro_ministerio_actual' => (string)$filtroMinisterio,
@@ -318,7 +358,17 @@ class CelulaController extends BaseController {
         }
         
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $this->celulaModel->create($this->datosFichaDesdePost($_POST, null));
+            $ficha = $this->datosFichaDesdePost($_POST, null);
+            if (($ficha['Estado_Celula'] ?? '') === 'Cerrada'
+                && trim((string)($ficha['Observaciones_Cierre'] ?? '')) === ''
+            ) {
+                $this->view('celulas/formulario', array_merge(
+                    $this->datosFormularioCelula($ficha),
+                    ['error_cierre' => 'Indica por qué se cierra la célula.']
+                ));
+                return;
+            }
+            $this->celulaModel->create($ficha);
             $this->redirect('celulas&guardado=1');
         } else {
             $this->view('celulas/formulario', $this->datosFormularioCelula());
@@ -349,7 +399,18 @@ class CelulaController extends BaseController {
                 $this->redirect('celulas');
             }
 
-            $this->celulaModel->update($id, $this->datosFichaDesdePost($_POST, $celulaAntes));
+            $ficha = $this->datosFichaDesdePost($_POST, $celulaAntes);
+            if (($ficha['Estado_Celula'] ?? '') === 'Cerrada'
+                && trim((string)($ficha['Observaciones_Cierre'] ?? '')) === ''
+            ) {
+                $this->view('celulas/formulario', array_merge(
+                    $this->datosFormularioCelula(array_merge($celulaAntes, $ficha)),
+                    ['error_cierre' => 'Indica por qué se cierra la célula.']
+                ));
+                return;
+            }
+
+            $this->celulaModel->update($id, $ficha);
             $this->redirect('celulas&guardado=1');
         } else {
             $this->view('celulas/formulario', $this->datosFormularioCelula($this->celulaModel->getById($id)));
@@ -407,7 +468,38 @@ class CelulaController extends BaseController {
             unset($miembro);
         }
 
-        $this->view('celulas/detalle', ['celula' => $celula]);
+        $personasEnSeguimiento = [];
+        $filasSeguimientoCelula = $this->personaModel->getEnSeguimientoWithRole(DataIsolation::generarFiltroPersonas());
+        foreach ($filasSeguimientoCelula as $filaSegCel) {
+            if ((int)($filaSegCel['Id_Celula'] ?? 0) === (int)$id) {
+                $personasEnSeguimiento[] = $this->mapearPersonaEnSeguimiento($filaSegCel);
+            }
+        }
+
+        $this->view('celulas/detalle', [
+            'celula' => $celula,
+            'personasEnSeguimiento' => $personasEnSeguimiento,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $fila
+     * @return array<string, mixed>
+     */
+    private function mapearPersonaEnSeguimiento(array $fila): array {
+        $nombre = trim(((string)($fila['Nombre'] ?? '')) . ' ' . ((string)($fila['Apellido'] ?? '')));
+        $ministerio = trim((string)($fila['Nombre_Ministerio'] ?? ''));
+        return [
+            'Id_Persona' => (int)($fila['Id_Persona'] ?? 0),
+            'Nombre' => (string)($fila['Nombre'] ?? ''),
+            'Apellido' => (string)($fila['Apellido'] ?? ''),
+            'nombre' => $nombre !== '' ? $nombre : 'Sin nombre',
+            'telefono' => (string)($fila['Telefono'] ?? ''),
+            'celula' => (string)($fila['Nombre_Celula'] ?? 'Sin célula'),
+            'lider' => trim((string)($fila['Nombre_Lider'] ?? '')),
+            'ministerio' => $ministerio !== '' ? $ministerio : 'Sin ministerio',
+            'id_celula' => (int)($fila['Id_Celula'] ?? 0),
+        ];
     }
 
     public function exportarExcel() {

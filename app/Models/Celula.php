@@ -40,6 +40,10 @@ class Celula extends BaseModel {
             if (!$this->columnExists('Fecha_Cierre')) {
                 $this->execute("ALTER TABLE {$this->table} ADD COLUMN Fecha_Cierre DATETIME NULL DEFAULT NULL");
             }
+
+            if (!$this->columnExists('Observaciones_Cierre')) {
+                $this->execute("ALTER TABLE {$this->table} ADD COLUMN Observaciones_Cierre TEXT NULL DEFAULT NULL");
+            }
         } catch (Throwable $e) {
             // Evita bloquear la aplicación si el motor no permite alter en este momento.
             error_log('No fue posible asegurar campos de reporte en celula: ' . $e->getMessage());
@@ -310,7 +314,8 @@ class Celula extends BaseModel {
 
         $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));
         $sql = "SELECT p.Id_Persona, p.Id_Celula, p.Nombre, p.Apellido, p.Telefono, p.Numero_Documento,
-                       COALESCE(p.Es_Antiguo, 1) AS Es_Antiguo
+                       COALESCE(p.Es_Antiguo, 1) AS Es_Antiguo,
+                       p.Proceso, p.Escalera_Checklist, p.Id_Rol, p.Id_Lider, p.Id_Ministerio
                 FROM persona p
                 INNER JOIN {$this->table} c ON c.Id_Celula = p.Id_Celula
                 WHERE p.Id_Celula IN ({$placeholders})

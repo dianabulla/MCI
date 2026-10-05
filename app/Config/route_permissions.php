@@ -56,6 +56,10 @@ return [
 
     'personas/ganar' => ['checker' => 'puedeVerModuloPersonasGanar'],
 
+    'personas/notasSeguimiento' => ['checker' => 'puedeUsarSeguimientoPersonaListado'],
+
+    'personas/guardarNotaSeguimiento' => ['checker' => 'puedeGuardarSeguimientoPersonaListado'],
+
     'personas/plantillas-whatsapp' => 'personas_plantillas_whatsapp:ver',
 
     'personas/plantillas-whatsapp/programar' => 'personas_plantillas_whatsapp:ver',
@@ -69,6 +73,8 @@ return [
     'personas/exportarExcel' => ['any' => ['personas:exportar_excel', 'personas:editar']],
 
     'personas/crear' => ['any' => ['personas:crear', 'acceso_rapido_nuevo_discipulo:crear']],
+
+    'personas/sincronizar-edades' => ['allow' => true],
 
     'personas/editar' => ['checker' => 'puedeEditarPersonaDesdeDiscipular'],
 
@@ -179,6 +185,10 @@ return [
     'asistencias' => 'asistencias:ver',
 
     'asistencias/actualizarEntregoSobre' => ['checker' => 'puedeMarcarEntregoSobre'],
+
+    'asistencias/marcarNoDisponible' => ['any' => ['asistencias:crear', 'asistencias:editar']],
+    'asistencias/quitarDeCelula' => ['any' => ['asistencias:crear', 'asistencias:editar']],
+    'asistencias/migrarCelula' => ['any' => ['asistencias:crear', 'asistencias:editar']],
 
     'asistencias/*' => ['modulo' => 'asistencias', 'inferir_accion' => true],
 
@@ -314,6 +324,8 @@ return [
 
     'reportes/dashboard-escuelas-uv-detalle' => ['checker' => 'puedeVerDashboardProgramaUv'],
 
+    'reportes/dashboard-escuelas-uv-detalle-avance' => ['checker' => 'puedeVerDashboardProgramaUv'],
+
     'reportes/dashboard-escuelas-capacitacion' => ['checker' => 'puedeVerDashboardProgramaCap'],
 
     'reportes/*' => 'reportes:ver',
@@ -360,6 +372,10 @@ return [
     'talleres/servicio-social/horarios' => ['checker' => 'puedeGestionarServicioSocial'],
 
     'talleres/servicio-social/horarios/guardar' => ['checker' => 'puedeGestionarServicioSocial'],
+
+    'talleres/servicio-social/inscripciones' => ['checker' => 'puedeGestionarServicioSocial'],
+
+    'talleres/servicio-social/inscripciones/guardar' => ['checker' => 'puedeGestionarServicioSocial'],
 
     'talleres/servicio-social/guardar-historia' => ['checker' => 'puedeGestionarServicioSocial'],
 
@@ -426,6 +442,9 @@ return [
 
     'escuelas_formacion/pagos/enviar' => ['checker' => 'puedeGestionarPagosProgramaCap'],
 
+    'escuelas_formacion/pagos/eliminar' => ['any' => ['programas:gestionar_pagos_universidad_vida', 'programas:gestionar_pagos_capacitacion_destino', 'escuelas_formacion:gestionar_pagos']],
+    'escuelas_formacion/pagos/editar' => ['any' => ['programas:gestionar_pagos_universidad_vida', 'programas:gestionar_pagos_capacitacion_destino', 'escuelas_formacion:gestionar_pagos']],
+
     'escuelas_formacion/pagos' => ['any' => ['programas:gestionar_pagos_universidad_vida', 'programas:gestionar_pagos_capacitacion_destino', 'escuelas_formacion:gestionar_pagos', 'programas:ver']],
 
     'escuelas_formacion/pagos/*' => ['any' => ['programas:gestionar_pagos_universidad_vida', 'programas:gestionar_pagos_capacitacion_destino', 'escuelas_formacion:gestionar_pagos', 'programas:ver']],
@@ -441,6 +460,10 @@ return [
     'escuelas_formacion/abonos/*' => ['checker' => 'puedeAccederEscuelasFormacion'],
 
     'escuelas_formacion/codigos' => ['checker' => 'puedeAccederEscuelasFormacion'],
+    'escuelas_formacion/asistencia-publica' => ['allow' => true],
+    'escuelas_formacion/asistencia-publica/qr' => ['allow' => true],
+    'escuelas_formacion/asistencia-publica/buscar' => ['allow' => true],
+    'escuelas_formacion/asistencia-publica/guardar' => ['allow' => true],
 
 
 

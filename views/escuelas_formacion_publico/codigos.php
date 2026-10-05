@@ -176,6 +176,16 @@ $tarjetasQr = [
         'boton_formulario' => 'Abrir formulario UV',
         'boton_clase' => 'btn',
     ],
+    'universidad_vida_asistencia' => [
+        'titulo' => 'Asistencia Universidad de la Vida',
+        'descripcion' => 'QR para consultar por cédula y marcar la clase que está tomando la persona.',
+        'url' => (string)($url_asistencia_uv ?? ''),
+        'imagen_id' => 'qr-img-asistencia-uv',
+        'alt' => 'QR asistencia universidad de la vida',
+        'archivo' => 'qr_asistencia_universidad_vida.png',
+        'boton_formulario' => 'Abrir toma de asistencia',
+        'boton_clase' => 'btn',
+    ],
     'capacitacion_destino' => [
         'titulo' => 'Capacitacion Destino',
         'descripcion' => 'Acceso publico exclusivo para inscripciones de Capacitacion Destino.',
@@ -188,7 +198,9 @@ $tarjetasQr = [
     ],
 ];
 
-if ($programaFiltro !== '' && isset($tarjetasQr[$programaFiltro])) {
+if ($programaFiltro === 'universidad_vida') {
+    $tarjetasQr = array_intersect_key($tarjetasQr, array_flip(['universidad_vida', 'universidad_vida_asistencia']));
+} elseif ($programaFiltro !== '' && isset($tarjetasQr[$programaFiltro])) {
     $tarjetasQr = [$programaFiltro => $tarjetasQr[$programaFiltro]];
 }
 
