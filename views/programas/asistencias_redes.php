@@ -17,6 +17,7 @@ $sinClasificar = (int)($conteosRed['otros'] ?? 0);
 </div>
 <?php
 $filtro_semestre_form = true;
+$filtro_semestre_buscar = true;
 include VIEWS . '/programas/_filtro_semestre.php';
 ?>
 

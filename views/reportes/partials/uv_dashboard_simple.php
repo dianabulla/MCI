@@ -50,7 +50,7 @@ $totalesFilasUv = static function (array $filas) {
 
 <p class="uv-dash-intro uv-dash-intro-compact">
     <strong><?= (int)$anioRepUv ?></strong>
-    · Ciclo seleccionado. Pulsa una fila para ver las personas inscritas, a cuántas clases fueron y si culminaron los dos días de Encuentro.
+    · Ciclo seleccionado. Pulsa una fila para ver abajo las personas: clases, si compraron libro, si pagaron el encuentro y si culminaron el encuentro.
 </p>
 
 <?php foreach ($tablasUvSemestres as $bloqueSem):
@@ -121,31 +121,30 @@ $totalesFilasUv = static function (array $filas) {
 </div>
 <?php endforeach; ?>
 
-<div id="uvAvanceDetalleModal" class="uv-avance-modal" hidden aria-hidden="true">
-    <div class="uv-avance-modal__overlay" data-uv-avance-cerrar="1"></div>
-    <div class="uv-avance-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="uvAvanceDetalleTitulo">
-        <div class="uv-avance-modal__head">
+<div id="uvAvanceDetalleModal" class="uv-avance-detalle-panel dash-card" hidden>
+    <div class="uv-avance-detalle-panel__head">
+        <div>
             <h3 id="uvAvanceDetalleTitulo">Personas inscritas</h3>
-            <button type="button" class="uv-avance-modal__cerrar" data-uv-avance-cerrar="1" aria-label="Cerrar">×</button>
+            <p class="uv-avance-detalle-panel__sub" id="uvAvanceDetalleSub"></p>
         </div>
-        <p class="uv-avance-modal__sub" id="uvAvanceDetalleSub"></p>
-        <p class="uv-avance-modal__estado" id="uvAvanceDetalleEstado" hidden></p>
-        <div class="table-wrap">
-            <table class="leader-table">
-                <thead>
-                    <tr>
+        <button type="button" class="uv-avance-detalle-panel__cerrar" data-uv-avance-cerrar="1" aria-label="Cerrar detalle">×</button>
+    </div>
+    <p class="uv-avance-detalle-panel__estado" id="uvAvanceDetalleEstado" hidden></p>
+    <div class="table-wrap">
+        <table class="leader-table uv-simple-table">
+            <thead>
+                <tr>
                         <th>Persona</th>
                         <th>Cédula</th>
                         <th>Líder</th>
                         <th class="uv-num">Clases</th>
-                        <th>Día 1</th>
-                        <th>Día 2</th>
+                        <th>Compró libro</th>
+                        <th>Pagó encuentro</th>
                         <th>Culminó encuentro</th>
-                    </tr>
-                </thead>
-                <tbody id="uvAvanceDetalleBody"></tbody>
-            </table>
-        </div>
+                </tr>
+            </thead>
+            <tbody id="uvAvanceDetalleBody"></tbody>
+        </table>
     </div>
 </div>
 
@@ -168,48 +167,28 @@ $totalesFilasUv = static function (array $filas) {
 }
 .uv-avance-row-click { cursor: pointer; }
 .uv-avance-row-click:hover { background: #f1f5f9; }
-.uv-avance-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 5000;
+.uv-avance-row-click.is-active { background: #e8f0fe; }
+.uv-avance-detalle-panel {
+    margin: 4px 0 20px;
+    padding: 14px 16px 18px;
+    border: 1px solid #dbe7f3;
+    scroll-margin-top: 16px;
+}
+.uv-avance-detalle-panel[hidden] { display: none !important; }
+.uv-avance-detalle-panel__head {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 80px 16px 28px;
-    box-sizing: border-box;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 10px;
 }
-.uv-avance-modal[hidden] { display: none !important; }
-.uv-avance-modal__overlay {
-    position: absolute; inset: 0; background: rgba(15, 23, 42, 0.5);
-}
-.uv-avance-modal__dialog {
-    position: relative; z-index: 1;
-    width: min(960px, 100%);
-    max-height: min(78vh, calc(100vh - 108px));
-    overflow: auto;
-    background: #fff;
-    border-radius: 14px;
-    padding: 16px 16px 20px;
-    box-shadow: 0 18px 50px rgba(15, 23, 42, 0.25);
-    margin: 0;
-}
-.uv-avance-modal__head {
-    display:flex;
-    justify-content:space-between;
-    gap:12px;
-    align-items:flex-start;
-    position: sticky;
-    top: 0;
-    background: #fff;
-    z-index: 2;
-    padding-bottom: 8px;
-}
-.uv-avance-modal__head h3 { margin: 0; font-size: 1.05rem; }
-.uv-avance-modal__cerrar {
+.uv-avance-detalle-panel__head h3 { margin: 0; font-size: 1.05rem; color: #1e293b; }
+.uv-avance-detalle-panel__sub { margin: 6px 0 0; color: #64748b; font-size: 0.85rem; }
+.uv-avance-detalle-panel__cerrar {
     border: 0; background: #e2e8f0; border-radius: 8px;
-    width: 32px; height: 32px; font-size: 20px; cursor: pointer;
+    width: 32px; height: 32px; font-size: 20px; cursor: pointer; color: #475569; flex-shrink: 0;
 }
-.uv-avance-modal__sub { margin: 6px 0 12px; color: #64748b; font-size: 0.85rem; }
+.uv-avance-detalle-panel__estado { margin: 0 0 10px; color: #b91c1c; font-size: 0.88rem; }
 .uv-avance-si { color: #166534; font-weight: 700; }
 .uv-avance-no { color: #94a3b8; }
 </style>
@@ -219,7 +198,7 @@ $totalesFilasUv = static function (array $filas) {
     const anio = <?= json_encode((string)$anioRepUv) ?>;
     const filtroMinisterio = <?= json_encode((string)($filtro_ministerio ?? ''), JSON_UNESCAPED_UNICODE) ?>;
     const filtroLider = <?= json_encode((string)($filtro_lider ?? ''), JSON_UNESCAPED_UNICODE) ?>;
-    const modal = document.getElementById('uvAvanceDetalleModal');
+    const panel = document.getElementById('uvAvanceDetalleModal');
     const titulo = document.getElementById('uvAvanceDetalleTitulo');
     const sub = document.getElementById('uvAvanceDetalleSub');
     const estado = document.getElementById('uvAvanceDetalleEstado');
@@ -266,10 +245,20 @@ $totalesFilasUv = static function (array $filas) {
         });
     });
 
-    function cerrarModal() {
-        if (!modal) return;
-        modal.hidden = true;
-        modal.setAttribute('aria-hidden', 'true');
+    function marcarFilaActiva(fila) {
+        document.querySelectorAll('.js-uv-avance-row.is-active').forEach(function (otra) {
+            otra.classList.remove('is-active');
+        });
+        if (fila) {
+            fila.classList.add('is-active');
+        }
+    }
+
+    function cerrarDetalle() {
+        if (!panel) return;
+        panel.hidden = true;
+        marcarFilaActiva(null);
+        if (body) body.innerHTML = '';
     }
 
     function marcarSiNo(ok) {
@@ -295,10 +284,11 @@ $totalesFilasUv = static function (array $filas) {
             estado.textContent = '';
         }
         if (body) body.innerHTML = '';
-        if (modal) {
-            modal.hidden = false;
-            modal.setAttribute('aria-hidden', 'false');
+        if (panel) {
+            panel.hidden = false;
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
+        marcarFilaActiva(fila);
         const params = new URLSearchParams({
             anio: anio,
             semestre: semestre,
@@ -332,8 +322,8 @@ $totalesFilasUv = static function (array $filas) {
                         + '<td>' + esc(p.cedula || '') + '</td>'
                         + '<td>' + esc(p.lider || '') + '</td>'
                         + '<td class="uv-num">' + String(parseInt(p.clases, 10) || 0) + ' / 10</td>'
-                        + '<td>' + marcarSiNo(!!p.dia1) + '</td>'
-                        + '<td>' + marcarSiNo(!!p.dia2) + '</td>'
+                        + '<td>' + marcarSiNo(!!p.pago_libro) + '</td>'
+                        + '<td>' + marcarSiNo(!!p.pago_encuentro) + '</td>'
                         + '<td>' + marcarSiNo(!!p.culmino_encuentro) + '</td>'
                         + '</tr>';
                 }).join('');
@@ -353,11 +343,11 @@ $totalesFilasUv = static function (array $filas) {
         });
     });
     document.querySelectorAll('[data-uv-avance-cerrar="1"]').forEach(function (el) {
-        el.addEventListener('click', cerrarModal);
+        el.addEventListener('click', cerrarDetalle);
     });
     document.addEventListener('keydown', function (ev) {
-        if (ev.key === 'Escape' && modal && !modal.hidden) {
-            cerrarModal();
+        if (ev.key === 'Escape' && panel && !panel.hidden) {
+            cerrarDetalle();
         }
     });
 })();

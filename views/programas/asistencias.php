@@ -7,6 +7,7 @@ $etiquetaRed = SegmentoRedUv::etiqueta($redAsistencia);
 $titulo = $etiquetaRed !== ''
     ? ('Asistencias Universidad de la Vida · ' . $etiquetaRed)
     : 'Asistencias Universidad de la Vida';
+$buscarAsistencias = preg_replace('/\s+/u', ' ', trim((string)($buscar_asistencias ?? ($_GET['buscar'] ?? ''))));
 $public_url = PUBLIC_URL;
 
 $paramsRetorno = $_GET;
@@ -21,16 +22,13 @@ $returnUrlInscritos = '?' . http_build_query($paramsRetorno);
 $urlHubRedes = (string)($url_hub_redes ?? '');
 if ($urlHubRedes === '') {
     $paramsHub = $paramsRetorno;
-    unset($paramsHub['red']);
+    unset($paramsHub['red'], $paramsHub['buscar']);
     $urlHubRedes = rtrim((string)PUBLIC_URL, '/') . '/?' . http_build_query($paramsHub);
 }
 
 $esAdmin = class_exists('AuthController') && AuthController::esAdministrador();
 $puedeAcceso = $esAdmin
-    || (class_exists('AuthController') && (
-        AuthController::puede('asistencias:ver')
-        || AuthController::tieneCoordinacionTotalProgramas()
-    ));
+    || (class_exists('AuthController') && AuthController::puedeVerListadoAsistenciasUniversidadVida());
 
 $puede_editar = $esAdmin || $puedeAcceso;
 $puede_eliminar = $esAdmin || $puedeAcceso;

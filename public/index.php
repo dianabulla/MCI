@@ -152,6 +152,7 @@ foreach ($authRoutesFallback as $routeKey => $routeTarget) {
 
 $reportesRoutesFallback = [
     'reportes/dashboard-escuelas-uv-detalle' => 'ReporteController@dashboardEscuelasUvDetalleMinisterio',
+    'reportes/dashboard-escuelas-uv-detalle-avance' => 'ReporteController@dashboardEscuelasUvDetalleAvanceRed',
     'reportes/dashboard-ganar-redes' => 'ReporteController@dashboardGanarRedes',
 ];
 foreach ($reportesRoutesFallback as $routeKey => $routeTarget) {
@@ -269,6 +270,7 @@ $rutasPublicas = class_exists('PublicRouteRegistry', false)
     'escuelas_formacion/registro-publico/subir-documentos',
     'escuelas_formacion/registro-publico/ticket',
     'escuelas_formacion/asistencia-publica',
+    'escuelas_formacion/asistencia-publica/qr',
     'escuelas_formacion/asistencia-publica/buscar',
     'escuelas_formacion/asistencia-publica/guardar',
     'talleres_publico',
@@ -303,6 +305,7 @@ $rutasPublicasExtra = [
     'eventos/universidad-vida/publico',
     'eventos/capacitacion-destino/publico',
     'eventos/otros/publico',
+    'personas/sincronizar-edades',
 ];
 $rutasPublicas = array_values(array_unique(array_merge($rutasPublicas, $rutasPublicasExtra)));
 

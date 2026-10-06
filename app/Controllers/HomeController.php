@@ -4782,7 +4782,8 @@ class HomeController extends BaseController {
 
         require_once APP . '/Helpers/SegmentoRedUv.php';
         $redAsistencia = SegmentoRedUv::normalizarRed((string)($_GET['red'] ?? ''));
-        if ($redAsistencia === '') {
+        $buscarAsistencias = preg_replace('/\s+/u', ' ', trim((string)($_GET['buscar'] ?? '')));
+        if ($redAsistencia === '' && $buscarAsistencias === '') {
             $conteosRed = $this->contarInscritosUniversidadVidaPorRed();
             require_once APP . '/Helpers/PeriodoSemestre.php';
             $this->view('programas/asistencias_redes', [
@@ -4795,7 +4796,8 @@ class HomeController extends BaseController {
 
         $this->view('programas/asistencias', [
             'red_asistencia' => $redAsistencia,
-            'url_hub_redes' => $this->urlAsistenciasUniversidadVida(['red' => null]),
+            'buscar_asistencias' => $buscarAsistencias,
+            'url_hub_redes' => $this->urlAsistenciasUniversidadVida(['red' => null, 'buscar' => null]),
         ]);
     }
 
@@ -4883,7 +4885,13 @@ class HomeController extends BaseController {
         require_once APP . '/Helpers/SegmentoRedUv.php';
 
         $inscripcionModel = new EscuelaFormacionInscripcion();
-        $personas = $inscripcionModel->getInscritosBasicos('universidad_vida', '', 2000);
+        require_once APP . '/Helpers/DataIsolation.php';
+        $personas = $inscripcionModel->getInscritosBasicos(
+            'universidad_vida',
+            '',
+            2000,
+            DataIsolation::generarFiltroPersonas()
+        );
         require_once APP . '/Helpers/PeriodoSemestre.php';
         $rango = PeriodoSemestre::resolver();
         $personas = array_values(array_filter(is_array($personas) ? $personas : [], static function ($persona) use ($rango) {
@@ -5261,6 +5269,11 @@ class HomeController extends BaseController {
 
                 if (!$this->puedeEditarEscuelasFormacion()) {
                     $this->json(['ok' => false, 'error' => 'No autorizado'], 403);
+                }
+                require_once APP . '/Helpers/DataIsolation.php';
+                if (DataIsolation::esLiderazgoAsistenciasSoloConsulta()) {
+                    $this->json(['ok' => false, 'error' => 'Sin permiso para cambiar de red'], 403);
+                    return;
                 }
 
             $idInscripcion = (int)($_POST['id_inscripcion'] ?? 0);

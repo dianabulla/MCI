@@ -2476,10 +2476,16 @@ class EscuelaFormacionInscripcion extends BaseModel {
      * con datos básicos actualizados desde la tabla persona.
      * Deduplicación por Cedula_Clave (Cedula o SIN-CEDULA-{Id_Persona}).
      */
-    public function getInscritosBasicos(string $programa = 'universidad_vida', string $buscar = '', int $limit = 800): array {
+    public function getInscritosBasicos(string $programa = 'universidad_vida', string $buscar = '', int $limit = 800, string $filtroPersonas = '1=1'): array {
         $programa = trim($programa);
         $buscar   = trim($buscar);
         $limit    = max(1, min(2000, $limit));
+        $filtroPersonasSql = trim($filtroPersonas);
+        if ($filtroPersonasSql === '') {
+            $filtroPersonasSql = '1=1';
+        } elseif (preg_match('/[;]|--|#|\/\*/', $filtroPersonasSql)) {
+            $filtroPersonasSql = '1=0';
+        }
 
         $innerWhere  = ['1=1'];
         $innerParams = [];
@@ -2551,6 +2557,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
                 LEFT JOIN persona p  ON base.Id_Persona = p.Id_Persona AND base.Id_Persona > 0
                 LEFT JOIN persona lp ON p.Id_Lider = lp.Id_Persona
                 LEFT JOIN ministerio mp ON p.Id_Ministerio = mp.Id_Ministerio
+                WHERE ({$filtroPersonasSql})
                 ORDER BY Nombre ASC
                 LIMIT {$limit}";
 

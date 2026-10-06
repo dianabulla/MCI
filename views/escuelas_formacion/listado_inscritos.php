@@ -23,15 +23,17 @@ $periodoListado = PeriodoSemestre::resolver();
 $urlHubRedesListado = trim((string)($urlHubRedes ?? ''));
 $etiquetaRedListado = SegmentoRedUv::etiquetaCompleta($redAsistenciaListado);
 $modoRedAsistencia = $redAsistenciaListado !== '';
-$colspanTablaUv = $modoRedAsistencia ? 19 : 21;
+$buscarAsistenciasListado = preg_replace('/\s+/u', ' ', trim((string)($buscarAsistencias ?? ($_GET['buscar'] ?? ''))));
 
 // Permisos: si la vista se incluye desde programas/asistencias puede no venir del controlador.
 $esAdminSesion = class_exists('AuthController') && AuthController::esAdministrador();
 $puedeAccesoListado = $esAdminSesion
-    || (class_exists('AuthController') && (
-        AuthController::puede('asistencias:ver')
-        || AuthController::tieneCoordinacionTotalProgramas()
-    ));
+    || (class_exists('AuthController') && AuthController::puedeVerListadoAsistenciasUniversidadVida());
+require_once APP . '/Helpers/DataIsolation.php';
+$soloConsultaLiderazgo = !$esAdminSesion && DataIsolation::esLiderazgoAsistenciasSoloConsulta();
+$colspanTablaUv = $soloConsultaLiderazgo
+    ? ($modoRedAsistencia ? 8 : 10)
+    : ($modoRedAsistencia ? 21 : 23);
 
 if (!isset($puede_editar)) {
     $puede_editar = $puedeAccesoListado;
@@ -51,10 +53,16 @@ if ($esAdminSesion) {
     $puede_editar_persona = true;
 }
 
+if ($soloConsultaLiderazgo) {
+    $puede_editar = false;
+    $puede_eliminar = false;
+    $puede_editar_persona = false;
+}
+
 $puedeEditar        = !empty($puede_editar);
 $puedeEditarPersona = !empty($puede_editar_persona);
 $puedeEliminar      = !empty($puede_eliminar);
-$puedeIrPagos = class_exists('AuthController') && (
+$puedeIrPagos = !$soloConsultaLiderazgo && class_exists('AuthController') && (
     AuthController::puedeRecibirPagosEscuelasFormacion()
     || ($programa === 'universidad_vida' && AuthController::puedeGestionarPagosProgramaUv())
     || (strpos((string)$programa, 'capacitacion_destino') === 0 && AuthController::puedeGestionarPagosProgramaCap())
@@ -187,8 +195,12 @@ $puedeIrPagos = class_exists('AuthController') && (
 .li-table.li-table--compact td.col-genero,
 .li-table.li-table--compact th.col-edad,
 .li-table.li-table--compact td.col-edad { width: 4%; }
-.li-table.li-table--compact th.col-pago,
-.li-table.li-table--compact td.col-pago { width: 10%; }
+.li-table.li-table--compact th.col-pago-enc,
+.li-table.li-table--compact td.col-pago-enc,
+.li-table.li-table--compact th.col-pago-libro,
+.li-table.li-table--compact td.col-pago-libro { width: 8%; }
+.li-table.li-table--compact th.col-culmino,
+.li-table.li-table--compact td.col-culmino { width: 7%; }
 .li-table.li-table--compact th.col-acciones,
 .li-table.li-table--compact td.col-acciones { width: 56px; }
 .li-table.li-table--modo-red.li-table--compact th.col-acciones,
@@ -273,28 +285,6 @@ $puedeIrPagos = class_exists('AuthController') && (
   gap:6px;
 }
 
-.btn-pago-icon {
-  width:24px;
-  height:24px;
-  border-radius:999px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  background:#2563eb;
-  color:#fff;
-  text-decoration:none;
-  border:1px solid #1d4ed8;
-  font-size:12px;
-  line-height:1;
-  font-weight:700;
-  box-shadow:0 1px 2px rgba(15,23,42,.12);
-}
-
-.btn-pago-icon:hover {
-  background:#1d4ed8;
-  color:#fff;
-}
-
 .pago-status {
   display:inline-flex;
   align-items:center;
@@ -317,6 +307,12 @@ $puedeIrPagos = class_exists('AuthController') && (
   background:#fef2f2;
   border-color:#fecaca;
   color:#991b1b;
+}
+
+.pago-status.libro.ok {
+  background:#eff6ff;
+  border-color:#bfdbfe;
+  color:#1d4ed8;
 }
 
 /* ── Acciones (editar / eliminar) ───────────────────────────────── */
@@ -375,19 +371,35 @@ $puedeIrPagos = class_exists('AuthController') && (
 .li-table[data-oculta~="telefono"] .col-telefono,
 .li-table[data-oculta~="lider"] .col-lider,
 .li-table[data-oculta~="documentos"] .col-documentos,
-.li-table[data-oculta~="pago"] .col-pago,
+.li-table[data-oculta~="pago-enc"] .col-pago-enc,
+.li-table[data-oculta~="pago-libro"] .col-pago-libro,
 .li-table[data-oculta~="acciones"] .col-acciones,
-.li-table[data-oculta~="pre-1"] .col-pre-1,
-.li-table[data-oculta~="pre-2"] .col-pre-2,
-.li-table[data-oculta~="pre-3"] .col-pre-3,
-.li-table[data-oculta~="pre-4"] .col-pre-4,
-.li-table[data-oculta~="enc-1"] .col-enc-1,
-.li-table[data-oculta~="enc-2"] .col-enc-2,
-.li-table[data-oculta~="post-1"] .col-post-1,
-.li-table[data-oculta~="post-2"] .col-post-2,
-.li-table[data-oculta~="post-3"] .col-post-3,
-.li-table[data-oculta~="post-4"] .col-post-4,
-.li-table[data-oculta~="bautismo"] .col-bautismo { display: none !important; }
+.li-table[data-oculta~="pre-1"] th.col-pre-1:not([data-col-group]),
+.li-table[data-oculta~="pre-1"] td.col-pre-1,
+.li-table[data-oculta~="pre-2"] th.col-pre-2:not([data-col-group]),
+.li-table[data-oculta~="pre-2"] td.col-pre-2,
+.li-table[data-oculta~="pre-3"] th.col-pre-3:not([data-col-group]),
+.li-table[data-oculta~="pre-3"] td.col-pre-3,
+.li-table[data-oculta~="pre-4"] th.col-pre-4:not([data-col-group]),
+.li-table[data-oculta~="pre-4"] td.col-pre-4,
+.li-table[data-oculta~="enc-1"] th.col-enc-1:not([data-col-group]),
+.li-table[data-oculta~="enc-1"] td.col-enc-1,
+.li-table[data-oculta~="enc-2"] th.col-enc-2:not([data-col-group]),
+.li-table[data-oculta~="enc-2"] td.col-enc-2,
+.li-table[data-oculta~="post-1"] th.col-post-1:not([data-col-group]),
+.li-table[data-oculta~="post-1"] td.col-post-1,
+.li-table[data-oculta~="post-2"] th.col-post-2:not([data-col-group]),
+.li-table[data-oculta~="post-2"] td.col-post-2,
+.li-table[data-oculta~="post-3"] th.col-post-3:not([data-col-group]),
+.li-table[data-oculta~="post-3"] td.col-post-3,
+.li-table[data-oculta~="post-4"] th.col-post-4:not([data-col-group]),
+.li-table[data-oculta~="post-4"] td.col-post-4,
+.li-table[data-oculta~="bautismo"] .col-bautismo,
+.li-table[data-oculta~="culmino"] .col-culmino { display: none !important; }
+
+.li-table th[data-col-group] {
+  white-space: nowrap;
+}
 
 .li-col-picker { position: relative; align-self: flex-end; }
 .li-col-picker__btn { min-width: 140px; }
@@ -438,8 +450,8 @@ $puedeIrPagos = class_exists('AuthController') && (
   <div class="li-head">
     <h2>📋 <?= htmlspecialchars($titulo) ?></h2>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <?php if ($redAsistenciaListado !== '' && $urlHubRedesListado !== ''): ?>
-        <a href="<?= htmlspecialchars($urlHubRedesListado, ENT_QUOTES, 'UTF-8') ?>" class="btn-pago" style="text-decoration:none;background:#1e4a89;">← Cambiar red</a>
+      <?php if ($urlHubRedesListado !== ''): ?>
+        <a href="<?= htmlspecialchars($urlHubRedesListado, ENT_QUOTES, 'UTF-8') ?>" class="btn-pago" style="text-decoration:none;background:#1e4a89;">← Redes</a>
       <?php endif; ?>
       <?php if ($programa === 'universidad_vida'): ?>
         <?php if (!$modoRedAsistencia): ?>
@@ -456,7 +468,8 @@ $puedeIrPagos = class_exists('AuthController') && (
   <div class="li-toolbar">
     <div>
       <label for="li-buscar">Búsqueda universal</label>
-      <input type="search" id="li-buscar" placeholder="Nombre, cédula o teléfono…" autocomplete="off">
+      <input type="search" id="li-buscar" placeholder="Nombre, cédula o teléfono…" autocomplete="off"
+             value="<?= htmlspecialchars((string)$buscarAsistenciasListado, ENT_QUOTES, 'UTF-8') ?>">
     </div>
     <div>
       <label for="li-anio">Año</label>
@@ -491,10 +504,15 @@ $puedeIrPagos = class_exists('AuthController') && (
       <label for="li-pago">Pago / Abono</label>
       <select id="li-pago">
         <option value="todos">Todos</option>
-        <option value="pagados">Con pago</option>
-        <option value="sin_pago">Sin pago</option>
+        <option value="pagados">Con algún pago</option>
+        <option value="sin_pago">Sin ningún pago</option>
+        <option value="encuentro">Con pago encuentro</option>
+        <option value="sin_encuentro_pago">Sin pago encuentro</option>
+        <option value="libro">Con pago libro</option>
+        <option value="sin_libro">Sin pago libro</option>
       </select>
     </div>
+    <?php if (empty($soloConsultaLiderazgo)): ?>
     <div>
       <label for="li-encuentro">Asistencia encuentro</label>
       <select id="li-encuentro" title="Filtra por asistencia a los días del encuentro (clases 5 y 6)">
@@ -517,6 +535,10 @@ $puedeIrPagos = class_exists('AuthController') && (
         <option value="sin_bautismo">Sin bautismo</option>
       </select>
     </div>
+    <?php else: ?>
+    <input type="hidden" id="li-encuentro" value="todos">
+    <input type="hidden" id="li-bautismo" value="todos">
+    <?php endif; ?>
     <div>
       <label for="li-lider">Líder</label>
       <select id="li-lider">
@@ -538,7 +560,9 @@ $puedeIrPagos = class_exists('AuthController') && (
           <strong>Columnas visibles</strong>
           <div class="li-col-picker__actions">
             <button type="button" id="li-col-ver-todas">Ver todas</button>
+            <?php if (empty($soloConsultaLiderazgo)): ?>
             <button type="button" id="li-col-solo-encuentro">Solo encuentro</button>
+            <?php endif; ?>
           </div>
         </div>
         <div id="li-col-checkboxes"></div>
@@ -571,6 +595,7 @@ $puedeIrPagos = class_exists('AuthController') && (
       <strong id="li-seg-teens">–</strong>
       <span>Teens (9–13)</span>
     </div>
+    <?php if (empty($soloConsultaLiderazgo)): ?>
     <div class="li-stat li-stat--enc" style="min-width:180px;">
       <div class="li-encuentro-asist" id="li-encuentro-asist">
         <span class="li-enc-badge" title="Asistieron al día 1 del encuentro">
@@ -581,6 +606,7 @@ $puedeIrPagos = class_exists('AuthController') && (
         </span>
       </div>
     </div>
+    <?php endif; ?>
     <?php endif; ?>
   </div>
   <p id="li-resumen-filtro" class="li-resumen-filtro" hidden></p>
@@ -602,15 +628,21 @@ $puedeIrPagos = class_exists('AuthController') && (
             <th class="col-telefono" rowspan="2">Teléfono</th>
             <th class="t-left col-lider" rowspan="2" style="min-width:120px;">Líder</th>
             <th class="col-documentos" rowspan="2">Documentos</th>
-            <th class="col-pago" rowspan="2">Pago</th>
+            <th colspan="2" class="col-pago-group" data-col-group="pago">Pagos</th>
+            <?php if (empty($soloConsultaLiderazgo)): ?>
             <th class="col-acciones" rowspan="2" style="min-width:<?= $modoRedAsistencia ? '136' : '88' ?>px;">Acciones</th>
-            <th colspan="4" class="th-pre col-pre-group col-pre-1 col-pre-2 col-pre-3 col-pre-4" data-col-group="pre">Clases Pre-Encuentro</th>
-            <th colspan="2" class="th-enc col-enc-group col-enc-1 col-enc-2" data-col-group="enc">Encuentro</th>
-            <th colspan="2" class="th-post col-post-group col-post-1 col-post-2" data-col-group="post">Refuerzo</th>
-            <th colspan="2" class="th-post col-post-group col-post-3 col-post-4" data-col-group="post">Post-encuentro</th>
+            <th colspan="4" class="th-pre col-pre-group" data-col-group="pre">Clases Pre-Encuentro</th>
+            <th colspan="2" class="th-enc col-enc-group" data-col-group="enc">Encuentro</th>
+            <th colspan="2" class="th-post col-post-group" data-col-group="refuerzo">Refuerzo</th>
+            <th colspan="2" class="th-post col-post-group" data-col-group="post">Post-encuentro</th>
             <th rowspan="2" class="th-baut col-bautismo">Bautismo</th>
+            <th rowspan="2" class="th-enc col-culmino">Culminó encuentro</th>
+            <?php endif; ?>
           </tr>
           <tr>
+            <th class="col-pago-enc">Pagó encuentro</th>
+            <th class="col-pago-libro">Compró libro</th>
+            <?php if (empty($soloConsultaLiderazgo)): ?>
             <th class="th-pre col-pre-1">C1</th>
             <th class="th-pre col-pre-2">C2</th>
             <th class="th-pre col-pre-3">C3</th>
@@ -621,6 +653,7 @@ $puedeIrPagos = class_exists('AuthController') && (
             <th class="th-post col-post-2">C2</th>
             <th class="th-post col-post-3">C1</th>
             <th class="th-post col-post-4">C2</th>
+            <?php endif; ?>
           </tr>
         </thead>
         <tbody id="li-tbody">
@@ -677,6 +710,7 @@ $puedeIrPagos = class_exists('AuthController') && (
   const PROGRAMA   = <?= json_encode($programa) ?>;
   const RED_BLOQUEADA = <?= json_encode($redAsistenciaListado) ?>;
   const MODO_RED = <?= $modoRedAsistencia ? 'true' : 'false' ?>;
+  const SOLO_CONSULTA_LIDERAZGO = <?= !empty($soloConsultaLiderazgo) ? 'true' : 'false' ?>;
   const COLSPAN_TABLA = <?= (int)$colspanTablaUv ?>;
   const BASE_URL   = <?= json_encode(rtrim($publicUrl, '/') . '/?url=') ?>;
   const ABONO_URL    = BASE_URL + 'escuelas_formacion/inscritos/abono-admin';
@@ -730,10 +764,24 @@ $puedeIrPagos = class_exists('AuthController') && (
     }
   }
 
+  function tienePagoEncuentro(p) {
+    return !!p.tiene_pago_encuentro
+      || Number(p.total_pagado || 0) > 0
+      || Number(p.registros_encuentro || 0) > 0;
+  }
+
+  function tienePagoLibro(p) {
+    return !!p.tiene_pago_libro
+      || Number(p.total_libros || 0) > 0
+      || Number(p.registros_libro || 0) > 0;
+  }
+
   function tienePagoRegistrado(p) {
-    const totalPagado = Number(p.total_pagado || 0);
-    const registrosPago = Number(p.registros_pago || 0);
-    return !!p.tiene_pago_registrado || totalPagado > 0 || registrosPago > 0;
+    return tienePagoEncuentro(p) || tienePagoLibro(p);
+  }
+
+  function culminoEncuentro(p) {
+    return !!(p && p.clase_5 && p.clase_6);
   }
 
   function clasificarGeneroBase(g) {
@@ -800,9 +848,14 @@ $puedeIrPagos = class_exists('AuthController') && (
     const terminoBuscar = normalizar(buscar);
 
     return todosLosDatos.filter(p => {
-      const pagado = tienePagoRegistrado(p);
-      if (filtroPago === 'pagados' && !pagado) return false;
-      if (filtroPago === 'sin_pago' && pagado) return false;
+      const pagadoEncuentro = tienePagoEncuentro(p);
+      const pagadoLibro = tienePagoLibro(p);
+      if (filtroPago === 'pagados' && !tienePagoRegistrado(p)) return false;
+      if (filtroPago === 'sin_pago' && tienePagoRegistrado(p)) return false;
+      if (filtroPago === 'encuentro' && !pagadoEncuentro) return false;
+      if (filtroPago === 'sin_encuentro_pago' && pagadoEncuentro) return false;
+      if (filtroPago === 'libro' && !pagadoLibro) return false;
+      if (filtroPago === 'sin_libro' && pagadoLibro) return false;
 
       if (!coincideFiltroEncuentro(p, filtroEncuentro)) return false;
 
@@ -872,8 +925,12 @@ $puedeIrPagos = class_exists('AuthController') && (
   }
 
   function etiquetaFiltroPago(valor) {
-    if (valor === 'pagados') return 'Con pago';
-    if (valor === 'sin_pago') return 'Sin pago';
+    if (valor === 'pagados') return 'Con algún pago';
+    if (valor === 'sin_pago') return 'Sin ningún pago';
+    if (valor === 'encuentro') return 'Con pago encuentro';
+    if (valor === 'sin_encuentro_pago') return 'Sin pago encuentro';
+    if (valor === 'libro') return 'Con pago libro';
+    if (valor === 'sin_libro') return 'Sin pago libro';
     return '';
   }
 
@@ -950,6 +1007,14 @@ $puedeIrPagos = class_exists('AuthController') && (
 
   function contarSinPago(lista) {
     return (lista || []).filter((p) => !tienePagoRegistrado(p)).length;
+  }
+
+  function contarConPagoEncuentro(lista) {
+    return (lista || []).filter((p) => tienePagoEncuentro(p)).length;
+  }
+
+  function contarConPagoLibro(lista) {
+    return (lista || []).filter((p) => tienePagoLibro(p)).length;
   }
 
   /** Encuentro: clase 5 = día 1, clase 6 = día 2 */
@@ -1070,14 +1135,16 @@ $puedeIrPagos = class_exists('AuthController') && (
       if (filtrosActivos) {
         elPagados.textContent = String(pagadosVista);
         labelPagados.textContent = 'Con pago (filtro)';
-        subPagados.textContent = pagadosVista === pagadosGlobal
-          ? 'en esta vista'
-          : ('de ' + pagadosGlobal + ' en total');
+        subPagados.textContent = (pagadosVista === pagadosGlobal ? 'en esta vista' : ('de ' + pagadosGlobal + ' en total'))
+          + ' · Encuentro ' + contarConPagoEncuentro(filas)
+          + ' · Libro ' + contarConPagoLibro(filas);
         subPagados.hidden = false;
       } else {
         elPagados.textContent = String(pagadosGlobal);
         labelPagados.textContent = 'Con pago';
-        subPagados.hidden = true;
+        subPagados.textContent = 'Encuentro ' + contarConPagoEncuentro(todosLosDatos)
+          + ' · Libro ' + contarConPagoLibro(todosLosDatos);
+        subPagados.hidden = false;
       }
     }
 
@@ -1141,37 +1208,49 @@ $puedeIrPagos = class_exists('AuthController') && (
         <td class="col-telefono">${esc(p.Telefono || '–')}</td>
         <td class="t-left col-lider" style="color:#475569;">${esc(p.Lider || '–')}</td>
         <td class="col-documentos">${celdaDocumentos(p)}</td>
-        <td class="col-pago">${btnPago(p)}</td>
-        <td class="col-acciones">${btnAcciones(p)}</td>
+        <td class="col-pago-enc">${badgePago(tienePagoEncuentro(p), Number(p.total_pagado || 0), 'Encuentro')}</td>
+        <td class="col-pago-libro">${badgePago(tienePagoLibro(p), Number(p.total_libros || 0), 'Libro', true)}</td>
       `;
 
-      const clasesAsist = ['col-pre-1', 'col-pre-2', 'col-pre-3', 'col-pre-4', 'col-enc-1', 'col-enc-2', 'col-post-1', 'col-post-2', 'col-post-3', 'col-post-4'];
-      for (let c = 1; c <= 10; c++) {
-        const td = document.createElement('td');
-        td.className = clasesAsist[c - 1];
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.className = 'check-asist';
-        cb.checked = !!p['clase_' + c];
-        cb.dataset.idPersona = p.Id_Persona;
-        cb.dataset.clase = c;
-        cb.dataset.tipo = 'uv';
-        cb.addEventListener('change', onCheckChange);
-        td.appendChild(cb);
-        tr.appendChild(td);
-      }
+      if (!SOLO_CONSULTA_LIDERAZGO) {
+        const tdAcc = document.createElement('td');
+        tdAcc.className = 'col-acciones';
+        tdAcc.innerHTML = btnAcciones(p);
+        tr.appendChild(tdAcc);
 
-      const tdBaut = document.createElement('td');
-      tdBaut.className = 'col-bautismo';
-      const cbBaut = document.createElement('input');
-      cbBaut.type = 'checkbox';
-      cbBaut.className = 'check-asist';
-      cbBaut.checked = !!p.clase_bautismo;
-      cbBaut.dataset.idPersona = p.Id_Persona;
-      cbBaut.dataset.tipo = 'bautismo';
-      cbBaut.addEventListener('change', onCheckChange);
-      tdBaut.appendChild(cbBaut);
-      tr.appendChild(tdBaut);
+        const clasesAsist = ['col-pre-1', 'col-pre-2', 'col-pre-3', 'col-pre-4', 'col-enc-1', 'col-enc-2', 'col-post-1', 'col-post-2', 'col-post-3', 'col-post-4'];
+        for (let c = 1; c <= 10; c++) {
+          const td = document.createElement('td');
+          td.className = clasesAsist[c - 1];
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.className = 'check-asist';
+          cb.checked = !!p['clase_' + c];
+          cb.dataset.idPersona = p.Id_Persona;
+          cb.dataset.clase = c;
+          cb.dataset.tipo = 'uv';
+          cb.addEventListener('change', onCheckChange);
+          td.appendChild(cb);
+          tr.appendChild(td);
+        }
+
+        const tdBaut = document.createElement('td');
+        tdBaut.className = 'col-bautismo';
+        const cbBaut = document.createElement('input');
+        cbBaut.type = 'checkbox';
+        cbBaut.className = 'check-asist';
+        cbBaut.checked = !!p.clase_bautismo;
+        cbBaut.dataset.idPersona = p.Id_Persona;
+        cbBaut.dataset.tipo = 'bautismo';
+        cbBaut.addEventListener('change', onCheckChange);
+        tdBaut.appendChild(cbBaut);
+        tr.appendChild(tdBaut);
+
+        const tdCulmino = document.createElement('td');
+        tdCulmino.className = 'col-culmino';
+        tdCulmino.innerHTML = badgeCulminoEncuentro(p);
+        tr.appendChild(tdCulmino);
+      }
 
       fragment.appendChild(tr);
     });
@@ -1346,19 +1425,20 @@ $puedeIrPagos = class_exists('AuthController') && (
     }
   }
 
-  // ── Botón pago ──────────────────────────────────────────────────
-  function btnPago(p) {
-    const href = hrefPagoPersona(p);
-    const totalPagado = Number(p.total_pagado || 0);
-    const tienePago = tienePagoRegistrado(p);
-    const estado = tienePago
-      ? `<span class="pago-status ok" title="Ya tiene pago registrado">Con pago${totalPagado > 0 ? (' · $' + formatNumber(totalPagado)) : ''}</span>`
-      : `<span class="pago-status no" title="Sin pago registrado">Sin pago</span>`;
+  function badgePago(tienePago, total, etiqueta, esLibro) {
+    const extraClase = esLibro ? ' libro' : '';
+    if (tienePago) {
+      const monto = total > 0 ? (' · $' + formatNumber(total)) : '';
+      return `<span class="pago-status ok${extraClase}" title="${esc(etiqueta)}: ya tiene pago registrado">Con pago${monto}</span>`;
+    }
+    return `<span class="pago-status no" title="${esc(etiqueta)}: sin pago registrado">Sin pago</span>`;
+  }
 
-    return `<div class="pago-cell">`
-      + `<a class="btn-pago-icon" href="${href}" target="_blank" title="Registrar pago/abono">💳</a>`
-      + estado
-      + `</div>`;
+  function badgeCulminoEncuentro(p) {
+    if (culminoEncuentro(p)) {
+      return '<span class="pago-status ok" title="Asistió a los dos días del encuentro">Sí</span>';
+    }
+    return '<span class="pago-status no" title="Aún no asiste a los dos días del encuentro">No</span>';
   }
 
   function formatNumber(n) {
@@ -1475,8 +1555,9 @@ $puedeIrPagos = class_exists('AuthController') && (
     { id: 'telefono', label: 'Teléfono', grupo: 'Datos personales' },
     { id: 'lider', label: 'Líder', grupo: 'Datos personales' },
     { id: 'documentos', label: 'Documentos', grupo: 'Gestión' },
-    { id: 'pago', label: 'Pago / Abono', grupo: 'Gestión' },
     { id: 'acciones', label: 'Acciones', grupo: 'Gestión' },
+    { id: 'pago-libro', label: 'Compró libro', grupo: 'Pagos' },
+    { id: 'pago-enc', label: 'Pagó encuentro', grupo: 'Pagos' },
     { id: 'pre-1', label: 'Pre-encuentro — C1', grupo: 'Clases pre-encuentro' },
     { id: 'pre-2', label: 'Pre-encuentro — C2', grupo: 'Clases pre-encuentro' },
     { id: 'pre-3', label: 'Pre-encuentro — C3', grupo: 'Clases pre-encuentro' },
@@ -1487,8 +1568,20 @@ $puedeIrPagos = class_exists('AuthController') && (
     { id: 'post-2', label: 'Refuerzo — C2', grupo: 'Refuerzo' },
     { id: 'post-3', label: 'Post-encuentro — C1', grupo: 'Clases post-encuentro' },
     { id: 'post-4', label: 'Post-encuentro — C2', grupo: 'Clases post-encuentro' },
-    { id: 'bautismo', label: 'Bautismo', grupo: 'Consolidar' }
+    { id: 'bautismo', label: 'Bautismo', grupo: 'Consolidar' },
+    { id: 'culmino', label: 'Culminó encuentro', grupo: 'Consolidar' }
   ].filter(function (col) {
+    if (SOLO_CONSULTA_LIDERAZGO) {
+      const idsOcultosLiderazgo = {
+        acciones: true,
+        'pre-1': true, 'pre-2': true, 'pre-3': true, 'pre-4': true,
+        'enc-1': true, 'enc-2': true,
+        'post-1': true, 'post-2': true, 'post-3': true, 'post-4': true,
+        bautismo: true,
+        culmino: true
+      };
+      if (idsOcultosLiderazgo[col.id]) return false;
+    }
     if (!MODO_RED) return true;
     return col.id !== 'genero' && col.id !== 'segmento';
   });
@@ -1510,17 +1603,21 @@ $puedeIrPagos = class_exists('AuthController') && (
     if (!tablaAsistencias) return;
     const ocultas = new Set(idsOcultosDesdeEstado());
     const grupos = {
+      pago: ['pago-enc', 'pago-libro'],
       pre: ['pre-1', 'pre-2', 'pre-3', 'pre-4'],
       enc: ['enc-1', 'enc-2'],
-      post: ['post-1', 'post-2', 'post-3', 'post-4']
+      refuerzo: ['post-1', 'post-2'],
+      post: ['post-3', 'post-4']
     };
     Object.keys(grupos).forEach(function (nombre) {
       const ids = grupos[nombre];
-      const todasOcultas = ids.every(function (id) { return ocultas.has(id); });
       const visibles = ids.filter(function (id) { return !ocultas.has(id); }).length;
       tablaAsistencias.querySelectorAll('[data-col-group="' + nombre + '"]').forEach(function (th) {
-        th.style.display = todasOcultas ? 'none' : '';
-        if (!todasOcultas) {
+        if (visibles === 0) {
+          th.style.display = 'none';
+          th.removeAttribute('colspan');
+        } else {
+          th.style.display = '';
           th.colSpan = visibles;
         }
       });
@@ -1560,6 +1657,14 @@ $puedeIrPagos = class_exists('AuthController') && (
               columnasVisibles[col.id] = parsed[col.id];
             }
           });
+          if (typeof parsed.pago === 'boolean') {
+            if (typeof parsed['pago-enc'] !== 'boolean') {
+              columnasVisibles['pago-enc'] = parsed.pago;
+            }
+            if (typeof parsed['pago-libro'] !== 'boolean') {
+              columnasVisibles['pago-libro'] = parsed.pago;
+            }
+          }
           return;
         }
       }
@@ -1612,9 +1717,18 @@ $puedeIrPagos = class_exists('AuthController') && (
   }
 
   function setSoloEncuentro() {
+    const idsSolo = {
+      nombre: true,
+      lider: true,
+      acciones: true,
+      'pago-libro': true,
+      'pago-enc': true,
+      'enc-1': true,
+      'enc-2': true,
+      culmino: true
+    };
     COLUMNAS_DEF.forEach(function (col) {
-      const esPrePost = col.id.indexOf('pre-') === 0 || col.id.indexOf('post-') === 0;
-      columnasVisibles[col.id] = !esPrePost;
+      columnasVisibles[col.id] = !!idsSolo[col.id];
     });
     if (colCheckboxesHost) {
       colCheckboxesHost.querySelectorAll('input[type=checkbox]').forEach(function (input) {
@@ -1774,13 +1888,14 @@ $puedeIrPagos = class_exists('AuthController') && (
   }
 
   function textoPagoExport(p) {
-    const pagado = tienePagoRegistrado(p);
-    if (!pagado) return 'No';
-    const total = Number(p.total_pagado || 0);
-    if (total > 0) {
-      return 'Sí ($' + total.toLocaleString('es-CO') + ')';
-    }
-    return 'Sí';
+    const partes = [];
+    partes.push(tienePagoEncuentro(p)
+      ? ('Encuentro: Sí' + (Number(p.total_pagado || 0) > 0 ? (' ($' + Number(p.total_pagado).toLocaleString('es-CO') + ')') : ''))
+      : 'Encuentro: No');
+    partes.push(tienePagoLibro(p)
+      ? ('Libro: Sí' + (Number(p.total_libros || 0) > 0 ? (' ($' + Number(p.total_libros).toLocaleString('es-CO') + ')') : ''))
+      : 'Libro: No');
+    return partes.join(' | ');
   }
 
   function valorCeldaExport(p, colId) {
@@ -1793,7 +1908,13 @@ $puedeIrPagos = class_exists('AuthController') && (
       case 'telefono': return p.Telefono || '';
       case 'lider': return p.Lider || '';
       case 'documentos': return textoDocumentosExport(p);
-      case 'pago': return textoPagoExport(p);
+      case 'pago':
+      case 'pago-enc': return tienePagoEncuentro(p)
+        ? ('Sí' + (Number(p.total_pagado || 0) > 0 ? (' ($' + Number(p.total_pagado).toLocaleString('es-CO') + ')') : ''))
+        : 'No';
+      case 'pago-libro': return tienePagoLibro(p)
+        ? ('Sí' + (Number(p.total_libros || 0) > 0 ? (' ($' + Number(p.total_libros).toLocaleString('es-CO') + ')') : ''))
+        : 'No';
       case 'pre-1': return p.clase_1 ? 'X' : '';
       case 'pre-2': return p.clase_2 ? 'X' : '';
       case 'pre-3': return p.clase_3 ? 'X' : '';
@@ -1805,6 +1926,7 @@ $puedeIrPagos = class_exists('AuthController') && (
       case 'post-3': return p.clase_9 ? 'X' : '';
       case 'post-4': return p.clase_10 ? 'X' : '';
       case 'bautismo': return p.clase_bautismo ? 'X' : '';
+      case 'culmino': return culminoEncuentro(p) ? 'Sí' : 'No';
       default: return '';
     }
   }

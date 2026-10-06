@@ -134,7 +134,7 @@ return [
 
     'home/escuelas-formacion/*' => ['checker' => 'puedeAccederEscuelasFormacion'],
 
-    'home/cambiar-segmento-inscripcion' => ['checker' => 'puedeAccederEscuelasFormacion'],
+    'home/cambiar-segmento-inscripcion' => ['checker' => 'puedeVerListadoAsistenciasUniversidadVida'],
 
     'home/eliminar-inscripcion-formacion' => ['any' => ['personas:eliminar', 'escuelas_formacion:eliminar']],
 
@@ -449,13 +449,13 @@ return [
 
     'escuelas_formacion/pagos/*' => ['any' => ['programas:gestionar_pagos_universidad_vida', 'programas:gestionar_pagos_capacitacion_destino', 'escuelas_formacion:gestionar_pagos', 'programas:ver']],
 
-    'escuelas_formacion/inscritos' => ['checker' => 'puedeAccederEscuelasFormacion'],
+    'escuelas_formacion/inscritos' => ['checker' => 'puedeVerListadoAsistenciasUniversidadVida'],
 
     'escuelas_formacion/inscritos/eliminar' => ['any' => ['escuelas_formacion:eliminar', 'personas:eliminar']],
 
-    'escuelas_formacion/inscritos/guardar-asistencia' => 'escuelas_formacion_marcar_asistencia:editar',
+    'escuelas_formacion/inscritos/guardar-asistencia' => ['checker' => 'puedeMarcarAsistenciaListadoUniversidadVida'],
 
-    'escuelas_formacion/inscritos/*' => ['checker' => 'puedeAccederEscuelasFormacion'],
+    'escuelas_formacion/inscritos/*' => ['checker' => 'puedeVerListadoAsistenciasUniversidadVida'],
 
     'escuelas_formacion/abonos/*' => ['checker' => 'puedeAccederEscuelasFormacion'],
 

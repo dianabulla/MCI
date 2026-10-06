@@ -1476,6 +1476,43 @@ class AuthController extends BaseController {
     }
 
     /**
+     * Listado de asistencias UV en Programas (HTML + AJAX de inscritos).
+     * Incluye el permiso de módulo Asistencias y la acción granular de Programas.
+     */
+    public static function puedeVerListadoAsistenciasUniversidadVida(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+        if (self::puedeAccederEscuelasFormacion()) {
+            return true;
+        }
+        if (self::puede('asistencias:ver')) {
+            return true;
+        }
+
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        return PermisosProgramasAccess::puedeVerAsistenciasUniversidadVida();
+    }
+
+    public static function puedeMarcarAsistenciaListadoUniversidadVida(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+        if (class_exists('DataIsolation') && DataIsolation::esLiderazgoAsistenciasSoloConsulta()) {
+            return false;
+        }
+        if (self::puede('escuelas_formacion_marcar_asistencia:editar')) {
+            return true;
+        }
+        if (self::puede('asistencias:ver')) {
+            return true;
+        }
+
+        require_once APP . '/Helpers/PermisosProgramasAccess.php';
+        return PermisosProgramasAccess::puedeVerAsistenciasUniversidadVida();
+    }
+
+    /**
      * Sin modulo Personas completo pero con acceso a Programas (UV, Cap. Destino o programas ver).
      * Quien este en este modo gestiona inscritos desde Programas; no se muestra panel Personas en inicio
      * y las entradas personas/ redirigen al consolidado correspondiente.

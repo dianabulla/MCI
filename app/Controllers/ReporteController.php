@@ -7343,10 +7343,78 @@ class ReporteController extends BaseController {
     }
 
     /**
-     * UV: inscritos, asistencia real a clases (lista 1–4) y Encuentro (lista 5–6) por ministerio y red.
+     * Pagos UV separados en libro vs encuentro, indexados por cédula y clave.
      *
-     * @return array<int, array<string, mixed>>
+     * @return array<string, array{libro:bool,encuentro:bool}>
      */
+    private function mapaPagoLibroEncuentroUvPorClave(): array {
+        $filas = $this->escuelaInscripcionModel->getResumenPagosAbonos('', 2500, 'universidad_vida');
+        $mapa = [];
+
+        foreach ((array)$filas as $fila) {
+            $pagoLibro = ((int)($fila['Registros_Libro'] ?? 0) > 0)
+                || ((float)($fila['Total_Libros'] ?? 0) > 0)
+                || ((int)($fila['Tiene_Libro'] ?? 0) === 1);
+            $pagoEncuentro = ((int)($fila['Registros_Encuentro'] ?? 0) > 0)
+                || ((float)($fila['Total_Pagado_Encuentro'] ?? 0) > 0);
+
+            $entry = [
+                'libro' => $pagoLibro,
+                'encuentro' => $pagoEncuentro,
+            ];
+
+            $cedulaClave = trim((string)($fila['Cedula_Clave'] ?? ''));
+            $cedulaDigitos = preg_replace('/\D+/', '', (string)($fila['Cedula'] ?? ''));
+            if ($cedulaClave !== '' && !isset($mapa[$cedulaClave])) {
+                $mapa[$cedulaClave] = $entry;
+            }
+            if ($cedulaDigitos !== '' && !isset($mapa[$cedulaDigitos])) {
+                $mapa[$cedulaDigitos] = $entry;
+            }
+        }
+
+        return $mapa;
+    }
+
+    /**
+     * @param array<string, mixed> $inscripcion
+     * @param array<string, array{libro:bool,encuentro:bool}> $mapa
+     * @return array{libro:bool,encuentro:bool}
+     */
+    private function resolverPagoLibroEncuentroPersona(array $inscripcion, array $mapa): array {
+        $libro = false;
+        $encuentro = false;
+        $cedulaDigitos = preg_replace('/\D+/', '', (string)($inscripcion['Cedula'] ?? ''));
+        $idPersona = (int)($inscripcion['Id_Persona'] ?? 0);
+        $claves = [];
+        if ($cedulaDigitos !== '') {
+            $claves[] = $cedulaDigitos;
+        }
+        if ($idPersona > 0) {
+            $claves[] = 'SIN-CEDULA-' . $idPersona;
+        }
+
+        foreach ($claves as $clave) {
+            if (!isset($mapa[$clave])) {
+                continue;
+            }
+            $libro = $libro || !empty($mapa[$clave]['libro']);
+            $encuentro = $encuentro || !empty($mapa[$clave]['encuentro']);
+        }
+
+        $categoria = strtolower(preg_replace('/[\s_\-]+/', '', (string)($inscripcion['Categoria_Pago'] ?? '')));
+        if (strpos($categoria, 'libro') !== false || strpos($categoria, 'book') !== false) {
+            $libro = true;
+        } elseif ($categoria === 'encuentro' || ((float)($inscripcion['Valor_Pago'] ?? 0) > 0 && strpos($categoria, 'libro') === false)) {
+            $encuentro = true;
+        }
+
+        return [
+            'libro' => $libro,
+            'encuentro' => $encuentro,
+        ];
+    }
+
     /**
      * Clases UV (1–10) y días de Encuentro (5 y 6) de una persona.
      *
@@ -9286,6 +9354,8 @@ class ReporteController extends BaseController {
             );
         }
 
+        $mapaPagosUv = $this->mapaPagoLibroEncuentroUvPorClave();
+
         $nombreTitulo = '';
         $personas = [];
         $yaContados = [];
@@ -9319,6 +9389,7 @@ class ReporteController extends BaseController {
             }
 
             $resumenAsist = $this->resumenAsistenciaClasesUvPersona($idPersona, $asistUv, $asistEncuentro);
+            $pagosPersona = $this->resolverPagoLibroEncuentroPersona($inscripcion, $mapaPagosUv);
             $personas[] = [
                 'id_inscripcion' => (int)($inscripcion['Id_Inscripcion'] ?? 0),
                 'id_persona' => $idPersona,
@@ -9326,8 +9397,8 @@ class ReporteController extends BaseController {
                 'cedula' => trim((string)($inscripcion['Cedula'] ?? '')),
                 'lider' => $this->resolverNombreLiderCelulaInscripcionDashboard($inscripcion),
                 'clases' => (int)$resumenAsist['clases'],
-                'dia1' => !empty($resumenAsist['dia1']),
-                'dia2' => !empty($resumenAsist['dia2']),
+                'pago_libro' => !empty($pagosPersona['libro']),
+                'pago_encuentro' => !empty($pagosPersona['encuentro']),
                 'culmino_encuentro' => !empty($resumenAsist['culmino_encuentro']),
             ];
         }

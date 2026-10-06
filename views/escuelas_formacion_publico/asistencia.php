@@ -109,7 +109,7 @@
             background: #fff;
             cursor: pointer;
         }
-        .clase.sugerida { border-color: #0f6a66; box-shadow: 0 0 0 2px rgba(15, 106, 102, .18); }
+        .clase.seleccionada { border-color: #0f6a66; box-shadow: 0 0 0 2px rgba(15, 106, 102, .18); }
         .clase.asistio { background: #ecf8ef; border-color: #b7e0c0; }
         .clase input { width: 18px; height: 18px; accent-color: var(--primary); }
         .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
@@ -177,7 +177,7 @@
 <div class="container">
     <div class="header">
         <h1>Asistencia Universidad de la Vida</h1>
-        <p>Consulta por cédula. Los días de Encuentro no se marcan en este formulario. Refuerzo marca las dos clases juntas.</p>
+        <p>Consulta por cédula. Puedes marcar una o varias clases a la vez. Los días de Encuentro no se marcan en este formulario.</p>
     </div>
     <div class="body">
         <?php if (!empty($mensaje)): ?>
@@ -185,7 +185,7 @@
                 <?= htmlspecialchars((string)$mensaje) ?>
             </div>
         <?php endif; ?>
-        <p class="help">Escribe el número de cédula. Verás pre-encuentro, refuerzo (marca las dos clases) y dos clases de post-encuentro. Los días de Encuentro no se marcan aquí.</p>
+        <p class="help">Escribe el número de cédula. Marca una o varias clases de pre-encuentro, refuerzo o post-encuentro y pulsa <strong>Marcar asistencia</strong>. Los días de Encuentro no se marcan aquí.</p>
         <form method="POST" action="<?= PUBLIC_URL ?>?url=escuelas_formacion/asistencia-publica/guardar" id="form-asistencia-publica" autocomplete="off">
             <div class="field">
                 <label for="cedula">Número de cédula</label>
@@ -274,7 +274,7 @@
         const claseTxt = String(etiquetaClase || '');
         if (exitoTitulo) {
             exitoTitulo.textContent = claseTxt
-                ? ('Asistencia guardada a ' + claseTxt + ' con éxito')
+                ? ('Asistencia guardada: ' + claseTxt)
                 : 'Asistencia guardada con éxito';
         }
         if (exitoTexto) {
@@ -311,12 +311,29 @@
         datosPersona.textContent = '';
     }
 
-    function seleccionarOpcion(opcion) {
-        const numeros = (opcion.numeros || []).map(function (n) { return Number(n); }).filter(function (n) { return n > 0; });
+    function actualizarSeleccion() {
+        const numeros = [];
+        const ids = [];
+        grupos.querySelectorAll('input[type="checkbox"]').forEach(function (input) {
+            const label = input.closest('.clase');
+            if (label) {
+                label.classList.toggle('seleccionada', input.checked && !input.disabled);
+            }
+            if (!input.checked || input.disabled) {
+                return;
+            }
+            ids.push(String(input.value || ''));
+            String(input.getAttribute('data-numeros') || '').split(',').forEach(function (parte) {
+                const n = Number(String(parte || '').trim());
+                if (n > 0 && numeros.indexOf(n) === -1) {
+                    numeros.push(n);
+                }
+            });
+        });
         numeroClaseInput.value = numeros.length ? String(numeros[0]) : '';
         if (numerosClaseInput) numerosClaseInput.value = numeros.join(',');
-        if (opcionClaseInput) opcionClaseInput.value = String(opcion.id || '');
-        btnGuardar.disabled = numeros.length === 0 || !!opcion.asistio;
+        if (opcionClaseInput) opcionClaseInput.value = ids.join(',');
+        btnGuardar.disabled = numeros.length === 0;
     }
 
     function renderClases(clases, sugerida, opciones) {
@@ -353,32 +370,29 @@
                 const label = document.createElement('label');
                 const yaAsistio = !!opcion.asistio;
                 const extra = yaAsistio ? ' (ya asistió)' : (opcion.parcial ? ' (parcial)' : '');
+                const numeros = (opcion.numeros || []).map(function (n) { return Number(n); }).filter(function (n) { return n > 0; });
                 label.className = 'clase' + (yaAsistio ? ' asistio' : '');
-                label.innerHTML = '<input type="radio" name="clase_ui" value="' + String(opcion.id || '') + '"'
+                label.innerHTML = '<input type="checkbox" name="clase_ui[]" value="' + String(opcion.id || '') + '"'
+                    + ' data-numeros="' + numeros.join(',') + '"'
                     + (yaAsistio ? ' disabled' : '') + '>'
                     + '<span>' + String(opcion.label || '') + extra + '</span>';
                 const input = label.querySelector('input');
-                input.addEventListener('change', function () {
-                    if (input.checked) {
-                        seleccionarOpcion(opcion);
-                    }
-                });
+                input.addEventListener('change', actualizarSeleccion);
                 grid.appendChild(label);
             });
             wrap.appendChild(grid);
             grupos.appendChild(wrap);
         });
         grupos.classList.add('visible');
-        const sugeridaLibre = items.find(function (opcion) { return !opcion.asistio; });
-        if (sugeridaLibre) {
-            const radio = grupos.querySelector('input[value="' + sugeridaLibre.id + '"]');
-            if (radio) {
-                radio.checked = true;
-                seleccionarOpcion(sugeridaLibre);
-            }
-        } else {
-            btnGuardar.disabled = true;
+        const sugeridaNum = Number(sugerida || 0);
+        let marcada = grupos.querySelector('input[type="checkbox"]:not(:disabled)[data-numeros="' + sugeridaNum + '"]');
+        if (!marcada) {
+            marcada = grupos.querySelector('input[type="checkbox"]:not(:disabled)');
         }
+        if (marcada) {
+            marcada.checked = true;
+        }
+        actualizarSeleccion();
     }
 
     function buscar(opciones) {
@@ -425,7 +439,7 @@
                 ficha.classList.add('visible');
                 renderClases(data.clases || [], data.clase_sugerida || 1, data.opciones || []);
                 if (!mantenerExito) {
-                    setEstado('info', data.mensaje || 'Marca la clase correspondiente.');
+                    setEstado('info', data.mensaje || 'Marca una o varias clases.');
                 }
             })
             .catch(function () {
@@ -451,7 +465,7 @@
         const cedula = String(cedulaInput.value || '').trim();
         const numerosClase = String((numerosClaseInput && numerosClaseInput.value) || numeroClaseInput.value || '').trim();
         if (cedula.length < 4 || !numerosClase) {
-            setEstado('warn', 'Busca la persona y selecciona el número de clase.');
+            setEstado('warn', 'Busca la persona y marca al menos una clase.');
             return;
         }
         const body = new FormData();

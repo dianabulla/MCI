@@ -131,6 +131,24 @@ class DataIsolation {
     }
 
     /**
+     * Verificar si el usuario es líder de 144
+     */
+    public static function esLider144() {
+        $rolNombre = self::getUsuarioRolNombre();
+        return PermisosCatalogo::esNombreRolLider144($rolNombre);
+    }
+
+    /**
+     * Líder de célula / 12 / 144: ven inscritos UV (datos y pagos), no marcan asistencia.
+     */
+    public static function esLiderazgoAsistenciasSoloConsulta() {
+        if (self::esAdmin()) {
+            return false;
+        }
+        return self::esLiderCelula() || self::esLider12() || self::esLider144();
+    }
+
+    /**
      * Verificar si el usuario es pastor
      */
     public static function esPastor() {
@@ -227,14 +245,30 @@ class DataIsolation {
             $aliasPersona = 'p';
         }
 
+        $celulasPropias = "$aliasPersona.Id_Celula IN (
+                SELECT c.Id_Celula
+                FROM celula c
+                WHERE c.Id_Lider = $usuarioId
+            )";
+
         if (self::esLiderCelula()) {
-            return "($aliasPersona.Id_Lider = $usuarioId OR $aliasPersona.Id_Persona = $usuarioId)";
+            return "(
+                $aliasPersona.Id_Persona = $usuarioId
+                OR $aliasPersona.Id_Lider = $usuarioId
+                OR $celulasPropias
+            )";
         }
 
         if (self::esLider12()) {
             $condicion = "(
                 $aliasPersona.Id_Persona = $usuarioId
                 OR $aliasPersona.Id_Lider = $usuarioId
+                OR $celulasPropias
+                OR $aliasPersona.Id_Celula IN (
+                    SELECT c.Id_Celula
+                    FROM celula c
+                    WHERE c.Id_Lider_Inmediato = $usuarioId
+                )
                 OR $aliasPersona.Id_Lider IN (
                     SELECT DISTINCT c.Id_Lider
                     FROM celula c
@@ -382,6 +416,37 @@ class DataIsolation {
 
         // Otros roles: sin acceso (restringir)
         return "1=0";
+    }
+
+    /**
+     * Indica si una persona cae en la cobertura del usuario (mismo aislamiento SQL).
+     */
+    public static function personaVisibleParaUsuarioActual(int $idPersona): bool {
+        if ($idPersona <= 0) {
+            return false;
+        }
+
+        $filtro = self::generarFiltroPersonas();
+        if ($filtro === '1=1') {
+            return true;
+        }
+        if ($filtro === '1=0') {
+            return false;
+        }
+
+        global $pdo;
+        if (!isset($pdo) || !($pdo instanceof PDO)) {
+            return false;
+        }
+
+        try {
+            $stmt = $pdo->prepare("SELECT 1 FROM persona p WHERE p.Id_Persona = ? AND ({$filtro}) LIMIT 1");
+            $stmt->execute([$idPersona]);
+            return (bool)$stmt->fetchColumn();
+        } catch (Throwable $e) {
+            error_log('DataIsolation::personaVisibleParaUsuarioActual: ' . $e->getMessage());
+            return false;
+        }
     }
 
     /**

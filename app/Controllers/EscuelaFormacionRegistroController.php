@@ -36,6 +36,14 @@ class EscuelaFormacionRegistroController extends BaseController {
     private $soportaFechaNacimiento = false;
     private $idRolAsistenteCache = null;
 
+    private function usuarioPuedeVerListadoInscritosUv() {
+        if (!class_exists('AuthController')) {
+            return false;
+        }
+
+        return AuthController::puedeVerListadoAsistenciasUniversidadVida();
+    }
+
     private function usuarioPuedeVerPagos() {
         if (!class_exists('AuthController')) {
             return false;
@@ -2210,7 +2218,7 @@ class EscuelaFormacionRegistroController extends BaseController {
     }
 
     /**
-     * Casillas del formulario público: sin días de Encuentro; refuerzo y post marcan dos clases a la vez.
+     * Casillas del formulario público: sin días de Encuentro; se puede marcar una o varias clases.
      *
      * @param array<int, mixed> $asistenciasPersona
      * @return list<array<string, mixed>>
@@ -2238,7 +2246,8 @@ class EscuelaFormacionRegistroController extends BaseController {
         for ($n = 1; $n <= 4; $n++) {
             $opciones[] = $armar('pre-' . $n, 'Pre-encuentro', 'Clase ' . $n, [$n]);
         }
-        $opciones[] = $armar('refuerzo', 'Refuerzo', 'Clases 1 y 2', [7, 8]);
+        $opciones[] = $armar('refuerzo-1', 'Refuerzo', 'Clase 1', [7]);
+        $opciones[] = $armar('refuerzo-2', 'Refuerzo', 'Clase 2', [8]);
         $opciones[] = $armar('post-1', 'Post-encuentro', 'Clase 1', [9]);
         $opciones[] = $armar('post-2', 'Post-encuentro', 'Clase 2', [10]);
 
@@ -2261,10 +2270,18 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
         $opcion = trim((string)($_POST['opcion_clase'] ?? ''));
         if ($brutos === [] && $opcion !== '') {
+            $idsOpcion = [];
+            foreach (explode(',', $opcion) as $parte) {
+                $id = trim($parte);
+                if ($id !== '') {
+                    $idsOpcion[$id] = $id;
+                }
+            }
             foreach ($this->opcionesAsistenciaPublicaUniversidadVida([]) as $item) {
-                if ((string)($item['id'] ?? '') === $opcion) {
-                    $brutos = array_map('intval', (array)($item['numeros'] ?? []));
-                    break;
+                if (isset($idsOpcion[(string)($item['id'] ?? '')])) {
+                    foreach ((array)($item['numeros'] ?? []) as $n) {
+                        $brutos[] = (int)$n;
+                    }
                 }
             }
         }
@@ -2559,7 +2576,10 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'total_abonos' => $normalizado['total_abonos'],
                 'total_pago_completo' => $normalizado['total_pago_completo'],
                 'pago_completo_uv' => $normalizado['pago_completo_uv'],
-                'registros_pago' => (int)($filaPago['Registros_Pago'] ?? 0),
+                'registros_pago' => (int)($filaPago['Registros_Encuentro'] ?? $filaPago['Registros_Pago'] ?? 0),
+                'total_libros' => $totalLibros,
+                'registros_libro' => (int)($filaPago['Registros_Libro'] ?? 0),
+                'registros_encuentro' => (int)($filaPago['Registros_Encuentro'] ?? 0),
             ];
 
             $cedulaClavePago = trim((string)($filaPago['Cedula_Clave'] ?? ''));
@@ -2590,6 +2610,9 @@ class EscuelaFormacionRegistroController extends BaseController {
             'total_abonos' => 0.0,
             'total_pago_completo' => 0.0,
             'registros_pago' => 0,
+            'total_libros' => 0.0,
+            'registros_libro' => 0,
+            'registros_encuentro' => 0,
         ];
 
         $claves = $this->clavesIdentidadEscuelaFormacion(
@@ -2613,7 +2636,12 @@ class EscuelaFormacionRegistroController extends BaseController {
         $persona['total_abonos'] = (float)$pago['total_abonos'];
         $persona['total_pago_completo'] = (float)$pago['total_pago_completo'];
         $persona['registros_pago'] = (int)$pago['registros_pago'];
-        $persona['tiene_pago_registrado'] = ((float)$pago['total_pagado'] > 0) || ((int)$pago['registros_pago'] > 0);
+        $persona['total_libros'] = (float)($pago['total_libros'] ?? 0);
+        $persona['registros_libro'] = (int)($pago['registros_libro'] ?? 0);
+        $persona['registros_encuentro'] = (int)($pago['registros_encuentro'] ?? $pago['registros_pago'] ?? 0);
+        $persona['tiene_pago_encuentro'] = ((float)$pago['total_pagado'] > 0) || ((int)$persona['registros_encuentro'] > 0);
+        $persona['tiene_pago_libro'] = ((float)$persona['total_libros'] > 0) || ((int)$persona['registros_libro'] > 0);
+        $persona['tiene_pago_registrado'] = !empty($persona['tiene_pago_encuentro']) || !empty($persona['tiene_pago_libro']);
     }
 
     private function indexarInscripcionesPorClave(array $inscripciones): array {
@@ -3576,7 +3604,8 @@ class EscuelaFormacionRegistroController extends BaseController {
             'persona' => $resultado['persona'],
             'clases' => $resultado['clases'],
             'clase_sugerida' => (int)($resultado['clase_sugerida'] ?? 1),
-            'mensaje' => 'Persona encontrada. Marca la clase que está tomando hoy.',
+            'opciones' => $resultado['opciones'] ?? [],
+            'mensaje' => 'Persona encontrada. Marca una o varias clases.',
         ]);
     }
 
@@ -3614,7 +3643,7 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         if ($numerosClase === []) {
-            $responder(false, 'Selecciona la clase que está tomando.', 422, ['cedula' => $cedula]);
+            $responder(false, 'Selecciona al menos una clase.', 422, ['cedula' => $cedula]);
         }
 
         $persona = (array)($resultado['persona'] ?? []);
@@ -3638,9 +3667,14 @@ class EscuelaFormacionRegistroController extends BaseController {
         foreach ($numerosClase as $numeroClase) {
             $etiquetas[] = $this->etiquetaClaseUniversidadVida($numeroClase);
         }
-        $etiquetaConjunto = implode(' y ', array_unique($etiquetas));
-        if (count($numerosClase) === 2 && $numerosClase === [7, 8]) {
-            $etiquetaConjunto = 'Refuerzo — Clases 1 y 2';
+        $etiquetas = array_values(array_unique($etiquetas));
+        if (count($etiquetas) <= 1) {
+            $etiquetaConjunto = (string)($etiquetas[0] ?? 'clase');
+        } elseif (count($etiquetas) === 2) {
+            $etiquetaConjunto = $etiquetas[0] . ' y ' . $etiquetas[1];
+        } else {
+            $ultima = array_pop($etiquetas);
+            $etiquetaConjunto = implode(', ', $etiquetas) . ' y ' . $ultima;
         }
 
         if ($pendientes === []) {
@@ -4821,7 +4855,7 @@ class EscuelaFormacionRegistroController extends BaseController {
     // ─────────────────────────────────────────────────────────────────
 
     public function listadoInscritos() {
-        if (!$this->usuarioPuedeVerPagos()) {
+        if (!$this->usuarioPuedeVerListadoInscritosUv()) {
             if (!class_exists('AuthController') || !AuthController::estaAutenticado()) {
                 header('Location: ' . PUBLIC_URL . '/index.php?url=auth/login');
                 exit;
@@ -4838,7 +4872,9 @@ class EscuelaFormacionRegistroController extends BaseController {
             $buscar = trim((string)($_GET['buscar'] ?? ''));
             $limit  = max(1, min(2500, (int)($_GET['limit'] ?? 2500)));
 
-            $personas = $this->inscripcionModel->getInscritosBasicos($programa, $buscar, $limit);
+            require_once APP . '/Helpers/DataIsolation.php';
+            $filtroPersonas = DataIsolation::generarFiltroPersonas();
+            $personas = $this->inscripcionModel->getInscritosBasicos($programa, $buscar, $limit, $filtroPersonas);
             require_once APP . '/Helpers/PeriodoSemestre.php';
             $rangoSemestre = PeriodoSemestre::resolver();
             $personas = array_values(array_filter((array)$personas, static function ($persona) use ($rangoSemestre) {
@@ -4897,7 +4933,8 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         // ── Vista HTML ────────────────────────────────────────────────
         $esAdmin = class_exists('AuthController') && AuthController::esAdministrador();
-        $puedeGestionarListado = $esAdmin || $this->usuarioPuedeVerPagos();
+        $puedeGestionarListado = $esAdmin
+            || $this->usuarioPuedeVerListadoInscritosUv();
         $puedeEliminarInscripcion = $esAdmin
             || AuthController::puede('escuelas_formacion:eliminar')
             || AuthController::puede('personas:eliminar');
@@ -4930,7 +4967,7 @@ class EscuelaFormacionRegistroController extends BaseController {
         $puedeEliminar = AuthController::esAdministrador()
             || AuthController::puede('escuelas_formacion:eliminar')
             || AuthController::puede('personas:eliminar');
-        if (!$puedeEliminar) {
+        if (!$puedeEliminar || (class_exists('DataIsolation') && DataIsolation::esLiderazgoAsistenciasSoloConsulta())) {
             $this->json(['success' => false, 'mensaje' => 'Sin permiso para eliminar inscripciones'], 403);
             return;
         }
@@ -4972,7 +5009,7 @@ class EscuelaFormacionRegistroController extends BaseController {
      * POST: id_persona, modulo, programa, numero_clase, asistio (0/1)
      */
     public function guardarAsistenciaClase() {
-        if (!$this->usuarioPuedeVerPagos()) {
+        if (!class_exists('AuthController') || !AuthController::puedeMarcarAsistenciaListadoUniversidadVida()) {
             $this->json(['success' => false, 'mensaje' => 'Sin permiso'], 403);
             return;
         }
@@ -5000,6 +5037,12 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         if ($idPersona <= 0) {
             $this->json(['success' => false, 'mensaje' => 'Parámetros inválidos'], 422);
+            return;
+        }
+
+        require_once APP . '/Helpers/DataIsolation.php';
+        if (!DataIsolation::personaVisibleParaUsuarioActual($idPersona)) {
+            $this->json(['success' => false, 'mensaje' => 'Sin acceso a esta persona'], 403);
             return;
         }
 
