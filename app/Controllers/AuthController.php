@@ -1308,14 +1308,15 @@ class AuthController extends BaseController {
     }
 
     /**
-     * Ruta de entrada al área Ganar-Consolidar según permisos del rol.
+     * Entrada de Escalera del éxito. Almas ganadas queda en personas/ganar
+     * y solo abre sola cuando el rol no puede ver la escalera.
      */
     public static function urlEntradaGanarConsolidarRelativa(): string {
-        if (self::puedeVerModuloPersonasGanar()) {
-            return 'personas/ganar';
-        }
         if (self::puedeVerSubmoduloPersonasConsulta()) {
             return 'personas';
+        }
+        if (self::puedeVerModuloPersonasGanar()) {
+            return 'personas/ganar';
         }
         return 'auth/acceso-denegado';
     }

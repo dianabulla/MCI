@@ -41,10 +41,10 @@ if ($esDiscipuloSoloDiscipular) {
 
 if (!$esDiscipuloSoloDiscipular && AuthController::puedeAccederAreaGanarConsolidar()) {
     $cardsDashboard[] = [
-        'titulo' => 'Ganar-Consolidar',
-        'subtitulo' => AuthController::puedeVerModuloPersonasGanar()
+        'titulo' => 'Escalera del éxito',
+        'subtitulo' => AuthController::puedeVerSubmoduloPersonasConsulta()
             ? 'Almas ganadas y discípulos'
-            : 'Discípulos de tu red',
+            : 'Almas ganadas',
         'accion' => 'Abrir',
         'href' => PUBLIC_URL . '?url=' . AuthController::urlEntradaGanarConsolidarRelativa(),
         'icono' => 'bi-person-heart',

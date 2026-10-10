@@ -1,13 +1,16 @@
 <?php
-$puedeMostrarCampanaNotif = !empty($puedeVerPendientesGanar) || !empty($puedeVerGanarArea);
+$campanaSoloDiscipulos = !empty($campanaSoloDiscipulos);
+$puedeMostrarCampanaNotif = !empty($puedeVerPendientesGanar) || !empty($puedeVerGanarArea) || $campanaSoloDiscipulos;
 if (!$puedeMostrarCampanaNotif) {
     return;
 }
 
 $urlNotifAlmasGanadas = PUBLIC_URL . '?url=personas/ganar';
-$urlNotifDiscipulos = PUBLIC_URL . '?url=personas';
-$urlNotifCentro = PUBLIC_URL . '?url=personas/notificaciones';
-$totalNotifAlmas = (int)($totalPendientesGanar ?? 0);
+$urlNotifDiscipulos = PUBLIC_URL . '?url=personas&perfil=pendientes_conectar';
+$urlNotifCentro = $campanaSoloDiscipulos
+    ? $urlNotifDiscipulos
+    : (PUBLIC_URL . '?url=personas/notificaciones');
+$totalNotifAlmas = $campanaSoloDiscipulos ? 0 : (int)($totalPendientesGanar ?? 0);
 $totalNotifDiscipulos = (int)($totalPendientesPorConectar ?? 0);
 $totalNotifCampana = max(0, $totalNotifAlmas + $totalNotifDiscipulos);
 $paginaNotificacionesActiva = ($currentUrl ?? '') === 'personas/notificaciones';
@@ -36,6 +39,7 @@ $paginaNotificacionesActiva = ($currentUrl ?? '') === 'personas/notificaciones';
                     <a href="<?= htmlspecialchars($urlNotifCentro, ENT_QUOTES, 'UTF-8') ?>" class="fb-notif-panel-link">Ver todas</a>
                 </div>
 
+                <?php if (!$campanaSoloDiscipulos): ?>
                 <a href="<?= htmlspecialchars($urlNotifAlmasGanadas, ENT_QUOTES, 'UTF-8') ?>" class="fb-notif-item" role="menuitem">
                     <span class="fb-notif-item-icon fb-notif-item-icon--almas" aria-hidden="true">
                         <i class="bi bi-person-plus-fill"></i>
@@ -48,6 +52,7 @@ $paginaNotificacionesActiva = ($currentUrl ?? '') === 'personas/notificaciones';
                         <span class="fb-notif-item-count"><?= $totalNotifAlmas > 99 ? '99+' : $totalNotifAlmas ?></span>
                     <?php endif; ?>
                 </a>
+                <?php endif; ?>
 
                 <a href="<?= htmlspecialchars($urlNotifDiscipulos, ENT_QUOTES, 'UTF-8') ?>" class="fb-notif-item" role="menuitem">
                     <span class="fb-notif-item-icon fb-notif-item-icon--discipulos" aria-hidden="true">

@@ -15,7 +15,7 @@ $resumenCategorias = [
         'icono' => 'bi-people-fill',
         'color' => '#1877f2',
         'link' => $linkGestionPendientes,
-        'cta' => 'Ir a Discípulos',
+        'cta' => 'Ir a Escalera del éxito',
     ],
     [
         'id' => 'nuevas',
@@ -37,7 +37,7 @@ $resumenCategorias = [
         <p>Elige un acceso para ir directo al módulo de gestión correspondiente.</p>
     </div>
     <div class="personas-header-actions">
-        <nav class="personas-action-group-nav" aria-label="Secciones Ganar-Consolidar">
+        <nav class="personas-action-group-nav" aria-label="Secciones de Escalera del éxito">
             <a href="<?= PUBLIC_URL ?>?url=personas" class="personas-action-pill">Discípulos</a>
             <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="personas-action-pill">Almas ganadas</a>
             <a href="<?= PUBLIC_URL ?>?url=personas/notificaciones" class="personas-action-pill is-active" aria-current="page">Notificaciones</a>

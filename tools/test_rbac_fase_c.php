@@ -51,8 +51,8 @@ $assert(!empty($cfgPersonas['acciones']), 'personas tiene acciones granulares');
 $assert(!isset($cat['personas_acciones_editar']), 'sin botón genérico editar duplicado');
 
 $jerarquia = PermisosModulos::jerarquiaParaPantalla();
-$assert(isset($jerarquia['Ganar-Consolidar']['submodulos']['personas']), 'jerarquía Ganar → Almas ganadas');
-$assert(isset($jerarquia['Ganar-Consolidar']['submodulos']['personas_consulta']), 'jerarquía Ganar → Discípulos');
+$assert(isset($jerarquia['Escalera del éxito']['submodulos']['personas']), 'jerarquía Escalera del éxito → Almas ganadas');
+$assert(isset($jerarquia['Escalera del éxito']['submodulos']['personas_consulta']), 'jerarquía Escalera del éxito → listado');
 
 $_SESSION = [
     'auth_user_id' => 1,

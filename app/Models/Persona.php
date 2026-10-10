@@ -1092,8 +1092,8 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Obtener personas con lÃ­der y ministerio asignados que superaron el lÃ­mite
-     * de horas para registrar el primer contacto.
+     * Personas nuevas con líder y ministerio, cuya asignación superó el plazo
+     * sin primer contacto o sin célula.
      */
     public function getCandidatosReasignacionPrimerContacto($horasLimite = 48) {
         $horasLimite = max(1, (int)$horasLimite);
@@ -1106,13 +1106,25 @@ class Persona extends BaseModel {
 
         $campoTiempoControl = "p.Fecha_Asignacion_Lider";
 
-        $sql = "SELECT p.Id_Persona, p.Id_Lider, p.Id_Ministerio, p.Fecha_Registro, p.Fecha_Asignacion_Lider, p.Escalera_Checklist, p.Proceso, p.Estado_Cuenta
+        $filtroNuevas = $this->tieneColumna('Es_Antiguo')
+            ? ' AND COALESCE(p.Es_Antiguo, 0) = 0'
+            : '';
+        $filtroCanal = '';
+        if ($this->tieneColumna('Canal_Creacion')) {
+            $filtroCanal = " AND TRIM(COALESCE(p.Canal_Creacion, '')) NOT IN ('Escuelas Formacion (Formulario publico)', 'Tour Levántate y Resplandece')";
+        }
+
+        $sql = "SELECT p.Id_Persona, p.Id_Lider, p.Id_Ministerio, p.Id_Celula, p.Fecha_Registro, p.Fecha_Asignacion_Lider, p.Escalera_Checklist, p.Proceso, p.Estado_Cuenta
             FROM {$this->table} p
             WHERE p.Id_Lider IS NOT NULL
+              AND p.Id_Lider > 0
               AND p.Id_Ministerio IS NOT NULL
+              AND p.Id_Ministerio > 0
               AND {$campoTiempoControl} IS NOT NULL
               AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
               AND (p.Proceso = 'Ganar' OR p.Proceso IS NULL OR p.Proceso = '')
+              {$filtroNuevas}
+              {$filtroCanal}
               AND TIMESTAMPDIFF(HOUR, {$campoTiempoControl}, NOW()) >= ?
             ORDER BY {$campoTiempoControl} ASC, p.Id_Persona ASC";
 
@@ -2358,7 +2370,8 @@ class Persona extends BaseModel {
             return false;
         }
 
-        if (trim((string)($persona['Canal_Creacion'] ?? '')) === 'Escuelas Formacion (Formulario publico)') {
+        $canal = trim((string)($persona['Canal_Creacion'] ?? ''));
+        if ($canal === 'Escuelas Formacion (Formulario publico)' || $canal === 'Tour Levántate y Resplandece') {
             return false;
         }
 
@@ -2374,36 +2387,10 @@ class Persona extends BaseModel {
             }
         }
 
-        $rol = strtolower(trim((string)($persona['Nombre_Rol'] ?? '')));
-        $rol = strtr($rol, [
-            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
-        ]);
-        if (
-            strpos($rol, 'pastor') !== false
-            || strpos($rol, 'lider de 12') !== false
-            || strpos($rol, 'lider 12') !== false
-            || strpos($rol, 'lideres de 12') !== false
-            || strpos($rol, 'lider de 144') !== false
-            || strpos($rol, 'lider 144') !== false
-            || strpos($rol, 'lideres de 144') !== false
-            || strpos($rol, 'lider de celula') !== false
-            || strpos($rol, 'lider celula') !== false
-        ) {
-            return false;
-        }
-
-        $proceso = strtolower(trim((string)($persona['Proceso'] ?? '')));
-        if (in_array($proceso, ['consolidar', 'discipular', 'enviar'], true)) {
-            return false;
-        }
-
         $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
         $idLider = (int)($persona['Id_Lider'] ?? 0);
         $idCelula = (int)($persona['Id_Celula'] ?? 0);
-        if ($idCelula > 0) {
-            return false;
-        }
-        if ($idMinisterio > 0 && $idLider > 0) {
+        if ($idMinisterio > 0 && $idLider > 0 && $idCelula > 0) {
             return false;
         }
 
@@ -2436,7 +2423,7 @@ class Persona extends BaseModel {
         $sql = "SELECT COUNT(*) AS total
                 FROM persona p
                 WHERE $filtroRol
-                  AND (p.Id_Ministerio IS NULL OR p.Id_Lider IS NULL OR p.Id_Celula IS NULL)";
+                  AND (p.Id_Ministerio IS NULL OR p.Id_Ministerio <= 0 OR p.Id_Lider IS NULL OR p.Id_Lider <= 0 OR p.Id_Celula IS NULL OR p.Id_Celula <= 0)";
 
         $resultado = $this->query($sql);
         if (empty($resultado)) {
@@ -2466,9 +2453,9 @@ class Persona extends BaseModel {
                 WHERE $filtroRol";
 
         if ($soloGanar === true) {
-            $sql .= " AND (p.Id_Ministerio IS NULL OR p.Id_Lider IS NULL OR p.Id_Celula IS NULL)";
+            $sql .= " AND (p.Id_Ministerio IS NULL OR p.Id_Ministerio <= 0 OR p.Id_Lider IS NULL OR p.Id_Lider <= 0 OR p.Id_Celula IS NULL OR p.Id_Celula <= 0)";
         } elseif ($soloGanar === false) {
-            $sql .= " AND p.Id_Ministerio IS NOT NULL AND p.Id_Lider IS NOT NULL AND p.Id_Celula IS NOT NULL";
+            $sql .= " AND p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0 AND p.Id_Lider IS NOT NULL AND p.Id_Lider > 0 AND p.Id_Celula IS NOT NULL AND p.Id_Celula > 0";
         }
 
         $params = [];
@@ -2575,9 +2562,9 @@ class Persona extends BaseModel {
                 WHERE $filtroRol";
 
         if ($soloGanar === true) {
-            $sql .= " AND (p.Id_Ministerio IS NULL OR p.Id_Lider IS NULL OR p.Id_Celula IS NULL)";
+            $sql .= " AND (p.Id_Ministerio IS NULL OR p.Id_Ministerio <= 0 OR p.Id_Lider IS NULL OR p.Id_Lider <= 0 OR p.Id_Celula IS NULL OR p.Id_Celula <= 0)";
         } elseif ($soloGanar === false) {
-            $sql .= " AND p.Id_Ministerio IS NOT NULL AND p.Id_Lider IS NOT NULL AND p.Id_Celula IS NOT NULL";
+            $sql .= " AND p.Id_Ministerio IS NOT NULL AND p.Id_Ministerio > 0 AND p.Id_Lider IS NOT NULL AND p.Id_Lider > 0 AND p.Id_Celula IS NOT NULL AND p.Id_Celula > 0";
         }
         
         $params = [];

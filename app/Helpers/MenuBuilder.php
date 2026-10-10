@@ -5,7 +5,7 @@
  */
 class MenuBuilder {
     /** Incrementar al cambiar estructura del menú lateral (invalida caché en sesión). */
-    public const SIDEBAR_MENU_VERSION = 12;
+    public const SIDEBAR_MENU_VERSION = 13;
 
     /**
      * Sincroniza permisos planos y menú en $_SESSION.
@@ -299,7 +299,7 @@ class MenuBuilder {
             ],
             [
                 'id' => 'personas_ganar',
-                'label' => 'Ganar-Consolidar',
+                'label' => 'Escalera del éxito',
                 'ruta' => 'personas/ganar',
                 'icon' => 'bi-person-heart',
                 'active_prefixes' => ['personas', 'personas/ganar'],

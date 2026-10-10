@@ -82,15 +82,15 @@ class PermisosModulos {
 
         return [
 
-            // --- Ganar-Consolidar ---
+            // --- Escalera del éxito ---
 
             'personas' => [
 
                 'label' => 'Almas ganadas',
 
-                'descripcion' => 'Pestaña Almas ganadas, campaña y registro de almas en Ganar-Consolidar.',
+                'descripcion' => 'Pestaña Almas ganadas, campaña y registro de almas. La entrada del menú es Escalera del éxito.',
 
-                'grupo' => 'Ganar-Consolidar',
+                'grupo' => 'Escalera del éxito',
 
                 'crud_labels' => [
 
@@ -108,15 +108,15 @@ class PermisosModulos {
 
             'personas_consulta' => [
 
-                'label' => 'Discípulos (consulta)',
+                'label' => 'Escalera del éxito',
 
-                'descripcion' => 'Listado «Discípulos», fichas y Universidad de la Vida sin menú Ganar-Consolidar ni Almas ganadas.',
+                'descripcion' => 'Por conectar, etapas de la escalera y fichas. No incluye la pestaña Almas ganadas.',
 
-                'grupo' => 'Ganar-Consolidar',
+                'grupo' => 'Escalera del éxito',
 
                 'crud_labels' => [
 
-                    'puede_ver' => 'Ver Discípulos',
+                    'puede_ver' => 'Ver Escalera del éxito',
 
                     'puede_crear' => 'Crear fichas',
 
@@ -134,7 +134,7 @@ class PermisosModulos {
 
                 'descripcion' => 'Filtro «Asignados» en pendientes por consolidar (vista Ganar).',
 
-                'grupo' => 'Ganar-Consolidar',
+                'grupo' => 'Escalera del éxito',
 
                 'solo_ver' => true,
 
@@ -148,7 +148,7 @@ class PermisosModulos {
 
                 'descripcion' => 'Filtro «Reasignados» en pendientes por consolidar (vista Ganar).',
 
-                'grupo' => 'Ganar-Consolidar',
+                'grupo' => 'Escalera del éxito',
 
                 'solo_ver' => true,
 
@@ -930,7 +930,7 @@ class PermisosModulos {
 
         $ordenGrupos = [
 
-            'Ganar-Consolidar',
+            'Escalera del éxito',
 
             'Accesos rápidos',
 
@@ -1023,7 +1023,7 @@ class PermisosModulos {
      */
     public static function jerarquiaParaPantalla(): array {
         $ordenGrupos = [
-            'Ganar-Consolidar',
+            'Escalera del éxito',
             'Accesos rápidos',
             'Comunidad',
             'Enviar',

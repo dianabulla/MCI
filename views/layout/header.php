@@ -70,7 +70,11 @@ $puedeVerRoles = $puedeVer('roles');
 $puedeVerMaterialCelulasEnEnviar = $puedeVerEnviar && (AuthController::esAdministrador() || AuthController::puedeVerMaterialCelulas());
 $puedeVerAsistenciasEnEnviar = $puedeVerEnviar && $puedeVerAsistencias;
 
-$puedeVerPendientesGanar = $puedeVerGanarAlmas;
+require_once APP . '/Helpers/DataIsolation.php';
+$campanaSoloDiscipulos = AuthController::estaAutenticado()
+    && !AuthController::esAdministrador()
+    && (DataIsolation::esLiderCelula() || DataIsolation::esLider12());
+$puedeVerPendientesGanar = $puedeVerGanarAlmas && !$campanaSoloDiscipulos;
 $totalPendientesGanar = 0;
 $totalPendientesPorConectar = 0;
 $totalNuevasAlmasGanadas = 0;
@@ -82,15 +86,16 @@ if ($mostrarAlertaIngresoGanar) {
     unset($_SESSION['mostrar_alerta_ganar_pendiente']);
 }
 
-if ($puedeVerPendientesGanar) {
-    require_once APP . '/Helpers/DataIsolation.php';
+if ($puedeVerPendientesGanar || $campanaSoloDiscipulos) {
     require_once APP . '/Models/Persona.php';
 
     try {
         $personaCampanaModel = new Persona();
         $filtroRolPendientes = DataIsolation::generarFiltroPersonasPendienteConsolidar();
         $filtroRolDiscipulos = DataIsolation::generarFiltroPersonas();
-        $personasCampana = $personaCampanaModel->getAllWithRole($filtroRolPendientes, true);
+        $personasCampana = $campanaSoloDiscipulos
+            ? []
+            : $personaCampanaModel->getAllWithRole($filtroRolPendientes, true);
 
         $normalizarRol = static function ($rolNombre) {
             $rol = strtolower(trim((string)$rolNombre));
@@ -340,7 +345,7 @@ if ($esMenuMaestro) {
 
             <?php if ($puedeVerGanarArea): ?>
             <a class="sidebar-link <?= $isActive(['personas', 'personas/ganar']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($urlEntradaGanarConsolidar, ENT_QUOTES, 'UTF-8') ?>">
-                <span class="sidebar-link-icon"><i class="bi bi-person-heart"></i></span><span class="sidebar-link-text">Ganar-Consolidar</span>
+                <span class="sidebar-link-icon"><i class="bi bi-person-heart"></i></span><span class="sidebar-link-text">Escalera del éxito</span>
             </a>
             <?php endif; ?>
             <!-- Eliminado acceso directo y comentarios de Material para evitar restos visibles -->

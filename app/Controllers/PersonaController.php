@@ -811,7 +811,10 @@ class PersonaController extends BaseController {
 
     private function normalizarOrigenFiltro($origen) {
         $origen = strtolower(trim((string)$origen));
-        return in_array($origen, ['domingo', 'celula', 'asignados', 'reasignados', 'no_disponible', 'en_seguimiento'], true) ? $origen : '';
+        if ($origen === 'iglesia') {
+            $origen = 'domingo';
+        }
+        return in_array($origen, ['domingo', 'celula', 'somos_uno', 'otros', 'asignados', 'reasignados', 'no_disponible', 'en_seguimiento'], true) ? $origen : '';
     }
 
     private function resolverRangoSemanaLunesDomingo($fechaReferencia) {
@@ -1115,20 +1118,21 @@ class PersonaController extends BaseController {
 
             $checklist = $this->normalizarChecklistEscalera($checklistActual);
 
-            // Si ya hubo primer contacto, no se reasigna.
-            if (!empty($checklist['Ganar'][0])) {
+            // No mover casos cerrados como "No se dispone".
+            if (!empty($checklist['Ganar'][5])) {
                 continue;
             }
 
-            // No mover casos cerrados como "No se dispone".
-            if (!empty($checklist['Ganar'][5])) {
+            $tieneContacto = !empty($checklist['Ganar'][0]);
+            $tieneCelula = (int)($persona['Id_Celula'] ?? 0) > 0;
+            if ($tieneContacto && $tieneCelula) {
                 continue;
             }
 
             $checklist['Ganar'][1] = false;
             $checklist['_meta']['reasignado_automatico'] = true;
             $checklist['_meta']['reasignado_automatico_at'] = date('Y-m-d H:i:s');
-            $checklist['_meta']['reasignado_automatico_motivo'] = 'Sin primer contacto en 48 horas';
+            $checklist['_meta']['reasignado_automatico_motivo'] = 'Pasaron 48 horas sin contacto o sin célula';
 
             $checklistJson = json_encode($checklist, JSON_UNESCAPED_UNICODE);
             if ($checklistJson === false) {
@@ -1566,50 +1570,129 @@ class PersonaController extends BaseController {
     }
 
     private function obtenerCategoriaOrigenPendiente(array $persona) {
-        if (!empty($persona['Seguimiento_Reasignado'])) {
-            return 'reasignados';
-        }
-
         if (!empty($persona['Seguimiento_No_Disponible'])) {
             return 'no_disponible';
         }
 
-        $origenGanar = trim((string)($persona['Origen_Ganar'] ?? ''));
-        $tipoReunion = $this->textoSinAcentos((string)($persona['Tipo_Reunion'] ?? ''));
-        $invitadoPor = trim((string)($persona['Invitado_Por'] ?? ''));
-        $idLider = (int)($persona['Id_Lider'] ?? 0);
-        $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
-        $tieneAsignacion = ($idLider > 0 || $idMinisterio > 0);
-        $esCelula = ($origenGanar === 'Celula' || strpos($tipoReunion, 'celula') !== false);
-        $esMigrados = strpos($tipoReunion, 'migrados') !== false;
-
-        if ($esCelula) {
-            return 'celula';
+        if (!empty($persona['Seguimiento_Reasignado'])) {
+            return 'reasignados';
         }
 
-        if ($invitadoPor === '' && $tieneAsignacion && !$esMigrados) {
+        $tipoReunion = $this->textoSinAcentos((string)($persona['Tipo_Reunion'] ?? ''));
+        $origenGanar = $this->textoSinAcentos((string)($persona['Origen_Ganar'] ?? ''));
+        $marca = $tipoReunion !== '' ? $tipoReunion : $origenGanar;
+
+        if (strpos($marca, 'celula') !== false) {
+            return 'celula';
+        }
+        if (strpos($marca, 'somos uno') !== false || strpos($marca, 'somosuno') !== false) {
+            return 'somos_uno';
+        }
+        if (strpos($marca, 'otro') !== false) {
+            return 'otros';
+        }
+        if (strpos($marca, 'domingo') !== false || strpos($marca, 'iglesia') !== false) {
+            return 'domingo';
+        }
+        if (strpos($marca, 'asignad') !== false) {
             return 'asignados';
         }
 
-        if ($invitadoPor !== '') {
-            return 'domingo';
+        $invitadoPor = trim((string)($persona['Invitado_Por'] ?? ''));
+        $idLider = (int)($persona['Id_Lider'] ?? 0);
+        $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
+        $esMigrados = strpos($marca, 'migrados') !== false;
+        if ($invitadoPor === '' && ($idLider > 0 || $idMinisterio > 0) && !$esMigrados && $marca === '') {
+            return 'asignados';
         }
 
-        if ($origenGanar !== 'Domingo' && ($tipoReunion === '' || $esMigrados)) {
-            return 'otros';
+        return 'otros';
+    }
+
+    private function esCanalFueraDeAlmasGanadas(array $persona): bool {
+        if (!$this->soportaCanalCreacion) {
+            return false;
+        }
+        $canal = trim((string)($persona['Canal_Creacion'] ?? ''));
+        return in_array($canal, [
+            'Escuelas Formacion (Formulario publico)',
+            'Tour Levántate y Resplandece',
+        ], true);
+    }
+
+    private function filtrarPoblacionAlmasGanadas(array $personas, bool $soloIncompletas): array {
+        $personas = $this->filtrarSoloPersonasNuevas($personas);
+        $personas = array_values(array_filter($personas, function ($persona) {
+            return !$this->esCanalFueraDeAlmasGanadas((array)$persona);
+        }));
+        if (!$soloIncompletas) {
+            return $personas;
         }
 
-        return 'domingo';
+        return array_values(array_filter($personas, static function ($persona) {
+            $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
+            $idLider = (int)($persona['Id_Lider'] ?? 0);
+            $idCelula = (int)($persona['Id_Celula'] ?? 0);
+            return !($idMinisterio > 0 && $idLider > 0 && $idCelula > 0);
+        }));
+    }
+
+    private function filtrarPersonasPorOrigenAlmas(array $personas, string $filtroOrigen): array {
+        if ($filtroOrigen === 'no_disponible') {
+            return array_values(array_filter($personas, static function ($persona) {
+                return !empty($persona['Seguimiento_No_Disponible']);
+            }));
+        }
+
+        if ($filtroOrigen === 'reasignados') {
+            return array_values(array_filter($personas, static function ($persona) {
+                return empty($persona['Seguimiento_No_Disponible']) && !empty($persona['Seguimiento_Reasignado']);
+            }));
+        }
+
+        if ($filtroOrigen === 'en_seguimiento') {
+            return array_values(array_filter($personas, static function ($persona) {
+                return !empty($persona['En_Seguimiento']);
+            }));
+        }
+
+        if ($filtroOrigen === '') {
+            return array_values(array_filter($personas, static function ($persona) {
+                return empty($persona['Seguimiento_No_Disponible']);
+            }));
+        }
+
+        return array_values(array_filter($personas, function ($persona) use ($filtroOrigen) {
+            return empty($persona['Seguimiento_No_Disponible'])
+                && empty($persona['Seguimiento_Reasignado'])
+                && $this->obtenerCategoriaOrigenPendiente($persona) === $filtroOrigen;
+        }));
+    }
+
+    private function totalesOrigenAlmasGanadas(array $personasVisibles, array $personasSinFecha): array {
+        $totales = $this->contarOrigenesPendientes($personasVisibles);
+        $totales['no_disponible'] = count(array_filter($personasSinFecha, static function ($persona) {
+            return !empty($persona['Seguimiento_No_Disponible']);
+        }));
+        $totales['reasignados'] = count(array_filter($personasSinFecha, static function ($persona) {
+            return empty($persona['Seguimiento_No_Disponible']) && !empty($persona['Seguimiento_Reasignado']);
+        }));
+        $totales['en_seguimiento'] = count(array_filter($personasSinFecha, static function ($persona) {
+            return !empty($persona['En_Seguimiento']);
+        }));
+
+        return $totales;
     }
 
     private function contarOrigenesPendientes(array $personas) {
         $totales = [
             'celula' => 0,
             'domingo' => 0,
+            'somos_uno' => 0,
+            'otros' => 0,
             'asignados' => 0,
             'reasignados' => 0,
-            'no_disponible' => 0,
-            'otros' => 0
+            'no_disponible' => 0
         ];
 
         foreach ($personas as $persona) {
@@ -2057,12 +2140,78 @@ class PersonaController extends BaseController {
         $personasUniversidadVida = $this->filtrarPersonasPorLiderListado($personasUniversidadVida, $filtroLider);
 
         $personasFusionDiscipulos = $this->unirPersonasSinDuplicados($personasPendientesConectar, $personasUniversidadVida);
+        $personasSinLider = $this->personaModel->getWithFiltersAndRole(
+            $filtroRol,
+            null,
+            '0',
+            null,
+            'Activo',
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+        $personasSinLider = array_values(array_filter($personasSinLider, function ($persona) {
+            $persona = (array)$persona;
+            if ($this->esRolLiderazgoPorIdRol((int)($persona['Id_Rol'] ?? 0))) {
+                return false;
+            }
+            if (!empty($persona['Seguimiento_No_Disponible'])) {
+                return false;
+            }
+            return (int)($persona['Id_Ministerio'] ?? 0) > 0 && (int)($persona['Id_Lider'] ?? 0) <= 0;
+        }));
+        $personasSinLider = $this->filtrarPersonasPorMinisterioListado($personasSinLider, $filtroMinisterio);
+        $personasSinLider = $this->filtrarPersonasPorLiderListado($personasSinLider, $filtroLider);
+        $personasFusionDiscipulos = $this->unirPersonasSinDuplicados($personasFusionDiscipulos, $personasSinLider);
         $totalPendientesConectarContexto = count($personasFusionDiscipulos);
         $sugerenciasNombre = $this->obtenerSugerenciasNombreListado($personasFusionDiscipulos);
         $personas = $this->filtrarPersonasPorNombreListado($personasFusionDiscipulos, $filtroNombre);
 
+        $personasEtapas = $this->personaModel->getWithFiltersAndRole(
+            $filtroRol,
+            null,
+            null,
+            null,
+            'Activo',
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+        $personasEtapas = $this->filtrarSoloDiscipulos($personasEtapas);
+        $personasEtapas = $this->filtrarPersonasPorMinisterioListado($personasEtapas, $filtroMinisterio);
+        $personasEtapas = $this->filtrarPersonasPorLiderListado($personasEtapas, $filtroLider);
+        $personasEtapas = $this->filtrarPersonasPorNombreListado($personasEtapas, $filtroNombre);
+        $totalesEtapaEscalera = $this->contarEtapasEscalera($personasEtapas);
+        $etapaLista = strtolower(trim((string)($_GET['etapa'] ?? '')));
+        $etapasListaPermitidas = ['ganar', 'consolidar', 'discipular', 'enviar', 'sin_etapa'];
+        if (!in_array($etapaLista, $etapasListaPermitidas, true)) {
+            $etapaLista = '';
+        }
+        if ($etapaLista !== '') {
+            $mapaEtapaLista = [
+                'ganar' => 'Ganar',
+                'consolidar' => 'Consolidar',
+                'discipular' => 'Discipular',
+                'enviar' => 'Enviar',
+            ];
+            $personasEtapas = array_values(array_filter($personasEtapas, static function ($persona) use ($etapaLista, $mapaEtapaLista) {
+                $proceso = trim((string)($persona['Proceso'] ?? ''));
+                if ($etapaLista === 'sin_etapa') {
+                    return $proceso === '';
+                }
+                return $proceso === ($mapaEtapaLista[$etapaLista] ?? '');
+            }));
+        }
+
         $this->view('personas/lista', [
             'personas' => $personas,
+            'personasEtapas' => $personasEtapas,
+            'totalesEtapaEscalera' => $totalesEtapaEscalera,
+            'filtroEtapaActual' => $etapaLista,
             'ministerios' => $ministerios,
             'lideres' => $lideres,
             'filtroMinisterioActual' => $filtroMinisterio,
@@ -2331,6 +2480,8 @@ class PersonaController extends BaseController {
             exit;
         }
 
+        $this->aplicarReglaReasignacionPrimerContacto(48);
+
         $soloGanar = true;
         $filtroMinisterio = $_GET['ministerio'] ?? null;
         $filtroLider = $_GET['lider'] ?? null;
@@ -2360,8 +2511,6 @@ class PersonaController extends BaseController {
         if ($filtroOrigen === 'reasignados' && !$puedeVerAtajoReasignados) {
             $filtroOrigen = '';
         }
-
-        // Reasignación ahora es exclusivamente manual al cambiar el líder.
 
         // Pendientes por consolidar debe incluir cualquier persona con
         // asignación incompleta, incluso si Proceso está vacío o en otra etapa.
@@ -2405,18 +2554,6 @@ class PersonaController extends BaseController {
             }
         }
 
-        if (!$verHistorial && $filtroSemanaRef === '') {
-            $hoy = time();
-            $diaSemanaHoy = (int)date('N', $hoy); // 1 lunes, 7 domingo
-            $inicioSemanaActual = strtotime('-' . ($diaSemanaHoy - 1) . ' days', $hoy);
-            $finSemanaActual = strtotime('+6 days', $inicioSemanaActual);
-
-            $filtroFechaInicio = date('Y-m-d', $inicioSemanaActual);
-            $filtroFechaFin = date('Y-m-d', $finSemanaActual);
-            $filtroSemanaRef = $filtroFechaInicio;
-            $filtroSemanaRefEsDefault = true;
-        }
-
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $filtroFechaInicio)) {
             $filtroFechaInicio = '';
         }
@@ -2427,9 +2564,9 @@ class PersonaController extends BaseController {
             [$filtroFechaInicio, $filtroFechaFin] = [$filtroFechaFin, $filtroFechaInicio];
         }
 
-        // "No se dispone" y "Reasignados" listan todos los casos marcados (puede ser días
-        // después del registro). Célula, iglesia y asignados respetan la semana/fecha seleccionada.
-        if (in_array($filtroOrigen, ['no_disponible', 'reasignados', 'en_seguimiento'], true)) {
+        // "No se dispone", "Reasignados" y "En seguimiento" listan todos los casos marcados
+        // (puede ser días después del registro). El resto respeta la semana si el usuario la eligió.
+        if (!$verHistorial && in_array($filtroOrigen, ['no_disponible', 'reasignados', 'en_seguimiento'], true)) {
             $filtroFechaInicio = '';
             $filtroFechaFin = '';
             $filtroSemanaRef = '';
@@ -2474,7 +2611,7 @@ class PersonaController extends BaseController {
             $filtroRolBusqueda = DataIsolation::generarFiltroPersonasPendienteConsolidar();
             $personas = $this->personaModel->buscarPersonasTextoListadoConRole($filtroRolBusqueda, $filtroNombre, 250);
             $personas = $this->enriquecerChecklistPersonas($personas);
-            $personas = $this->filtrarSoloPersonasNuevas($personas);
+            $personas = $this->filtrarPoblacionAlmasGanadas($personas, !$verHistorial);
             $personas = $this->filtrarPersonasPorMinisterioListado($personas, (string)$filtroMinisterio);
             $personas = $this->filtrarPersonasPorLiderListado($personas, (string)$filtroLider);
             if ($filtroCelula !== '') {
@@ -2489,17 +2626,7 @@ class PersonaController extends BaseController {
                     }));
                 }
             }
-            $totalesOrigenPendiente = $this->contarOrigenesPendientes($personas);
-            $totalesOrigenPendiente['en_seguimiento'] = count($this->personaModel->getEnSeguimientoWithRole(
-                DataIsolation::generarFiltroPersonas(),
-                $filtroMinisterio,
-                $filtroLider
-            ));
-            if ($filtroOrigen === 'en_seguimiento') {
-                $personas = array_values(array_filter($personas, static function ($persona) {
-                    return !empty($persona['En_Seguimiento']);
-                }));
-            }
+            $totalesOrigenPendiente = $this->totalesOrigenAlmasGanadas($personas, $personas);
             $ministerios = $contextoFiltros['ministerios'];
             $lideres = $contextoFiltros['lideres'];
 
@@ -2553,31 +2680,13 @@ class PersonaController extends BaseController {
         }
         $personasBaseConteo = $this->enriquecerChecklistPersonas($personasBaseConteo);
         $personasBaseConteo = $this->filtrarPersonasPorNombreListado($personasBaseConteo, $filtroNombre);
+        $personasBaseConteo = $this->filtrarPoblacionAlmasGanadas($personasBaseConteo, !$usarVistaHistoricaGanados);
 
-        if (!$usarVistaHistoricaGanados) {
-            $personasBaseConteo = array_values(array_filter($personasBaseConteo, static function($persona) {
-                $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
-                $idLider = (int)($persona['Id_Lider'] ?? 0);
-                $idCelula = (int)($persona['Id_Celula'] ?? 0);
-                return !($idMinisterio > 0 && $idLider > 0 && $idCelula > 0);
-            }));
-        }
-
-        // Pendientes e historial de almas ganadas: solo personas marcadas como nuevas (Es_Antiguo = 0), no antiguas.
-        $personasBaseConteo = $this->filtrarSoloPersonasNuevas($personasBaseConteo);
-
-        // Excluir personas de Escuelas de Formación (tienen su propia sección "Universidad de la Vida")
-        if ($this->soportaCanalCreacion) {
-            $personasBaseConteo = array_values(array_filter($personasBaseConteo, static function($p) {
-                return trim((string)($p['Canal_Creacion'] ?? '')) !== 'Escuelas Formacion (Formulario publico)';
-            }));
-        }
-
-        // Totales de No se dispone / Reasignados: sin filtro de semana (marcado posterior al registro).
-        $personasBaseConteoNoDisponible = $personasBaseConteo;
+        // No se dispone, Reasignados y En seguimiento ignoran la semana: el marcado puede ser posterior al registro.
+        $personasBaseConteoSinFecha = $personasBaseConteo;
         if (!$usarVistaHistoricaGanados && $filtroFechaInicio !== '' && $filtroFechaFin !== '') {
             if ($hayFiltrosSinOrigen) {
-                $personasBaseConteoNoDisponible = $this->personaModel->getWithFiltersAndRole(
+                $personasBaseConteoSinFecha = $this->personaModel->getWithFiltersAndRole(
                     $filtroRol,
                     $filtroMinisterio,
                     $filtroLider,
@@ -2590,7 +2699,7 @@ class PersonaController extends BaseController {
                     ''
                 );
             } else {
-                $personasBaseConteoNoDisponible = $this->personaModel->getAllWithRole(
+                $personasBaseConteoSinFecha = $this->personaModel->getAllWithRole(
                     $filtroRol,
                     $soloGanarBaseConteo,
                     $filtroEstado,
@@ -2601,129 +2710,25 @@ class PersonaController extends BaseController {
                     ''
                 );
             }
-            $personasBaseConteoNoDisponible = $this->enriquecerChecklistPersonas($personasBaseConteoNoDisponible);
-            $personasBaseConteoNoDisponible = $this->filtrarPersonasPorNombreListado($personasBaseConteoNoDisponible, $filtroNombre);
-            $personasBaseConteoNoDisponible = array_values(array_filter($personasBaseConteoNoDisponible, static function($persona) {
-                $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
-                $idLider = (int)($persona['Id_Lider'] ?? 0);
-                $idCelula = (int)($persona['Id_Celula'] ?? 0);
-                return !($idMinisterio > 0 && $idLider > 0 && $idCelula > 0);
-            }));
-            $personasBaseConteoNoDisponible = $this->filtrarSoloPersonasNuevas($personasBaseConteoNoDisponible);
-            if ($this->soportaCanalCreacion) {
-                $personasBaseConteoNoDisponible = array_values(array_filter($personasBaseConteoNoDisponible, static function($p) {
-                    return trim((string)($p['Canal_Creacion'] ?? '')) !== 'Escuelas Formacion (Formulario publico)';
-                }));
-            }
+            $personasBaseConteoSinFecha = $this->enriquecerChecklistPersonas($personasBaseConteoSinFecha);
+            $personasBaseConteoSinFecha = $this->filtrarPersonasPorNombreListado($personasBaseConteoSinFecha, $filtroNombre);
+            $personasBaseConteoSinFecha = $this->filtrarPoblacionAlmasGanadas($personasBaseConteoSinFecha, true);
         }
 
-        $totalesOrigenPendiente = $this->contarOrigenesPendientes($personasBaseConteo);
-        $totalesOrigenPendiente['no_disponible'] = count(array_filter($personasBaseConteoNoDisponible, static function($persona) {
-            return !empty($persona['Seguimiento_No_Disponible']);
-        }));
-        $totalesOrigenPendiente['reasignados'] = count(array_filter($personasBaseConteoNoDisponible, static function($persona) {
-            return empty($persona['Seguimiento_No_Disponible']) && !empty($persona['Seguimiento_Reasignado']);
-        }));
-        $totalesOrigenPendiente['en_seguimiento'] = count($this->personaModel->getEnSeguimientoWithRole(
-            DataIsolation::generarFiltroPersonas(),
-            $filtroMinisterio,
-            $filtroLider
-        ));
+        $totalesOrigenPendiente = $this->totalesOrigenAlmasGanadas($personasBaseConteo, $personasBaseConteoSinFecha);
 
-        // Para orígenes con pestaña propia no restringir por asignación incompleta en SQL;
-        // el listado se afina por origen (PHP/SQL) y luego se excluyen ubicaciones completas.
         $soloGanarListado = $usarVistaHistoricaGanados ? null : true;
-        if (!$usarVistaHistoricaGanados && in_array($filtroOrigen, ['celula', 'domingo', 'asignados'], true)) {
-            $soloGanarListado = null;
-        }
 
-        $origenSql = $filtroOrigen === 'en_seguimiento' ? '' : $filtroOrigen;
-
-        if ($hayFiltrosSinOrigen || ($filtroOrigen !== '')) {
-            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, $soloGanarListado, $filtroEstado, $filtroCelula, $filtroEtapa, $origenSql, $filtroFechaInicio, $filtroFechaFin);
+        if ($hayFiltrosSinOrigen || $filtroOrigen !== '') {
+            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, $soloGanarListado, $filtroEstado, $filtroCelula, $filtroEtapa, '', $filtroFechaInicio, $filtroFechaFin);
         } else {
-            $personas = $this->personaModel->getAllWithRole($filtroRol, $soloGanarListado, $filtroEstado, $filtroCelula, $filtroEtapa, $origenSql, $filtroFechaInicio, $filtroFechaFin);
+            $personas = $this->personaModel->getAllWithRole($filtroRol, $soloGanarListado, $filtroEstado, $filtroCelula, $filtroEtapa, '', $filtroFechaInicio, $filtroFechaFin);
         }
-
-        $personas = $this->filtrarSoloPersonasNuevas($personas);
 
         $personas = $this->enriquecerChecklistPersonas($personas);
         $personas = $this->filtrarPersonasPorNombreListado($personas, $filtroNombre);
-
-        if (!$usarVistaHistoricaGanados) {
-            $personas = array_values(array_filter($personas, static function($persona) {
-                $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
-                $idLider = (int)($persona['Id_Lider'] ?? 0);
-                $idCelula = (int)($persona['Id_Celula'] ?? 0);
-                return !($idMinisterio > 0 && $idLider > 0 && $idCelula > 0);
-            }));
-        }
-
-        if ($filtroOrigen === 'no_disponible') {
-            $personas = array_values(array_filter($personas, static function($persona) {
-                return !empty($persona['Seguimiento_No_Disponible']);
-            }));
-        } elseif ($filtroOrigen === 'reasignados') {
-            $personas = array_values(array_filter($personas, static function($persona) {
-                return empty($persona['Seguimiento_No_Disponible']) && !empty($persona['Seguimiento_Reasignado']);
-            }));
-        } elseif ($filtroOrigen === 'asignados') {
-            $personas = array_values(array_filter($personas, function($persona) {
-                return empty($persona['Seguimiento_No_Disponible'])
-                    && empty($persona['Seguimiento_Reasignado'])
-                    && $this->obtenerCategoriaOrigenPendiente($persona) === 'asignados';
-            }));
-        } elseif ($filtroOrigen === 'en_seguimiento') {
-            // El listado se carga más abajo: todas las personas marcadas En seguimiento.
-        } else {
-            // En la lista general de pendientes no deben aparecer
-            // los casos marcados como "No se dispone".
-            $personas = array_values(array_filter($personas, static function($persona) {
-                return empty($persona['Seguimiento_No_Disponible']);
-            }));
-
-            if ($filtroOrigen !== '' && !$usarVistaHistoricaGanados) {
-                $personas = array_values(array_filter($personas, static function($persona) {
-                    return empty($persona['Seguimiento_Reasignado']);
-                }));
-            }
-        }
-
-        // Excluir personas de Escuelas de Formación y del Tour Levántate (no son almas nuevas en Ganar)
-        if ($this->soportaCanalCreacion) {
-            $personas = array_values(array_filter($personas, static function($p) {
-                $canal = trim((string)($p['Canal_Creacion'] ?? ''));
-                if ($canal === 'Escuelas Formacion (Formulario publico)') {
-                    return false;
-                }
-                if ($canal === 'Tour Levántate y Resplandece') {
-                    return false;
-                }
-                return true;
-            }));
-        }
-
-        if ($filtroOrigen === 'en_seguimiento') {
-            $personas = $this->personaModel->getEnSeguimientoWithRole(
-                DataIsolation::generarFiltroPersonas(),
-                $filtroMinisterio,
-                $filtroLider
-            );
-            $personas = $this->enriquecerChecklistPersonas($personas);
-            $personas = $this->filtrarPersonasPorNombreListado($personas, $filtroNombre);
-            if ($filtroCelula !== '') {
-                if ($filtroCelula === '0') {
-                    $personas = array_values(array_filter($personas, static function ($persona) {
-                        return empty($persona['Id_Celula']) || (int)($persona['Id_Celula'] ?? 0) <= 0;
-                    }));
-                } else {
-                    $idCelFiltroSeg = (int)$filtroCelula;
-                    $personas = array_values(array_filter($personas, static function ($persona) use ($idCelFiltroSeg) {
-                        return (int)($persona['Id_Celula'] ?? 0) === $idCelFiltroSeg;
-                    }));
-                }
-            }
-        }
+        $personas = $this->filtrarPoblacionAlmasGanadas($personas, !$usarVistaHistoricaGanados);
+        $personas = $this->filtrarPersonasPorOrigenAlmas($personas, $filtroOrigen);
 
         $ministerios = $contextoFiltros['ministerios'];
         $lideres = $contextoFiltros['lideres'];
@@ -3574,7 +3579,21 @@ class PersonaController extends BaseController {
             $filtroCelula = '';
         }
 
-        $filtroRol = DataIsolation::generarFiltroPersonas();
+        $filtroRol = $esModoGanar
+            ? DataIsolation::generarFiltroPersonasPendienteConsolidar()
+            : DataIsolation::generarFiltroPersonas();
+        $verHistorialExport = $esModoGanar && (string)($_GET['historial'] ?? '') === '1';
+        if ($esModoGanar && $verHistorialExport) {
+            $anioExport = (int)($_GET['anio'] ?? date('Y'));
+            if ($anioExport < 2020 || $anioExport > ((int)date('Y') + 1)) {
+                $anioExport = (int)date('Y');
+            }
+            $filtroFechaInicio = sprintf('%04d-01-01', $anioExport);
+            $filtroFechaFin = sprintf('%04d-12-31', $anioExport);
+        } elseif ($esModoGanar && in_array($filtroOrigen, ['no_disponible', 'reasignados', 'en_seguimiento'], true)) {
+            $filtroFechaInicio = '';
+            $filtroFechaFin = '';
+        }
 
         $exportListaPendientesConectar = !$esModoGanar && $filtroPerfil === 'pendientes_conectar';
 
@@ -3608,15 +3627,17 @@ class PersonaController extends BaseController {
             $personasUv = $this->filtrarPersonasPorLiderListado($personasUv, $fLidList);
             $personas = $this->unirPersonasSinDuplicados($personas, $personasUv);
         } elseif (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '') || ($filtroEstado !== null && $filtroEstado !== '') || ($filtroCelula !== null && $filtroCelula !== '') || ($filtroEtapa !== null && $filtroEtapa !== '') || ($filtroOrigen !== '') || ($filtroFechaInicio !== '' && $filtroFechaFin !== '')) {
-            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, $soloGanar, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
+            $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, $soloGanar, $filtroEstado, $filtroCelula, $filtroEtapa, $esModoGanar ? '' : $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         } else {
-            $personas = $this->personaModel->getAllWithRole($filtroRol, $soloGanar, $filtroEstado, $filtroCelula, $filtroEtapa, $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
+            $personas = $this->personaModel->getAllWithRole($filtroRol, $soloGanar, $filtroEstado, $filtroCelula, $filtroEtapa, $esModoGanar ? '' : $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         }
 
         $personas = $this->filtrarPersonasPorNombreListado($personas, $filtroNombre);
 
         if ($esModoGanar) {
-            $personas = $this->filtrarSoloPersonasNuevas($personas);
+            $personas = $this->enriquecerChecklistPersonas($personas);
+            $personas = $this->filtrarPoblacionAlmasGanadas($personas, !$verHistorialExport);
+            $personas = $this->filtrarPersonasPorOrigenAlmas($personas, $filtroOrigen);
         }
 
         if ($filtroPerfil !== '' && !$exportListaPendientesConectar) {

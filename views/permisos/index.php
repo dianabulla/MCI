@@ -68,7 +68,7 @@ $modulosHuerfanosPorGrupo = static function (array $modulos, array $jerarquia) u
     <header class="perm-hero">
         <div>
             <h2 class="perm-hero__title"><i class="bi bi-shield-check"></i> Permisos por rol</h2>
-            <p class="perm-hero__lead">Configure por <strong>menú del sistema</strong> (Ganar-Consolidar, Comunidad, …), luego cada <strong>sección</strong> (Almas ganadas, Discípulos, …) y sus acciones concretas.</p>
+            <p class="perm-hero__lead">Configure por <strong>menú del sistema</strong> (Escalera del éxito, Comunidad, …), luego cada <strong>sección</strong> (Almas ganadas, Escalera del éxito, …) y sus acciones concretas.</p>
         </div>
         <details class="perm-hero__help">
             <summary><i class="bi bi-question-circle"></i> Ayuda</summary>

@@ -11,14 +11,13 @@ $mostrarEscaleraRapida = $puedeModuloGanarCompleto;
 ?>
 
 <div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
-    <h2 style="margin:0;">Discipulos</h2>
+    <h2 style="margin:0;">Escalera del éxito</h2>
     <div class="personas-header-actions">
+        <?php if ($puedeModuloGanarCompleto): ?>
         <div class="personas-action-group personas-action-group-nav">
-            <a href="<?= PUBLIC_URL ?>?url=personas" class="personas-action-pill is-active" aria-current="page">Discipulos</a>
-            <?php if ($puedeModuloGanarCompleto): ?>
             <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="personas-action-pill">Almas ganadas</a>
-            <?php endif; ?>
         </div>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -198,8 +197,8 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
     <div class="card-body" style="padding: 14px 18px;">
         <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px;justify-content:space-between;">
             <div>
-                <strong style="font-size:1.05rem;color:#1e3a5f;">Por conectar a célula</strong>
-                <div style="color:#5b6d88;font-size:13px;margin-top:4px;">Con ministerio asignado y sin célula (nuevas, antiguas, UV, etc.). Sin ministerio no aparecen aquí.</div>
+                <strong style="font-size:1.05rem;color:#1e3a5f;">Por conectar a célula o líder</strong>
+                <div style="color:#5b6d88;font-size:13px;margin-top:4px;">Tienen ministerio y les falta célula o líder. Quien aún no tiene ministerio sigue en Almas ganadas.</div>
             </div>
             <div style="font-size:1.6rem;font-weight:800;color:#2563eb;line-height:1;"><?= $totalPendientesBanner ?></div>
         </div>
@@ -212,8 +211,8 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
         type="button"
         class="btn btn-outline-secondary btn-sm btn-descargar-imagen-tabla"
         data-tabla-id="discipulosTableWrap"
-        data-export-title="Discípulos — Ganar-Consolidar"
-        data-filename="discipulos-ganar-consolidar"
+        data-export-title="Por conectar — Escalera del éxito"
+        data-filename="escalera-por-conectar"
         data-export-subtitle-from="filtro_perfil_form"
         data-label-default="Descargar tabla como imagen"
         title="Descargar la tabla filtrada como PNG">
@@ -397,16 +396,148 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
             <?php else: ?>
                 <tr>
                     <?php $columnasBase = 3 + ($mostrarEscaleraRapida ? 1 : 0) + ($mostrarAcciones ? 1 : 0); ?>
-                    <td colspan="<?= (string)$columnasBase ?>" class="text-center">No hay personas con ministerio y sin célula con los filtros actuales.</td>
+                    <td colspan="<?= (string)$columnasBase ?>" class="text-center">No hay personas con ministerio pendientes de célula o líder.</td>
                 </tr>
             <?php endif; ?>
         </tbody>
     </table>
 </div>
 
+<?php
+$totalesEtapaVista = is_array($totalesEtapaEscalera ?? null) ? $totalesEtapaEscalera : [
+    'Ganar' => 0,
+    'Consolidar' => 0,
+    'Discipular' => 0,
+    'Enviar' => 0,
+    'sin_etapa' => 0,
+];
+$etapaVistaActual = (string)($filtroEtapaActual ?? '');
+$personasEtapasVista = is_array($personasEtapas ?? null) ? $personasEtapas : [];
+$etapasEscaleraNav = [
+    'ganar' => ['etiqueta' => 'Ganar', 'clave' => 'Ganar'],
+    'consolidar' => ['etiqueta' => 'Consolidar', 'clave' => 'Consolidar'],
+    'discipular' => ['etiqueta' => 'Discipular', 'clave' => 'Discipular'],
+    'enviar' => ['etiqueta' => 'Enviar', 'clave' => 'Enviar'],
+    'sin_etapa' => ['etiqueta' => 'Sin etapa', 'clave' => 'sin_etapa'],
+];
+?>
+<section class="escalera-etapas" aria-label="Etapas de la escalera">
+    <div class="escalera-etapas-head">
+        <h3>Etapas de la escalera</h3>
+        <p>Personas activas de tu red, según la etapa guardada en su ficha. Los filtros de arriba también aplican aquí.</p>
+    </div>
+    <div class="escalera-etapas-nav">
+        <a class="escalera-etapa-chip<?= $etapaVistaActual === '' ? ' is-active' : '' ?>" href="<?= htmlspecialchars($buildPersonasUrl(['etapa' => '']), ENT_QUOTES, 'UTF-8') ?>">Todas</a>
+        <?php foreach ($etapasEscaleraNav as $claveNav => $etapaNav): ?>
+        <a class="escalera-etapa-chip<?= $etapaVistaActual === $claveNav ? ' is-active' : '' ?>" href="<?= htmlspecialchars($buildPersonasUrl(['etapa' => $claveNav]), ENT_QUOTES, 'UTF-8') ?>">
+            <?= htmlspecialchars($etapaNav['etiqueta']) ?>
+            <strong><?= (int)($totalesEtapaVista[$etapaNav['clave']] ?? 0) ?></strong>
+        </a>
+        <?php endforeach; ?>
+    </div>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Persona</th>
+                    <th>Ministerio</th>
+                    <th>Líder</th>
+                    <th>Etapa</th>
+                    <?php if ($mostrarAcciones): ?><th class="action-col">Acciones</th><?php endif; ?>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if ($personasEtapasVista === []): ?>
+                <tr>
+                    <td colspan="<?= $mostrarAcciones ? '5' : '4' ?>" class="text-center">No hay personas en esta etapa con los filtros actuales.</td>
+                </tr>
+                <?php else: ?>
+                    <?php foreach ($personasEtapasVista as $personaEtapa): ?>
+                    <?php
+                    $nombreEtapa = trim((string)($personaEtapa['Nombre'] ?? '') . ' ' . (string)($personaEtapa['Apellido'] ?? ''));
+                    $procesoEtapa = trim((string)($personaEtapa['Proceso'] ?? ''));
+                    if ($procesoEtapa === '') {
+                        $procesoEtapa = 'Sin etapa';
+                    }
+                    $idEtapa = (int)($personaEtapa['Id_Persona'] ?? 0);
+                    ?>
+                    <tr>
+                        <td class="persona-nombre-cell"><?= htmlspecialchars($nombreEtapa) ?></td>
+                        <td><?= htmlspecialchars((string)($personaEtapa['Nombre_Ministerio'] ?? 'Sin ministerio')) ?></td>
+                        <td><?= htmlspecialchars(trim((string)($personaEtapa['Nombre_Lider'] ?? '')) ?: 'Sin líder') ?></td>
+                        <td><?= htmlspecialchars($procesoEtapa) ?></td>
+                        <?php if ($mostrarAcciones): ?>
+                        <td class="action-col">
+                            <div class="action-buttons action-buttons-compact">
+                                <?php if ($puedeVerPersona): ?>
+                                <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= $idEtapa ?>&return_url=<?= urlencode($returnUrlPersonas) ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <?php endif; ?>
+                                <?php if ($puedeEditarPersona): ?>
+                                <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $idEtapa ?>&return_url=<?= urlencode($returnUrlPersonas) ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                        <?php endif; ?>
+                    </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</section>
+
 <style>
 .persona-nombre-cell {
     font-weight: 700;
+}
+
+.escalera-etapas {
+    margin-top: 28px;
+}
+
+.escalera-etapas-head h3 {
+    margin: 0 0 4px;
+}
+
+.escalera-etapas-head p {
+    margin: 0 0 12px;
+    color: #5b6d88;
+    font-size: 14px;
+}
+
+.escalera-etapas-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.escalera-etapa-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid #d5e2f3;
+    border-radius: 999px;
+    background: #f8fbff;
+    color: #1e3a5f;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.escalera-etapa-chip strong {
+    font-size: 14px;
+}
+
+.escalera-etapa-chip.is-active {
+    background: #1f5ea8;
+    border-color: #1f5ea8;
+    color: #ffffff;
 }
 
 .personas-header-actions {
