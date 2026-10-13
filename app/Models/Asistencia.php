@@ -278,7 +278,7 @@ class Asistencia extends BaseModel {
      * @param int[] $idsCelula
      * @return array<int, array<int, int>> [Id_Celula][Id_Persona] => total
      */
-    public function getConteoAsistenciasPorCelulas(array $idsCelula): array {
+    public function getConteoAsistenciasPorCelulas(array $idsCelula, ?string $fechaInicio = null, ?string $fechaFin = null): array {
         $idsCelula = array_values(array_unique(array_filter(array_map('intval', $idsCelula), static function($id) {
             return $id > 0;
         })));
@@ -286,15 +286,23 @@ class Asistencia extends BaseModel {
             return [];
         }
 
+        $fechaInicio = substr(trim((string)$fechaInicio), 0, 10);
+        $fechaFin = substr(trim((string)$fechaFin), 0, 10);
         $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));
+        $params = $idsCelula;
         $sql = "SELECT Id_Celula, Id_Persona,
                        COUNT(DISTINCT CASE WHEN Asistio = 1 THEN Fecha_Asistencia END) AS Total
                 FROM {$this->table}
-                WHERE Id_Celula IN ({$placeholders})
-                GROUP BY Id_Celula, Id_Persona";
+                WHERE Id_Celula IN ({$placeholders})";
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaInicio) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaFin)) {
+            $sql .= ' AND Fecha_Asistencia BETWEEN ? AND ?';
+            $params[] = $fechaInicio;
+            $params[] = $fechaFin;
+        }
+        $sql .= ' GROUP BY Id_Celula, Id_Persona';
 
         $resultado = [];
-        foreach ($this->query($sql, $idsCelula) as $row) {
+        foreach ($this->query($sql, $params) as $row) {
             $idCelula = (int)($row['Id_Celula'] ?? 0);
             $idPersona = (int)($row['Id_Persona'] ?? 0);
             if ($idCelula <= 0 || $idPersona <= 0) {
@@ -376,18 +384,19 @@ class Asistencia extends BaseModel {
             return $id > 0;
         })));
 
-        $semanaInicio = trim((string)$semanaInicio);
+        $semanaInicio = $this->lunesDeSemana($semanaInicio);
         if (empty($idsCelula) || $semanaInicio === '') {
             return [];
         }
 
+        $domingo = date('Y-m-d', strtotime($semanaInicio . ' +6 days'));
         $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));
         $sql = "SELECT Id_Celula, Entrego_Sobre
                 FROM asistencia_entrega_sobre_semana
-                WHERE Semana_Inicio = ?
+                WHERE Semana_Inicio BETWEEN ? AND ?
                   AND Id_Celula IN ({$placeholders})";
 
-        $rows = $this->query($sql, array_merge([$semanaInicio], $idsCelula));
+        $rows = $this->query($sql, array_merge([$semanaInicio, $domingo], $idsCelula));
         $estado = [];
 
         foreach ($rows as $row) {
@@ -395,7 +404,8 @@ class Asistencia extends BaseModel {
             if ($idCelula <= 0) {
                 continue;
             }
-            $estado[$idCelula] = (int)($row['Entrego_Sobre'] ?? 0) === 1;
+            $entrego = (int)($row['Entrego_Sobre'] ?? 0) === 1;
+            $estado[$idCelula] = !empty($estado[$idCelula]) || $entrego;
         }
 
         return $estado;
@@ -469,14 +479,47 @@ class Asistencia extends BaseModel {
         return $salida;
     }
 
+    /**
+     * Lunes de la semana de una fecha. La marca del sobre se guarda siempre en ese lunes
+     * para que coincida con las semanas del reporte operativo.
+     */
+    public function lunesDeSemana($fechaYmd): string {
+        $fechaYmd = substr(trim((string)$fechaYmd), 0, 10);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaYmd)) {
+            return '';
+        }
+
+        $ts = strtotime($fechaYmd);
+        if ($ts === false) {
+            return '';
+        }
+
+        $diaSemana = (int)date('N', $ts);
+        $lunesTs = strtotime('-' . ($diaSemana - 1) . ' days', strtotime(date('Y-m-d', $ts)));
+        if ($lunesTs === false) {
+            return '';
+        }
+
+        return date('Y-m-d', $lunesTs);
+    }
+
     public function guardarEntregoSobreSemana($idCelula, $semanaInicio, $entregoSobre) {
         $idCelula = (int)$idCelula;
-        $semanaInicio = trim((string)$semanaInicio);
+        $semanaInicio = $this->lunesDeSemana($semanaInicio);
         $entregoSobre = !empty($entregoSobre) ? 1 : 0;
 
         if ($idCelula <= 0 || $semanaInicio === '') {
             return false;
         }
+
+        $domingo = date('Y-m-d', strtotime($semanaInicio . ' +6 days'));
+        $this->execute(
+            "DELETE FROM asistencia_entrega_sobre_semana
+             WHERE Id_Celula = ?
+               AND Semana_Inicio BETWEEN ? AND ?
+               AND Semana_Inicio <> ?",
+            [$idCelula, $semanaInicio, $domingo, $semanaInicio]
+        );
 
         $sql = "INSERT INTO asistencia_entrega_sobre_semana (Id_Celula, Semana_Inicio, Entrego_Sobre)
                 VALUES (?, ?, ?)
@@ -551,10 +594,24 @@ class Asistencia extends BaseModel {
             return $id > 0;
         })));
 
+        $desde = $this->lunesDeSemana($fechaInicio);
+        if ($desde === '') {
+            $desde = $fechaInicio;
+        }
+        $finTs = strtotime($fechaFin);
+        $hasta = $fechaFin;
+        if ($finTs !== false) {
+            $diaFin = (int)date('N', $finTs);
+            $domingoTs = strtotime('+' . (7 - $diaFin) . ' days', strtotime(date('Y-m-d', $finTs)));
+            if ($domingoTs !== false) {
+                $hasta = date('Y-m-d', $domingoTs);
+            }
+        }
+
         $sql = 'SELECT Id_Celula, Semana_Inicio, Entrego_Sobre
                 FROM asistencia_entrega_sobre_semana
                 WHERE Semana_Inicio BETWEEN ? AND ?';
-        $params = [$fechaInicio, $fechaFin];
+        $params = [$desde, $hasta];
 
         if (!empty($idsCelula)) {
             $placeholders = implode(',', array_fill(0, count($idsCelula), '?'));

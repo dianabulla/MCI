@@ -133,7 +133,12 @@ class Celula extends BaseModel {
      */
     public function getAllWithMemberCount() {
         $sql = "SELECT c.*, 
-                COUNT(CASE WHEN p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL THEN 1 END) as Total_Miembros,
+                COUNT(DISTINCT CASE
+                    WHEN (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                     AND p.Id_Persona IS NOT NULL
+                     AND (c.Id_Lider IS NULL OR p.Id_Persona <> c.Id_Lider)
+                    THEN p.Id_Persona
+                END) as Total_Miembros,
                 CONCAT(l.Nombre, ' ', l.Apellido) as Nombre_Lider,
                 CONCAT(an.Nombre, ' ', an.Apellido) as Nombre_Anfitrion
                 FROM {$this->table} c
@@ -150,7 +155,12 @@ class Celula extends BaseModel {
      */
     public function getByMinisterioWithMemberCount($idMinisterio) {
         $sql = "SELECT c.*, 
-                COUNT(CASE WHEN p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL THEN 1 END) as Total_Miembros,
+                COUNT(DISTINCT CASE
+                    WHEN (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                     AND p.Id_Persona IS NOT NULL
+                     AND (c.Id_Lider IS NULL OR p.Id_Persona <> c.Id_Lider)
+                    THEN p.Id_Persona
+                END) as Total_Miembros,
                 CONCAT(l.Nombre, ' ', l.Apellido) as Nombre_Lider,
                 CONCAT(an.Nombre, ' ', an.Apellido) as Nombre_Anfitrion
                 FROM {$this->table} c
@@ -173,7 +183,14 @@ class Celula extends BaseModel {
                     WHERE Id_Celula = ? 
                     AND (Estado_Cuenta = 'Activo' OR Estado_Cuenta IS NULL)
                     ORDER BY Apellido, Nombre";
-            $celula['miembros'] = $this->query($sql, [$id]);
+            $idLiderCelula = (int)($celula['Id_Lider'] ?? 0);
+            $celula['miembros'] = array_values(array_filter(
+                $this->query($sql, [$id]),
+                static function ($miembro) use ($idLiderCelula) {
+                    $idPersona = (int)($miembro['Id_Persona'] ?? 0);
+                    return $idPersona > 0 && ($idLiderCelula <= 0 || $idPersona !== $idLiderCelula);
+                }
+            ));
         }
         return $celula;
     }
@@ -183,7 +200,12 @@ class Celula extends BaseModel {
      */
     public function getAllWithMemberCountAndRole($filtroRol, $idMinisterio = null, $idLider = null) {
         $sql = "SELECT c.*, 
-                COUNT(CASE WHEN p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL THEN 1 END) as Total_Miembros,
+                COUNT(DISTINCT CASE
+                    WHEN (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                     AND p.Id_Persona IS NOT NULL
+                     AND (c.Id_Lider IS NULL OR p.Id_Persona <> c.Id_Lider)
+                    THEN p.Id_Persona
+                END) as Total_Miembros,
                 CONCAT(l.Nombre, ' ', l.Apellido) as Nombre_Lider,
                 CONCAT(an.Nombre, ' ', an.Apellido) as Nombre_Anfitrion,
                 COALESCE(c.Id_Ministerio, l.Id_Ministerio) as Id_Ministerio_Lider,

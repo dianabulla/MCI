@@ -5,7 +5,7 @@
  */
 class MenuBuilder {
     /** Incrementar al cambiar estructura del menú lateral (invalida caché en sesión). */
-    public const SIDEBAR_MENU_VERSION = 13;
+    public const SIDEBAR_MENU_VERSION = 14;
 
     /**
      * Sincroniza permisos planos y menú en $_SESSION.
@@ -312,7 +312,7 @@ class MenuBuilder {
             ],
             [
                 'id' => 'celulas',
-                'label' => 'Enviar',
+                'label' => 'Células',
                 'ruta' => 'celulas',
                 'icon' => 'bi-send-check',
                 'active_prefixes' => ['celulas', 'asistencias'],

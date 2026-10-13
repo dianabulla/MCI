@@ -118,6 +118,8 @@ unset($_SESSION['asistencia_flash_error']);
     </div>
 </div>
 
+<?php include VIEWS . '/personas/partials/modal_seguimiento.php'; ?>
+
 <style>
 .autocomplete-wrapper {
     position: relative;
@@ -279,6 +281,8 @@ const motivoNoRealizoOtro = document.getElementById('motivo_no_realizo_otro');
 const urlMarcarNoDisponible = '<?= PUBLIC_URL ?>?url=asistencias/marcarNoDisponible';
 const urlQuitarDeCelula = '<?= PUBLIC_URL ?>?url=asistencias/quitarDeCelula';
 const urlMigrarCelula = '<?= PUBLIC_URL ?>?url=asistencias/migrarCelula';
+const puedeUsarSeguimientoReporte = <?= AuthController::puedeUsarSeguimientoPersonaListado() ? 'true' : 'false' ?>;
+const puedeGuardarSeguimientoReporte = <?= AuthController::puedeGuardarSeguimientoPersonaListado() ? 'true' : 'false' ?>;
 const modalNoDisponible = document.getElementById('modalNoDisponible');
 const modalNoDisponiblePersona = document.getElementById('noDisponiblePersona');
 const modalNoDisponibleObservacion = document.getElementById('noDisponibleObservacion');
@@ -593,8 +597,24 @@ async function cargarMiembrosCelula(celulaId) {
         return;
     }
 
-    const miembrosNuevos = [];
+    const miembrosCasiNoVan = [];
     const miembrosFrecuentes = [];
+
+    const personaEnSeguimiento = (miembro) => {
+        let checklist = miembro.Escalera_Checklist;
+        if (typeof checklist === 'string' && checklist.trim() !== '') {
+            try {
+                checklist = JSON.parse(checklist);
+            } catch (e) {
+                checklist = null;
+            }
+        }
+        const meta = checklist && checklist._meta ? checklist._meta : {};
+        if (meta.en_seguimiento) {
+            return true;
+        }
+        return Array.isArray(meta.seguimiento_notas) && meta.seguimiento_notas.length > 0;
+    };
 
     miembrosCelula.forEach(miembro => {
         const idPersona = parseInt(miembro.Id_Persona, 10);
@@ -603,11 +623,11 @@ async function cargarMiembrosCelula(celulaId) {
         if (totalAsistencias >= 3) {
             miembrosFrecuentes.push(fila);
         } else {
-            miembrosNuevos.push(fila);
+            miembrosCasiNoVan.push(fila);
         }
     });
 
-    const construirTablaSeccion = (titulo, miembros, tipo) => {
+    const construirTablaSeccion = (titulo, miembros) => {
         let bloque = '<div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 14px;">';
         bloque += '<h4 style="margin: 0 0 10px; color: #2d405f;">' + escapeHtml(titulo) + ' (' + miembros.length + ')</h4>';
 
@@ -618,28 +638,34 @@ async function cargarMiembrosCelula(celulaId) {
         }
 
         bloque += '<table style="width: 100%;">';
-        bloque += '<thead><tr><th style="text-align: left; padding: 8px;">Nombre</th><th style="text-align: left; padding: 8px;">Estado</th><th style="text-align: center; padding: 8px;">Asistió</th><th style="text-align: center; padding: 8px;">Acción</th></tr></thead>';
+        bloque += '<thead><tr><th style="text-align: left; padding: 8px;">Nombre</th><th style="text-align: center; padding: 8px;">Asistió</th><th style="text-align: center; padding: 8px;">Acción</th></tr></thead>';
         bloque += '<tbody>';
 
         miembros.forEach(miembro => {
-            const nombreCompleto = (miembro.Nombre || '') + ' ' + (miembro.Apellido || '');
-            const estado = tipo === 'nuevo'
-                ? ('Nuevo (' + (miembro.totalAsistencias || 0) + '/3)')
-                : ('Frecuente (' + (miembro.totalAsistencias || 0) + ')');
+            const nombreCompleto = ((miembro.Nombre || '') + ' ' + (miembro.Apellido || '')).trim();
+            const telefono = String(miembro.Telefono || '').trim();
             bloque += '<tr style="border-bottom: 1px solid #dee2e6;">';
-            bloque += '<td style="padding: 8px;"><strong>' + escapeHtml(nombreCompleto.trim()) + '</strong></td>';
-            bloque += '<td style="padding: 8px; color: #5a6b86;">' + escapeHtml(estado) + '</td>';
+            bloque += '<td style="padding: 8px;"><strong>' + escapeHtml(nombreCompleto) + '</strong></td>';
             bloque += '<td style="text-align: center; padding: 8px;">';
             bloque += '<input type="hidden" name="asistencias[' + miembro.Id_Persona + ']" value="0">';
             bloque += '<input type="checkbox" name="asistencias[' + miembro.Id_Persona + ']" value="1" style="width: 20px; height: 20px; cursor: pointer;">';
             bloque += '</td>';
             bloque += '<td style="text-align:center;padding:8px;">';
             bloque += '<div class="asist-acciones">';
-            bloque += '<button type="button" class="asist-acc-btn asist-acc-btn--del js-quitar-celula" data-id-persona="' + miembro.Id_Persona + '" data-nombre="' + escapeHtml(nombreCompleto.trim()) + '" title="Eliminar de esta célula" aria-label="Eliminar de esta célula">';
+            if (puedeUsarSeguimientoReporte) {
+                bloque += '<button type="button" class="action-seguimiento-btn js-seguimiento-btn' + (personaEnSeguimiento(miembro) ? ' is-active' : '') + '"';
+                bloque += ' data-persona-id="' + miembro.Id_Persona + '"';
+                bloque += ' data-persona-nombre="' + escapeHtml(nombreCompleto) + '"';
+                bloque += ' data-persona-telefono="' + escapeHtml(telefono) + '"';
+                bloque += ' data-puede-editar="' + (puedeGuardarSeguimientoReporte ? '1' : '0') + '"';
+                bloque += ' title="En seguimiento" aria-label="En seguimiento">';
+                bloque += '<i class="bi bi-signpost-2" aria-hidden="true"></i><span>En seguimiento</span></button>';
+            }
+            bloque += '<button type="button" class="asist-acc-btn asist-acc-btn--del js-quitar-celula" data-id-persona="' + miembro.Id_Persona + '" data-nombre="' + escapeHtml(nombreCompleto) + '" title="Eliminar de esta célula" aria-label="Eliminar de esta célula">';
             bloque += '<i class="bi bi-trash" aria-hidden="true"></i></button>';
-            bloque += '<button type="button" class="asist-acc-btn asist-acc-btn--nd js-no-disponible" data-id-persona="' + miembro.Id_Persona + '" data-nombre="' + escapeHtml(nombreCompleto.trim()) + '" title="No se dispuso" aria-label="No se dispuso">';
+            bloque += '<button type="button" class="asist-acc-btn asist-acc-btn--nd js-no-disponible" data-id-persona="' + miembro.Id_Persona + '" data-nombre="' + escapeHtml(nombreCompleto) + '" title="No se dispuso" aria-label="No se dispuso">';
             bloque += '<i class="bi bi-person-x" aria-hidden="true"></i></button>';
-            bloque += '<button type="button" class="asist-acc-btn asist-acc-btn--mig js-migrar-celula" data-id-persona="' + miembro.Id_Persona + '" data-nombre="' + escapeHtml(nombreCompleto.trim()) + '" title="Migrar a otra célula del mismo ministerio" aria-label="Migrar a otra célula">';
+            bloque += '<button type="button" class="asist-acc-btn asist-acc-btn--mig js-migrar-celula" data-id-persona="' + miembro.Id_Persona + '" data-nombre="' + escapeHtml(nombreCompleto) + '" title="Migrar a otra célula del mismo ministerio" aria-label="Migrar a otra célula">';
             bloque += '<i class="bi bi-arrow-left-right" aria-hidden="true"></i></button>';
             bloque += '</div>';
             bloque += '</td>';
@@ -659,17 +685,20 @@ async function cargarMiembrosCelula(celulaId) {
         html += 'Conviene unificar esos registros en Personas para evitar confusiones.';
         html += '</div>';
     }
-    html += construirTablaSeccion('Asistentes nuevos', miembrosNuevos, 'nuevo');
-    html += construirTablaSeccion('Asistentes frecuentes', miembrosFrecuentes, 'frecuente');
+    html += construirTablaSeccion('Casi no van', miembrosCasiNoVan);
+    html += construirTablaSeccion('Frecuentes', miembrosFrecuentes);
     html += '<p style="margin-top: 6px; color: #666; font-size: 0.9em;">';
     html += '<strong>Personas únicas:</strong> ' + miembrosCelula.length;
     if (duplicadosOcultos > 0) {
         html += ' (' + duplicadosOcultos + ' registro(s) duplicado(s) oculto(s) por misma cédula)';
     }
-    html += ' | <strong>Regla:</strong> con 3 o más reuniones asistidas en esta célula pasa de Nuevo a Frecuente.';
+    html += ' | <strong>Regla:</strong> con 3 o más reuniones asistidas en esta célula queda en Frecuentes. Con menos, en Casi no van.';
     html += '</p>';
     
     listaMiembros.innerHTML = html;
+    if (typeof window.inicializarBotonesSeguimiento === 'function') {
+        window.inicializarBotonesSeguimiento(listaMiembros);
+    }
     miembrosContainer.style.display = 'block';
     botonesAccion.style.display = 'flex';
     syncNoSeRealizoState();

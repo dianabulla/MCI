@@ -231,11 +231,16 @@ class CelulaController extends BaseController {
         $sections = [];
         foreach ($celulas as $celula) {
             $idCelula = (int)($celula['Id_Celula'] ?? 0);
+            $idLiderCelula = (int)($celula['Id_Lider'] ?? 0);
             $miembrosCelula = $miembrosPorCelula[$idCelula] ?? [];
 
             $rows = [];
             $nro = 1;
             foreach ($miembrosCelula as $miembro) {
+                $idPersonaMiembro = (int)($miembro['Id_Persona'] ?? 0);
+                if ($idLiderCelula > 0 && $idPersonaMiembro === $idLiderCelula) {
+                    continue;
+                }
                 $nombreCompleto = trim(((string)($miembro['Nombre'] ?? '')) . ' ' . ((string)($miembro['Apellido'] ?? '')));
                 $rows[] = [
                     'nro' => $nro++,
@@ -257,6 +262,7 @@ class CelulaController extends BaseController {
                 'hora' => (string)($celula['Hora_Reunion'] ?? ''),
                 'rows' => $rows,
                 'total_personas' => count($rows),
+                'estado' => (string)($celula['Estado_Celula'] ?? 'Activa'),
                 'entrego_sobre' => null,
             ];
         }
@@ -449,7 +455,13 @@ class CelulaController extends BaseController {
                 $idPersona = (int)($miembro['Id_Persona'] ?? 0);
                 $total = (int)($conteos[$idPersona] ?? 0);
                 $miembro['Total_Asistencias'] = $total;
-                $miembro['Indicador_Asistencia'] = $total >= 3 ? 'Frecuente' : 'Regular';
+                if ($total <= 0) {
+                    $miembro['Indicador_Asistencia'] = 'Sin asistencia';
+                } elseif ($total >= 3) {
+                    $miembro['Indicador_Asistencia'] = 'Frecuente';
+                } else {
+                    $miembro['Indicador_Asistencia'] = 'Regular';
+                }
                 $proceso = $this->personaModel->resolverProcesoVisible($miembro);
                 $flags = $flagsFormacion[$idPersona] ?? [];
                 if (!empty($flags['capacitacion_destino'])

@@ -134,7 +134,6 @@ foreach ($sections as $section) {
     $ministerioGrupos[$ministerio][] = $section;
 }
 $seguimientoPorMinisterio = is_array($seguimientoPorMinisterio ?? null) ? $seguimientoPorMinisterio : [];
-$seguimientoPorCelula = is_array($seguimientoPorCelula ?? null) ? $seguimientoPorCelula : [];
 foreach ($seguimientoPorMinisterio as $ministerioSeguimiento => $_personasMinSeg) {
     if (!isset($ministerioGrupos[$ministerioSeguimiento])) {
         $ministerioGrupos[$ministerioSeguimiento] = [];
@@ -170,7 +169,7 @@ $slugMinisterio = static function ($texto) {
         >
             <h3><?= htmlspecialchars($ministerioNombre) ?></h3>
             <div class="value" style="color:#17a2b8;"><?= count($celulasMinisterio) ?></div>
-            <small style="color:#637087;">Personas: <?= number_format($totalPersonasMinisterio) ?> · En seguimiento: <?= (int)$totalSeguimientoMinisterio ?> · Clic para ver detalle</small>
+            <small style="color:#637087;">Miembros: <?= number_format($totalPersonasMinisterio) ?> · En seguimiento: <?= (int)$totalSeguimientoMinisterio ?> · Clic para ver detalle</small>
         </button>
     <?php endforeach; ?>
 </div>
@@ -215,7 +214,7 @@ $slugMinisterio = static function ($texto) {
                 <thead>
                     <tr>
                         <th>Célula</th>
-                        <th style="width:120px;">Asistentes</th>
+                        <th style="width:120px;">Miembros</th>
                         <?php if ($puedeMarcarEntregoSobre): ?>
                             <th style="width:168px;">Sobre entregado</th>
                         <?php endif; ?>
@@ -225,9 +224,14 @@ $slugMinisterio = static function ($texto) {
                 <tbody>
                     <?php foreach ($celulasMinisterio as $section): ?>
                         <tr>
-                            <td><strong><?= htmlspecialchars((string)$section['label']) ?></strong></td>
                             <td>
-                                <span class="celulas-count-badge" title="Personas activas en esta célula">
+                                <strong><?= htmlspecialchars((string)$section['label']) ?></strong>
+                                <?php if (strtolower(trim((string)($section['estado'] ?? ''))) === 'cerrada'): ?>
+                                    <span class="celulas-estado-cerrada">Cerrada</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <span class="celulas-count-badge" title="Personas activas asignadas a esta célula, aunque no asistan. El líder no entra en este número.">
                                     <?= (int)($section['total_personas'] ?? 0) ?>
                                 </span>
                             </td>
@@ -255,37 +259,8 @@ $slugMinisterio = static function ($texto) {
                             <?php endif; ?>
                             <td>
                                 <div class="celulas-actions-row">
-                                    <a href="<?= PUBLIC_URL ?>?url=celulas/detalle&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon" title="Ver personas" aria-label="Ver personas">
-                                        <i class="bi bi-people-fill" aria-hidden="true"></i>
-                                    </a>
-                                    <?php
-                                    $idCelulaSegBtn = (int)($section['id_celula'] ?? 0);
-                                    $personasSegCel = $seguimientoPorCelula[$idCelulaSegBtn] ?? [];
-                                    $payloadSegCel = [];
-                                    foreach ($personasSegCel as $pSegCel) {
-                                        $payloadSegCel[] = [
-                                            'id' => (int)($pSegCel['Id_Persona'] ?? 0),
-                                            'nombre' => (string)($pSegCel['nombre'] ?? ''),
-                                            'telefono' => (string)($pSegCel['telefono'] ?? ''),
-                                            'celula' => (string)($pSegCel['celula'] ?? ''),
-                                            'lider' => (string)($pSegCel['lider'] ?? ''),
-                                        ];
-                                    }
-                                    ?>
-                                    <button
-                                        type="button"
-                                        class="btn btn-sm celulas-action-btn celulas-action-btn--seguimiento js-ver-seguimiento-celula"
-                                        data-titulo="<?= htmlspecialchars('En seguimiento · ' . (string)($section['label'] ?? 'Célula'), ENT_QUOTES, 'UTF-8') ?>"
-                                        data-mostrar-celula="0"
-                                        data-personas="<?= htmlspecialchars(json_encode($payloadSegCel, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>"
-                                        title="Ver personas en seguimiento"
-                                        aria-label="Ver personas en seguimiento"
-                                    >
-                                        <i class="bi bi-signpost-2" aria-hidden="true"></i>
-                                        <span class="celulas-seguimiento-badge"><?= count($payloadSegCel) ?></span>
-                                    </button>
-                                    <a href="<?= PUBLIC_URL ?>?url=personas/crear&return_to=celulas&return_url=<?= urlencode(PUBLIC_URL . '?url=celulas') ?>&celula=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon" title="Nueva persona" aria-label="Nueva persona">
-                                        <i class="bi bi-person-plus-fill" aria-hidden="true"></i>
+                                    <a href="<?= PUBLIC_URL ?>?url=celulas/detalle&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon" title="Ver" aria-label="Ver">
+                                        <i class="bi bi-eye-fill" aria-hidden="true"></i>
                                     </a>
                                     <?php if (AuthController::puede('asistencias:crear')): ?>
                                         <a href="<?= PUBLIC_URL ?>?url=asistencias/registrar&celula=<?= (int)$section['id_celula'] ?><?= $fechaReporteCelula !== '' ? '&fecha=' . urlencode($fechaReporteCelula) : '' ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--report">Reportar célula</a>
@@ -316,6 +291,17 @@ $slugMinisterio = static function ($texto) {
 <?php endif; ?>
 
 <style>
+.celulas-estado-cerrada {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 0.75rem;
+    font-weight: 700;
+    vertical-align: middle;
+}
 .celulas-summary-grid {
     gap: 14px;
 }
@@ -719,6 +705,9 @@ $slugMinisterio = static function ($texto) {
                 const semanaInicio = String(row.dataset.semanaInicio || '');
                 const checksFila = Array.from(row.querySelectorAll('.entrego-sobre-x'));
                 const status = row.querySelector('.entrego-sobre-status');
+                const previo = checksFila.map(function(item) {
+                    return item === check ? !item.checked : item.checked;
+                });
 
                 if (check.checked) {
                     checksFila.forEach(function(otro) {
@@ -787,7 +776,11 @@ $slugMinisterio = static function ($texto) {
                     }
                 })
                 .catch(function() {
-                    checksFila.forEach(function(item) { item.disabled = false; });
+                    checksFila.forEach(function(item, idx) {
+                        item.disabled = false;
+                        item.checked = !!previo[idx];
+                    });
+                    pintar();
                     if (status) {
                         status.textContent = 'Error';
                         status.classList.remove('success');

@@ -83,8 +83,8 @@ if (!$esPerfilMenuReducido
 
 if (!$esPerfilMenuReducido && !$esDiscipuloSoloDiscipular && (AuthController::esAdministrador() || AuthController::puede('celulas:ver'))) {
     $cardsDashboard[] = [
-        'titulo' => 'Enviar',
-        'subtitulo' => 'Celulas activas en mision',
+        'titulo' => 'Células',
+        'subtitulo' => 'Células activas en misión',
         'accion' => 'Ver todas',
         'href' => PUBLIC_URL . '?url=celulas',
         'icono' => 'bi-send-check',

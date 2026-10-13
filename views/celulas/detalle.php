@@ -10,9 +10,6 @@ if ($fechaAperturaRaw !== '' && $fechaAperturaRaw !== '0000-00-00') {
 
 $idCelulaDetalle = (int)($celula['Id_Celula'] ?? 0);
 $returnUrlCelula = PUBLIC_URL . 'index.php?url=celulas/detalle&id=' . $idCelulaDetalle;
-$puedeVerPersona = AuthController::esAdministrador() || AuthController::puede('personas:ver') || AuthController::puede('celulas:ver');
-$puedeEditarPersona = AuthController::puedeEditarPersonaDesdeDiscipular();
-$puedeEliminarPersona = AuthController::puedeEliminarPersonaDesdeDiscipular();
 ?>
 
 <div class="page-header">
@@ -132,8 +129,8 @@ $puedeEliminarPersona = AuthController::puedeEliminarPersonaDesdeDiscipular();
     </div>
 
     <div class="detail-section">
-        <h3>Asistentes de la Célula (<?= count($celula['miembros'] ?? []) ?>)</h3>
-        <p style="margin: 0 0 12px; color: #5b6b86; font-size: 0.92em;">Regular: menos de 3 reuniones asistidas en esta célula. Frecuente: 3 o más.</p>
+        <h3>Miembros de la célula (<?= count($celula['miembros'] ?? []) ?>)</h3>
+        <p style="margin: 0 0 12px; color: #5b6b86; font-size: 0.92em;">Sin asistencia: ninguna reunión en esta célula. Regular: 1 o 2. Frecuente: 3 o más.</p>
         
         <?php if (!empty($celula['miembros'])): ?>
             <div class="table-container">
@@ -146,15 +143,16 @@ $puedeEliminarPersona = AuthController::puedeEliminarPersonaDesdeDiscipular();
                             <th>Indicador</th>
                             <th>Asistencias</th>
                             <th>Proceso</th>
-                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($celula['miembros'] as $miembro): ?>
                             <?php
                             $nombreCompleto = trim(($miembro['Nombre'] ?? '') . ' ' . ($miembro['Apellido'] ?? ''));
-                            $indicador = (string)($miembro['Indicador_Asistencia'] ?? 'Regular');
-                            $esFrecuente = $indicador === 'Frecuente';
+                            $indicador = (string)($miembro['Indicador_Asistencia'] ?? 'Sin asistencia');
+                            $claseIndicador = $indicador === 'Frecuente'
+                                ? 'badge-success'
+                                : ($indicador === 'Regular' ? 'badge-warning' : 'badge-secondary');
                             $documento = trim((string)($miembro['Numero_Documento'] ?? ''));
                             if ($documento === '') {
                                 $documento = 'N/A';
@@ -169,29 +167,10 @@ $puedeEliminarPersona = AuthController::puedeEliminarPersonaDesdeDiscipular();
                                 <td data-label="Documento"><?= htmlspecialchars($documento) ?></td>
                                 <td data-label="Teléfono"><?= htmlspecialchars($miembro['Telefono'] ?? 'N/A') ?></td>
                                 <td data-label="Indicador">
-                                    <span class="badge <?= $esFrecuente ? 'badge-success' : 'badge-warning' ?>"><?= htmlspecialchars($indicador) ?></span>
+                                    <span class="badge <?= $claseIndicador ?>"><?= htmlspecialchars($indicador) ?></span>
                                 </td>
                                 <td data-label="Asistencias"><?= (int)($miembro['Total_Asistencias'] ?? 0) ?></td>
                                 <td data-label="Proceso"><?= htmlspecialchars($proceso) ?></td>
-                                <td data-label="Acciones">
-                                    <div class="action-buttons action-buttons-compact">
-                                        <?php if ($puedeVerPersona): ?>
-                                        <a href="<?= PUBLIC_URL ?>index.php?url=personas/detalle&id=<?= (int)$miembro['Id_Persona'] ?>&return_to=celulas&return_url=<?= urlencode($returnUrlCelula) ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                        <?php endif; ?>
-                                        <?php if ($puedeEditarPersona): ?>
-                                        <a href="<?= PUBLIC_URL ?>index.php?url=personas/editar&id=<?= (int)$miembro['Id_Persona'] ?>&return_to=celulas&return_url=<?= urlencode($returnUrlCelula) ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
-                                            <i class="bi bi-pencil"></i>
-                                        </a>
-                                        <?php endif; ?>
-                                        <?php if ($puedeEliminarPersona): ?>
-                                        <a href="<?= PUBLIC_URL ?>index.php?url=personas/eliminar&id=<?= (int)$miembro['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlCelula) ?>" class="action-icon-btn action-icon-danger" title="Eliminar de la base de datos" aria-label="Eliminar de la base de datos" onclick="return confirm('¿Eliminar de forma definitiva a <?= htmlspecialchars($nombreCompleto, ENT_QUOTES, 'UTF-8') ?>?\nSe borrará de la base de datos y no se puede deshacer.')">
-                                            <i class="bi bi-trash"></i>
-                                        </a>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -204,38 +183,6 @@ $puedeEliminarPersona = AuthController::puedeEliminarPersonaDesdeDiscipular();
 </div>
 
 <style>
-.action-buttons-compact {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-}
-.action-icon-btn {
-    width: 27px;
-    height: 27px;
-    border-radius: 8px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    text-decoration: none;
-    border: 1px solid transparent;
-    font-size: 13px;
-}
-.action-icon-info {
-    background: #e6f2ff;
-    color: #0d6efd;
-    border-color: #b7d7ff;
-}
-.action-icon-warning {
-    background: #fff4dd;
-    color: #9a6700;
-    border-color: #ffd98a;
-}
-.action-icon-danger {
-    background: #ffe8ea;
-    color: #c82333;
-    border-color: #ffc1c7;
-}
 .celulas-actions-row {
     display: flex;
     gap: 6px;

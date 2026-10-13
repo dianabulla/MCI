@@ -208,7 +208,8 @@ class AsistenciaController extends BaseController {
         }
         $entregoSobre = $rawSobre === '1' ? 1 : 0;
 
-        if ($idCelula <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $semanaInicio)) {
+        $semanaInicio = $this->asistenciaModel->lunesDeSemana($semanaInicio);
+        if ($idCelula <= 0 || $semanaInicio === '') {
             $this->json(['success' => false, 'error' => 'Datos invalidos'], 422);
         }
 

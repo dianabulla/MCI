@@ -110,6 +110,8 @@ $tablaOperativaHiddenExtras = is_array($tablaOperativaHiddenExtras ?? null) ? $t
 
     <small style="color:#64748b; display:block; margin-bottom:12px;">
         Abre un ministerio para ver sus líderes y el resumen de cada célula. Clic en un número para ver personas o el detalle. Cierre con la X.
+        Asistentes son las personas de la célula, sin el líder, que vinieron en el rango: frecuente con 3 o más fechas y regular con 1 o 2.
+        En el subtotal y en el total, las dos últimas columnas cuentan células con al menos una semana pendiente; en cada célula el número sigue siendo de semanas.
     </small>
 
     <?php
@@ -118,7 +120,7 @@ $tablaOperativaHiddenExtras = is_array($tablaOperativaHiddenExtras ?? null) ? $t
             return '<span style="color:#64748b;">0</span>';
         }
         $ayuda = $tipo === 'sin_sobre'
-            ? 'En estas semanas la célula sí reportó asistencia, pero no quedó marcada la casilla «Sobre entregado» en Enviar.'
+            ? 'Semanas con reporte de asistencia y sin «Sobre entregado», posteriores a la última vez que sí marcaron el sobre. Al marcarlo, las semanas anteriores dejan de contarse.'
             : 'Estas son las semanas consecutivas sin reporte de asistencia de célula.';
         $payload = htmlspecialchars(json_encode([
             'titulo' => $tituloModal,
@@ -227,8 +229,8 @@ $tablaOperativaHiddenExtras = is_array($tablaOperativaHiddenExtras ?? null) ? $t
                                 <td><?= (int)($subtotalesGrupo['antiguas'] ?? 0) ?></td>
                                 <td><?= (int)($subtotalesGrupo['frecuentes'] ?? 0) ?></td>
                                 <td><?= (int)($subtotalesGrupo['regulares'] ?? 0) ?></td>
-                                <td><?= (int)($subtotalesGrupo['semanas_sin_entregar_sobre'] ?? 0) ?></td>
-                                <td><?= (int)($subtotalesGrupo['semanas_sin_reportar'] ?? 0) ?></td>
+                                <td><?= (int)($subtotalesGrupo['semanas_sin_entregar_sobre'] ?? 0) ?> células</td>
+                                <td><?= (int)($subtotalesGrupo['semanas_sin_reportar'] ?? 0) ?> células</td>
                             </tr>
                         </tbody>
                     </table>
@@ -239,6 +241,18 @@ $tablaOperativaHiddenExtras = is_array($tablaOperativaHiddenExtras ?? null) ? $t
     </div>
     <div class="table-container" style="overflow-x:auto; margin-top:10px;">
         <table class="dash-min-table">
+            <thead>
+                <tr>
+                    <th>Total</th>
+                    <th>Asistentes</th>
+                    <th>Nuevos</th>
+                    <th>Antiguas</th>
+                    <th>Frecuentes</th>
+                    <th>Regulares</th>
+                    <th>Células sin entregar sobre</th>
+                    <th>Células sin reportar</th>
+                </tr>
+            </thead>
             <tfoot>
                 <tr style="background:#f8fafc; font-weight:700;">
                     <td>TOTAL GENERAL</td>
@@ -247,8 +261,8 @@ $tablaOperativaHiddenExtras = is_array($tablaOperativaHiddenExtras ?? null) ? $t
                     <td><?= (int)($reporteCelulasTotales['antiguas'] ?? 0) ?></td>
                     <td><?= (int)($reporteCelulasTotales['frecuentes'] ?? 0) ?></td>
                     <td><?= (int)($reporteCelulasTotales['regulares'] ?? 0) ?></td>
-                    <td><?= (int)($reporteCelulasTotales['semanas_sin_entregar_sobre'] ?? 0) ?></td>
-                    <td><?= (int)($reporteCelulasTotales['semanas_sin_reportar'] ?? 0) ?></td>
+                    <td><?= (int)($reporteCelulasTotales['semanas_sin_entregar_sobre'] ?? 0) ?> células</td>
+                    <td><?= (int)($reporteCelulasTotales['semanas_sin_reportar'] ?? 0) ?> células</td>
                 </tr>
             </tfoot>
         </table>

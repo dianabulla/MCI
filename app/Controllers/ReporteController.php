@@ -2707,9 +2707,13 @@ class ReporteController extends BaseController {
                 continue;
             }
             $asistencias = (int)($conteosPersona[$idPersona] ?? 0);
+            if ($asistencias < 1) {
+                continue;
+            }
             $esAntigua = ((int)($miembro['Es_Antiguo'] ?? 1) === 1);
             $esFrecuente = $asistencias >= 3;
             $item = [
+                'id' => $idPersona,
                 'nombre' => trim((string)($miembro['Nombre'] ?? '') . ' ' . (string)($miembro['Apellido'] ?? '')),
                 'documento' => trim((string)($miembro['Numero_Documento'] ?? '')),
                 'telefono' => trim((string)($miembro['Telefono'] ?? '')),
@@ -3069,7 +3073,11 @@ class ReporteController extends BaseController {
         $ultimasFechasAnio = $this->asistenciaModel->getUltimaFechaReportePorCelulaEnRango($idsCelula, $fechaInicioAnio, $fechaFinAnio);
         $miembrosPorCelula = $this->celulaModel->getConteoMiembrosActivosPorCelulas($idsCelula);
         $detalleMiembrosPorCelula = $this->celulaModel->getMiembrosActivosDetallePorCelulas($idsCelula);
-        $conteosAsistenciaPorCelula = $this->asistenciaModel->getConteoAsistenciasPorCelulas($idsCelula);
+        $conteosAsistenciaPorCelula = $this->asistenciaModel->getConteoAsistenciasPorCelulas(
+            $idsCelula,
+            $fechaInicioAnio,
+            $fechaFinAnio
+        );
 
         $metricasPorCelula = [];
         foreach ($celulas as $celula) {
@@ -3161,13 +3169,23 @@ class ReporteController extends BaseController {
             }, $celulasLider)));
 
             $totalCelulas = count($idsCelulasLider);
-            $totalAsistentes = $this->celulaModel->contarMiembrosActivosUnicosEnCelulas($idsCelulasLider);
-            $semanasSinEntregarSobre = 0;
-            $semanasSinReportar = 0;
+            $idsAsistentesLider = [];
+            $celulasSinSobreLider = 0;
+            $celulasSinReporteLider = 0;
 
             foreach ($celulasLider as $metricaCelula) {
-                $semanasSinEntregarSobre += (int)($metricaCelula['semanas_sin_entregar_sobre'] ?? 0);
-                $semanasSinReportar += (int)($metricaCelula['semanas_sin_reportar'] ?? 0);
+                foreach ((array)($metricaCelula['asistentes_personas'] ?? []) as $personaAsistente) {
+                    $idAsistente = (int)($personaAsistente['id'] ?? 0);
+                    if ($idAsistente > 0) {
+                        $idsAsistentesLider[$idAsistente] = true;
+                    }
+                }
+                if ((int)($metricaCelula['semanas_sin_entregar_sobre'] ?? 0) > 0) {
+                    $celulasSinSobreLider++;
+                }
+                if ((int)($metricaCelula['semanas_sin_reportar'] ?? 0) > 0) {
+                    $celulasSinReporteLider++;
+                }
             }
 
             $grupoKey = $idMinisterio . '|' . $this->normalizarTextoComparable($ministerio);
@@ -3187,9 +3205,9 @@ class ReporteController extends BaseController {
                 'lider' => $nombreLider,
                 'tipo' => $tipoLider,
                 'celulas' => $totalCelulas,
-                'asistentes' => $totalAsistentes,
-                'semanas_sin_entregar_sobre' => $semanasSinEntregarSobre,
-                'semanas_sin_reportar' => $semanasSinReportar,
+                'asistentes' => count($idsAsistentesLider),
+                'semanas_sin_entregar_sobre' => $celulasSinSobreLider,
+                'semanas_sin_reportar' => $celulasSinReporteLider,
                 'detalle_sin_entregar_sobre' => $this->fusionarDetalleSemanasPorCelulas($celulasLider, 'detalle_sin_entregar_sobre'),
                 'detalle_sin_reportar' => $this->fusionarDetalleSemanasPorCelulas($celulasLider, 'detalle_sin_reportar'),
             ];
@@ -3200,7 +3218,7 @@ class ReporteController extends BaseController {
                     'celula' => (string)($metricaFila['nombre_celula'] ?? ''),
                     'lider' => $nombreLider,
                     'tipo' => $tipoLider,
-                    'asistentes' => (int)($metricaFila['miembros'] ?? 0),
+                    'asistentes' => count((array)($metricaFila['asistentes_personas'] ?? [])),
                     'nuevos' => (int)($metricaFila['nuevos'] ?? 0),
                     'antiguas' => (int)($metricaFila['antiguas'] ?? 0),
                     'frecuentes' => (int)($metricaFila['frecuentes'] ?? 0),
@@ -3230,6 +3248,15 @@ class ReporteController extends BaseController {
         });
 
         $totales = $this->vaciosTotalesReporteCelulasLider();
+        $idsTotalesPersona = [
+            'asistentes' => [],
+            'nuevos' => [],
+            'antiguas' => [],
+            'frecuentes' => [],
+            'regulares' => [],
+        ];
+        $celulasSinSobreTotal = 0;
+        $celulasSinReporteTotal = 0;
         foreach ($grupos as &$grupo) {
             usort($grupo['lideres'], static function($a, $b) {
                 $cmpTipo = strcmp((string)($a['tipo'] ?? ''), (string)($b['tipo'] ?? ''));
@@ -3247,53 +3274,60 @@ class ReporteController extends BaseController {
             });
 
             $idsCelulasGrupo = array_values(array_unique(array_map('intval', (array)($grupo['ids_celulas'] ?? []))));
-            $semanasSinEntregarSobreGrupo = 0;
-            $semanasSinReportarGrupo = 0;
-            foreach ($idsCelulasGrupo as $idCelulaGrupo) {
-                if (!isset($metricasPorCelula[$idCelulaGrupo])) {
-                    continue;
+            $idsGrupoPersona = [
+                'asistentes' => [],
+                'nuevos' => [],
+                'antiguas' => [],
+                'frecuentes' => [],
+                'regulares' => [],
+            ];
+            $celulasSinSobreGrupo = 0;
+            $celulasSinReporteGrupo = 0;
+            foreach ((array)($grupo['filas'] ?? []) as $filaCel) {
+                foreach (array_keys($idsGrupoPersona) as $campoPersona) {
+                    foreach ((array)($filaCel[$campoPersona . '_personas'] ?? []) as $personaFila) {
+                        $idPersonaFila = (int)($personaFila['id'] ?? 0);
+                        if ($idPersonaFila <= 0) {
+                            continue;
+                        }
+                        $idsGrupoPersona[$campoPersona][$idPersonaFila] = true;
+                        $idsTotalesPersona[$campoPersona][$idPersonaFila] = true;
+                    }
                 }
-                $semanasSinEntregarSobreGrupo += (int)($metricasPorCelula[$idCelulaGrupo]['semanas_sin_entregar_sobre'] ?? 0);
-                $semanasSinReportarGrupo += (int)($metricasPorCelula[$idCelulaGrupo]['semanas_sin_reportar'] ?? 0);
+                if ((int)($filaCel['semanas_sin_entregar_sobre'] ?? 0) > 0) {
+                    $celulasSinSobreGrupo++;
+                    $celulasSinSobreTotal++;
+                }
+                if ((int)($filaCel['semanas_sin_reportar'] ?? 0) > 0) {
+                    $celulasSinReporteGrupo++;
+                    $celulasSinReporteTotal++;
+                }
             }
 
             $grupo['subtotales'] = [
                 'celulas' => count($idsCelulasGrupo),
-                'asistentes' => $this->celulaModel->contarMiembrosActivosUnicosEnCelulas($idsCelulasGrupo),
-                'nuevos' => 0,
-                'antiguas' => 0,
-                'frecuentes' => 0,
-                'regulares' => 0,
-                'semanas_sin_entregar_sobre' => $semanasSinEntregarSobreGrupo,
-                'semanas_sin_reportar' => $semanasSinReportarGrupo,
+                'asistentes' => count($idsGrupoPersona['asistentes']),
+                'nuevos' => count($idsGrupoPersona['nuevos']),
+                'antiguas' => count($idsGrupoPersona['antiguas']),
+                'frecuentes' => count($idsGrupoPersona['frecuentes']),
+                'regulares' => count($idsGrupoPersona['regulares']),
+                'semanas_sin_entregar_sobre' => $celulasSinSobreGrupo,
+                'semanas_sin_reportar' => $celulasSinReporteGrupo,
             ];
-            foreach ((array)($grupo['filas'] ?? []) as $filaCel) {
-                $grupo['subtotales']['nuevos'] += (int)($filaCel['nuevos'] ?? 0);
-                $grupo['subtotales']['antiguas'] += (int)($filaCel['antiguas'] ?? 0);
-                $grupo['subtotales']['frecuentes'] += (int)($filaCel['frecuentes'] ?? 0);
-                $grupo['subtotales']['regulares'] += (int)($filaCel['regulares'] ?? 0);
-            }
             unset($grupo['ids_celulas']);
 
-            foreach (['celulas', 'nuevos', 'antiguas', 'frecuentes', 'regulares', 'semanas_sin_entregar_sobre', 'semanas_sin_reportar'] as $campo) {
-                $totales[$campo] += (int)($grupo['subtotales'][$campo] ?? 0);
-            }
+            $totales['celulas'] += (int)$grupo['subtotales']['celulas'];
         }
         unset($grupo);
 
-        $totales['asistentes'] = $this->celulaModel->contarMiembrosActivosUnicosEnCelulas($idsCelulaTotales);
+        $totales['asistentes'] = count($idsTotalesPersona['asistentes']);
+        $totales['nuevos'] = count($idsTotalesPersona['nuevos']);
+        $totales['antiguas'] = count($idsTotalesPersona['antiguas']);
+        $totales['frecuentes'] = count($idsTotalesPersona['frecuentes']);
+        $totales['regulares'] = count($idsTotalesPersona['regulares']);
         $totales['celulas'] = count(array_unique($idsCelulaTotales));
-        $totalesSemanasSinEntregarSobre = 0;
-        $totalesSemanasSinReportar = 0;
-        foreach (array_unique($idsCelulaTotales) as $idCelulaTotal) {
-            if (!isset($metricasPorCelula[$idCelulaTotal])) {
-                continue;
-            }
-            $totalesSemanasSinEntregarSobre += (int)($metricasPorCelula[$idCelulaTotal]['semanas_sin_entregar_sobre'] ?? 0);
-            $totalesSemanasSinReportar += (int)($metricasPorCelula[$idCelulaTotal]['semanas_sin_reportar'] ?? 0);
-        }
-        $totales['semanas_sin_entregar_sobre'] = $totalesSemanasSinEntregarSobre;
-        $totales['semanas_sin_reportar'] = $totalesSemanasSinReportar;
+        $totales['semanas_sin_entregar_sobre'] = $celulasSinSobreTotal;
+        $totales['semanas_sin_reportar'] = $celulasSinReporteTotal;
 
         return [
             'anio' => $anio,
@@ -5895,8 +5929,8 @@ class ReporteController extends BaseController {
                         '0',
                         '0',
                         '0',
-                        (string)(int)($lider['semanas_sin_entregar_sobre'] ?? 0),
-                        (string)(int)($lider['semanas_sin_reportar'] ?? 0),
+                        (int)($lider['semanas_sin_entregar_sobre'] ?? 0) . ' células',
+                        (int)($lider['semanas_sin_reportar'] ?? 0) . ' células',
                     ];
                 }
             } else {
@@ -5926,8 +5960,8 @@ class ReporteController extends BaseController {
                 (string)(int)($sub['antiguas'] ?? 0),
                 (string)(int)($sub['frecuentes'] ?? 0),
                 (string)(int)($sub['regulares'] ?? 0),
-                (string)(int)($sub['semanas_sin_entregar_sobre'] ?? 0),
-                (string)(int)($sub['semanas_sin_reportar'] ?? 0),
+                (int)($sub['semanas_sin_entregar_sobre'] ?? 0) . ' células',
+                (int)($sub['semanas_sin_reportar'] ?? 0) . ' células',
             ];
         }
 
@@ -5941,8 +5975,8 @@ class ReporteController extends BaseController {
             (string)(int)($totales['antiguas'] ?? 0),
             (string)(int)($totales['frecuentes'] ?? 0),
             (string)(int)($totales['regulares'] ?? 0),
-            (string)(int)($totales['semanas_sin_entregar_sobre'] ?? 0),
-            (string)(int)($totales['semanas_sin_reportar'] ?? 0),
+            (int)($totales['semanas_sin_entregar_sobre'] ?? 0) . ' células',
+            (int)($totales['semanas_sin_reportar'] ?? 0) . ' células',
         ];
 
         $this->exportCsv(

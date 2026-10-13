@@ -401,7 +401,7 @@ if ($esMenuMaestro) {
 
             <?php if ($puedeVerEnviar): ?>
             <a class="sidebar-link <?= $isActive(['celulas', 'asistencias']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=celulas">
-                <span class="sidebar-link-icon"><i class="bi bi-send-check"></i></span><span class="sidebar-link-text">Enviar</span>
+                <span class="sidebar-link-icon"><i class="bi bi-send-check"></i></span><span class="sidebar-link-text">Células</span>
             </a>
             <?php endif; ?>
 

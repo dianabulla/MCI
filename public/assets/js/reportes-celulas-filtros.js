@@ -51,6 +51,11 @@
     const bodyEstado = document.getElementById('tablaEstadoSemanalCelulasBody');
     const estadoConteoSi = document.getElementById('estadoSemanalConteoSi');
     const estadoConteoNo = document.getElementById('estadoSemanalConteoNo');
+    const bodyResumenSemanas = document.getElementById('tablaResumenSemanasMinRedBody');
+    const filtroMinisterioSemanasRed = document.getElementById('reporteCelulasFiltroMinisterioSemanasRed');
+    const filaEmptyFiltroSemanas = bodyResumenSemanas
+        ? bodyResumenSemanas.querySelector('tr[data-row-type="empty-filtro"]')
+        : null;
 
     const datosLideresRed = (typeof window.tablaLideresPorRedTipoData !== 'undefined' && Array.isArray(window.tablaLideresPorRedTipoData))
         ? window.tablaLideresPorRedTipoData
@@ -116,6 +121,33 @@
             const mostrarEmpty = visibles === 0
                 && bodySeguimiento.querySelectorAll('tr[data-row-type="dato"]').length > 0;
             establecerFilaVisible(filaEmptyFiltroSeguimiento, mostrarEmpty);
+        }
+    };
+
+    const aplicarFiltroSemanasMinisterioRed = () => {
+        if (!bodyResumenSemanas) {
+            return;
+        }
+        const ministerioSeleccionado = normFiltro((filtroMinisterioSemanasRed && filtroMinisterioSemanasRed.value) || '');
+        let visibles = 0;
+        bodyResumenSemanas.querySelectorAll('[data-row-type="ministerio"]').forEach((item) => {
+            const ministerioFila = normFiltro(item.dataset.ministerio || '');
+            const visible = ministerioSeleccionado === '' || ministerioFila === ministerioSeleccionado;
+            item.style.display = visible ? '' : 'none';
+            if (!visible) {
+                item.classList.remove('is-open');
+                const btn = item.querySelector('[data-sem-min-toggle="1"]');
+                if (btn) btn.setAttribute('aria-expanded', 'false');
+            }
+            if (visible) {
+                visibles += 1;
+            }
+        });
+        if (filaEmptyFiltroSemanas) {
+            const mostrarEmpty = visibles === 0
+                && bodyResumenSemanas.querySelectorAll('[data-row-type="ministerio"]').length > 0;
+            filaEmptyFiltroSemanas.hidden = !mostrarEmpty;
+            filaEmptyFiltroSemanas.style.display = mostrarEmpty ? '' : 'none';
         }
     };
 
@@ -260,10 +292,68 @@
         }).join('');
     };
 
+    const seleccionarOpcionMinisterio = (select, nombreBuscado) => {
+        if (!select || String(nombreBuscado || '').trim() === '') {
+            return false;
+        }
+        const n = normFiltro(nombreBuscado);
+        let encontrado = false;
+        Array.from(select.options).forEach((opt) => {
+            if (encontrado) {
+                return;
+            }
+            if (normFiltro(opt.value) === n || normFiltro(opt.text) === n) {
+                select.value = opt.value;
+                encontrado = true;
+            }
+        });
+        return encontrado;
+    };
+
+    const nombreMinisterioGlobal = () => {
+        const global = document.getElementById('filtro_ministerio_celulas');
+        if (!global || String(global.value || '').trim() === '' || global.selectedIndex < 0) {
+            return '';
+        }
+        return String(global.options[global.selectedIndex].textContent || '').trim();
+    };
+
+    const sincronizarFiltrosMinisterioDesdeGlobal = () => {
+        const nombre = nombreMinisterioGlobal();
+        if (nombre === '') {
+            return;
+        }
+        [
+            filtroMinisterioSeguimiento,
+            filtroMinisterioResumenRed,
+            filtroMinisterioEstado,
+            filtroMinisterioSemanasRed
+        ].forEach((sel) => {
+            seleccionarOpcionMinisterio(sel, nombre);
+        });
+    };
+
+    window.obtenerMinisterioCelulasActivo = function (preferId) {
+        if (preferId) {
+            const local = document.getElementById(preferId);
+            if (local && String(local.value || '').trim() !== '') {
+                return String(local.value).trim();
+            }
+        }
+        if (filtroMinisterioSemanasRed && String(filtroMinisterioSemanasRed.value || '').trim() !== '') {
+            return String(filtroMinisterioSemanasRed.value).trim();
+        }
+        return nombreMinisterioGlobal();
+    };
+
+    window.normFiltroMinisterioCelulas = normFiltro;
+
     window.aplicarFiltrosTablasCelulas = function () {
+        sincronizarFiltrosMinisterioDesdeGlobal();
         aplicarFiltrosSeguimiento();
         aplicarFiltrosEstado();
         aplicarFiltrosResumenRed();
+        aplicarFiltroSemanasMinisterioRed();
     };
 
     const contenedor = document.getElementById('reportesVisualContainer');
@@ -276,6 +366,8 @@
             const id = String(objetivo.id || '');
             if (id === 'reporteCelulasFiltroMinisterioSeguimiento' || id === 'reporteCelulasFiltroRedSeguimiento' || id === 'reporteCelulasFiltroColorSeguimiento') {
                 aplicarFiltrosSeguimiento();
+            } else if (id === 'reporteCelulasFiltroMinisterioSemanasRed') {
+                aplicarFiltroSemanasMinisterioRed();
             } else if (id === 'reporteCelulasFiltroMinisterioEstado' || id === 'reporteCelulasFiltroRedEstado' || id === 'reporteCelulasFiltroEstadoReporte') {
                 aplicarFiltrosEstado();
             } else if (id === 'reporteCelulasFiltroMinisterioResumenRed' || id === 'reporteCelulasFiltroLiderResumenRed' || id === 'reporteCelulasFiltroRedResumenRed') {
