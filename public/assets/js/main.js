@@ -207,6 +207,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const forms = document.querySelectorAll('form');
     forms.forEach(form => {
         form.addEventListener('submit', function(e) {
+            if (form.id === 'form-taller-editor') {
+                return;
+            }
             const requiredFields = form.querySelectorAll('[required]');
             let isValid = true;
 

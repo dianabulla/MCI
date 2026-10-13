@@ -34,6 +34,8 @@ class TallerFormulario extends BaseModel {
         'persona_direccion' => 'Dirección de residencia',
         'persona_estado_civil' => 'Estado civil',
         'persona_ocupacion' => 'Ocupación',
+        'persona_lider' => 'Líder',
+        'persona_ministerio' => 'Ministerio',
     ];
 
     /** @var array<int, string> */
@@ -137,13 +139,104 @@ class TallerFormulario extends BaseModel {
 
     private function ensureTipoBloqueAutorizacion(): void {
         try {
-            $this->db->exec("
-                ALTER TABLE talleres_formulario_bloque
-                MODIFY Tipo ENUM('persona', 'personalizado', 'autorizacion', 'padres', 'nino', 'documentos') NOT NULL DEFAULT 'personalizado'
-            ");
+            $rows = $this->query("SHOW COLUMNS FROM talleres_formulario_bloque LIKE 'Tipo'");
+            $tipo = strtolower((string)($rows[0]['Type'] ?? ''));
+            $necesarios = ['persona', 'personalizado', 'autorizacion', 'padres', 'nino', 'documentos'];
+            if ($tipo === '' || !str_starts_with($tipo, 'enum(')) {
+                return;
+            }
+            foreach ($necesarios as $valor) {
+                if (!str_contains($tipo, "'" . $valor . "'")) {
+                    $this->forzarTipoBloqueFlexible();
+                    return;
+                }
+            }
         } catch (Throwable $e) {
-            // Tabla nueva o ENUM ya actualizado.
+            error_log('ensureTipoBloqueAutorizacion: ' . $e->getMessage());
         }
+    }
+
+    private function forzarTipoBloqueFlexible(): void {
+        $this->db->exec("
+            ALTER TABLE talleres_formulario_bloque
+            MODIFY Tipo VARCHAR(40) NOT NULL DEFAULT 'personalizado'
+        ");
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function soloColumnasExistentes(string $table, array $data): array {
+        if ($data === []) {
+            return [];
+        }
+        try {
+            $rows = $this->query('SHOW COLUMNS FROM ' . $table);
+        } catch (Throwable $e) {
+            return $data;
+        }
+        $existentes = [];
+        foreach ($rows as $row) {
+            $existentes[strtolower((string)($row['Field'] ?? ''))] = true;
+        }
+        $filtrados = [];
+        foreach ($data as $columna => $valor) {
+            if (isset($existentes[strtolower((string)$columna)])) {
+                $filtrados[$columna] = $valor;
+            }
+        }
+        return $filtrados;
+    }
+
+    /**
+     * Guarda cabecera y bloques en una sola transacción.
+     *
+     * @param array<string, mixed> $data
+     * @param array<int, array<string, mixed>> $bloques
+     */
+    public function guardarFormularioCompleto(int $id, array $data, array $bloques, bool $reintentoTipo = false): int {
+        $data = $this->soloColumnasExistentes('talleres_formulario', $data);
+        $idOriginal = $id;
+        $propia = !$this->db->inTransaction();
+        if ($propia) {
+            $this->db->beginTransaction();
+        }
+        try {
+            if ($id > 0) {
+                if ($data !== []) {
+                    $this->update($id, $data);
+                }
+            } else {
+                $id = (int)$this->create($data);
+            }
+            $this->reemplazarBloquesYCampos($id, $bloques);
+            if ($propia && $this->db->inTransaction()) {
+                $this->db->commit();
+            }
+            return $id;
+        } catch (Throwable $e) {
+            if ($propia && $this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            if (!$reintentoTipo && $this->esErrorTipoBloque($e)) {
+                try {
+                    $this->forzarTipoBloqueFlexible();
+                } catch (Throwable $alterError) {
+                    error_log('forzarTipoBloqueFlexible: ' . $alterError->getMessage());
+                }
+                return $this->guardarFormularioCompleto($idOriginal, $data, $bloques, true);
+            }
+            throw $e;
+        }
+    }
+
+    private function esErrorTipoBloque(Throwable $e): bool {
+        $msg = strtolower($e->getMessage());
+        return str_contains($msg, 'tipo')
+            || str_contains($msg, '1265')
+            || str_contains($msg, 'data truncated')
+            || str_contains($msg, 'truncated');
     }
 
     private function ensureTablaPagos(): void {
@@ -731,19 +824,62 @@ class TallerFormulario extends BaseModel {
             return;
         }
 
-        $this->db->beginTransaction();
+        $conservarTipos = ['padres', 'nino', 'documentos'];
+        $existentes = $this->getBloquesPorFormulario($idFormulario);
+        $conservados = [];
+        foreach ($existentes as $bloque) {
+            $tipoExistente = (string)($bloque['Tipo'] ?? '');
+            if (in_array($tipoExistente, $conservarTipos, true)) {
+                $conservados[] = $bloque;
+            }
+        }
+        $idsConservar = array_values(array_filter(array_map(static function ($bloque) {
+            return (int)($bloque['Id_Bloque'] ?? 0);
+        }, $conservados)));
+
+        $transaccionPropia = !$this->db->inTransaction();
+        if ($transaccionPropia) {
+            $this->db->beginTransaction();
+        }
         try {
-        $this->execute('DELETE FROM talleres_formulario_campo WHERE Id_Formulario = ?', [$idFormulario]);
-        $this->execute('DELETE FROM talleres_formulario_bloque WHERE Id_Formulario = ?', [$idFormulario]);
+        if ($idsConservar === []) {
+            $this->execute('DELETE FROM talleres_formulario_campo WHERE Id_Formulario = ?', [$idFormulario]);
+            $this->execute('DELETE FROM talleres_formulario_bloque WHERE Id_Formulario = ?', [$idFormulario]);
+        } else {
+            $marcas = implode(',', array_fill(0, count($idsConservar), '?'));
+            $this->execute(
+                'DELETE FROM talleres_formulario_campo WHERE Id_Formulario = ? AND (Id_Bloque IS NULL OR Id_Bloque NOT IN (' . $marcas . '))',
+                array_merge([$idFormulario], $idsConservar)
+            );
+            $this->execute(
+                'DELETE FROM talleres_formulario_bloque WHERE Id_Formulario = ? AND Id_Bloque NOT IN (' . $marcas . ')',
+                array_merge([$idFormulario], $idsConservar)
+            );
+        }
 
-        $this->insertEnTabla('talleres_formulario_bloque', [
-            'Id_Formulario' => $idFormulario,
-            'Titulo' => '1. DATOS PERSONALES',
-            'Tipo' => 'persona',
-            'Orden' => 0,
-        ]);
+        $ordenBloque = 0;
+        if ($conservados === []) {
+            $this->insertEnTabla('talleres_formulario_bloque', [
+                'Id_Formulario' => $idFormulario,
+                'Titulo' => '1. DATOS PERSONALES',
+                'Tipo' => 'persona',
+                'Orden' => 0,
+            ]);
+            $ordenBloque = 1;
+        } else {
+            foreach ($conservados as $bloque) {
+                $idBloque = (int)($bloque['Id_Bloque'] ?? 0);
+                if ($idBloque <= 0) {
+                    continue;
+                }
+                $this->execute(
+                    'UPDATE talleres_formulario_bloque SET Orden = ? WHERE Id_Bloque = ?',
+                    [$ordenBloque, $idBloque]
+                );
+                $ordenBloque++;
+            }
+        }
 
-        $ordenBloque = 1;
         foreach ($bloquesPersonalizados as $bloque) {
             $titulo = trim((string)($bloque['titulo'] ?? ''));
             if ($titulo === '') {
@@ -769,9 +905,11 @@ class TallerFormulario extends BaseModel {
             'Orden' => $ordenBloque,
         ]);
         }
-            $this->db->commit();
+            if ($transaccionPropia && $this->db->inTransaction()) {
+                $this->db->commit();
+            }
         } catch (Throwable $e) {
-            if ($this->db->inTransaction()) {
+            if ($transaccionPropia && $this->db->inTransaction()) {
                 $this->db->rollBack();
             }
             throw $e;

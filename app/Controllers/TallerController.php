@@ -416,7 +416,7 @@ class TallerController extends BaseController {
 
         foreach ($completo['bloques'] as $item) {
 
-            if (in_array(($item['bloque']['Tipo'] ?? ''), ['persona', 'autorizacion', 'padres', 'nino'], true)) {
+            if (in_array(($item['bloque']['Tipo'] ?? ''), ['persona', 'autorizacion', 'padres', 'nino', 'documentos'], true)) {
 
                 continue;
 
@@ -454,7 +454,21 @@ class TallerController extends BaseController {
 
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
-            header('Location: ' . PUBLIC_URL . '?url=talleres');
+            $_SESSION['talleres_flash_error'] = 'No llegó la información del formulario. Ábralo de nuevo y pulse Guardar formulario.';
+
+            header('Location: ' . public_app_url('talleres'));
+
+            exit;
+
+        }
+
+        if ($_POST === []) {
+
+            $_SESSION['talleres_flash_error'] = 'El servidor no recibió los datos. Recargue la página y vuelva a guardar.';
+
+            $idVacio = (int)($_GET['id'] ?? 0);
+
+            header('Location: ' . public_app_url($idVacio > 0 ? 'talleres/editar' : 'talleres/crear', $idVacio > 0 ? ['id' => $idVacio] : []));
 
             exit;
 
@@ -534,11 +548,7 @@ class TallerController extends BaseController {
 
         try {
 
-            if ($esEdicion) {
-
-                $this->model->update($id, $data);
-
-            } else {
+            if (!$esEdicion) {
 
                 $idPersona = (int)($_SESSION['id_persona'] ?? 0);
 
@@ -548,23 +558,29 @@ class TallerController extends BaseController {
 
                 }
 
-                $id = (int)$this->model->create($data);
-
             }
-
-
 
             $bloquesPost = $this->parsearBloquesDesdePost($_POST);
 
-            $this->model->reemplazarBloquesYCampos($id, $bloquesPost);
+            $id = $this->model->guardarFormularioCompleto($esEdicion ? $id : 0, $data, $bloquesPost);
 
         } catch (Throwable $e) {
 
             error_log('No se pudo guardar el formulario de taller: ' . $e->getMessage());
 
-            $_SESSION['talleres_flash_error'] = 'No se pudo guardar el formulario. Revise los bloques e intente de nuevo.';
+            $detalle = trim((string)preg_replace('/\s+/', ' ', $e->getMessage()));
 
-            header('Location: ' . PUBLIC_URL . '?url=talleres/' . ($esEdicion && $id > 0 ? 'editar&id=' . $id : 'crear'));
+            if (strlen($detalle) > 180) {
+
+                $detalle = substr($detalle, 0, 180) . '…';
+
+            }
+
+            $_SESSION['talleres_flash_error'] = 'No se pudo guardar el formulario.'
+
+                . ($detalle !== '' ? ' ' . $detalle : ' Revise los bloques e intente de nuevo.');
+
+            header('Location: ' . public_app_url($esEdicion && $id > 0 ? 'talleres/editar' : 'talleres/crear', $esEdicion && $id > 0 ? ['id' => $id] : []));
 
             exit;
 
@@ -572,7 +588,7 @@ class TallerController extends BaseController {
 
         $_SESSION['talleres_flash_ok'] = 'Formulario guardado correctamente.';
 
-        header('Location: ' . PUBLIC_URL . '?url=talleres/editar&id=' . $id);
+        header('Location: ' . public_app_url('talleres/editar', ['id' => $id]));
 
         exit;
 
@@ -1863,6 +1879,18 @@ class TallerController extends BaseController {
         if (trim((string)($valores['persona_ocupacion'] ?? '')) === '') {
 
             $valores['persona_ocupacion'] = (string)($json['persona_ocupacion'] ?? $extras['ocupacion'] ?? '');
+
+        }
+
+        if (trim((string)($valores['persona_lider'] ?? '')) === '') {
+
+            $valores['persona_lider'] = (string)($json['persona_lider'] ?? $extras['persona_lider'] ?? '');
+
+        }
+
+        if (trim((string)($valores['persona_ministerio'] ?? '')) === '') {
+
+            $valores['persona_ministerio'] = (string)($json['persona_ministerio'] ?? $extras['persona_ministerio'] ?? '');
 
         }
 

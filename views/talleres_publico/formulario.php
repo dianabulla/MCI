@@ -752,6 +752,21 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
 
                         </div>
 
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                            <div class="field">
+                                <label for="persona_lider">Líder</label>
+                                <input class="form-control campo-bloqueado" type="text" id="persona_lider" name="persona_lider" readonly
+                                       value="<?= htmlspecialchars(taller_valor($valores, 'persona_lider'), ENT_QUOTES, 'UTF-8') ?>"
+                                       placeholder="Se completa al buscar por cédula">
+                            </div>
+                            <div class="field">
+                                <label for="persona_ministerio">Ministerio</label>
+                                <input class="form-control campo-bloqueado" type="text" id="persona_ministerio" name="persona_ministerio" readonly
+                                       value="<?= htmlspecialchars(taller_valor($valores, 'persona_ministerio'), ENT_QUOTES, 'UTF-8') ?>"
+                                       placeholder="Se completa al buscar por cédula">
+                            </div>
+                        </div>
+
 
 
                         <?php endif; ?>
@@ -1206,9 +1221,11 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
 
                         if (!el) return;
 
-                        el.readOnly = false;
+                        el.value = '';
 
-                        el.classList.remove('campo-bloqueado');
+                        el.readOnly = true;
+
+                        el.classList.add('campo-bloqueado');
 
                     });
 

@@ -71,7 +71,13 @@ La cifra del informe puede seguir siendo mayor que la tarjeta de Almas ganadas: 
 
 ## Formularios de talleres
 
-Guardar el editor de un formulario exige permiso de crear o de editar. El guardado avisa si quedó bien o si falló, y los bloques se reemplazan en una sola transacción para no perder el formulario a medias.
+Cada taller se edita por su cuenta. El bloque de datos personales, líder y ministerio va fijo en todos y no se arma como pregunta del taller. En el formulario público, líder y ministerio salen de la ficha al buscar la cédula y quedan solo de lectura. Lo que sí se guarda por taller es el nombre, la descripción, el mensaje al enviar, el texto de autorización, si el enlace está activo o cerrado, y las preguntas de los bloques de abajo.
+
+Guardar exige permiso de crear o de editar. El nombre y las preguntas se escriben juntos: si las preguntas no entran, el nombre tampoco queda a medias. Al terminar bien aparece «Formulario guardado correctamente», arriba y junto al botón. Si el servidor lo rechaza, el aviso rojo queda en los dos sitios e incluye el motivo. Si falta el título de un bloque o el texto de una pregunta, el navegador indica cuál es y no envía el formulario.
+
+En Presentación de niños, los bloques de padres, niño y documentos no se borran al guardar. Las preguntas adicionales se conservan al volver a abrir el editor.
+
+Los botones de guardar, ver respuestas y abrir formulario van al final del editor, en el flujo de la página, para no tapar el enlace para compartir.
 
 ## Creación de personas desde talleres y escuelas
 

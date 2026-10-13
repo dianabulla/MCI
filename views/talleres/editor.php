@@ -79,7 +79,7 @@ unset($_SESSION['talleres_flash_ok']);
 
 
 
-<form method="POST" action="<?= PUBLIC_URL ?>?url=talleres/guardar" id="form-taller-editor">
+<form method="POST" action="<?= htmlspecialchars(public_app_url('talleres/guardar'), ENT_QUOTES, 'UTF-8') ?>" id="form-taller-editor">
 
     <input type="hidden" name="id_formulario" value="<?= $id ?>">
 
@@ -198,10 +198,6 @@ unset($_SESSION['talleres_flash_ok']);
 
 
 
-        </div>
-
-
-
         <div class="form-group" style="background:#f8fbff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px;">
 
             <label style="font-weight:700;margin-bottom:8px;">Estado del enlace público</label>
@@ -241,21 +237,21 @@ unset($_SESSION['talleres_flash_ok']);
 
     <div class="form-container" style="margin-bottom:20px;background:#f0f9ff;border-color:#bae6fd;">
 
-        <h4 style="margin-bottom:8px;">Bloque 1 — Datos personales (fijo)</h4>
+        <h4 style="margin-bottom:8px;">Bloque 1 — Datos personales y ministerio (fijo)</h4>
 
         <p class="text-muted" style="font-size:0.9rem;margin:0;">
 
-            Este bloque siempre está presente y se vincula con la base de datos de personas.
+            Este bloque va en todos los talleres y no se quita. Líder y ministerio salen de la ficha de la persona al buscarla por cédula.
 
-            Si la persona no existe, se crea automáticamente al enviar el formulario.
+            Las preguntas de cada taller se editan en los bloques de abajo.
 
         </p>
 
         <ul style="margin:12px 0 0 18px;font-size:0.9rem;color:#475569;">
 
-            <li>Nombre completo, documento, fecha de nacimiento, edad</li>
+            <li>Nombre, documento, fecha de nacimiento, edad, teléfono, correo, dirección, estado civil y ocupación</li>
 
-            <li>Teléfono, correo, dirección, estado civil, ocupación</li>
+            <li>Líder y ministerio</li>
 
         </ul>
 
@@ -288,6 +284,9 @@ unset($_SESSION['talleres_flash_ok']);
         </div>
 
         <p class="text-muted" style="font-size:0.9rem;">Organice las preguntas por secciones. Cada bloque aparece como un apartado en el formulario público.</p>
+        <?php if (!empty($es_presentacion_ninos)): ?>
+        <p class="text-muted" style="font-size:0.9rem;">Los datos de padres, del niño y los documentos forman parte fija de este formulario y se conservan al guardar. Aquí solo se editan las preguntas adicionales.</p>
+        <?php endif; ?>
 
 
 
@@ -409,9 +408,16 @@ unset($_SESSION['talleres_flash_ok']);
 
 
 
+    <?php if ($flashError !== ''): ?>
+    <div class="alert alert-danger"><?= htmlspecialchars($flashError, ENT_QUOTES, 'UTF-8') ?></div>
+    <?php endif; ?>
+    <?php if ($flashOk !== ''): ?>
+    <div class="alert alert-success"><?= htmlspecialchars($flashOk, ENT_QUOTES, 'UTF-8') ?></div>
+    <?php endif; ?>
+
     <div class="taller-form-acciones">
 
-        <button type="submit" class="btn btn-primary" id="btn-guardar-formulario">Guardar formulario</button>
+        <button type="submit" class="btn btn-primary" id="btn-guardar-formulario" form="form-taller-editor">Guardar formulario</button>
 
         <?php if ($id > 0): ?>
 
@@ -900,20 +906,37 @@ unset($_SESSION['talleres_flash_ok']);
     const formEditor = document.getElementById('form-taller-editor');
     const btnGuardar = document.getElementById('btn-guardar-formulario');
     if (formEditor) {
+        let avisoInvalido = false;
+        if (btnGuardar) {
+            btnGuardar.addEventListener('click', function() {
+                avisoInvalido = false;
+            });
+        }
         formEditor.addEventListener('invalid', function(event) {
             const campo = event.target;
             if (campo && typeof campo.scrollIntoView === 'function') {
                 campo.scrollIntoView({ block: 'center', behavior: 'smooth' });
             }
+            if (!avisoInvalido && campo) {
+                avisoInvalido = true;
+                const caja = campo.closest('.form-group, .campo-row, div');
+                const etiqueta = caja ? caja.querySelector('label') : null;
+                const nombre = etiqueta ? etiqueta.textContent.replace(/\s+/g, ' ').trim() : 'un campo obligatorio';
+                window.alert('No se guardó porque falta completar: ' + nombre);
+            }
         }, true);
-        formEditor.addEventListener('submit', function() {
+        formEditor.addEventListener('submit', function(event) {
+            if (event.defaultPrevented || !formEditor.checkValidity()) {
+                if (btnGuardar) {
+                    btnGuardar.disabled = false;
+                    btnGuardar.textContent = 'Guardar formulario';
+                }
+                return;
+            }
             if (!btnGuardar) {
                 return;
             }
             btnGuardar.textContent = 'Guardando...';
-            window.setTimeout(function() {
-                btnGuardar.disabled = true;
-            }, 0);
         });
     }
 
@@ -959,22 +982,19 @@ unset($_SESSION['talleres_flash_ok']);
     align-items: center;
     justify-content: flex-start;
     gap: 10px;
-    margin: 8px 0 24px;
-    padding: 12px 14px;
-    background: #fff;
-    border: 1px solid #d5e2f4;
-    border-radius: 12px;
-    box-shadow: 0 8px 20px rgba(32, 68, 126, 0.08);
-    position: sticky;
-    bottom: 16px;
-    z-index: 20;
+    margin: 8px 0 72px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    position: static;
 }
 .taller-form-acciones .btn {
-    width: auto;
-    height: auto;
+    width: auto !important;
+    height: auto !important;
     min-height: 40px;
     max-width: none;
-    aspect-ratio: auto;
+    aspect-ratio: auto !important;
     flex: 0 0 auto;
     align-self: center;
     display: inline-flex;
