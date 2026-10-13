@@ -80,9 +80,6 @@ $buildPendientesUrl = static function(array $extra = []) use ($queryBasePendient
     return PUBLIC_URL . '?' . http_build_query($params);
 };
 $returnUrlGanar = $buildPendientesUrl();
-$historialToggleUrl = $verHistorialGanar
-    ? $buildPendientesUrl(['historial' => '', 'anio' => '', 'semana_ref' => '', 'buscar' => '', 'origen' => ''])
-    : $buildPendientesUrl(['historial' => '1', 'semana_ref' => '', 'buscar' => '', 'anio' => (string)$anioActualCalendario, 'origen' => ($filtroOrigenActual ?? '')]);
 ?>
 
 <div class="card" style="margin-bottom: 16px;">
@@ -153,9 +150,6 @@ $historialToggleUrl = $verHistorialGanar
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-funnel"></i> Filtrar
                     </button>
-                    <a href="<?= htmlspecialchars($historialToggleUrl) ?>" class="btn <?= $verHistorialGanar ? 'btn-secondary' : 'btn-info' ?>">
-                        <i class="bi bi-clock-history"></i> Historial
-                    </a>
                     <?php if ($hayFiltrosPendiente): ?>
                     <a href="<?= PUBLIC_URL ?>?url=personas/ganar" class="btn btn-secondary">
                         <i class="bi bi-x-circle"></i> Limpiar
@@ -170,11 +164,11 @@ $historialToggleUrl = $verHistorialGanar
 <div class="alert alert-info" style="margin-bottom: 20px;">
     <i class="bi bi-info-circle"></i>
     <?php if ($verHistorialGanar): ?>
-    <strong>Historial</strong>: personas <strong>nuevas</strong> registradas en el año elegido (excluye antiguas del padrón); incluye las que ya están consolidadas o ubicadas. Usa las pestañas para filtrar por origen. Los datos de ubicación (célula, líder, ministerio) son el <strong>estado actual</strong>.
+    <strong>Historial</strong>: personas <strong>nuevas</strong> registradas en el año elegido (excluye antiguas del padrón); incluye las que ya están consolidadas o ubicadas. Los datos de ubicación (célula, líder, ministerio) son el <strong>estado actual</strong>.
     <?php elseif ($filtroNombrePendiente !== ''): ?>
-    Resultados de búsqueda (nombre, documento o teléfono) entre personas nuevas pendientes. Escuelas de Formación y el Tour Levántate quedan fuera. Las pestañas por origen no aplican mientras haya texto en el buscador.
+    Resultados de búsqueda (nombre, documento o teléfono) entre personas nuevas pendientes. Escuelas de Formación y el Tour Levántate quedan fuera.
     <?php else: ?>
-    Aparecen las <strong>personas nuevas</strong> que siguen pendientes de contacto o de ubicación. Si dejas «Semana» vacía se muestran todas, de cualquier fecha. Si eliges una fecha, la lista se limita a esa semana (lun–dom). <strong>Historial</strong> muestra las nuevas del año elegido, incluidas las que ya están ubicadas.
+    Aparecen las <strong>personas nuevas</strong> a las que les falta líder o ministerio. Salen de Nuevos cuando ya tienen líder y ministerio, cuando pasan a Reasignados, a En seguimiento o a No se dispone. Si dejas «Semana» vacía se muestran todas, de cualquier fecha. Si eliges una fecha, la lista se limita a esa semana (lun–dom).
     <?php endif; ?>
 </div>
 
@@ -183,35 +177,11 @@ $historialToggleUrl = $verHistorialGanar
     <div class="card-body">
         <div class="ganar-shortcuts">
             <div class="ganar-shortcut-item">
-                <a href="<?= htmlspecialchars($buildPendientesUrl(['origen' => 'celula'])) ?>" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'celula') ? 'active' : '' ?>">
-                    <span class="ganar-shortcut-title"><i class="bi bi-house-heart"></i> Ganados en célula</span>
-                    <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['celula'] ?? 0) ?></span>
+                <a href="<?= htmlspecialchars($buildPendientesUrl(['origen' => ''])) ?>" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? '') === '') ? 'active' : '' ?>">
+                    <span class="ganar-shortcut-title"><i class="bi bi-person-plus"></i> Nuevos</span>
+                    <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['nuevos'] ?? 0) ?></span>
                 </a>
-                <small class="ganar-shortcut-help">Ganado en: Célula</small>
-            </div>
-
-            <div class="ganar-shortcut-item">
-                <a href="<?= htmlspecialchars($buildPendientesUrl(['origen' => 'domingo'])) ?>" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'domingo') ? 'active' : '' ?>">
-                    <span class="ganar-shortcut-title"><i class="bi bi-building"></i> Ganados en iglesia</span>
-                    <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['domingo'] ?? 0) ?></span>
-                </a>
-                <small class="ganar-shortcut-help">Solo registros con origen Domingo o Iglesia</small>
-            </div>
-
-            <div class="ganar-shortcut-item">
-                <a href="<?= htmlspecialchars($buildPendientesUrl(['origen' => 'somos_uno'])) ?>" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'somos_uno') ? 'active' : '' ?>">
-                    <span class="ganar-shortcut-title"><i class="bi bi-people"></i> Somos Uno</span>
-                    <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['somos_uno'] ?? 0) ?></span>
-                </a>
-                <small class="ganar-shortcut-help">Registros con origen Somos Uno</small>
-            </div>
-
-            <div class="ganar-shortcut-item">
-                <a href="<?= htmlspecialchars($buildPendientesUrl(['origen' => 'otros'])) ?>" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'otros') ? 'active' : '' ?>">
-                    <span class="ganar-shortcut-title"><i class="bi bi-three-dots"></i> Otros</span>
-                    <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['otros'] ?? 0) ?></span>
-                </a>
-                <small class="ganar-shortcut-help">Registros con origen Otros</small>
+                <small class="ganar-shortcut-help">Les falta líder o ministerio. Reasignados y en seguimiento no entran aquí</small>
             </div>
 
             <?php if ($puedeVerAtajoAsignados): ?>
@@ -230,7 +200,7 @@ $historialToggleUrl = $verHistorialGanar
                     <span class="ganar-shortcut-title"><i class="bi bi-arrow-repeat"></i> Reasignados</span>
                     <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['reasignados'] ?? 0) ?></span>
                 </a>
-                <small class="ganar-shortcut-help">Pasaron 48 horas sin contacto o sin célula, o se cambió el líder</small>
+                <small class="ganar-shortcut-help">Pasaron 4 días sin contacto o sin célula, o se cambió el líder</small>
             </div>
             <?php endif; ?>
 
@@ -240,14 +210,6 @@ $historialToggleUrl = $verHistorialGanar
                     <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['no_disponible'] ?? 0) ?></span>
                 </a>
                 <small class="ganar-shortcut-help">Personas no concretadas (inactivas)</small>
-            </div>
-
-            <div class="ganar-shortcut-item">
-                <a href="<?= htmlspecialchars($buildPendientesUrl(['origen' => 'en_seguimiento'])) ?>" class="ganar-shortcut-card <?= (($filtroOrigenActual ?? ($_GET['origen'] ?? '')) === 'en_seguimiento') ? 'active' : '' ?>">
-                    <span class="ganar-shortcut-title"><i class="bi bi-signpost-2"></i> En seguimiento</span>
-                    <span class="ganar-shortcut-count"><?= (int)($totalesOrigenPendiente['en_seguimiento'] ?? 0) ?></span>
-                </a>
-                <small class="ganar-shortcut-help">Personas nuevas de esta pantalla marcadas En seguimiento</small>
             </div>
         </div>
     </div>

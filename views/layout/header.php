@@ -117,6 +117,14 @@ if ($puedeVerPendientesGanar || $campanaSoloDiscipulos) {
             return strpos($rol, 'discipul') !== false || strpos($rol, 'disipul') !== false;
         };
 
+        $esNoDisponibleChecklist = static function ($persona) {
+            if (!empty($persona['Seguimiento_No_Disponible'])) {
+                return true;
+            }
+            $decoded = json_decode((string)($persona['Escalera_Checklist'] ?? ''), true);
+            return is_array($decoded) && !empty($decoded['Ganar'][5]);
+        };
+
         $idsPendientesPorConectar = [];
         $idsNuevasAlmasGanadas = [];
         $idsUniversidadVida = [];
@@ -138,7 +146,10 @@ if ($puedeVerPendientesGanar || $campanaSoloDiscipulos) {
             if ($esRolLiderazgo($rolPendiente)) {
                 continue;
             }
-            if (!empty($personaTmpPendiente['Seguimiento_No_Disponible'])) {
+            if ($esNoDisponibleChecklist($personaTmpPendiente)) {
+                continue;
+            }
+            if (Persona::checklistIndicaEnSeguimiento($personaTmpPendiente['Escalera_Checklist'] ?? '')) {
                 continue;
             }
             if ((int)($personaTmpPendiente['Id_Ministerio'] ?? 0) <= 0) {
@@ -150,6 +161,41 @@ if ($puedeVerPendientesGanar || $campanaSoloDiscipulos) {
             $idPersonaPendiente = (int)($personaTmpPendiente['Id_Persona'] ?? 0);
             if ($idPersonaPendiente > 0) {
                 $idsPendientesPorConectar[$idPersonaPendiente] = true;
+            }
+        }
+
+        $personasSinLiderCampana = $personaCampanaModel->getWithFiltersAndRole(
+            $filtroRolDiscipulos,
+            null,
+            '0',
+            null,
+            'Activo',
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+        foreach ((array)$personasSinLiderCampana as $personaSinLider) {
+            $rolSinLider = (string)($personaSinLider['Nombre_Rol'] ?? '');
+            if ($esRolLiderazgo($rolSinLider)) {
+                continue;
+            }
+            if ($esNoDisponibleChecklist($personaSinLider)) {
+                continue;
+            }
+            if (Persona::checklistIndicaEnSeguimiento($personaSinLider['Escalera_Checklist'] ?? '')) {
+                continue;
+            }
+            if ((int)($personaSinLider['Id_Ministerio'] ?? 0) <= 0) {
+                continue;
+            }
+            if ((int)($personaSinLider['Id_Lider'] ?? 0) > 0) {
+                continue;
+            }
+            $idSinLider = (int)($personaSinLider['Id_Persona'] ?? 0);
+            if ($idSinLider > 0) {
+                $idsPendientesPorConectar[$idSinLider] = true;
             }
         }
 
@@ -167,7 +213,10 @@ if ($puedeVerPendientesGanar || $campanaSoloDiscipulos) {
         $personasUniversidad = $personaCampanaModel->getPersonasUniversidadVida($filtroRolUniversidad);
         foreach ((array)$personasUniversidad as $personaUvTmp) {
             $rolUv = (string)($personaUvTmp['Nombre_Rol'] ?? '');
-            if ($esRolLiderazgo($rolUv) || !empty($personaUvTmp['Seguimiento_No_Disponible'])) {
+            if ($esRolLiderazgo($rolUv) || $esNoDisponibleChecklist($personaUvTmp)) {
+                continue;
+            }
+            if (Persona::checklistIndicaEnSeguimiento($personaUvTmp['Escalera_Checklist'] ?? '')) {
                 continue;
             }
             if ((int)($personaUvTmp['Id_Ministerio'] ?? 0) <= 0) {

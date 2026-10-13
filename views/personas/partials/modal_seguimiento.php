@@ -246,6 +246,9 @@ $urlGuardarSeguimiento = function_exists('public_app_url')
                 textoEl.value = '';
                 setStatus('Seguimiento guardado', false);
                 if (botonActivo) botonActivo.classList.add('is-active');
+                if (document.getElementById('listaPorConectar') || document.querySelector('.ganar-table')) {
+                    window.location.reload();
+                }
             })
             .catch(function (err) {
                 setStatus(err.message || 'No se pudo guardar', true);

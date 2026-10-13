@@ -190,29 +190,69 @@ $esPendienteUbicacionRed = static function(array $persona) {
 if (!isset($totalPendientesConectarContexto)) {
     $totalPendientesConectarContexto = is_array($personas ?? null) ? count($personas) : 0;
 }
+$perfilListaActual = (string)($_GET['perfil'] ?? '');
+$personasPorConectarVista = is_array($personas ?? null) ? $personas : [];
+$personasEnSeguimientoVista = is_array($personasEnSeguimiento ?? null) ? $personasEnSeguimiento : [];
 $totalPendientesBanner = (int)$totalPendientesConectarContexto;
+$totalEnSeguimientoBanner = (int)($totalEnSeguimientoContexto ?? count($personasEnSeguimientoVista));
+$listasConexion = [
+    [
+        'id' => 'listaPorConectar',
+        'btn' => 'btnPorConectar',
+        'titulo' => 'Por conectar a célula o líder',
+        'texto' => 'Tienen ministerio y les falta la célula, el líder, o los dos. Si las marcas En seguimiento, salen de aquí.',
+        'personas' => $personasPorConectarVista,
+        'total' => $totalPendientesBanner,
+        'abierta' => $perfilListaActual === 'pendientes_conectar',
+        'vacio' => 'No hay personas con ministerio pendientes de célula o líder.',
+        'tablaWrap' => 'discipulosTableWrap',
+        'tabla' => 'tabla-discipulos',
+        'exportTitle' => 'Por conectar — Escalera del éxito',
+        'filename' => 'escalera-por-conectar',
+        'clase' => '',
+    ],
+    [
+        'id' => 'listaEnSeguimiento',
+        'btn' => 'btnEnSeguimiento',
+        'titulo' => 'En seguimiento',
+        'texto' => 'Salieron de Nuevos o de Por conectar. Quien solo asiste a la iglesia queda aquí. Cuando tengan líder y célula, salen de esta lista.',
+        'personas' => $personasEnSeguimientoVista,
+        'total' => $totalEnSeguimientoBanner,
+        'abierta' => $perfilListaActual === 'en_seguimiento',
+        'vacio' => 'No hay personas en seguimiento.',
+        'tablaWrap' => 'seguimientoTableWrap',
+        'tabla' => 'tabla-seguimiento',
+        'exportTitle' => 'En seguimiento — Escalera del éxito',
+        'filename' => 'escalera-en-seguimiento',
+        'clase' => ' por-conectar-toggle-seguimiento',
+    ],
+];
 ?>
 
-<div class="card" style="margin-bottom: 16px; border-left: 4px solid #2563eb;">
-    <div class="card-body" style="padding: 14px 18px;">
-        <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px;justify-content:space-between;">
-            <div>
-                <strong style="font-size:1.05rem;color:#1e3a5f;">Por conectar a célula o líder</strong>
-                <div style="color:#5b6d88;font-size:13px;margin-top:4px;">Tienen ministerio y les falta célula o líder. Quien aún no tiene ministerio sigue en Almas ganadas.</div>
-            </div>
-            <div style="font-size:1.6rem;font-weight:800;color:#2563eb;line-height:1;"><?= $totalPendientesBanner ?></div>
-        </div>
-    </div>
-</div>
+<?php foreach ($listasConexion as $listaConexion): ?>
+<button
+    type="button"
+    id="<?= htmlspecialchars($listaConexion['btn']) ?>"
+    class="por-conectar-toggle<?= htmlspecialchars($listaConexion['clase']) ?><?= !empty($listaConexion['abierta']) ? ' is-open' : '' ?>"
+    aria-expanded="<?= !empty($listaConexion['abierta']) ? 'true' : 'false' ?>"
+    aria-controls="<?= htmlspecialchars($listaConexion['id']) ?>"
+>
+    <span class="por-conectar-toggle-text">
+        <strong><?= htmlspecialchars($listaConexion['titulo']) ?></strong>
+        <span><?= htmlspecialchars($listaConexion['texto']) ?></span>
+    </span>
+    <span class="por-conectar-toggle-count"><?= (int)$listaConexion['total'] ?></span>
+</button>
 
+<div id="<?= htmlspecialchars($listaConexion['id']) ?>"<?= !empty($listaConexion['abierta']) ? '' : ' hidden' ?>>
 <div class="discipulos-export-toolbar" style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
     <small style="color:#64748b;font-size:0.82rem;margin-right:auto;">La imagen refleja los discípulos visibles con los filtros actuales.</small>
     <button
         type="button"
         class="btn btn-outline-secondary btn-sm btn-descargar-imagen-tabla"
-        data-tabla-id="discipulosTableWrap"
-        data-export-title="Por conectar — Escalera del éxito"
-        data-filename="escalera-por-conectar"
+        data-tabla-id="<?= htmlspecialchars($listaConexion['tablaWrap']) ?>"
+        data-export-title="<?= htmlspecialchars($listaConexion['exportTitle']) ?>"
+        data-filename="<?= htmlspecialchars($listaConexion['filename']) ?>"
         data-export-subtitle-from="filtro_perfil_form"
         data-label-default="Descargar tabla como imagen"
         title="Descargar la tabla filtrada como PNG">
@@ -220,13 +260,14 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
     </button>
 </div>
 
-<div id="discipulosTableWrap" class="table-container">
-    <table id="tabla-discipulos" class="data-table ganar-table mobile-persona-accordion">
+<div id="<?= htmlspecialchars($listaConexion['tablaWrap']) ?>" class="table-container">
+    <table id="<?= htmlspecialchars($listaConexion['tabla']) ?>" class="data-table ganar-table mobile-persona-accordion">
         <thead>
             <tr>
                 <th>Nombre</th>
                 <th>Ministerio</th>
                 <th>Líder</th>
+                <th>Falta</th>
                 <?php if ($mostrarEscaleraRapida): ?>
                 <th class="escalera-inline-col">Escalera rápida</th>
                 <?php endif; ?>
@@ -234,8 +275,8 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
             </tr>
         </thead>
         <tbody>
-            <?php if (!empty($personas)): ?>
-                <?php foreach ($personas as $persona): ?>
+            <?php if (!empty($listaConexion['personas'])): ?>
+                <?php foreach ($listaConexion['personas'] as $persona): ?>
                     <?php
                     $checklistEscalera = [];
                     $checklistRawPersona = (string)($persona['Escalera_Checklist'] ?? '');
@@ -289,6 +330,19 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
                         </td>
                         <td><?= htmlspecialchars($persona['Nombre_Ministerio'] ?? 'Sin ministerio') ?></td>
                         <td><?= htmlspecialchars(trim((string)($persona['Nombre_Lider'] ?? '')) ?: 'Sin líder') ?></td>
+                        <td>
+                            <?php
+                            $faltasConexion = [];
+                            if ($idLidEscalera <= 0) {
+                                $faltasConexion[] = 'Líder';
+                            }
+                            if ($idCelEscalera <= 0) {
+                                $faltasConexion[] = 'Célula';
+                            }
+                            $textoFaltaConexion = $faltasConexion !== [] ? implode(' y ', $faltasConexion) : '—';
+                            ?>
+                            <span class="falta-conexion"><?= htmlspecialchars($textoFaltaConexion) ?></span>
+                        </td>
                         <?php if ($mostrarEscaleraRapida): ?>
                         <td class="escalera-inline-col">
                             <?php if ($mostrarEscaleraFila): ?>
@@ -395,13 +449,38 @@ $totalPendientesBanner = (int)$totalPendientesConectarContexto;
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <?php $columnasBase = 3 + ($mostrarEscaleraRapida ? 1 : 0) + ($mostrarAcciones ? 1 : 0); ?>
-                    <td colspan="<?= (string)$columnasBase ?>" class="text-center">No hay personas con ministerio pendientes de célula o líder.</td>
+                    <?php $columnasBase = 4 + ($mostrarEscaleraRapida ? 1 : 0) + ($mostrarAcciones ? 1 : 0); ?>
+                    <td colspan="<?= (string)$columnasBase ?>" class="text-center"><?= htmlspecialchars($listaConexion['vacio']) ?></td>
                 </tr>
             <?php endif; ?>
         </tbody>
     </table>
 </div>
+</div>
+<?php endforeach; ?>
+<script>
+(function () {
+    document.querySelectorAll('.por-conectar-toggle').forEach(function (boton) {
+        var lista = document.getElementById(boton.getAttribute('aria-controls') || '');
+        if (!lista) {
+            return;
+        }
+        boton.addEventListener('click', function () {
+            var abrir = lista.hasAttribute('hidden');
+            if (abrir) {
+                lista.removeAttribute('hidden');
+                boton.classList.add('is-open');
+                boton.setAttribute('aria-expanded', 'true');
+                lista.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else {
+                lista.setAttribute('hidden', '');
+                boton.classList.remove('is-open');
+                boton.setAttribute('aria-expanded', 'false');
+            }
+        });
+    });
+})();
+</script>
 
 <?php
 $totalesEtapaVista = is_array($totalesEtapaEscalera ?? null) ? $totalesEtapaEscalera : [
@@ -491,8 +570,70 @@ $etapasEscaleraNav = [
 </section>
 
 <style>
+.por-conectar-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0 0 16px;
+    padding: 14px 18px;
+    text-align: left;
+    cursor: pointer;
+    background: #fff;
+    color: inherit;
+    font: inherit;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #2563eb;
+    border-radius: 12px;
+}
+.por-conectar-toggle-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+.por-conectar-toggle-text strong {
+    font-size: 1.05rem;
+    color: #1e3a5f;
+}
+.por-conectar-toggle-text span {
+    color: #5b6d88;
+    font-size: 13px;
+}
+.por-conectar-toggle-count {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #2563eb;
+    line-height: 1;
+}
+.por-conectar-toggle.is-open {
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+.por-conectar-toggle-seguimiento {
+    border-left-color: #0f766e;
+}
+.por-conectar-toggle-seguimiento .por-conectar-toggle-count {
+    color: #0f766e;
+}
+.por-conectar-toggle-seguimiento.is-open {
+    box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.18);
+}
+#listaPorConectar {
+    margin-bottom: 8px;
+}
 .persona-nombre-cell {
     font-weight: 700;
+}
+.falta-conexion {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #fff7ed;
+    color: #9a3412;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
 }
 
 .escalera-etapas {

@@ -60,9 +60,20 @@ $configPlantillaPadres = TallerFormulario::getConfigPlantillaTallerPadres();
 
 
 
+<?php
+$flashOk = $_SESSION['talleres_flash_ok'] ?? '';
+unset($_SESSION['talleres_flash_ok']);
+?>
+
 <?php if ($flashError !== ''): ?>
 
 <div class="alert alert-danger"><?= htmlspecialchars($flashError, ENT_QUOTES, 'UTF-8') ?></div>
+
+<?php endif; ?>
+
+<?php if ($flashOk !== ''): ?>
+
+<div class="alert alert-success"><?= htmlspecialchars($flashOk, ENT_QUOTES, 'UTF-8') ?></div>
 
 <?php endif; ?>
 
@@ -284,6 +295,8 @@ $configPlantillaPadres = TallerFormulario::getConfigPlantillaTallerPadres();
 
             <?php if (!empty($bloques)): ?>
 
+                <?php $campoGlobalIdx = 0; ?>
+
                 <?php foreach ($bloques as $bIdx => $bloque): ?>
 
                 <div class="bloque-row card" data-bloque-idx="<?= (int)$bIdx ?>" style="padding:16px;margin-bottom:14px;border:1px solid #cbd5e1;">
@@ -346,6 +359,8 @@ $configPlantillaPadres = TallerFormulario::getConfigPlantillaTallerPadres();
 
                             <?php include __DIR__ . '/_campo_editor_row.php'; ?>
 
+                            <?php $campoGlobalIdx++; ?>
+
                         <?php endforeach; ?>
 
                     </div>
@@ -394,9 +409,9 @@ $configPlantillaPadres = TallerFormulario::getConfigPlantillaTallerPadres();
 
 
 
-    <div style="margin:20px 0;display:flex;gap:10px;flex-wrap:wrap;">
+    <div class="taller-form-acciones">
 
-        <button type="submit" class="btn btn-primary">Guardar formulario</button>
+        <button type="submit" class="btn btn-primary" id="btn-guardar-formulario">Guardar formulario</button>
 
         <?php if ($id > 0): ?>
 
@@ -882,6 +897,26 @@ $configPlantillaPadres = TallerFormulario::getConfigPlantillaTallerPadres();
 
 
 
+    const formEditor = document.getElementById('form-taller-editor');
+    const btnGuardar = document.getElementById('btn-guardar-formulario');
+    if (formEditor) {
+        formEditor.addEventListener('invalid', function(event) {
+            const campo = event.target;
+            if (campo && typeof campo.scrollIntoView === 'function') {
+                campo.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
+        }, true);
+        formEditor.addEventListener('submit', function() {
+            if (!btnGuardar) {
+                return;
+            }
+            btnGuardar.textContent = 'Guardando...';
+            window.setTimeout(function() {
+                btnGuardar.disabled = true;
+            }, 0);
+        });
+    }
+
     if (btnCopiar && enlaceVista) {
 
         btnCopiar.addEventListener('click', function() {
@@ -915,6 +950,70 @@ $configPlantillaPadres = TallerFormulario::getConfigPlantillaTallerPadres();
 })();
 
 </script>
+
+<style>
+.taller-form-acciones {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    margin: 8px 0 24px;
+    padding: 12px 14px;
+    background: #fff;
+    border: 1px solid #d5e2f4;
+    border-radius: 12px;
+    box-shadow: 0 8px 20px rgba(32, 68, 126, 0.08);
+    position: sticky;
+    bottom: 16px;
+    z-index: 20;
+}
+.taller-form-acciones .btn {
+    width: auto;
+    height: auto;
+    min-height: 40px;
+    max-width: none;
+    aspect-ratio: auto;
+    flex: 0 0 auto;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    padding: 9px 16px;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-decoration: none;
+    font-size: 0.95rem;
+}
+.taller-form-acciones .btn-outline-primary,
+.taller-form-acciones .btn-outline-info,
+#form-taller-editor .btn-outline-primary,
+#form-taller-editor .btn-outline-success,
+#form-taller-editor .btn-outline-secondary,
+#form-taller-editor .btn-outline-danger {
+    background: #fff;
+    border: 1px solid #b7c9e6;
+    color: #244a86;
+}
+.taller-form-acciones .btn-outline-primary:hover,
+.taller-form-acciones .btn-outline-info:hover,
+#form-taller-editor .btn-outline-primary:hover,
+#form-taller-editor .btn-outline-success:hover,
+#form-taller-editor .btn-outline-secondary:hover {
+    background: #eef4ff;
+    color: #1d3f78;
+}
+#form-taller-editor .btn-outline-danger {
+    color: #9f2438;
+    border-color: #f0b8c2;
+}
+#form-taller-editor .btn-outline-danger:hover {
+    background: #fff1f3;
+    color: #8a1d30;
+}
+</style>
 
 
 

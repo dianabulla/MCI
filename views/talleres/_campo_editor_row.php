@@ -72,7 +72,7 @@
 
         <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer;">
 
-            <input type="checkbox" name="campo_requerido[<?= (int)$cIdx ?>]" class="campo-requerido-check" value="1" <?= !empty($campo['Requerido']) ? 'checked' : '' ?>>
+            <input type="checkbox" name="campo_requerido[<?= (int)($campoGlobalIdx ?? $cIdx) ?>]" class="campo-requerido-check" value="1" <?= !empty($campo['Requerido']) ? 'checked' : '' ?>>
 
             Obligatoria
 

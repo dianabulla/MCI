@@ -59,7 +59,6 @@ return [
     'personas/ganar' => 'PersonaController@ganar',
     'personas/universidad-vida' => 'PersonaController@universidadVida',
     'personas/notificaciones' => 'PersonaController@notificaciones',
-    'personas/escalera' => 'PersonaController@escalera',
     'personas/actualizarChecklistEscalera' => 'PersonaController@actualizarChecklistEscalera',
     'personas/notasSeguimiento' => 'PersonaController@notasSeguimiento',
     'personas/guardarNotaSeguimiento' => 'PersonaController@guardarNotaSeguimiento',

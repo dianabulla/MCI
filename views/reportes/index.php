@@ -15,6 +15,8 @@ $resumenOrigen = $resumen_origen_ganados ?? [
     'Ganados_Celula' => 0,
     'Ganados_Iglesia' => 0,
     'Ganados_Domingo' => 0,
+    'Ganados_Somos_Uno' => 0,
+    'Ganados_Otros' => 0,
     'Total' => 0
 ];
 
@@ -748,7 +750,20 @@ include VIEWS . '/reportes/partials/tabla_operativa_celulas.php';
     <button type="button" class="report-kpi-card report-kpi-button kpi-domingo js-kpi-detalle" data-origen="iglesia">
         <div class="report-kpi-icon">✅</div>
         <div class="report-kpi-label">Ganados en iglesia</div>
-        <div class="report-kpi-value"><?= (int)($resumenOrigen['Ganados_Iglesia'] ?? ($resumenOrigen['Ganados_Domingo'] ?? 0)) ?></div>
+        <div class="report-kpi-value"><?= (int)($resumenOrigen['Ganados_Domingo'] ?? ($resumenOrigen['Ganados_Iglesia'] ?? 0)) ?></div>
+        <small style="color:#637087;">Domingo o Iglesia</small>
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button kpi-somos js-kpi-detalle" data-origen="somos_uno">
+        <div class="report-kpi-icon">🤝</div>
+        <div class="report-kpi-label">Somos Uno</div>
+        <div class="report-kpi-value"><?= (int)($resumenOrigen['Ganados_Somos_Uno'] ?? 0) ?></div>
+        <small style="color:#637087;">Origen Somos Uno</small>
+    </button>
+    <button type="button" class="report-kpi-card report-kpi-button kpi-otros js-kpi-detalle" data-origen="otros">
+        <div class="report-kpi-icon">•</div>
+        <div class="report-kpi-label">Otros</div>
+        <div class="report-kpi-value"><?= (int)($resumenOrigen['Ganados_Otros'] ?? 0) ?></div>
+        <small style="color:#637087;">Origen Otros y los demás de ese grupo</small>
     </button>
     <button type="button" class="report-kpi-card report-kpi-button kpi-asistencia js-kpi-detalle" data-origen="asignados">
         <div class="report-kpi-icon">📌</div>
@@ -2681,11 +2696,13 @@ if (tipoReporte === 'personas') {
                     name: 'Personas',
                     data: [
                         parseInt(resumenOrigen.Ganados_Celula || 0, 10),
-                        parseInt((resumenOrigen.Ganados_Iglesia ?? resumenOrigen.Ganados_Domingo) || 0, 10),
+                        parseInt((resumenOrigen.Ganados_Domingo ?? resumenOrigen.Ganados_Iglesia) || 0, 10),
+                        parseInt(resumenOrigen.Ganados_Somos_Uno || 0, 10),
+                        parseInt(resumenOrigen.Ganados_Otros || 0, 10),
                         parseInt(resumenOrigen.Asignados || 0, 10)
                     ]
                 }],
-                xaxis: { categories: ['Ganados en célula', 'Ganados en iglesia', 'Asignados'] },
+                xaxis: { categories: ['Ganados en célula', 'Ganados en iglesia', 'Somos Uno', 'Otros', 'Asignados'] },
                 dataLabels: { enabled: true },
                 colors: ['#3b82f6'],
                 yaxis: {
@@ -2722,6 +2739,8 @@ if (tipoReporte === 'personas') {
         celula: 'Ganados en célula',
         iglesia: 'Ganados en iglesia',
         domingo: 'Ganados en iglesia',
+        somos_uno: 'Somos Uno',
+        otros: 'Otros',
         asignados: 'Asignados',
         todos: 'Todos los orígenes',
         hombres_anio: 'Ganados en el año (Hombres)',
@@ -2878,6 +2897,8 @@ if (tipoReporte === 'personas') {
             const combinadas = [
                 ...(Array.isArray(detalleOrigenGanados.celula) ? detalleOrigenGanados.celula : []),
                 ...(Array.isArray(detalleOrigenGanados.iglesia) ? detalleOrigenGanados.iglesia : []),
+                ...(Array.isArray(detalleOrigenGanados.somos_uno) ? detalleOrigenGanados.somos_uno : []),
+                ...(Array.isArray(detalleOrigenGanados.otros) ? detalleOrigenGanados.otros : []),
                 ...(Array.isArray(detalleOrigenGanados.asignados) ? detalleOrigenGanados.asignados : [])
             ];
 
@@ -4312,6 +4333,8 @@ html.show-report-tables #reportesVisualContainer .ganar-extra-section {
 
 .kpi-celula { border-top: 4px solid #4a9ee8; }
 .kpi-domingo { border-top: 4px solid #e6a93e; }
+.kpi-somos { border-top: 4px solid #0f766e; }
+.kpi-otros { border-top: 4px solid #64748b; }
 .kpi-escalera { border-top: 4px solid #4cbf6e; }
 .kpi-asistencia { border-top: 4px solid #7f88e6; }
 

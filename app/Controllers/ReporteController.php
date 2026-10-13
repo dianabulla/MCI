@@ -2525,6 +2525,43 @@ class ReporteController extends BaseController {
         return $diffDiasApertura > 0 ? (int)floor($diffDiasApertura / 7) : 0;
     }
 
+    /**
+     * Último lunes en el que la célula sí marcó el sobre.
+     * Las semanas anteriores a esa marca dejan de contarse, igual que un reporte
+     * de célula corta la racha de semanas sin reportar.
+     */
+    private function ultimaSemanaSobreEntregado(int $idCelula, array $entregasSobre): string {
+        if ($idCelula <= 0 || empty($entregasSobre[$idCelula]) || !is_array($entregasSobre[$idCelula])) {
+            return '';
+        }
+
+        $ultima = '';
+        foreach ($entregasSobre[$idCelula] as $semana => $entrego) {
+            if (empty($entrego)) {
+                continue;
+            }
+            $semanaNorm = $this->normalizarSemanaLunes((string)$semana);
+            if ($semanaNorm !== '' && ($ultima === '' || strcmp($semanaNorm, $ultima) > 0)) {
+                $ultima = $semanaNorm;
+            }
+        }
+
+        return $ultima;
+    }
+
+    private function semanaCuentaComoSobrePendiente(
+        string $semanaNorm,
+        int $idCelula,
+        array $entregasSobre,
+        string $ultimaEntrega
+    ): bool {
+        if ($semanaNorm === '' || !empty($entregasSobre[$idCelula][$semanaNorm])) {
+            return false;
+        }
+
+        return $ultimaEntrega === '' || strcmp($semanaNorm, $ultimaEntrega) > 0;
+    }
+
     private function contarSobresPendientesCelulaAnio(
         int $idCelula,
         array $semanasReportadas,
@@ -2534,10 +2571,11 @@ class ReporteController extends BaseController {
             return 0;
         }
 
+        $ultimaEntrega = $this->ultimaSemanaSobreEntregado($idCelula, $entregasSobre);
         $pendientes = 0;
         foreach (array_keys($semanasReportadas[$idCelula]) as $semana) {
             $semanaNorm = $this->normalizarSemanaLunes($semana);
-            if ($semanaNorm === '' || !empty($entregasSobre[$idCelula][$semanaNorm])) {
+            if (!$this->semanaCuentaComoSobrePendiente($semanaNorm, $idCelula, $entregasSobre, $ultimaEntrega)) {
                 continue;
             }
             $pendientes++;
@@ -2597,7 +2635,8 @@ class ReporteController extends BaseController {
                 }
 
                 if ($valoresBooleanos) {
-                    $normalizado[$idCelula][$semanaNorm] = !empty($valor);
+                    $yaEntrego = !empty($normalizado[$idCelula][$semanaNorm]);
+                    $normalizado[$idCelula][$semanaNorm] = $yaEntrego || !empty($valor);
                     continue;
                 }
 
@@ -2820,10 +2859,11 @@ class ReporteController extends BaseController {
             return [];
         }
 
+        $ultimaEntrega = $this->ultimaSemanaSobreEntregado($idCelula, $entregasSobre);
         $semanas = [];
         foreach (array_keys($semanasReportadas[$idCelula]) as $semana) {
             $semanaNorm = $this->normalizarSemanaLunes($semana);
-            if ($semanaNorm === '' || !empty($entregasSobre[$idCelula][$semanaNorm])) {
+            if (!$this->semanaCuentaComoSobrePendiente($semanaNorm, $idCelula, $entregasSobre, $ultimaEntrega)) {
                 continue;
             }
             $semanas[] = [
@@ -2915,7 +2955,7 @@ class ReporteController extends BaseController {
                 'periodo' => $periodo,
                 'periodo_corto' => $periodoCorto,
                 'mes' => $mesEtiqueta,
-                'situacion' => 'Reportó asistencia, pero no marcó «Sobre entregado» en Asistencias.',
+                'situacion' => 'Reportó asistencia y no marcó «Sobre entregado» después de la última entrega registrada.',
                 'icono' => 'sobre',
             ];
         }
@@ -4138,7 +4178,9 @@ class ReporteController extends BaseController {
         $resumenOrigenGanados = $this->personaModel->getResumenGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, $filtroMinisterio, $filtroLider);
         $detalleOrigenGanados = [
             'celula' => $this->personaModel->getDetalleGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, 'celula', $filtroMinisterio, $filtroLider),
-            'iglesia' => $this->personaModel->getDetalleGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, 'iglesia', $filtroMinisterio, $filtroLider),
+            'iglesia' => $this->personaModel->getDetalleGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, 'domingo', $filtroMinisterio, $filtroLider),
+            'somos_uno' => $this->personaModel->getDetalleGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, 'somos_uno', $filtroMinisterio, $filtroLider),
+            'otros' => $this->personaModel->getDetalleGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, 'otros', $filtroMinisterio, $filtroLider),
             'asignados' => $this->personaModel->getDetalleGanadosOrigenWithRole($fechaInicioGanar, $fechaFinGanar, $filtroRol, 'asignados', $filtroMinisterio, $filtroLider),
             'hombres_anio' => $this->personaModel->getDetalleGanadosGeneroWithRole($fechaInicioAnioGanar, $fechaFinAnioGanar, $filtroRol, 'hombres', $filtroMinisterio, $filtroLider),
             'mujeres_anio' => $this->personaModel->getDetalleGanadosGeneroWithRole($fechaInicioAnioGanar, $fechaFinAnioGanar, $filtroRol, 'mujeres', $filtroMinisterio, $filtroLider),
@@ -4717,7 +4759,9 @@ class ReporteController extends BaseController {
             $rows[] = ['', '', '', '', '', '', ''];
             $rows[] = ['Ganados por Origen', '', '', '', '', '', ''];
             $rows[] = ['Ganados en Celula', (string)($resumenOrigenGanados['Ganados_Celula'] ?? 0), '', '', '', '', ''];
-            $rows[] = ['Ganados en Iglesia', (string)($resumenOrigenGanados['Ganados_Iglesia'] ?? ($resumenOrigenGanados['Ganados_Domingo'] ?? 0)), '', '', '', '', ''];
+            $rows[] = ['Ganados en Iglesia', (string)($resumenOrigenGanados['Ganados_Domingo'] ?? ($resumenOrigenGanados['Ganados_Iglesia'] ?? 0)), '', '', '', '', ''];
+            $rows[] = ['Somos Uno', (string)($resumenOrigenGanados['Ganados_Somos_Uno'] ?? 0), '', '', '', '', ''];
+            $rows[] = ['Otros', (string)($resumenOrigenGanados['Ganados_Otros'] ?? 0), '', '', '', '', ''];
             $rows[] = ['Total', (string)($resumenOrigenGanados['Total'] ?? 0), '', '', '', '', ''];
 
             $rows[] = ['', '', '', '', '', '', ''];

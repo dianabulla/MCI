@@ -10,7 +10,7 @@ $resumenCategorias = [
     [
         'id' => 'conectar',
         'titulo' => 'Pendientes por conectar',
-        'descripcion' => 'Personas por ubicar en el padrón o inscripciones de Universidad de la Vida.',
+        'descripcion' => 'Tienen ministerio y les falta líder o célula.',
         'total' => count($pendientesConectar),
         'icono' => 'bi-people-fill',
         'color' => '#1877f2',
@@ -20,7 +20,7 @@ $resumenCategorias = [
     [
         'id' => 'nuevas',
         'titulo' => 'Nuevas en Almas ganadas',
-        'descripcion' => 'Personas nuevas aún sin ubicar (falta ministerio o líder) y todavía en Ganar.',
+        'descripcion' => 'Les falta líder o ministerio. Seguimiento y reasignados no entran.',
         'total' => count($nuevasAlmasGanadas),
         'icono' => 'bi-person-plus-fill',
         'color' => '#00a884',

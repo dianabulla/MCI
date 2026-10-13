@@ -1,56 +1,74 @@
 # Escalera del éxito y Almas ganadas
 
-Registro del cambio del 9 de octubre de 2026.
+Registro al 13 de octubre de 2026.
 
 ## Entrada del módulo
 
-El menú y la tarjeta del inicio se llaman **Escalera del éxito** y abren `personas`.
+El menú y la tarjeta del inicio se llaman **Escalera del éxito** y abren `personas`. La pantalla antigua `personas/escalera` ya no existe.
 
 Quien solo tiene permiso de Almas ganadas entra directo a `personas/ganar`.
 
 ## Escalera del éxito (`personas`)
 
-Arriba, **Por conectar a célula o líder**: personas con ministerio que les falta célula o líder.
+**Por conectar a célula o líder.** Personas con ministerio a las que les falta la célula, el líder, o los dos. La lista se abre al pulsar la tarjeta. La columna **Falta** dice qué les falta. Quien ya tiene líder sigue aquí si no tiene célula.
 
-Abajo, **Etapas de la escalera**: personas activas que no son de liderazgo, con filtro por etapa (Ganar, Consolidar, Discipular, Enviar o sin etapa).
+**En seguimiento.** Salen de Por conectar cuando se les guarda una nota de seguimiento. También entran quienes vienen de Almas ganadas y solo asisten a la iglesia (aún sin ministerio). Cuando ya tienen líder y célula, salen de esta lista.
 
-Quien no tiene ministerio no aparece aquí. Sigue en Almas ganadas.
+**Etapas de la escalera.** Personas activas que no son de liderazgo, con filtro por etapa (Ganar, Consolidar, Discipular, Enviar o sin etapa). Esta lista no cambia al marcar seguimiento.
+
+Quien no tiene ministerio y no está en seguimiento sigue en Almas ganadas.
 
 ## Almas ganadas (`personas/ganar`)
 
 Solo personas nuevas. Quedan fuera Escuelas de Formación y el Tour Levántate y Resplandece, también en la búsqueda.
 
-Si la semana se deja vacía, se ven todas las que siguen pendientes. Elegir una fecha limita a esa semana (lunes a domingo). El historial muestra el año elegido, incluidas las que ya están ubicadas.
+Si la semana se deja vacía, se ven todas las pendientes, de cualquier fecha. Elegir una fecha limita a esa semana (lunes a domingo). El botón Historial ya no está: la lista de trabajo es la de pendientes, no el archivo del año.
 
-El número de cada tarjeta y las filas de la tabla usan la misma clasificación:
+El origen (Célula, Domingo, Somos Uno u Otros) queda guardado en la ficha y se ve en el reporte. En esta pantalla la lista general es **Nuevos**. Las otras tarjetas filtran aparte y no se mezclan con Nuevos:
 
-| Tarjeta | Quién entra |
-| --- | --- |
-| Ganados en célula | Origen Célula |
-| Ganados en iglesia | Origen Domingo o Iglesia |
-| Somos Uno | Origen Somos Uno |
-| Otros | Origen Otros |
-| Asignados | Sin origen de ganancia, con líder o ministerio |
-| Reasignados | Cambio de líder, o pasaron 48 horas sin contacto o sin célula |
-| No se dispone | Marcados como no concretados |
-| En seguimiento | Personas nuevas de esta misma pantalla marcadas en seguimiento |
+| Tarjeta | Quién entra | Sale de Nuevos |
+| --- | --- | --- |
+| Nuevos | Les falta líder o ministerio | — |
+| Asignados | Sin origen de ganancia, con líder o ministerio | Siguen en Nuevos si aún les falta el líder o el ministerio |
+| Reasignados | Cambio de líder, o pasaron 4 días sin contacto o sin célula | Sí |
+| No se dispone | Marcados como no concretados | Sí |
 
-Un enlace antiguo `origen=iglesia` abre Ganados en iglesia.
+Una persona sale de **Nuevos** cuando ya tiene líder y ministerio, o cuando pasa a En seguimiento, Reasignados o No se dispone. La célula no la retiene en Nuevos: si ya tiene líder y ministerio y le falta célula, sigue en Discípulos, en Por conectar.
 
-## Regla de 48 horas
+## Célula, líder y ministerio
+
+Si la persona está en una célula y el líder o el ministerio están vacíos, se llenan con el líder de esa célula y el ministerio de ese líder (o el ministerio guardado en la célula). No se reemplaza un líder o ministerio que ya esté elegido, ni se asigna a la persona como su propio líder.
+
+Al guardar una ficha nueva o editada con célula, ocurre lo mismo.
+
+## Regla de 4 días
 
 El plazo empieza cuando la persona tiene líder y ministerio (`Fecha_Asignacion_Lider`).
 
-Si en 48 horas no hubo primer contacto o no quedó en una célula, vuelve a **Reasignados**: se le quita el líder y el ministerio para asignarle otro. La marca queda en el checklist como `reasignado_automatico`.
+Si en 4 días no quedó en una célula, vuelve a **Reasignados**: se le quita el líder y el ministerio para asignarle otro. La marca queda en el checklist como `reasignado_automatico`.
 
-No se mueve a quien está en «No se dispone», ni a quien ya fue contactado y ya tiene célula. Quien nunca tuvo fecha de asignación no entra en esta regla.
+No se mueve a quien está en «No se dispone», a quien está en seguimiento, ni a quien ya tiene célula. Quien nunca tuvo fecha de asignación no entra en esta regla.
 
-La revisión corre al abrir Almas ganadas. La primera visita puede mover asignaciones que ya superaron las 48 horas.
+La revisión corre al abrir Almas ganadas.
 
 ## Aviso de personas nuevas
 
-La campana cuenta la misma población pendiente de Almas ganadas: persona nueva, sin escuela ni tour, sin «No se dispone», y con ministerio, líder o célula faltante.
+La campana de **Almas ganadas** cuenta personas nuevas, sin escuela ni tour, a las que les falta líder o ministerio. No entran seguimiento, reasignados ni «No se dispone».
+
+La campana de **Discípulos** cuenta personas que ya tienen ministerio y les falta líder o célula. En seguimiento no entra en ese aviso.
+
+Quien tiene ministerio y todavía no tiene líder puede verse en las dos listas: sigue en Nuevos hasta tener líder y ministerio, y en Discípulos porque le falta el líder.
 
 ## Informe aparte
 
-El botón **Reporte almas ganadas** abre el informe de personas. Ahí «Ganados en iglesia» todavía suma Domingo, Somos Uno y Otros. Esa cifra puede ser mayor que la tarjeta Domingo de esta pantalla.
+El botón **Reporte almas ganadas** abre el informe de personas. Ahí el origen sigue separado:
+
+- **Ganados en iglesia** cuenta solo Domingo o Iglesia.
+- **Somos Uno** cuenta ese origen.
+- **Otros** cuenta el origen Otros y lo que antes entraba en iglesia sin ser Domingo ni Somos Uno.
+
+La cifra del informe puede seguir siendo mayor que la tarjeta de Almas ganadas: el informe cuenta las personas nuevas registradas en el rango, y la tarjeta cuenta las que siguen pendientes. El informe ministerial sigue agrupando Domingo, Somos Uno y Otros como ganados en iglesia.
+
+## Formularios de talleres
+
+Guardar el editor de un formulario exige permiso de crear o de editar. El guardado avisa si quedó bien o si falló, y los bloques se reemplazan en una sola transacción para no perder el formulario a medias.

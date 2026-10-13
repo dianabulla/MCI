@@ -348,7 +348,7 @@ return [
 
     'talleres/crear' => 'talleres:crear',
 
-    'talleres/guardar' => ['modulo' => 'talleres', 'inferir_accion' => true],
+    'talleres/guardar' => ['any' => ['talleres:crear', 'talleres:editar']],
 
     'talleres/editar' => 'talleres:editar',
 

@@ -46,7 +46,7 @@ $paginaNotificacionesActiva = ($currentUrl ?? '') === 'personas/notificaciones';
                     </span>
                     <span class="fb-notif-item-body">
                         <span class="fb-notif-item-title">Almas ganadas</span>
-                        <span class="fb-notif-item-desc">Nuevas aún sin ubicar (ministerio y líder) o sin avanzar de Ganar</span>
+                        <span class="fb-notif-item-desc">Les falta líder o ministerio. Seguimiento y reasignados no entran</span>
                     </span>
                     <?php if ($totalNotifAlmas > 0): ?>
                         <span class="fb-notif-item-count"><?= $totalNotifAlmas > 99 ? '99+' : $totalNotifAlmas ?></span>
@@ -60,7 +60,7 @@ $paginaNotificacionesActiva = ($currentUrl ?? '') === 'personas/notificaciones';
                     </span>
                     <span class="fb-notif-item-body">
                         <span class="fb-notif-item-title">Discípulos</span>
-                        <span class="fb-notif-item-desc">Pendientes por conectar: ministerio, líder o célula</span>
+                        <span class="fb-notif-item-desc">Tienen ministerio y les falta líder o célula. En seguimiento no entra aquí.</span>
                     </span>
                     <?php if ($totalNotifDiscipulos > 0): ?>
                         <span class="fb-notif-item-count"><?= $totalNotifDiscipulos > 99 ? '99+' : $totalNotifDiscipulos ?></span>

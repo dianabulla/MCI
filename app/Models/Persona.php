@@ -127,6 +127,43 @@ class Persona extends BaseModel {
     }
 
     /**
+     * Marca de origen: Ganado en si tiene valor; si no, Origen_Ganar.
+     */
+    private function sqlMarcaOrigenGanar(string $alias = 'p'): string {
+        $tipo = $this->sqlTipoReunionNormalizado($alias);
+        if (!$this->tieneColumna('Origen_Ganar')) {
+            return $tipo;
+        }
+        $origen = "REPLACE(REPLACE(LOWER(TRIM(COALESCE({$alias}.Origen_Ganar, ''))), 'é', 'e'), 'í', 'i')";
+        return "(CASE WHEN {$tipo} <> '' THEN {$tipo} ELSE {$origen} END)";
+    }
+
+    /** Origen Somos Uno. No incluye célula. */
+    private function sqlEsGanadoSomosUno(string $alias = 'p'): string {
+        $marca = $this->sqlMarcaOrigenGanar($alias);
+        $celula = $this->sqlEsGanadoEnCelula($alias);
+        return "(NOT {$celula} AND ({$marca} LIKE '%somos uno%' OR {$marca} LIKE '%somosuno%'))";
+    }
+
+    /** Origen Domingo o Iglesia. No incluye Somos Uno, Otros ni célula. */
+    private function sqlEsGanadoDomingo(string $alias = 'p'): string {
+        $marca = $this->sqlMarcaOrigenGanar($alias);
+        $celula = $this->sqlEsGanadoEnCelula($alias);
+        $somos = $this->sqlEsGanadoSomosUno($alias);
+        return "(NOT {$celula} AND NOT {$somos} AND {$marca} NOT LIKE '%otro%' AND ({$marca} LIKE '%domingo%' OR {$marca} LIKE '%iglesia%'))";
+    }
+
+    /**
+     * Resto del grupo antiguo «iglesia»: Otros y orígenes que no son Domingo ni Somos Uno.
+     */
+    private function sqlEsGanadoOtrosOrigen(string $alias = 'p'): string {
+        $iglesia = $this->sqlEsGanadoEnIglesia($alias);
+        $domingo = $this->sqlEsGanadoDomingo($alias);
+        $somos = $this->sqlEsGanadoSomosUno($alias);
+        return "({$iglesia} AND NOT {$domingo} AND NOT {$somos})";
+    }
+
+    /**
      * Asignados: sin invitador, con ministerio y/o líder asignado, no origen célula ni migrados.
      */
     private function sqlEsAsignadoGanar(string $alias = 'p'): string {
@@ -816,70 +853,7 @@ class Persona extends BaseModel {
     }
 
     /**
-     * NUEVO: obtener personas para la vista de escalera
-     */
-    public function getPersonasEscalera($filtroRol = '', $etapaFiltro = '') {
-        $where = ["(p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)"];
-
-        if (trim((string)$filtroRol) !== '') {
-            $where[] = '(' . $filtroRol . ')';
-        }
-
-        $etapaFiltro = trim((string)$etapaFiltro);
-        if ($etapaFiltro === 'sin_etapa') {
-            $where[] = "(p.Proceso IS NULL OR TRIM(p.Proceso) = '')";
-        } elseif (in_array($etapaFiltro, ['Ganar', 'Consolidar', 'Discipular', 'Enviar'], true)) {
-            $where[] = "p.Proceso = " . $this->db->quote($etapaFiltro);
-        }
-
-        $sql = "SELECT
-                    p.Id_Persona,
-                    p.Nombre,
-                    p.Apellido,
-                    p.Proceso,
-                    p.Escalera_Checklist,
-                    CONCAT(COALESCE(lid.Nombre, ''), ' ', COALESCE(lid.Apellido, '')) AS Nombre_Lider
-                FROM persona p
-                LEFT JOIN persona lid ON p.Id_Lider = lid.Id_Persona
-                WHERE " . implode(' AND ', $where) . "
-                ORDER BY p.Nombre ASC, p.Apellido ASC";
-
-        return $this->query($sql);
-    }
-
-    /**
-     * NUEVO: totales de personas por etapa para la escalera
-     */
-    public function getTotalesEscalera($filtroRol = '') {
-        $where = ["(p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)"];
-
-        if (trim((string)$filtroRol) !== '') {
-            $where[] = '(' . $filtroRol . ')';
-        }
-
-        $sql = "SELECT
-                    SUM(CASE WHEN p.Proceso = 'Ganar' THEN 1 ELSE 0 END) AS Ganar,
-                    SUM(CASE WHEN p.Proceso = 'Consolidar' THEN 1 ELSE 0 END) AS Consolidar,
-                    SUM(CASE WHEN p.Proceso = 'Discipular' THEN 1 ELSE 0 END) AS Discipular,
-                    SUM(CASE WHEN p.Proceso = 'Enviar' THEN 1 ELSE 0 END) AS Enviar,
-                    SUM(CASE WHEN p.Proceso IS NULL OR TRIM(p.Proceso) = '' THEN 1 ELSE 0 END) AS sin_etapa
-                FROM persona p
-                WHERE " . implode(' AND ', $where);
-
-        $rows = $this->query($sql);
-        $row = $rows[0] ?? [];
-
-        return [
-            'Ganar' => (int)($row['Ganar'] ?? 0),
-            'Consolidar' => (int)($row['Consolidar'] ?? 0),
-            'Discipular' => (int)($row['Discipular'] ?? 0),
-            'Enviar' => (int)($row['Enviar'] ?? 0),
-            'sin_etapa' => (int)($row['sin_etapa'] ?? 0),
-        ];
-    }
-
-    /**
-     * NUEVO: reporte mensual de escalera del Ã©xito por peldaÃ±o
+     * Reporte mensual de escalera del éxito por peldaño.
      */
     public function getReporteEscaleraMesActual($filtroRol = '', $fechaInicio = null, $fechaFin = null, $idMinisterio = '', $idLider = '', $idCelula = '') {
         $inicioMes = is_string($fechaInicio) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaInicio)
@@ -1095,7 +1069,7 @@ class Persona extends BaseModel {
      * Personas nuevas con líder y ministerio, cuya asignación superó el plazo
      * sin primer contacto o sin célula.
      */
-    public function getCandidatosReasignacionPrimerContacto($horasLimite = 48) {
+    public function getCandidatosReasignacionPrimerContacto($horasLimite = 96) {
         $horasLimite = max(1, (int)$horasLimite);
 
         // Regla de seguridad: sin Fecha_Asignacion_Lider no se ejecuta
@@ -2361,9 +2335,8 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Alma ganada que aún debe aparecer en la campana: persona nueva,
-     * sin ubicar (falta ministerio o líder) y todavía en peldaño Ganar.
-     * Si ya tiene ministerio+líder, célula, o avanzó de proceso, no cuenta.
+     * Campana de Almas ganadas: persona nueva a la que le falta líder o ministerio.
+     * Con líder y ministerio sale de Nuevos. Seguimiento, reasignados y No se dispone no entran.
      */
     public function esAlmaGanadaPendienteUbicacion(array $persona): bool {
         if ((int)($persona['Es_Antiguo'] ?? 1) === 1) {
@@ -2379,23 +2352,32 @@ class Persona extends BaseModel {
             return false;
         }
 
+        $checklist = [];
         $checklistRaw = (string)($persona['Escalera_Checklist'] ?? '');
         if ($checklistRaw !== '') {
-            $checklist = json_decode($checklistRaw, true);
-            if (is_array($checklist) && !empty($checklist['Ganar'][5])) {
-                return false;
+            $decoded = json_decode($checklistRaw, true);
+            if (is_array($decoded)) {
+                $checklist = $decoded;
             }
+        }
+        if (!empty($checklist['Ganar'][5])) {
+            return false;
+        }
+        if (self::checklistIndicaEnSeguimiento($checklist !== [] ? $checklist : $checklistRaw)) {
+            return false;
+        }
+        $meta = is_array($checklist['_meta'] ?? null) ? $checklist['_meta'] : [];
+        if (!empty($meta['reasignado_manual']) || !empty($meta['reasignado_automatico'])) {
+            return false;
         }
 
         $idMinisterio = (int)($persona['Id_Ministerio'] ?? 0);
         $idLider = (int)($persona['Id_Lider'] ?? 0);
-        $idCelula = (int)($persona['Id_Celula'] ?? 0);
-        if ($idMinisterio > 0 && $idLider > 0 && $idCelula > 0) {
+        if ($idMinisterio > 0 && $idLider > 0) {
             return false;
         }
 
-        $idPersona = (int)($persona['Id_Persona'] ?? 0);
-        return $idPersona > 0;
+        return (int)($persona['Id_Persona'] ?? 0) > 0;
     }
 
     public function contarNuevasAlmasGanadasWithRole($filtroRol) {
@@ -2896,12 +2878,16 @@ class Persona extends BaseModel {
         $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
 
         $esCelulaExpr = $this->sqlEsGanadoEnCelula('p');
-        $esIglesiaExpr = $this->sqlEsGanadoEnIglesia('p');
+        $esDomingoExpr = $this->sqlEsGanadoDomingo('p');
+        $esSomosUnoExpr = $this->sqlEsGanadoSomosUno('p');
+        $esOtrosExpr = $this->sqlEsGanadoOtrosOrigen('p');
         $esAsignadoExpr = $this->sqlEsAsignadoGanar('p');
 
         $sql = "SELECT
                     SUM(CASE WHEN {$esCelulaExpr} THEN 1 ELSE 0 END) AS Ganados_Celula,
-                    SUM(CASE WHEN {$esIglesiaExpr} THEN 1 ELSE 0 END) AS Ganados_Iglesia,
+                    SUM(CASE WHEN {$esDomingoExpr} THEN 1 ELSE 0 END) AS Ganados_Domingo,
+                    SUM(CASE WHEN {$esSomosUnoExpr} THEN 1 ELSE 0 END) AS Ganados_Somos_Uno,
+                    SUM(CASE WHEN {$esOtrosExpr} THEN 1 ELSE 0 END) AS Ganados_Otros,
                     SUM(CASE WHEN {$esAsignadoExpr} THEN 1 ELSE 0 END) AS Asignados,
                     COUNT(*) AS Total
                 FROM persona p
@@ -2923,10 +2909,14 @@ class Persona extends BaseModel {
         $rows = $this->query($sql, $params);
         $row = $rows[0] ?? [];
 
+        $domingo = (int)($row['Ganados_Domingo'] ?? 0);
+
         return [
             'Ganados_Celula' => (int)($row['Ganados_Celula'] ?? 0),
-            'Ganados_Iglesia' => (int)($row['Ganados_Iglesia'] ?? 0),
-            'Ganados_Domingo' => (int)($row['Ganados_Iglesia'] ?? 0),
+            'Ganados_Domingo' => $domingo,
+            'Ganados_Iglesia' => $domingo,
+            'Ganados_Somos_Uno' => (int)($row['Ganados_Somos_Uno'] ?? 0),
+            'Ganados_Otros' => (int)($row['Ganados_Otros'] ?? 0),
             'Asignados' => (int)($row['Asignados'] ?? 0),
             'Total' => (int)($row['Total'] ?? 0)
         ];
@@ -3089,7 +3079,9 @@ class Persona extends BaseModel {
         $filtroNuevas = $this->tieneColumna('Es_Antiguo') ? " AND p.Es_Antiguo = 0" : '';
 
         $esCelulaExpr = $this->sqlEsGanadoEnCelula('p');
-        $esIglesiaExpr = $this->sqlEsGanadoEnIglesia('p');
+        $esDomingoExpr = $this->sqlEsGanadoDomingo('p');
+        $esSomosUnoExpr = $this->sqlEsGanadoSomosUno('p');
+        $esOtrosExpr = $this->sqlEsGanadoOtrosOrigen('p');
         $esAsignadoExpr = $this->sqlEsAsignadoGanar('p');
 
         $sql = "SELECT
@@ -3123,7 +3115,11 @@ class Persona extends BaseModel {
         if ($origen === 'celula') {
             $sql .= " AND {$esCelulaExpr}";
         } elseif ($origen === 'iglesia' || $origen === 'domingo') {
-            $sql .= " AND {$esIglesiaExpr}";
+            $sql .= " AND {$esDomingoExpr}";
+        } elseif ($origen === 'somos_uno') {
+            $sql .= " AND {$esSomosUnoExpr}";
+        } elseif ($origen === 'otros') {
+            $sql .= " AND {$esOtrosExpr}";
         } elseif ($origen === 'asignados') {
             $sql .= " AND {$esAsignadoExpr}";
         } else {

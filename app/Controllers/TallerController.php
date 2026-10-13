@@ -532,29 +532,43 @@ class TallerController extends BaseController {
 
 
 
-        if ($esEdicion) {
+        try {
 
-            $this->model->update($id, $data);
+            if ($esEdicion) {
 
-        } else {
+                $this->model->update($id, $data);
 
-            $idPersona = (int)($_SESSION['id_persona'] ?? 0);
+            } else {
 
-            if ($idPersona > 0) {
+                $idPersona = (int)($_SESSION['id_persona'] ?? 0);
 
-                $data['Creado_Por'] = $idPersona;
+                if ($idPersona > 0) {
+
+                    $data['Creado_Por'] = $idPersona;
+
+                }
+
+                $id = (int)$this->model->create($data);
 
             }
 
-            $id = (int)$this->model->create($data);
+
+
+            $bloquesPost = $this->parsearBloquesDesdePost($_POST);
+
+            $this->model->reemplazarBloquesYCampos($id, $bloquesPost);
+
+        } catch (Throwable $e) {
+
+            error_log('No se pudo guardar el formulario de taller: ' . $e->getMessage());
+
+            $_SESSION['talleres_flash_error'] = 'No se pudo guardar el formulario. Revise los bloques e intente de nuevo.';
+
+            header('Location: ' . PUBLIC_URL . '?url=talleres/' . ($esEdicion && $id > 0 ? 'editar&id=' . $id : 'crear'));
+
+            exit;
 
         }
-
-
-
-        $bloquesPost = $this->parsearBloquesDesdePost($_POST);
-
-        $this->model->reemplazarBloquesYCampos($id, $bloquesPost);
 
         $_SESSION['talleres_flash_ok'] = 'Formulario guardado correctamente.';
 

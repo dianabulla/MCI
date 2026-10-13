@@ -731,6 +731,8 @@ class TallerFormulario extends BaseModel {
             return;
         }
 
+        $this->db->beginTransaction();
+        try {
         $this->execute('DELETE FROM talleres_formulario_campo WHERE Id_Formulario = ?', [$idFormulario]);
         $this->execute('DELETE FROM talleres_formulario_bloque WHERE Id_Formulario = ?', [$idFormulario]);
 
@@ -766,6 +768,13 @@ class TallerFormulario extends BaseModel {
             'Tipo' => 'autorizacion',
             'Orden' => $ordenBloque,
         ]);
+        }
+            $this->db->commit();
+        } catch (Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $e;
         }
     }
 
