@@ -660,7 +660,8 @@
                 'teens' => 'Teens',
             ];
             ?>
-            <p class="help">Paso 1: busca por cédula. Si la persona ya existe, se cargarán todos sus datos y solo podrás editar los campos faltantes. Si no existe, se habilitan los datos para crearla y quedará inscrita automáticamente en <?= $programaBaseSeleccionado === 'capacitacion_destino' ? 'Capacitación Destino' : 'Universidad de la Vida' ?>.</p>
+            <p class="help">Paso 1: busca por cédula. Si la persona ya existe, se cargarán sus datos. Si no existe, se abre el formulario de personas para crearla y, al guardar, se vuelve a este registro.</p>
+            <p class="help" id="aviso-crear-persona" style="display:none;">Esta persona no está en el registro. <a id="enlace-crear-persona" href="#">Crearla en el formulario de personas</a> y luego vuelve a buscarla por cédula.</p>
 
             <form method="POST" action="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/guardar" id="form-escuelas" autocomplete="off" enctype="multipart/form-data">
                 <?php if ($ocultarSelectorPrograma): ?>
@@ -1007,6 +1008,48 @@
     const endpointLideres = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/registro-publico/buscar-lideres') ?>;
     const endpointValidarAbono = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/registro-publico/validar-abono') ?>;
     const endpointSubirDocumentos = <?= json_encode(function_exists('public_app_url') ? public_app_url('escuelas_formacion/registro-publico/subir-documentos') : (PUBLIC_URL . 'index.php?url=escuelas_formacion/registro-publico/subir-documentos')) ?>;
+    const urlPublicaEscuela = <?= json_encode(PUBLIC_URL) ?>;
+    const rutaRetornoEscuela = <?= json_encode((($programa_actual ?? '') === 'capacitacion_destino') ? 'escuelas_formacion/registro-publico/capacitacion-destino' : 'escuelas_formacion/registro-publico/universidad-vida') ?>;
+
+    function valorCampoEscuela(id) {
+        const el = document.getElementById(id);
+        return el ? String(el.value || '').trim() : '';
+    }
+
+    function actualizarEnlaceCrearPersona(visible) {
+        const aviso = document.getElementById('aviso-crear-persona');
+        const enlace = document.getElementById('enlace-crear-persona');
+        if (!aviso || !enlace) return;
+        if (!visible) {
+            aviso.style.display = 'none';
+            return;
+        }
+        const nombreCompleto = valorCampoEscuela('nombre');
+        const partes = nombreCompleto.split(/\s+/).filter(Boolean);
+        const cedulaValorEnlace = valorCampoEscuela('cedula').replace(/\D/g, '');
+        const regreso = new URLSearchParams();
+        regreso.set('url', rutaRetornoEscuela);
+        if (cedulaValorEnlace) regreso.set('cedula', cedulaValorEnlace);
+        const params = new URLSearchParams();
+        params.set('url', 'personas/crear');
+        params.set('return_to', 'escuelas');
+        params.set('return_url', urlPublicaEscuela + '?' + regreso.toString());
+        if (partes[0]) params.set('nombre', partes[0]);
+        if (partes.length > 1) params.set('apellido', partes.slice(1).join(' '));
+        const campos = {
+            numero_documento: cedulaValorEnlace,
+            telefono: valorCampoEscuela('telefono').replace(/\D/g, ''),
+            tipo_documento: valorCampoEscuela('tipo_documento'),
+            genero: valorCampoEscuela('genero'),
+            fecha_nacimiento: valorCampoEscuela('fecha_nacimiento'),
+            direccion: valorCampoEscuela('direccion')
+        };
+        Object.keys(campos).forEach(function(clave) {
+            if (campos[clave]) params.set(clave, campos[clave]);
+        });
+        enlace.href = urlPublicaEscuela + '?' + params.toString();
+        aviso.style.display = '';
+    }
     const form = document.getElementById('form-escuelas');
     const btnSubirDocumentos = document.getElementById('btn-subir-documentos');
     const btnQuitarTodosDocumentos = document.getElementById('btn-quitar-todos-documentos');
@@ -2023,12 +2066,13 @@
                 }
                 personaExistente = false;
                 actualizarModoCamposPersonaExistente(false, null);
-                mostrarSeccionDatosPersonales(true);
+                mostrarSeccionDatosPersonales(false);
                 limpiarDatosPersonaNueva();
                 actualizarResumenPersona(null, false);
                 setModoSoloAsistencia(false);
                 renderInscripciones([]);
-                setEstadoBusqueda('warn', data.mensaje || 'No existe coincidencias para esta persona. Completa datos para crearla.');
+                actualizarEnlaceCrearPersona(true);
+                setEstadoBusqueda('warn', 'No está en el registro. Créala en el formulario de personas y vuelve a buscarla.');
                 return;
             }
 
@@ -2037,6 +2081,7 @@
             }
 
             personaExistente = true;
+            actualizarEnlaceCrearPersona(false);
             mostrarSeccionDatosPersonales(true);
             aplicarPersona(data.persona || null, true);
             actualizarModoCamposPersonaExistente(true, data.persona || null);
@@ -2241,6 +2286,10 @@
 
     if (!prefillInicial && modoAbono && String(cedula.value || '').trim() !== '') {
         // En modo abono se carga automáticamente la persona seleccionada desde el botón.
+        buscarPersona();
+    }
+
+    if (!prefillInicial && !modoAbono && String(cedula.value || '').replace(/\D/g, '').length >= 4) {
         buscarPersona();
     }
 
@@ -2553,30 +2602,13 @@
         }
 
         if (personaExistente === false) {
-            if (!nombre.value.trim()) {
-                event.preventDefault();
-                alert('Para persona nueva, el nombre es obligatorio.');
-                nombre.focus();
-                return;
+            event.preventDefault();
+            actualizarEnlaceCrearPersona(true);
+            const enlaceCrear = document.getElementById('enlace-crear-persona');
+            if (enlaceCrear && enlaceCrear.href) {
+                window.location.href = enlaceCrear.href;
             }
-            if (!Number.isFinite(edadValor) || edadValor < 7 || edadValor > 120) {
-                event.preventDefault();
-                alert('Para persona nueva, la edad debe estar entre 7 y 120 anos.');
-                edad.focus();
-                return;
-            }
-            if (!telefonoValor) {
-                event.preventDefault();
-                alert('Para persona nueva, el teléfono es obligatorio.');
-                telefono.focus();
-                return;
-            }
-            if (!cedulaValor) {
-                event.preventDefault();
-                alert('Para persona nueva, la cédula es obligatoria.');
-                cedula.focus();
-                return;
-            }
+            return;
         }
     });
 

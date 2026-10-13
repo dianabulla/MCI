@@ -4177,8 +4177,42 @@ class PersonaController extends BaseController {
                 'return_url' => $returnUrl,
                 'celula_retorno' => $celulaRetorno
             ];
+            $prefill = $this->prefillCrearDesdeConsulta();
+            if ($prefill !== []) {
+                $data['post_data'] = $prefill;
+            }
             $this->view('personas/formulario', $this->enriquecerViewDataFormulario($data));
         }
+    }
+
+    /**
+     * Datos que talleres, Universidad de la Vida o Capacitación Destino
+     * pueden traer al abrir el formulario de creación.
+     *
+     * @return array<string, string>
+     */
+    private function prefillCrearDesdeConsulta(): array {
+        $mapa = [
+            'nombre' => 'nombre',
+            'apellido' => 'apellido',
+            'tipo_documento' => 'tipo_documento',
+            'numero_documento' => 'numero_documento',
+            'fecha_nacimiento' => 'fecha_nacimiento',
+            'genero' => 'genero',
+            'telefono' => 'telefono',
+            'direccion' => 'direccion',
+            'id_ministerio' => 'id_ministerio',
+            'id_lider' => 'id_lider',
+            'lider_search' => 'lider_search',
+        ];
+        $prefill = [];
+        foreach ($mapa as $origen => $destino) {
+            $valor = trim((string)($_GET[$origen] ?? ''));
+            if ($valor !== '') {
+                $prefill[$destino] = $valor;
+            }
+        }
+        return $prefill;
     }
 
     public function editar() {

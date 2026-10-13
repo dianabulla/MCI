@@ -1271,6 +1271,64 @@ class EscuelaFormacionRegistroController extends BaseController {
         return $rows[0] ?? null;
     }
 
+    /**
+     * Universidad de la Vida y Capacitación Destino no crean la ficha.
+     * Abren el formulario de personas y, al guardar, regresan a este registro.
+     */
+    private function redirigirAlFormularioCrearPersona(
+        string $rutaFormulario,
+        string $nombreCompleto,
+        string $cedula,
+        string $tipoDocumento,
+        string $telefono,
+        string $direccion,
+        string $fechaNacimiento,
+        string $genero,
+        int $idMinisterio,
+        int $idLider
+    ): void {
+        $partes = preg_split('/\s+/', trim($nombreCompleto), 2) ?: [];
+        $retorno = PUBLIC_URL . '?' . http_build_query([
+            'url' => $rutaFormulario,
+            'cedula' => $cedula,
+        ]);
+        $query = [
+            'url' => 'personas/crear',
+            'return_to' => 'escuelas',
+            'return_url' => $retorno,
+            'nombre' => trim((string)($partes[0] ?? '')),
+            'apellido' => trim((string)($partes[1] ?? '')),
+            'numero_documento' => $cedula,
+            'tipo_documento' => $tipoDocumento,
+            'telefono' => $telefono,
+            'direccion' => $direccion,
+            'fecha_nacimiento' => $fechaNacimiento,
+            'genero' => $genero,
+        ];
+        if ($idMinisterio > 0) {
+            $query['id_ministerio'] = (string)$idMinisterio;
+        }
+        if ($idLider > 0) {
+            $query['id_lider'] = (string)$idLider;
+            $lider = $this->personaModel->getById($idLider);
+            if (is_array($lider)) {
+                $nombreLider = trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? ''));
+                if ($nombreLider !== '') {
+                    $query['lider_search'] = $nombreLider;
+                }
+            }
+        }
+        $query = array_filter($query, static function ($valor) {
+            return trim((string)$valor) !== '';
+        });
+        $query['url'] = 'personas/crear';
+        $query['return_to'] = 'escuelas';
+        $query['return_url'] = $retorno;
+
+        header('Location: ' . PUBLIC_URL . '?' . http_build_query($query));
+        exit;
+    }
+
     private function crearPersonaNueva($nombreCompleto, $telefono, $cedula, $tipoDocumento, $idMinisterio, $idLider = 0, $genero = '', $nombreLider = '', $email = '', $direccion = '', $fechaNacimiento = '') {
         $partesNombre = $this->separarNombreApellido($nombreCompleto);
         $genero = trim((string)$genero);
@@ -4381,25 +4439,22 @@ class EscuelaFormacionRegistroController extends BaseController {
         $idPersona = (int)($persona['Id_Persona'] ?? 0);
         $esPersonaNueva = $idPersona <= 0;
 
-        if ($esPersonaNueva) {
-            if ($nombre === '') {
-                $errores[] = 'El nombre es requerido para crear una persona nueva.';
-            }
-            if ($edad <= 0) {
-                $errores[] = 'La edad es requerida para persona nueva.';
-            } elseif ($edad < 7 || $edad > 120) {
-                $errores[] = 'La edad debe estar entre 7 y 120 anos.';
-            }
-            if ($telefono === '') {
-                $errores[] = 'El telefono es obligatorio para persona nueva.';
-            }
-            if ($cedula === '') {
-                $errores[] = 'La cedula es obligatoria para persona nueva.';
-            }
-            if (!in_array($genero, $generosValidos, true)) {
-                $errores[] = 'Debe seleccionar un género válido para persona nueva.';
-            }
-        } elseif ($genero !== '' && !in_array($genero, $generosValidos, true)) {
+        if ($esPersonaNueva && empty($errores)) {
+            $this->redirigirAlFormularioCrearPersona(
+                $rutaFormulario,
+                $nombre,
+                $cedula,
+                $tipoDocumento,
+                $telefono,
+                $direccion,
+                $fechaNacimiento,
+                $genero,
+                $idMinisterio,
+                $idLider
+            );
+        }
+
+        if (!$esPersonaNueva && $genero !== '' && !in_array($genero, $generosValidos, true)) {
             $errores[] = 'El género no es válido.';
         }
 
@@ -4461,10 +4516,18 @@ class EscuelaFormacionRegistroController extends BaseController {
             } elseif (is_array($duplicadoPersona) && (string)($duplicadoPersona['_motivo'] ?? '') === 'telefono') {
                 $errores[] = 'Ya existe una persona con ese teléfono. Solo un menor (Registro Civil o Tarjeta de Identidad) puede repetir un teléfono.';
             } else {
-                $idPersona = $this->crearPersonaNueva($nombre, $telefono, $cedula, $tipoDocumento, $idMinisterio, $idLider, $genero, $lider, $email, $direccion, $fechaNacimiento);
-                if ($idPersona <= 0) {
-                    $errores[] = 'No se pudo crear la persona nueva en la lista de Personas.';
-                }
+                $this->redirigirAlFormularioCrearPersona(
+                    $rutaFormulario,
+                    $nombre,
+                    $cedula,
+                    $tipoDocumento,
+                    $telefono,
+                    $direccion,
+                    $fechaNacimiento,
+                    $genero,
+                    $idMinisterio,
+                    $idLider
+                );
             }
         }
 

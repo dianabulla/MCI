@@ -162,7 +162,7 @@ class TallerPersonaSync {
 
     /**
 
-     * Igual que procesarDesdePost, pero crea el registro en persona si no existe.
+     * Localiza la persona. La ficha nueva se crea en el formulario de personas.
 
      *
 
@@ -172,83 +172,7 @@ class TallerPersonaSync {
 
     public function procesarDesdePostConCreacion(array $post): array {
 
-        $resultado = $this->procesarDesdePost($post);
-
-        if (!$resultado['ok']) {
-
-            return $resultado;
-
-        }
-
-
-
-        $idPersona = (int)($resultado['id_persona'] ?? 0);
-
-        if ($idPersona > 0) {
-
-            return $resultado;
-
-        }
-
-        $documento = preg_replace('/\D+/', '', (string)($post['persona_documento'] ?? ''));
-
-        $telefono = preg_replace('/\D+/', '', (string)($post['persona_telefono'] ?? ''));
-
-        $nehemias = $this->buscarEnNehemias($documento, $telefono);
-
-        if (is_array($nehemias)) {
-
-            if (trim((string)($post['persona_lider'] ?? '')) === '') {
-
-                $post['persona_lider'] = trim((string)($nehemias['Lider_Nehemias'] ?? ''));
-
-            }
-
-            if (trim((string)($post['persona_ministerio'] ?? '')) === '') {
-
-                $post['persona_ministerio'] = trim((string)($nehemias['Lider'] ?? ''));
-
-            }
-
-        }
-
-
-
-        $idNueva = $this->crearPersonaDesdePost($post, true);
-
-        if ($idNueva <= 0) {
-
-            return [
-
-                'ok' => false,
-
-                'errores' => ['persona_documento' => 'No se pudo registrar la persona. Intente de nuevo.'],
-
-                'id_persona' => 0,
-
-                'extras' => [],
-
-                'datos_persona' => [],
-
-            ];
-
-        }
-
-
-
-        return [
-
-            'ok' => true,
-
-            'errores' => [],
-
-            'id_persona' => $idNueva,
-
-            'extras' => $resultado['extras'],
-
-            'datos_persona' => $this->construirDatosPersonaParaRespuesta($idNueva, $post),
-
-        ];
+        return $this->procesarDesdePost($post);
 
     }
 
@@ -276,7 +200,8 @@ class TallerPersonaSync {
     }
 
     /**
-     * Crea o localiza la ficha a partir de los datos guardados en la inscripción.
+     * Localiza la ficha a partir de los datos guardados en la inscripción.
+     * Si no existe, devuelve 0 para que el formulario de personas la cree.
      *
      * @param array<string, mixed> $json
      */
@@ -298,11 +223,7 @@ class TallerPersonaSync {
             return $idBuscado;
         }
 
-        if (trim((string)($post['persona_nombre'] ?? '')) === '') {
-            return 0;
-        }
-
-        return $this->crearPersonaDesdePost($post, $esTourLevantate);
+        return 0;
     }
 
     /**

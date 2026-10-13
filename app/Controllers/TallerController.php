@@ -892,14 +892,14 @@ class TallerController extends BaseController {
 
         $json = $this->decodificarDatosJsonRespuesta($respuesta['Datos_JSON'] ?? null);
 
-        $esTour = $this->model->esTourLevantate($formulario);
         $idPersona = (int)($respuesta['Id_Persona'] ?? 0);
         if ($idPersona <= 0) {
-            $idPersona = $this->personaSync->asegurarPersonaDesdeJson($json, $esTour);
+            $idPersona = $this->personaSync->asegurarPersonaDesdeJson($json, false);
         }
         if ($idPersona <= 0) {
-            $_SESSION['talleres_flash_error'] = 'No se pudo crear o localizar la ficha: la inscripción no tiene nombre, documento y teléfono suficientes.';
-            header('Location: ' . $redirBase . '&abrir=sin-ministerio');
+            $datosCrear = $this->personaSync->jsonAPost($json);
+            $datosCrear['id_ministerio'] = (string)$idMinisterio;
+            header('Location: ' . $this->urlFormularioCrearPersona($datosCrear, $redirBase . '&abrir=sin-ministerio'));
             exit;
         }
 
@@ -1968,7 +1968,9 @@ class TallerController extends BaseController {
 
         $valores = $_SESSION['talleres_publico_valores'] ?? [];
 
-        unset($_SESSION['talleres_publico_errores'], $_SESSION['talleres_publico_valores']);
+        $enlaceCrearPersona = (string)($_SESSION['talleres_enlace_crear_persona'] ?? '');
+
+        unset($_SESSION['talleres_publico_errores'], $_SESSION['talleres_publico_valores'], $_SESSION['talleres_enlace_crear_persona']);
 
 
 
@@ -1990,6 +1992,8 @@ class TallerController extends BaseController {
 
             'valores' => $valores,
 
+            'enlace_crear_persona' => $enlaceCrearPersona,
+
             'enviado_ok' => !empty($_GET['ok']),
 
         ]);
@@ -1997,6 +2001,44 @@ class TallerController extends BaseController {
     }
 
 
+
+    /**
+     * Abre el formulario de personas con los datos que ya trae el taller.
+     *
+     * @param array<string, mixed> $campos
+     */
+    private function urlFormularioCrearPersona(array $campos, string $returnUrl): string {
+        $nombre = trim((string)($campos['persona_nombre'] ?? $campos['nombre'] ?? ''));
+        $apellido = trim((string)($campos['persona_apellido'] ?? $campos['apellido'] ?? ''));
+        if ($apellido === '' && str_contains($nombre, ' ')) {
+            $partes = preg_split('/\s+/', $nombre, 2) ?: [];
+            $nombre = trim((string)($partes[0] ?? ''));
+            $apellido = trim((string)($partes[1] ?? ''));
+        }
+
+        $query = [
+            'url' => 'personas/crear',
+            'return_to' => 'talleres',
+            'return_url' => $returnUrl,
+            'nombre' => $nombre,
+            'apellido' => $apellido,
+            'numero_documento' => preg_replace('/\D+/', '', (string)($campos['persona_documento'] ?? $campos['numero_documento'] ?? $campos['buscar_documento'] ?? '')),
+            'telefono' => preg_replace('/\D+/', '', (string)($campos['persona_telefono'] ?? $campos['telefono'] ?? '')),
+            'tipo_documento' => trim((string)($campos['persona_tipo_documento'] ?? $campos['tipo_documento'] ?? '')),
+            'fecha_nacimiento' => trim((string)($campos['persona_fecha_nacimiento'] ?? $campos['fecha_nacimiento'] ?? '')),
+            'direccion' => trim((string)($campos['persona_direccion'] ?? $campos['direccion'] ?? '')),
+            'genero' => trim((string)($campos['persona_genero'] ?? $campos['genero'] ?? '')),
+            'id_ministerio' => trim((string)($campos['id_ministerio'] ?? '')),
+        ];
+        $query = array_filter($query, static function ($valor) {
+            return trim((string)$valor) !== '';
+        });
+        $query['url'] = 'personas/crear';
+        $query['return_to'] = 'talleres';
+        $query['return_url'] = $returnUrl;
+
+        return PUBLIC_URL . '?' . http_build_query($query);
+    }
 
     public function buscarPersonaPublico(): void {
 
@@ -2536,7 +2578,7 @@ class TallerController extends BaseController {
 
         } else if ($esTourLevantate) {
 
-            $personaResult = $this->personaSync->procesarDesdePostConCreacion($_POST);
+            $personaResult = $this->personaSync->procesarDesdePost($_POST);
 
             $errores = array_merge($personaResult['errores'], $resultado['errores']);
 
@@ -2582,6 +2624,17 @@ class TallerController extends BaseController {
                     $errores['desea_comprar_libro'] = 'Indique si desea comprar el libro.';
                 }
             }
+        }
+
+        if (!$esPresentacionNinos && $idPersona <= 0 && empty($personaResult['errores'])) {
+            if (!is_array($errores ?? null)) {
+                $errores = [];
+            }
+            $errores['persona_documento'] = 'Esta persona no está en el registro. Créala en el formulario de personas y vuelve a buscarla por cédula.';
+            $_SESSION['talleres_enlace_crear_persona'] = $this->urlFormularioCrearPersona(
+                $_POST,
+                PUBLIC_URL . '?url=talleres_publico&slug=' . urlencode($slug)
+            );
         }
 
         if (!$esPresentacionNinos) {

@@ -72,3 +72,15 @@ La cifra del informe puede seguir siendo mayor que la tarjeta de Almas ganadas: 
 ## Formularios de talleres
 
 Guardar el editor de un formulario exige permiso de crear o de editar. El guardado avisa si quedó bien o si falló, y los bloques se reemplazan en una sola transacción para no perder el formulario a medias.
+
+## Creación de personas desde talleres y escuelas
+
+Talleres, Universidad de la Vida y Capacitación Destino no crean la ficha por su cuenta. Si la persona no está en el registro, abren `personas/crear` con lo que ya se escribió: nombre, apellidos, tipo y número de documento, teléfono, dirección, género, fecha de nacimiento y, si venía elegido, ministerio y líder. Al guardar, se vuelve al formulario de origen y se busca de nuevo por cédula.
+
+Ese formulario sigue exigiendo los mismos datos: nombre, apellidos, tipo de documento, número de documento, fecha de nacimiento, género, teléfono y tratamiento de datos. Dirección, barrio, célula, ministerio y líder siguen siendo opcionales.
+
+Hace falta estar dentro de la aplicación con permiso para crear personas. Quien no ha iniciado sesión llega primero al login.
+
+En un taller, incluido el Tour Levántate y Resplandece, la inscripción no se guarda hasta que la persona exista. Si desde las respuestas se asigna ministerio a una inscripción sin ficha, se abre el mismo formulario de personas, con el ministerio ya elegido.
+
+En presentación de niños, el acudiente y el niño que no estén en el registro tienen el enlace al mismo formulario. Esa inscripción puede guardarse en el taller: el niño queda en la inscripción y no como ficha nueva.

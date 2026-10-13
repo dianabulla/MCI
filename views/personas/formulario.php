@@ -153,7 +153,7 @@ $urlVolver = $returnUrl !== ''
                 <div class="form-group">
                     <label for="direccion">Dirección</label>
                     <input type="text" id="direccion" name="direccion" class="form-control" 
-                           value="<?= htmlspecialchars($persona['Direccion'] ?? '') ?>">
+                           value="<?= htmlspecialchars($post_data['direccion'] ?? $persona['Direccion'] ?? '') ?>">
                 </div>
 
                 <div class="form-group">

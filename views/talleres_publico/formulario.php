@@ -497,6 +497,12 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
 
 
 
+        <?php if (!empty($enlace_crear_persona)): ?>
+            <div class="persona-aviso">
+                <a href="<?= htmlspecialchars((string)$enlace_crear_persona, ENT_QUOTES, 'UTF-8') ?>">Abrir el formulario de personas</a>
+            </div>
+        <?php endif; ?>
+
         <form method="POST" action="<?= PUBLIC_URL ?>?url=talleres_publico/guardar" id="form-taller-publico"<?= ($esPresentacionNinos || $tieneBloqueDocumentos) ? ' enctype="multipart/form-data"' : '' ?>>
 
             <input type="hidden" name="slug" value="<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>">
@@ -532,7 +538,7 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
                         <?php if ($esTourLevantate): ?>
 
                         <div class="persona-aviso">
-                            Escriba su número de cédula. Si ya está en nuestra base de datos o en el histórico de la iglesia, cargaremos sus datos; si no, crearemos su ficha como <strong>miembro antiguo</strong> (no como alma nueva en Ganar).
+                            Escriba su número de cédula. Si ya está en nuestra base de datos o en el histórico de la iglesia, cargaremos sus datos. Si no está, hay que crearla en el formulario de personas y volver a buscarla.
                         </div>
 
                         <div class="buscar-doc">
@@ -590,7 +596,7 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
 
                         <div class="persona-aviso">
 
-                            Si ya está en nuestra base de datos, al escribir documento o teléfono cargaremos sus datos. Si no está registrado, solo guardaremos su inscripción al taller (no se crea una ficha nueva en Personas).
+                            Si ya está en nuestra base de datos, al escribir documento o teléfono cargaremos sus datos. Si no está, hay que crearla en el formulario de personas y volver a buscarla.
 
                         </div>
 
@@ -755,7 +761,7 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
                     <?php elseif ($tipoBloque === 'padres'): ?>
 
                         <div class="persona-aviso">
-                            Escriba el documento del padre, madre o acudiente. Si ya está en Personas cargamos sus datos; si no, complete el formulario manualmente.
+                            Escriba el documento del padre, madre o acudiente. Si ya está en Personas cargamos sus datos. Si no está, créelo en el formulario de personas y vuelva a buscarlo.
                         </div>
                         <div class="buscar-doc">
                             <div>
@@ -790,7 +796,7 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
                     <?php elseif ($tipoBloque === 'nino'): ?>
 
                         <div class="persona-aviso">
-                            Escriba el documento del niño(a). Si ya está en Personas cargamos sus datos; si no, complete el formulario manualmente.
+                            Escriba el documento del niño(a). Si ya está en Personas cargamos sus datos. Si no está, créelo en el formulario de personas y vuelva a buscarlo.
                         </div>
                         <div class="buscar-doc">
                             <div>
@@ -925,6 +931,38 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
     const urlBuscar = <?= json_encode($urlBuscarPersona) ?>;
 
     const slugFormulario = <?= json_encode($slug) ?>;
+
+    const urlPublicaTaller = <?= json_encode(PUBLIC_URL) ?>;
+
+    function valorCampoTaller(id) {
+        const el = document.getElementById(id);
+        return el ? String(el.value || '').trim() : '';
+    }
+
+    function urlCrearPersonaTaller() {
+        const doc = (valorCampoTaller('persona_documento') || valorCampoTaller('buscar_documento')).replace(/\D/g, '');
+        const regreso = new URLSearchParams();
+        regreso.set('url', 'talleres_publico');
+        if (slugFormulario) regreso.set('slug', slugFormulario);
+        const params = new URLSearchParams();
+        params.set('url', 'personas/crear');
+        params.set('return_to', 'talleres');
+        params.set('return_url', urlPublicaTaller + '?' + regreso.toString());
+        const campos = {
+            nombre: valorCampoTaller('persona_nombre'),
+            apellido: valorCampoTaller('persona_apellido'),
+            numero_documento: doc,
+            telefono: valorCampoTaller('persona_telefono').replace(/\D/g, ''),
+            tipo_documento: valorCampoTaller('persona_tipo_documento'),
+            fecha_nacimiento: valorCampoTaller('persona_fecha_nacimiento'),
+            direccion: valorCampoTaller('persona_direccion'),
+            genero: valorCampoTaller('persona_genero')
+        };
+        Object.keys(campos).forEach(function(clave) {
+            if (campos[clave]) params.set(clave, campos[clave]);
+        });
+        return urlPublicaTaller + '?' + params.toString();
+    }
 
     const btnBuscar = document.getElementById('btn-buscar-persona');
 
@@ -1150,7 +1188,15 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
 
                 } else {
 
-                    if (msg) msg.textContent = 'No encontrada. Complete como persona nueva.';
+                    if (msg) {
+                        msg.textContent = '';
+                        const enlaceCrear = document.createElement('a');
+                        enlaceCrear.href = urlCrearPersonaTaller();
+                        enlaceCrear.textContent = 'Crearla en el formulario de personas';
+                        msg.appendChild(document.createTextNode('No está en el registro. '));
+                        msg.appendChild(enlaceCrear);
+                        msg.appendChild(document.createTextNode(' y vuelve a buscarla por cédula.'));
+                    }
 
                     if (buscarPorDoc && inpDoc) inpDoc.value = doc;
 
@@ -1636,7 +1682,36 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
 (function() {
     const urlBuscar = <?= json_encode($urlBuscarPersona) ?>;
     const slugFormulario = <?= json_encode($slug) ?>;
+    const urlPublicaNinos = <?= json_encode(PUBLIC_URL) ?>;
     const MIN_DOC = 5;
+
+    function enlaceCrearPersonaNinos(documento, nombreId) {
+        const params = new URLSearchParams();
+        params.set('url', 'personas/crear');
+        params.set('return_to', 'talleres');
+        const regreso = new URLSearchParams();
+        regreso.set('url', 'talleres_publico');
+        if (slugFormulario) regreso.set('slug', slugFormulario);
+        params.set('return_url', urlPublicaNinos + '?' + regreso.toString());
+        if (documento) params.set('numero_documento', documento);
+        const nombreEl = nombreId ? document.getElementById(nombreId) : null;
+        const nombre = nombreEl ? String(nombreEl.value || '').trim() : '';
+        const partes = nombre.split(/\s+/).filter(Boolean);
+        if (partes[0]) params.set('nombre', partes[0]);
+        if (partes.length > 1) params.set('apellido', partes.slice(1).join(' '));
+        return urlPublicaNinos + '?' + params.toString();
+    }
+
+    function mostrarEnlaceCrearPersona(msgEl, texto, documento, nombreId) {
+        if (!msgEl) return;
+        msgEl.textContent = '';
+        const enlace = document.createElement('a');
+        enlace.href = enlaceCrearPersonaNinos(documento, nombreId);
+        enlace.textContent = 'Crearla en el formulario de personas';
+        msgEl.appendChild(document.createTextNode(texto + ' '));
+        msgEl.appendChild(enlace);
+        msgEl.appendChild(document.createTextNode('.'));
+    }
 
     const IDS_PADRES = ['padres_nombre', 'padres_documento', 'padres_telefono'];
     const IDS_NINO_EDITABLES = ['nino_nombre', 'nino_documento', 'nino_fecha_nacimiento'];
@@ -1902,7 +1977,7 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
                     aplicarPadresEncontrado(data.persona);
                 } else {
                     desbloquearPadresManual(doc);
-                    if (msgPadres) msgPadres.textContent = 'No está en Personas. Complete nombre y teléfono.';
+                    mostrarEnlaceCrearPersona(msgPadres, 'No está en el registro.', doc, 'padres_nombre');
                 }
             })
             .catch(function() {
@@ -1934,7 +2009,7 @@ $urlBuscarPersona = PUBLIC_URL . '?url=talleres_publico/buscar-persona';
                     aplicarNinoEncontrado(data.persona);
                 } else {
                     desbloquearNinoManual(doc);
-                    if (msgNino) msgNino.textContent = 'No está en Personas. Complete nombre y fecha de nacimiento.';
+                    mostrarEnlaceCrearPersona(msgNino, 'No está en el registro.', doc, 'nino_nombre');
                 }
             })
             .catch(function() {
