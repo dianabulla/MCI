@@ -232,7 +232,7 @@ return [
 
     // --- Teen (privado; formularios públicos sin permiso de módulo) ---
 
-    'teen' => 'teen:ver',
+    'teen' => ['checker' => 'puedeVerMaterialTeens'],
 
     'teen/registro-menores' => 'teen:ver',
 
@@ -258,7 +258,7 @@ return [
 
     'teen/detalleVistas' => ['checker' => 'puedeVerMaterialTeens'],
 
-    'teen/qr-registro' => ['allow' => true],
+    'teen/qr-registro' => 'teen:ver',
 
     'teen/registro-publico' => ['allow' => true],
 
@@ -267,6 +267,8 @@ return [
     'teen/consulta-codigo' => ['allow' => true],
 
     'teen/buscar-menor-publico-telefono' => ['allow' => true],
+
+    'teen/buscar-menor-publico-documento' => ['allow' => true],
 
 
 

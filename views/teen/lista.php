@@ -1544,11 +1544,7 @@ function abrirPreviewPdfTeen(trigger) {
     var nombre = trigger.getAttribute('data-nombre') || 'Documento PDF';
     var urlVer = trigger.getAttribute('data-url-ver') || '';
     var urlEmbed = trigger.getAttribute('data-url-embed') || urlVer;
-    var src = urlVer;
-
-    if (urlVer.indexOf('/uploads/teens/') !== -1) {
-        src = urlVer + '#view=FitH&toolbar=1&navpanes=0';
-    }
+    var src = urlEmbed || urlVer;
 
     titulo.textContent = 'Vista previa del material';
     subtitulo.textContent = nombre;

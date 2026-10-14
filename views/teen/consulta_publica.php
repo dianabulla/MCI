@@ -163,7 +163,7 @@
         <div class="inner">
             <form method="GET" action="<?= PUBLIC_URL ?>index.php">
                 <input type="hidden" name="url" value="teen/consulta-codigo">
-                <input type="text" name="codigo" value="<?= htmlspecialchars((string)($codigo ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej: TS-260416-123456" required>
+                <input type="text" name="codigo" value="<?= htmlspecialchars((string)($codigo ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Ej: TNS4821 o KS1930" required>
                 <button type="submit">Buscar</button>
                 <a class="btn-link" href="<?= PUBLIC_URL ?>index.php?url=teen/registro-publico">Registrar nuevo</a>
             </form>

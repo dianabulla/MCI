@@ -328,6 +328,10 @@ class Teen extends BaseModel {
                 $this->execute("ALTER TABLE {$this->tablaMenores} ADD COLUMN documento VARCHAR(40) NULL AFTER nombre_menor");
             }
 
+            if (!$this->columnExists('id_persona', $this->tablaMenores)) {
+                $this->execute("ALTER TABLE {$this->tablaMenores} ADD COLUMN id_persona INT NULL AFTER documento");
+            }
+
             if (!$this->columnExists('es_nuevo', $this->tablaMenores)) {
                 $this->execute("ALTER TABLE {$this->tablaMenores} ADD COLUMN es_nuevo TINYINT(1) NOT NULL DEFAULT 1 AFTER barrio");
             }

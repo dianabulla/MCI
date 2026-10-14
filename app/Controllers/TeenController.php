@@ -764,17 +764,6 @@ class TeenController extends BaseController {
         return $url;
     }
 
-    private function urlPublicaPdfTeen(string $nombreArchivo): string {
-        $ruta = $this->normalizarRutaArchivoTeen($nombreArchivo);
-        if ($ruta === '') {
-            $ruta = basename($nombreArchivo);
-        }
-
-        $partes = array_map('rawurlencode', explode('/', $ruta));
-
-        return rtrim(PUBLIC_URL, '/') . '/uploads/teens/' . implode('/', $partes);
-    }
-
     private function servirPdfTeen(string $rutaFisica, string $nombreArchivo): void {
         while (ob_get_level() > 0) {
             ob_end_clean();
@@ -893,15 +882,59 @@ class TeenController extends BaseController {
             ? $this->obtenerPrefijoCodigoKids()
             : 'TNS';
 
-        for ($i = 0; $i < 120; $i++) {
-            $numero = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-            $codigo = $prefijo . substr($numero, -2);
+        // 4 dígitos: 10.000 combinaciones por grupo y domingo (antes eran 100 y se adivinaban).
+        for ($i = 0; $i < 250; $i++) {
+            $numero = str_pad((string)random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+            $codigo = $prefijo . $numero;
             if (!$this->teenModel->existeCodigoSemanal($codigo, $fechaDomingo)) {
                 return $codigo;
             }
         }
 
-        throw new Exception('No fue posible generar un código semanal corto único para esta semana.');
+        throw new Exception('No fue posible generar un código semanal único para esta semana.');
+    }
+
+    /**
+     * Si el documento o el teléfono del acudiente ya están en Personas, los une.
+     * No crea fichas nuevas (igual que talleres): el voluntario no arma la ficha en la puerta.
+     *
+     * @return array{id_persona:int,id_acudiente:int}
+     */
+    private function resolverVinculosPersonaMenor(string $documentoNorm, string $telefono, string $nombreAcudiente): array {
+        $idPersona = 0;
+        $idAcudiente = 0;
+
+        if ($documentoNorm !== '') {
+            $personaNino = $this->personaModel->buscarParaInscripcionEscuela($documentoNorm, '', '');
+            if (!empty($personaNino['Id_Persona'])) {
+                $idPersona = (int)$personaNino['Id_Persona'];
+            }
+        }
+
+        $telefonoNorm = preg_replace('/\D+/', '', $telefono);
+        if ($telefonoNorm !== '') {
+            $personaAcudiente = $this->personaModel->buscarParaInscripcionEscuela('', $telefonoNorm, '');
+            if (!empty($personaAcudiente['Id_Persona'])) {
+                $nombreBase = $this->normalizarTextoMayusculas(trim(
+                    (string)($personaAcudiente['Nombre'] ?? '') . ' ' . (string)($personaAcudiente['Apellido'] ?? '')
+                ));
+                $nombreBuscado = $this->normalizarTextoMayusculas($nombreAcudiente);
+                $coincideNombre = $nombreBuscado === '' || $nombreBase === ''
+                    || $nombreBase === $nombreBuscado
+                    || ($nombreBase !== '' && $nombreBuscado !== '' && (
+                        mb_stripos($nombreBase, $nombreBuscado) !== false
+                        || mb_stripos($nombreBuscado, $nombreBase) !== false
+                    ));
+                if ($coincideNombre) {
+                    $idAcudiente = (int)$personaAcudiente['Id_Persona'];
+                }
+            }
+        }
+
+        return [
+            'id_persona' => $idPersona,
+            'id_acudiente' => $idAcudiente,
+        ];
     }
 
     private function obtenerOCrearAsistenciaSemanal($idMenor) {
@@ -916,6 +949,16 @@ class TeenController extends BaseController {
         }
 
         $existente = $this->teenModel->getAsistenciaSemanalActualByMenor($idMenor);
+        $codigoActual = trim((string)($existente['codigo_semana'] ?? ''));
+        if (!empty($existente) && $codigoActual !== '') {
+            return [
+                'asistencia' => $existente,
+                'fue_nueva' => false,
+                'fue_renovada' => false,
+                'fue_reutilizada' => true,
+            ];
+        }
+
         $codigoSemanal = $this->generarCodigoSemanalUnico($menor);
 
         if (!empty($existente)) {
@@ -939,6 +982,7 @@ class TeenController extends BaseController {
             'asistencia' => $asistencia,
             'fue_nueva' => empty($existente),
             'fue_renovada' => !empty($existente),
+            'fue_reutilizada' => false,
         ];
     }
 
@@ -977,15 +1021,10 @@ class TeenController extends BaseController {
                     $totalArchivosOk++;
                 }
 
-                $rutaPublicaRelativa = str_replace('\\', '/', $directorioMateriales . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $nombreArchivo));
-                $enCarpetaPublica = is_file($rutaPublicaRelativa);
-
                 $infArchivo = [
                     'nombre' => $nombreArchivo,
                     'url' => $this->urlVerPdfTeen($nombreArchivo),
-                    'url_preview' => $enCarpetaPublica
-                        ? $this->urlPublicaPdfTeen($nombreArchivo)
-                        : $this->urlVerPdfTeen($nombreArchivo, true),
+                    'url_preview' => $this->urlVerPdfTeen($nombreArchivo, true),
                     'url_embed' => $this->urlVerPdfTeen($nombreArchivo, true),
                     'existe' => $existe,
                     'peso_kb' => $existe ? round(((int)@filesize($ruta)) / 1024, 2) : 0,
@@ -1323,8 +1362,13 @@ class TeenController extends BaseController {
 
                 $archivos = $this->normalizarArchivosPdfSubidos($_FILES['archivo_pdf']);
 
-                $directorioSemana = $this->obtenerDirectorioSemanaTeen($anio, $mes, $semanaMes);
-                $prefijoRelativo = $this->prefijoRelativoSemanaTeen($anio, $mes, $semanaMes);
+                if (Teen::esSemanaDecoracion($semanaMes)) {
+                    $directorioSemana = $this->obtenerDirectorioDecoracionTeen($anio, $mes);
+                    $prefijoRelativo = $this->prefijoRelativoDecoracionTeen($anio, $mes);
+                } else {
+                    $directorioSemana = $this->obtenerDirectorioSemanaTeen($anio, $mes, $semanaMes);
+                    $prefijoRelativo = $this->prefijoRelativoSemanaTeen($anio, $mes, $semanaMes);
+                }
                 $archivosSubidos = [];
                 $erroresSubida = [];
 
@@ -1356,8 +1400,11 @@ class TeenController extends BaseController {
                     $profesor
                 );
 
+                $destinoTexto = Teen::esSemanaDecoracion($semanaMes)
+                    ? 'decoración'
+                    : ('semana ' . $semanaMes);
                 $mensaje = count($archivosSubidos) . ' archivo(s) publicado(s) en '
-                    . Teen::nombreMes($mes) . ', semana ' . $semanaMes . '.';
+                    . Teen::nombreMes($mes) . ', ' . $destinoTexto . '.';
                 if ($profesor['profesor_nombre'] !== '') {
                     $mensaje .= ' Maestro: ' . $profesor['profesor_nombre'] . '.';
                 }
@@ -1610,6 +1657,8 @@ class TeenController extends BaseController {
         }
 
         $nombreMenor = $this->normalizarTextoMayusculas($_POST['nombre_menor'] ?? '');
+        $documento = trim((string)($_POST['documento'] ?? ''));
+        $documentoNorm = Teen::normalizarDocumentoMenor($documento);
         $acudienteBusqueda = $this->normalizarTextoMayusculas($_POST['acudiente_busqueda'] ?? '');
         $idAcudiente = (int)($_POST['id_acudiente'] ?? 0);
         $telefonoContacto = trim((string)($_POST['telefono_contacto'] ?? ''));
@@ -1639,6 +1688,7 @@ class TeenController extends BaseController {
 
         $old = [
             'nombre_menor' => $nombreMenor,
+            'documento' => $documento,
             'acudiente_busqueda' => $acudienteBusqueda,
             'id_acudiente' => (string)$idAcudiente,
             'telefono_contacto' => $telefonoContacto,
@@ -1654,6 +1704,10 @@ class TeenController extends BaseController {
 
         if ($nombreMenor === '') {
             $errores[] = 'El nombre y apellido del menor es obligatorio.';
+        }
+
+        if ($documentoNorm !== '' && strlen($documentoNorm) < 5) {
+            $errores[] = 'El documento del niño debe tener mínimo 5 caracteres.';
         }
 
         if ($idAcudiente <= 0) {
@@ -1702,8 +1756,23 @@ class TeenController extends BaseController {
             $this->redirigirRegistroMenor(implode(' ', $errores), 'error', $old);
         }
 
+        $telefonoNorm = preg_replace('/\D+/', '', $telefonoContacto);
+        $registroPrevio = $this->teenModel->resolverMenorRegistrado(
+            $idMenorExistente,
+            $documentoNorm,
+            $nombreMenor,
+            $fechaNacimiento,
+            $telefonoNorm,
+            $nombreAcudiente !== '' ? $nombreAcudiente : $acudienteBusqueda
+        );
+
+        $vinculos = $this->resolverVinculosPersonaMenor(
+            $documentoNorm,
+            $telefonoContacto,
+            $nombreAcudiente !== '' ? $nombreAcudiente : $acudienteBusqueda
+        );
+
         $data = [
-            'codigo_registro' => $this->generarCodigoRegistroUnico(),
             'nombre_menor' => $nombreMenor,
             'id_acudiente' => $idAcudiente,
             'nombre_acudiente' => $nombreAcudiente !== '' ? $nombreAcudiente : $acudienteBusqueda,
@@ -1714,14 +1783,49 @@ class TeenController extends BaseController {
             'asiste_celula' => in_array($asisteCelulaRaw, ['SI', 'SÍ'], true) ? 1 : 0,
             'barrio' => $barrio !== '' ? $barrio : null
         ];
+        if ($documentoNorm !== '') {
+            $data['documento'] = $documentoNorm;
+        }
+        if ($vinculos['id_persona'] > 0) {
+            $data['id_persona'] = $vinculos['id_persona'];
+        }
 
         try {
-            $idMenor = (int)$this->teenModel->createMenor($data);
-            if ($idMenor <= 0) {
-                throw new Exception('No se pudo guardar el registro del menor.');
+            $esExistente = !empty($registroPrevio);
+            if ($esExistente) {
+                $idMenor = (int)($registroPrevio['id'] ?? 0);
+                if ($idMenor <= 0) {
+                    throw new Exception('Se encontró un registro existente inválido.');
+                }
+                if ($documentoNorm !== '') {
+                    $this->teenModel->vincularDocumentoMenor($idMenor, $documentoNorm);
+                }
+                $this->teenModel->updateMenorById($idMenor, $data);
+            } elseif ($documentoNorm !== '' && $this->teenModel->documentoMenorExiste($documentoNorm)) {
+                $this->redirigirRegistroMenor(
+                    'Este documento ya está registrado. No se creó un niño duplicado.',
+                    'error',
+                    $old
+                );
+            } else {
+                $data['codigo_registro'] = $this->generarCodigoRegistroUnico();
+                $idMenor = (int)$this->teenModel->createMenor($data);
+                if ($idMenor <= 0) {
+                    throw new Exception('No se pudo guardar el registro del menor.');
+                }
             }
 
-            $this->redirigirRegistroMenor('Menor registrado correctamente. Código asignado: ' . $data['codigo_registro'], 'success');
+            $resultadoAsistencia = $this->obtenerOCrearAsistenciaSemanal($idMenor);
+            $codigoSemana = (string)($resultadoAsistencia['asistencia']['codigo_semana'] ?? '');
+            if ($esExistente) {
+                $mensaje = !empty($resultadoAsistencia['fue_reutilizada'])
+                    ? 'El niño ya estaba registrado. Se conservó el código de este domingo: ' . $codigoSemana
+                    : 'El niño ya estaba registrado. Código de este domingo: ' . $codigoSemana;
+            } else {
+                $mensaje = 'Menor registrado correctamente. Código de este domingo: ' . $codigoSemana;
+            }
+
+            $this->redirigirRegistroMenor($mensaje, 'success');
         } catch (Throwable $e) {
             $this->redirigirRegistroMenor('Error al guardar el menor: ' . $e->getMessage(), 'error', $old);
         }
@@ -1930,11 +2034,13 @@ class TeenController extends BaseController {
             } else {
                 try {
                     $codigoRegistro = $this->generarCodigoRegistroUnico();
+                    $vinculosAlta = $this->resolverVinculosPersonaMenor($documentoNorm, $telefonoNormalizado, $nombreAcudiente);
                     $data = [
                         'codigo_registro' => $codigoRegistro,
                         'nombre_menor' => $nombreMenor,
                         'documento' => $documentoNorm,
-                        'id_acudiente' => 0,
+                        'id_persona' => $vinculosAlta['id_persona'] > 0 ? $vinculosAlta['id_persona'] : null,
+                        'id_acudiente' => $vinculosAlta['id_acudiente'] > 0 ? $vinculosAlta['id_acudiente'] : 0,
                         'nombre_acudiente' => $nombreAcudiente,
                         'telefono_contacto' => $telefonoNormalizado,
                         'fecha_nacimiento' => $fechaNacimiento !== '' ? $fechaNacimiento : null,
@@ -1984,8 +2090,26 @@ class TeenController extends BaseController {
                 throw new Exception('No se pudo obtener el código semanal.');
             }
 
-            if ($esExistente) {
-                $mensaje = 'Registro renovado. Se generó un código semanal nuevo para este domingo (no se duplicó el niño).';
+            $vinculos = $this->resolverVinculosPersonaMenor($documentoNorm, $telefonoNormalizado, $nombreAcudiente);
+            $patchPersona = [];
+            if ($vinculos['id_persona'] > 0) {
+                $patchPersona['id_persona'] = $vinculos['id_persona'];
+            }
+            if ($vinculos['id_acudiente'] > 0) {
+                $actualMenor = $this->teenModel->getMenorRegistradoById($idMenor);
+                $idAcudienteActual = (int)($actualMenor['id_acudiente'] ?? 0);
+                if ($idAcudienteActual <= 0) {
+                    $patchPersona['id_acudiente'] = $vinculos['id_acudiente'];
+                }
+            }
+            if ($patchPersona !== []) {
+                $this->teenModel->updateMenorById($idMenor, $patchPersona);
+            }
+
+            if ($esExistente && !empty($resultadoAsistencia['fue_reutilizada'])) {
+                $mensaje = 'Este niño ya tenía código de este domingo. Se conservó el mismo (no se duplicó ni se cambió).';
+            } elseif ($esExistente) {
+                $mensaje = 'Registro renovado. Se asignó el código de este domingo (no se duplicó el niño).';
             } else {
                 $mensaje = 'Registro completado correctamente. Este es tu código semanal.';
             }
@@ -2095,7 +2219,7 @@ class TeenController extends BaseController {
                     'fuente' => 'teen',
                     'es_nuevo' => false,
                     'data' => $this->formatearMenorPublicoBusqueda($registro),
-                    'mensaje' => 'Encontramos al niño en registros anteriores. Cargamos todos sus datos. Al guardar solo se renovará el código semanal.',
+                    'mensaje' => 'Encontramos al niño en registros anteriores. Cargamos todos sus datos. Al guardar se conserva el código de este domingo si ya lo tiene.',
                 ], JSON_UNESCAPED_UNICODE);
                 exit;
             }
@@ -2123,7 +2247,7 @@ class TeenController extends BaseController {
                     'fuente' => 'teen',
                     'es_nuevo' => false,
                     'data' => $this->formatearMenorPublicoBusqueda($registroTeen),
-                    'mensaje' => 'Encontramos al niño en registros anteriores (sin documento vinculado). Al guardar solo se renovará el código semanal.',
+                    'mensaje' => 'Encontramos al niño en registros anteriores (sin documento vinculado). Al guardar se conserva el código de este domingo si ya lo tiene.',
                 ], JSON_UNESCAPED_UNICODE);
                 exit;
             }

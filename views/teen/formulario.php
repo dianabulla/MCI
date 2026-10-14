@@ -109,7 +109,7 @@ foreach (($registros ?? []) as $registroTmp) {
         <div class="teen-section-head">
             <div>
                 <h3 style="margin-top:0;">Kids</h3>
-                <p>El código visible usa el prefijo KS y dos dígitos semanales.</p>
+                <p>El código visible usa el prefijo KS y cuatro dígitos semanales.</p>
             </div>
             <span class="teen-chip teen-chip-kids"><?= count($registrosKids) ?> registros</span>
         </div>
