@@ -4,7 +4,12 @@ require_once APP . '/Helpers/GestionSistemaAccess.php';
 $puedeGestionarPermisosRol = GestionSistemaAccess::puedeVerMatrizPermisos();
 $admin_nav_active = 'roles';
 include VIEWS . '/partials/admin_nav.php';
+$rolesFlashError = (string)($_SESSION['roles_flash_error'] ?? '');
+unset($_SESSION['roles_flash_error']);
 ?>
+<?php if ($rolesFlashError !== ''): ?>
+<div class="alert alert-danger" role="alert" style="margin-bottom:14px;"><?= htmlspecialchars($rolesFlashError, ENT_QUOTES, 'UTF-8') ?></div>
+<?php endif; ?>
 
 <div class="page-header roles-page-header">
     <h2>Roles</h2>

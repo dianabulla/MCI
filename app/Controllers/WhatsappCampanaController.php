@@ -311,7 +311,8 @@ class WhatsappCampanaController extends BaseController {
             $token = $_GET['hub_verify_token'] ?? $_GET['hub.verify_token'] ?? '';
 
             if ($mode !== '' && $challenge !== '') {
-                if ($tokenEsperado === '' || hash_equals($tokenEsperado, (string)$token)) {
+                // Sin token configurado no se acepta ninguna verificación.
+                if ($tokenEsperado !== '' && hash_equals($tokenEsperado, (string)$token)) {
                     header('Content-Type: text/plain');
                     echo (string)$challenge;
                     exit;
@@ -327,6 +328,20 @@ class WhatsappCampanaController extends BaseController {
         }
 
         $input = file_get_contents('php://input');
+
+        // Si la configuración tiene el secreto de la app de Meta (columna opcional app_secret),
+        // el POST debe venir firmado; así nadie puede inventar estados de entrega.
+        $appSecret = trim((string)($config['app_secret'] ?? ''));
+        if ($appSecret !== '') {
+            $firma = (string)($_SERVER['HTTP_X_HUB_SIGNATURE_256'] ?? '');
+            $esperada = 'sha256=' . hash_hmac('sha256', (string)$input, $appSecret);
+            if ($firma === '' || !hash_equals($esperada, $firma)) {
+                http_response_code(403);
+                echo 'firma invalida';
+                exit;
+            }
+        }
+
         $payload = json_decode((string)$input, true);
         if (!is_array($payload)) {
             $payload = [];

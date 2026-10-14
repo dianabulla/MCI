@@ -15,11 +15,14 @@
 </div>
 
 <div class="page-header">
-    <h2><?= isset($rol) ? 'Editar' : 'Nuevo' ?> Rol</h2>
+    <h2><?= (isset($rol) && empty($modo_nuevo)) ? 'Editar' : 'Nuevo' ?> Rol</h2>
     <a href="<?= PUBLIC_URL ?>index.php?url=roles" class="btn btn-secondary">Volver</a>
 </div>
 
 <div class="form-container">
+    <?php if (!empty($error)): ?>
+    <div class="alert alert-danger" role="alert" style="margin-bottom:14px;"><?= htmlspecialchars((string)$error, ENT_QUOTES, 'UTF-8') ?></div>
+    <?php endif; ?>
     <form method="POST">
         <div class="form-group">
             <label for="nombre_rol">Nombre del Rol</label>

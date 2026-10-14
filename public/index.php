@@ -305,7 +305,6 @@ $rutasPublicasExtra = [
     'eventos/universidad-vida/publico',
     'eventos/capacitacion-destino/publico',
     'eventos/otros/publico',
-    'personas/sincronizar-edades',
 ];
 $rutasPublicas = array_values(array_unique(array_merge($rutasPublicas, $rutasPublicasExtra)));
 
@@ -380,6 +379,9 @@ if (!$esRutaPublica($url)) {
 
     require_once APP . '/Helpers/RouteGuard.php';
     RouteGuard::denegarSiNoPuede($url);
+
+    require_once APP . '/Helpers/OriginGuard.php';
+    OriginGuard::validar($url);
 }
 
 // Buscar la ruta

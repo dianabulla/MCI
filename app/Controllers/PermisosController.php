@@ -191,6 +191,18 @@ class PermisosController extends BaseController {
             return;
         }
 
+        if (!AuthController::esAdministrador()) {
+            // Evita que se concedan (o se concedan a sí mismos) permisos de administración.
+            if (in_array(strtolower($modulo), ['permisos', 'cuentas', 'roles'], true)) {
+                echo json_encode(['success' => false, 'error' => 'Solo un administrador puede conceder permisos de Permisos, Cuentas o Roles']);
+                return;
+            }
+            if ($idRol === (int)($_SESSION['usuario_rol'] ?? 0)) {
+                echo json_encode(['success' => false, 'error' => 'No puedes modificar los permisos de tu propio rol']);
+                return;
+            }
+        }
+
         if (stripos($campo, 'extra:') === 0) {
             $accionExtra = strtolower(trim(substr($campo, 6)));
             if ($accionExtra === '' || !PermisosCatalogo::esAccionValida($modulo, $accionExtra)) {

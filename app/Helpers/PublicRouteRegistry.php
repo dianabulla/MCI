@@ -54,7 +54,6 @@ class PublicRouteRegistry {
             'nehemias/testigos-electorales/formulario',
             'nehemias/testigos-electorales/guardar',
             'nehemias/whatsapp/webhook',
-            'personas/sincronizar-edades',
         ];
     }
 

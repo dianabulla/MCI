@@ -219,7 +219,7 @@ class DataIsolation {
      * Roles que SIEMPRE deben respetar aislamiento por jerarquia.
      */
     private static function esRolJerarquicoRestringido() {
-        return self::esLiderCelula() || self::esLider12() || self::esAsistente();
+        return self::esLiderCelula() || self::esLider12() || self::esLider144() || self::esAsistente();
     }
 
     /**
@@ -281,6 +281,29 @@ class DataIsolation {
             }
 
             return $condicion;
+        }
+
+        if (self::esLider144()) {
+            // Solo su propio equipo: él, quienes lo tienen como líder, los líderes de su equipo
+            // con sus miembros, y las células propias o bajo su cobertura. Sin ampliar por ministerio.
+            return "(
+                $aliasPersona.Id_Persona = $usuarioId
+                OR $aliasPersona.Id_Lider = $usuarioId
+                OR $aliasPersona.Id_Lider IN (
+                    SELECT eq.Id_Persona FROM persona eq WHERE eq.Id_Lider = $usuarioId
+                )
+                OR $celulasPropias
+                OR $aliasPersona.Id_Celula IN (
+                    SELECT c.Id_Celula
+                    FROM celula c
+                    WHERE c.Id_Lider_Inmediato = $usuarioId
+                )
+                OR $aliasPersona.Id_Lider IN (
+                    SELECT DISTINCT c.Id_Lider
+                    FROM celula c
+                    WHERE c.Id_Lider_Inmediato = $usuarioId
+                )
+            )";
         }
 
         if (self::esPastor()) {
@@ -350,7 +373,7 @@ class DataIsolation {
         if (self::esAdmin()) {
             return false;
         }
-        if (self::esLiderCelula() || self::esLider12() || self::esPastor() || self::esAsistente()) {
+        if (self::esLiderCelula() || self::esLider12() || self::esLider144() || self::esPastor() || self::esAsistente()) {
             return false;
         }
         $p = isset($_SESSION['permisos']['programas']) ? $_SESSION['permisos']['programas'] : null;
@@ -370,7 +393,7 @@ class DataIsolation {
             return "1=1";
         }
 
-        if (self::esLiderCelula() || self::esLider12() || self::esPastor()) {
+        if (self::esLiderCelula() || self::esLider12() || self::esLider144() || self::esPastor()) {
             return self::generarCondicionAnclajePersonas('p');
         }
 
@@ -460,6 +483,10 @@ class DataIsolation {
 
         if (self::tieneAccesoTotal()) {
             return "1=1";
+        }
+
+        if (self::esLider144()) {
+            return self::generarCondicionAnclajePersonas('p');
         }
 
         if (self::esLiderCelula() || self::esLider12() || self::esPastor()) {
@@ -552,6 +579,17 @@ class DataIsolation {
             return "1=0";
         }
 
+        if (self::esLider144()) {
+            if ($usuarioId) {
+                return "(
+                    c.Id_Lider = $usuarioId
+                    OR c.Id_Lider_Inmediato = $usuarioId
+                    OR c.Id_Lider IN (SELECT eq.Id_Persona FROM persona eq WHERE eq.Id_Lider = $usuarioId)
+                )";
+            }
+            return "1=0";
+        }
+
         if (self::esPastor()) {
             if ($usuarioId) {
                 return "(c.Id_Lider_Inmediato = $usuarioId OR c.Id_Lider = $usuarioId)";
@@ -590,7 +628,7 @@ class DataIsolation {
             return "1=1";
         }
 
-        if (self::esLiderCelula() || self::esLider12() || self::esPastor()) {
+        if (self::esLiderCelula() || self::esLider12() || self::esLider144() || self::esPastor()) {
             $condicionPersonas = self::generarCondicionAnclajePersonas('p');
             return "a.Id_Persona IN (SELECT p.Id_Persona FROM persona p WHERE $condicionPersonas)";
         }

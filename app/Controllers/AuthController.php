@@ -375,8 +375,10 @@ class AuthController extends BaseController {
             }
 
             if ($error === null && $contrasenaNueva !== '') {
-                if (strlen($contrasenaNueva) < 6) {
-                    $error = 'La nueva contraseña debe tener mínimo 6 caracteres.';
+                require_once APP . '/Helpers/PasswordPolicy.php';
+                $errorPolitica = PasswordPolicy::validar($contrasenaNueva);
+                if ($errorPolitica !== null) {
+                    $error = 'La nueva contraseña no es válida. ' . $errorPolitica;
                 } elseif ($contrasenaNueva !== $contrasenaConfirmacion) {
                     $error = 'La confirmación de la nueva contraseña no coincide.';
                 }

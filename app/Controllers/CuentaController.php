@@ -10,6 +10,7 @@ require_once APP . '/Models/UserRole.php';
 require_once APP . '/Controllers/AuthController.php';
 require_once APP . '/Helpers/GestionSistemaAccess.php';
 require_once APP . '/Helpers/PermisoGuard.php';
+require_once APP . '/Helpers/PasswordPolicy.php';
 require_once APP . '/Helpers/PermisosCatalogo.php';
 
 class CuentaController extends BaseController {
@@ -189,7 +190,7 @@ class CuentaController extends BaseController {
         PermisoGuard::exigir('cuentas:crear');
 
         $tablaDisponible = $this->usuarioAccesoModel->existeTabla();
-        $roles = $this->rolModel->getAll();
+        $roles = $this->rolesAsignables();
         $postData = $_POST;
         $persona = null;
         $tipoCreacion = trim((string)($_GET['tipo'] ?? $_POST['tipo_creacion'] ?? 'ministerial'));
@@ -219,8 +220,10 @@ class CuentaController extends BaseController {
 
                     if ($usuario === '' || $contrasena === '' || $idRol <= 0) {
                         $error = 'Usuario, contraseña y rol son obligatorios.';
-                    } elseif (strlen($contrasena) < 6) {
-                        $error = 'La contraseña debe tener mínimo 6 caracteres.';
+                    } elseif (($errorClave = PasswordPolicy::validar($contrasena)) !== null) {
+                        $error = $errorClave;
+                    } elseif (!AuthController::esAdministrador() && $this->esRolAdministrador($idRol)) {
+                        $error = 'Solo un administrador puede crear cuentas con el rol Administrador.';
                     } elseif ($this->usuarioAccesoModel->existeUsuario($usuario)) {
                         $error = 'Ese usuario ya existe en el sistema.';
                     } elseif ($tipoCreacion === 'ministerial' && empty($persona)) {
@@ -276,7 +279,7 @@ class CuentaController extends BaseController {
         PermisoGuard::exigir('cuentas:editar');
 
         $tablaDisponible = $this->usuarioAccesoModel->existeTabla();
-        $roles = $this->rolModel->getAll();
+        $roles = $this->rolesAsignables();
         $tipo = trim((string)($_GET['tipo'] ?? $_POST['tipo'] ?? 'persona'));
         $id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
         $error = null;
@@ -309,6 +312,11 @@ class CuentaController extends BaseController {
             $this->redirect('cuentas');
             return;
         }
+        // Una cuenta de administrador solo la modifica otro administrador (contraseña, rol, estado).
+        if (!AuthController::esAdministrador() && $this->esRolAdministrador((int)($cuentaAcceso['Id_Rol'] ?? 0))) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
         if (!empty($cuentaAcceso['Id_Persona'])) {
             $persona = $this->personaModel->getById((int)$cuentaAcceso['Id_Persona']);
         }
@@ -321,8 +329,15 @@ class CuentaController extends BaseController {
 
             if ($usuario === '' || $idRol <= 0) {
                 $error = 'Usuario y rol son obligatorios.';
-            } elseif ($contrasena !== '' && strlen($contrasena) < 6) {
-                $error = 'La contraseña debe tener mínimo 6 caracteres.';
+            } elseif ($contrasena !== '' && ($errorClave = PasswordPolicy::validar($contrasena)) !== null) {
+                $error = $errorClave;
+            } elseif (!AuthController::esAdministrador() && $this->esRolAdministrador($idRol)) {
+                $error = 'Solo un administrador puede asignar el rol Administrador.';
+            } elseif (!AuthController::esAdministrador()
+                && $idRol !== (int)($cuentaAcceso['Id_Rol'] ?? 0)
+                && !empty($cuentaAcceso['Id_Persona'])
+                && (int)$cuentaAcceso['Id_Persona'] === (int)($_SESSION['usuario_id'] ?? 0)) {
+                $error = 'No puedes cambiar tu propio rol.';
             } elseif ($this->usuarioAccesoModel->existeUsuario($usuario, $id)) {
                 $error = 'Ese usuario ya existe en el sistema.';
             } else {
@@ -359,6 +374,32 @@ class CuentaController extends BaseController {
             'tipo_cuenta' => $tipo,
             'cuenta_id' => $id,
         ]);
+    }
+
+    private function esRolAdministrador(int $idRol): bool {
+        if ($idRol <= 0) {
+            return false;
+        }
+        $fila = $this->rolModel->getById($idRol);
+        return PermisosCatalogo::esRolAdministradorGlobal($idRol, trim((string)($fila['Nombre_Rol'] ?? '')));
+    }
+
+    /**
+     * Roles que el usuario actual puede asignar: quien no es administrador no ve el rol Administrador.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function rolesAsignables(): array {
+        $roles = $this->rolModel->getAll();
+        if (AuthController::esAdministrador()) {
+            return $roles;
+        }
+        return array_values(array_filter($roles, function ($rol) {
+            return !PermisosCatalogo::esRolAdministradorGlobal(
+                (int)($rol['Id_Rol'] ?? 0),
+                trim((string)($rol['Nombre_Rol'] ?? ''))
+            );
+        }));
     }
 
     private function sincronizarRolMinisterialPersona(int $idPersona, int $idRol): void {

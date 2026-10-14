@@ -65,7 +65,7 @@
                             class="form-control"
                             id="contrasena_nueva"
                             name="contrasena_nueva"
-                            minlength="6"
+                            minlength="8"
                             placeholder="Mínimo 6 caracteres"
                         >
                         <button type="button" class="password-toggle-btn" data-target="contrasena_nueva" aria-label="Mostrar nueva contraseña" title="Mostrar/Ocultar">
@@ -82,7 +82,7 @@
                             class="form-control"
                             id="contrasena_nueva_confirmacion"
                             name="contrasena_nueva_confirmacion"
-                            minlength="6"
+                            minlength="8"
                             placeholder="Repite la nueva contraseña"
                         >
                         <button type="button" class="password-toggle-btn" data-target="contrasena_nueva_confirmacion" aria-label="Mostrar confirmación de contraseña" title="Mostrar/Ocultar">

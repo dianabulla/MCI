@@ -1,9 +1,7 @@
 <?php
-$claveOk = !empty($clave_ok);
 $pendientes = (int)($pendientes ?? 0);
 $mensaje = (string)($mensaje ?? '');
 $tipoMensaje = (string)($tipo_mensaje ?? '');
-$clave = (string)($clave ?? '');
 $action = (defined('PUBLIC_URL') ? rtrim(PUBLIC_URL, '/') . '/index.php?url=personas/sincronizar-edades' : '?url=personas/sincronizar-edades');
 ?>
 <!DOCTYPE html>
@@ -16,8 +14,6 @@ $action = (defined('PUBLIC_URL') ? rtrim(PUBLIC_URL, '/') . '/index.php?url=pers
         body { font-family: sans-serif; background: #f4f6fb; margin: 0; padding: 24px; color: #1e293b; }
         .box { max-width: 520px; margin: 40px auto; background: #fff; border: 1px solid #dbe4f0; border-radius: 12px; padding: 24px; }
         h1 { margin: 0 0 12px; font-size: 1.3rem; }
-        label { display: block; font-weight: 700; margin: 12px 0 6px; }
-        input[type="password"] { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; }
         .btn { margin-top: 14px; background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; font-weight: 700; cursor: pointer; }
         .ok { background: #e8f7ee; color: #166534; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; }
         .err { background: #fef2f2; color: #991b1b; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; }
@@ -26,28 +22,20 @@ $action = (defined('PUBLIC_URL') ? rtrim(PUBLIC_URL, '/') . '/index.php?url=pers
 <body>
 <div class="box">
     <h1>Actualizar edades</h1>
-    <p>Calcula la edad con la fecha de nacimiento. No requiere iniciar sesión.</p>
+    <p>Calcula la edad con la fecha de nacimiento. Solo para administradores.</p>
+
     <?php if ($mensaje !== ''): ?>
         <div class="<?= $tipoMensaje === 'success' ? 'ok' : 'err' ?>"><?= htmlspecialchars($mensaje) ?></div>
     <?php endif; ?>
 
-    <?php if (!$claveOk): ?>
-    <form method="POST" action="<?= htmlspecialchars($action, ENT_QUOTES, 'UTF-8') ?>">
-        <label for="clave">Clave</label>
-        <input type="password" id="clave" name="clave" required autocomplete="off">
-        <button class="btn" type="submit">Entrar</button>
-    </form>
-    <?php else: ?>
     <p>Pendientes: <strong><?= $pendientes ?></strong></p>
     <?php if ($pendientes > 0): ?>
     <form method="POST" action="<?= htmlspecialchars($action, ENT_QUOTES, 'UTF-8') ?>" onsubmit="return confirm('¿Actualizar <?= $pendientes ?> persona(s)?');">
-        <input type="hidden" name="clave" value="<?= htmlspecialchars($clave, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="confirmar" value="1">
         <button class="btn" type="submit">Actualizar edades ahora</button>
     </form>
     <?php else: ?>
     <p>No hay registros pendientes.</p>
-    <?php endif; ?>
     <?php endif; ?>
 </div>
 </body>

@@ -74,7 +74,7 @@ return [
 
     'personas/crear' => ['any' => ['personas:crear', 'acceso_rapido_nuevo_discipulo:crear']],
 
-    'personas/sincronizar-edades' => ['allow' => true],
+    'personas/sincronizar-edades' => ['admin_only' => true],
 
     'personas/editar' => ['checker' => 'puedeEditarPersonaDesdeDiscipular'],
 
@@ -506,6 +506,46 @@ return [
     'herramientas/corregir-rol-celulas' => ['admin_only' => true],
 
     'herramientas/corregir-rol-celulas/aplicar' => ['admin_only' => true],
+
+    // --- Acciones que modifican datos y cuyo nombre lleva guion o mayúsculas ---
+    // RouteGuard solo deduce crear/editar/eliminar cuando la palabra va sola entre barras;
+    // estas rutas se habrían tratado como "ver". Cada regla replica lo que ya exige su controlador.
+
+    'discipular/ministerios/asignar-cupo' => ['checker' => 'puedeEditarPersonaDesdeDiscipular'],
+    'discipular/ministerios/liberar-cupo' => ['checker' => 'puedeEditarPersonaDesdeDiscipular'],
+    'discipular/ministerios/reasignar-cupo' => ['checker' => 'puedeEditarPersonaDesdeDiscipular'],
+    'ministerios/asignar-cupo' => ['checker' => 'puedeEditarPersonaDesdeDiscipular'],
+    'ministerios/liberar-cupo' => ['checker' => 'puedeEditarPersonaDesdeDiscipular'],
+    'ministerios/reasignar-cupo' => ['checker' => 'puedeEditarPersonaDesdeDiscipular'],
+
+    'discipular/ministerios/guardar-metas' => 'ministerios:editar',
+    'discipular/ministerios/actualizarMeta' => 'ministerios:editar',
+    'discipular/ministerios/actualizar-lideres-principales' => 'ministerios:editar',
+    'ministerios/guardar-metas' => 'ministerios:editar',
+    'ministerios/actualizarMeta' => 'ministerios:editar',
+    'ministerios/actualizar-lideres-principales' => 'ministerios:editar',
+
+    'asistencias/registrar' => 'asistencias:crear',
+
+    'personas/asignarMinisterioGanar' => 'personas:editar',
+    'personas/reasignarMinisterioGanar' => 'personas:editar',
+
+    'talleres/estado' => 'talleres:editar',
+    'talleres/respuestas/asignar-ministerio' => ['any' => ['talleres:editar', 'talleres:eliminar']],
+    'talleres/crear-presentacion-ninos' => 'talleres:crear',
+    'talleres/crear-tour-levantate' => 'talleres:crear',
+    'talleres/corregir-personas-tour' => ['any' => ['talleres:editar', 'talleres:crear']],
+    'talleres/guardar-pago' => ['any' => ['talleres:editar', 'talleres:crear']],
+
+    'entrega_obsequio/marcarEntregado' => 'entrega_obsequio:editar',
+
+    'nehemias/seremos1200/importar' => 'nehemias:crear',
+    'nehemias/seremos1200/decision' => 'nehemias:editar',
+    'nehemias/whatsapp-campanas/generar-cola' => 'nehemias:editar',
+    'nehemias/whatsapp-campanas/procesar-cola' => 'nehemias:editar',
+    'nehemias/whatsapp-campanas/reintentar-fallidos' => 'nehemias:editar',
+
+    'transmisiones/cambiarEstado' => 'transmisiones:editar',
 
 ];
 

@@ -4703,31 +4703,26 @@ class PersonaController extends BaseController {
     }
 
     public function sincronizarEdades() {
-        $claveEsperada = 'mci_admin_2026';
-        $clave = trim((string)($_POST['clave'] ?? $_GET['clave'] ?? ''));
-        $claveOk = $clave !== '' && hash_equals($claveEsperada, $clave);
+        // Ruta privada solo para administradores (ver route_permissions.php).
+        // Se retiró la clave fija que estaba escrita en el código.
+        if (!AuthController::esAdministrador()) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
 
         $mensaje = '';
         $tipoMensaje = '';
-        $pendientes = 0;
-        if ($claveOk) {
-            if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['confirmar'] ?? '') === '1') {
-                $actualizadas = $this->personaModel->sincronizarEdadesDesdeFechaNacimiento();
-                $mensaje = 'Se actualizó la edad de ' . $actualizadas . ' persona(s).';
-                $tipoMensaje = 'success';
-            }
-            $pendientes = $this->personaModel->contarEdadesPendientesDeSincronizar();
-        } elseif ($clave !== '') {
-            $mensaje = 'La clave no es correcta.';
-            $tipoMensaje = 'error';
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['confirmar'] ?? '') === '1') {
+            $actualizadas = $this->personaModel->sincronizarEdadesDesdeFechaNacimiento();
+            $mensaje = 'Se actualizó la edad de ' . $actualizadas . ' persona(s).';
+            $tipoMensaje = 'success';
         }
+        $pendientes = $this->personaModel->contarEdadesPendientesDeSincronizar();
 
         $this->view('personas/sincronizar_edades', [
             'pendientes' => $pendientes,
             'mensaje' => $mensaje,
             'tipo_mensaje' => $tipoMensaje,
-            'clave_ok' => $claveOk,
-            'clave' => $claveOk ? $clave : '',
         ]);
     }
 }

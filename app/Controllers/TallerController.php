@@ -2408,6 +2408,8 @@ class TallerController extends BaseController {
         }
 
         $this->requiereAccesoRespuestas();
+        // Registrar un pago modifica datos: no basta con poder ver las respuestas.
+        $this->requierePermiso('editar', ['crear']);
 
         $idRespuesta = (int)($_POST['id_respuesta'] ?? 0);
 
