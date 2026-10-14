@@ -3689,6 +3689,33 @@ class Persona extends BaseModel {
     }
 
     /**
+     * Personas que hoy ocupan una casilla (1 a 12) de algún equipo de Discipular.
+     * Con $soloIdLider > 0 cuenta únicamente las casillas de ese líder.
+     */
+    public function contarPersonasEnCasillasDiscipular(string $filtroRol = '1=1', int $soloIdLider = 0): int {
+        if (!$this->tieneColumna('Numero_Cupo')) {
+            return 0;
+        }
+
+        $filtroRol = trim($filtroRol) !== '' ? $filtroRol : '1=1';
+        $sql = "SELECT COUNT(*) AS Total
+                FROM {$this->table} p
+                WHERE (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                  AND {$filtroRol}
+                  AND p.Id_Lider IS NOT NULL AND p.Id_Lider > 0
+                  AND p.Numero_Cupo BETWEEN 1 AND 12";
+        $params = [];
+        if ($soloIdLider > 0) {
+            $sql .= ' AND p.Id_Lider = ?';
+            $params[] = $soloIdLider;
+        }
+
+        $rows = $this->query($sql, $params);
+
+        return (int)($rows[0]['Total'] ?? 0);
+    }
+
+    /**
      * Total de lÃ­deres de cÃ©lula visibles segÃºn aislamiento.
      */
     public function getTotalLideresCelulaWithRole($filtroRol) {

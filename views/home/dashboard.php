@@ -8,7 +8,7 @@ $indicadoresDashboard = [
     ],
     'discipular' => [
         'valor' => (int)($totalDiscipular ?? 0),
-        'etiqueta' => 'personas en red',
+        'etiqueta' => 'personas en equipos de 12',
     ],
     'enviar' => [
         'valor' => (int)($totalCelulas ?? $totalPersonasCelulas ?? 0),

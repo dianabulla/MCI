@@ -26,6 +26,12 @@ La única ventana flotante que queda es la de configurar los líderes principale
 
 Del código de la pantalla salieron los bloques antiguos que ya no se mostraban: el encabezado con filtros, las pestañas de listados y las tablas de la red completa.
 
+## Número de la tarjeta del inicio
+
+La tarjeta Discipular del inicio cuenta las **personas que hoy ocupan una casilla de 1 a 12** de algún equipo, es decir, las que se ven dentro de este módulo. Antes contaba a cualquiera con ministerio o líder, y por eso el número era mucho mayor. La etiqueta dice «personas en equipos de 12».
+
+El líder de 12 y el líder de 144 ven solo el conteo de sus propias casillas.
+
 ## Quién ve qué
 
 Pastor, Ganar y el rol administrativo Células recorren las redes.

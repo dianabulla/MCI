@@ -1213,7 +1213,14 @@ class HomeController extends BaseController {
 
         $totalPersonas = $personaModel->contarTodasEnBase($filtroPersonas);
         $totalCelulas = $celulaModel->contarCelulas($filtroCelulas, true);
-        $totalDiscipular = $personaModel->contarPersonasRedDiscipular($filtroPersonas);
+        // Discipular muestra solo las casillas 1 a 12 de cada equipo.
+        // Un líder de 12 o de 144 cuenta únicamente las suyas.
+        $soloSusCasillas = !AuthController::esAdministrador()
+            && (DataIsolation::esLider12() || DataIsolation::esLider144());
+        $totalDiscipular = $personaModel->contarPersonasEnCasillasDiscipular(
+            $filtroPersonas,
+            $soloSusCasillas ? (int)($_SESSION['usuario_id'] ?? 0) : 0
+        );
         $totalProgramas = $inscripcionModel->contarPersonasUnicasInscritas([
             'universidad_vida',
             'capacitacion_destino',
