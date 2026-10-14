@@ -104,7 +104,7 @@ $fechaPublicacionHasta = htmlspecialchars((string)($itemEditar['Fecha_Publicacio
                 <input type="date" id="fecha_publicacion_desde_masivo" name="fecha_publicacion_desde_masivo" class="form-control">
             </div>
             <div class="form-group" style="margin:0;">
-                <label for="fecha_publicacion_hasta_masivo">Publicar hasta</label>
+                <label for="fecha_publicacion_hasta_masivo">Caduca el / Publicar hasta</label>
                 <input type="date" id="fecha_publicacion_hasta_masivo" name="fecha_publicacion_hasta_masivo" class="form-control">
             </div>
         </div>
@@ -151,8 +151,9 @@ $fechaPublicacionHasta = htmlspecialchars((string)($itemEditar['Fecha_Publicacio
         </div>
 
         <div class="form-group">
-            <label for="fecha_publicacion_hasta">Publicar hasta (opcional)</label>
+            <label for="fecha_publicacion_hasta">Caduca el / Publicar hasta (opcional)</label>
             <input type="date" id="fecha_publicacion_hasta" name="fecha_publicacion_hasta" class="form-control" value="<?= $fechaPublicacionHasta ?>">
+            <small style="display:block; margin-top:6px; color:#666;">Pasada esta fecha el contenido se baja solo de la página pública. Déjalo vacío si no debe caducar.</small>
         </div>
 
         <div class="form-group">
@@ -250,9 +251,19 @@ $fechaPublicacionHasta = htmlspecialchars((string)($itemEditar['Fecha_Publicacio
                             <?php endif; ?>
                         </td>
                         <td data-label="Publicación">
-                            <?php if (!empty($item['Fecha_Publicacion_Desde']) || !empty($item['Fecha_Publicacion_Hasta'])): ?>
-                                <?= htmlspecialchars((string)($item['Fecha_Publicacion_Desde'] ?? '')) ?>
-                                <?= !empty($item['Fecha_Publicacion_Hasta']) ? ' a ' . htmlspecialchars((string)$item['Fecha_Publicacion_Hasta']) : '' ?>
+                            <?php
+                            $hoyModulo = date('Y-m-d');
+                            $desdeItem = (string)($item['Fecha_Publicacion_Desde'] ?? '');
+                            $hastaItem = (string)($item['Fecha_Publicacion_Hasta'] ?? '');
+                            ?>
+                            <?php if ($desdeItem !== '' || $hastaItem !== ''): ?>
+                                <?= htmlspecialchars($desdeItem) ?>
+                                <?= $hastaItem !== '' ? ' a ' . htmlspecialchars($hastaItem) : '' ?>
+                                <?php if ($hastaItem !== '' && $hastaItem < $hoyModulo): ?>
+                                    <br><span class="meta-pill" style="background:#fff3df; color:#8a5a00;">Caducado (no se ve en público)</span>
+                                <?php elseif ($desdeItem !== '' && $desdeItem > $hoyModulo): ?>
+                                    <br><span class="meta-pill" style="background:#e8f0ff; color:#1f4f9a;">Programado</span>
+                                <?php endif; ?>
                             <?php else: ?>
                                 Siempre
                             <?php endif; ?>

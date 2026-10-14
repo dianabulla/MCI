@@ -72,7 +72,18 @@ Subido a producción el 14 de octubre de 2026 (17 archivos, tamaños verificados
 
 Pruebas recomendadas con usuarios reales: crear/editar una persona y eliminar un registro de prueba como administrador; entrar con un Líder de 144 y confirmar que solo ve su red; crear una cuenta probando la regla de contraseña.
 
-## Pendiente
+## Pendiente principal: rediseñar el módulo de Permisos
+
+El módulo de Permisos no refleja los módulos y acciones que existen hoy en la web. Se siguen presentando problemas al habilitar módulos a usuarios. Se deja anotado y pendiente por decisión del 14 de octubre de 2026; se revisará cuando termine la revisión del resto de módulos.
+
+Qué hay que hacer cuando se retome:
+1. Inventario real: listar cada módulo de la web (menú lateral, rutas en `routes.php`, reglas de `route_permissions.php` y acciones extra de `PermisosCatalogo.php`) y compararlo con lo que muestra la pantalla de Permisos.
+2. Corregir las diferencias: módulos que no aparecen, nombres que no coinciden con el menú y acciones extra faltantes o sobrantes. Los módulos usados hoy en las reglas de rutas son: acceso_rapido_nuevo_discipulo, asistencias, celulas, cuentas, discipular_evaluaciones, entrega_obsequio, escuelas_formacion, escuelas_formacion_marcar_asistencia, eventos, material_capacitacion_destino, ministerios, nehemias, permisos, personas, personas_plantillas_whatsapp, peticiones, programas, reportes, roles, talleres, teen, transmisiones.
+3. Probar por rol: habilitar un módulo a un rol limitado y confirmar que aparece en el menú (tras cerrar sesión y volver a entrar), que las acciones Ver/Crear/Editar/Eliminar funcionan y que no ve nada más.
+4. Definir cómo se maneja que el menú se guarda en la sesión (hoy hay que reingresar para ver módulos nuevos).
+5. Revisar los roles de producción: qué roles tienen `permisos:editar` y `cuentas:*`.
+
+## Otros pendientes
 
 - Confirmar en producción qué roles tienen `permisos:editar` y `cuentas:*` (en la base local, Pastores tiene `permisos:editar`).
 - Agregar `app_secret` a `whatsapp_config` y firmar el webhook de Meta.

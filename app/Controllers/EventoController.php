@@ -55,6 +55,27 @@ class EventoController extends BaseController {
         return $items;
     }
 
+    /**
+     * Valida los datos mínimos de un evento (nombre y fecha válida).
+     * @throws Exception
+     */
+    private function validarDatosEvento(array $data): void {
+        if (trim((string)($data['Nombre_Evento'] ?? '')) === '') {
+            throw new Exception('El nombre del evento es obligatorio.');
+        }
+
+        $fecha = trim((string)($data['Fecha_Evento'] ?? ''));
+        $dt = DateTime::createFromFormat('Y-m-d', $fecha);
+        if ($fecha === '' || !$dt || $dt->format('Y-m-d') !== $fecha) {
+            throw new Exception('La fecha del evento es obligatoria y debe ser válida.');
+        }
+
+        $hora = trim((string)($data['Hora_Evento'] ?? ''));
+        if ($hora !== '' && !preg_match('/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/', $hora)) {
+            throw new Exception('La hora del evento no es válida.');
+        }
+    }
+
     private function eventoSigueVigenteParaPublico(array $evento) {
         $fecha = trim((string)($evento['Fecha_Evento'] ?? ''));
         if ($fecha === '') {
@@ -145,14 +166,8 @@ class EventoController extends BaseController {
             return false;
         }
 
-        $items = (array)$this->eventoModuloModel->getByModulo($tipo);
-        foreach ($items as $item) {
-            if ((int)($item['Estado_Activo'] ?? 1) === 1) {
-                return true;
-            }
-        }
-
-        return false;
+        // getByModuloPublico ya filtra activo + rango de publicación (caducidad).
+        return !empty($this->eventoModuloModel->getByModuloPublico($tipo));
     }
 
     private function redirigirModulo($tipo) {
@@ -289,6 +304,14 @@ class EventoController extends BaseController {
                     'Permitir_Compartir' => !empty($_POST['permitir_compartir']) ? 1 : 0
                 ];
 
+                try {
+                    $this->validarDatosEvento($data);
+                } catch (Exception $e) {
+                    $this->eliminarArchivoFisico($rutaImagen);
+                    $this->eliminarArchivoFisico($rutaVideo);
+                    throw $e;
+                }
+
                 $this->eventoModel->create($data);
                 $this->redirect('eventos');
             } catch (Exception $e) {
@@ -326,6 +349,8 @@ class EventoController extends BaseController {
                     'Lugar_Evento' => trim($_POST['lugar_evento'] ?? ''),
                     'Permitir_Compartir' => !empty($_POST['permitir_compartir']) ? 1 : 0
                 ];
+
+                $this->validarDatosEvento($data);
 
                 $eliminarImagen = !empty($_POST['eliminar_imagen']);
                 $eliminarVideo = !empty($_POST['eliminar_video']);
@@ -428,6 +453,12 @@ class EventoController extends BaseController {
         if (empty($evento)) {
             http_response_code(404);
             echo 'Evento no encontrado';
+            return;
+        }
+
+        if (!$this->eventoSigueVigenteParaPublico((array)$evento)) {
+            http_response_code(404);
+            echo 'Este evento ya finalizó';
             return;
         }
 
@@ -730,11 +761,9 @@ class EventoController extends BaseController {
             return;
         }
 
-        // Mostrar contenido publicado (activo) aunque su rango de fechas haya pasado.
-        $items = $this->eventoModuloModel->getByModulo($config['tipo']);
-        $items = array_values(array_filter($items, static function($item) {
-            return (int)($item['Estado_Activo'] ?? 1) === 1;
-        }));
+        // Solo contenido activo y dentro de su rango de publicación: pasada la fecha
+        // "Publicar hasta" (caducidad) el contenido sale del listado público.
+        $items = (array)$this->eventoModuloModel->getByModuloPublico($config['tipo']);
         $items = $this->ordenarItemsPublicosRecientes($items);
 
         $modulosPublicos = [];
