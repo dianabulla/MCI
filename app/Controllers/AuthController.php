@@ -1774,6 +1774,7 @@ class AuthController extends BaseController {
         if (!self::estaAutenticado()) {
             return;
         }
+        self::sincronizarPermisosSesionActual(true);
         self::refrescarPerfilServicioSocialEnSesion();
         MenuBuilder::sincronizarSesion();
     }

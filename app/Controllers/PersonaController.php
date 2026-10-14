@@ -1217,6 +1217,21 @@ class PersonaController extends BaseController {
             || strpos($nombreRol, 'miembro') !== false;
     }
 
+    private function acomodarCasillaLiderCelulaSiAplica(int $idPersona, array $data): void {
+        if ($idPersona <= 0) {
+            return;
+        }
+        if ($this->personaModel->getJerarquiaByRol((int)($data['Id_Rol'] ?? 0)) !== 'lider_celula') {
+            return;
+        }
+
+        try {
+            $this->personaModel->acomodarLideresCelulaEnCasillas((int)($data['Id_Lider'] ?? 0));
+        } catch (Throwable $e) {
+            error_log('acomodar casillas: ' . $e->getMessage());
+        }
+    }
+
     private function aplicarAccesoAutomaticoDiscipulo(array &$data) {
         $idRol = (int)($data['Id_Rol'] ?? 0);
         if (!$this->debeAutoCrearAccesoDiscipuloPorIdRol($idRol)) {
@@ -4103,6 +4118,7 @@ class PersonaController extends BaseController {
             
             try {
                 $idPersonaNueva = (int)$this->personaModel->create($data);
+                $this->acomodarCasillaLiderCelulaSiAplica($idPersonaNueva, $data);
 
                 if ($idPersonaNueva > 0 && (int)($data['Id_Celula'] ?? 0) > 0) {
                     $personaCreadaCheck = $this->personaModel->getById($idPersonaNueva);
@@ -4510,6 +4526,7 @@ class PersonaController extends BaseController {
             
             try {
                 $this->personaModel->update($id, $data);
+                $this->acomodarCasillaLiderCelulaSiAplica((int)$id, $data);
                 $this->sincronizarRolSecundarioCapDestino((int)$id, (int)($data['Id_Rol'] ?? 0));
                 $this->provisionarAccesoMinisterialSiAplica((int)$id, $data);
                 Auditoria::ok('personas', 'editar', [

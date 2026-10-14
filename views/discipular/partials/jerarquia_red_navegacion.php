@@ -72,7 +72,9 @@ $slotsNodoActivo = ($nodoActivoId > 0 && isset($equipoDirectoPorLider[$nodoActiv
 $resumenNodoActivo = $resumenLiderPorId[$nodoActivoId] ?? null;
 $ocupadosNodo = $contarEquipo($equipoDirectoPorLider, $nodoActivoId);
 $redTotalNodo = is_array($resumenNodoActivo) ? (int)($resumenNodoActivo['red_total'] ?? 0) : 0;
-$puedeGestionarCupos = !empty($mostrarBotonesCupoPastoral) || !empty($esVistaPropiaLider12);
+$puedeGestionarCupos = (!empty($mostrarBotonesCupoPastoral) || !empty($esVistaPropiaLider12) || !empty($esVistaPropiaLider144))
+    && !empty($puedeEditarPersonaDiscipular);
+$encerrarEquipoPropio = !empty($esVistaPropiaLider144) || !empty($esVistaPropiaLider12);
 
 $construirReporteLideres12BajoPastor = static function (int $idPastorRed) use (
     $equipoDirectoPorLider,
@@ -173,24 +175,24 @@ $clasificarEstadoEquipoPrincipal = static function (int $ocupados): array {
 };
 ?>
 
+<?php
+// Un solo "Volver": va al nivel inmediato anterior.
+$urlVolverPaso = $buildJerarquiaUrl(0, $generoRedActual !== '' ? $generoRedActual : '');
+if ($nivelJerarquia === 'red') {
+    $urlVolverPaso = $buildJerarquiaUrl(0, '');
+} elseif ($nivelJerarquia === 'equipo') {
+    foreach (array_reverse($cadenaBreadcrumbJerarquia) as $crumbPadre) {
+        if (empty($crumbPadre['activo']) && !empty($crumbPadre['url'])) {
+            $urlVolverPaso = (string)$crumbPadre['url'];
+            break;
+        }
+    }
+}
+?>
 <section class="jer-red-panel jer-red-panel--limpio" aria-label="Navegación por redes">
-    <?php if (!empty($cadenaBreadcrumbJerarquia)): ?>
-    <nav class="jer-breadcrumb" aria-label="Ruta jerárquica">
-        <a href="<?= htmlspecialchars($buildJerarquiaUrl(0, '')) ?>" class="jer-breadcrumb-inicio"><i class="bi bi-house"></i> Inicio</a>
-        <?php foreach ($cadenaBreadcrumbJerarquia as $crumb): ?>
-            <span class="jer-breadcrumb-sep" aria-hidden="true">›</span>
-            <?php if (!empty($crumb['activo'])): ?>
-                <span class="jer-breadcrumb-activo"><?= htmlspecialchars((string)($crumb['nombre'] ?? '')) ?></span>
-            <?php else: ?>
-                <a href="<?= htmlspecialchars((string)($crumb['url'] ?? '#')) ?>"><?= htmlspecialchars((string)($crumb['nombre'] ?? '')) ?></a>
-            <?php endif; ?>
-        <?php endforeach; ?>
-    </nav>
-    <?php endif; ?>
-
     <?php if ($nivelJerarquia === 'inicio'): ?>
     <div class="jer-paso jer-paso-inicio">
-        <p class="jer-paso-hint">Selecciona una red para continuar</p>
+        <p class="jer-paso-hint">Elige una red</p>
         <div class="jer-red-grid jer-red-grid--inicio">
             <?php foreach ($redesRaiz as $generoKey => $red): ?>
                 <a href="<?= htmlspecialchars($buildJerarquiaUrl(0, $generoKey)) ?>" class="jer-red-choice <?= htmlspecialchars($red['clase']) ?>">
@@ -210,14 +212,14 @@ $clasificarEstadoEquipoPrincipal = static function (int $ocupados): array {
     $urlPastor = $idPastor > 0 ? $buildJerarquiaUrl($idPastor, $generoRedActual) : '#';
     ?>
     <div class="jer-paso jer-paso-red">
-        <a href="<?= htmlspecialchars($buildJerarquiaUrl(0, '')) ?>" class="jer-back-link"><i class="bi bi-arrow-left"></i> Volver a redes</a>
-        <p class="jer-paso-hint"><?= htmlspecialchars($redActiva['titulo']) ?></p>
+        <a href="<?= htmlspecialchars($urlVolverPaso) ?>" class="jer-back-link"><i class="bi bi-arrow-left"></i> Volver</a>
+        <h3 class="jer-paso-titulo"><?= htmlspecialchars($redActiva['titulo']) ?></h3>
         <?php if ($idPastor > 0): ?>
         <a href="<?= htmlspecialchars($urlPastor) ?>" class="jer-pastor-card <?= htmlspecialchars($redActiva['clase']) ?>">
             <span class="jer-pastor-etiqueta"><?= htmlspecialchars($redActiva['subtitulo']) ?></span>
             <strong class="jer-pastor-nombre"><?= htmlspecialchars($redActiva['nombre'] !== '' ? $redActiva['nombre'] : 'Sin nombre') ?></strong>
-            <span class="jer-pastor-meta">Equipo principal: <strong><?= $equipoPastor ?>/12</strong><?php if ($equipoPastor < 12): ?> · <em><?= (12 - $equipoPastor) ?> casilla(s) libre(s)</em><?php endif; ?></span>
-            <span class="jer-pastor-cta">Ver equipo del 12 <i class="bi bi-chevron-right"></i></span>
+            <span class="jer-pastor-meta">Equipo de 12: <strong><?= $equipoPastor ?>/12</strong></span>
+            <span class="jer-pastor-cta">Ver equipo <i class="bi bi-chevron-right"></i></span>
         </a>
         <?php else: ?>
         <div class="jer-empty-state">
@@ -226,24 +228,6 @@ $clasificarEstadoEquipoPrincipal = static function (int $ocupados): array {
             <button type="button" class="btn btn-sm btn-primary" onclick="document.getElementById('btnEditarLiderazgo')&&document.getElementById('btnEditarLiderazgo').click()">Configurar ahora</button>
             <?php endif; ?>
         </div>
-        <?php endif; ?>
-
-        <?php if ($idPastor > 0 && !empty($puedeGestionarCupos)): ?>
-        <p class="jer-paso-hint jer-paso-hint--accion">
-            <?php if ($equipoPastor < 12): ?>
-            Hay <?= (12 - $equipoPastor) ?> casilla(s) libre(s) bajo <?= htmlspecialchars($redActiva['subtitulo']) ?>.
-            <?php else: ?>
-            Equipo principal completo (12/12).
-            <?php endif; ?>
-        </p>
-        <button
-            type="button"
-            class="btn btn-sm btn-primary js-abrir-cupos-jerarquia jer-btn-gestionar-red"
-            data-id-lider="<?= $idPastor ?>"
-            data-id-ministerio="<?= (int)($idMinisterioFiltro ?? 0) ?>"
-            data-nombre-lider="<?= htmlspecialchars($redActiva['nombre'] !== '' ? $redActiva['nombre'] : 'Pastor/a', ENT_QUOTES, 'UTF-8') ?>"
-            data-modo-cupo="<?= !empty($hayFiltroMinisterio) ? 'lider_144' : 'pastoral' ?>"
-        ><i class="bi bi-grid-3x3-gap"></i> Gestionar cupos del equipo (<?= $equipoPastor ?>/12)</button>
         <?php endif; ?>
 
         <?php if ($idPastor > 0): ?>
@@ -256,28 +240,25 @@ $clasificarEstadoEquipoPrincipal = static function (int $ocupados): array {
             ?>
             <div class="jer-reporte-wrap">
                 <div class="jer-reporte-head">
-                    <h4>Reporte · Equipo principal de líderes de 12</h4>
-                    <p>Personas asignadas bajo <strong><?= htmlspecialchars($redActiva['nombre'] !== '' ? $redActiva['nombre'] : 'pastor') ?></strong> en <?= htmlspecialchars($redActiva['titulo']) ?>.</p>
+                    <h4>Líderes de 12</h4>
                 </div>
                 <?php if (empty($filasReporteL12)): ?>
-                <p class="jer-reporte-empty">Aún no hay líderes de 12 asignados en esta red.</p>
+                <p class="jer-reporte-empty">Aún no hay líderes de 12 en esta red.</p>
                 <?php else: ?>
                 <div class="table-container jer-reporte-table-wrap">
                     <table class="data-table jer-reporte-table">
                         <thead>
                             <tr>
-                                <th style="width:52px;">Cupo</th>
+                                <th style="width:64px;">Casilla</th>
                                 <th>Líder de 12</th>
-                                <th style="width:140px;">Equipo principal</th>
-                                <th style="width:110px;">Estado</th>
-                                <th style="width:72px;"></th>
+                                <th style="width:200px;">Su equipo</th>
+                                <th style="width:90px;"></th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($filasReporteL12 as $filaRep): ?>
                                 <?php
                                 $eqPrin = (int)($filaRep['equipo_principal'] ?? 0);
-                                $estadoRep = $clasificarEstadoEquipoPrincipal($eqPrin);
                                 $nombreRep = trim((string)($filaRep['nombre'] ?? ''));
                                 ?>
                                 <tr>
@@ -289,24 +270,17 @@ $clasificarEstadoEquipoPrincipal = static function (int $ocupados): array {
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <span class="jer-reporte-equipo-num">Tiene <strong><?= $eqPrin ?></strong> de 12</span>
+                                        <span class="jer-reporte-equipo-num"><strong><?= $eqPrin ?></strong> de 12</span>
                                         <div class="jer-reporte-bar" aria-hidden="true">
                                             <span class="jer-reporte-bar-fill" style="width:<?= min(100, (int)round(($eqPrin / 12) * 100)) ?>%;"></span>
                                         </div>
                                     </td>
-                                    <td><span class="jer-estado-badge <?= htmlspecialchars($estadoRep['clase']) ?>"><?= htmlspecialchars($estadoRep['label']) ?></span></td>
                                     <td class="text-center">
-                                        <a href="<?= htmlspecialchars((string)($filaRep['url'] ?? '#')) ?>" class="btn btn-xs btn-secondary" title="Ver equipo">Ver</a>
+                                        <a href="<?= htmlspecialchars((string)($filaRep['url'] ?? '#')) ?>" class="btn btn-sm btn-primary" title="Ver equipo">Ver equipo</a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
-                        <tfoot>
-                            <tr>
-                                <td colspan="2"><strong><?= count($filasReporteL12) ?></strong> líder(es) de 12</td>
-                                <td colspan="3"><strong><?= $totalPersonasEquipos ?></strong> persona(s) en equipos principales (suma)</td>
-                            </tr>
-                        </tfoot>
                     </table>
                 </div>
                 <?php endif; ?>
@@ -316,110 +290,129 @@ $clasificarEstadoEquipoPrincipal = static function (int $ocupados): array {
 
     <?php elseif ($nivelJerarquia === 'equipo' && $nodoActivoId > 0): ?>
     <div class="jer-paso jer-paso-equipo">
-        <?php
-        $urlVolverRed = $generoRedActual !== ''
-            ? $buildJerarquiaUrl(0, $generoRedActual)
-            : $buildJerarquiaUrl(0, '');
-        ?>
-        <a href="<?= htmlspecialchars($urlVolverRed) ?>" class="jer-back-link"><i class="bi bi-arrow-left"></i> Volver</a>
+        <?php if (empty($encerrarEquipoPropio)): ?>
+        <a href="<?= htmlspecialchars($urlVolverPaso) ?>" class="jer-back-link"><i class="bi bi-arrow-left"></i> Volver</a>
+        <?php endif; ?>
 
         <header class="jer-nodo-head">
             <div>
                 <p class="jer-nodo-etiqueta">
-                    <?= $generoRedActual === 'mujeres' ? 'Red Mujeres' : ($generoRedActual === 'hombres' ? 'Red Hombres' : 'Equipo') ?>
+                    <?= $generoRedActual === 'mujeres' ? 'Red Mujeres' : ($generoRedActual === 'hombres' ? 'Red Hombres' : 'Equipo de 12') ?>
                 </p>
                 <h4><?= htmlspecialchars($obtenerNombre($nodoActivoId, $resumenLiderPorId)) ?></h4>
             </div>
             <div class="jer-nodo-actions">
-                <span class="jer-kpi"><strong><?= $ocupadosNodo ?></strong>/12</span>
-                <?php if ($redTotalNodo > 0): ?>
-                <span class="jer-kpi jer-kpi-muted"><?= $redTotalNodo ?> en red</span>
-                <?php endif; ?>
-                <?php if ($puedeGestionarCupos): ?>
-                <button
-                    type="button"
-                    class="btn btn-sm btn-primary js-abrir-cupos-jerarquia"
-                    data-id-lider="<?= $nodoActivoId ?>"
-                    data-id-ministerio="<?= (int)($idMinisterioFiltro ?? 0) ?>"
-                    data-nombre-lider="<?= htmlspecialchars($obtenerNombre($nodoActivoId, $resumenLiderPorId), ENT_QUOTES, 'UTF-8') ?>"
-                    data-modo-cupo="<?= !empty($hayFiltroMinisterio) ? 'lider_144' : 'pastoral' ?>"
-                >Gestionar cupos</button>
-                <?php endif; ?>
+                <span class="jer-kpi"><strong><?= $ocupadosNodo ?></strong> de 12</span>
             </div>
         </header>
 
         <?php
-        $miembrosVisibles = [];
+        $slotsPorNumero = [];
         if (is_array($slotsNodoActivo)) {
-            foreach ($slotsNodoActivo as $idxSlot => $miembroSlot) {
+            foreach ($slotsNodoActivo as $miembroSlot) {
                 if (!is_array($miembroSlot) || empty($miembroSlot['id_persona'])) {
                     continue;
                 }
                 $cupoNumerado = (int)($miembroSlot['numero_cupo'] ?? 0);
-                if ($cupoNumerado < 1 || $cupoNumerado > 12) {
-                    continue;
+                if ($cupoNumerado >= 1 && $cupoNumerado <= 12) {
+                    $slotsPorNumero[$cupoNumerado] = $miembroSlot;
                 }
-                $miembrosVisibles[] = [
-                    'slot' => $cupoNumerado,
-                    'miembro' => $miembroSlot,
-                ];
             }
         }
-        usort($miembrosVisibles, static function ($a, $b) {
-            return (int)($a['slot'] ?? 0) <=> (int)($b['slot'] ?? 0);
-        });
+        $idMinisterioCasillas = (int)($idMinisterioFiltro ?? 0);
+        $modoCupoCasillas = !empty($hayFiltroMinisterio) ? 'lider_144' : 'pastoral';
         ?>
-
-        <?php if (empty($miembrosVisibles)): ?>
-        <div class="jer-empty-state">
-            <p>Este líder aún no tiene personas con casilla numerada (1–12) en su equipo principal.</p>
-            <p class="jer-empty-sub">Si hay personas en cobertura sin casilla, asígnalas con el botón de abajo.</p>
-            <?php if ($puedeGestionarCupos): ?>
-            <button type="button" class="btn btn-sm btn-primary js-abrir-cupos-jerarquia" data-id-lider="<?= $nodoActivoId ?>" data-id-ministerio="<?= (int)($idMinisterioFiltro ?? 0) ?>" data-nombre-lider="<?= htmlspecialchars($obtenerNombre($nodoActivoId, $resumenLiderPorId), ENT_QUOTES, 'UTF-8') ?>" data-modo-cupo="<?= !empty($hayFiltroMinisterio) ? 'lider_144' : 'pastoral' ?>">Asignar cupos</button>
-            <?php endif; ?>
-        </div>
-        <?php else: ?>
+        <section
+            class="asig-equipo"
+            data-id-lider="<?= (int)$nodoActivoId ?>"
+            data-id-ministerio="<?= $idMinisterioCasillas ?>"
+            data-modo-cupo="<?= htmlspecialchars($modoCupoCasillas, ENT_QUOTES, 'UTF-8') ?>"
+            data-jerarquia-lider="<?= htmlspecialchars((string)($jerarquiaPorLiderId[$nodoActivoId] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+            data-genero-red="<?= htmlspecialchars($generoRedActual, ENT_QUOTES, 'UTF-8') ?>"
+            data-tab="<?= htmlspecialchars((string)($tabActivo ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+            data-url-personas="<?= htmlspecialchars((string)($personasAsignablesUrl ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+            data-url-asignar="<?= htmlspecialchars(PUBLIC_URL . '?url=discipular/ministerios/asignar-cupo', ENT_QUOTES, 'UTF-8') ?>"
+            data-url-liberar="<?= htmlspecialchars(PUBLIC_URL . '?url=discipular/ministerios/liberar-cupo', ENT_QUOTES, 'UTF-8') ?>"
+            data-puede-gestionar="<?= $puedeGestionarCupos ? '1' : '0' ?>"
+        >
         <ul class="jer-miembros-lista">
-            <?php foreach ($miembrosVisibles as $itemMiembro): ?>
+            <?php for ($slotNum = 1; $slotNum <= 12; $slotNum++): ?>
                 <?php
-                $miembro = $itemMiembro['miembro'];
-                $slotNum = (int)($itemMiembro['slot'] ?? 0);
-                $idMiembro = (int)($miembro['id_persona'] ?? 0);
-                $nombreMiembro = trim((string)($miembro['nombre'] ?? ''));
-                $equipoMiembro = $contarEquipo($equipoDirectoPorLider, $idMiembro);
-                $redMiembro = (int)($resumenLiderPorId[$idMiembro]['red_total'] ?? 0);
-                $puedeDrill = $equipoMiembro > 0 || $redMiembro > 0 || isset($equipoDirectoPorLider[$idMiembro]);
-                $urlMiembro = $puedeDrill ? $buildJerarquiaUrl($idMiembro, $generoRedActual) : '';
+                $miembro = $slotsPorNumero[$slotNum] ?? null;
+                $idMiembro = $miembro ? (int)($miembro['id_persona'] ?? 0) : 0;
                 ?>
-                <li class="jer-miembro-item<?= $puedeDrill ? ' is-clickable' : '' ?>">
-                    <?php if ($puedeDrill && $urlMiembro !== ''): ?>
-                    <a href="<?= htmlspecialchars($urlMiembro) ?>" class="jer-miembro-link">
-                        <span class="jer-miembro-cupo"><?= $slotNum > 0 ? $slotNum : '·' ?></span>
-                        <span class="jer-miembro-body">
-                            <strong><?= htmlspecialchars($nombreMiembro !== '' ? $nombreMiembro : ('Persona #' . $idMiembro)) ?></strong>
-                            <?php if (trim((string)($miembro['nombre_rol'] ?? '')) !== ''): ?>
-                            <small><?= htmlspecialchars((string)$miembro['nombre_rol']) ?></small>
-                            <?php endif; ?>
-                            <span class="jer-miembro-meta">Equipo: <?= $equipoMiembro ?>/12<?= $redMiembro > 0 ? ' · Red: ' . $redMiembro : '' ?></span>
-                        </span>
-                        <i class="bi bi-chevron-right jer-miembro-arrow" aria-hidden="true"></i>
-                    </a>
-                    <?php else: ?>
-                    <div class="jer-miembro-static">
-                        <span class="jer-miembro-cupo"><?= $slotNum > 0 ? $slotNum : '·' ?></span>
-                        <span class="jer-miembro-body">
-                            <strong><?= htmlspecialchars($nombreMiembro !== '' ? $nombreMiembro : ('Persona #' . $idMiembro)) ?></strong>
-                            <small>Sin equipo debajo</small>
-                        </span>
+                <?php if ($idMiembro <= 0): ?>
+                <li class="jer-slot-card is-vacia" data-slot="<?= $slotNum ?>" data-id-persona="0" data-nombre="">
+                    <div class="jer-slot-top">
+                        <span class="jer-miembro-cupo"><?= $slotNum ?></span>
+                        <div class="jer-slot-ident">
+                            <strong class="jer-slot-nombre jer-slot-libre">Casilla libre</strong>
+                        </div>
                     </div>
+                    <?php if ($puedeGestionarCupos): ?>
+                    <div class="jer-slot-acciones">
+                        <button type="button" class="btn btn-sm btn-primary js-casilla-abrir">Asignar persona</button>
+                    </div>
+                    <div class="asig-panel-slot"></div>
                     <?php endif; ?>
                 </li>
-            <?php endforeach; ?>
+                <?php else: ?>
+                <?php
+                $nombreMiembro = trim((string)($miembro['nombre'] ?? ''));
+                if ($nombreMiembro === '') {
+                    $nombreMiembro = 'Persona #' . $idMiembro;
+                }
+                $equipoMiembro = $contarEquipo($equipoDirectoPorLider, $idMiembro);
+                $redMiembro = (int)($resumenLiderPorId[$idMiembro]['red_total'] ?? 0);
+                $puedeDrill = empty($encerrarEquipoPropio)
+                    && ($equipoMiembro > 0 || $redMiembro > 0 || isset($equipoDirectoPorLider[$idMiembro]));
+                $urlMiembro = $puedeDrill ? $buildJerarquiaUrl($idMiembro, $generoRedActual) : '';
+                $rolMiembro = trim((string)($miembro['nombre_rol'] ?? ''));
+                ?>
+                <li class="jer-slot-card" data-slot="<?= $slotNum ?>" data-id-persona="<?= $idMiembro ?>" data-nombre="<?= htmlspecialchars($nombreMiembro, ENT_QUOTES, 'UTF-8') ?>">
+                    <div class="jer-slot-top">
+                        <span class="jer-miembro-cupo"><?= $slotNum ?></span>
+                        <div class="jer-slot-ident">
+                            <strong class="jer-slot-nombre"><?= htmlspecialchars($nombreMiembro) ?></strong>
+                            <?php if ($rolMiembro !== ''): ?>
+                            <small><?= htmlspecialchars($rolMiembro) ?></small>
+                            <?php endif; ?>
+                            <?php if ($puedeDrill || $equipoMiembro > 0): ?>
+                            <span class="jer-miembro-meta">Su equipo: <?= $equipoMiembro ?> de 12</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <?php if ($puedeDrill && $urlMiembro !== ''): ?>
+                    <div class="jer-slot-acciones">
+                        <a href="<?= htmlspecialchars($urlMiembro) ?>" class="btn btn-sm btn-primary">Ver equipo</a>
+                        <?php if ($puedeGestionarCupos): ?>
+                        <button type="button" class="btn btn-sm btn-outline-primary js-casilla-abrir">Cambiar</button>
+                        <?php endif; ?>
+                    </div>
+                    <?php elseif ($puedeGestionarCupos): ?>
+                    <div class="jer-slot-acciones">
+                        <button type="button" class="btn btn-sm btn-outline-primary js-casilla-abrir">Cambiar</button>
+                    </div>
+                    <?php endif; ?>
+                    <div class="jer-miembro-escalera tabla-discipulos-compacta">
+                        <?php
+                        $escaleraPersonaId = $idMiembro;
+                        $escaleraChecklistRaw = (string)($miembro['escalera_checklist'] ?? '');
+                        $escaleraProceso = (string)($miembro['proceso'] ?? '');
+                        $escaleraIdCelula = (int)($miembro['id_celula'] ?? 0);
+                        $escaleraIdMinisterio = (int)($miembro['id_ministerio'] ?? 0);
+                        $escaleraPuedeEditar = !empty($puedeEditarPersonaDiscipular);
+                        include VIEWS . '/discipular/partials/escalera_rapida_casilla.php';
+                        ?>
+                    </div>
+                    <?php if ($puedeGestionarCupos): ?>
+                    <div class="asig-panel-slot"></div>
+                    <?php endif; ?>
+                </li>
+                <?php endif; ?>
+            <?php endfor; ?>
         </ul>
-        <?php if ($ocupadosNodo < 12): ?>
-        <p class="jer-cupos-libres"><?= (12 - $ocupadosNodo) ?> cupo(s) libre(s)</p>
-        <?php endif; ?>
-        <?php endif; ?>
+        </section>
     </div>
     <?php endif; ?>
 </section>

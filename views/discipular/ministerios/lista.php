@@ -11,7 +11,6 @@ $puedeCrearMinisterio = AuthController::esAdministrador() || AuthController::pue
 $puedeEditarMinisterio = AuthController::esAdministrador() || AuthController::puede('ministerios:editar');
 $puedeEliminarMinisterio = AuthController::esAdministrador() || AuthController::puede('ministerios:eliminar');
 $urlEquipoPrincipal = PUBLIC_URL . '?url=discipular/ministerios/equipo-principal';
-$urlLideresCelula = PUBLIC_URL . '?url=discipular/ministerios/lideres-celula';
 $urlNuevoMinisterio = PUBLIC_URL . '?url=discipular/ministerios/crear' . $returnUrlParam;
 $fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));
 ?>
@@ -20,7 +19,7 @@ $fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));
     <div>
         <h2>Discipular · Ministerios (redes)</h2>
         <p style="margin:6px 0 0; font-size:0.9rem; color:#5c6f8b; max-width:52rem; line-height:1.4;">
-            Cada ministerio corresponde a una <strong>red</strong> de la visión (hombres, mujeres, jóvenes, etc.). Desde aquí accedes al equipo del 12, metas y líderes de célula.
+            Cada ministerio corresponde a una <strong>red</strong>. Desde aquí abres el equipo de 12 y las metas.
         </p>
     </div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-start;">
@@ -28,14 +27,11 @@ $fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));
         <a href="<?= htmlspecialchars((string)$returnUrl) ?>" class="btn btn-secondary">← Volver a reportes</a>
         <?php endif; ?>
         <a href="<?= $urlEquipoPrincipal ?>" class="btn btn-secondary">Equipo Principal</a>
-        <a href="<?= $urlLideresCelula ?>" class="btn btn-secondary">Líderes de Célula</a>
         <?php if ($puedeCrearMinisterio): ?>
         <a href="<?= $urlNuevoMinisterio ?>" class="btn btn-primary">+ Nuevo Ministerio</a>
         <?php endif; ?>
     </div>
 </div>
-
-<?php include VIEWS . '/discipular/partials/jerarquia_g12_panel.php'; ?>
 
 <?php if (!empty($ministeriosOrdenados)): ?>
 <div class="table-container" style="margin-top:16px;">

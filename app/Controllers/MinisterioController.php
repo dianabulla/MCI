@@ -826,13 +826,19 @@ class MinisterioController extends BaseController {
      * JSON bajo demanda: personas para asignar cupos (no embeber en la carga inicial).
      */
     public function personasAsignablesJson() {
-        if (!AuthController::puede('ministerios:ver')) {
+        if (!AuthController::puedeEditarPersonaDesdeDiscipular()) {
             $this->json(['error' => 'Sin permiso'], 403);
             return;
         }
 
         require_once APP . '/Helpers/DataIsolation.php';
         $filtroPersonas = DataIsolation::generarFiltroPersonas();
+        if ($this->esVistaEquipoPropioEncerrado()) {
+            $idUsuarioEquipo = (int)($_SESSION['usuario_id'] ?? 0);
+            if ($idUsuarioEquipo > 0) {
+                $filtroPersonas = "(p.Id_Lider = {$idUsuarioEquipo} OR p.Id_Lider IS NULL OR p.Id_Lider = 0)";
+            }
+        }
 
         $idMinisterio = 0;
         if (array_key_exists('id_ministerio', $_GET)) {
@@ -842,6 +848,10 @@ class MinisterioController extends BaseController {
         }
 
         $idLider = (int)($_GET['id_lider'] ?? 0);
+        if ($idLider > 0 && !$this->puedeGestionarCuposDelLider($idLider)) {
+            $this->json(['error' => 'Sin permiso'], 403);
+            return;
+        }
 
         // Cupos: personas activas; el rol se asciende al asignar.
         $personasAsignablesRaw = $this->personaModel->getPersonasAsignablesParaEquipos(
@@ -855,6 +865,14 @@ class MinisterioController extends BaseController {
             $idPersona = (int)($persona['Id_Persona'] ?? 0);
             if ($idPersona <= 0) {
                 continue;
+            }
+
+            if ($this->esVistaEquipoPropioEncerrado()) {
+                $idUsuario = (int)($_SESSION['usuario_id'] ?? 0);
+                $idLiderPersona = (int)($persona['Id_Lider'] ?? 0);
+                if ($idLiderPersona > 0 && $idLiderPersona !== $idUsuario) {
+                    continue;
+                }
             }
 
             $persona['_jerarquia'] = $this->personaModel->getJerarquiaByRol((int)($persona['Id_Rol'] ?? 0));
@@ -889,6 +907,9 @@ class MinisterioController extends BaseController {
         $esVistaPropiaLider12 = $this->esVistaPropiaLider12Equipo();
         $idUsuarioSesion = (int)($_SESSION['usuario_id'] ?? 0);
         $this->redirigirLider12EquipoPrincipalSiAplica($esVistaPropiaLider12, $idUsuarioSesion);
+
+        $esVistaPropiaLider144 = $this->esVistaPropiaLider144Equipo();
+        $this->redirigirLider144EquipoPrincipalSiAplica($esVistaPropiaLider144, $idUsuarioSesion);
 
         $filtroPersonas = DataIsolation::generarFiltroPersonas();
         $filtroMinisterios = DataIsolation::generarFiltroMinisterios();
@@ -1127,10 +1148,20 @@ class MinisterioController extends BaseController {
         $encabezado['equipo_principal_mujeres'] = count($lideresMujeres);
 
         $equipoDirectoPorLider = $this->construirEquipoDirectoPorLider($liderazgoRed, $discipulos);
-        $idsLideresEquipoDirectoDb = $idMinisterioFiltro > 0
-            ? $idsLideres12CoberturaCupo
-            : array_values(array_unique(array_merge($idsLideres12, [$idLiderPrincipal1, $idLiderPrincipal2])));
+        $encerrarEquipoPropio = ($esVistaPropiaLider12 || $esVistaPropiaLider144) && $idUsuarioSesion > 0;
+        if ($encerrarEquipoPropio) {
+            $idsLideresEquipoDirectoDb = [$idUsuarioSesion];
+        } else {
+            $idsLideresEquipoDirectoDb = $idMinisterioFiltro > 0
+                ? $idsLideres12CoberturaCupo
+                : array_values(array_unique(array_merge($idsLideres12, [$idLiderPrincipal1, $idLiderPrincipal2])));
+        }
         $equipoDirectoPorLider = $this->enriquecerEquipoDirectoDesdeDb($equipoDirectoPorLider, $idsLideresEquipoDirectoDb);
+        if ($encerrarEquipoPropio) {
+            $equipoDirectoPorLider = [
+                $idUsuarioSesion => $equipoDirectoPorLider[$idUsuarioSesion] ?? array_fill(0, 12, null),
+            ];
+        }
         $codigosJerarquia = CodigoJerarquiaHelper::construirMapaCodigos(
             $idLiderPrincipal1,
             $idLiderPrincipal2,
@@ -1189,6 +1220,7 @@ class MinisterioController extends BaseController {
             'es_ministerio_pastoral' => $esMinisterioPastoral,
             'ids_lideres_12_cobertura_cupo' => $idsLideres12CoberturaCupo,
             'es_vista_propia_lider_12' => $esVistaPropiaLider12,
+            'es_vista_propia_lider_144' => $esVistaPropiaLider144,
             'id_usuario_sesion' => $idUsuarioSesion,
             'puede_configurar_lideres_principales' => !$esVistaPropiaLider12,
             'totales_personas_ministerio' => $totalesPersonasMinisterio,
@@ -1235,13 +1267,75 @@ class MinisterioController extends BaseController {
         return count($ids);
     }
 
+    private function esRolDiscipularAmplio(): bool {
+        require_once APP . '/Helpers/DataIsolation.php';
+        return DataIsolation::esAdmin()
+            || DataIsolation::esPastor()
+            || DataIsolation::esGanar()
+            || DataIsolation::esRolCelulas();
+    }
+
     private function esVistaPropiaLider12Equipo(): bool {
         require_once APP . '/Helpers/DataIsolation.php';
-        if (DataIsolation::tieneAccesoTotal() || DataIsolation::esPastor()) {
+        if ($this->esRolDiscipularAmplio()) {
             return false;
         }
 
         return DataIsolation::esLider12();
+    }
+
+    private function esVistaPropiaLider144Equipo(): bool {
+        require_once APP . '/Helpers/DataIsolation.php';
+        if ($this->esRolDiscipularAmplio() || DataIsolation::esLider12()) {
+            return false;
+        }
+
+        return DataIsolation::esLider144();
+    }
+
+    private function esVistaPropiaLiderCelulaEquipo(): bool {
+        require_once APP . '/Helpers/DataIsolation.php';
+        if ($this->esRolDiscipularAmplio() || DataIsolation::esLider12() || DataIsolation::esLider144()) {
+            return false;
+        }
+
+        return DataIsolation::esLiderCelula();
+    }
+
+    private function puedeGestionarCuposDelLider(int $idLider): bool {
+        require_once APP . '/Helpers/DataIsolation.php';
+        if ($idLider <= 0) {
+            return false;
+        }
+        if ($this->esRolDiscipularAmplio()) {
+            return true;
+        }
+        if ($this->esVistaPropiaLiderCelulaEquipo()) {
+            return false;
+        }
+
+        $idUsuario = (int)($_SESSION['usuario_id'] ?? 0);
+        if ($this->esVistaEquipoPropioEncerrado()) {
+            return $idUsuario > 0 && $idLider === $idUsuario;
+        }
+
+        return true;
+    }
+
+    private function esVistaEquipoPropioEncerrado(): bool {
+        return $this->esVistaPropiaLider12Equipo() || $this->esVistaPropiaLider144Equipo();
+    }
+
+    private function acomodarCasillasTrasCambio(int $idLider): void {
+        if ($idLider <= 0) {
+            return;
+        }
+
+        try {
+            $this->personaModel->acomodarLideresCelulaEnCasillas($idLider);
+        } catch (Throwable $e) {
+            error_log('acomodar casillas: ' . $e->getMessage());
+        }
     }
 
     private function redirigirLider12EquipoPrincipalSiAplica(bool $esVistaPropiaLider12, int $idUsuarioSesion): void {
@@ -1250,109 +1344,72 @@ class MinisterioController extends BaseController {
         }
 
         $persona = $this->personaModel->getById($idUsuarioSesion);
-        if (empty($persona)) {
-            return;
-        }
-
         $idMinisterioUsuario = (int)($persona['Id_Ministerio'] ?? 0);
-        if ($idMinisterioUsuario <= 0) {
+        $idMinisterioGet = (int)($_GET['id_ministerio'] ?? 0);
+        $coberturaGet = trim((string)($_GET['cobertura_principal'] ?? ''));
+        $generoRed = trim((string)($_GET['genero_red'] ?? ''));
+
+        $coberturaAjena = $coberturaGet !== (string)$idUsuarioSesion;
+        $redAbierta = $generoRed !== '';
+        $ministerioAjeno = $idMinisterioUsuario > 0
+            ? $idMinisterioGet !== $idMinisterioUsuario
+            : $idMinisterioGet > 0;
+
+        if (!$coberturaAjena && !$redAbierta && !$ministerioAjeno) {
             return;
         }
 
-        $idMinisterioGet = (int)($_GET['id_ministerio'] ?? 0);
-        $tabGet = strtolower(trim((string)($_GET['tab'] ?? '')));
-        $tabsPermitidosLider12 = ['lideres_144', 'lideres_celula', 'discipulos'];
-
-        $paramsBase = [
+        $params = [
             'url' => 'discipular/ministerios/equipo-principal',
-            'id_ministerio' => $idMinisterioUsuario,
+            'cobertura_principal' => $idUsuarioSesion,
         ];
-
-        if ($idMinisterioGet !== $idMinisterioUsuario) {
-            header('Location: ' . PUBLIC_URL . '?' . http_build_query($paramsBase + [
-                'tab' => 'lideres_144',
-                'cobertura_principal' => $idUsuarioSesion,
-            ]));
-            exit;
+        if ($idMinisterioUsuario > 0) {
+            $params['id_ministerio'] = $idMinisterioUsuario;
         }
 
-        if ($tabGet === '' || !in_array($tabGet, $tabsPermitidosLider12, true)) {
-            header('Location: ' . PUBLIC_URL . '?' . http_build_query($paramsBase + [
-                'tab' => 'lideres_144',
-                'cobertura_principal' => $idUsuarioSesion,
-            ]));
-            exit;
+        header('Location: ' . PUBLIC_URL . '?' . http_build_query($params));
+        exit;
+    }
+
+    private function redirigirLider144EquipoPrincipalSiAplica(bool $esVistaPropiaLider144, int $idUsuarioSesion): void {
+        if (!$esVistaPropiaLider144 || $idUsuarioSesion <= 0) {
+            return;
         }
 
-        if ($tabGet === 'lideres_144') {
-            $coberturaGet = trim((string)($_GET['cobertura_principal'] ?? ''));
-            if ($coberturaGet !== (string)$idUsuarioSesion) {
-                header('Location: ' . PUBLIC_URL . '?' . http_build_query($paramsBase + [
-                    'tab' => 'lideres_144',
-                    'cobertura_principal' => $idUsuarioSesion,
-                ]));
-                exit;
-            }
+        $persona = $this->personaModel->getById($idUsuarioSesion);
+        $idMinisterioUsuario = (int)($persona['Id_Ministerio'] ?? 0);
+        $idMinisterioGet = (int)($_GET['id_ministerio'] ?? 0);
+        $coberturaGet = trim((string)($_GET['cobertura_principal'] ?? ''));
+        $generoRed = trim((string)($_GET['genero_red'] ?? ''));
+
+        $coberturaAjena = $coberturaGet !== (string)$idUsuarioSesion;
+        $redAbierta = $generoRed !== '';
+        $ministerioAjeno = $idMinisterioUsuario > 0
+            ? $idMinisterioGet !== $idMinisterioUsuario
+            : $idMinisterioGet > 0;
+
+        if (!$coberturaAjena && !$redAbierta && !$ministerioAjeno) {
+            return;
         }
+
+        $params = [
+            'url' => 'discipular/ministerios/equipo-principal',
+            'cobertura_principal' => $idUsuarioSesion,
+        ];
+        if ($idMinisterioUsuario > 0) {
+            $params['id_ministerio'] = $idMinisterioUsuario;
+        }
+
+        header('Location: ' . PUBLIC_URL . '?' . http_build_query($params));
+        exit;
     }
 
     public function lideresCelula() {
-        if (!AuthController::puede('ministerios:ver')) {
-            header('Location: ' . public_app_url('auth/acceso-denegado'));
-            exit;
-        }
-
-        $filtroPersonas = DataIsolation::generarFiltroPersonas();
-        $lideres = $this->personaModel->getResumenLideresCelulaWithRole($filtroPersonas);
-
-        $idMinisterioFiltro = (int)($_GET['id_ministerio'] ?? 0);
-        $nombreMinisterioFiltro = '';
-
-        if ($idMinisterioFiltro > 0) {
-            $lideres = array_values(array_filter($lideres, static function ($lider) use ($idMinisterioFiltro) {
-                return (int)($lider['Id_Ministerio'] ?? 0) === $idMinisterioFiltro;
-            }));
-
-            $ministerio = $this->ministerioModel->getById($idMinisterioFiltro);
-            $nombreMinisterioFiltro = trim((string)($ministerio['Nombre_Ministerio'] ?? ''));
-        }
-
-        $lideres = $this->anexarResumenRedLideres($lideres, $idMinisterioFiltro);
-
-        $esGeneroMujer = static function ($genero) {
-            $g = strtolower(trim((string)$genero));
-            return (strpos($g, 'mujer') !== false) || (strpos($g, 'femen') !== false);
-        };
-
-        $lideresCelulaHombres = [];
-        $lideresCelulaMujeres = [];
-
-        foreach ($lideres as $lider) {
-            if ((int)($lider['Es_Lider_Celula'] ?? 0) !== 1) {
-                continue;
-            }
-
-            $nodo = $this->normalizarNodoEquipo12($lider, $esGeneroMujer);
-            if (!empty($nodo['es_mujer'])) {
-                $lideresCelulaMujeres[] = $nodo;
-            } else {
-                $lideresCelulaHombres[] = $nodo;
-            }
-        }
-
-        usort($lideresCelulaHombres, [$this, 'compararNodosEquipo12']);
-        usort($lideresCelulaMujeres, [$this, 'compararNodosEquipo12']);
-
-        $this->view('discipular/ministerios/lideres_celula', [
-            'lideres_celula_hombres' => $lideresCelulaHombres,
-            'lideres_celula_mujeres' => $lideresCelulaMujeres,
-            'id_ministerio_filtro' => $idMinisterioFiltro,
-            'nombre_ministerio_filtro' => $nombreMinisterioFiltro,
-        ]);
+        $this->redirect('discipular/ministerios/equipo-principal');
     }
 
     public function validarCupoLider() {
-        if (!AuthController::puede('ministerios:ver')) {
+        if (!AuthController::puedeEditarPersonaDesdeDiscipular()) {
             $this->json(['ok' => false, 'error' => 'No autorizado'], 403);
         }
 
@@ -1360,6 +1417,10 @@ class MinisterioController extends BaseController {
 
         if ($idLider <= 0) {
             $this->json(['ok' => false, 'error' => 'id_lider es obligatorio'], 422);
+        }
+
+        if (!$this->puedeGestionarCuposDelLider($idLider)) {
+            $this->json(['ok' => false, 'error' => 'No autorizado'], 403);
         }
 
         $resumenCupos = $this->personaModel->getResumenCuposNumeradosLider($idLider);
@@ -1407,7 +1468,7 @@ class MinisterioController extends BaseController {
     }
 
     public function asignarCupo() {
-        if (!AuthController::puede('ministerios:ver')) {
+        if (!AuthController::puedeEditarPersonaDesdeDiscipular()) {
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
@@ -1438,6 +1499,11 @@ class MinisterioController extends BaseController {
             return;
         }
 
+        if (!$this->puedeGestionarCuposDelLider($idLider)) {
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('Solo puedes cambiar las casillas de tu equipo.'));
+            return;
+        }
+
         $persona = $this->personaModel->getById($idPersona);
         $lider = $this->personaModel->getById($idLider);
         $personaActualSlot = $idPersonaActualSlot > 0 ? $this->personaModel->getById($idPersonaActualSlot) : null;
@@ -1445,6 +1511,15 @@ class MinisterioController extends BaseController {
         if (empty($persona) || empty($lider)) {
             $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('No se encontró la persona o el líder seleccionado.'));
             return;
+        }
+
+        if ($this->esVistaEquipoPropioEncerrado()) {
+            $idUsuario = (int)($_SESSION['usuario_id'] ?? 0);
+            $idLiderPersona = (int)($persona['Id_Lider'] ?? 0);
+            if ($idLiderPersona > 0 && $idLiderPersona !== $idUsuario) {
+                $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('Esa persona ya está en el equipo de otro líder.'));
+                return;
+            }
         }
 
         if ($idPersonaActualSlot > 0) {
@@ -1542,6 +1617,7 @@ class MinisterioController extends BaseController {
 
         $excludeCupo = array_filter([$idPersona, $idPersonaActualSlot]);
         $usaCuposNumerados = $limiteEquipo > 0;
+        $idOcupanteCupo = 0;
         if ($usaCuposNumerados) {
             if ($numeroCupo < 1 || $numeroCupo > 12) {
                 $numeroCupo = $this->personaModel->primerCupoLibreDeLider($idLider, $excludeCupo);
@@ -1552,9 +1628,6 @@ class MinisterioController extends BaseController {
             }
 
             $idOcupanteCupo = $this->personaModel->getIdPersonaEnCupoDeLider($idLider, $numeroCupo, $excludeCupo);
-            if ($idOcupanteCupo > 0 && $idOcupanteCupo !== $idPersona) {
-                $this->personaModel->update($idOcupanteCupo, ['Numero_Cupo' => null]);
-            }
         } else {
             $numeroCupo = 0;
         }
@@ -1577,26 +1650,41 @@ class MinisterioController extends BaseController {
             $dataUpdate['Id_Ministerio'] = (int)$lider['Id_Ministerio'];
         }
 
-        if ($idPersonaActualSlot > 0) {
-            $liberarData = ['Id_Lider' => null];
-            if ($this->personaModel->tieneColumna('Numero_Cupo')) {
-                $liberarData['Numero_Cupo'] = null;
+        global $pdo;
+        $usarTransaccion = $pdo instanceof PDO;
+        try {
+            if ($usarTransaccion && !$pdo->inTransaction()) {
+                $pdo->beginTransaction();
             }
-            $okLiberar = $this->personaModel->update($idPersonaActualSlot, $liberarData);
-            if (!$okLiberar) {
-                $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('No se pudo liberar a la persona que ocupaba ese cupo.'));
-                return;
-            }
-        }
 
-        $ok = $this->personaModel->update($idPersona, $dataUpdate);
-        if (!$ok) {
-            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('No se pudo guardar la asignación del cupo.'));
+            if ($usaCuposNumerados && $idOcupanteCupo > 0 && $idOcupanteCupo !== $idPersona) {
+                $this->personaModel->update($idOcupanteCupo, ['Numero_Cupo' => null]);
+            }
+
+            if ($idPersonaActualSlot > 0) {
+                $liberarData = ['Id_Lider' => null];
+                if ($this->personaModel->tieneColumna('Numero_Cupo')) {
+                    $liberarData['Numero_Cupo'] = null;
+                }
+                $this->personaModel->update($idPersonaActualSlot, $liberarData);
+            }
+
+            $this->personaModel->update($idPersona, $dataUpdate);
+
+            if (isset($dataUpdate['Id_Rol'])) {
+                $this->personaModel->ajustarEscaleraPorRol($idPersona, (int)$dataUpdate['Id_Rol']);
+            }
+
+            if ($usarTransaccion && $pdo->inTransaction()) {
+                $pdo->commit();
+            }
+        } catch (Throwable $e) {
+            if ($usarTransaccion && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log('asignarCupo: ' . $e->getMessage());
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('No se pudo guardar el cambio de casilla. La asignación anterior se mantuvo.'));
             return;
-        }
-
-        if (isset($dataUpdate['Id_Rol'])) {
-            $this->personaModel->ajustarEscaleraPorRol($idPersona, (int)$dataUpdate['Id_Rol']);
         }
 
         $mensajeExito = ($idLiderAnterior > 0 && !$yaBajoMismoLider) ? 'Cupo reasignado correctamente.' : 'Cupo asignado correctamente.';
@@ -1618,6 +1706,8 @@ class MinisterioController extends BaseController {
             $mensajeExito .= ' La persona anterior quedó sin líder asignado.';
         }
 
+        $this->acomodarCasillasTrasCambio($idLider);
+
         $this->redirect($queryBase . '&asignacion_ok=1&asignacion_msg=' . urlencode($mensajeExito));
     }
 
@@ -1625,7 +1715,7 @@ class MinisterioController extends BaseController {
      * Quita a una persona del cupo (equipo directo) de un líder sin borrar la persona.
      */
     public function liberarCupo() {
-        if (!AuthController::puede('ministerios:ver')) {
+        if (!AuthController::puedeEditarPersonaDesdeDiscipular()) {
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
@@ -1650,6 +1740,11 @@ class MinisterioController extends BaseController {
 
         if ($idLider <= 0 || $idPersona <= 0) {
             $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('Datos incompletos para quitar del cupo.'));
+            return;
+        }
+
+        if (!$this->puedeGestionarCuposDelLider($idLider)) {
+            $this->redirect($queryBase . '&asignacion_error=1&asignacion_msg=' . urlencode('Solo puedes cambiar las casillas de tu equipo.'));
             return;
         }
 
@@ -1678,11 +1773,12 @@ class MinisterioController extends BaseController {
         $msg = $numeroCupo > 0
             ? 'Casilla ' . $numeroCupo . ' quedó libre.'
             : 'Persona quitada del equipo directo.';
+        $this->acomodarCasillasTrasCambio($idLider);
         $this->redirect($queryBase . '&asignacion_ok=1&asignacion_msg=' . urlencode($msg));
     }
 
     public function reasignarCupo() {
-        if (!AuthController::puede('ministerios:ver')) {
+        if (!AuthController::puedeEditarPersonaDesdeDiscipular()) {
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
@@ -1700,6 +1796,11 @@ class MinisterioController extends BaseController {
 
         if ($idLiderNuevo <= 0 || $idPersona <= 0) {
             $this->redirect($queryBase . '&reasignacion_error=1&reasignacion_msg=' . urlencode('Selecciona persona y nuevo líder para reasignar.'));
+            return;
+        }
+
+        if (!$this->puedeGestionarCuposDelLider($idLiderNuevo)) {
+            $this->redirect($queryBase . '&reasignacion_error=1&reasignacion_msg=' . urlencode('Solo puedes cambiar las casillas de tu equipo.'));
             return;
         }
 
@@ -2024,6 +2125,10 @@ class MinisterioController extends BaseController {
                 'email' => trim((string)($fila['Email'] ?? '')),
                 'nombre_rol' => trim((string)($fila['Nombre_Rol'] ?? '')),
                 'numero_cupo' => (int)($fila['Numero_Cupo'] ?? 0),
+                'proceso' => trim((string)($fila['Proceso'] ?? '')),
+                'escalera_checklist' => (string)($fila['Escalera_Checklist'] ?? ''),
+                'id_celula' => (int)($fila['Id_Celula'] ?? 0),
+                'id_ministerio' => (int)($fila['Id_Ministerio'] ?? 0),
             ];
         };
 
@@ -2080,7 +2185,8 @@ class MinisterioController extends BaseController {
         $placeholders = implode(',', array_fill(0, count($idsLideres), '?'));
         $rows = $this->personaModel->query(
             "SELECT p.Id_Persona, p.Numero_Documento, p.Nombre, p.Apellido, p.Email, p.Telefono,
-                    p.Id_Lider, p.Numero_Cupo, COALESCE(r.Nombre_Rol, '') AS Nombre_Rol
+                    p.Id_Lider, p.Id_Ministerio, p.Id_Celula, p.Numero_Cupo, p.Proceso, p.Escalera_Checklist,
+                    COALESCE(r.Nombre_Rol, '') AS Nombre_Rol
              FROM persona p
              LEFT JOIN rol r ON r.Id_Rol = p.Id_Rol
              WHERE p.Id_Lider IN ({$placeholders})
@@ -2120,6 +2226,10 @@ class MinisterioController extends BaseController {
                 'email' => trim((string)($row['Email'] ?? '')),
                 'nombre_rol' => trim((string)($row['Nombre_Rol'] ?? '')),
                 'numero_cupo' => $numeroCupo,
+                'proceso' => trim((string)($row['Proceso'] ?? '')),
+                'escalera_checklist' => (string)($row['Escalera_Checklist'] ?? ''),
+                'id_celula' => (int)($row['Id_Celula'] ?? 0),
+                'id_ministerio' => (int)($row['Id_Ministerio'] ?? 0),
             ];
 
             $porLider[$idLider] = $this->ordenarMiembrosEnDoceCasillas($miembros);

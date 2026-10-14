@@ -5,7 +5,7 @@
  */
 class MenuBuilder {
     /** Incrementar al cambiar estructura del menú lateral (invalida caché en sesión). */
-    public const SIDEBAR_MENU_VERSION = 14;
+    public const SIDEBAR_MENU_VERSION = 15;
 
     /**
      * Sincroniza permisos planos y menú en $_SESSION.

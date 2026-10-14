@@ -1685,6 +1685,123 @@ class Persona extends BaseModel {
     }
 
     /**
+     * Casillas 1–12 más líderes de célula aún sin número, bajo un líder de 144.
+     */
+    public function contarOcupacionEquipoLider144(int $idLider, int $excludePersonaId = 0): int {
+        $idLider = (int)$idLider;
+        $excludePersonaId = (int)$excludePersonaId;
+        if ($idLider <= 0) {
+            return 0;
+        }
+
+        $sql = "SELECT Id_Persona, Id_Rol, Numero_Cupo
+             FROM {$this->table}
+             WHERE Id_Lider = ?
+               AND (Estado_Cuenta = 'Activo' OR Estado_Cuenta IS NULL)";
+        $filas = $this->query($sql, [$idLider]);
+        $ids = [];
+
+        foreach ($filas as $fila) {
+            $idPersona = (int)($fila['Id_Persona'] ?? 0);
+            if ($idPersona <= 0 || $idPersona === $excludePersonaId) {
+                continue;
+            }
+
+            $cupo = (int)($fila['Numero_Cupo'] ?? 0);
+            $enCasilla = $this->tieneColumna('Numero_Cupo') && $cupo >= 1 && $cupo <= 12;
+            $esLiderCelula = $this->getJerarquiaByRol((int)($fila['Id_Rol'] ?? 0)) === 'lider_celula';
+            if ($enCasilla || $esLiderCelula) {
+                $ids[$idPersona] = true;
+            }
+        }
+
+        return count($ids);
+    }
+
+    public function acomodarLideresCelulaEnCasillas(int $idLider): int {
+        $idLider = (int)$idLider;
+        if ($idLider <= 0 || !$this->tieneColumna('Numero_Cupo')) {
+            return 0;
+        }
+
+        $lider = $this->getById($idLider);
+        if (empty($lider) || $this->getJerarquiaByRol((int)($lider['Id_Rol'] ?? 0)) !== 'lider_144') {
+            return 0;
+        }
+
+        $filas = $this->query(
+            "SELECT Id_Persona, Id_Rol, Numero_Cupo
+             FROM {$this->table}
+             WHERE Id_Lider = ?
+               AND (Estado_Cuenta = 'Activo' OR Estado_Cuenta IS NULL)
+             ORDER BY Nombre ASC, Apellido ASC, Id_Persona ASC",
+            [$idLider]
+        );
+
+        $asignados = 0;
+        foreach ($filas as $fila) {
+            $idPersona = (int)($fila['Id_Persona'] ?? 0);
+            if ($idPersona <= 0) {
+                continue;
+            }
+
+            $cupo = (int)($fila['Numero_Cupo'] ?? 0);
+            if ($cupo >= 1 && $cupo <= 12) {
+                continue;
+            }
+            if ($this->getJerarquiaByRol((int)($fila['Id_Rol'] ?? 0)) !== 'lider_celula') {
+                continue;
+            }
+
+            $libre = $this->primerCupoLibreDeLider($idLider);
+            if ($libre <= 0) {
+                break;
+            }
+
+            $this->update($idPersona, ['Numero_Cupo' => $libre]);
+            $asignados++;
+        }
+
+        return $asignados;
+    }
+
+    public function acomodarCasillasPendientesLideres144(): int {
+        $roles = $this->query('SELECT Id_Rol, Nombre_Rol FROM rol');
+        $idsRol = [];
+        foreach ($roles as $rol) {
+            if ($this->getJerarquiaByRol((int)($rol['Id_Rol'] ?? 0)) === 'lider_144') {
+                $idsRol[] = (int)$rol['Id_Rol'];
+            }
+        }
+        if ($idsRol === []) {
+            return 0;
+        }
+
+        $marcas = implode(',', array_fill(0, count($idsRol), '?'));
+        $lideres = $this->query(
+            "SELECT Id_Persona FROM {$this->table} WHERE Id_Rol IN ({$marcas})",
+            $idsRol
+        );
+
+        $total = 0;
+        foreach ($lideres as $lider) {
+            $total += $this->acomodarLideresCelulaEnCasillas((int)($lider['Id_Persona'] ?? 0));
+        }
+
+        return $total;
+    }
+
+    private function personaYaEstaBajoLider(int $idPersona, int $idLider): bool {
+        if ($idPersona <= 0 || $idLider <= 0) {
+            return false;
+        }
+
+        $persona = $this->getById($idPersona);
+
+        return (int)($persona['Id_Lider'] ?? 0) === $idLider;
+    }
+
+    /**
      * Resumen de cupos numerados (1–12) para validación y UI.
      *
      * @return array{equipo_directo: int, limite_equipo: int, cupos_disponibles: int, cupo_lleno: bool}
@@ -1852,12 +1969,15 @@ class Persona extends BaseModel {
         }
 
         $aplicaCupoLiderazgo = in_array($jerarquiaLider, ['pastor', 'lider_12', 'lider_144'], true)
-            && in_array($jerarquiaPersona, ['lider_12', 'lider_144', 'lider_celula'], true)
-            && !($jerarquiaLider === 'lider_144' && $jerarquiaPersona === 'lider_celula');
+            && in_array($jerarquiaPersona, ['lider_12', 'lider_144', 'lider_celula'], true);
 
         if ($aplicaCupoLiderazgo) {
-            $totalDirectos = $this->contarEquipoPrincipalPorCupo($idLider, $excludePersonaId);
-            if ($totalDirectos >= 12) {
+            $totalDirectos = $jerarquiaLider === 'lider_144'
+                ? $this->contarOcupacionEquipoLider144($idLider, (int)$excludePersonaId)
+                : $this->contarEquipoPrincipalPorCupo($idLider, $excludePersonaId);
+            $yaPertenece = (int)$excludePersonaId > 0
+                && $this->personaYaEstaBajoLider((int)$excludePersonaId, $idLider);
+            if (!$yaPertenece && $totalDirectos >= 12) {
                 return [
                     'ok' => false,
                     'message' => 'Ese líder ya tiene las 12 casillas del equipo principal ocupadas.'
@@ -3608,8 +3728,10 @@ class Persona extends BaseModel {
                     p.Id_Lider,
                     p.Id_Ministerio,
                     p.Id_Rol,
+                    p.Id_Celula,
                     p.Numero_Cupo,
                     p.Proceso,
+                    p.Escalera_Checklist,
                     {$this->sqlCampoUltimoAcceso('p')},
                     m.Nombre_Ministerio,
                     COALESCE(r.Nombre_Rol, '') AS Nombre_Rol,
