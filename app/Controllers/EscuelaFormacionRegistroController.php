@@ -2086,10 +2086,13 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         if ($programa === 'universidad_vida' && $redPagos === '' && !$esAjax) {
             require_once APP . '/Helpers/PeriodoSemestre.php';
-            $conteosRed = $this->contarPagosUniversidadVidaPorRed();
+            $urlsRed = [];
+            foreach (['hombres', 'mujeres', 'jovenes', 'teens'] as $redHub) {
+                $urlsRed[$redHub] = $this->urlPagosUniversidadVida(['red' => $redHub, 'filtro_genero' => null]);
+            }
             $this->view('programas/pagos_redes', [
-                'conteos_red' => $conteosRed,
-                'tarjetas_red' => $this->tarjetasPagosUniversidadVidaPorRed($conteosRed),
+                'categorias_pago' => $this->hubPagosUniversidadVida(),
+                'urls_red' => $urlsRed,
                 'periodo_semestre' => PeriodoSemestre::resolver(),
             ]);
             return;
@@ -2159,78 +2162,74 @@ class EscuelaFormacionRegistroController extends BaseController {
     }
 
     /**
-     * @return array{hombres:int,mujeres:int,jovenes:int,teens:int,otros:int,total:int}
+     * @return array<string, array<string, mixed>>
      */
-    private function contarPagosUniversidadVidaPorRed(): array
+    private function hubPagosUniversidadVida(): array
     {
-        require_once APP . '/Helpers/SegmentoRedUv.php';
-
         $data = $this->construirDatosPagosEscuelasUnificados('universidad_vida', '', '', '', '', '');
-        $personas = [];
-        foreach ((array)($data['resumen'] ?? []) as $fila) {
-            $totalPagado = (float)($fila['total_pagado'] ?? 0);
-            $abonos = (float)($fila['total_abonos'] ?? 0);
-            $registros = (int)($fila['registros_pago'] ?? 0);
-            if ($totalPagado <= 0 && $abonos <= 0 && $registros <= 0) {
-                continue;
-            }
-            $personas[] = [
-                'Genero' => (string)($fila['genero'] ?? ''),
-                'Edad' => (int)($fila['edad'] ?? 0),
-                'Segmento_Preferido' => (string)($fila['segmento_preferido'] ?? ''),
-            ];
-        }
 
-        return SegmentoRedUv::contarPorRed($personas);
+        return $this->resumenCategoriasPagosUv((array)($data['resumen'] ?? []));
     }
 
     /**
-     * @param array{hombres?:int,mujeres?:int,jovenes?:int,teens?:int,otros?:int,total?:int} $conteos
-     * @return array<int, array<string, mixed>>
+     * @param array<int, array<string, mixed>> $filas
+     * @return array<string, array<string, mixed>>
      */
-    private function tarjetasPagosUniversidadVidaPorRed(array $conteos): array
+    private function resumenCategoriasPagosUv(array $filas): array
     {
-        $defs = [
-            'hombres' => [
-                'titulo' => 'Hombres',
-                'subtitulo' => 'Red adulta (29+ o segmento hombres)',
-                'icono' => '👨',
-                'color' => '#1e4a89',
-                'avatar_class' => 'gender-avatar-male',
-            ],
-            'mujeres' => [
-                'titulo' => 'Mujeres',
-                'subtitulo' => 'Red adulta (29+ o segmento mujeres)',
-                'icono' => '👩',
-                'color' => '#8b1c62',
-                'avatar_class' => 'gender-avatar-female',
-            ],
-            'jovenes' => [
-                'titulo' => 'Jóvenes',
-                'subtitulo' => '14–28 años o segmento jóvenes',
-                'icono' => '🧑',
-                'color' => '#1e6b3c',
-                'avatar_class' => '',
-            ],
-            'teens' => [
-                'titulo' => 'Teens',
-                'subtitulo' => '9–13 años o segmento teens',
-                'icono' => '🧒',
-                'color' => '#7b3fa0',
-                'avatar_class' => '',
-            ],
+        require_once APP . '/Helpers/SegmentoRedUv.php';
+        $redesVacias = static function (): array {
+            return [
+                'hombres' => ['personas' => 0, 'valor' => 0.0],
+                'mujeres' => ['personas' => 0, 'valor' => 0.0],
+                'jovenes' => ['personas' => 0, 'valor' => 0.0],
+                'teens' => ['personas' => 0, 'valor' => 0.0],
+                'otros' => ['personas' => 0, 'valor' => 0.0],
+            ];
+        };
+        $out = [
+            'encuentro' => ['personas' => 0, 'valor' => 0.0, 'redes' => $redesVacias()],
+            'libro' => ['personas' => 0, 'valor' => 0.0, 'redes' => $redesVacias()],
         ];
 
-        $tarjetas = [];
-        foreach ($defs as $red => $def) {
-            $tarjetas[] = array_merge($def, [
-                'red' => $red,
-                'total' => (int)($conteos[$red] ?? 0),
-                'url' => $this->urlPagosUniversidadVida(['red' => $red, 'filtro_genero' => null]),
-            ]);
+        foreach ($filas as $fila) {
+            $segmento = SegmentoRedUv::resolver(
+                (string)($fila['genero'] ?? ''),
+                (int)($fila['edad'] ?? 0),
+                (string)($fila['segmento_preferido'] ?? '')
+            );
+            $red = 'otros';
+            if ($segmento === 'hombres_adultos') {
+                $red = 'hombres';
+            } elseif ($segmento === 'mujeres_adultas') {
+                $red = 'mujeres';
+            } elseif ($segmento === 'jovenes') {
+                $red = 'jovenes';
+            } elseif ($segmento === 'teens') {
+                $red = 'teens';
+            }
+
+            $valorEncuentro = (float)($fila['total_pagado'] ?? 0);
+            $abonosEncuentro = (float)($fila['total_abonos'] ?? 0);
+            $registrosEncuentro = (int)($fila['registros_pago'] ?? 0);
+            if ($valorEncuentro > 0 || $abonosEncuentro > 0 || $registrosEncuentro > 0) {
+                $out['encuentro']['personas']++;
+                $out['encuentro']['valor'] += $valorEncuentro;
+                $out['encuentro']['redes'][$red]['personas']++;
+                $out['encuentro']['redes'][$red]['valor'] += $valorEncuentro;
+            }
+
+            $valorLibro = (float)($fila['total_libros'] ?? 0);
+            $tieneLibro = ((int)($fila['tiene_libro'] ?? 0) === 1) || $valorLibro > 0;
+            if ($tieneLibro) {
+                $out['libro']['personas']++;
+                $out['libro']['valor'] += $valorLibro;
+                $out['libro']['redes'][$red]['personas']++;
+                $out['libro']['redes'][$red]['valor'] += $valorLibro;
+            }
         }
 
-        return $tarjetas;
+        return $out;
     }
 
     public function pagosConsolidar() {
