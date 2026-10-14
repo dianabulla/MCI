@@ -169,6 +169,13 @@
     }
 }
 
+.jer-btn-ministerios-metas {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+}
+
 .jer-topbar-title {
     margin: 0;
     font-size: 1.35rem;

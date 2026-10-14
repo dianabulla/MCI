@@ -551,6 +551,7 @@ class MinisterioController extends BaseController {
             $miembrosPorMinisterio[$idMinisterio][] = $miembro;
         }
 
+        $celulasPorMinisterio = $this->celulaModel->contarActivasPorMinisterio();
         $sections = [];
         foreach ($ministerios as $ministerio) {
             $idMinisterio = (int)($ministerio['Id_Ministerio'] ?? 0);
@@ -626,7 +627,8 @@ class MinisterioController extends BaseController {
                 'total_personas' => count($rows),
                 'metricas' => $metricasMinisterio[$idMinisterio] ?? null,
                 'metas_detalle' => $metasDetalle[$idMinisterio] ?? null,
-                'avance_metas_tiempo' => $avanceMetasTiempo[$idMinisterio] ?? null
+                'avance_metas_tiempo' => $avanceMetasTiempo[$idMinisterio] ?? null,
+                'total_celulas' => (int)($celulasPorMinisterio[$idMinisterio] ?? 0)
             ];
         }
 
@@ -2854,6 +2856,38 @@ class MinisterioController extends BaseController {
         );
     }
 
+    /**
+     * Meta anual sugerida: reparte la meta total que ya tiene la iglesia entre los
+     * ministerios según su número de células activas. Es solo una ayuda; no guarda nada.
+     *
+     * @return array{celulas:int,celulas_total:int,meta_total:int,sugerida:int}
+     */
+    private function calcularMetaAnualSugerida(int $idMinisterio): array {
+        $celulasPorMinisterio = $this->celulaModel->contarActivasPorMinisterio();
+        $celulasTotal = array_sum($celulasPorMinisterio);
+        $celulasMinisterio = (int)($celulasPorMinisterio[$idMinisterio] ?? 0);
+
+        $idsMinisterios = array_map(static function ($fila) {
+            return (int)($fila['Id_Ministerio'] ?? 0);
+        }, $this->ministerioModel->getAll());
+        $metasDetalle = $this->ministerioModel->getMetasDetalleByMinisterioIds($idsMinisterios);
+        $metaTotal = 0;
+        foreach ($metasDetalle as $metas) {
+            $metaTotal += max(0, (int)($metas['meta_anual'] ?? 0));
+        }
+
+        $sugerida = ($celulasTotal > 0 && $metaTotal > 0)
+            ? (int)round($metaTotal * $celulasMinisterio / $celulasTotal)
+            : 0;
+
+        return [
+            'celulas' => $celulasMinisterio,
+            'celulas_total' => (int)$celulasTotal,
+            'meta_total' => $metaTotal,
+            'sugerida' => $sugerida,
+        ];
+    }
+
     public function editar() {
         // Verificar permiso de editar
         if (!AuthController::puede('ministerios:editar')) {
@@ -2904,6 +2938,7 @@ class MinisterioController extends BaseController {
             $data = [
                 'ministerio' => $this->ministerioModel->getById($id),
                 'metas' => $this->ministerioModel->getMetaDetalleByMinisterioId($id),
+                'meta_sugerida' => $this->calcularMetaAnualSugerida((int)$id),
                 'return_url' => $this->normalizarUrlRetorno($returnUrl),
                 'candidatos_lideres_principales' => $this->obtenerCandidatosLideresPrincipales(),
                 'id_lider_principal_1' => (int)($lideresMinisterio['id_lider_principal_1'] ?? 0),

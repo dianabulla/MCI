@@ -1,5 +1,5 @@
 <?php include VIEWS . '/layout/header.php'; ?>
-<link rel="stylesheet" href="<?= ASSETS_URL ?>/css/discipular-equipo.css?v=20261013c">
+<link rel="stylesheet" href="<?= ASSETS_URL ?>/css/discipular-equipo.css?v=20261013d">
 
 <?php
 $idMinisterioFiltro = (int)($id_ministerio_filtro ?? 0);
@@ -1517,6 +1517,11 @@ $urlVistaAvanzada = PUBLIC_URL . '?' . http_build_query(array_filter([
     <?php if ($vistaJerarquiaLimpia): ?>
     <header class="jer-topbar jer-topbar--solo-titulo">
         <h2 class="jer-topbar-title">Discipular</h2>
+        <?php if (AuthController::esAdministrador() || AuthController::puede('ministerios:ver')): ?>
+        <a href="<?= htmlspecialchars($urlMinisteriosLista) ?>" class="btn btn-primary jer-btn-ministerios-metas" title="Ver los ministerios, sus células y configurar sus metas">
+            <i class="bi bi-flag-fill" aria-hidden="true"></i> Ministerios y metas
+        </a>
+        <?php endif; ?>
         <?php if ($puedeConfigurarLideresPrincipales): ?>
         <button type="button" id="btnEditarLiderazgo" class="visually-hidden" tabindex="-1" aria-hidden="true" title="<?= htmlspecialchars($tituloBotonEditarLiderazgo) ?>">Configurar</button>
         <?php endif; ?>

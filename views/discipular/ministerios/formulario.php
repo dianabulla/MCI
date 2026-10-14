@@ -85,6 +85,18 @@ $urlGuardarMetas = public_app_url('discipular/ministerios/guardar-metas');
     color: #58708f;
 }
 
+.metas-sugerida {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid #cfe0f7;
+    border-radius: 8px;
+    background: #f3f8ff;
+    font-size: 13px;
+    color: #27406b;
+}
+.metas-sugerida p { margin: 0 0 8px; }
+.metas-sugerida small { margin-left: 8px; color: #58708f; }
+
 .lideres-principales-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -228,6 +240,22 @@ $urlGuardarMetas = public_app_url('discipular/ministerios/guardar-metas');
                         </div>
                     </div>
                     <p class="metas-auto-help">La meta anual se reparte automáticamente: Semestre 1 (ene–jun) + Semestre 2 (jul–dic) = meta anual.</p>
+                    <?php
+                    $sugerida = is_array($meta_sugerida ?? null) ? $meta_sugerida : [];
+                    $sugeridaValor = (int)($sugerida['sugerida'] ?? 0);
+                    ?>
+                    <?php if ($sugeridaValor > 0): ?>
+                    <div class="metas-sugerida">
+                        <p>
+                            Este ministerio tiene <strong><?= (int)$sugerida['celulas'] ?></strong> de las
+                            <strong><?= (int)$sugerida['celulas_total'] ?></strong> células activas de la iglesia.
+                            Si se reparte la meta total actual (<strong><?= (int)$sugerida['meta_total'] ?></strong> al año)
+                            según ese tamaño, la meta anual sugerida es <strong><?= $sugeridaValor ?></strong>.
+                        </p>
+                        <button type="button" class="btn btn-sm btn-secondary" id="btnUsarMetaSugerida" data-meta="<?= $sugeridaValor ?>">Usar la sugerida</button>
+                        <small>Solo rellena el campo. La meta cambia cuando pulses Guardar metas.</small>
+                    </div>
+                    <?php endif; ?>
                 </div>
 
                 <div class="metas-grid">
@@ -358,6 +386,14 @@ $urlGuardarMetas = public_app_url('discipular/ministerios/guardar-metas');
         inputSemanal.value = String(semanal);
         inputS1.value = String(metaS1);
         inputS2.value = String(metaS2);
+    }
+
+    var btnSugerida = document.getElementById('btnUsarMetaSugerida');
+    if (btnSugerida) {
+        btnSugerida.addEventListener('click', function() {
+            inputAnual.value = String(btnSugerida.getAttribute('data-meta') || '0');
+            recalcularMetas();
+        });
     }
 
     inputAnual.addEventListener('input', recalcularMetas);

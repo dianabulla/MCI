@@ -26,7 +26,7 @@ $fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));
         <?php if (!empty($returnUrl)): ?>
         <a href="<?= htmlspecialchars((string)$returnUrl) ?>" class="btn btn-secondary">← Volver a reportes</a>
         <?php endif; ?>
-        <a href="<?= $urlEquipoPrincipal ?>" class="btn btn-secondary">Equipo Principal</a>
+        <a href="<?= $urlEquipoPrincipal ?>" class="btn btn-secondary">← Volver a Discipular</a>
         <?php if ($puedeCrearMinisterio): ?>
         <a href="<?= $urlNuevoMinisterio ?>" class="btn btn-primary">+ Nuevo Ministerio</a>
         <?php endif; ?>
@@ -42,6 +42,8 @@ $fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));
                 <th>Ministerio</th>
                 <th>Personas</th>
                 <th>Líderes</th>
+                <th>Células</th>
+                <th>Meta anual</th>
                 <th>Acciones</th>
             </tr>
         </thead>
@@ -65,22 +67,24 @@ $fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));
                     <td>
                         <span class="badge badge-info"><?= $totalLideres ?></span>
                     </td>
+                    <td><?= (int)($section['total_celulas'] ?? 0) ?></td>
+                    <td><?= (int)($section['metas_detalle']['meta_anual'] ?? 0) ?></td>
                     <td>
                         <div class="ministerios-acciones-tabla">
-                            <a href="<?= htmlspecialchars($urlEquipoPrincipalPorMinisterio) ?>" class="btn btn-sm ministerios-action-btn ministerios-action-btn--detail" title="Ver detalle" aria-label="Ver detalle">
-                                <i class="bi bi-eye-fill" aria-hidden="true"></i>
+                            <a href="<?= htmlspecialchars($urlEquipoPrincipalPorMinisterio) ?>" class="btn btn-sm ministerios-action-btn ministerios-action-btn--detail" title="Ver el equipo de este ministerio">
+                                <i class="bi bi-eye-fill" aria-hidden="true"></i> Ver
                             </a>
                             <?php if ($puedeEditarMinisterio): ?>
-                            <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios/editar&id=<?= $idMinisterio ?><?= $returnUrlParam ?>#metas" class="btn btn-sm ministerios-action-btn ministerios-action-btn--metas" title="Metas" aria-label="Metas">
-                                <i class="bi bi-flag-fill" aria-hidden="true"></i>
+                            <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios/editar&id=<?= $idMinisterio ?><?= $returnUrlParam ?>#metas" class="btn btn-sm ministerios-action-btn ministerios-action-btn--metas" title="Configurar las metas de este ministerio">
+                                <i class="bi bi-flag-fill" aria-hidden="true"></i> Configurar metas
                             </a>
-                            <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios/editar&id=<?= $idMinisterio ?><?= $returnUrlParam ?>" class="btn btn-sm ministerios-action-btn ministerios-action-btn--edit" title="Editar" aria-label="Editar">
-                                <i class="bi bi-pencil-fill" aria-hidden="true"></i>
+                            <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios/editar&id=<?= $idMinisterio ?><?= $returnUrlParam ?>" class="btn btn-sm ministerios-action-btn ministerios-action-btn--edit" title="Editar nombre y líderes principales">
+                                <i class="bi bi-pencil-fill" aria-hidden="true"></i> Editar
                             </a>
                             <?php endif; ?>
                             <?php if ($puedeEliminarMinisterio): ?>
-                            <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios/eliminar&id=<?= $idMinisterio ?><?= $returnUrlParam ?>" class="btn btn-sm ministerios-action-btn ministerios-action-btn--delete" title="Eliminar" aria-label="Eliminar" onclick="return confirm('¿Eliminar este ministerio?')">
-                                <i class="bi bi-trash-fill" aria-hidden="true"></i>
+                            <a href="<?= PUBLIC_URL ?>?url=discipular/ministerios/eliminar&id=<?= $idMinisterio ?><?= $returnUrlParam ?>" class="btn btn-sm ministerios-action-btn ministerios-action-btn--delete" title="Eliminar este ministerio" onclick="return confirm('¿Eliminar este ministerio?')">
+                                <i class="bi bi-trash-fill" aria-hidden="true"></i> Eliminar
                             </a>
                             <?php endif; ?>
                         </div>
@@ -118,14 +122,18 @@ $fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));
 .ministerios-lista-table th:nth-child(3),
 .ministerios-lista-table td:nth-child(3),
 .ministerios-lista-table th:nth-child(4),
-.ministerios-lista-table td:nth-child(4) {
+.ministerios-lista-table td:nth-child(4),
+.ministerios-lista-table th:nth-child(5),
+.ministerios-lista-table td:nth-child(5),
+.ministerios-lista-table th:nth-child(6),
+.ministerios-lista-table td:nth-child(6) {
     width: 84px;
     text-align: center;
 }
 
-.ministerios-lista-table th:nth-child(5),
-.ministerios-lista-table td:nth-child(5) {
-    width: 150px;
+.ministerios-lista-table th:nth-child(7),
+.ministerios-lista-table td:nth-child(7) {
+    width: 390px;
 }
 
 .ministerios-lista-table td:nth-child(2) {
@@ -146,9 +154,10 @@ $fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));
     background: #f6f9ff;
     color: #2f4f7a;
     font-weight: 600;
-    width: 28px;
-    height: 28px;
-    padding: 0;
+    height: 30px;
+    padding: 0 10px;
+    gap: 5px;
+    white-space: nowrap;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -185,9 +194,9 @@ $fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));
         padding: 5px 6px;
     }
 
-    .ministerios-lista-table th:nth-child(5),
-    .ministerios-lista-table td:nth-child(5) {
-        width: 132px;
+    .ministerios-lista-table th:nth-child(7),
+    .ministerios-lista-table td:nth-child(7) {
+        width: 300px;
     }
 }
 </style>

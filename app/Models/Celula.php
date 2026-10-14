@@ -399,6 +399,36 @@ class Celula extends BaseModel {
     }
 
     /**
+     * Células activas por ministerio (el de la célula o, si no tiene, el de su líder).
+     *
+     * @return array<int,int> [Id_Ministerio => cantidad]
+     */
+    public function contarActivasPorMinisterio(): array {
+        $columnaMinisterio = $this->columnExists('Id_Ministerio')
+            ? 'COALESCE(c.Id_Ministerio, l.Id_Ministerio)'
+            : 'l.Id_Ministerio';
+        $where = $this->columnExists('Estado_Celula')
+            ? "WHERE (c.Estado_Celula = 'Activa' OR c.Estado_Celula IS NULL OR c.Estado_Celula = '')"
+            : '';
+
+        $sql = "SELECT {$columnaMinisterio} AS Id_Ministerio, COUNT(*) AS Total
+                FROM {$this->table} c
+                LEFT JOIN persona l ON l.Id_Persona = c.Id_Lider
+                {$where}
+                GROUP BY {$columnaMinisterio}";
+
+        $resultado = [];
+        foreach ($this->query($sql) as $fila) {
+            $id = (int)($fila['Id_Ministerio'] ?? 0);
+            if ($id > 0) {
+                $resultado[$id] = (int)($fila['Total'] ?? 0);
+            }
+        }
+
+        return $resultado;
+    }
+
+    /**
      * Verifica si una célula existe dentro del alcance de un filtro de rol.
      */
     public function existsByIdWithRole($idCelula, $filtroRol) {
