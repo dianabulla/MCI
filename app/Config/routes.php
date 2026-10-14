@@ -224,6 +224,8 @@ return [
     'talleres/pago' => 'TallerController@pagoRespuesta',
     'talleres/guardar-pago' => 'TallerController@guardarPago',
     'talleres/ticket-pago' => 'TallerController@ticketPago',
+    'talleres/nueva-actividad' => 'TallerController@nuevaActividad',
+    'talleres/documento-presentacion' => 'TallerController@documentoPresentacion',
 
     'comunidad/pagos' => 'ComunidadPagosController@index',
     'comunidad/pagos/buscar' => 'ComunidadPagosController@buscar',

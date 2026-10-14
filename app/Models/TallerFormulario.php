@@ -135,6 +135,225 @@ class TallerFormulario extends BaseModel {
         $this->ensureTablaPagos();
         $this->ensureColumn('talleres_formulario_pago', 'Entrego_Material', 'TINYINT(1) NULL AFTER Recibido_Por');
         $this->activarPagoEnTodosLosFormularios();
+        $this->ensureTablaAperturas();
+    }
+
+    private function ensureTablaAperturas(): void {
+        try {
+            $this->db->exec("
+                CREATE TABLE IF NOT EXISTS talleres_formulario_apertura (
+                    Id_Apertura INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                    Id_Formulario INT UNSIGNED NOT NULL,
+                    Nombre VARCHAR(180) NOT NULL,
+                    Fecha_Apertura DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    Fecha_Cierre DATETIME NULL,
+                    Activa TINYINT(1) NOT NULL DEFAULT 1,
+                    PRIMARY KEY (Id_Apertura),
+                    KEY idx_taller_apertura_formulario (Id_Formulario, Activa)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+        } catch (Throwable $e) {
+            error_log('ensureTablaAperturas: ' . $e->getMessage());
+            return;
+        }
+
+        $this->ensureColumn('talleres_formulario_respuesta', 'Id_Apertura', 'INT UNSIGNED NULL AFTER Id_Formulario');
+
+        try {
+            $formularios = (array)$this->query('SELECT Id_Formulario, Titulo, Fecha_Creacion FROM talleres_formulario');
+        } catch (Throwable $e) {
+            return;
+        }
+
+        foreach ($formularios as $formulario) {
+            $idFormulario = (int)($formulario['Id_Formulario'] ?? 0);
+            if ($idFormulario <= 0) {
+                continue;
+            }
+            $this->asegurarAperturaActual($idFormulario);
+        }
+    }
+
+    /**
+     * Garantiza una actividad abierta por formulario y enlaza inscripciones viejas.
+     */
+    public function asegurarAperturaActual(int $idFormulario): int {
+        $idFormulario = (int)$idFormulario;
+        if ($idFormulario <= 0) {
+            return 0;
+        }
+
+        $activa = $this->getAperturaActiva($idFormulario);
+        if ($activa !== null) {
+            $idApertura = (int)($activa['Id_Apertura'] ?? 0);
+            $this->asignarRespuestasSinApertura($idFormulario, $idApertura);
+            return $idApertura;
+        }
+
+        $existentes = $this->getAperturasPorFormulario($idFormulario);
+        if ($existentes !== []) {
+            $ultima = $existentes[0];
+            $idApertura = (int)($ultima['Id_Apertura'] ?? 0);
+            if ($idApertura > 0) {
+                $this->execute(
+                    'UPDATE talleres_formulario_apertura SET Activa = 1, Fecha_Cierre = NULL WHERE Id_Apertura = ? LIMIT 1',
+                    [$idApertura]
+                );
+                $this->asignarRespuestasSinApertura($idFormulario, $idApertura);
+                return $idApertura;
+            }
+        }
+
+        $nombre = 'Actividad inicial';
+        $this->execute(
+            'INSERT INTO talleres_formulario_apertura (Id_Formulario, Nombre, Fecha_Apertura, Activa)
+             VALUES (?, ?, NOW(), 1)',
+            [$idFormulario, $nombre]
+        );
+        $idApertura = (int)$this->db->lastInsertId();
+        if ($idApertura <= 0) {
+            $creada = $this->getAperturaActiva($idFormulario);
+            $idApertura = (int)($creada['Id_Apertura'] ?? 0);
+        }
+        $this->asignarRespuestasSinApertura($idFormulario, $idApertura);
+
+        return $idApertura;
+    }
+
+    private function asignarRespuestasSinApertura(int $idFormulario, int $idApertura): void {
+        if ($idFormulario <= 0 || $idApertura <= 0) {
+            return;
+        }
+        try {
+            $this->execute(
+                'UPDATE talleres_formulario_respuesta
+                 SET Id_Apertura = ?
+                 WHERE Id_Formulario = ?
+                   AND (Id_Apertura IS NULL OR Id_Apertura = 0)',
+                [$idApertura, $idFormulario]
+            );
+        } catch (Throwable $e) {
+            // Columna puede no existir aún en un despliegue a medias.
+        }
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function getAperturaActiva(int $idFormulario): ?array {
+        $idFormulario = (int)$idFormulario;
+        if ($idFormulario <= 0) {
+            return null;
+        }
+        try {
+            $rows = $this->query(
+                'SELECT * FROM talleres_formulario_apertura
+                 WHERE Id_Formulario = ? AND Activa = 1
+                 ORDER BY Id_Apertura DESC
+                 LIMIT 1',
+                [$idFormulario]
+            );
+        } catch (Throwable $e) {
+            return null;
+        }
+        return !empty($rows[0]) ? (array)$rows[0] : null;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getAperturasPorFormulario(int $idFormulario): array {
+        $idFormulario = (int)$idFormulario;
+        if ($idFormulario <= 0) {
+            return [];
+        }
+        try {
+            return (array)$this->query(
+                'SELECT a.*,
+                        (SELECT COUNT(*) FROM talleres_formulario_respuesta r
+                         WHERE r.Id_Apertura = a.Id_Apertura) AS Total_Respuestas
+                 FROM talleres_formulario_apertura a
+                 WHERE a.Id_Formulario = ?
+                 ORDER BY a.Id_Apertura DESC',
+                [$idFormulario]
+            );
+        } catch (Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function getAperturaPorId(int $idApertura, int $idFormulario = 0): ?array {
+        $idApertura = (int)$idApertura;
+        if ($idApertura <= 0) {
+            return null;
+        }
+        $sql = 'SELECT * FROM talleres_formulario_apertura WHERE Id_Apertura = ?';
+        $params = [$idApertura];
+        if ($idFormulario > 0) {
+            $sql .= ' AND Id_Formulario = ?';
+            $params[] = $idFormulario;
+        }
+        $sql .= ' LIMIT 1';
+        try {
+            $rows = $this->query($sql, $params);
+        } catch (Throwable $e) {
+            return null;
+        }
+        return !empty($rows[0]) ? (array)$rows[0] : null;
+    }
+
+    /**
+     * Cierra la actividad actual y abre otra. El enlace y el QR del formulario no cambian.
+     */
+    public function abrirNuevaActividad(int $idFormulario, string $nombre = ''): int {
+        $idFormulario = (int)$idFormulario;
+        if ($idFormulario <= 0) {
+            return 0;
+        }
+
+        $nombre = trim($nombre);
+        if ($nombre === '') {
+            $nombre = 'Actividad ' . date('d/m/Y');
+        }
+        if (function_exists('mb_substr')) {
+            $nombre = mb_substr($nombre, 0, 180, 'UTF-8');
+        } else {
+            $nombre = substr($nombre, 0, 180);
+        }
+
+        $this->execute(
+            'UPDATE talleres_formulario_apertura
+             SET Activa = 0, Fecha_Cierre = NOW()
+             WHERE Id_Formulario = ? AND Activa = 1',
+            [$idFormulario]
+        );
+
+        $this->execute(
+            'INSERT INTO talleres_formulario_apertura (Id_Formulario, Nombre, Fecha_Apertura, Activa)
+             VALUES (?, ?, NOW(), 1)',
+            [$idFormulario, $nombre]
+        );
+
+        return (int)$this->db->lastInsertId();
+    }
+
+    public function tituloExiste(string $titulo, int $excluirId = 0): bool {
+        $titulo = trim($titulo);
+        if ($titulo === '') {
+            return false;
+        }
+        $sql = 'SELECT Id_Formulario FROM talleres_formulario WHERE LOWER(TRIM(Titulo)) = LOWER(?)';
+        $params = [$titulo];
+        if ($excluirId > 0) {
+            $sql .= ' AND Id_Formulario <> ?';
+            $params[] = $excluirId;
+        }
+        $sql .= ' LIMIT 1';
+        $rows = $this->query($sql, $params);
+        return !empty($rows);
     }
 
     private function ensureTipoBloqueAutorizacion(): void {
@@ -334,11 +553,27 @@ class TallerFormulario extends BaseModel {
         $sql = "
             SELECT f.*,
                    (SELECT COUNT(*) FROM talleres_formulario_campo c WHERE c.Id_Formulario = f.Id_Formulario) AS Total_Campos,
-                   (SELECT COUNT(*) FROM talleres_formulario_respuesta r WHERE r.Id_Formulario = f.Id_Formulario) AS Total_Respuestas
+                   (SELECT COUNT(*) FROM talleres_formulario_respuesta r WHERE r.Id_Formulario = f.Id_Formulario) AS Total_Respuestas,
+                   (SELECT a.Nombre FROM talleres_formulario_apertura a
+                    WHERE a.Id_Formulario = f.Id_Formulario AND a.Activa = 1
+                    ORDER BY a.Id_Apertura DESC LIMIT 1) AS Actividad_Actual,
+                   (SELECT COUNT(*) FROM talleres_formulario_respuesta r
+                    INNER JOIN talleres_formulario_apertura a ON a.Id_Apertura = r.Id_Apertura
+                    WHERE r.Id_Formulario = f.Id_Formulario AND a.Activa = 1) AS Respuestas_Actividad
             FROM talleres_formulario f
             ORDER BY f.Fecha_Creacion DESC
         ";
-        return (array)$this->query($sql);
+        try {
+            return (array)$this->query($sql);
+        } catch (Throwable $e) {
+            return (array)$this->query("
+                SELECT f.*,
+                       (SELECT COUNT(*) FROM talleres_formulario_campo c WHERE c.Id_Formulario = f.Id_Formulario) AS Total_Campos,
+                       (SELECT COUNT(*) FROM talleres_formulario_respuesta r WHERE r.Id_Formulario = f.Id_Formulario) AS Total_Respuestas
+                FROM talleres_formulario f
+                ORDER BY f.Fecha_Creacion DESC
+            ");
+        }
     }
 
     public function getBySlug(string $slug): ?array {
@@ -1277,15 +1512,19 @@ class TallerFormulario extends BaseModel {
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function getRespuestasPorFormulario(int $idFormulario, int $limite = 5000): array {
+    public function getRespuestasPorFormulario(int $idFormulario, int $limite = 5000, int $idApertura = 0): array {
         if ($idFormulario <= 0) {
             return [];
         }
         $limite = max(1, min(10000, $limite));
-        return (array)$this->query(
-            'SELECT * FROM talleres_formulario_respuesta WHERE Id_Formulario = ? ORDER BY Fecha_Registro DESC LIMIT ' . (int)$limite,
-            [$idFormulario]
-        );
+        $sql = 'SELECT * FROM talleres_formulario_respuesta WHERE Id_Formulario = ?';
+        $params = [$idFormulario];
+        if ($idApertura > 0) {
+            $sql .= ' AND Id_Apertura = ?';
+            $params[] = $idApertura;
+        }
+        $sql .= ' ORDER BY Fecha_Registro DESC LIMIT ' . (int)$limite;
+        return (array)$this->query($sql, $params);
     }
 
     /**
@@ -1293,16 +1532,19 @@ class TallerFormulario extends BaseModel {
      *
      * @return array{id_respuesta:int, fecha:string, nino_nombre:string}|null
      */
-    public function buscarInscripcionPorDocumentoNino(int $idFormulario, string $documento, int $excluirIdRespuesta = 0): ?array {
+    public function buscarInscripcionPorDocumentoNino(int $idFormulario, string $documento, int $excluirIdRespuesta = 0, int $idApertura = 0): ?array {
         $documento = preg_replace('/\D+/', '', trim($documento));
         if ($idFormulario <= 0 || $documento === '') {
             return null;
         }
 
-        $rows = $this->query(
-            'SELECT Id_Respuesta, Datos_JSON, Fecha_Registro FROM talleres_formulario_respuesta WHERE Id_Formulario = ?',
-            [$idFormulario]
-        );
+        $sql = 'SELECT Id_Respuesta, Datos_JSON, Fecha_Registro FROM talleres_formulario_respuesta WHERE Id_Formulario = ?';
+        $params = [$idFormulario];
+        if ($idApertura > 0) {
+            $sql .= ' AND Id_Apertura = ?';
+            $params[] = $idApertura;
+        }
+        $rows = $this->query($sql, $params);
 
         foreach ($rows as $row) {
             $idRespuesta = (int)($row['Id_Respuesta'] ?? 0);
@@ -1338,17 +1580,20 @@ class TallerFormulario extends BaseModel {
      *
      * @return array{id_respuesta:int, fecha:string, persona_nombre:string}|null
      */
-    public function buscarInscripcionPorDocumentoPersona(int $idFormulario, string $documento, int $idPersona = 0, int $excluirIdRespuesta = 0): ?array {
+    public function buscarInscripcionPorDocumentoPersona(int $idFormulario, string $documento, int $idPersona = 0, int $excluirIdRespuesta = 0, int $idApertura = 0): ?array {
         $documento = preg_replace('/\D+/', '', trim($documento));
         $idPersona = (int)$idPersona;
         if ($idFormulario <= 0 || ($documento === '' && $idPersona <= 0)) {
             return null;
         }
 
-        $rows = $this->query(
-            'SELECT Id_Respuesta, Id_Persona, Datos_JSON, Fecha_Registro FROM talleres_formulario_respuesta WHERE Id_Formulario = ?',
-            [$idFormulario]
-        );
+        $sql = 'SELECT Id_Respuesta, Id_Persona, Datos_JSON, Fecha_Registro FROM talleres_formulario_respuesta WHERE Id_Formulario = ?';
+        $params = [$idFormulario];
+        if ($idApertura > 0) {
+            $sql .= ' AND Id_Apertura = ?';
+            $params[] = $idApertura;
+        }
+        $rows = $this->query($sql, $params);
 
         foreach ($rows as $row) {
             $idRespuesta = (int)($row['Id_Respuesta'] ?? 0);
@@ -1406,6 +1651,10 @@ class TallerFormulario extends BaseModel {
         if ($idPersona > 0) {
             $payload['Id_Persona'] = $idPersona;
         }
+        $idApertura = $this->asegurarAperturaActual($idFormulario);
+        if ($idApertura > 0) {
+            $payload['Id_Apertura'] = $idApertura;
+        }
         return $this->insertEnTabla('talleres_formulario_respuesta', $payload);
     }
 
@@ -1430,6 +1679,11 @@ class TallerFormulario extends BaseModel {
         $this->execute('DELETE FROM talleres_formulario_respuesta WHERE Id_Formulario = ?', [$idFormulario]);
         $this->execute('DELETE FROM talleres_formulario_campo WHERE Id_Formulario = ?', [$idFormulario]);
         $this->execute('DELETE FROM talleres_formulario_bloque WHERE Id_Formulario = ?', [$idFormulario]);
+        try {
+            $this->execute('DELETE FROM talleres_formulario_apertura WHERE Id_Formulario = ?', [$idFormulario]);
+        } catch (Throwable $e) {
+            // Tabla de actividades puede no existir en instalaciones antiguas.
+        }
         return $this->delete($idFormulario);
     }
 
@@ -1641,7 +1895,7 @@ class TallerFormulario extends BaseModel {
      *
      * @return array<int, array<string, mixed>>
      */
-    public function getPagosPorFormulario(int $idFormulario): array {
+    public function getPagosPorFormulario(int $idFormulario, int $idApertura = 0): array {
         $idFormulario = (int)$idFormulario;
         if ($idFormulario <= 0) {
             return [];
@@ -1651,10 +1905,15 @@ class TallerFormulario extends BaseModel {
                     r.Datos_JSON, r.Id_Persona
              FROM talleres_formulario_pago p
              INNER JOIN talleres_formulario_respuesta r ON r.Id_Respuesta = p.Id_Respuesta
-             WHERE p.Id_Formulario = ?
-             ORDER BY p.Fecha_Registro DESC, p.Id_Pago DESC";
+             WHERE p.Id_Formulario = ?";
+        $params = [$idFormulario];
+        if ($idApertura > 0) {
+            $sql .= ' AND r.Id_Apertura = ?';
+            $params[] = $idApertura;
+        }
+        $sql .= ' ORDER BY p.Fecha_Registro DESC, p.Id_Pago DESC';
         try {
-            $rows = $this->query($sql, [$idFormulario]);
+            $rows = $this->query($sql, $params);
         } catch (Throwable $e) {
             return [];
         }

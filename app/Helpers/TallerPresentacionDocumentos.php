@@ -236,17 +236,18 @@ class TallerPresentacionDocumentos {
     }
 
     public static function construirUrlArchivo(int $idRespuesta, string $archivo, string $urlExistente = ''): string {
-        $urlExistente = trim($urlExistente);
-        if ($urlExistente !== '') {
-            return $urlExistente;
+        $archivo = basename(str_replace('\\', '/', trim($archivo)));
+        if ($archivo === '' && $urlExistente !== '') {
+            $path = (string)(parse_url($urlExistente, PHP_URL_PATH) ?? $urlExistente);
+            $archivo = basename(str_replace('\\', '/', $path));
         }
-        $archivo = trim($archivo);
         $idRespuesta = (int)$idRespuesta;
         if ($archivo === '' || $idRespuesta <= 0) {
             return '';
         }
         $basePublic = rtrim((string)(defined('PUBLIC_URL') ? PUBLIC_URL : ''), '/');
-        return $basePublic . '/uploads/talleres_presentacion/' . $idRespuesta . '/' . rawurlencode($archivo);
+        return $basePublic . '/index.php?url=talleres/documento-presentacion&id_respuesta='
+            . $idRespuesta . '&archivo=' . rawurlencode($archivo);
     }
 
     /**

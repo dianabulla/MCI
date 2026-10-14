@@ -32,6 +32,11 @@ $soloGraficas = !empty($solo_graficas);
 $tabActiva = (string)($tab_activa ?? 'lista');
 $totalInscripciones = (int)($statsGraficas['total'] ?? $total);
 $listaPagosTaller = is_array($lista_pagos ?? null) ? $lista_pagos : [];
+$aperturasTaller = is_array($aperturas ?? null) ? $aperturas : [];
+$aperturaIdVista = (int)($apertura_id ?? 0);
+$verTodasActividades = !empty($ver_todas_actividades);
+$aperturaActualVista = is_array($apertura_actual ?? null) ? $apertura_actual : null;
+$queryApertura = $verTodasActividades ? 'todas' : (string)$aperturaIdVista;
 $totalPagosTaller = 0.0;
 foreach ($listaPagosTaller as $pagoFila) {
     $totalPagosTaller += (float)($pagoFila['valor'] ?? 0);
@@ -861,12 +866,12 @@ function taller_resp_valor(array $valores, string $clave): string {
         <a href="<?= PUBLIC_URL ?>?url=talleres/editar&id=<?= $id ?>" class="btn btn-outline-secondary btn-sm">Editar formulario</a>
         <?php endif; ?>
         <?php if ($puedeExportar): ?>
-        <a href="<?= PUBLIC_URL ?>?url=talleres/exportar&id=<?= $id ?>" class="btn btn-success btn-sm">
+        <a href="<?= PUBLIC_URL ?>?url=talleres/exportar&id=<?= $id ?><?= $queryApertura !== '' && $queryApertura !== '0' ? '&apertura=' . urlencode($queryApertura) : '' ?>" class="btn btn-success btn-sm">
             <i class="bi bi-file-earmark-excel"></i> Descargar Excel
         </a>
         <?php endif; ?>
         <?php if (!$soloGraficas && $puedeGraficas && $totalInscripciones > 0 && $graficasList !== []): ?>
-        <a href="<?= PUBLIC_URL ?>?url=talleres/respuestas&id=<?= $id ?>&tab=graficas" class="btn btn-primary btn-sm">
+        <a href="<?= PUBLIC_URL ?>?url=talleres/respuestas&id=<?= $id ?>&tab=graficas<?= $queryApertura !== '' && $queryApertura !== '0' ? '&apertura=' . urlencode($queryApertura) : '' ?>" class="btn btn-primary btn-sm">
             <i class="bi bi-bar-chart-line"></i> Ver gráficas
         </a>
         <?php endif; ?>
@@ -892,6 +897,48 @@ unset($_SESSION['talleres_flash_ok'], $_SESSION['talleres_flash_error']);
 <?php if ($flashErrorResp !== ''): ?>
 <div class="alert alert-danger"><?= htmlspecialchars($flashErrorResp, ENT_QUOTES, 'UTF-8') ?></div>
 <?php endif; ?>
+
+<div class="card" style="margin-bottom:16px;padding:14px 16px;">
+    <form method="get" action="<?= PUBLIC_URL ?>index.php" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin:0;">
+        <input type="hidden" name="url" value="talleres/respuestas">
+        <input type="hidden" name="id" value="<?= $id ?>">
+        <?php if ($tabActiva === 'graficas' || $soloGraficas): ?>
+        <input type="hidden" name="tab" value="graficas">
+        <?php endif; ?>
+        <div>
+            <label for="filtro-apertura" style="display:block;font-size:0.8rem;font-weight:700;margin-bottom:4px;">Actividad</label>
+            <select id="filtro-apertura" name="apertura" class="form-control" style="min-width:220px;" onchange="this.form.submit()">
+                <?php foreach ($aperturasTaller as $ap): ?>
+                    <?php $idAp = (int)($ap['Id_Apertura'] ?? 0); ?>
+                    <option value="<?= $idAp ?>" <?= !$verTodasActividades && $idAp === $aperturaIdVista ? 'selected' : '' ?>>
+                        <?= htmlspecialchars((string)($ap['Nombre'] ?? 'Actividad'), ENT_QUOTES, 'UTF-8') ?>
+                        <?= !empty($ap['Activa']) ? '(actual)' : '' ?>
+                        — <?= (int)($ap['Total_Respuestas'] ?? 0) ?> inscritos
+                    </option>
+                <?php endforeach; ?>
+                <option value="todas" <?= $verTodasActividades ? 'selected' : '' ?>>Todas las actividades</option>
+            </select>
+        </div>
+    </form>
+    <?php if (!$soloGraficas && $puedeEditar): ?>
+    <form method="post" action="<?= PUBLIC_URL ?>?url=talleres/nueva-actividad" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:12px;" onsubmit="return confirm('Se cierra la lista actual y se abre una nueva. El enlace y el QR siguen siendo los mismos. ¿Continuar?');">
+        <input type="hidden" name="id_formulario" value="<?= $id ?>">
+        <div>
+            <label for="nombre_actividad" style="display:block;font-size:0.8rem;font-weight:700;margin-bottom:4px;">Nueva actividad (próxima fecha)</label>
+            <input type="text" id="nombre_actividad" name="nombre_actividad" class="form-control" placeholder="Ej.: Taller de padres — mayo 2026" style="min-width:260px;">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Abrir nueva actividad</button>
+    </form>
+    <?php endif; ?>
+    <p class="text-muted" style="margin:8px 0 0;font-size:0.82rem;">
+        No cree otro formulario. La misma persona podrá inscribirse otra vez en la nueva actividad.
+        <?php if ($verTodasActividades): ?>
+            Está viendo el histórico de todas las actividades.
+        <?php elseif (!empty($aperturaActualVista['Nombre'])): ?>
+            Esta pantalla muestra: <strong><?= htmlspecialchars((string)$aperturaActualVista['Nombre'], ENT_QUOTES, 'UTF-8') ?></strong>.
+        <?php endif; ?>
+    </p>
+</div>
 
 <?php if (!$soloGraficas && $totalInscripciones > 0 && $puedeGraficas && $graficasList !== []): ?>
 <nav class="taller-resp-tabs" aria-label="Vista de respuestas">

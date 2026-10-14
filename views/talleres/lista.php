@@ -105,7 +105,7 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
             <?php if ($puedeSoloGraficas): ?>
                 Consulte las gráficas estadísticas de cada formulario de taller.
             <?php else: ?>
-                Cree formularios, comparta el enlace y vea las respuestas.
+                Un formulario por tipo de actividad. Edítelo y, para la próxima fecha, abra una nueva actividad: el enlace y el QR no cambian.
             <?php endif; ?>
         </p>
     </div>
@@ -131,6 +131,28 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
 <?php if ($flashError !== ''): ?>
 <div class="alert alert-danger"><?= htmlspecialchars($flashError, ENT_QUOTES, 'UTF-8') ?></div>
 <?php endif; ?>
+<?php
+$titulosVistos = [];
+$titulosDuplicados = [];
+foreach (is_array($formularios ?? null) ? $formularios : [] as $filaDup) {
+    $claveTitulo = mb_strtolower(trim((string)($filaDup['Titulo'] ?? '')), 'UTF-8');
+    if ($claveTitulo === '') {
+        continue;
+    }
+    if (isset($titulosVistos[$claveTitulo])) {
+        $titulosDuplicados[$claveTitulo] = (string)($filaDup['Titulo'] ?? '');
+    } else {
+        $titulosVistos[$claveTitulo] = true;
+    }
+}
+?>
+<?php if ($titulosDuplicados !== []): ?>
+<div class="alert alert-warning">
+    Hay más de un formulario con el mismo nombre
+    (<?= htmlspecialchars(implode(', ', array_values($titulosDuplicados)), ENT_QUOTES, 'UTF-8') ?>).
+    Deje uno, use «Nueva actividad» para las próximas fechas y cierre o elimine el duplicado. No se unieron solos para no mezclar inscripciones.
+</div>
+<?php endif; ?>
 
 <div class="table-container">
     <table class="data-table">
@@ -155,9 +177,17 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
                     <tr>
                         <td>
                             <strong><?= htmlspecialchars((string)($f['Titulo'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+                            <?php if (trim((string)($f['Actividad_Actual'] ?? '')) !== ''): ?>
+                                <br><small class="text-muted">Actividad: <?= htmlspecialchars((string)$f['Actividad_Actual'], ENT_QUOTES, 'UTF-8') ?></small>
+                            <?php endif; ?>
                         </td>
                         <td><?= (int)($f['Total_Campos'] ?? 0) ?></td>
-                        <td><?= (int)($f['Total_Respuestas'] ?? 0) ?></td>
+                        <td>
+                            <?= (int)($f['Respuestas_Actividad'] ?? $f['Total_Respuestas'] ?? 0) ?>
+                            <?php if ((int)($f['Total_Respuestas'] ?? 0) > (int)($f['Respuestas_Actividad'] ?? 0)): ?>
+                                <small class="text-muted">/ <?= (int)$f['Total_Respuestas'] ?> hist.</small>
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <?php if (!empty($f['Activo'])): ?>
                                 <span class="badge bg-success">Activo</span>
@@ -212,7 +242,7 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="5">No hay formularios creados. Use «Nuevo formulario» para empezar.</td>
+                    <td colspan="5">No hay formularios creados. Use «Nuevo formulario» para el tipo de actividad (Taller de Padres, etc.).</td>
                 </tr>
             <?php endif; ?>
         </tbody>

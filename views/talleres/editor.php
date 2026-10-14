@@ -99,7 +99,14 @@ unset($_SESSION['talleres_flash_ok']);
 
                    value="<?= htmlspecialchars((string)($formulario['Titulo'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
 
-            <small class="text-muted">Este nombre se usa para crear el enlace que compartirá.</small>
+            <small class="text-muted">
+                Un formulario por tipo de actividad (Taller de Padres, Presentación de niños, etc.).
+                <?php if ($id > 0): ?>
+                    Al guardar no cambia el enlace ni el QR. Para la próxima fecha use «Nueva actividad» en las respuestas.
+                <?php else: ?>
+                    El enlace se crea con este nombre. Si ya existe uno igual, edítelo y abra una nueva actividad en vez de duplicarlo.
+                <?php endif; ?>
+            </small>
 
         </div>
 

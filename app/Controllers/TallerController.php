@@ -520,7 +520,21 @@ class TallerController extends BaseController {
 
 
 
-        $slug = $this->model->generarSlugUnico($titulo, $esEdicion ? $id : 0);
+        if ($this->model->tituloExiste($titulo, $esEdicion ? $id : 0)) {
+            $_SESSION['talleres_flash_error'] = 'Ya existe un formulario con ese nombre. Edítelo y use «Nueva actividad» para la próxima fecha: el enlace y el QR no cambian.';
+            header('Location: ' . PUBLIC_URL . '?url=talleres/' . ($esEdicion ? 'editar&id=' . $id : 'crear'));
+            exit;
+        }
+
+        if ($esEdicion) {
+            $actualFormulario = $this->model->getById($id);
+            $slug = trim((string)($actualFormulario['Slug'] ?? ''));
+            if ($slug === '') {
+                $slug = $this->model->generarSlugUnico($titulo, $id);
+            }
+        } else {
+            $slug = $this->model->generarSlugUnico($titulo);
+        }
 
 
 
@@ -563,6 +577,9 @@ class TallerController extends BaseController {
             $bloquesPost = $this->parsearBloquesDesdePost($_POST);
 
             $id = $this->model->guardarFormularioCompleto($esEdicion ? $id : 0, $data, $bloquesPost);
+            if ($id > 0) {
+                $this->model->asegurarAperturaActual($id);
+            }
 
         } catch (Throwable $e) {
 
@@ -634,6 +651,37 @@ class TallerController extends BaseController {
 
         exit;
 
+    }
+
+    public function nuevaActividad(): void {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . PUBLIC_URL . '?url=talleres');
+            exit;
+        }
+
+        $this->requierePermiso('editar', ['crear']);
+
+        $id = (int)($_POST['id_formulario'] ?? 0);
+        $formulario = $id > 0 ? $this->model->getById($id) : null;
+        if (!$formulario) {
+            $_SESSION['talleres_flash_error'] = 'No se encontró el formulario.';
+            header('Location: ' . PUBLIC_URL . '?url=talleres');
+            exit;
+        }
+
+        $nombre = trim((string)($_POST['nombre_actividad'] ?? ''));
+        $idApertura = $this->model->abrirNuevaActividad($id, $nombre);
+        if ($idApertura <= 0) {
+            $_SESSION['talleres_flash_error'] = 'No se pudo abrir la nueva actividad.';
+            header('Location: ' . PUBLIC_URL . '?url=talleres/respuestas&id=' . $id);
+            exit;
+        }
+
+        $this->model->update($id, ['Activo' => 1]);
+        $nombreFinal = $nombre !== '' ? $nombre : ('Actividad ' . date('d/m/Y'));
+        $_SESSION['talleres_flash_ok'] = 'Quedó abierta «' . $nombreFinal . '». El mismo enlace y el mismo QR sirven. Las inscripciones anteriores quedan en la actividad previa; la misma persona puede volver a inscribirse.';
+        header('Location: ' . PUBLIC_URL . '?url=talleres/respuestas&id=' . $id . '&apertura=' . $idApertura);
+        exit;
     }
 
 
@@ -986,7 +1034,26 @@ class TallerController extends BaseController {
 
         $campos = $this->model->getCamposPersonalizadosPorFormulario($id);
 
-        $respuestasRaw = $this->model->getRespuestasPorFormulario($id);
+        $this->model->asegurarAperturaActual($id);
+        $aperturas = $this->model->getAperturasPorFormulario($id);
+        $aperturaRaw = trim((string)($_GET['apertura'] ?? ''));
+        $verTodasActividades = ($aperturaRaw === 'todas');
+        $idAperturaVista = 0;
+        if (!$verTodasActividades) {
+            if ($aperturaRaw !== '' && ctype_digit($aperturaRaw)) {
+                $pedida = $this->model->getAperturaPorId((int)$aperturaRaw, $id);
+                if ($pedida) {
+                    $idAperturaVista = (int)$pedida['Id_Apertura'];
+                }
+            }
+            if ($idAperturaVista <= 0) {
+                $activaVista = $this->model->getAperturaActiva($id);
+                $idAperturaVista = (int)($activaVista['Id_Apertura'] ?? 0);
+            }
+        }
+        $aperturaActual = $idAperturaVista > 0 ? $this->model->getAperturaPorId($idAperturaVista, $id) : null;
+
+        $respuestasRaw = $this->model->getRespuestasPorFormulario($id, 5000, $verTodasActividades ? 0 : $idAperturaVista);
 
         $secciones = $soloGraficas ? [] : $this->buildSeccionesParaVista($id);
 
@@ -1134,7 +1201,15 @@ class TallerController extends BaseController {
 
             'ministerios_asignacion' => $this->listarMinisteriosAsignacion(),
 
-            'lista_pagos' => $soloGraficas ? [] : $this->model->getPagosPorFormulario($id),
+            'lista_pagos' => $soloGraficas ? [] : $this->model->getPagosPorFormulario($id, $verTodasActividades ? 0 : $idAperturaVista),
+
+            'aperturas' => $aperturas,
+
+            'apertura_id' => $idAperturaVista,
+
+            'ver_todas_actividades' => $verTodasActividades,
+
+            'apertura_actual' => $aperturaActual,
 
         ]);
 
@@ -1720,7 +1795,20 @@ class TallerController extends BaseController {
 
         $campos = $this->model->getCamposPersonalizadosPorFormulario($id);
 
-        $respuestasRaw = $this->model->getRespuestasPorFormulario($id);
+        $this->model->asegurarAperturaActual($id);
+        $aperturaExport = trim((string)($_GET['apertura'] ?? ''));
+        $idAperturaExport = 0;
+        if ($aperturaExport === 'todas') {
+            $idAperturaExport = 0;
+        } elseif ($aperturaExport !== '' && ctype_digit($aperturaExport)) {
+            $pedidaExp = $this->model->getAperturaPorId((int)$aperturaExport, $id);
+            $idAperturaExport = (int)($pedidaExp['Id_Apertura'] ?? 0);
+        } else {
+            $activaExp = $this->model->getAperturaActiva($id);
+            $idAperturaExport = (int)($activaExp['Id_Apertura'] ?? 0);
+        }
+
+        $respuestasRaw = $this->model->getRespuestasPorFormulario($id, 5000, $idAperturaExport);
 
 
 
@@ -2118,8 +2206,9 @@ class TallerController extends BaseController {
         }
 
         $inscripcionPrevia = null;
+        $idAperturaActiva = $idFormulario > 0 ? $this->model->asegurarAperturaActual($idFormulario) : 0;
         if ($modo === 'nino' && $idFormulario > 0 && $documento !== '') {
-            $inscripcionPrevia = $this->model->buscarInscripcionPorDocumentoNino($idFormulario, $documento);
+            $inscripcionPrevia = $this->model->buscarInscripcionPorDocumentoNino($idFormulario, $documento, 0, $idAperturaActiva);
         }
 
         if ($modo === 'nino' && $inscripcionPrevia) {
@@ -2154,7 +2243,9 @@ class TallerController extends BaseController {
             $inscripcionPreviaPersona = $this->model->buscarInscripcionPorDocumentoPersona(
                 $idFormulario,
                 $documento,
-                $idPersonaEncontrada
+                $idPersonaEncontrada,
+                0,
+                $idAperturaActiva
             );
             if ($inscripcionPreviaPersona) {
                 echo json_encode([
@@ -2209,6 +2300,48 @@ class TallerController extends BaseController {
             $ref .= $chars[random_int(0, strlen($chars) - 1)];
         }
         return $ref;
+    }
+
+    private function generarReferenciaPagoUnica(): string {
+        for ($i = 0; $i < 20; $i++) {
+            $ref = $this->generarReferenciaCorta();
+            if ($this->model->getPagoPorReferencia($ref) === null) {
+                return $ref;
+            }
+        }
+        return $this->generarReferenciaCorta() . str_pad((string)random_int(0, 99), 2, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Interpreta 50.000 o 50,000 como cincuenta mil (igual que Comunidad).
+     */
+    private function normalizarValorPago($valor): float {
+        $raw = trim((string)$valor);
+        if ($raw === '') {
+            return 0.0;
+        }
+        $raw = str_replace([' ', "\u{00A0}"], '', $raw);
+        $tieneComa = strpos($raw, ',') !== false;
+        $tienePunto = strpos($raw, '.') !== false;
+        if ($tieneComa && $tienePunto) {
+            if ((int)strrpos($raw, ',') > (int)strrpos($raw, '.')) {
+                $raw = str_replace('.', '', $raw);
+                $raw = str_replace(',', '.', $raw);
+            } else {
+                $raw = str_replace(',', '', $raw);
+            }
+        } elseif ($tieneComa) {
+            $partes = explode(',', $raw);
+            $raw = count($partes) === 2 && strlen(end($partes)) <= 2
+                ? implode('.', $partes)
+                : str_replace(',', '', $raw);
+        } elseif ($tienePunto) {
+            $partes = explode('.', $raw);
+            if (count($partes) > 2 || (count($partes) === 2 && strlen(end($partes)) === 3 && strlen($partes[0]) <= 3)) {
+                $raw = str_replace('.', '', $raw);
+            }
+        }
+        return round((float)$raw, 2);
     }
 
     /**
@@ -2443,7 +2576,7 @@ class TallerController extends BaseController {
             $json = [];
         }
 
-        $valor = (float)str_replace([',', ' '], ['.', ''], (string)($_POST['valor_pago'] ?? '0'));
+        $valor = $this->normalizarValorPago($_POST['valor_pago'] ?? '0');
 
         $metodo = trim((string)($_POST['metodo_pago'] ?? 'Efectivo'));
 
@@ -2466,7 +2599,7 @@ class TallerController extends BaseController {
 
         }
 
-        $referenciaPago = $this->generarReferenciaCorta();
+        $referenciaPago = $this->generarReferenciaPagoUnica();
 
         $tipoNormalizado = in_array($tipo, ['completo', 'abono'], true) ? $tipo : 'completo';
 
@@ -2630,7 +2763,8 @@ class TallerController extends BaseController {
                 ?: ($_POST['buscar_nino_documento'] ?? '')
             ));
             if ($docNino !== '') {
-                $inscripcionPrevia = $this->model->buscarInscripcionPorDocumentoNino($id, $docNino);
+                $idAperturaGuardar = $this->model->asegurarAperturaActual($id);
+                $inscripcionPrevia = $this->model->buscarInscripcionPorDocumentoNino($id, $docNino, 0, $idAperturaGuardar);
                 if ($inscripcionPrevia) {
                     if (!is_array($errores ?? null)) {
                         $errores = [];
@@ -2676,7 +2810,8 @@ class TallerController extends BaseController {
                 ?: ($_POST['buscar_documento'] ?? '')
             ));
             if ($docPersona !== '' || $idPersona > 0) {
-                $inscripcionPrevia = $this->model->buscarInscripcionPorDocumentoPersona($id, $docPersona, $idPersona);
+                $idAperturaGuardarPersona = $this->model->asegurarAperturaActual($id);
+                $inscripcionPrevia = $this->model->buscarInscripcionPorDocumentoPersona($id, $docPersona, $idPersona, 0, $idAperturaGuardarPersona);
                 if ($inscripcionPrevia) {
                     $errores['persona_documento'] = $this->mensajeInscripcionDuplicadaTaller($formulario, $inscripcionPrevia);
                 }
@@ -2800,9 +2935,9 @@ class TallerController extends BaseController {
             ($_POST['nino_documento'] ?? '')
             ?: ($_POST['buscar_nino_documento'] ?? '')
         ));
-        if ($docInscripcion !== '' && $docPost !== '' && $docInscripcion !== $docPost) {
+        if ($docInscripcion === '' || $docPost === '' || $docInscripcion !== $docPost) {
             $_SESSION['talleres_publico_errores'] = [
-                'nino_documento' => 'El documento no coincide con la inscripción existente.',
+                'nino_documento' => 'Para subir documentos busque al niño por su documento. El número debe coincidir con la inscripción.',
             ];
             $_SESSION['talleres_publico_valores'] = $_POST;
             header('Location: ' . PUBLIC_URL . '?url=talleres_publico&slug=' . urlencode($slug));
@@ -2878,6 +3013,54 @@ class TallerController extends BaseController {
     }
 
 
+
+    public function documentoPresentacion(): void {
+        $this->requiereAccesoRespuestas();
+
+        $idRespuesta = (int)($_GET['id_respuesta'] ?? 0);
+        $archivo = basename(str_replace('\\', '/', (string)($_GET['archivo'] ?? '')));
+        if ($idRespuesta <= 0 || $archivo === '' || str_contains($archivo, '..')) {
+            http_response_code(404);
+            echo 'Archivo no encontrado';
+            return;
+        }
+
+        $respuesta = $this->model->getRespuestaPorId($idRespuesta);
+        if (!$respuesta) {
+            http_response_code(404);
+            echo 'Archivo no encontrado';
+            return;
+        }
+
+        $ruta = TallerPresentacionDocumentos::directorioRespuesta($idRespuesta) . DIRECTORY_SEPARATOR . $archivo;
+        if (!is_file($ruta)) {
+            http_response_code(404);
+            echo 'Archivo no encontrado';
+            return;
+        }
+
+        $mime = 'application/octet-stream';
+        if (function_exists('finfo_open')) {
+            $finfo = @finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo) {
+                $detectado = (string)@finfo_file($finfo, $ruta);
+                @finfo_close($finfo);
+                if ($detectado !== '') {
+                    $mime = $detectado;
+                }
+            }
+        }
+
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        header('Content-Type: ' . $mime);
+        header('Content-Disposition: inline; filename="' . str_replace(['"', "\r", "\n"], '', $archivo) . '"');
+        header('Content-Length: ' . (string)filesize($ruta));
+        header('X-Content-Type-Options: nosniff');
+        readfile($ruta);
+        exit;
+    }
 
     public function qr(): void {
 

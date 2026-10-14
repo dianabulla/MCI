@@ -538,6 +538,8 @@ return [
     'talleres/crear-tour-levantate' => 'talleres:crear',
     'talleres/corregir-personas-tour' => ['any' => ['talleres:editar', 'talleres:crear']],
     'talleres/guardar-pago' => ['any' => ['talleres:editar', 'talleres:crear']],
+    'talleres/nueva-actividad' => ['any' => ['talleres:editar', 'talleres:crear']],
+    'talleres/documento-presentacion' => ['checker' => 'puedeAccederRespuestasTalleres'],
 
     'entrega_obsequio/marcarEntregado' => 'entrega_obsequio:editar',
 

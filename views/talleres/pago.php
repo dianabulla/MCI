@@ -250,7 +250,8 @@ $urlPagoBase = PUBLIC_URL . '?url=talleres/pago&id=' . $idFormulario . '&id_resp
 
         <div class="mb-3">
             <label class="form-label">Valor</label>
-            <input type="text" name="valor_pago" class="form-control" placeholder="Ej.: 50000" required>
+            <input type="text" name="valor_pago" class="form-control" placeholder="Ej.: 50000 o 50.000" required>
+            <small class="text-muted">Puede escribir 50000 o 50.000; ambos son cincuenta mil pesos.</small>
         </div>
 
         <div class="mb-3">
