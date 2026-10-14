@@ -362,9 +362,9 @@ return [
 
     'talleres/qr' => ['any' => ['talleres:gestionar_enlace', 'talleres:editar', 'talleres:ver']],
 
-    'talleres/servicio-social' => ['checker' => 'puedeAccederModuloTalleres'],
+    'talleres/servicio-social' => ['checker' => 'puedeVerServicioSocial'],
 
-    'talleres/servicio-social/ver' => ['checker' => 'puedeAccederModuloTalleres'],
+    'talleres/servicio-social/ver' => ['checker' => 'puedeVerServicioSocial'],
 
     'talleres/servicio-social/actualizar' => ['checker' => 'puedeGestionarServicioSocial'],
     'talleres/servicio-social/agendar-nueva' => ['checker' => 'puedeGestionarServicioSocial'],

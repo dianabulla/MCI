@@ -232,7 +232,7 @@ class TallerController extends BaseController {
 
         $this->requiereAccesoTaller();
 
-        if (AuthController::esPerfilServicioSocialTalleres()) {
+        if (AuthController::esPerfilServicioSocialTalleres() || AuthController::soloParteServicioSocialTalleres()) {
             $this->redirect('talleres/servicio-social');
         }
 

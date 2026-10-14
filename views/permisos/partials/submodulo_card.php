@@ -12,8 +12,37 @@ $pEli = $permiso ? (int)$permiso['Puede_Eliminar'] : 0;
 $soloVerModulo = !empty($definiciones_modulos[$mk]['solo_ver']);
 $crudLabels = PermisosModulos::crudLabels($mk);
 $extras = PermisosUiCatalogo::extrasDeSubmodulo($mk);
+$partesExtra = [];
+$funcionesExtra = [];
+foreach ($extras['acciones'] as $itemExtra) {
+    $claveExtra = (string)($itemExtra['clave'] ?? '');
+    $modSubExtra = (string)($itemExtra['modulo'] ?? '');
+    $permSubExtra = $permisos[$idRol][$modSubExtra] ?? null;
+    $itemExtra['activo'] = $permSubExtra ? (int)$permSubExtra['Puede_Ver'] : 0;
+    if (PermisosCatalogo::esVistaParcial($mk, $claveExtra)) {
+        $partesExtra[] = $itemExtra;
+    } else {
+        $funcionesExtra[] = $itemExtra;
+    }
+}
+$columnasExtra = [];
+foreach ($extras['columnas'] as $itemCol) {
+    $modSubCol = (string)($itemCol['modulo'] ?? '');
+    $permSubCol = $permisos[$idRol][$modSubCol] ?? null;
+    $itemCol['activo'] = $permSubCol ? (int)$permSubCol['Puede_Ver'] : 0;
+    $columnasExtra[] = $itemCol;
+}
 $tieneAlguno = ($pVer + $pCre + $pEdi + $pEli) > 0;
+foreach (array_merge($partesExtra, $funcionesExtra, $columnasExtra) as $itemActivo) {
+    if (!empty($itemActivo['activo'])) {
+        $tieneAlguno = true;
+        break;
+    }
+}
 $searchText = strtolower($subTitulo . ' ' . $subDesc . ' ' . $mk);
+foreach (array_merge($partesExtra, $funcionesExtra, $columnasExtra) as $itemBusqueda) {
+    $searchText .= ' ' . strtolower((string)($itemBusqueda['label'] ?? ''));
+}
 ?>
 <article class="perm-submodule<?= $tieneAlguno ? ' perm-submodule--on' : '' ?>"
     data-module-key="<?= htmlspecialchars($mk, ENT_QUOTES, 'UTF-8') ?>"
@@ -30,25 +59,28 @@ $searchText = strtolower($subTitulo . ' ' . $subDesc . ' ' . $mk);
         <?php endif; ?>
     </header>
 
+    <div class="perm-bloque">
+        <p class="perm-bloque__titulo">Acceso</p>
     <div class="perm-pills" role="group" aria-label="Acceso al submódulo">
         <?php
         $pills = [
-            ['puede_ver', $pVer, $crudLabels['puede_ver'], 'bi-eye', 'perm-pill--ver', true],
-            ['puede_crear', $pCre, $crudLabels['puede_crear'], 'bi-plus-lg', 'perm-pill--crear', !$soloVerModulo],
-            ['puede_editar', $pEdi, $crudLabels['puede_editar'], 'bi-pencil', 'perm-pill--editar', !$soloVerModulo],
-            ['puede_eliminar', $pEli, $crudLabels['puede_eliminar'], 'bi-trash', 'perm-pill--eliminar', !$soloVerModulo],
+            ['puede_ver', $pVer, $crudLabels['puede_ver'], 'bi-eye', 'perm-pill--ver', true, false],
+            ['puede_crear', $pCre, $crudLabels['puede_crear'], 'bi-plus-lg', 'perm-pill--crear', !$soloVerModulo, true],
+            ['puede_editar', $pEdi, $crudLabels['puede_editar'], 'bi-pencil', 'perm-pill--editar', !$soloVerModulo, true],
+            ['puede_eliminar', $pEli, $crudLabels['puede_eliminar'], 'bi-trash', 'perm-pill--eliminar', !$soloVerModulo, true],
         ];
-        foreach ($pills as [$campo, $val, $label, $icon, $cls, $show]):
+        foreach ($pills as [$campo, $val, $label, $icon, $cls, $show, $requiereVer]):
             if (!$show) {
                 continue;
             }
         ?>
-        <label class="perm-pill <?= $cls ?><?= $val ? ' is-on' : '' ?>">
+        <label class="perm-pill <?= $cls ?><?= $val ? ' is-on' : '' ?><?= (!$pVer && $requiereVer) ? ' is-locked' : '' ?>">
             <input type="checkbox"
                 class="permiso-check"
                 data-rol="<?= $idRol ?>"
                 data-modulo="<?= htmlspecialchars($mk, ENT_QUOTES, 'UTF-8') ?>"
                 data-campo="<?= $campo ?>"
+                <?= $requiereVer ? 'data-requiere-ver="1"' : '' ?>
                 <?= $val ? 'checked' : '' ?>
                 <?= $deshabilitarEdicion ? 'disabled' : '' ?>>
             <i class="bi <?= $icon ?>"></i>
@@ -56,46 +88,72 @@ $searchText = strtolower($subTitulo . ' ' . $subDesc . ' ' . $mk);
         </label>
         <?php endforeach; ?>
     </div>
+    </div>
 
-    <?php if (!empty($extras['acciones'])): ?>
-    <div class="perm-card__ui-block">
-        <p class="perm-card__ui-title">Acciones permitidas</p>
+    <?php if ($partesExtra !== []): ?>
+    <div class="perm-bloque perm-bloque--partes">
+        <p class="perm-bloque__titulo">Partes <span>se pueden dar solas</span></p>
         <div class="perm-card__adv-list">
-            <?php foreach ($extras['acciones'] as $item):
+            <?php foreach ($partesExtra as $item):
                 $modSub = $item['modulo'];
-                $permSub = $permisos[$idRol][$modSub] ?? null;
-                $pSub = $permSub ? (int)$permSub['Puede_Ver'] : 0;
+                $pSub = (int)($item['activo'] ?? 0);
             ?>
-            <label class="perm-adv-chip<?= $pSub ? ' is-on' : '' ?>">
+            <label class="perm-adv-chip perm-adv-chip--parte<?= $pSub ? ' is-on' : '' ?>">
                 <input type="checkbox"
                     class="permiso-check"
                     data-rol="<?= $idRol ?>"
                     data-modulo="<?= htmlspecialchars($modSub, ENT_QUOTES, 'UTF-8') ?>"
                     data-campo="puede_ver"
+                    data-padre="<?= htmlspecialchars($mk, ENT_QUOTES, 'UTF-8') ?>"
+                    data-parte="1"
                     <?= $pSub ? 'checked' : '' ?>
                     <?= $deshabilitarEdicion ? 'disabled' : '' ?>>
                 <span class="perm-adv-chip__label"><?= htmlspecialchars($item['label']) ?></span>
+                <span class="perm-adv-chip__hint">No abre el resto del módulo.</span>
             </label>
             <?php endforeach; ?>
         </div>
     </div>
     <?php endif; ?>
 
-    <?php if (!empty($extras['columnas'])): ?>
-    <div class="perm-card__ui-block">
-        <p class="perm-card__ui-title">Columnas visibles en tablas</p>
-        <div class="perm-pills perm-pills--nested">
-            <?php foreach ($extras['columnas'] as $item):
+    <?php if ($funcionesExtra !== [] || $columnasExtra !== []): ?>
+    <div class="perm-bloque perm-bloque--funciones">
+        <p class="perm-bloque__titulo">Funciones <span>solo si Ver está encendido</span></p>
+        <?php if ($funcionesExtra !== []): ?>
+        <div class="perm-card__adv-list">
+            <?php foreach ($funcionesExtra as $item):
                 $modSub = $item['modulo'];
-                $permSub = $permisos[$idRol][$modSub] ?? null;
-                $pSub = $permSub ? (int)$permSub['Puede_Ver'] : 0;
+                $pSub = (int)($item['activo'] ?? 0);
             ?>
-            <label class="perm-pill perm-pill--ver<?= $pSub ? ' is-on' : '' ?>">
+            <label class="perm-adv-chip perm-adv-chip--funcion<?= $pSub ? ' is-on' : '' ?><?= $pVer ? '' : ' is-locked' ?>">
                 <input type="checkbox"
                     class="permiso-check"
                     data-rol="<?= $idRol ?>"
                     data-modulo="<?= htmlspecialchars($modSub, ENT_QUOTES, 'UTF-8') ?>"
                     data-campo="puede_ver"
+                    data-padre="<?= htmlspecialchars($mk, ENT_QUOTES, 'UTF-8') ?>"
+                    data-requiere-ver="1"
+                    <?= $pSub ? 'checked' : '' ?>
+                    <?= $deshabilitarEdicion ? 'disabled' : '' ?>>
+                <span class="perm-adv-chip__label"><?= htmlspecialchars($item['label']) ?></span>
+            </label>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+        <?php if ($columnasExtra !== []): ?>
+        <div class="perm-pills perm-pills--nested">
+            <?php foreach ($columnasExtra as $item):
+                $modSub = $item['modulo'];
+                $pSub = (int)($item['activo'] ?? 0);
+            ?>
+            <label class="perm-pill perm-pill--ver<?= $pSub ? ' is-on' : '' ?><?= $pVer ? '' : ' is-locked' ?>">
+                <input type="checkbox"
+                    class="permiso-check"
+                    data-rol="<?= $idRol ?>"
+                    data-modulo="<?= htmlspecialchars($modSub, ENT_QUOTES, 'UTF-8') ?>"
+                    data-campo="puede_ver"
+                    data-padre="<?= htmlspecialchars($mk, ENT_QUOTES, 'UTF-8') ?>"
+                    data-requiere-ver="1"
                     <?= $pSub ? 'checked' : '' ?>
                     <?= $deshabilitarEdicion ? 'disabled' : '' ?>>
                 <i class="bi bi-layout-three-columns"></i>
@@ -103,6 +161,7 @@ $searchText = strtolower($subTitulo . ' ' . $subDesc . ' ' . $mk);
             </label>
             <?php endforeach; ?>
         </div>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 </article>

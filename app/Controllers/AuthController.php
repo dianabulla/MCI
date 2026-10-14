@@ -1458,8 +1458,6 @@ class AuthController extends BaseController {
             return true;
         }
         return self::puede('programas:ver')
-            || self::puede('personas:ver')
-            || self::puede('personas_consulta:ver')
             || self::puede('programas:ver_universidad_vida')
             || self::puede('programas:ver_capacitacion_destino')
             || self::tieneCoordinacionTotalProgramas();
@@ -1473,9 +1471,8 @@ class AuthController extends BaseController {
             return true;
         }
         return self::puede('escuelas_formacion:ver')
-            || self::puede('escuelas_formacion:crear')
-            || self::puede('escuelas_formacion:editar')
-            || self::puede('personas:ver');
+            || self::puede('escuelas_formacion_marcar_asistencia:ver')
+            || self::puede('escuelas_formacion_editar_fechas:ver');
     }
 
     /**
@@ -1656,7 +1653,7 @@ class AuthController extends BaseController {
         if (self::esAdministrador()) {
             return true;
         }
-        foreach (['ver', 'crear', 'editar', 'eliminar', 'ver_respuestas', 'ver_graficas', 'exportar_excel', 'gestionar_enlace'] as $accion) {
+        foreach (['ver', 'ver_respuestas', 'ver_graficas', 'servicio_social'] as $accion) {
             if (self::puede('talleres:' . $accion)) {
                 return true;
             }
@@ -1688,9 +1685,36 @@ class AuthController extends BaseController {
     /**
      * Gestionar citas de Servicio Social (estado, horarios, eliminar).
      */
+    public static function puedeVerServicioSocial(): bool {
+        if (self::esAdministrador() || self::esPerfilServicioSocialTalleres()) {
+            return true;
+        }
+
+        return self::puede('talleres:servicio_social')
+            || self::puede('talleres:ver')
+            || self::puede('talleres:ver_respuestas');
+    }
+
+    /**
+     * Solo la parte de Servicio social, sin el listado de talleres.
+     */
+    public static function soloParteServicioSocialTalleres(): bool {
+        if (self::esAdministrador()) {
+            return false;
+        }
+        if (!self::puede('talleres:servicio_social') && !self::esPerfilServicioSocialTalleres()) {
+            return false;
+        }
+
+        return !self::puede('talleres:ver')
+            && !self::puede('talleres:ver_respuestas')
+            && !self::puede('talleres:ver_graficas');
+    }
+
     public static function puedeGestionarServicioSocial(): bool {
         return self::esAdministrador()
             || self::esPerfilServicioSocialTalleres()
+            || self::puede('talleres:servicio_social')
             || self::puede('talleres:editar')
             || self::puede('talleres:ver_respuestas');
     }
@@ -1805,11 +1829,12 @@ class AuthController extends BaseController {
             $accion = 'ver';
         }
 
-        // Si existe permiso explicito de modulo, SIEMPRE manda lo configurado
-        // por el administrador.
+        // Si existe permiso explicito de modulo, manda lo configurado.
+        // Sin «ver», crear/editar/eliminar/exportar no abren el módulo.
+        // Las vistas parciales (gráficas, Servicio social, una línea de Programas) sí.
         if (isset($_SESSION['permisos'][$modulo]) && is_array($_SESSION['permisos'][$modulo])) {
             if (array_key_exists($accion, $_SESSION['permisos'][$modulo])) {
-                return !empty($_SESSION['permisos'][$modulo][$accion]);
+                return self::concedidoSiPuedeVerParte($modulo, $accion, !empty($_SESSION['permisos'][$modulo][$accion]));
             }
         }
 
@@ -1820,7 +1845,7 @@ class AuthController extends BaseController {
         if (PermisosUiCatalogo::tieneAccionUi($modulo, $accion)) {
             $claveSub = PermisosUiCatalogo::claveAccion($modulo, $accion);
             if (isset($_SESSION['permisos'][$claveSub]) && is_array($_SESSION['permisos'][$claveSub])) {
-                return !empty($_SESSION['permisos'][$claveSub]['ver']);
+                return self::concedidoSiPuedeVerParte($modulo, $accion, !empty($_SESSION['permisos'][$claveSub]['ver']));
             }
         }
 
@@ -1837,6 +1862,25 @@ class AuthController extends BaseController {
         }
 
         return false;
+    }
+
+    /**
+     * Crear, editar, eliminar y exportar exigen el Ver del mismo módulo.
+     * Una vista parcial se concede sola.
+     */
+    private static function concedidoSiPuedeVerParte(string $modulo, string $accion, bool $concedido): bool {
+        if (!$concedido || $accion === 'ver') {
+            return $concedido;
+        }
+        if (!class_exists('PermisosCatalogo', false)) {
+            require_once APP . '/Helpers/PermisosCatalogo.php';
+        }
+        if (PermisosCatalogo::esVistaParcial($modulo, $accion)) {
+            return true;
+        }
+        $fila = $_SESSION['permisos'][$modulo] ?? null;
+
+        return is_array($fila) && !empty($fila['ver']);
     }
 
     public static function sincronizarPermisosSesionActual($forzar = false) {

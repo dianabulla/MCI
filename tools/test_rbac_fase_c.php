@@ -80,5 +80,23 @@ $assert(!PermisosProgramasAccess::puedeVerDashboardUniversidadVida(), 'programas
 $assert(!PermisosProgramasAccess::puedeGestionarPagosUniversidadVida(), 'programas:ver no abre pagos');
 $assert(!PermisosProgramasAccess::puedeVerFormularioUniversidadVida(), 'programas:ver no abre formulario');
 
+$_SESSION['permisos'] = [
+    'personas' => ['ver' => 0, 'crear' => 1, 'editar' => 1, 'eliminar' => 1],
+];
+$_SESSION['permisos_configurados'] = true;
+$_SESSION['permisos_last_sync'] = time();
+$assert(!AuthController::puede('personas:crear'), 'sin ver no puede crear');
+$assert(!AuthController::puede('personas:editar'), 'sin ver no puede editar');
+$assert(!AuthController::puedeVerModulo('personas'), 'sin ver no entra al módulo');
+
+$_SESSION['permisos'] = [
+    'talleres' => ['ver' => 0, 'crear' => 1, 'editar' => 0, 'eliminar' => 0],
+    'talleres_acciones_ver_graficas' => ['ver' => 1, 'crear' => 0, 'editar' => 0, 'eliminar' => 0],
+];
+$_SESSION['permisos_last_sync'] = time();
+$assert(AuthController::puede('talleres:ver_graficas'), 'gráficas es una parte y se ve sola');
+$assert(!AuthController::puede('talleres:crear'), 'crear talleres sin ver no abre nada');
+$assert(AuthController::puedeAccederModuloTalleres(), 'la parte de gráficas sí muestra Talleres');
+
 echo $ok ? PHP_EOL . 'Fase C: permisos UI OK.' . PHP_EOL : PHP_EOL . 'Hay fallos.' . PHP_EOL;
 exit($ok ? 0 : 1);

@@ -25,6 +25,7 @@
     }
 
     let toastTimer = null;
+    let grupoAbierto = '';
 
     function showToast(msg, tipo) {
         const el = document.getElementById('perm-toast');
@@ -76,6 +77,7 @@
             const any = card.querySelectorAll('.permiso-check:checked').length > 0;
             card.classList.toggle('perm-submodule--on', any);
             card.classList.toggle('perm-card--on', any);
+            refrescarCandados(card);
         }
     }
 
@@ -106,6 +108,7 @@
                 if (!data.success) throw new Error(data.error || 'Error desconocido');
                 syncPermisoCheckboxes(rol, modulo, campo, cb.checked);
                 actualizarBadgeSelect();
+                filtrarVista();
                 showToast('Guardado');
             })
             .catch((err) => {
@@ -114,6 +117,38 @@
                 showToast('Error: ' + err.message, 'error');
                 if (onError) onError();
             });
+    }
+
+    function verDelModulo(card, modulo) {
+        if (!card) return null;
+        return card.querySelector('.permiso-check[data-campo="puede_ver"][data-modulo="' + modulo + '"]:not([data-requiere-ver]):not([data-parte])');
+    }
+
+    function aplicarReglaVer(cb) {
+        const card = cb.closest('.perm-submodule') || cb.closest('.perm-card');
+        const tocados = [];
+        if (!card) return tocados;
+
+        const moduloPadre = cb.dataset.padre || cb.dataset.modulo;
+        const ver = verDelModulo(card, moduloPadre);
+        if (!ver || ver === cb) {
+            if (cb.dataset.campo === 'puede_ver' && !cb.dataset.padre && !cb.checked) {
+                card.querySelectorAll('.permiso-check[data-requiere-ver="1"]').forEach((otro) => {
+                    const mismo = !otro.dataset.padre || otro.dataset.padre === cb.dataset.modulo;
+                    if (mismo && otro.checked) {
+                        otro.checked = false;
+                        tocados.push(otro);
+                    }
+                });
+            }
+            return tocados;
+        }
+
+        if (cb.dataset.requiereVer === '1' && cb.checked && !ver.checked) {
+            ver.checked = true;
+            tocados.push(ver);
+        }
+        return tocados;
     }
 
     function aplicarPresetEnChecks(cbs, preset) {
@@ -151,6 +186,7 @@
                 syncPillVisual(cb);
             });
             actualizarBadgeSelect();
+            filtrarVista();
             showToast('Permisos actualizados');
         });
     }
@@ -162,7 +198,7 @@
         const panel = getPanelActivo();
         if (!panel || panel.dataset.rolProtegido === '1') return;
 
-        const labels = { activar: 'Activar todo', desactivar: 'Quitar todo', solo_ver: 'Dejar solo lectura' };
+        const labels = { activar: 'Activar este menú', desactivar: 'Quitar este menú', solo_ver: 'Dejar este menú en solo lectura' };
         if (!confirm('¿' + (labels[accion] || accion) + ' en esta selección?')) return;
 
         const root = scopeElement || panel;
@@ -188,8 +224,18 @@
             if (soloLectura) {
                 return;
             }
+            const extra = aplicarReglaVer(this);
             syncPillVisual(this);
-            guardarPermiso(this);
+            extra.forEach((otro) => syncPillVisual(otro));
+            const lista = [this].concat(extra);
+            if (lista.length === 1) {
+                guardarPermiso(this);
+                return;
+            }
+            lista.forEach((otro) => { otro.disabled = true; });
+            guardarListaChecks(lista)
+                .catch((err) => showToast('Error: ' + err.message, 'error'))
+                .finally(() => lista.forEach((otro) => { otro.disabled = false; }));
         });
     });
 
@@ -210,7 +256,8 @@
             btn.dataset.rol = idRol;
         });
 
-        filtrarBusqueda();
+        construirIndice();
+        filtrarVista();
         actualizarBadgeSelect();
     }
 
@@ -223,7 +270,12 @@
 
     document.querySelectorAll('.btn-perm-all').forEach((btn) => {
         btn.addEventListener('click', function () {
-            ejecutarMasivo(this.dataset.accion, getPanelActivo());
+            const panel = getPanelActivo();
+            let scope = panel;
+            if (panel && !panel.classList.contains('perm-panel--buscando')) {
+                scope = panel.querySelector('.perm-family.is-open') || panel;
+            }
+            ejecutarMasivo(this.dataset.accion, scope);
         });
     });
 
@@ -251,32 +303,132 @@
         });
     });
 
-    function filtrarBusqueda() {
+    function escaparGrupo(nombre) {
+        if (window.CSS && typeof CSS.escape === 'function') {
+            return CSS.escape(nombre);
+        }
+        return String(nombre).replace(/"/g, '\\"');
+    }
+
+    function refrescarCandados(card) {
+        if (!card) return;
+        const ver = verDelModulo(card, card.dataset.moduleKey || '');
+        const abierto = !ver || ver.checked;
+        card.querySelectorAll('[data-requiere-ver="1"]').forEach((cb) => {
+            const host = cb.closest('.perm-pill, .perm-adv-chip');
+            if (host) host.classList.toggle('is-locked', !abierto);
+        });
+    }
+
+    function construirIndice() {
+        const nav = document.getElementById('perm-indice');
+        const panel = getPanelActivo();
+        if (!nav || !panel) return;
+        const familias = panel.querySelectorAll('.perm-family');
+        nav.innerHTML = '';
+        familias.forEach((fam) => {
+            const nombre = fam.dataset.grupo || '';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'perm-indice__btn';
+            btn.dataset.grupo = nombre;
+            btn.append(document.createTextNode(nombre + ' '));
+            const count = document.createElement('span');
+            count.className = 'perm-indice__count';
+            count.textContent = '0';
+            btn.append(count);
+            btn.addEventListener('click', function () {
+                abrirGrupo(nombre);
+            });
+            nav.appendChild(btn);
+        });
+        const existe = grupoAbierto && panel.querySelector('.perm-family[data-grupo="' + escaparGrupo(grupoAbierto) + '"]');
+        if (!existe) {
+            const primeraActiva = Array.from(familias).find((fam) => fam.querySelector('.perm-submodule--on'));
+            grupoAbierto = (primeraActiva || familias[0]) ? (primeraActiva || familias[0]).dataset.grupo || '' : '';
+        }
+    }
+
+    function abrirGrupo(nombre) {
+        grupoAbierto = nombre;
+        const input = document.getElementById('perm-search');
+        if (input) input.value = '';
+        const panel = getPanelActivo();
+        if (panel) panel.classList.remove('perm-panel--buscando');
+        filtrarVista();
+    }
+
+    function aplicarGrupoAbierto() {
+        const panel = getPanelActivo();
+        if (!panel || panel.classList.contains('perm-panel--buscando')) return;
+        panel.querySelectorAll('.perm-family').forEach((fam) => {
+            fam.hidden = false;
+            fam.classList.toggle('is-open', fam.dataset.grupo === grupoAbierto);
+        });
+    }
+
+    function actualizarIndice() {
+        const panel = getPanelActivo();
+        if (!panel) return;
+        document.querySelectorAll('.perm-indice__btn').forEach((btn) => {
+            const fam = panel.querySelector('.perm-family[data-grupo="' + escaparGrupo(btn.dataset.grupo || '') + '"]');
+            const n = fam ? fam.querySelectorAll('.perm-submodule--on').length : 0;
+            const count = btn.querySelector('.perm-indice__count');
+            if (count) count.textContent = String(n);
+            btn.classList.toggle('is-empty', n === 0);
+            btn.classList.toggle('is-current', btn.dataset.grupo === grupoAbierto && !panel.classList.contains('perm-panel--buscando'));
+        });
+    }
+
+    function filtrarVista() {
         const panel = getPanelActivo();
         const input = document.getElementById('perm-search');
-        if (!panel || !input) return;
+        const solo = document.getElementById('perm-solo-activo');
+        if (!panel) return;
 
-        const term = String(input.value || '').toLowerCase().trim();
+        const term = String(input ? input.value : '').toLowerCase().trim();
+        const soloActivo = !solo || solo.checked;
+        const shell = document.querySelector('.perm-shell');
+        if (shell) shell.classList.toggle('perm-shell--solo', soloActivo);
+        const buscando = term !== '';
+        panel.classList.toggle('perm-panel--buscando', buscando);
+
         let visibles = 0;
-
-        panel.querySelectorAll('.perm-submodule, .perm-card').forEach((card) => {
-            const hay = term === '' || String(card.dataset.search || '').includes(term);
-            card.hidden = !hay;
-            if (hay) visibles++;
+        panel.querySelectorAll('.perm-submodule').forEach((card) => {
+            const textoOk = term === '' || String(card.dataset.search || '').includes(term);
+            const activo = card.querySelector('.permiso-check:checked') !== null;
+            card.classList.toggle('perm-submodule--on', activo);
+            card.hidden = !textoOk || (soloActivo && !activo);
+            if (!card.hidden) visibles++;
         });
 
-        panel.querySelectorAll('.perm-family, .perm-section').forEach((section) => {
-            const cardsVis = section.querySelectorAll('.perm-submodule:not([hidden]), .perm-card:not([hidden])');
-            section.hidden = cardsVis.length === 0 && term !== '';
-        });
+        if (buscando) {
+            panel.querySelectorAll('.perm-family').forEach((fam) => {
+                const hay = fam.querySelector('.perm-submodule:not([hidden])');
+                fam.hidden = !hay;
+                fam.classList.toggle('is-open', !!hay);
+            });
+        } else {
+            aplicarGrupoAbierto();
+        }
 
         const emptyMsg = panel.querySelector('.perm-empty-search');
-        if (emptyMsg) emptyMsg.hidden = visibles > 0 || term === '';
+        if (emptyMsg) emptyMsg.hidden = !buscando || visibles > 0;
+        actualizarIndice();
+    }
+
+    function filtrarBusqueda() {
+        filtrarVista();
     }
 
     const searchInput = document.getElementById('perm-search');
     if (searchInput) {
-        searchInput.addEventListener('input', filtrarBusqueda);
+        searchInput.addEventListener('input', filtrarVista);
+    }
+
+    const soloActivoInput = document.getElementById('perm-solo-activo');
+    if (soloActivoInput) {
+        soloActivoInput.addEventListener('change', filtrarVista);
     }
 
     const btnLimpiar = document.getElementById('btnLimpiarModulosObsoletos');

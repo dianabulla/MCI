@@ -288,7 +288,7 @@ class PermisosController extends BaseController {
                 $stmt->execute([$valor, $idRol, $modulo]);
             }
 
-            // Si se actualiza el rol del usuario actual, reflejar en sesión inmediatamente.
+            $this->aplicarPuertaVer($idRol, $modulo, $campoDb, $valor);
             $this->actualizarSesionPermisoSiAplica($idRol, $modulo, $campo, $valor);
 
             echo json_encode(['success' => true]);
@@ -302,6 +302,79 @@ class PermisosController extends BaseController {
                 return;
             }
             echo json_encode(['success' => false, 'error' => $msg]);
+        }
+    }
+
+    /**
+     * Sin Ver no quedan crear/editar/eliminar ni acciones que no sean una parte.
+     * Activar esas acciones enciende Ver. Una parte (gráficas, Servicio social, una línea) no lo exige.
+     */
+    private function aplicarPuertaVer(int $idRol, string $modulo, string $campoDb, int $valor): void {
+        require_once APP . '/Helpers/PermisosUiCatalogo.php';
+        $padre = PermisosUiCatalogo::padreDeModuloDerivado($modulo);
+        if ($padre !== null) {
+            if ($campoDb === 'Puede_Ver' && $valor === 1 && preg_match('/_acciones_([a-z0-9_]+)$/', $modulo, $m)) {
+                if (!PermisosCatalogo::esVistaParcial($padre, $m[1])) {
+                    $this->asegurarVerModulo($idRol, $padre);
+                    $this->actualizarSesionPermisoSiAplica($idRol, $padre, 'puede_ver', 1);
+                }
+            }
+            return;
+        }
+
+        if ($campoDb === 'Puede_Ver' && $valor === 0) {
+            $stmt = $this->db->prepare(
+                'UPDATE permisos SET Puede_Crear = 0, Puede_Editar = 0, Puede_Eliminar = 0 WHERE Id_Rol = ? AND Modulo = ?'
+            );
+            $stmt->execute([$idRol, $modulo]);
+            $this->actualizarSesionPermisoSiAplica($idRol, $modulo, 'puede_crear', 0);
+            $this->actualizarSesionPermisoSiAplica($idRol, $modulo, 'puede_editar', 0);
+            $this->actualizarSesionPermisoSiAplica($idRol, $modulo, 'puede_eliminar', 0);
+            $this->apagarAccionesQueExigenVer($idRol, $modulo);
+            return;
+        }
+
+        if ($valor === 1 && in_array($campoDb, ['Puede_Crear', 'Puede_Editar', 'Puede_Eliminar'], true)) {
+            $this->asegurarVerModulo($idRol, $modulo);
+            $this->actualizarSesionPermisoSiAplica($idRol, $modulo, 'puede_ver', 1);
+        }
+    }
+
+    private function asegurarVerModulo(int $idRol, string $modulo): void {
+        $stmt = $this->db->prepare('SELECT Id_Permiso FROM permisos WHERE Id_Rol = ? AND Modulo = ?');
+        $stmt->execute([$idRol, $modulo]);
+        $fila = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($fila) {
+            $up = $this->db->prepare('UPDATE permisos SET Puede_Ver = 1 WHERE Id_Permiso = ?');
+            $up->execute([(int)$fila['Id_Permiso']]);
+            return;
+        }
+        $ins = $this->db->prepare(
+            'INSERT INTO permisos (Id_Rol, Modulo, Puede_Ver, Puede_Crear, Puede_Editar, Puede_Eliminar) VALUES (?, ?, 1, 0, 0, 0)'
+        );
+        $ins->execute([$idRol, $modulo]);
+    }
+
+    private function apagarAccionesQueExigenVer(int $idRol, string $modulo): void {
+        require_once APP . '/Helpers/PermisosUiCatalogo.php';
+        $cfg = PermisosUiCatalogo::configuracionPorSubmodulo()[$modulo] ?? ['acciones' => [], 'columnas' => []];
+        $claves = [];
+        foreach (array_keys($cfg['acciones'] ?? []) as $accion) {
+            if (PermisosCatalogo::esVistaParcial($modulo, (string)$accion)) {
+                continue;
+            }
+            $claves[] = PermisosUiCatalogo::claveAccion($modulo, (string)$accion);
+        }
+        foreach (array_keys($cfg['columnas'] ?? []) as $columna) {
+            $claves[] = PermisosUiCatalogo::claveColumna($modulo, (string)$columna);
+        }
+        if ($claves === []) {
+            return;
+        }
+        $up = $this->db->prepare('UPDATE permisos SET Puede_Ver = 0 WHERE Id_Rol = ? AND Modulo = ?');
+        foreach ($claves as $clave) {
+            $up->execute([$idRol, $clave]);
+            $this->actualizarSesionPermisoSiAplica($idRol, $clave, 'puede_ver', 0);
         }
     }
 

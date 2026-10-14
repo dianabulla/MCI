@@ -62,20 +62,20 @@ $modulosHuerfanosPorGrupo = static function (array $modulos, array $jerarquia) u
 </div>
 <?php endif; ?>
 
-<link rel="stylesheet" href="<?= ASSETS_URL ?>/css/permisos.css?v=20260520">
+<link rel="stylesheet" href="<?= ASSETS_URL ?>/css/permisos.css?v=20261014b">
 
-<div class="perm-shell">
+<div class="perm-shell perm-shell--solo">
     <header class="perm-hero">
         <div>
             <h2 class="perm-hero__title"><i class="bi bi-shield-check"></i> Permisos por rol</h2>
-            <p class="perm-hero__lead">Configure por <strong>menú del sistema</strong> (Escalera del éxito, Comunidad, …), luego cada <strong>sección</strong> (Almas ganadas, Escalera del éxito, …) y sus acciones concretas.</p>
+            <p class="perm-hero__lead">Los nombres siguen el menú actual. Si un rol no tiene <strong>Ver</strong> en una sección, no ve nada de esa sección. Las partes (gráficas, Servicio social, una línea de Programas) se marcan aparte y no abren el resto.</p>
         </div>
         <details class="perm-hero__help">
             <summary><i class="bi bi-question-circle"></i> Ayuda</summary>
             <ul>
-                <li><strong>Ver / Crear / Editar / Eliminar</strong> — acceso a cada sección (mismo nombre que en la app).</li>
-                <li><strong>Acciones permitidas</strong> — exportar, moderar, editar en listado (Nehemías), etc.</li>
-                <li><strong>Columnas visibles</strong> — datos sensibles en tablas (p. ej. cédula en Nehemías).</li>
+                <li><strong>Ver</strong> abre la sección. Sin Ver, Crear, Editar, Eliminar y exportar no muestran nada.</li>
+                <li><strong>Partes</strong> (respuestas, gráficas, Servicio social, Universidad de la Vida, Capacitación Destino) se pueden dar solas.</li>
+                <li><strong>Columnas</strong> solo aplican si el rol ya puede ver esa sección (Nehemías).</li>
             </ul>
         </details>
     </header>
@@ -104,19 +104,24 @@ $modulosHuerfanosPorGrupo = static function (array $modulos, array $jerarquia) u
         </div>
         <div class="perm-toolbar__search">
             <label for="perm-search" class="perm-toolbar__label">Buscar</label>
-            <input type="search" id="perm-search" class="perm-search" placeholder="Ej. almas ganadas, discípulos, nehemias…" autocomplete="off">
+            <input type="search" id="perm-search" class="perm-search" placeholder="Ej. talleres, células, gráficas…" autocomplete="off">
         </div>
+        <label class="perm-solo-activo" for="perm-solo-activo">
+            <input type="checkbox" id="perm-solo-activo" checked>
+            <span>Solo lo activo</span>
+            <small>Desactívelo para ver también lo apagado y poder agregarlo.</small>
+        </label>
         <div class="perm-toolbar__bulk" id="perm-toolbar-bulk"<?= $puedeEditarMatriz ? '' : ' hidden' ?>>
             <span class="perm-toolbar__label">Acciones rápidas</span>
             <div class="perm-bulk-btns">
                 <button type="button" class="btn-perm-all btn-perm-solo-ver" data-accion="solo_ver">
-                    <i class="bi bi-eye"></i> Solo ver todo
+                    <i class="bi bi-eye"></i> Solo ver este menú
                 </button>
                 <button type="button" class="btn-perm-all btn-perm-activar" data-accion="activar">
-                    <i class="bi bi-check-all"></i> Activar todo
+                    <i class="bi bi-check-all"></i> Activar este menú
                 </button>
                 <button type="button" class="btn-perm-all btn-perm-quitar" data-accion="desactivar">
-                    <i class="bi bi-slash-circle"></i> Quitar todo
+                    <i class="bi bi-slash-circle"></i> Quitar este menú
                 </button>
             </div>
         </div>
@@ -124,6 +129,8 @@ $modulosHuerfanosPorGrupo = static function (array $modulos, array $jerarquia) u
             <i class="bi bi-shield-fill-check"></i> Rol administrador — no editable (acceso total)
         </div>
     </div>
+
+    <nav id="perm-indice" class="perm-indice" aria-label="Menús del sistema"></nav>
 
     <?php
     $huerfanosPorGrupo = $modulosHuerfanosPorGrupo($modulos, $jerarquiaModulos);
@@ -135,7 +142,7 @@ $modulosHuerfanosPorGrupo = static function (array $modulos, array $jerarquia) u
     ?>
     <section class="perm-panel<?= $i === $indiceRolActivo ? ' active' : '' ?>" id="rol-<?= $idRol ?>" data-rol-protegido="<?= $esRolProtegido ? '1' : '0' ?>">
 
-        <?php foreach ($jerarquiaModulos as $grupoNombre => $familia):
+        <?php $grupoIndice = 0; foreach ($jerarquiaModulos as $grupoNombre => $familia):
             $subs = $familia['submodulos'];
             if (!empty($huerfanosPorGrupo[$grupoNombre])) {
                 foreach ($huerfanosPorGrupo[$grupoNombre] as $mk => $info) {
@@ -147,10 +154,10 @@ $modulosHuerfanosPorGrupo = static function (array $modulos, array $jerarquia) u
                 continue;
             }
         ?>
-        <div class="perm-family card" data-grupo="<?= htmlspecialchars($grupoNombre, ENT_QUOTES, 'UTF-8') ?>">
+        <div class="perm-family card<?= $grupoIndice === 0 ? ' is-open' : '' ?>" data-grupo="<?= htmlspecialchars($grupoNombre, ENT_QUOTES, 'UTF-8') ?>">
             <header class="perm-family__head">
                 <h3 class="perm-family__title"><?= htmlspecialchars($grupoNombre) ?></h3>
-                <p class="perm-family__lead">Submódulos y permisos del menú «<?= htmlspecialchars($grupoNombre) ?>».</p>
+                <p class="perm-family__lead">Secciones de este menú. Ver abre la sección. Las partes de abajo se pueden dar solas.</p>
                 <?php if (!$esRolProtegido && $puedeEditarMatriz): ?>
                 <div class="perm-section__actions">
                     <button type="button" class="perm-grupo-btn" data-accion="solo_ver">Solo ver grupo</button>
@@ -165,8 +172,9 @@ $modulosHuerfanosPorGrupo = static function (array $modulos, array $jerarquia) u
                     include VIEWS . '/permisos/partials/submodulo_card.php';
                 endforeach; ?>
             </div>
+            <p class="perm-family__vacio">Este rol no tiene nada activo aquí. Desactive «Solo lo activo» para configurarlo.</p>
         </div>
-        <?php endforeach; ?>
+        <?php $grupoIndice++; endforeach; ?>
 
         <?php if (!empty($huerfanosPorGrupo)): ?>
         <?php foreach ($huerfanosPorGrupo as $grupoNombre => $subs): ?>
@@ -210,6 +218,6 @@ window.PERMISOS_CONFIG = {
     soloLectura: <?= $puedeEditarMatriz ? 'false' : 'true' ?>
 };
 </script>
-<script src="<?= ASSETS_URL ?>/js/permisos.js?v=20260520"></script>
+<script src="<?= ASSETS_URL ?>/js/permisos.js?v=20261014b"></script>
 
 <?php require_once VIEWS . '/layout/footer.php'; ?>

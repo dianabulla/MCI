@@ -57,9 +57,6 @@ class PermisosUiCatalogo {
         'asistencias' => [
             'exportar_excel' => 'Exportar asistencias',
         ],
-        'teen' => [
-            'exportar_datos' => 'Exportar datos teens',
-        ],
         'nehemias' => [
             'editar' => 'Editar en listado',
             'eliminar' => 'Eliminar en listado',
@@ -73,19 +70,11 @@ class PermisosUiCatalogo {
             'ver_graficas' => 'Ver gráficas del cuestionario',
             'exportar_excel' => 'Exportar respuestas a Excel',
             'gestionar_enlace' => 'Abrir enlace público y QR',
+            'servicio_social' => 'Servicio social (citas)',
         ],
         'entrega_obsequio' => [
             'exportar_pdf' => 'Exportar PDF',
             'exportar_excel' => 'Exportar Excel',
-        ],
-        'roles' => [
-            'exportar_excel' => 'Exportar roles',
-        ],
-        'material' => [
-            'gestionar_subida' => 'Gestionar subida global',
-        ],
-        'materiales_celulas' => [
-            'exportar_datos' => 'Exportar material células',
         ],
     ];
 

@@ -115,6 +115,7 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
             <i class="bi bi-plus-lg"></i> Nuevo formulario
         </a>
         <?php endif; ?>
+        <?php if (AuthController::puedeVerServicioSocial()): ?>
         <a href="<?= PUBLIC_URL ?>?url=talleres/servicio-social" class="talleres-btn-ss">
             <i class="bi bi-heart-pulse"></i>
             <span class="talleres-btn-ss-copy">
@@ -122,6 +123,7 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
                 <small>Citas y atención</small>
             </span>
         </a>
+        <?php endif; ?>
     </div>
 </div>
 

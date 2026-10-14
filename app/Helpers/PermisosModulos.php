@@ -248,7 +248,7 @@ class PermisosModulos {
 
                 'label' => 'Talleres',
 
-                'descripcion' => 'Formularios de talleres: listado, respuestas, gráficas, Excel y enlaces públicos. Use las acciones permitidas para afinar cada rol.',
+                'descripcion' => 'Formularios de la iglesia (un formulario por tipo de actividad). Sin «Ver listado» no se ve el módulo. Respuestas, gráficas y Servicio social son partes aparte.',
 
                 'grupo' => 'Comunidad',
 
@@ -268,9 +268,9 @@ class PermisosModulos {
 
             'comunidad_pagos' => [
 
-                'label' => 'Pagos Comunidad',
+                'label' => 'Pagos',
 
-                'descripcion' => 'Caja unificada: buscar por cédula e registrar pagos de Universidad de la Vida, Capacitación Destino y talleres.',
+                'descripcion' => 'Menú Comunidad → Pagos. Buscar por cédula y registrar pagos de talleres, Universidad de la Vida y Capacitación Destino.',
 
                 'grupo' => 'Comunidad',
 
@@ -330,15 +330,15 @@ class PermisosModulos {
 
 
 
-            // --- Enviar ---
+            // --- Células ---
 
             'celulas' => [
 
-                'label' => 'Enviar (células)',
+                'label' => 'Células',
 
-                'descripcion' => 'Menú «Enviar»: gestión de células, miembros y exportaciones.',
+                'descripcion' => 'Menú Células: células, miembros y exportación. Sin Ver no aparece en el menú.',
 
-                'grupo' => 'Enviar',
+                'grupo' => 'Células',
 
                 'crud_labels' => [
 
@@ -356,11 +356,11 @@ class PermisosModulos {
 
             'asistencias' => [
 
-                'label' => 'Asistencias (Enviar)',
+                'label' => 'Asistencias',
 
-                'descripcion' => 'Registro y consulta de asistencias a reuniones de célula.',
+                'descripcion' => 'Asistencia a reuniones de célula. Es parte de Células: sin su Ver no se abre.',
 
-                'grupo' => 'Enviar',
+                'grupo' => 'Células',
 
                 'crud_labels' => [
 
@@ -458,9 +458,9 @@ class PermisosModulos {
 
             'ministerios' => [
 
-                'label' => 'Discipular (ministerios)',
+                'label' => 'Discipular',
 
-                'descripcion' => 'Menú «Discipular»: equipos ministeriales, líderes, cupos y metas.',
+                'descripcion' => 'Menú Discipular: equipos, líderes, cupos y metas. Sin Ver no aparece en el menú.',
 
                 'grupo' => 'Discipular',
 
@@ -558,7 +558,7 @@ class PermisosModulos {
 
                 'label' => 'Material células',
 
-                'descripcion' => 'Documentos PDF y vistas del material para células (también desde Enviar).',
+                'descripcion' => 'Material PDF de células. Sin Ver no se abre esta parte.',
 
                 'grupo' => 'Material',
 
@@ -580,9 +580,9 @@ class PermisosModulos {
 
                 'label' => 'Teens',
 
-                'descripcion' => 'Registro de menores, códigos QR y material del módulo Teens.',
+                'descripcion' => 'Menú Teens: registro de niños, códigos del domingo y material. Sin Ver no aparece en el menú. No hay exportación.',
 
-                'grupo' => 'Material',
+                'grupo' => 'Teens',
 
                 'crud_labels' => [
 
@@ -662,9 +662,9 @@ class PermisosModulos {
 
             'reportes' => [
 
-                'label' => 'Reportes',
+                'label' => 'Dashboard Ganar',
 
-                'descripcion' => 'Dashboards y reportes estadísticos (Ganar, escuelas, ministerial, etc.).',
+                'descripcion' => 'Menú Dashboard Ganar y el resto de reportes estadísticos. Sin Ver no aparece en el menú.',
 
                 'grupo' => 'Reportes',
 
@@ -936,11 +936,13 @@ class PermisosModulos {
 
             'Comunidad',
 
-            'Enviar',
+            'Células',
 
             'Programas',
 
             'Discipular',
+
+            'Teens',
 
             'Material',
 
@@ -1026,9 +1028,10 @@ class PermisosModulos {
             'Escalera del éxito',
             'Accesos rápidos',
             'Comunidad',
-            'Enviar',
+            'Células',
             'Programas',
             'Discipular',
+            'Teens',
             'Material',
             'Reportes',
             'Obsequios',

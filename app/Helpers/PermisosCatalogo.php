@@ -82,6 +82,14 @@ class PermisosCatalogo {
                     'label' => 'Ver matriz completa',
                     'descripcion' => 'Ver todas las columnas y fechas en la matriz de escuelas.',
                 ],
+                'exportar_inscritos' => [
+                    'label' => 'Exportar inscritos',
+                    'descripcion' => 'Exportar listados de inscritos y asistencias de escuelas.',
+                ],
+                'gestionar_pagos' => [
+                    'label' => 'Gestionar pagos escuela',
+                    'descripcion' => 'Consolidar y enviar pagos de formación.',
+                ],
             ],
             'reportes' => [
                 'exportar' => [
@@ -117,12 +125,6 @@ class PermisosCatalogo {
                     'descripcion' => 'Descargar planillas de asistencias a Excel.',
                 ],
             ],
-            'teen' => [
-                'exportar_datos' => [
-                    'label' => 'Exportar datos teens',
-                    'descripcion' => 'Exportar listados del módulo Teens.',
-                ],
-            ],
             'nehemias' => [
                 'importar_masivo' => [
                     'label' => 'Importación masiva',
@@ -150,7 +152,11 @@ class PermisosCatalogo {
                 ],
                 'gestionar_enlace' => [
                     'label' => 'Abrir enlace público y QR',
-                    'descripcion' => 'Abrir el formulario público y generar o imprimir el código QR de inscripción.',
+                    'descripcion' => 'Abrir el formulario público y generar o imprimir el código QR de inscripción. Requiere Ver el listado.',
+                ],
+                'servicio_social' => [
+                    'label' => 'Servicio social',
+                    'descripcion' => 'Ver y atender citas, horarios e historia clínica. No abre el resto de Talleres.',
                 ],
             ],
             'entrega_obsequio' => [
@@ -163,35 +169,33 @@ class PermisosCatalogo {
                     'descripcion' => 'Exportar listado de obsequios a Excel.',
                 ],
             ],
-            'roles' => [
-                'exportar_excel' => [
-                    'label' => 'Exportar roles',
-                    'descripcion' => 'Exportar matriz de roles a Excel.',
-                ],
-            ],
-            'material' => [
-                'gestionar_subida' => [
-                    'label' => 'Gestionar subida global',
-                    'descripcion' => 'Subir o reemplazar archivos en el centro de material.',
-                ],
-            ],
-            'materiales_celulas' => [
-                'exportar_datos' => [
-                    'label' => 'Exportar material células',
-                    'descripcion' => 'Exportar métricas o listados del material de células.',
-                ],
-            ],
-            'escuelas_formacion' => [
-                'exportar_inscritos' => [
-                    'label' => 'Exportar inscritos',
-                    'descripcion' => 'Exportar listados de inscritos y asistencias de escuelas.',
-                ],
-                'gestionar_pagos' => [
-                    'label' => 'Gestionar pagos escuela',
-                    'descripcion' => 'Consolidar y enviar pagos de formación.',
-                ],
+        ];
+    }
+
+    /**
+     * Parte del módulo que se puede ver sin el «Ver» general.
+     * Crear, editar, eliminar y exportar no cuentan: sin Ver no muestran nada.
+     */
+    public static function esVistaParcial(string $modulo, string $accion): bool {
+        $modulo = strtolower(trim($modulo));
+        $accion = strtolower(trim($accion));
+        $vistas = [
+            'talleres' => ['ver_respuestas', 'ver_graficas', 'servicio_social'],
+            'programas' => [
+                'ver_universidad_vida',
+                'ver_capacitacion_destino',
+                'dashboard_universidad_vida',
+                'dashboard_capacitacion_destino',
+                'gestionar_pagos_universidad_vida',
+                'gestionar_pagos_capacitacion_destino',
+                'formulario_universidad_vida',
+                'formulario_capacitacion_destino',
+                'asistencias_universidad_vida',
+                'asistencias_capacitacion_destino',
             ],
         ];
+
+        return in_array($accion, $vistas[$modulo] ?? [], true);
     }
 
     /**

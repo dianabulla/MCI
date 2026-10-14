@@ -358,7 +358,15 @@ class MenuBuilder {
                 'ruta' => 'talleres',
                 'icon' => 'bi-ui-checks-grid',
                 'active_prefixes' => ['talleres'],
-                'permiso' => 'talleres:ver',
+                'visible' => static function () {
+                    return AuthController::puedeAccederModuloTalleres();
+                },
+                'ruta_resolver' => static function () {
+                    if (AuthController::soloParteServicioSocialTalleres()) {
+                        return 'talleres/servicio-social';
+                    }
+                    return 'talleres';
+                },
             ],
             [
                 'id' => 'reportes_ganar',

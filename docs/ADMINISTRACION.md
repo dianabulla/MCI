@@ -72,16 +72,33 @@ Subido a producción el 14 de octubre de 2026 (17 archivos, tamaños verificados
 
 Pruebas recomendadas con usuarios reales: crear/editar una persona y eliminar un registro de prueba como administrador; entrar con un Líder de 144 y confirmar que solo ve su red; crear una cuenta probando la regla de contraseña.
 
-## Pendiente principal: rediseñar el módulo de Permisos
+## Permisos (14 oct 2026)
 
-El módulo de Permisos no refleja los módulos y acciones que existen hoy en la web. Se siguen presentando problemas al habilitar módulos a usuarios. Se deja anotado y pendiente por decisión del 14 de octubre de 2026; se revisará cuando termine la revisión del resto de módulos.
+La pantalla usa los nombres del menú actual: Escalera del éxito, Células, Asistencias, Programas, Discipular, Teens, Talleres, Pagos, Eventos, Dashboard Ganar, material y Administración.
 
-Qué hay que hacer cuando se retome:
-1. Inventario real: listar cada módulo de la web (menú lateral, rutas en `routes.php`, reglas de `route_permissions.php` y acciones extra de `PermisosCatalogo.php`) y compararlo con lo que muestra la pantalla de Permisos.
-2. Corregir las diferencias: módulos que no aparecen, nombres que no coinciden con el menú y acciones extra faltantes o sobrantes. Los módulos usados hoy en las reglas de rutas son: acceso_rapido_nuevo_discipulo, asistencias, celulas, cuentas, discipular_evaluaciones, entrega_obsequio, escuelas_formacion, escuelas_formacion_marcar_asistencia, eventos, material_capacitacion_destino, ministerios, nehemias, permisos, personas, personas_plantillas_whatsapp, peticiones, programas, reportes, roles, talleres, teen, transmisiones.
-3. Probar por rol: habilitar un módulo a un rol limitado y confirmar que aparece en el menú (tras cerrar sesión y volver a entrar), que las acciones Ver/Crear/Editar/Eliminar funcionan y que no ve nada más.
-4. Definir cómo se maneja que el menú se guarda en la sesión (hoy hay que reingresar para ver módulos nuevos).
-5. Revisar los roles de producción: qué roles tienen `permisos:editar` y `cuentas:*`.
+**Sin Ver no se ve el módulo.** Crear, editar, eliminar, exportar y el enlace/QR no abren nada si esa sección no tiene Ver. Al quitar Ver se apagan esas acciones. Al marcarlas, se enciende Ver.
+
+**Partes que sí se pueden dar solas** (no abren el resto):
+
+- Talleres: respuestas, gráficas, Servicio social.
+- Programas: cada línea (Universidad de la Vida o Capacitación Destino), su dashboard, pagos, formulario y asistencias.
+
+Se quitaron acciones que no existen: exportar Teens, exportar roles, exportar material de células y «subida global» de material (subir ya es Crear en cada material). Peticiones y Transmisiones siguen ocultas. Nehemías se dejó con sus columnas; el módulo en sí no se revisó.
+
+El menú de Talleres aparece si hay Ver o una de esas partes. Quien solo tiene Servicio social entra directo a citas. Programas ya no se abre solo por tener Escalera del éxito.
+
+La pantalla abre un menú a la vez (índice arriba, con el conteo de secciones activas). Al entrar muestra solo lo activo de ese rol. Dentro de cada sección, Acceso (Ver, Crear, Editar, Eliminar) va aparte de las partes que se pueden dar solas y de las funciones que exigen Ver.
+
+## Despliegue de Permisos
+
+Subido a producción el 14 de octubre de 2026. No hay SQL: usa la misma tabla `permisos`. Tras guardar un permiso, quien tenga ese rol debe volver a entrar para que el menú se actualice.
+
+Tras el despliegue: Administración → Permisos muestra el índice de menús y «Solo lo activo». Un rol sin Ver en un módulo no ve ese menú. Quien solo tiene gráficas de Talleres entra a gráficas; quien solo tiene Servicio social entra a citas.
+
+## Pendiente de Permisos
+
+1. Probar en la pantalla con un rol limitado: sin Ver no aparece el menú; con solo gráficas ve Talleres pero no el listado; con solo Servicio social ve citas.
+2. Revisar en producción qué roles tienen `permisos:editar` y `cuentas:*`.
 
 ## Otros pendientes
 
