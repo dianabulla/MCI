@@ -87,12 +87,26 @@ class AuthController extends BaseController {
                     return;
                 }
 
-                $preservarPool = $modoAgregarCuenta && isset($_SESSION['usuario_id']);
+                // Preservar pool al agregar cuenta, o si quedó el pool tras "cambiar cuenta"
+                // (sesión sin usuario activo pero con account_pool).
+                $poolPrevio = $_SESSION['account_pool'] ?? [];
+                $tienePoolPrevio = is_array($poolPrevio) && count($poolPrevio) > 0;
+                $preservarPool = ($modoAgregarCuenta && self::estaAutenticado())
+                    || ($tienePoolPrevio && !self::estaAutenticado());
+
                 $user['_login_ingresado'] = $usuario;
                 $this->iniciarSesionUsuario($user, $preservarPool);
 
                 if ($modoAgregarCuenta) {
-                    $_SESSION['flash_info'] = 'Cuenta agregada correctamente. Ya puedes cambiar entre cuentas sin volver a iniciar sesión.';
+                    $poolActual = $_SESSION['account_pool'] ?? [];
+                    $totalCuentas = is_array($poolActual) ? count($poolActual) : 0;
+                    if ($preservarPool && $totalCuentas > 1) {
+                        $_SESSION['flash_info'] = 'Cuenta agregada correctamente. Haz clic en tu nombre (abajo a la izquierda) para cambiar entre cuentas sin volver a iniciar sesión.';
+                    } elseif ($preservarPool && $totalCuentas === 1) {
+                        $_SESSION['flash_info'] = 'Entraste con esta cuenta. Si es la misma que ya tenías vinculada, el cambio rápido ya está activo.';
+                    } else {
+                        $_SESSION['flash_info'] = 'La sesión anterior no estaba activa, así que entraste solo con esta cuenta. Para vincular otra, usa «Agregar cuenta» sin cerrar sesión.';
+                    }
                 }
 
                 $this->redirigirPostLogin();
@@ -110,9 +124,17 @@ class AuthController extends BaseController {
             }
         } else {
             $usuarioPrefill = trim((string)($_GET['cuenta'] ?? ''));
+            $avisoAgregar = '';
+            if ($modoAgregarCuenta && !self::estaAutenticado()) {
+                $poolPrevio = $_SESSION['account_pool'] ?? [];
+                if (!is_array($poolPrevio) || count($poolPrevio) === 0) {
+                    $avisoAgregar = 'Tu sesión anterior ya no está activa. Si inicias sesión ahora, entrarás solo con esta cuenta. Para vincular varias, agrega la siguiente sin cerrar sesión.';
+                }
+            }
             $this->view('auth/login', [
                 'usuario' => $usuarioPrefill,
-                'modo_agregar_cuenta' => $modoAgregarCuenta
+                'modo_agregar_cuenta' => $modoAgregarCuenta,
+                'aviso_agregar_cuenta' => $avisoAgregar,
             ]);
         }
     }
@@ -464,15 +486,18 @@ class AuthController extends BaseController {
      */
     public function cambiarCuenta() {
         $cuentasVinculadas = $_SESSION['account_pool'] ?? [];
-        if (is_array($cuentasVinculadas) && !empty($cuentasVinculadas)) {
-            $_SESSION = [
-                'account_pool' => $cuentasVinculadas
-            ];
-        } else {
-            $_SESSION = [];
+        if (!is_array($cuentasVinculadas)) {
+            $cuentasVinculadas = [];
         }
+        // Mantener el pool para que el próximo login no borre las cuentas vinculadas.
+        $_SESSION = [
+            'account_pool' => $cuentasVinculadas,
+        ];
         session_regenerate_id(true);
-        $_SESSION['flash_info'] = 'Selecciona la cuenta con la que deseas ingresar.';
+        $_SESSION['account_pool'] = $cuentasVinculadas;
+        $_SESSION['flash_info'] = empty($cuentasVinculadas)
+            ? 'Inicia sesión con la cuenta que deseas usar.'
+            : 'Inicia sesión con otra cuenta; las ya vinculadas se mantendrán para cambio rápido.';
         $this->redirect('auth/login');
     }
 
@@ -805,6 +830,7 @@ class AuthController extends BaseController {
             $_SESSION['account_pool'][$idUsuario] = [
                 'id' => $idUsuario,
                 'nombre' => $_SESSION['usuario_nombre'],
+                'login' => $_SESSION['usuario_login'],
                 'rol_nombre' => $_SESSION['usuario_rol_nombre'],
                 'active_context' => $_SESSION['active_context'],
                 'ministerio_id' => $_SESSION['usuario_ministerio'],
@@ -1371,10 +1397,16 @@ class AuthController extends BaseController {
             || self::puede('ministerios:eliminar');
     }
 
+    /**
+     * Crear ficha de persona (formulario personas/crear y accesos rápidos).
+     * Acepta cualquiera de: Almas ganadas → Registrar almas, Escalera → Crear fichas,
+     * o Acceso rápido → Registrar discípulo.
+     */
     public static function puedeCrearPersonasConsulta(): bool {
         return self::esAdministrador()
             || self::puede('personas:crear')
-            || self::puede('personas_consulta:crear');
+            || self::puede('personas_consulta:crear')
+            || self::puede('acceso_rapido_nuevo_discipulo:crear');
     }
 
     /**

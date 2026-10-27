@@ -921,6 +921,10 @@ textarea.form-control {
     --shadow-card: 0 6px 18px rgba(41, 73, 128, 0.08);
 }
 
+html {
+    scrollbar-gutter: stable;
+}
+
 body {
     color: var(--text-main);
     background:
@@ -1684,20 +1688,30 @@ body.sidebar-collapsed .app-shell {
     margin-bottom: 10px;
 }
 
-.sidebar-user-meta i {
+.sidebar-user-meta--switchable {
+    cursor: pointer;
+    border-radius: 10px;
+    padding: 4px 6px;
+    margin: -4px -6px 10px;
+    transition: background-color 0.15s ease;
+}
+
+.sidebar-user-meta--switchable:hover,
+.sidebar-user-meta--switchable:focus {
+    background: #e8f0fc;
+    outline: none;
+}
+
+.sidebar-user-meta i,
+.account-menu-avatar i {
     font-size: 1.4rem;
     color: #2f4f87;
 }
 
-.account-menu-toggle {
-    border: none;
-    background: transparent;
-    padding: 0;
-    margin: 0;
+.account-menu-avatar {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
 }
 
 .account-menu-caret {
@@ -1724,6 +1738,15 @@ body.sidebar-collapsed .app-shell {
     display: block;
 }
 
+.account-switch-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #6a7fa8;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 4px 8px 8px;
+}
+
 .account-switch-item {
     display: flex;
     align-items: center;
@@ -1748,8 +1771,20 @@ body.sidebar-collapsed .app-shell {
     color: #2a4e8f;
 }
 
+.account-switch-item--add {
+    margin-top: 4px;
+    border-top: 1px solid #e2ebf8;
+    border-radius: 0 0 10px 10px;
+    color: #355fa8;
+}
+
 .account-switch-item i {
     font-size: 0.95rem;
+}
+
+.app-flash-info {
+    margin: 0 0 16px;
+    border-radius: 12px;
 }
 
 .sidebar-logout {

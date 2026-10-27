@@ -197,6 +197,31 @@
             text-decoration: underline;
             cursor: pointer;
         }
+        .remember-row {
+            margin-top: -6px;
+            margin-bottom: 18px;
+        }
+        .remember-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #4d5f86;
+            cursor: pointer;
+            margin: 0;
+        }
+        .remember-label input {
+            width: 16px;
+            height: 16px;
+            accent-color: #5f60d8;
+        }
+        .remember-hint {
+            margin: 6px 0 0 24px;
+            font-size: 12px;
+            color: #7a88a8;
+            line-height: 1.35;
+        }
     </style>
 </head>
 <body>
@@ -221,6 +246,12 @@
             <?php unset($_SESSION['flash_info']); ?>
             <?php endif; ?>
 
+            <?php if (!empty($aviso_agregar_cuenta)): ?>
+            <div class="alert alert-warning" style="background:#fffbeb;border-color:#fcd34d;color:#92400e;">
+                <i class="bi bi-exclamation-triangle"></i> <?= htmlspecialchars((string)$aviso_agregar_cuenta) ?>
+            </div>
+            <?php endif; ?>
+
             <?php if (isset($error)): ?>
             <div class="alert alert-danger">
                 <i class="bi bi-exclamation-triangle"></i> <?php echo htmlspecialchars($error); ?>
@@ -228,7 +259,7 @@
             <?php endif; ?>
 
             <div class="recent-accounts" id="recentAccountsCard" style="display:none;">
-                <h6><i class="bi bi-clock-history"></i> Cuentas recientes en este navegador</h6>
+                <h6><i class="bi bi-clock-history"></i> Usuarios recientes en este navegador</h6>
                 <div class="recent-list" id="recentAccountsList"></div>
                 <div class="recent-actions">
                     <button type="button" class="recent-clear" id="clearRecentAccounts">Limpiar historial</button>
@@ -247,29 +278,37 @@
             }
             ?>
             
-            <form method="POST" action="" id="loginForm">
+            <form method="POST" action="" id="loginForm" autocomplete="on">
                 <?php if (!empty($modo_agregar_cuenta)): ?>
                     <input type="hidden" name="modo" value="agregar">
                 <?php endif; ?>
                 <div class="form-group">
-                    <label class="form-label">Usuario</label>
+                    <label class="form-label" for="usuario">Usuario</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-person"></i></span>
-                        <input type="text" id="usuario" name="usuario" class="form-control" placeholder="Ingrese su usuario" value="<?= htmlspecialchars((string)($usuario ?? '')) ?>" required autofocus>
+                        <input type="text" id="usuario" name="usuario" class="form-control" placeholder="Ingrese su usuario" value="<?= htmlspecialchars((string)($usuario ?? '')) ?>" required autofocus autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
                     </div>
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label">Contraseña</label>
+                    <label class="form-label" for="password">Contraseña</label>
                     <div class="input-group password-toggle">
                         <span class="input-group-text"><i class="bi bi-lock"></i></span>
-                        <input type="password" id="password" name="contrasena" class="form-control" placeholder="Ingrese su contraseña" required>
+                        <input type="password" id="password" name="contrasena" class="form-control" placeholder="Ingrese su contraseña" required autocomplete="current-password">
                         <i class="bi bi-eye toggle-password" id="togglePassword"></i>
                     </div>
                 </div>
+
+                <div class="form-group remember-row">
+                    <label class="remember-label">
+                        <input type="checkbox" id="rememberUser" checked>
+                        Recordar usuario en este navegador
+                    </label>
+                    <p class="remember-hint">La contraseña la puede guardar el gestor de claves del navegador al iniciar sesión.</p>
+                </div>
                 
                 <button type="submit" class="btn btn-login">
-                    <i class="bi bi-box-arrow-in-right"></i> Iniciar Sesión
+                    <i class="bi bi-box-arrow-in-right"></i> <?= !empty($modo_agregar_cuenta) ? 'Agregar cuenta' : 'Iniciar Sesión' ?>
                 </button>
             </form>
         </div>
@@ -285,7 +324,9 @@
         const recentAccountsCard = document.getElementById('recentAccountsCard');
         const recentAccountsList = document.getElementById('recentAccountsList');
         const clearRecentAccounts = document.getElementById('clearRecentAccounts');
+        const rememberUser = document.getElementById('rememberUser');
         const recentAccountsKey = 'mci.recentAccounts';
+        const lastUserKey = 'mci.lastLoginUser';
 
         function readRecentAccounts() {
             try {
@@ -308,6 +349,15 @@
             }
         }
 
+        function applyUserToForm(account) {
+            usuarioInput.value = account;
+            password.value = '';
+            password.focus();
+            // Disparar input para que el gestor de claves del navegador ofrezca la contraseña guardada.
+            usuarioInput.dispatchEvent(new Event('input', { bubbles: true }));
+            usuarioInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
         function renderRecentAccounts() {
             const accounts = readRecentAccounts();
             if (!accounts.length) {
@@ -325,8 +375,7 @@
                 button.className = 'recent-account-btn';
                 button.textContent = account;
                 button.addEventListener('click', function() {
-                    usuarioInput.value = account;
-                    password.focus();
+                    applyUserToForm(account);
                 });
                 recentAccountsList.appendChild(button);
             });
@@ -339,15 +388,34 @@
                     return;
                 }
 
-                const accounts = readRecentAccounts().filter(acc => acc.toLowerCase() !== currentUser.toLowerCase());
-                accounts.unshift(currentUser);
-                writeRecentAccounts(accounts);
+                const shouldRemember = !rememberUser || rememberUser.checked;
+                if (shouldRemember) {
+                    const accounts = readRecentAccounts().filter(acc => acc.toLowerCase() !== currentUser.toLowerCase());
+                    accounts.unshift(currentUser);
+                    writeRecentAccounts(accounts);
+                    try {
+                        localStorage.setItem(lastUserKey, currentUser);
+                    } catch (error) {
+                        // Ignorar fallos de storage
+                    }
+                } else {
+                    try {
+                        localStorage.removeItem(lastUserKey);
+                    } catch (error) {
+                        // Ignorar fallos de storage
+                    }
+                }
             });
         }
 
         if (clearRecentAccounts) {
             clearRecentAccounts.addEventListener('click', function() {
                 writeRecentAccounts([]);
+                try {
+                    localStorage.removeItem(lastUserKey);
+                } catch (error) {
+                    // Ignorar fallos de storage
+                }
                 renderRecentAccounts();
             });
         }
@@ -363,6 +431,21 @@
         });
 
         renderRecentAccounts();
+
+        // Prefill del último usuario recordado si el campo viene vacío.
+        if (usuarioInput && !(usuarioInput.value || '').trim()) {
+            try {
+                const lastUser = (localStorage.getItem(lastUserKey) || '').trim();
+                if (lastUser) {
+                    usuarioInput.value = lastUser;
+                    if (rememberUser) {
+                        rememberUser.checked = true;
+                    }
+                }
+            } catch (error) {
+                // Ignorar fallos de storage
+            }
+        }
     </script>
 </body>
 </html>

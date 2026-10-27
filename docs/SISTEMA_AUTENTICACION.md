@@ -149,6 +149,37 @@ UPDATE persona SET Estado_Cuenta = 'Suspendido' WHERE Usuario = 'usuario';
 
 ---
 
+## Cuentas recientes y cambio rápido (27 oct 2026)
+
+### Recordar usuario en el login
+
+- En el login hay un checkbox **«Recordar usuario en este navegador»** (activo por defecto).
+- Guarda solo el **nombre de usuario** en `localStorage` (`mci.recentAccounts`, `mci.lastLoginUser`). **No guarda la contraseña** en la aplicación.
+- La contraseña la puede guardar el **gestor de claves del navegador** gracias a `autocomplete="username"` y `autocomplete="current-password"`.
+- Los chips de «Usuarios recientes» rellenan el usuario y dejan el foco en la contraseña para que el navegador ofrezca la clave guardada.
+
+### Agregar cuenta / cambio rápido
+
+1. Con sesión activa: menú lateral → **Agregar cuenta** (`auth/login&modo=agregar`).
+2. Iniciar sesión con otra cuenta. El sistema conserva `$_SESSION['account_pool']`.
+3. Con **2 o más** cuentas en el pool, haz clic en **tu nombre / avatar** (abajo a la izquierda) para cambiar sin volver a escribir la clave.
+4. Al **cerrar sesión** se borra el pool (hay que volver a vincular las cuentas).
+
+**Archivos:** `AuthController.php`, `views/auth/login.php`, `views/layout/header.php`, `public/assets/js/main.js`, `public/assets/css/styles.css`.
+
+**Notas:**
+- El mensaje de «cuenta agregada» se muestra en la app (`flash_info` en el layout), no solo en el login.
+- Si la sesión ya había caducado al usar «Agregar cuenta», se avisa y se entra solo con la cuenta nueva.
+- Cuentas sin `Id_Persona` (acceso administrativo puro) no entran al pool de cambio rápido.
+
+### Despliegue
+
+Subido a producción el **27 de octubre de 2026**. Sin SQL. Tras el despliegue, actualizar `public/assets/.build` (`20261027-login-cuentas`) para que CSS/JS no queden en caché.
+
+Pruebas: login con «Recordar usuario»; agregar una segunda cuenta sin cerrar sesión; cambiar desde el menú del nombre; cerrar sesión y confirmar que el pool se limpia.
+
+---
+
 ## 🎉 ¡Sistema Listo!
 
 El sistema de autenticación está completamente funcional. Todos los usuarios ahora deben iniciar sesión para acceder al sistema, y los permisos se controlan automáticamente según su rol.

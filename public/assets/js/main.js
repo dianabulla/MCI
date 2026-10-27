@@ -175,12 +175,25 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (accountMenuToggle && accountSwitchMenu) {
+        function setAccountMenuOpen(willOpen) {
+            accountSwitchMenu.classList.toggle('open', willOpen);
+            accountSwitchMenu.setAttribute('aria-hidden', willOpen ? 'false' : 'true');
+            accountMenuToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        }
+
         accountMenuToggle.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            const willOpen = !accountSwitchMenu.classList.contains('open');
-            accountSwitchMenu.classList.toggle('open', willOpen);
-            accountSwitchMenu.setAttribute('aria-hidden', willOpen ? 'false' : 'true');
+            setAccountMenuOpen(!accountSwitchMenu.classList.contains('open'));
+        });
+
+        accountMenuToggle.addEventListener('keydown', function(e) {
+            if (e.key !== 'Enter' && e.key !== ' ') {
+                return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            setAccountMenuOpen(!accountSwitchMenu.classList.contains('open'));
         });
 
         accountSwitchMenu.addEventListener('click', function(e) {
@@ -188,8 +201,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         document.addEventListener('click', function() {
-            accountSwitchMenu.classList.remove('open');
-            accountSwitchMenu.setAttribute('aria-hidden', 'true');
+            setAccountMenuOpen(false);
         });
     }
 

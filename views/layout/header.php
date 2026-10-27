@@ -24,7 +24,6 @@ if (class_exists('AuthController') && AuthController::estaAutenticado()) {
     }
 }
 ?>
-?>
 <body<?= $productTourRole !== '' ? ' data-product-tour-role="' . htmlspecialchars($productTourRole, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
 <?php
 $currentUrl = $_GET['url'] ?? 'home';
@@ -293,8 +292,7 @@ if ($esMenuMaestro) {
         </div>
 
         <?php
-        $puedeNuevoDiscipuloRapido = AuthController::puede('personas:crear')
-            || AuthController::puede('acceso_rapido_nuevo_discipulo:crear');
+        $puedeNuevoDiscipuloRapido = AuthController::puedeCrearPersonasConsulta();
         $puedePlantillasWaRapido = AuthController::puedeVerModulo('personas_plantillas_whatsapp');
         $puedeFormularioPublicoRapido = AuthController::puedeVerModulo('personas_formulario_publico');
         $puedeAlgunAccesoRapido = $puedeNuevoDiscipuloRapido || $puedePlantillasWaRapido || $puedeFormularioPublicoRapido;
@@ -463,15 +461,15 @@ if ($esMenuMaestro) {
         </nav>
 
         <div class="sidebar-user-card">
-            <div class="sidebar-user-meta">
-                <?php $linkedAccounts = $_SESSION['account_pool'] ?? []; ?>
-                <?php $hasLinkedAccounts = is_array($linkedAccounts) && count($linkedAccounts) > 1; ?>
-                <button type="button" class="account-menu-toggle" id="accountMenuToggle" aria-label="Ver cuentas vinculadas" title="Ver cuentas vinculadas">
+            <?php $linkedAccounts = $_SESSION['account_pool'] ?? []; ?>
+            <?php $hasLinkedAccounts = is_array($linkedAccounts) && count($linkedAccounts) > 1; ?>
+            <div class="sidebar-user-meta<?= $hasLinkedAccounts ? ' sidebar-user-meta--switchable' : '' ?>"<?= $hasLinkedAccounts ? ' id="accountMenuToggle" role="button" tabindex="0" aria-label="Ver cuentas vinculadas" title="Cambiar de cuenta" aria-haspopup="true" aria-expanded="false"' : '' ?>>
+                <span class="account-menu-avatar" aria-hidden="true">
                     <i class="bi bi-person-circle"></i>
-                </button>
+                </span>
                 <div>
-                    <div class="user-name"><?= $_SESSION['usuario_nombre'] ?? 'Usuario' ?></div>
-                    <div class="user-role"><?= $_SESSION['usuario_rol_nombre'] ?? 'Sin Rol' ?></div>
+                    <div class="user-name"><?= htmlspecialchars((string)($_SESSION['usuario_nombre'] ?? 'Usuario')) ?></div>
+                    <div class="user-role"><?= htmlspecialchars((string)($_SESSION['usuario_rol_nombre'] ?? 'Sin Rol')) ?></div>
                 </div>
                 <?php if ($hasLinkedAccounts): ?>
                     <i class="bi bi-caret-down-fill account-menu-caret" aria-hidden="true"></i>
@@ -480,20 +478,33 @@ if ($esMenuMaestro) {
 
             <?php if ($hasLinkedAccounts): ?>
                 <div class="account-switch-menu" id="accountSwitchMenu" aria-hidden="true">
+                    <div class="account-switch-label">Cuentas en esta sesión</div>
                     <?php foreach ($linkedAccounts as $linkedAccount): ?>
                         <?php $isCurrent = ((int)($linkedAccount['id'] ?? 0) === (int)($_SESSION['usuario_id'] ?? 0)); ?>
+                        <?php
+                            $nombreCuenta = trim((string)($linkedAccount['nombre'] ?? 'Cuenta'));
+                            $loginCuenta = trim((string)($linkedAccount['login'] ?? ''));
+                            $etiquetaCuenta = $nombreCuenta;
+                            if ($loginCuenta !== '' && strcasecmp($loginCuenta, $nombreCuenta) !== 0) {
+                                $etiquetaCuenta .= ' (' . $loginCuenta . ')';
+                            }
+                        ?>
                         <?php if ($isCurrent): ?>
                             <div class="account-switch-item current">
                                 <i class="bi bi-check-circle-fill"></i>
-                                <span><?= htmlspecialchars((string)($linkedAccount['nombre'] ?? 'Cuenta actual')) ?></span>
+                                <span><?= htmlspecialchars($etiquetaCuenta) ?></span>
                             </div>
                         <?php else: ?>
                             <a href="<?= PUBLIC_URL ?>?url=auth/cambiar-usuario&id=<?= (int)$linkedAccount['id'] ?>" class="account-switch-item">
                                 <i class="bi bi-person-check"></i>
-                                <span><?= htmlspecialchars((string)($linkedAccount['nombre'] ?? 'Cuenta')) ?></span>
+                                <span><?= htmlspecialchars($etiquetaCuenta) ?></span>
                             </a>
                         <?php endif; ?>
                     <?php endforeach; ?>
+                    <a href="<?= PUBLIC_URL ?>?url=auth/login&modo=agregar" class="account-switch-item account-switch-item--add">
+                        <i class="bi bi-person-plus"></i>
+                        <span>Agregar otra cuenta</span>
+                    </a>
                 </div>
             <?php endif; ?>
 
@@ -517,4 +528,14 @@ if ($esMenuMaestro) {
             <?php include VIEWS . '/layout/_topbar_notificaciones.php'; ?>
         </div>
 
-        <main class="main-content<?= !empty($puedeVerPendientesGanar) || !empty($puedeVerGanarArea) ? ' main-content--with-topbar' : '' ?>">
+        <main class="main-content<?= !empty($puedeVerPendientesGanar) || !empty($puedeVerGanarArea) || !empty($campanaSoloDiscipulos) ? ' main-content--with-topbar' : '' ?>">
+            <?php
+            $flashInfoApp = trim((string)($_SESSION['flash_info'] ?? ''));
+            if ($flashInfoApp !== '') {
+                unset($_SESSION['flash_info']);
+                echo '<div class="alert alert-info app-flash-info" role="status">'
+                    . '<i class="bi bi-info-circle"></i> '
+                    . htmlspecialchars($flashInfoApp)
+                    . '</div>';
+            }
+            ?>
