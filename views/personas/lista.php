@@ -38,11 +38,22 @@ $mostrarEscaleraRapida = $puedeModuloGanarCompleto;
 
             return $idMinisterioLider === $filtroMinisterioListado;
         }));
+        $etapaQueryActual = strtolower(trim((string)($filtroEtapaActual ?? ($_GET['etapa'] ?? ''))));
+        $etapasQueryPermitidas = ['ganar', 'consolidar', 'discipular', 'enviar', 'sin_etapa'];
+        if (!in_array($etapaQueryActual, $etapasQueryPermitidas, true)) {
+            $etapaQueryActual = 'ganar';
+        }
+        $redQueryActual = strtolower(trim((string)($filtroRedActual ?? ($_GET['red'] ?? ''))));
+        if (!in_array($redQueryActual, ['hombres', 'mujeres'], true)) {
+            $redQueryActual = '';
+        }
         $queryBasePersonas = [
             'url' => 'personas',
             'ministerio' => $filtroMinisterioListado,
             'lider' => $filtroLiderListado,
-            'buscar' => (string)($filtroNombreActual ?? ($_GET['buscar'] ?? ''))
+            'buscar' => (string)($filtroNombreActual ?? ($_GET['buscar'] ?? '')),
+            'etapa' => $etapaQueryActual,
+            'red' => $redQueryActual,
         ];
         $buildPersonasUrl = static function(array $extra = []) use ($queryBasePersonas) {
             $params = array_merge($queryBasePersonas, $extra);
@@ -55,6 +66,12 @@ $mostrarEscaleraRapida = $puedeModuloGanarCompleto;
         ?>
         <form method="GET" action="<?= PUBLIC_URL ?>" class="filters-inline" id="filtro_perfil_form">
             <input type="hidden" name="url" value="personas">
+            <?php if ($etapaQueryActual !== ''): ?>
+            <input type="hidden" name="etapa" value="<?= htmlspecialchars($etapaQueryActual, ENT_QUOTES, 'UTF-8') ?>">
+            <?php endif; ?>
+            <?php if ($redQueryActual !== ''): ?>
+            <input type="hidden" name="red" value="<?= htmlspecialchars($redQueryActual, ENT_QUOTES, 'UTF-8') ?>">
+            <?php endif; ?>
             <div class="form-group">
                 <label for="filtro_ministerio" style="font-size: 14px; margin-bottom: 5px;">Filtro por ministerio</label>
                 <select id="filtro_ministerio" name="ministerio" class="form-control">
@@ -102,7 +119,7 @@ $mostrarEscaleraRapida = $puedeModuloGanarCompleto;
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-search"></i> Buscar
                 </button>
-                <?php if (!empty($_GET['buscar']) || !empty($_GET['ministerio']) || !empty($_GET['lider'])): ?>
+                <?php if (!empty($_GET['buscar']) || !empty($_GET['ministerio']) || !empty($_GET['lider']) || !empty($_GET['red'])): ?>
                 <a href="<?= PUBLIC_URL ?>?url=personas" class="btn btn-secondary">
                     <i class="bi bi-x-circle"></i> Limpiar
                 </a>
@@ -306,6 +323,12 @@ $listasConexion = [
                         $checklistEscalera['Discipular'][$i] = !empty($checklistEscalera['Discipular'][$i]);
                         $checklistEscalera['Enviar'][$i] = !empty($checklistEscalera['Enviar'][$i]);
                     }
+                    $idMinEscalera = (int)($persona['Id_Ministerio'] ?? 0);
+                    $idLidEscalera = (int)($persona['Id_Lider'] ?? 0);
+                    $idCelEscalera = (int)($persona['Id_Celula'] ?? 0);
+                    $checklistEscalera['Ganar'][1] = $idLidEscalera > 0 && $idMinEscalera > 0;
+                    $checklistEscalera['Ganar'][4] = $idCelEscalera > 0;
+                    // Enviar/Célula solo si dirige una célula (no por ser miembro).
                     $checklistEscaleraJson = htmlspecialchars((string)json_encode($checklistEscalera, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
                     $notasSeguimiento = (isset($checklistEscalera['_meta']['seguimiento_notas']) && is_array($checklistEscalera['_meta']['seguimiento_notas']))
                         ? $checklistEscalera['_meta']['seguimiento_notas']
@@ -315,9 +338,6 @@ $listasConexion = [
                     $esFilaDiscipulo = ($rowPerfilId === 'discipulos');
                     $filaPendienteUbicacion = $esPendienteUbicacionRed((array)$persona);
                     $canalUvFormulario = trim((string)($persona['Canal_Creacion'] ?? '')) === 'Escuelas Formacion (Formulario publico)';
-                    $idMinEscalera = (int)($persona['Id_Ministerio'] ?? 0);
-                    $idLidEscalera = (int)($persona['Id_Lider'] ?? 0);
-                    $idCelEscalera = (int)($persona['Id_Celula'] ?? 0);
                     $sinCelulaAsignada = $idCelEscalera <= 0;
                     $mostrarEscaleraFila = ($sinCelulaAsignada && $rowPerfilId !== 'pastores' && $rowPerfilId !== 'lideres_12' && $rowPerfilId !== 'lideres_celula');
                     $puedeEditarEscaleraInline = !empty($puedeEditarPersona) && $mostrarEscaleraFila;
@@ -372,6 +392,7 @@ $listasConexion = [
                                     <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="0" <?= !empty($checklistEscalera['Ganar'][0]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Primer contacto</span></label>
                                     <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="2" <?= !empty($checklistEscalera['Ganar'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Fonovisita</span></label>
                                     <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="3" <?= !empty($checklistEscalera['Ganar'][3]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Visita</span></label>
+                                    <label class="escalera-inline-item is-auto" title="Se marca solo al asignar la persona a una célula"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="4" <?= !empty($checklistEscalera['Ganar'][4]) ? 'checked' : '' ?> disabled><span>Ubicado en célula</span></label>
                                     <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="5" <?= !empty($checklistEscalera['Ganar'][5]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>No se dispone</span></label>
                                 </div>
 
@@ -388,7 +409,7 @@ $listasConexion = [
                                 </div>
 
                                 <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Enviar" hidden>
-                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Enviar" data-indice="2" <?= !empty($checklistEscalera['Enviar'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>><span>Célula</span></label>
+                                    <label class="escalera-inline-item is-auto" title="Se marca solo si dirige una célula o es líder de célula"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Enviar" data-indice="2" <?= !empty($checklistEscalera['Enviar'][2]) ? 'checked' : '' ?> disabled><span>Dirige célula</span></label>
                                 </div>
                             </div>
                             <?php else: ?>
@@ -492,6 +513,7 @@ $totalesEtapaVista = is_array($totalesEtapaEscalera ?? null) ? $totalesEtapaEsca
 ];
 $etapaVistaActual = (string)($filtroEtapaActual ?? '');
 $personasEtapasVista = is_array($personasEtapas ?? null) ? $personasEtapas : [];
+$flagsFormacionEscaleraVista = is_array($flagsFormacionEscalera ?? null) ? $flagsFormacionEscalera : [];
 $etapasEscaleraNav = [
     'ganar' => ['etiqueta' => 'Ganar', 'clave' => 'Ganar'],
     'consolidar' => ['etiqueta' => 'Consolidar', 'clave' => 'Consolidar'],
@@ -499,14 +521,50 @@ $etapasEscaleraNav = [
     'enviar' => ['etiqueta' => 'Enviar', 'clave' => 'Enviar'],
     'sin_etapa' => ['etiqueta' => 'Sin etapa', 'clave' => 'sin_etapa'],
 ];
+$totalesMinisterioVista = [];
+if (is_array($totalesMinisterioEscalera ?? null) && $totalesMinisterioEscalera !== []) {
+    $totalesMinisterioVista = $totalesMinisterioEscalera;
+} else {
+    // Fallback: ministerios del contexto con total 0 si el controlador no envió conteos.
+    foreach ((array)(($contextoFiltrosEscalera ?? [])['ministerios'] ?? ($ministerios ?? [])) as $minFallback) {
+        $idMinFallback = (int)($minFallback['Id_Ministerio'] ?? 0);
+        if ($idMinFallback <= 0) {
+            continue;
+        }
+        $claveMinFallback = (string)$idMinFallback;
+        $totalesMinisterioVista[$claveMinFallback] = [
+            'id' => $claveMinFallback,
+            'nombre' => trim((string)($minFallback['Nombre_Ministerio'] ?? 'Ministerio')),
+            'total' => 0,
+        ];
+    }
+}
+$totalPersonasEtapaVista = count($personasEtapasVista);
+$filtroMinisterioVista = (string)($filtroMinisterioActual ?? ($_GET['ministerio'] ?? ''));
+$filtroRedVista = strtolower(trim((string)($filtroRedActual ?? ($_GET['red'] ?? ''))));
+if (!in_array($filtroRedVista, ['hombres', 'mujeres'], true)) {
+    $filtroRedVista = '';
+}
+// Conteos de red = absolutos del/los ministerio(s) visibles (no por etapa).
+$totalHombresRedVista = 0;
+$totalMujeresRedVista = 0;
+$totalMinisterioAbsolutoVista = 0;
+foreach ($totalesMinisterioVista as $ministerioRedTot) {
+    $idMinisterioRedTot = (string)($ministerioRedTot['id'] ?? '');
+    if ($filtroMinisterioVista !== '' && $filtroMinisterioVista !== $idMinisterioRedTot) {
+        continue;
+    }
+    $totalHombresRedVista += (int)($ministerioRedTot['hombres'] ?? 0);
+    $totalMujeresRedVista += (int)($ministerioRedTot['mujeres'] ?? 0);
+    $totalMinisterioAbsolutoVista += (int)($ministerioRedTot['total'] ?? 0);
+}
 ?>
 <section class="escalera-etapas" aria-label="Etapas de la escalera">
     <div class="escalera-etapas-head">
         <h3>Etapas de la escalera</h3>
-        <p>Personas activas de tu red, según la etapa guardada en su ficha. Los filtros de arriba también aplican aquí.</p>
+        <p>Personas activas de tu red (incluidos líderes de célula). Consolidar: UV o Encuentro · Discipular: al menos un ítem · Enviar: dirige una célula. Los filtros de arriba también aplican aquí.</p>
     </div>
     <div class="escalera-etapas-nav">
-        <a class="escalera-etapa-chip<?= $etapaVistaActual === '' ? ' is-active' : '' ?>" href="<?= htmlspecialchars($buildPersonasUrl(['etapa' => '']), ENT_QUOTES, 'UTF-8') ?>">Todas</a>
         <?php foreach ($etapasEscaleraNav as $claveNav => $etapaNav): ?>
         <a class="escalera-etapa-chip<?= $etapaVistaActual === $claveNav ? ' is-active' : '' ?>" href="<?= htmlspecialchars($buildPersonasUrl(['etapa' => $claveNav]), ENT_QUOTES, 'UTF-8') ?>">
             <?= htmlspecialchars($etapaNav['etiqueta']) ?>
@@ -514,6 +572,55 @@ $etapasEscaleraNav = [
         </a>
         <?php endforeach; ?>
     </div>
+    <?php if ($totalesMinisterioVista !== []): ?>
+    <div class="escalera-ministerios" aria-label="Totales por ministerio">
+        <div class="escalera-ministerios-head">
+            <h4>Por ministerio</h4>
+            <div class="escalera-ministerios-meta">
+                <div class="escalera-red-filtros" role="group" aria-label="Filtrar por red de género">
+                    <a
+                        class="escalera-red-chip<?= $filtroRedVista === 'hombres' ? ' is-active' : '' ?>"
+                        href="<?= htmlspecialchars($buildPersonasUrl(['red' => $filtroRedVista === 'hombres' ? '' : 'hombres']), ENT_QUOTES, 'UTF-8') ?>"
+                        title="<?= $filtroRedVista === 'hombres' ? 'Quitar filtro de red de hombres' : 'Ver solo red de hombres' ?>"
+                    >
+                        Red hombres <strong><?= $totalHombresRedVista ?></strong>
+                    </a>
+                    <a
+                        class="escalera-red-chip<?= $filtroRedVista === 'mujeres' ? ' is-active' : '' ?>"
+                        href="<?= htmlspecialchars($buildPersonasUrl(['red' => $filtroRedVista === 'mujeres' ? '' : 'mujeres']), ENT_QUOTES, 'UTF-8') ?>"
+                        title="<?= $filtroRedVista === 'mujeres' ? 'Quitar filtro de red de mujeres' : 'Ver solo red de mujeres' ?>"
+                    >
+                        Red mujeres <strong><?= $totalMujeresRedVista ?></strong>
+                    </a>
+                </div>
+                <span class="escalera-ministerios-total" title="<?= (int)$totalPersonasEtapaVista ?> en el peldaño/filtro actual">
+                    <?= (int)$totalMinisterioAbsolutoVista ?> persona<?= $totalMinisterioAbsolutoVista === 1 ? '' : 's' ?> en el ministerio
+                </span>
+            </div>
+        </div>
+        <div class="escalera-ministerios-grid">
+            <?php foreach ($totalesMinisterioVista as $ministerioTot): ?>
+            <?php
+            $idMinisterioChip = (string)$ministerioTot['id'];
+            $chipMinisterioActivo = $filtroMinisterioVista !== '' && $filtroMinisterioVista === $idMinisterioChip;
+            ?>
+            <a
+                class="escalera-ministerio-card<?= $chipMinisterioActivo ? ' is-active' : '' ?><?= $idMinisterioChip === '0' ? ' is-sin-ministerio' : '' ?>"
+                href="<?= htmlspecialchars($buildPersonasUrl(['ministerio' => $idMinisterioChip, 'lider' => '']), ENT_QUOTES, 'UTF-8') ?>"
+                title="Filtrar por <?= htmlspecialchars((string)$ministerioTot['nombre'], ENT_QUOTES, 'UTF-8') ?>"
+            >
+                <span class="escalera-ministerio-nombre"><?= htmlspecialchars((string)$ministerioTot['nombre']) ?></span>
+                <strong class="escalera-ministerio-count"><?= (int)$ministerioTot['total'] ?></strong>
+            </a>
+            <?php endforeach; ?>
+            <?php if ($filtroMinisterioVista !== ''): ?>
+            <a class="escalera-ministerio-card escalera-ministerio-limpiar" href="<?= htmlspecialchars($buildPersonasUrl(['ministerio' => '', 'lider' => '']), ENT_QUOTES, 'UTF-8') ?>">
+                <span class="escalera-ministerio-nombre">Ver todos</span>
+            </a>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
     <div class="table-container">
         <table class="data-table">
             <thead>
@@ -539,6 +646,21 @@ $etapasEscaleraNav = [
                         $procesoEtapa = 'Sin etapa';
                     }
                     $idEtapa = (int)($personaEtapa['Id_Persona'] ?? 0);
+                    $flagsFormacionPersona = is_array($flagsFormacionEscaleraVista[$idEtapa] ?? null)
+                        ? $flagsFormacionEscaleraVista[$idEtapa]
+                        : [
+                            'universidad_vida' => false,
+                            'capacitacion_destino' => false,
+                        ];
+                    $yaUv = !empty($flagsFormacionPersona['universidad_vida']);
+                    $yaCd = !empty($flagsFormacionPersona['capacitacion_destino']);
+                    $sugerirUv = !$yaUv;
+                    $sugerirCd = !$yaCd;
+                    $cedulaEtapa = preg_replace('/\D+/', '', (string)($personaEtapa['Numero_Documento'] ?? ''));
+                    $qsInscripcionPersona = 'id_persona=' . $idEtapa;
+                    if ($cedulaEtapa !== '') {
+                        $qsInscripcionPersona .= '&cedula=' . rawurlencode($cedulaEtapa);
+                    }
                     ?>
                     <tr>
                         <td class="persona-nombre-cell"><?= htmlspecialchars($nombreEtapa) ?></td>
@@ -548,6 +670,30 @@ $etapasEscaleraNav = [
                         <?php if ($mostrarAcciones): ?>
                         <td class="action-col">
                             <div class="action-buttons action-buttons-compact">
+                                <div class="escalera-sugerencia-inscripcion" title="Estado en escuelas de formación (no depende del peldaño de la escalera)">
+                                    <?php if ($yaUv): ?>
+                                    <span class="action-sugerencia-badge action-sugerencia-done" title="Ya inscrita en Universidad de la Vida">Ya UV</span>
+                                    <?php else: ?>
+                                    <a
+                                        href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/universidad-vida&amp;<?= htmlspecialchars($qsInscripcionPersona, ENT_QUOTES, 'UTF-8') ?>"
+                                        class="action-sugerencia-btn action-sugerencia-uv"
+                                        target="_blank"
+                                        rel="noopener"
+                                        title="Sugerencia: aún no figura en Universidad de la Vida"
+                                    >Inscribir UV</a>
+                                    <?php endif; ?>
+                                    <?php if ($yaCd): ?>
+                                    <span class="action-sugerencia-badge action-sugerencia-done" title="Ya inscrita en Capacitación Destino">Ya CD</span>
+                                    <?php else: ?>
+                                    <a
+                                        href="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/capacitacion-destino&amp;<?= htmlspecialchars($qsInscripcionPersona, ENT_QUOTES, 'UTF-8') ?>"
+                                        class="action-sugerencia-btn action-sugerencia-cd"
+                                        target="_blank"
+                                        rel="noopener"
+                                        title="Sugerencia: aún no figura en Capacitación Destino"
+                                    >Inscribir CD</a>
+                                    <?php endif; ?>
+                                </div>
                                 <?php if ($puedeVerPersona): ?>
                                 <a href="<?= PUBLIC_URL ?>?url=personas/detalle&id=<?= $idEtapa ?>&return_url=<?= urlencode($returnUrlPersonas) ?>" class="action-icon-btn action-icon-info" title="Ver" aria-label="Ver">
                                     <i class="bi bi-eye"></i>
@@ -681,6 +827,157 @@ $etapasEscaleraNav = [
     color: #ffffff;
 }
 
+.escalera-ministerios {
+    margin: 0 0 16px;
+    padding: 14px 16px;
+    border: 1px solid #dbe7f5;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #f7fbff 0%, #eef5fc 100%);
+}
+
+.escalera-ministerios-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.escalera-ministerios-head h4 {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #1e3a5f;
+}
+
+.escalera-ministerios-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-left: auto;
+}
+
+.escalera-red-filtros {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.escalera-red-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid #d5e2f3;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #1e3a5f;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.escalera-red-chip strong {
+    font-size: 13px;
+    font-weight: 800;
+    color: #1f5ea8;
+}
+
+.escalera-red-chip:hover {
+    border-color: #93b6e0;
+    box-shadow: 0 0 0 2px rgba(31, 94, 168, 0.12);
+}
+
+.escalera-red-chip.is-active {
+    background: #1f5ea8;
+    border-color: #1f5ea8;
+    color: #ffffff;
+}
+
+.escalera-red-chip.is-active strong {
+    color: #ffffff;
+}
+
+.escalera-ministerios-total {
+    color: #5b6d88;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.escalera-ministerios-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px;
+}
+
+.escalera-ministerio-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 44px;
+    padding: 10px 12px;
+    border: 1px solid #d5e2f3;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #1e3a5f;
+    text-decoration: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.escalera-ministerio-card:hover {
+    border-color: #93b6e0;
+    box-shadow: 0 0 0 2px rgba(31, 94, 168, 0.12);
+}
+
+.escalera-ministerio-nombre {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.25;
+    min-width: 0;
+}
+
+.escalera-ministerio-count {
+    flex-shrink: 0;
+    min-width: 1.75rem;
+    text-align: right;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #1f5ea8;
+    line-height: 1;
+}
+
+.escalera-ministerio-card.is-active {
+    background: #1f5ea8;
+    border-color: #1f5ea8;
+    color: #ffffff;
+    box-shadow: 0 0 0 2px rgba(31, 94, 168, 0.22);
+}
+
+.escalera-ministerio-card.is-active .escalera-ministerio-count {
+    color: #ffffff;
+}
+
+.escalera-ministerio-card.is-sin-ministerio .escalera-ministerio-count {
+    color: #9a3412;
+}
+
+.escalera-ministerio-card.is-sin-ministerio.is-active .escalera-ministerio-count {
+    color: #ffffff;
+}
+
+.escalera-ministerio-limpiar {
+    justify-content: center;
+    border-style: dashed;
+    color: #5b6d88;
+    background: transparent;
+}
+
 .personas-header-actions {
     display: flex;
     gap: 10px;
@@ -786,6 +1083,71 @@ $etapasEscaleraNav = [
     text-decoration: none;
     border: 1px solid transparent;
     font-size: 13px;
+}
+
+.escalera-sugerencia-inscripcion {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    max-width: 220px;
+}
+
+.action-sugerencia-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    text-decoration: none;
+    line-height: 1.2;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+
+.action-sugerencia-uv {
+    background: #ecfdf5;
+    color: #0f766e;
+    border-color: #99f6e4;
+}
+
+.action-sugerencia-uv:hover {
+    background: #d1fae5;
+    color: #115e59;
+}
+
+.action-sugerencia-cd {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+}
+
+.action-sugerencia-cd:hover {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.action-sugerencia-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+
+.action-sugerencia-done {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #cbd5e1;
 }
 
 .action-icon-info {
@@ -1299,7 +1661,7 @@ if (filtroNombre && filtroPerfilForm) {
 (function() {
     const etapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
     const subprocesos = {
-        Ganar: ['Primer contacto', 'Asignacion a lideres y ministerio', 'Fonovisita', 'Visita', 'Asignacion a una celula', 'No se dispone'],
+        Ganar: ['Primer contacto', 'Asignacion a lideres y ministerio', 'Fonovisita', 'Visita', 'Ubicado en celula', 'No se dispone'],
         Consolidar: ['Universidad de la vida', 'Encuentro', 'Bautismo'],
         Discipular: ['Capacitacion destino nivel 1 (modulos 1 y 2)', 'Capacitacion destino nivel 2 (modulos 3 y 4)', 'Capacitacion destino nivel 3 (modulos 5 y 6)'],
         Enviar: ['Celula']
@@ -1903,7 +2265,8 @@ if (filtroNombre && filtroPerfilForm) {
         container.querySelectorAll('.js-inline-escalera-check').forEach(function(check) {
             const etapa = check.getAttribute('data-etapa') || 'Ganar';
             const indice = parseInt(check.getAttribute('data-indice') || '-1', 10);
-            let disabled = !puedeEditar;
+            const esAuto = etapa === 'Ganar' && (indice === 1 || indice === 4);
+            let disabled = esAuto || !puedeEditar;
             if (!disabled && noDisponible && !(etapa === 'Ganar' && indice === 5)) {
                 disabled = true;
             }

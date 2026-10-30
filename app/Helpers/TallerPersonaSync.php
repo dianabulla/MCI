@@ -4,7 +4,9 @@
 
  * Bloque 1 (datos personales) del formulario público de talleres.
 
- * No crea ni modifica registros en persona: solo enlaza Id_Persona si ya existe.
+ * No crea, no modifica ni enlaza fichas en persona: la inscripción vive solo en talleres.
+
+ * La búsqueda pública puede autocompletar si la cédula ya existe, pero no guarda Id_Persona.
 
  */
 
@@ -66,16 +68,6 @@ class TallerPersonaSync {
 
         $telefono = preg_replace('/\D+/', '', (string)($post['persona_telefono'] ?? ''));
 
-        $email = strtolower(trim((string)($post['persona_email'] ?? '')));
-
-        $direccion = trim((string)($post['persona_direccion'] ?? ''));
-
-        $estadoCivil = trim((string)($post['persona_estado_civil'] ?? ''));
-
-        $ocupacion = trim((string)($post['persona_ocupacion'] ?? ''));
-
-
-
         $errores = [];
 
         if ($nombreCompleto === '') {
@@ -102,29 +94,14 @@ class TallerPersonaSync {
 
         }
 
-        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-
-            $errores['persona_email'] = 'El correo electrónico no es válido.';
-
-        }
-
-
-
         if (!empty($errores)) {
 
             return ['ok' => false, 'errores' => $errores, 'id_persona' => 0, 'extras' => [], 'datos_persona' => []];
 
         }
 
-
-
-        $existente = $this->buscarPersonaExistente($documento, $telefono, $email, $tipoDocumento);
-
-        $idPersona = (int)($existente['Id_Persona'] ?? 0);
-
-        $datosPersona = $this->construirDatosPersonaParaRespuesta($idPersona, $post);
-
-
+        // Siempre snapshot del POST; nunca Id_Persona (aislamiento del módulo).
+        $datosPersona = $this->extraerDatosPersonaDesdePost($post);
 
         return [
 
@@ -132,13 +109,9 @@ class TallerPersonaSync {
 
             'errores' => [],
 
-            'id_persona' => $idPersona,
+            'id_persona' => 0,
 
             'extras' => array_filter([
-
-                'estado_civil' => $estadoCivil,
-
-                'ocupacion' => $ocupacion,
 
                 'persona_apellido' => $apellido,
 
@@ -390,17 +363,9 @@ class TallerPersonaSync {
 
             'persona_telefono' => preg_replace('/\D+/', '', (string)($post['persona_telefono'] ?? '')),
 
-            'persona_email' => strtolower(trim((string)($post['persona_email'] ?? ''))),
-
-            'persona_direccion' => trim((string)($post['persona_direccion'] ?? '')),
-
             'persona_fecha_nacimiento' => $fechaNac !== '' ? substr($fechaNac, 0, 10) : '',
 
             'persona_edad' => trim((string)($post['persona_edad'] ?? '')),
-
-            'persona_estado_civil' => trim((string)($post['persona_estado_civil'] ?? '')),
-
-            'persona_ocupacion' => trim((string)($post['persona_ocupacion'] ?? '')),
 
             'persona_lider' => trim((string)($post['persona_lider'] ?? '')),
 

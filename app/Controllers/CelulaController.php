@@ -476,6 +476,7 @@ class CelulaController extends BaseController {
                     $proceso = 'Consolidar';
                 }
                 $miembro['Proceso'] = $proceso;
+                $miembro['Proceso_Detalle'] = $this->personaModel->describirProcesoConDetalle($miembro, $proceso, $flags);
             }
             unset($miembro);
         }

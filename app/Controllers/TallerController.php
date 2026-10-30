@@ -440,7 +440,7 @@ class TallerController extends BaseController {
 
             'modo' => 'editar',
 
-            'es_presentacion_ninos' => $this->model->esPresentacionNinos($formulario),
+            'es_presentacion_ninos' => $this->model->esInscripcionNinosFija($formulario),
 
             'acepta_pago' => $this->model->aceptaPago($formulario),
 
@@ -938,8 +938,8 @@ class TallerController extends BaseController {
             exit;
         }
 
-        if ($this->model->esPresentacionNinos($formulario)) {
-            $_SESSION['talleres_flash_error'] = 'Esta asignación no aplica a presentación de niños.';
+        if ($this->model->esInscripcionNinosFija($formulario)) {
+            $_SESSION['talleres_flash_error'] = 'Esta asignación no aplica: el ministerio se elige en el formulario de inscripción.';
             header('Location: ' . $redirBase);
             exit;
         }
@@ -956,35 +956,7 @@ class TallerController extends BaseController {
 
         $json = $this->decodificarDatosJsonRespuesta($respuesta['Datos_JSON'] ?? null);
 
-        $idPersona = (int)($respuesta['Id_Persona'] ?? 0);
-        if ($idPersona <= 0) {
-            $idPersona = $this->personaSync->asegurarPersonaDesdeJson($json, false);
-        }
-        if ($idPersona <= 0) {
-            $datosCrear = $this->personaSync->jsonAPost($json);
-            $datosCrear['id_ministerio'] = (string)$idMinisterio;
-            header('Location: ' . $this->urlFormularioCrearPersona($datosCrear, $redirBase . '&abrir=sin-ministerio'));
-            exit;
-        }
-
-        $this->personaSync->completarCamposVaciosDesdeJson($idPersona, $json);
-
-        require_once APP . '/Models/Persona.php';
-        $personaModel = new Persona();
-        $personaModel->ensureEsAntiguoColumnExists();
-        $datosPersona = ['Id_Ministerio' => $idMinisterio];
-        if ($personaModel->tieneColumna('Es_Antiguo')) {
-            $datosPersona['Es_Antiguo'] = $esAntiguo;
-        }
-        $actualizoPersona = (bool)$personaModel->update($idPersona, $datosPersona);
-        if (!$actualizoPersona) {
-            $_SESSION['talleres_flash_error'] = 'No se pudo guardar el ministerio en la ficha de la persona.';
-            header('Location: ' . $redirBase . '&abrir=sin-ministerio');
-            exit;
-        }
-
-        $this->model->vincularPersonaRespuesta($idRespuesta, $idPersona);
-
+        // Solo en talleres: no crea ni actualiza fichas en Personas.
         $extras = is_array($json['_persona_extra'] ?? null) ? $json['_persona_extra'] : [];
         $json['persona_ministerio'] = $nombreMinisterio;
         $json['ministerio'] = $nombreMinisterio;
@@ -1000,11 +972,8 @@ class TallerController extends BaseController {
         $this->model->actualizarDatosJsonRespuesta($idRespuesta, $json);
 
         $etiquetaTipo = $esAntiguo === 1 ? 'antigua' : 'nueva';
-        $_SESSION['talleres_flash_ok'] = 'Ya no está en Sin ministerio: pasó a ' . $nombreMinisterio . ' como persona ' . $etiquetaTipo . '.';
-        $cacheAsig = [];
-        $personaModelAsig = $personaModel;
-        $nombreLider12 = $this->resolverNombreLider12Inscripcion($idPersona, $personaModelAsig, $cacheAsig);
-        header('Location: ' . $redirBase . '&abrir_ministerio=' . rawurlencode($nombreMinisterio) . '&abrir_lider12=' . rawurlencode($nombreLider12) . '&resaltar=' . $idRespuesta);
+        $_SESSION['talleres_flash_ok'] = 'Ya no está en Sin ministerio: pasó a ' . $nombreMinisterio . ' como persona ' . $etiquetaTipo . ' (solo en este taller).';
+        header('Location: ' . $redirBase . '&abrir_ministerio=' . rawurlencode($nombreMinisterio) . '&resaltar=' . $idRespuesta);
         exit;
     }
 
@@ -1084,7 +1053,7 @@ class TallerController extends BaseController {
                 $firmaRaw = (string)($auth['firma'] ?? '');
 
                 $documentosPresentacion = [];
-                if ($this->model->esPresentacionNinos($formulario)) {
+                if ($this->model->esInscripcionNinosFija($formulario)) {
                     $documentosPresentacion = TallerPresentacionDocumentos::obtenerParaRespuesta(
                         $idRespuesta,
                         $json['documentos_presentacion'] ?? []
@@ -1191,7 +1160,7 @@ class TallerController extends BaseController {
 
             'solo_graficas' => $soloGraficas,
 
-            'es_presentacion_ninos' => $this->model->esPresentacionNinos($formulario),
+            'es_presentacion_ninos' => $this->model->esInscripcionNinosFija($formulario),
 
             'acepta_pago' => $this->model->aceptaPago($formulario),
 
@@ -1515,20 +1484,23 @@ class TallerController extends BaseController {
         &$personaModel,
         array &$cachePersonas
     ): string {
+        require_once APP . '/Helpers/TallerMinisterioNormalizer.php';
+        $normalizer = $this->obtenerNormalizerMinisteriosTalleres();
+
         $asig = is_array($json['_asignacion_ministerio'] ?? null) ? $json['_asignacion_ministerio'] : [];
         $idAsig = (int)($asig['id_ministerio'] ?? 0);
         $nombreAsig = trim((string)($asig['nombre_ministerio'] ?? ''));
         if ($idAsig > 0) {
             $nombreDb = $this->nombreMinisterioPorId($idAsig);
             if ($nombreDb !== '') {
-                return $nombreDb;
+                return $normalizer->normalizar($nombreDb);
             }
             if ($nombreAsig !== '' && !$this->esNombreMinisterioVacio($nombreAsig)) {
-                return $nombreAsig;
+                return $normalizer->normalizar($nombreAsig);
             }
         }
         if ($nombreAsig !== '' && !$this->esNombreMinisterioVacio($nombreAsig)) {
-            return $nombreAsig;
+            return $normalizer->normalizar($nombreAsig);
         }
 
         if ($idPersona > 0) {
@@ -1548,17 +1520,28 @@ class TallerController extends BaseController {
                     $nombrePersona = $this->nombreMinisterioPorId($idMinPersona);
                 }
                 if ($nombrePersona !== '' && !$this->esNombreMinisterioVacio($nombrePersona)) {
-                    return $nombrePersona;
+                    return $normalizer->normalizar($nombrePersona);
                 }
             }
         }
 
         $ministerio = $this->extraerMinisterioDeRespuestaTaller($json, $campos);
         if ($ministerio !== '' && !$this->esNombreMinisterioVacio($ministerio)) {
-            return $ministerio;
+            return $normalizer->normalizar($ministerio);
         }
 
         return 'Sin ministerio asignado';
+    }
+
+    private function obtenerNormalizerMinisteriosTalleres(): TallerMinisterioNormalizer {
+        static $normalizer = null;
+        static $catalogoCargado = false;
+        if ($normalizer instanceof TallerMinisterioNormalizer && $catalogoCargado) {
+            return $normalizer;
+        }
+        $normalizer = new TallerMinisterioNormalizer($this->listarMinisteriosAsignacion());
+        $catalogoCargado = true;
+        return $normalizer;
     }
 
     /**
@@ -2062,7 +2045,7 @@ class TallerController extends BaseController {
 
         $id = (int)($formulario['Id_Formulario'] ?? 0);
 
-        $this->model->asegurarTipoPlantillaPresentacionNinos($id);
+        $this->model->asegurarTipoPlantillaInscripcionNinos($id);
 
         $formulario = $this->model->getById($id) ?: $formulario;
 
@@ -2090,17 +2073,17 @@ class TallerController extends BaseController {
 
 
 
+        $esNinosFijaVista = $this->model->esInscripcionNinosFija($formulario);
+
         $this->view('talleres_publico/formulario', [
 
             'formulario' => $formulario,
 
             'bloques' => $completo['bloques'],
 
-            'es_presentacion_ninos' => $this->model->esPresentacionNinos($formulario),
+            'es_presentacion_ninos' => $esNinosFijaVista,
 
             'es_tour_levantate' => $this->model->esTourLevantate($formulario),
-
-            'estados_civiles' => TallerFormulario::ESTADOS_CIVILES,
 
             'texto_autorizacion' => $completo['texto_autorizacion'] ?? TallerAutorizacionSync::textoDefault(),
 
@@ -2111,6 +2094,8 @@ class TallerController extends BaseController {
             'enlace_crear_persona' => $enlaceCrearPersona,
 
             'enviado_ok' => !empty($_GET['ok']),
+
+            'ministerios_asignacion' => $esNinosFijaVista ? $this->listarMinisteriosAsignacion() : [],
 
         ]);
 
@@ -2181,35 +2166,27 @@ class TallerController extends BaseController {
             return;
         }
 
-        $presentacionSync = new TallerPresentacionNinosSync();
+        // Presentación de niños ya no busca en Personas: el formulario es fijo y aislado.
+        if (in_array($modo, ['padres', 'nino'], true)) {
+            echo json_encode([
+                'ok' => false,
+                'mensaje' => 'Este formulario no busca en el registro de personas. Complete los datos a mano.',
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
 
         $persona = null;
 
         if ($documento !== '') {
-
-            if (in_array($modo, ['padres', 'nino'], true)) {
-
-                $persona = $presentacionSync->buscarPorDocumento($documento);
-
-            } else {
-
-                $persona = $this->personaSync->buscarPorDocumento($documento);
-
-            }
-
+            $persona = $this->personaSync->buscarPorDocumento($documento);
         }
 
-        if (!$persona && $telefono !== '' && !in_array($modo, ['padres', 'nino'], true)) {
-
+        if (!$persona && $telefono !== '') {
             $persona = $this->personaSync->buscarPorTelefono($telefono);
-
         }
 
         $inscripcionPrevia = null;
         $idAperturaActiva = $idFormulario > 0 ? $this->model->asegurarAperturaActual($idFormulario) : 0;
-        if ($modo === 'nino' && $idFormulario > 0 && $documento !== '') {
-            $inscripcionPrevia = $this->model->buscarInscripcionPorDocumentoNino($idFormulario, $documento, 0, $idAperturaActiva);
-        }
 
         if ($modo === 'nino' && $inscripcionPrevia) {
             $fechaPrev = substr((string)($inscripcionPrevia['fecha'] ?? ''), 0, 10);
@@ -2351,9 +2328,9 @@ class TallerController extends BaseController {
      */
     private function metadatosTicketPago(array $formulario, array $json): array {
         $titulo = trim((string)($formulario['Titulo'] ?? 'Taller'));
-        $esPresentacion = $this->model->esPresentacionNinos($formulario);
+        $esNinosFija = $this->model->esInscripcionNinosFija($formulario);
         return [
-            'etiqueta_nombre' => $esPresentacion ? 'Niño(a)' : 'Inscrito',
+            'etiqueta_nombre' => $esNinosFija ? 'Niño(a)' : 'Inscrito',
             'pie_comprobante' => 'Comprobante de pago — ' . ($titulo !== '' ? $titulo : 'Taller'),
             'nombre' => trim((string)($json['nino_nombre'] ?? $json['persona_nombre'] ?? '')),
             'documento' => trim((string)($json['nino_documento'] ?? $json['persona_documento'] ?? '')),
@@ -2679,7 +2656,7 @@ class TallerController extends BaseController {
 
         $id = (int)($formulario['Id_Formulario'] ?? 0);
 
-        $esPresentacionNinos = $this->model->esPresentacionNinos($formulario);
+        $esPresentacionNinos = $this->model->esInscripcionNinosFija($formulario);
 
         $esTourLevantate = $this->model->esTourLevantate($formulario);
 
@@ -2713,6 +2690,11 @@ class TallerController extends BaseController {
 
             $ninoResult = $presentacionSync->procesarNinoDesdePost($_POST);
 
+            $ministerioResult = $presentacionSync->procesarMinisterioDesdePost(
+                $_POST,
+                $this->listarMinisteriosAsignacion()
+            );
+
             $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
             if ($contentLength > 0 && $_POST === [] && empty($_FILES)) {
                 $errores = ['Los archivos superan el límite del servidor. Suba menos archivos o reduzca el tamaño (máx. 8 MB por archivo).'];
@@ -2721,6 +2703,7 @@ class TallerController extends BaseController {
                 $errores = array_merge(
                     $padresResult['errores'],
                     $ninoResult['errores'],
+                    $ministerioResult['errores'],
                     $resultado['errores'],
                     $authResult['errores']
                 );
@@ -2729,15 +2712,7 @@ class TallerController extends BaseController {
                 }
             }
 
-            $idPersona = (int)($ninoResult['id_persona'] ?? 0);
-
-            if ($idPersona <= 0) {
-
-                $idPersona = (int)($padresResult['id_persona'] ?? 0);
-
-            }
-
-            $personaResult = ['id_persona' => $idPersona, 'extras' => []];
+            $personaResult = ['id_persona' => 0, 'extras' => []];
 
         } else if ($esTourLevantate) {
 
@@ -2758,21 +2733,24 @@ class TallerController extends BaseController {
         }
 
         if ($esPresentacionNinos) {
-            $docNino = preg_replace('/\D+/', '', (string)(
-                ($_POST['nino_documento'] ?? '')
-                ?: ($_POST['buscar_nino_documento'] ?? '')
-            ));
-            if ($docNino !== '') {
+            $nombrePadresDup = trim((string)($_POST['padres_nombre'] ?? ''));
+            $nombreNinoDup = trim((string)($_POST['nino_nombre'] ?? ''));
+            if ($nombrePadresDup !== '' && $nombreNinoDup !== '') {
                 $idAperturaGuardar = $this->model->asegurarAperturaActual($id);
-                $inscripcionPrevia = $this->model->buscarInscripcionPorDocumentoNino($id, $docNino, 0, $idAperturaGuardar);
+                $inscripcionPrevia = $this->model->buscarInscripcionPresentacionPorNombres(
+                    $id,
+                    $nombrePadresDup,
+                    $nombreNinoDup,
+                    $idAperturaGuardar
+                );
                 if ($inscripcionPrevia) {
                     if (!is_array($errores ?? null)) {
                         $errores = [];
                     }
                     $fechaPrev = substr((string)($inscripcionPrevia['fecha'] ?? ''), 0, 10);
-                    $errores['nino_documento'] = 'Este niño(a) ya está inscrito en este formulario'
+                    $errores['nino_nombre'] = 'Este niño(a) ya está inscrito en esta actividad'
                         . ($fechaPrev !== '' ? ' (registro del ' . $fechaPrev . ')' : '')
-                        . '. Busque el documento del niño y use la sección Documentos para subir archivos.';
+                        . '.';
                 }
             }
         }
@@ -2790,17 +2768,6 @@ class TallerController extends BaseController {
             }
         }
 
-        if (!$esPresentacionNinos && $idPersona <= 0 && empty($personaResult['errores'])) {
-            if (!is_array($errores ?? null)) {
-                $errores = [];
-            }
-            $errores['persona_documento'] = 'Esta persona no está en el registro. Créala en el formulario de personas y vuelve a buscarla por cédula.';
-            $_SESSION['talleres_enlace_crear_persona'] = $this->urlFormularioCrearPersona(
-                $_POST,
-                PUBLIC_URL . '?url=talleres_publico&slug=' . urlencode($slug)
-            );
-        }
-
         if (!$esPresentacionNinos) {
             if (!is_array($errores ?? null)) {
                 $errores = [];
@@ -2809,9 +2776,9 @@ class TallerController extends BaseController {
                 ($_POST['persona_documento'] ?? '')
                 ?: ($_POST['buscar_documento'] ?? '')
             ));
-            if ($docPersona !== '' || $idPersona > 0) {
+            if ($docPersona !== '') {
                 $idAperturaGuardarPersona = $this->model->asegurarAperturaActual($id);
-                $inscripcionPrevia = $this->model->buscarInscripcionPorDocumentoPersona($id, $docPersona, $idPersona, 0, $idAperturaGuardarPersona);
+                $inscripcionPrevia = $this->model->buscarInscripcionPorDocumentoPersona($id, $docPersona, 0, 0, $idAperturaGuardarPersona);
                 if ($inscripcionPrevia) {
                     $errores['persona_documento'] = $this->mensajeInscripcionDuplicadaTaller($formulario, $inscripcionPrevia);
                 }
@@ -2844,9 +2811,12 @@ class TallerController extends BaseController {
 
                 $padresResult['datos'] ?? [],
 
-                $ninoResult['datos'] ?? []
+                $ninoResult['datos'] ?? [],
+
+                $ministerioResult['datos'] ?? []
 
             );
+            $datos['id_ministerio_taller'] = trim((string)($_POST['id_ministerio_taller'] ?? ''));
 
         } else {
 
@@ -2862,11 +2832,10 @@ class TallerController extends BaseController {
 
             }
 
-            $idPersona = (int)($personaResult['id_persona'] ?? 0);
-
         }
 
-
+        // Inscripción aislada: solo tablas de talleres, sin vincular a Personas.
+        $idPersona = 0;
 
         $ip = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
 

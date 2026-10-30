@@ -426,6 +426,34 @@
             color: #1f3d3a;
         }
 
+        .aviso-persona-nueva {
+            display: none;
+            margin: 0 0 14px;
+            border: 1px solid #f4db9b;
+            background: #fff7e9;
+            border-radius: 10px;
+            padding: 12px 14px;
+            color: #845500;
+            font-size: 14px;
+            line-height: 1.45;
+        }
+
+        .aviso-persona-nueva.active {
+            display: block;
+        }
+
+        .aviso-persona-nueva strong {
+            display: block;
+            margin-bottom: 4px;
+            color: #6b4400;
+        }
+
+        .form-req-note {
+            margin: 0 0 14px;
+            font-size: 14px;
+            color: #476360;
+        }
+
         .autocomplete-wrap {
             position: relative;
         }
@@ -660,9 +688,6 @@
                 'teens' => 'Teens',
             ];
             ?>
-            <p class="help">Paso 1: busca por cédula. Si la persona ya existe, se cargarán sus datos. Si no existe, se abre el formulario de personas para crearla y, al guardar, se vuelve a este registro.</p>
-            <p class="help" id="aviso-crear-persona" style="display:none;">Esta persona no está en el registro. <a id="enlace-crear-persona" href="#">Crearla en el formulario de personas</a> y luego vuelve a buscarla por cédula.</p>
-
             <form method="POST" action="<?= PUBLIC_URL ?>?url=escuelas_formacion/registro-publico/guardar" id="form-escuelas" autocomplete="off" enctype="multipart/form-data">
                 <?php if ($ocultarSelectorPrograma): ?>
                     <input type="hidden" id="programa" name="programa" value="<?= htmlspecialchars($programaBaseSeleccionado) ?>">
@@ -671,9 +696,18 @@
                 <input type="hidden" id="input-id-persona" name="id_persona" value="">
                 <input type="hidden" id="input-id-inscripcion" name="id_inscripcion" value="">
                 <input type="hidden" id="input-id-inscripcion-asistencia" name="id_inscripcion_asistencia" value="">
-                <div class="section">
-                    <h3 class="section-title">1. Identificación</h3>
-                    <div class="grid">
+                <div class="section" id="section-datos-personales">
+                    <h3 class="section-title">1. Datos personales</h3>
+                    <p class="form-req-note">Busque por cédula. Si la persona ya está registrada, se cargarán sus datos. Los campos marcados con <span class="req">*</span> son obligatorios.</p>
+                    <div class="aviso-persona-nueva" id="aviso-crear-persona" role="status">
+                        <strong>Esta persona no se encuentra en nuestra base de datos.</strong>
+                        Por favor complete los campos. Recuerde: los marcados con <span class="req">*</span> son obligatorios.
+                    </div>
+                    <div class="persona-resumen" id="persona-resumen-encontrada">
+                        <div><strong>Persona encontrada:</strong> <span id="persona-resumen-nombre">-</span></div>
+                        <div style="margin-top:4px; font-size:13px; color:#476360;">Edad: <span id="persona-resumen-edad">-</span> | Cédula: <span id="persona-resumen-cedula">-</span> | Teléfono: <span id="persona-resumen-telefono">-</span></div>
+                    </div>
+                    <div class="grid" style="margin-top:14px;">
                         <div class="field">
                             <label for="tipo_documento">Tipo de documento <span class="req" id="req-tipo-doc"<?= $relajarValidacionTipoDocumento ? ' style="display:none;"' : '' ?>>*</span></label>
                             <?php
@@ -702,22 +736,20 @@
                         </div>
 
                         <div class="field">
-                            <label for="telefono">Teléfono</label>
+                            <label for="telefono">Teléfono <span class="req" id="req-telefono">*</span></label>
                             <input type="tel" id="telefono" name="telefono" inputmode="numeric" pattern="[0-9]{4,}" minlength="4" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="<?= htmlspecialchars((string)($old['telefono'] ?? '')) ?>" placeholder="Ej: 3001234567">
                         </div>
-                    </div>
-                    <div class="persona-resumen" id="persona-resumen-encontrada">
-                        <div><strong>Persona encontrada:</strong> <span id="persona-resumen-nombre">-</span></div>
-                        <div style="margin-top:4px; font-size:13px; color:#476360;">Edad: <span id="persona-resumen-edad">-</span> | Cédula: <span id="persona-resumen-cedula">-</span> | Teléfono: <span id="persona-resumen-telefono">-</span></div>
-                    </div>
-                </div>
 
-                <div class="section" id="section-datos-personales">
-                    <h3 class="section-title">2. Datos Personales (nuevo registro)</h3>
-                    <div class="grid">
-                        <div class="field full">
-                            <label for="nombre">Nombre y apellidos <span class="req">*</span></label>
-                            <input type="text" id="nombre" name="nombre" autocomplete="off" autocapitalize="characters" spellcheck="false" value="<?= htmlspecialchars((string)($old['nombre'] ?? '')) ?>">
+                        <div class="field">
+                            <label for="nombre">Nombre <span class="req">*</span></label>
+                            <input type="text" id="nombre" name="nombre" autocomplete="given-name" autocapitalize="characters" spellcheck="false" maxlength="60" value="<?= htmlspecialchars((string)($old['nombre'] ?? '')) ?>" placeholder="Ej: JUAN CARLOS">
+                            <small class="help" style="margin-top:4px;">Solo nombres. No incluya apellidos.</small>
+                        </div>
+
+                        <div class="field">
+                            <label for="apellido">Apellidos <span class="req">*</span></label>
+                            <input type="text" id="apellido" name="apellido" autocomplete="family-name" autocapitalize="characters" spellcheck="false" maxlength="80" value="<?= htmlspecialchars((string)($old['apellido'] ?? '')) ?>" placeholder="Ej: PÉREZ GÓMEZ">
+                            <small class="help" style="margin-top:4px;">Primer y segundo apellido. No use X, N/A ni un punto.</small>
                         </div>
 
                         <div class="field">
@@ -730,24 +762,42 @@
                         </div>
 
                         <div class="field">
-                            <label for="edad">Edad <span class="req">*</span></label>
-                            <input type="number" id="edad" name="edad" min="7" max="120" step="1" value="<?= htmlspecialchars((string)($old['edad'] ?? '')) ?>" placeholder="Ej: 28">
+                            <label for="fecha_nacimiento">Fecha de nacimiento <span class="req" id="req-fecha-nacimiento">*</span></label>
+                            <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" value="<?= htmlspecialchars((string)($old['fecha_nacimiento'] ?? '')) ?>">
                         </div>
 
                         <div class="field">
-                            <label for="fecha_nacimiento">Fecha de nacimiento</label>
-                            <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" value="<?= htmlspecialchars((string)($old['fecha_nacimiento'] ?? '')) ?>">
+                            <label for="edad">Edad</label>
+                            <input type="number" id="edad" name="edad" min="7" max="120" step="1" value="<?= htmlspecialchars((string)($old['edad'] ?? '')) ?>" placeholder="Se calcula con la fecha">
                         </div>
 
                         <div class="field full">
                             <label for="direccion">Dirección</label>
                             <input type="text" id="direccion" name="direccion" autocomplete="off" value="<?= htmlspecialchars((string)($old['direccion'] ?? '')) ?>" placeholder="Ej: Calle 123 #45-67">
                         </div>
+
+                        <?php if (!empty($soportaTratamientoDatos)): ?>
+                        <?php $tratamientoOld = strtolower(trim((string)($old['tratamiento_datos'] ?? ''))); ?>
+                        <div class="field full" id="wrap-tratamiento-datos">
+                            <label>Tratamiento de datos <span class="req">*</span></label>
+                            <p class="help" style="margin:4px 0 8px;">Indique si la persona autoriza el tratamiento de sus datos personales conforme a la política de la iglesia.</p>
+                            <div style="display:flex;flex-direction:column;gap:8px;">
+                                <label style="font-weight:500;display:flex;align-items:center;gap:8px;cursor:pointer;">
+                                    <input type="radio" name="tratamiento_datos" id="tratamiento_acepta" value="acepta" <?= $tratamientoOld === 'acepta' ? 'checked' : '' ?>>
+                                    Acepta el tratamiento de datos
+                                </label>
+                                <label style="font-weight:500;display:flex;align-items:center;gap:8px;cursor:pointer;">
+                                    <input type="radio" name="tratamiento_datos" id="tratamiento_no_acepta" value="no acepta" <?= $tratamientoOld === 'no acepta' ? 'checked' : '' ?>>
+                                    No acepta el tratamiento de datos
+                                </label>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     </div>
                 </div>
 
                 <div class="section" id="section-inscripcion">
-                    <h3 class="section-title">3. Información ministerial</h3>
+                    <h3 class="section-title">2. Información ministerial</h3>
                     <div class="grid">
                         <div class="field full">
                             <label for="lider">Líder <span class="req">*</span></label>
@@ -773,7 +823,7 @@
                 </div>
 
                 <div class="section" id="section-programa-nuevo">
-                    <h3 class="section-title">4. Programa (nuevo registro)</h3>
+                    <h3 class="section-title">3. Programa</h3>
                     <div class="grid">
                         <?php if ($ocultarSelectorPrograma && $esFormularioUv): ?>
                             <div class="field full">
@@ -857,7 +907,7 @@
                 </div>
 
                 <div class="section" id="section-inscripciones-existentes" style="display:none;">
-                    <h3 class="section-title">4. Inscripciones existentes</h3>
+                    <h3 class="section-title">Inscripciones existentes</h3>
                     <p style="margin:0 0 10px; font-size:13px; color:#55706d;">Esta persona ya tiene inscripciones registradas. Puedes completar datos faltantes o inscribirla en otro programa si aplica.</p>
                     <div id="lista-inscripciones-existentes"></div>
                     <p id="msg-solo-asistencia" style="display:none; margin:12px 0 0; font-size:13px; color:#55706d; border-top:1px solid #e2e8f0; padding-top:10px;">Ya está inscrita en Universidad de la Vida. Puede subir documentos en la sección de abajo.</p>
@@ -868,16 +918,17 @@
                 ?>
                 <?php if ($mostrarBloqueDocumentos): ?>
                 <div class="section" id="section-documentos">
-                    <h3 class="section-title">5. Documentos</h3>
+                    <h3 class="section-title">Documentos</h3>
                     <p id="help-documentos" style="margin:0 0 12px; font-size:13px; color:#55706d;">
                         Puede seleccionar <strong>varios archivos a la vez</strong> (PDF, JPG, PNG, WEBP, DOC o DOCX; máx. 8 MB c/u).
-                        Si la persona ya está inscrita en Universidad de la Vida, pulse «Guardar documentos»; si es inscripción nueva, se adjuntan al enviar el formulario.
+                        Use <strong>Guardar documentos</strong> solo para subir archivos. La inscripción se guarda con el botón aparte de abajo.
                     </p>
                     <div id="msg-documentos-exito" class="alert success" style="display:none; margin:0 0 12px;">Inscripción con éxito y documentos cargados exitosamente.</div>
                     <input type="file" id="documentos_uv" name="documentos_uv[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,image/*,application/pdf" style="display:none;">
                     <div class="doc-upload-actions">
                         <button type="button" class="btn btn-secondary" id="btn-subir-documentos">+ Agregar archivos</button>
                         <button type="button" class="btn btn-secondary" id="btn-quitar-todos-documentos" style="display:none;">Quitar todos</button>
+                        <button type="button" class="btn" id="btn-guardar-documentos" style="background:#0f766e;border-color:#0f766e;">Guardar documentos</button>
                     </div>
                     <div id="doc-pendientes-panel" class="doc-pendientes-panel">
                         <div class="doc-pendientes-header">
@@ -899,7 +950,7 @@
 
                 <?php if ($mostrarBloqueAbonos): ?>
                 <div class="section" id="section-pago-material">
-                    <h3 class="section-title"><?= $mostrarBloqueDocumentos ? '6' : '5' ?>. Abonos</h3>
+                    <h3 class="section-title">Abonos</h3>
 
                     <div style="margin-bottom:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
                         <button type="button" class="btn btn-secondary" id="btn-mostrar-acceso-abono" <?= $abonoAutorizado ? 'style="display:none;"' : '' ?>>Habilitar abonos</button>
@@ -995,6 +1046,10 @@
                     <button type="button" class="btn btn-secondary" id="btn-limpiar-form">Limpiar formulario</button>
                     <button type="submit" class="btn" id="btn-guardar-inscripcion">Guardar inscripción</button>
                 </div>
+                <p class="hint" id="hint-botones-separados" style="margin-top:8px;">
+                    <strong>Guardar inscripción</strong> registra a la persona.
+                    Los archivos se suben solo con <strong>Guardar documentos</strong> en la sección Documentos.
+                </p>
             </form>
         <?php endif; ?>
     </div>
@@ -1008,48 +1063,29 @@
     const endpointLideres = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/registro-publico/buscar-lideres') ?>;
     const endpointValidarAbono = <?= json_encode(PUBLIC_URL . '?url=escuelas_formacion/registro-publico/validar-abono') ?>;
     const endpointSubirDocumentos = <?= json_encode(function_exists('public_app_url') ? public_app_url('escuelas_formacion/registro-publico/subir-documentos') : (PUBLIC_URL . 'index.php?url=escuelas_formacion/registro-publico/subir-documentos')) ?>;
-    const urlPublicaEscuela = <?= json_encode(PUBLIC_URL) ?>;
-    const rutaRetornoEscuela = <?= json_encode((($programa_actual ?? '') === 'capacitacion_destino') ? 'escuelas_formacion/registro-publico/capacitacion-destino' : 'escuelas_formacion/registro-publico/universidad-vida') ?>;
+    const soportaTratamientoDatos = <?= !empty($soportaTratamientoDatos) ? 'true' : 'false' ?>;
 
-    function valorCampoEscuela(id) {
-        const el = document.getElementById(id);
-        return el ? String(el.value || '').trim() : '';
-    }
-
-    function actualizarEnlaceCrearPersona(visible) {
+    function mostrarAvisoPersonaNueva(visible) {
         const aviso = document.getElementById('aviso-crear-persona');
-        const enlace = document.getElementById('enlace-crear-persona');
-        if (!aviso || !enlace) return;
-        if (!visible) {
-            aviso.style.display = 'none';
-            return;
-        }
-        const nombreCompleto = valorCampoEscuela('nombre');
-        const partes = nombreCompleto.split(/\s+/).filter(Boolean);
-        const cedulaValorEnlace = valorCampoEscuela('cedula').replace(/\D/g, '');
-        const regreso = new URLSearchParams();
-        regreso.set('url', rutaRetornoEscuela);
-        if (cedulaValorEnlace) regreso.set('cedula', cedulaValorEnlace);
-        const params = new URLSearchParams();
-        params.set('url', 'personas/crear');
-        params.set('return_to', 'escuelas');
-        params.set('return_url', urlPublicaEscuela + '?' + regreso.toString());
-        if (partes[0]) params.set('nombre', partes[0]);
-        if (partes.length > 1) params.set('apellido', partes.slice(1).join(' '));
-        const campos = {
-            numero_documento: cedulaValorEnlace,
-            telefono: valorCampoEscuela('telefono').replace(/\D/g, ''),
-            tipo_documento: valorCampoEscuela('tipo_documento'),
-            genero: valorCampoEscuela('genero'),
-            fecha_nacimiento: valorCampoEscuela('fecha_nacimiento'),
-            direccion: valorCampoEscuela('direccion')
-        };
-        Object.keys(campos).forEach(function(clave) {
-            if (campos[clave]) params.set(clave, campos[clave]);
-        });
-        enlace.href = urlPublicaEscuela + '?' + params.toString();
-        aviso.style.display = '';
+        if (!aviso) return;
+        aviso.classList.toggle('active', !!visible);
     }
+
+    function tratamientoDatosSeleccionado() {
+        const marcado = document.querySelector('input[name="tratamiento_datos"]:checked');
+        return marcado ? String(marcado.value || '').trim() : '';
+    }
+
+    function setTratamientoDatosRequerido(requerido) {
+        document.querySelectorAll('input[name="tratamiento_datos"]').forEach(function(radio) {
+            if (requerido) {
+                radio.setAttribute('required', 'required');
+            } else {
+                radio.removeAttribute('required');
+            }
+        });
+    }
+
     const form = document.getElementById('form-escuelas');
     const btnSubirDocumentos = document.getElementById('btn-subir-documentos');
     const btnQuitarTodosDocumentos = document.getElementById('btn-quitar-todos-documentos');
@@ -1069,12 +1105,14 @@
     const sectionDatosPersonales = document.getElementById('section-datos-personales');
     const tipoDocumento = document.getElementById('tipo_documento');
     const nombre = document.getElementById('nombre');
+    const apellido = document.getElementById('apellido');
     const genero = document.getElementById('genero');
     const edad = document.getElementById('edad');
     const telefono = document.getElementById('telefono');
     const cedula = document.getElementById('cedula');
     const direccion = document.getElementById('direccion');
     const fechaNacimiento = document.getElementById('fecha_nacimiento');
+    const wrapTratamientoDatos = document.getElementById('wrap-tratamiento-datos');
     const lider = document.getElementById('lider');
     const idLider = document.getElementById('id_lider');
     const listaLideres = document.getElementById('lista-lideres');
@@ -1102,7 +1140,9 @@
     const sectionPagoMaterial = document.getElementById('section-pago-material');
     const msgSoloAsistencia = document.getElementById('msg-solo-asistencia');
     const btnGuardarInscripcion = document.getElementById('btn-guardar-inscripcion');
+    const btnGuardarDocumentos = document.getElementById('btn-guardar-documentos');
     const btnLimpiarForm = document.getElementById('btn-limpiar-form');
+    const hintBotonesSeparados = document.getElementById('hint-botones-separados');
     const btnCompartirAbono = document.getElementById('btn-compartir-abono');
     const btnMostrarAccesoAbono = document.getElementById('btn-mostrar-acceso-abono');
     const abonoLockBox = document.getElementById('abono-lock-box');
@@ -1136,7 +1176,7 @@
 
     let toastTimer = null;
 
-    if (!form || !nombre || !genero || !edad || !telefono || !cedula || !lider || !idLider || !listaLideres || !ministerio || !programa || !wrapProgramaNivel || !programaNivel || !sectionDatosPersonales || !sectionProgramaNuevo) {
+    if (!form || !nombre || !apellido || !genero || !edad || !telefono || !cedula || !lider || !idLider || !listaLideres || !ministerio || !programa || !wrapProgramaNivel || !programaNivel || !sectionDatosPersonales || !sectionProgramaNuevo) {
         return;
     }
 
@@ -1286,14 +1326,18 @@
         }
 
         const nom = String(nombre.value || '').trim();
+        const ape = String(apellido.value || '').trim();
         const gen = String(genero.value || '').trim();
-        const ed = parseInt(String(edad.value || '').trim(), 10);
+        const fechaNac = String(fechaNacimiento ? fechaNacimiento.value : '').trim();
         const tel = String(telefono.value || '').trim();
 
-        if (!nom || !gen || !Number.isFinite(ed) || ed < 7 || ed > 120) {
+        if (!nom || !ape || !gen || !fechaNac) {
             return false;
         }
         if (!tel || tel.length < 4) {
+            return false;
+        }
+        if (soportaTratamientoDatos && !tratamientoDatosSeleccionado()) {
             return false;
         }
         if (idL <= 0 || !minMinisterio) {
@@ -1517,14 +1561,32 @@
         return fallback;
     }
 
+    function etiquetaBotonInscripcion() {
+        if (modoAbono) {
+            return 'Guardar abono';
+        }
+        if (obtenerTipoInscripcionUvSeleccionado() === 'bautismo') {
+            return 'Registrar bautismo';
+        }
+        return 'Guardar inscripción';
+    }
+
     function actualizarModoGuardarDocumentos(activo) {
+        // Ya no se reutiliza el botón de inscripción para documentos:
+        // cada acción tiene su propio botón.
         modoGuardarDocumentos = !!activo;
         if (btnGuardarInscripcion && !modoAbono && !modoSoloAsistencia) {
-            if (obtenerTipoInscripcionUvSeleccionado() === 'bautismo') {
-                btnGuardarInscripcion.textContent = 'Registrar bautismo';
-            } else {
-                btnGuardarInscripcion.textContent = modoGuardarDocumentos ? 'Guardar documentos' : 'Guardar inscripción';
-            }
+            btnGuardarInscripcion.style.display = '';
+            btnGuardarInscripcion.textContent = etiquetaBotonInscripcion();
+        }
+        if (btnGuardarDocumentos) {
+            const mostrarDocs = !!(sectionDocumentos && sectionDocumentos.style.display !== 'none');
+            btnGuardarDocumentos.style.display = mostrarDocs ? '' : 'none';
+            btnGuardarDocumentos.disabled = false;
+        }
+        if (hintBotonesSeparados) {
+            const mostrarHint = !!(sectionDocumentos && sectionDocumentos.style.display !== 'none') && !modoAbono;
+            hintBotonesSeparados.style.display = mostrarHint ? '' : 'none';
         }
     }
 
@@ -1738,9 +1800,21 @@
 
     function mostrarSeccionDatosPersonales(mostrar) {
         sectionDatosPersonales.style.display = '';
-        nombre.required = !!mostrar;
-        genero.required = !!mostrar;
-        edad.required = !!mostrar;
+        const exigir = !!mostrar && !personaExistente;
+        nombre.required = exigir;
+        apellido.required = exigir;
+        genero.required = exigir;
+        if (fechaNacimiento) {
+            fechaNacimiento.required = exigir;
+        }
+        telefono.required = exigir;
+        edad.required = false;
+        if (soportaTratamientoDatos) {
+            setTratamientoDatosRequerido(exigir);
+            if (wrapTratamientoDatos) {
+                wrapTratamientoDatos.style.display = exigir ? '' : 'none';
+            }
+        }
     }
 
     function setInputBloqueado(input, bloqueado) {
@@ -1773,6 +1847,7 @@
             setSelectBloqueado(tipoDocumento, false);
             setInputBloqueado(cedula, false);
             setInputBloqueado(nombre, false);
+            setInputBloqueado(apellido, false);
             setSelectBloqueado(genero, false);
             setInputBloqueado(edad, false);
             setInputBloqueado(fechaNacimiento, false);
@@ -1786,7 +1861,8 @@
         }
 
         // Persona EXISTE: Aplicar readonly solo a campos con valor, habilitar campos vacíos
-        const tieneNombre = String(data.nombre || nombre.value || '').trim() !== '';
+        const tieneNombre = String(data.nombre_solo || data.nombre || nombre.value || '').trim() !== '';
+        const tieneApellido = String(data.apellido || apellido.value || '').trim() !== '';
         const tieneGenero = String(data.genero || genero.value || '').trim() !== '';
         const edadValor = parseInt(String(data.edad || edad.value || '').trim(), 10);
         const tieneEdad = Number.isFinite(edadValor) && edadValor > 0;
@@ -1805,6 +1881,7 @@
         setInputBloqueado(cedula, tieneCedula);
 
         setInputBloqueado(nombre, tieneNombre);
+        setInputBloqueado(apellido, tieneApellido);
         setSelectBloqueado(genero, tieneGenero);
         setInputBloqueado(edad, tieneEdad);
         setInputBloqueado(fechaNacimiento, tieneFechaNacimiento);
@@ -1901,7 +1978,21 @@
             }
         };
 
-        completarSiFalta(nombre, persona.nombre || '');
+        const nombreSolo = String(persona.nombre_solo || '').trim();
+        const apellidoSolo = String(persona.apellido || '').trim();
+        if (nombreSolo !== '' || apellidoSolo !== '') {
+            completarSiFalta(nombre, nombreSolo);
+            completarSiFalta(apellido, apellidoSolo);
+        } else {
+            const nombreCompleto = String(persona.nombre || '').trim();
+            const partes = nombreCompleto.split(/\s+/).filter(Boolean);
+            if (partes.length > 0) {
+                completarSiFalta(nombre, partes[0]);
+                if (partes.length > 1) {
+                    completarSiFalta(apellido, partes.slice(1).join(' '));
+                }
+            }
+        }
         completarSiFalta(genero, persona.genero || '');
         completarSiFalta(edad, persona.edad || '');
         if (fechaNacimiento) {
@@ -1938,6 +2029,7 @@
         }
 
         toUpperCaseInput(nombre);
+        toUpperCaseInput(apellido);
         toUpperCaseInput(lider);
     }
 
@@ -1993,6 +2085,7 @@
 
     function limpiarDatosPersonaNueva() {
         nombre.value = '';
+        apellido.value = '';
         genero.value = '';
         edad.value = '';
         if (direccion) {
@@ -2001,6 +2094,9 @@
         if (fechaNacimiento) {
             fechaNacimiento.value = '';
         }
+        document.querySelectorAll('input[name="tratamiento_datos"]').forEach(function(radio) {
+            radio.checked = false;
+        });
     }
 
     async function buscarPersona() {
@@ -2066,13 +2162,13 @@
                 }
                 personaExistente = false;
                 actualizarModoCamposPersonaExistente(false, null);
-                mostrarSeccionDatosPersonales(false);
                 limpiarDatosPersonaNueva();
+                mostrarSeccionDatosPersonales(true);
+                mostrarAvisoPersonaNueva(true);
                 actualizarResumenPersona(null, false);
                 setModoSoloAsistencia(false);
                 renderInscripciones([]);
-                actualizarEnlaceCrearPersona(true);
-                setEstadoBusqueda('warn', 'No está en el registro. Créala en el formulario de personas y vuelve a buscarla.');
+                setEstadoBusqueda('warn', 'Esta persona no se encuentra en nuestra base de datos. Por favor complete los campos (los marcados con * son obligatorios).');
                 return;
             }
 
@@ -2081,7 +2177,7 @@
             }
 
             personaExistente = true;
-            actualizarEnlaceCrearPersona(false);
+            mostrarAvisoPersonaNueva(false);
             mostrarSeccionDatosPersonales(true);
             aplicarPersona(data.persona || null, true);
             actualizarModoCamposPersonaExistente(true, data.persona || null);
@@ -2137,6 +2233,11 @@
 
     nombre.addEventListener('input', function() {
         toUpperCaseInput(nombre);
+        sincronizarAbonoTrasDatosRegistro();
+    });
+
+    apellido.addEventListener('input', function() {
+        toUpperCaseInput(apellido);
         sincronizarAbonoTrasDatosRegistro();
     });
 
@@ -2240,9 +2341,11 @@
     }
 
     toUpperCaseInput(nombre);
+    toUpperCaseInput(apellido);
     toUpperCaseInput(lider);
     actualizarModoCamposPersonaExistente(false, null);
-    mostrarSeccionDatosPersonales(false);
+    mostrarSeccionDatosPersonales(true);
+    mostrarAvisoPersonaNueva(false);
     setModoSoloAsistencia(false);
     actualizarProgramaNivel();
 
@@ -2377,21 +2480,18 @@
     form.addEventListener('submit', function(event) {
         actualizarTrayectoriaUv();
 
-        if (modoGuardarDocumentos && obtenerTipoInscripcionUvSeleccionado() !== 'bautismo') {
+        // El submit del formulario solo guarda inscripción/abono/bautismo.
+        // Los documentos se guardan con el botón aparte «Guardar documentos».
+        if (
+            tieneInscripcionUvParaDocumentos
+            && obtenerTipoInscripcionUvSeleccionado() !== 'bautismo'
+            && !modoAbono
+            && !modoSoloAsistencia
+        ) {
             event.preventDefault();
-            sincronizarInputDocumentos();
-            const tieneArchivos = colaArchivosPendientes.length > 0;
-            if (tieneArchivos) {
-                if (idInscripcionParaDocumentos() > 0) {
-                    subirDocumentosSeleccionados();
-                } else {
-                    mostrarToast('No se encontró la inscripción para subir documentos');
-                }
-            } else {
-                mostrarToast('Seleccione los archivos que desea subir');
-                if (inputDocumentos) {
-                    inputDocumentos.click();
-                }
+            mostrarToast('Esta persona ya está inscrita. Use «Guardar documentos» para subir archivos, o elija Bautismo si aplica.');
+            if (sectionDocumentos && typeof sectionDocumentos.scrollIntoView === 'function') {
+                sectionDocumentos.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
             return;
         }
@@ -2403,6 +2503,8 @@
         if (tipoDocumento && tipoDocumento.disabled) {
             tipoDocumento.disabled = false;
         }
+        // Adjuntar cola de archivos al POST de inscripción nueva (si hay).
+        sincronizarInputDocumentos();
         actualizarTrayectoriaUv();
 
         const edadValor = parseInt(String(edad.value || '').trim(), 10);
@@ -2602,13 +2704,49 @@
         }
 
         if (personaExistente === false) {
-            event.preventDefault();
-            actualizarEnlaceCrearPersona(true);
-            const enlaceCrear = document.getElementById('enlace-crear-persona');
-            if (enlaceCrear && enlaceCrear.href) {
-                window.location.href = enlaceCrear.href;
+            const nom = String(nombre.value || '').trim();
+            const ape = String(apellido.value || '').trim();
+            const gen = String(genero.value || '').trim();
+            const fechaNac = String(fechaNacimiento ? fechaNacimiento.value : '').trim();
+            const tel = String(telefono.value || '').trim().replace(/\D/g, '');
+
+            if (!nom) {
+                event.preventDefault();
+                alert('El nombre es obligatorio para crear la ficha.');
+                nombre.focus();
+                return;
             }
-            return;
+            if (!ape) {
+                event.preventDefault();
+                alert('Los apellidos son obligatorios para crear la ficha.');
+                apellido.focus();
+                return;
+            }
+            if (!gen) {
+                event.preventDefault();
+                alert('Debe seleccionar el género.');
+                genero.focus();
+                return;
+            }
+            if (!fechaNac) {
+                event.preventDefault();
+                alert('La fecha de nacimiento es obligatoria.');
+                if (fechaNacimiento) fechaNacimiento.focus();
+                return;
+            }
+            if (!tel || tel.length < 4) {
+                event.preventDefault();
+                alert('El teléfono es obligatorio (mínimo 4 números).');
+                telefono.focus();
+                return;
+            }
+            if (soportaTratamientoDatos && !tratamientoDatosSeleccionado()) {
+                event.preventDefault();
+                alert('Debe indicar si acepta o no el tratamiento de datos.');
+                const primerRadio = document.querySelector('input[name="tratamiento_datos"]');
+                if (primerRadio) primerRadio.focus();
+                return;
+            }
         }
     });
 
@@ -2618,64 +2756,86 @@
                 clearTimeout(timer);
                 timer = null;
             }
+            buscarPersonaSeq++;
 
-            form.reset();
+            personaExistente = false;
+            modoSoloAsistencia = false;
+            modoGuardarDocumentos = false;
+            tieneInscripcionUvParaDocumentos = false;
+
+            // Desbloquear antes de limpiar (readonly/disabled bloqueaban el vaciado visual).
+            actualizarModoCamposPersonaExistente(false, null);
+            setModoSoloAsistencia(false);
+
+            if (inputIdPersona) inputIdPersona.value = '';
+            if (inputIdInscripcion) inputIdInscripcion.value = '';
+            if (inputIdInscripcionAsistencia) inputIdInscripcionAsistencia.value = '';
+            if (inputAccion) inputAccion.value = 'registro';
+
+            if (tipoDocumento) {
+                tipoDocumento.value = 'Cedula de Ciudadania';
+            }
+            cedula.value = '';
+            telefono.value = '';
             nombre.value = '';
+            apellido.value = '';
             genero.value = '';
             edad.value = '';
-            telefono.value = '';
-            cedula.value = '';
-            if (direccion) {
-                direccion.value = '';
-            }
-            if (fechaNacimiento) {
-                fechaNacimiento.value = '';
-            }
+            if (fechaNacimiento) fechaNacimiento.value = '';
+            if (direccion) direccion.value = '';
+            document.querySelectorAll('input[name="tratamiento_datos"]').forEach(function(radio) {
+                radio.checked = false;
+            });
+
             lider.value = '';
+            idLider.value = '';
+            ministerio.value = '';
+
+            const segmentoUv = document.getElementById('segmento_preferido') || document.getElementById('segmento_preferido_combo');
+            if (segmentoUv) {
+                segmentoUv.value = '';
+            }
+            document.querySelectorAll('input[name="tipo_inscripcion_uv"]').forEach(function(radio) {
+                radio.checked = radio.value === 'universidad_vida';
+            });
+
             if (form.elements.programa) {
                 form.elements.programa.value = programaFijo || 'universidad_vida';
             }
             if (form.elements.programa_nivel) {
-                form.elements.programa_nivel.value = programaFijo === 'capacitacion_destino' ? 'capacitacion_destino_nivel_1' : 'capacitacion_destino_nivel_1';
+                form.elements.programa_nivel.value = 'capacitacion_destino_nivel_1';
             }
-            if (metodoPago) {
-                metodoPago.value = '';
-            }
-            if (tipoPago) {
-                tipoPago.value = '';
-            }
-            if (valorPago) {
-                valorPago.value = '';
-            }
-            if (recibidoPor) {
-                recibidoPor.value = abonoNombreAutorizado || '';
-            }
-            if (inputAccion) {
-                inputAccion.value = 'registro';
-            }
-            if (inputIdInscripcionAsistencia) {
-                inputIdInscripcionAsistencia.value = '';
-            }
-            if (chkMarcarAsistencia) {
-                chkMarcarAsistencia.checked = false;
-            }
-            ministerio.value = '';
-            idLider.value = '';
-            personaExistente = false;
-            actualizarModoCamposPersonaExistente(false, null);
-            mostrarSeccionDatosPersonales(false);
+            if (metodoPago) metodoPago.value = '';
+            if (tipoPago) tipoPago.value = '';
+            if (valorPago) valorPago.value = '';
+            if (categoriaPago) categoriaPago.value = '';
+            if (entregoLibro) entregoLibro.value = '0';
+            if (recibidoPor) recibidoPor.value = abonoNombreAutorizado || '';
+
+            const chkAsistencia = document.getElementById('marcar_asistencia');
+            if (chkAsistencia) chkAsistencia.checked = false;
+
+            mostrarAvisoPersonaNueva(false);
+            mostrarSeccionDatosPersonales(true);
             actualizarResumenPersona(null, false);
-            setModoSoloAsistencia(false);
             actualizarProgramaNivel();
+            if (typeof actualizarTrayectoriaUv === 'function') {
+                actualizarTrayectoriaUv();
+            }
             cerrarListaLideres();
             renderInscripciones([]);
             limpiarColaArchivosPendientes();
             renderListaDocumentosSubidos([]);
-            tieneInscripcionUvParaDocumentos = false;
+            if (mostrarBloqueAbonos) {
+                actualizarCamposPago();
+            }
             setEstadoBusqueda('', '');
             setLoading(false);
-            toUpperCaseInput(nombre);
-            toUpperCaseInput(lider);
+            if (btnGuardarInscripcion) {
+                btnGuardarInscripcion.style.display = '';
+                btnGuardarInscripcion.textContent = 'Guardar inscripción';
+            }
+            actualizarModoGuardarDocumentos(false);
             cedula.focus();
             mostrarToast('Formulario limpiado');
         });
@@ -2972,9 +3132,9 @@
             fd.append('documentos_uv[]', colaArchivosPendientes[i]);
         }
 
-        const btnGuardar = btnGuardarInscripcion;
         if (btnSubirDocumentos) btnSubirDocumentos.disabled = true;
-        if (btnGuardar) btnGuardar.disabled = true;
+        if (btnGuardarDocumentos) btnGuardarDocumentos.disabled = true;
+        if (btnGuardarInscripcion) btnGuardarInscripcion.disabled = true;
         try {
             const resp = await fetch(endpointSubirDocumentos, {
                 method: 'POST',
@@ -2988,7 +3148,7 @@
             }
             renderListaDocumentosSubidos(json.documentos || []);
             limpiarColaArchivosPendientes();
-            const mensajeExito = 'Inscripción con éxito y documentos cargados exitosamente.';
+            const mensajeExito = 'Documentos guardados correctamente.';
             if (msgDocumentosExito) {
                 msgDocumentosExito.textContent = mensajeExito;
                 msgDocumentosExito.style.display = '';
@@ -3003,7 +3163,8 @@
             alert(err.message || 'Error al subir documentos');
         } finally {
             if (btnSubirDocumentos) btnSubirDocumentos.disabled = false;
-            if (btnGuardar) btnGuardar.disabled = false;
+            if (btnGuardarDocumentos) btnGuardarDocumentos.disabled = false;
+            if (btnGuardarInscripcion) btnGuardarInscripcion.disabled = false;
         }
     }
 
@@ -3022,10 +3183,7 @@
             if (resultado.errores.length > 0) {
                 alert(resultado.errores.join('\n'));
             }
-            const idIns = idInscripcionParaDocumentos();
-            if (idIns > 0 && !modoGuardarDocumentos && colaArchivosPendientes.length > 0) {
-                subirDocumentosSeleccionados();
-            }
+            // No subir automáticamente: el usuario confirma con «Guardar documentos».
         });
     }
 
@@ -3039,6 +3197,27 @@
             }
         });
     }
+
+    if (btnGuardarDocumentos) {
+        btnGuardarDocumentos.addEventListener('click', function () {
+            sincronizarInputDocumentos();
+            if (colaArchivosPendientes.length === 0) {
+                mostrarToast('Seleccione los archivos que desea subir');
+                if (inputDocumentos) {
+                    inputDocumentos.click();
+                }
+                return;
+            }
+            if (idInscripcionParaDocumentos() <= 0) {
+                mostrarToast('Primero guarde la inscripción; luego podrá subir documentos');
+                return;
+            }
+            subirDocumentosSeleccionados();
+        });
+    }
+
+    // Estado inicial de botones (inscripción vs documentos).
+    actualizarModoGuardarDocumentos(false);
 
     renderColaArchivosPendientes();
 

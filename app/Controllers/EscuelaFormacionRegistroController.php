@@ -34,6 +34,7 @@ class EscuelaFormacionRegistroController extends BaseController {
     private $soportaEmail = false;
     private $soportaDireccion = false;
     private $soportaFechaNacimiento = false;
+    private $soportaTratamientoDatos = false;
     private $idRolAsistenteCache = null;
 
     private function usuarioPuedeVerListadoInscritosUv() {
@@ -70,6 +71,7 @@ class EscuelaFormacionRegistroController extends BaseController {
         $this->personaModel->ensureCreadoPorColumnExists();
         $this->personaModel->ensureCanalCreacionColumnExists();
         $this->personaModel->ensureEscaleraChecklistColumnExists();
+        $this->personaModel->ensureTratamientoDatosColumnExists();
 
         $this->soportaProceso = $this->personaModel->tieneColumna('Proceso');
         $this->soportaOrigenGanar = $this->personaModel->tieneColumna('Origen_Ganar');
@@ -81,6 +83,7 @@ class EscuelaFormacionRegistroController extends BaseController {
         $this->soportaEmail = $this->personaModel->tieneColumna('Email');
         $this->soportaDireccion = $this->personaModel->tieneColumna('Direccion');
         $this->soportaFechaNacimiento = $this->personaModel->tieneColumna('Fecha_Nacimiento');
+        $this->soportaTratamientoDatos = $this->personaModel->tieneColumna('Tratamiento_Datos');
     }
 
     private function asegurarSesionAbono() {
@@ -522,8 +525,14 @@ class EscuelaFormacionRegistroController extends BaseController {
         return $normalizado;
     }
 
-    private function calcularProcesoPorChecklist(array $checklistNormalizado) {
-        return $this->personaModel->calcularProcesoDesdeChecklist($checklistNormalizado);
+    private function calcularProcesoPorChecklist(array $checklistNormalizado, array $persona = []) {
+        $contexto = [
+            'es_lider_celula' => !empty($checklistNormalizado['Enviar'][2])
+                || ($persona !== [] && $this->personaModel->esLiderDeCelulaPersona($persona)),
+            'inscrito_uv' => !empty($checklistNormalizado['Consolidar'][0]),
+            'inscrito_encuentro' => !empty($checklistNormalizado['Consolidar'][1]),
+        ];
+        return $this->personaModel->calcularProcesoDesdeChecklist($checklistNormalizado, $contexto);
     }
 
     private function marcarProgramaConsolidarEnEscalera($idPersona, $programa) {
@@ -557,16 +566,17 @@ class EscuelaFormacionRegistroController extends BaseController {
         $checklistNormalizado = $this->normalizarChecklistEscalera($checklistActual);
         $checklistNormalizado['Ganar'][1] = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
         $checklistNormalizado['Ganar'][4] = !empty($persona['Id_Celula']);
-        if ($checklistNormalizado['Ganar'][4]) {
-            $checklistNormalizado['Enviar'][2] = true;
-        }
+        $checklistNormalizado['Enviar'][2] = $this->personaModel->esLiderDeCelulaPersona($persona);
+        $checklistNormalizado['Consolidar'][(int)$mapaProgramaAIndice[$programa]] = true;
 
         $checklistJson = json_encode($checklistNormalizado, JSON_UNESCAPED_UNICODE);
         if ($checklistJson === false) {
             return;
         }
 
-        $proceso = $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklistNormalizado) : null;
+        $proceso = $this->soportaProceso
+            ? $this->calcularProcesoPorChecklist($checklistNormalizado, $persona)
+            : null;
         $this->personaModel->updateEscaleraChecklistYProceso($idPersona, $checklistJson, $proceso);
     }
 
@@ -649,16 +659,16 @@ class EscuelaFormacionRegistroController extends BaseController {
         $checklistNormalizado['Ganar'][1] = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
         $checklistNormalizado['Ganar'][4] = !empty($persona['Id_Celula']);
         $checklistNormalizado['Discipular'][(int)$mapaProgramaAIndice[$programa]] = true;
-        if ($checklistNormalizado['Ganar'][4]) {
-            $checklistNormalizado['Enviar'][2] = true;
-        }
+        $checklistNormalizado['Enviar'][2] = $this->personaModel->esLiderDeCelulaPersona($persona);
 
         $checklistJson = json_encode($checklistNormalizado, JSON_UNESCAPED_UNICODE);
         if ($checklistJson === false) {
             return;
         }
 
-        $proceso = $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklistNormalizado) : null;
+        $proceso = $this->soportaProceso
+            ? $this->calcularProcesoPorChecklist($checklistNormalizado, $persona)
+            : null;
         $this->personaModel->updateEscaleraChecklistYProceso($idPersona, $checklistJson, $proceso);
     }
 
@@ -1271,66 +1281,37 @@ class EscuelaFormacionRegistroController extends BaseController {
         return $rows[0] ?? null;
     }
 
-    /**
-     * Universidad de la Vida y Capacitación Destino no crean la ficha.
-     * Abren el formulario de personas y, al guardar, regresan a este registro.
-     */
-    private function redirigirAlFormularioCrearPersona(
-        string $rutaFormulario,
-        string $nombreCompleto,
-        string $cedula,
-        string $tipoDocumento,
-        string $telefono,
-        string $direccion,
-        string $fechaNacimiento,
-        string $genero,
-        int $idMinisterio,
-        int $idLider
-    ): void {
-        $partes = preg_split('/\s+/', trim($nombreCompleto), 2) ?: [];
-        $retorno = PUBLIC_URL . '?' . http_build_query([
-            'url' => $rutaFormulario,
-            'cedula' => $cedula,
-        ]);
-        $query = [
-            'url' => 'personas/crear',
-            'return_to' => 'escuelas',
-            'return_url' => $retorno,
-            'nombre' => trim((string)($partes[0] ?? '')),
-            'apellido' => trim((string)($partes[1] ?? '')),
-            'numero_documento' => $cedula,
-            'tipo_documento' => $tipoDocumento,
-            'telefono' => $telefono,
-            'direccion' => $direccion,
-            'fecha_nacimiento' => $fechaNacimiento,
-            'genero' => $genero,
-        ];
-        if ($idMinisterio > 0) {
-            $query['id_ministerio'] = (string)$idMinisterio;
+    private function normalizarTratamientoDatosInput($valor): ?string {
+        $texto = strtolower(trim((string)$valor));
+        if (in_array($texto, ['acepta', 'si', 'sí', '1', 'yes'], true)) {
+            return 'Acepta';
         }
-        if ($idLider > 0) {
-            $query['id_lider'] = (string)$idLider;
-            $lider = $this->personaModel->getById($idLider);
-            if (is_array($lider)) {
-                $nombreLider = trim((string)($lider['Nombre'] ?? '') . ' ' . (string)($lider['Apellido'] ?? ''));
-                if ($nombreLider !== '') {
-                    $query['lider_search'] = $nombreLider;
-                }
-            }
+        if (in_array($texto, ['no acepta', 'no_acepta', 'no', '0'], true)) {
+            return 'No acepta';
         }
-        $query = array_filter($query, static function ($valor) {
-            return trim((string)$valor) !== '';
-        });
-        $query['url'] = 'personas/crear';
-        $query['return_to'] = 'escuelas';
-        $query['return_url'] = $retorno;
-
-        header('Location: ' . PUBLIC_URL . '?' . http_build_query($query));
-        exit;
+        return null;
     }
 
-    private function crearPersonaNueva($nombreCompleto, $telefono, $cedula, $tipoDocumento, $idMinisterio, $idLider = 0, $genero = '', $nombreLider = '', $email = '', $direccion = '', $fechaNacimiento = '') {
-        $partesNombre = $this->separarNombreApellido($nombreCompleto);
+    /**
+     * Crea la ficha con las mismas reglas de identidad que personas/crear.
+     */
+    private function crearPersonaNueva(
+        string $nombre,
+        string $apellido,
+        string $telefono,
+        string $cedula,
+        string $tipoDocumento,
+        int $idMinisterio,
+        int $idLider = 0,
+        string $genero = '',
+        string $nombreLider = '',
+        string $email = '',
+        string $direccion = '',
+        string $fechaNacimiento = '',
+        ?string $tratamientoDatos = null
+    ): int {
+        $nombre = trim((string)$nombre);
+        $apellido = trim((string)$apellido);
         $genero = trim((string)$genero);
         $nombreLider = trim((string)$nombreLider);
         $email = $this->normalizarEmail($email);
@@ -1339,8 +1320,8 @@ class EscuelaFormacionRegistroController extends BaseController {
         $tipoDocumento = $this->normalizarTipoDocumento($tipoDocumento);
 
         $data = [
-            'Nombre' => $partesNombre['nombre'],
-            'Apellido' => $partesNombre['apellido'],
+            'Nombre' => $nombre,
+            'Apellido' => $apellido,
             'Tipo_Documento' => $tipoDocumento !== '' ? $tipoDocumento : 'Cedula de Ciudadania',
             'Numero_Documento' => $cedula !== '' ? $cedula : null,
             'Genero' => $genero !== '' ? $genero : null,
@@ -1363,6 +1344,10 @@ class EscuelaFormacionRegistroController extends BaseController {
 
         if ($this->soportaFechaNacimiento) {
             $data['Fecha_Nacimiento'] = $fechaNacimiento !== '' ? $fechaNacimiento : null;
+        }
+
+        if ($this->soportaTratamientoDatos && $tratamientoDatos !== null) {
+            $data['Tratamiento_Datos'] = $tratamientoDatos;
         }
 
         $idRolDiscipulo = $this->obtenerIdRolDiscipuloDefault();
@@ -1454,14 +1439,19 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         $prefillInicial = null;
-        if ($modoAbono) {
-            $idPersonaPrefillParam = (int)($_GET['id_persona'] ?? 0);
-            $idInscripcionPrefillParam = (int)($_GET['id_inscripcion'] ?? 0);
-            $cedulaPrefill = $this->normalizarDocumento($_GET['cedula'] ?? '');
-            $telefonoPrefill = $this->normalizarTelefono($_GET['telefono'] ?? '');
-            $nombrePrefill = trim((string)($_GET['nombre'] ?? ''));
+        // Prefill para inscripción (desde Escalera u otros módulos) o legado abono.
+        $idPersonaPrefillParam = (int)($_GET['id_persona'] ?? 0);
+        $idInscripcionPrefillParam = (int)($_GET['id_inscripcion'] ?? 0);
+        $cedulaPrefill = $this->normalizarDocumento($_GET['cedula'] ?? '');
+        $telefonoPrefill = $this->normalizarTelefono($_GET['telefono'] ?? '');
+        $nombrePrefill = trim((string)($_GET['nombre'] ?? ''));
+        $quierePrefillPersona = $idPersonaPrefillParam > 0
+            || $idInscripcionPrefillParam > 0
+            || $cedulaPrefill !== ''
+            || $telefonoPrefill !== ''
+            || $nombrePrefill !== '';
 
-            if ($idPersonaPrefillParam > 0 || $idInscripcionPrefillParam > 0 || $cedulaPrefill !== '' || $telefonoPrefill !== '' || $nombrePrefill !== '') {
+        if ($quierePrefillPersona) {
                 $personaPrefill = null;
 
                 $inscripcionDirecta = [];
@@ -1612,6 +1602,8 @@ class EscuelaFormacionRegistroController extends BaseController {
                             'nombre' => trim((string)($personaPrefill['Nombre'] ?? '') . ' ' . (string)($personaPrefill['Apellido'] ?? '')) !== ''
                                 ? trim((string)($personaPrefill['Nombre'] ?? '') . ' ' . (string)($personaPrefill['Apellido'] ?? ''))
                                 : trim((string)($inscripcionReferencia['Nombre'] ?? ($_GET['nombre'] ?? ''))),
+                            'nombre_solo' => trim((string)($personaPrefill['Nombre'] ?? '')),
+                            'apellido' => trim((string)($personaPrefill['Apellido'] ?? '')),
                             'edad' => $edadPersona > 0 ? $edadPersona : (int)($_GET['edad'] ?? 0),
                             'genero' => (string)($personaPrefill['Genero'] ?? ($inscripcionReferencia['Genero'] ?? ($_GET['genero'] ?? ''))),
                             'fecha_nacimiento' => $fechaNacimientoPersona !== '' ? $fechaNacimientoPersona : (string)($_GET['fecha_nacimiento'] ?? ''),
@@ -1626,7 +1618,6 @@ class EscuelaFormacionRegistroController extends BaseController {
                         'inscripciones' => $inscripcionesPrefill,
                     ];
                 }
-            }
         }
 
         $this->view('escuelas_formacion_publico/formulario', [
@@ -1643,9 +1634,11 @@ class EscuelaFormacionRegistroController extends BaseController {
             'puede_recibir_pagos_escuelas' => class_exists('AuthController') && AuthController::puedeRecibirPagosEscuelasFormacion(),
             'programa_actual' => $programaActual,
             'programa_label' => $paginaTitulo,
+            'soportaTratamientoDatos' => $this->soportaTratamientoDatos,
             'old' => [
                 'identificador' => (string)($_GET['identificador'] ?? ''),
                 'nombre' => (string)($_GET['nombre'] ?? ''),
+                'apellido' => (string)($_GET['apellido'] ?? ''),
                 'genero' => (string)($_GET['genero'] ?? ''),
                 'edad' => (string)($_GET['edad'] ?? ''),
                 'telefono' => (string)($_GET['telefono'] ?? ''),
@@ -1654,6 +1647,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'email' => (string)($_GET['email'] ?? ''),
                 'direccion' => (string)($_GET['direccion'] ?? ''),
                 'fecha_nacimiento' => (string)($_GET['fecha_nacimiento'] ?? ''),
+                'tratamiento_datos' => (string)($_GET['tratamiento_datos'] ?? ''),
                 'lider' => (string)($_GET['lider'] ?? ''),
                 'id_lider' => (string)($_GET['id_lider'] ?? ''),
                 'id_ministerio' => (string)($_GET['id_ministerio'] ?? ''),
@@ -2582,13 +2576,23 @@ class EscuelaFormacionRegistroController extends BaseController {
     /**
      * @return array{total_pagado:float,total_abonos:float,total_pago_completo:float,pago_completo_uv:bool}
      */
-    private function normalizarTotalesPagoUv(float $totalPagado, float $totalAbonos, float $totalPagoCompleto): array {
-        if ($totalPagado >= self::UMBRAL_PAGO_COMPLETO_UV) {
+    private function normalizarTotalesPagoUv(float $totalPagado, float $totalAbonos, float $totalPagoCompleto, ?float $umbral = null): array {
+        $umbral = $umbral ?? (float)self::UMBRAL_PAGO_COMPLETO_UV;
+        if ($totalPagado >= $umbral) {
             return [
                 'total_pagado' => $totalPagado,
                 'total_abonos' => 0.0,
                 'total_pago_completo' => $totalPagado,
                 'pago_completo_uv' => true,
+            ];
+        }
+
+        if ($umbral !== (float)self::UMBRAL_PAGO_COMPLETO_UV && $totalPagado > 0 && $totalAbonos <= 0) {
+            return [
+                'total_pagado' => $totalPagado,
+                'total_abonos' => $totalPagado,
+                'total_pago_completo' => 0.0,
+                'pago_completo_uv' => false,
             ];
         }
 
@@ -2604,7 +2608,7 @@ class EscuelaFormacionRegistroController extends BaseController {
         ];
     }
 
-    private function construirMapaPagosPorClave(array $resumenPagos): array {
+    private function construirMapaPagosPorClave(array $resumenPagos, ?float $umbral = null): array {
         $mapa = [];
 
         foreach ((array)$resumenPagos as $filaPago) {
@@ -2732,7 +2736,7 @@ class EscuelaFormacionRegistroController extends BaseController {
         return null;
     }
 
-    private function calcularEstadisticasPersonasEscuela(array $personas): array {
+    private function calcularEstadisticasPersonasEscuela(array $personas, ?float $umbral = null): array {
         $total = count($personas);
         $conPago = 0;
         $sinPago = 0;
@@ -3910,11 +3914,26 @@ class EscuelaFormacionRegistroController extends BaseController {
                 }
             }
 
+            $nombreSolo = !empty($personaPorId) ? trim((string)($personaPorId['Nombre'] ?? '')) : '';
+            $apellidoSolo = !empty($personaPorId) ? trim((string)($personaPorId['Apellido'] ?? '')) : '';
+            if ($nombreSolo === '' && $apellidoSolo === '' && $nombrePersona !== '') {
+                $partesNombreIns = $this->separarNombreApellido($nombrePersona);
+                $nombreSolo = (string)($partesNombreIns['nombre'] ?? '');
+                $apellidoSolo = (string)($partesNombreIns['apellido'] ?? '');
+                if ($apellidoSolo === '.') {
+                    $apellidoSolo = '';
+                }
+            }
+
             $this->json([
                 'encontrado' => true,
                 'persona' => [
                     'id_persona' => $idPersonaInscripcion,
-                    'nombre' => $nombrePersona,
+                    'nombre' => $nombreSolo !== '' || $apellidoSolo !== ''
+                        ? trim($nombreSolo . ' ' . $apellidoSolo)
+                        : $nombrePersona,
+                    'nombre_solo' => $nombreSolo,
+                    'apellido' => $apellidoSolo,
                     'edad' => $edadPersona,
                     'genero' => (string)($primeraInscripcion['Genero'] ?? ''),
                     'fecha_nacimiento' => $fechaNacimientoPersona,
@@ -4000,6 +4019,8 @@ class EscuelaFormacionRegistroController extends BaseController {
             'persona' => [
                 'id_persona' => (int)($persona['Id_Persona'] ?? 0),
                 'nombre' => trim((string)($persona['Nombre'] ?? '') . ' ' . (string)($persona['Apellido'] ?? '')),
+                'nombre_solo' => trim((string)($persona['Nombre'] ?? '')),
+                'apellido' => trim((string)($persona['Apellido'] ?? '')),
                 'edad' => $edadPersona,
                 'genero' => (string)($persona['Genero'] ?? ''),
                 'fecha_nacimiento' => $fechaNacimientoPersona,
@@ -4325,7 +4346,9 @@ class EscuelaFormacionRegistroController extends BaseController {
             exit;
         }
 
-        $nombre = $this->normalizarTextoMayusculas($_POST['nombre'] ?? '');
+        $nombreSolo = $this->normalizarTextoMayusculas($_POST['nombre'] ?? '');
+        $apellido = $this->normalizarTextoMayusculas($_POST['apellido'] ?? '');
+        $nombre = trim($nombreSolo . ' ' . $apellido);
         $genero = $this->normalizarGeneroBinario($_POST['genero'] ?? '');
         $edad = $this->normalizarEdad($_POST['edad'] ?? '');
         $telefono = $this->normalizarTelefono($_POST['telefono'] ?? '');
@@ -4334,6 +4357,9 @@ class EscuelaFormacionRegistroController extends BaseController {
         $email = $this->normalizarEmail($_POST['email'] ?? '');
         $direccion = trim((string)($_POST['direccion'] ?? ''));
         $fechaNacimiento = trim((string)($_POST['fecha_nacimiento'] ?? ''));
+        $tratamientoDatos = $this->soportaTratamientoDatos
+            ? $this->normalizarTratamientoDatosInput($_POST['tratamiento_datos'] ?? '')
+            : null;
 
         if ($edad <= 0 && $fechaNacimiento !== '') {
             $edad = $this->calcularEdadDesdeFechaNacimiento($fechaNacimiento);
@@ -4438,22 +4464,24 @@ class EscuelaFormacionRegistroController extends BaseController {
         $idPersona = (int)($persona['Id_Persona'] ?? 0);
         $esPersonaNueva = $idPersona <= 0;
 
-        if ($esPersonaNueva && empty($errores)) {
-            $this->redirigirAlFormularioCrearPersona(
-                $rutaFormulario,
-                $nombre,
-                $cedula,
-                $tipoDocumento,
-                $telefono,
-                $direccion,
-                $fechaNacimiento,
-                $genero,
-                $idMinisterio,
-                $idLider
-            );
-        }
-
-        if (!$esPersonaNueva && $genero !== '' && !in_array($genero, $generosValidos, true)) {
+        if ($esPersonaNueva) {
+            $errorNombreApellido = $this->primerErrorNombreYApellidoPersona($nombreSolo, $apellido);
+            if ($errorNombreApellido !== null) {
+                $errores[] = $errorNombreApellido;
+            }
+            if ($telefono === '') {
+                $errores[] = 'El teléfono es obligatorio.';
+            }
+            if ($fechaNacimiento === '' || $fechaNacimiento === '0000-00-00') {
+                $errores[] = 'La fecha de nacimiento es obligatoria.';
+            }
+            if ($genero === '' || !in_array($genero, $generosValidos, true)) {
+                $errores[] = 'Debe seleccionar el género.';
+            }
+            if ($this->soportaTratamientoDatos && $tratamientoDatos === null) {
+                $errores[] = 'Debe indicar si la persona acepta o no el tratamiento de datos.';
+            }
+        } elseif ($genero !== '' && !in_array($genero, $generosValidos, true)) {
             $errores[] = 'El género no es válido.';
         }
 
@@ -4512,21 +4540,35 @@ class EscuelaFormacionRegistroController extends BaseController {
             );
             if (is_array($duplicadoPersona) && (string)($duplicadoPersona['_motivo'] ?? '') === 'documento') {
                 $idPersona = (int)($duplicadoPersona['Id_Persona'] ?? 0);
+                $esPersonaNueva = false;
+                $persona = $duplicadoPersona;
             } elseif (is_array($duplicadoPersona) && (string)($duplicadoPersona['_motivo'] ?? '') === 'telefono') {
                 $errores[] = 'Ya existe una persona con ese teléfono. Solo un menor (Registro Civil o Tarjeta de Identidad) puede repetir un teléfono.';
             } else {
-                $this->redirigirAlFormularioCrearPersona(
-                    $rutaFormulario,
-                    $nombre,
+                $idPersona = $this->crearPersonaNueva(
+                    $nombreSolo,
+                    $apellido,
+                    $telefono,
                     $cedula,
                     $tipoDocumento,
-                    $telefono,
+                    $idMinisterio,
+                    $idLider,
+                    (string)$genero,
+                    $lider,
+                    $email,
                     $direccion,
                     $fechaNacimiento,
-                    $genero,
-                    $idMinisterio,
-                    $idLider
+                    $tratamientoDatos
                 );
+                if ($idPersona <= 0) {
+                    $errores[] = 'No se pudo crear la ficha de la persona. Intente de nuevo.';
+                } else {
+                    $esPersonaNueva = false;
+                    $personaCreada = $this->personaModel->getById($idPersona);
+                    if (is_array($personaCreada)) {
+                        $persona = $personaCreada;
+                    }
+                }
             }
         }
 
@@ -4535,14 +4577,17 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'url' => $rutaFormulario,
                 'mensaje' => implode(' ', $errores),
                 'tipo' => 'error',
-                'nombre' => $nombre,
+                'nombre' => $nombreSolo,
+                'apellido' => $apellido,
                 'genero' => $genero,
                 'edad' => (string)$edad,
                 'telefono' => $telefono,
                 'cedula' => $cedula,
+                'tipo_documento' => $tipoDocumento,
                 'email' => $email,
                 'direccion' => $direccion,
                 'fecha_nacimiento' => $fechaNacimiento,
+                'tratamiento_datos' => (string)($_POST['tratamiento_datos'] ?? ''),
                 'lider' => $lider,
                 'id_lider' => (string)$idLider,
                 'id_ministerio' => (string)$idMinisterio,

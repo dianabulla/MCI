@@ -95,6 +95,32 @@ Subido a producción el 14 de octubre de 2026. No hay SQL: usa la misma tabla `p
 
 Tras el despliegue: Administración → Permisos muestra el índice de menús y «Solo lo activo». Un rol sin Ver en un módulo no ve ese menú. Quien solo tiene gráficas de Talleres entra a gráficas; quien solo tiene Servicio social entra a citas.
 
+## Crear personas: permisos alineados (20 oct 2026)
+
+**Problema:** el menú y la ruta aceptaban «Registrar discípulo» (acceso rápido) o «Crear fichas» (Escalera), pero `PersonaController::crear()` solo miraba `personas:crear` («Registrar almas»). El usuario veía el enlace y luego acceso denegado.
+
+**Regla unificada** (`AuthController::puedeCrearPersonasConsulta`): basta con uno de estos tres:
+
+- Almas ganadas → Registrar almas (`personas:crear`)
+- Escalera del éxito → Crear fichas (`personas_consulta:crear`)
+- Accesos rápidos → Registrar discípulo (`acceso_rapido_nuevo_discipulo:crear`)
+
+Misma regla en `route_permissions.php` (`personas/crear`), el controlador, el sidebar y el botón de Universidad de la Vida.
+
+**Despliegue:** subido a producción el 20 de octubre de 2026 (5 archivos PHP/vistas). Sin SQL. Quien tenga el rol debe cerrar sesión y volver a entrar.
+
+### Tras guardar al crear persona (20 oct 2026)
+
+**Problema:** al dar Guardar, la ficha se insertaba bien, pero la redirección iba a `reportes&tipo=personas`. Ese destino exige `reportes:ver`. Quien solo tenía permiso de crear personas veía acceso denegado aunque el registro ya existiera.
+
+**Corrección** (`PersonaController::rutaTrasCrearPersona`):
+
+1. Si hay `return_url` / retorno a asistencia o célula → se respeta ese destino.
+2. Si no: Escalera (`personas`) o Almas ganadas (`personas/ganar`), según `urlEntradaGanarConsolidarRelativa()`.
+3. Si el rol no puede ver ninguno de esos listados (solo crear / acceso rápido) → vuelve a `personas/crear&ok=1` con mensaje de éxito en el formulario.
+
+**Archivos:** `PersonaController.php`, `views/personas/formulario.php`, `docs/ADMINISTRACION.md`. Subido a producción el 20 de octubre de 2026. Sin SQL.
+
 ## Pendiente de Permisos
 
 1. Probar en la pantalla con un rol limitado: sin Ver no aparece el menú; con solo gráficas ve Talleres pero no el listado; con solo Servicio social ve citas.

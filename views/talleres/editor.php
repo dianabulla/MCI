@@ -248,7 +248,7 @@ unset($_SESSION['talleres_flash_ok']);
 
         <p class="text-muted" style="font-size:0.9rem;margin:0;">
 
-            Este bloque va en todos los talleres y no se quita. Líder y ministerio salen de la ficha de la persona al buscarla por cédula.
+            Este bloque va en todos los talleres y no se quita. No busca en Personas: cada quien completa sus datos aquí.
 
             Las preguntas de cada taller se editan en los bloques de abajo.
 
@@ -256,9 +256,9 @@ unset($_SESSION['talleres_flash_ok']);
 
         <ul style="margin:12px 0 0 18px;font-size:0.9rem;color:#475569;">
 
-            <li>Nombre, documento, fecha de nacimiento, edad, teléfono, correo, dirección, estado civil y ocupación</li>
+            <li>Nombre, documento, fecha de nacimiento, edad y teléfono</li>
 
-            <li>Líder y ministerio</li>
+            <li>Líder y ministerio (opcionales)</li>
 
         </ul>
 
@@ -292,7 +292,7 @@ unset($_SESSION['talleres_flash_ok']);
 
         <p class="text-muted" style="font-size:0.9rem;">Organice las preguntas por secciones. Cada bloque aparece como un apartado en el formulario público.</p>
         <?php if (!empty($es_presentacion_ninos)): ?>
-        <p class="text-muted" style="font-size:0.9rem;">Los datos de padres, del niño y los documentos forman parte fija de este formulario y se conservan al guardar. Aquí solo se editan las preguntas adicionales.</p>
+        <p class="text-muted" style="font-size:0.9rem;">Formulario fijo (Presentación o Fiesta de los niños): nombre de los padres, nombre del niño(a), edad, ministerio (o sin ministerio) y consentimiento. Sin bloque de documentos. Los datos quedan solo en Talleres. Aquí solo se editan preguntas adicionales.</p>
         <?php endif; ?>
 
 

@@ -157,7 +157,7 @@ $returnUrlCelula = PUBLIC_URL . 'index.php?url=celulas/detalle&id=' . $idCelulaD
                             if ($documento === '') {
                                 $documento = 'N/A';
                             }
-                            $proceso = trim((string)($miembro['Proceso'] ?? ''));
+                            $proceso = trim((string)($miembro['Proceso_Detalle'] ?? $miembro['Proceso'] ?? ''));
                             if ($proceso === '') {
                                 $proceso = 'Sin proceso';
                             }
@@ -170,7 +170,7 @@ $returnUrlCelula = PUBLIC_URL . 'index.php?url=celulas/detalle&id=' . $idCelulaD
                                     <span class="badge <?= $claseIndicador ?>"><?= htmlspecialchars($indicador) ?></span>
                                 </td>
                                 <td data-label="Asistencias"><?= (int)($miembro['Total_Asistencias'] ?? 0) ?></td>
-                                <td data-label="Proceso"><?= htmlspecialchars($proceso) ?></td>
+                                <td data-label="Proceso"><span class="celula-proceso-detalle" title="<?= htmlspecialchars($proceso, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($proceso) ?></span></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -194,6 +194,13 @@ $returnUrlCelula = PUBLIC_URL . 'index.php?url=celulas/detalle&id=' . $idCelulaD
     background: #f6f9ff;
     color: #2f4f7a;
     font-weight: 600;
+}
+.celula-proceso-detalle {
+    display: inline-block;
+    max-width: 220px;
+    color: #1e3a5f;
+    font-weight: 600;
+    line-height: 1.25;
 }
 .celulas-action-btn:hover {
     background: #edf3fc;

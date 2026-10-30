@@ -25,6 +25,12 @@ $urlVolver = $returnUrl !== ''
 </div>
 <?php endif; ?>
 
+<?php if (!empty($success)): ?>
+<div class="alert alert-success" style="margin-bottom: 20px;">
+    <i class="bi bi-check-circle"></i> <?= htmlspecialchars((string)$success, ENT_QUOTES, 'UTF-8') ?>
+</div>
+<?php endif; ?>
+
 <?php if ($modoSoloEventosProcesos): ?>
 <div class="alert alert-info" style="margin-bottom: 20px;">
     <i class="bi bi-bullseye"></i> Estás en la vista enfocada de <strong>Eventos y procesos</strong>. Aquí solo verás esta sección para actualizar la escalera o las convenciones.
@@ -365,10 +371,10 @@ $urlVolver = $returnUrl !== ''
             <?php if (!empty($soportaProceso)): ?>
             <?php
             $subprocesosEscaleraFormulario = [
-                'Ganar' => ['Primer contacto', 'Asignación a líderes y ministerio', 'Fonovisita', 'Visita', 'Asignación a una célula', 'No se dispone'],
+                'Ganar' => ['Primer contacto', 'Asignación a líderes y ministerio', 'Fonovisita', 'Visita', 'Ubicado en célula', 'No se dispone'],
                 'Consolidar' => ['Universidad de la Vida', 'Encuentro', 'Bautismo'],
                 'Discipular' => ['Capacitación Destino Nivel 1 (Módulos 1 y 2)', 'Capacitación Destino Nivel 2 (Módulos 3 y 4)', 'Capacitación Destino Nivel 3 (Módulos 5 y 6)'],
-                'Enviar' => ['Célula']
+                'Enviar' => ['Dirige célula']
             ];
             $indicesChecklistEscaleraFormulario = [
                 'Ganar' => [0, 1, 2, 3, 4, 5],
@@ -432,6 +438,8 @@ $urlVolver = $returnUrl !== ''
 
             $tieneAsignacionLiderMinisterioFormulario = !empty($liderIdSeleccionado) && !empty($ministerioSeleccionado) && (string)$ministerioSeleccionado !== 'otro';
             $checklistFormulario['Ganar'][1] = $tieneAsignacionLiderMinisterioFormulario;
+            $checklistFormulario['Ganar'][4] = (int)($celulaIdSeleccionada ?? 0) > 0;
+            $checklistFormulario['Enviar'][2] = !empty($dirige_celula) || !empty($es_escalera_auto_por_rol);
             $checklistFormularioJson = json_encode($checklistFormulario, JSON_UNESCAPED_UNICODE);
             ?>
             <div class="form-row">
@@ -456,7 +464,8 @@ $urlVolver = $returnUrl !== ''
                                                 <?php
                                                 $indiceChecklistReal = (int)($indicesChecklistEscaleraFormulario[$etapaNombre][$indiceItem] ?? $indiceItem);
                                                 $estaMarcado = !empty($checklistFormulario[$etapaNombre][$indiceChecklistReal]);
-                                                $esAsignacionAuto = $etapaNombre === 'Ganar' && in_array($indiceChecklistReal, [1, 4], true);
+                                                $esAsignacionAuto = ($etapaNombre === 'Ganar' && in_array($indiceChecklistReal, [1, 4], true))
+                                                    || ($etapaNombre === 'Enviar' && $indiceChecklistReal === 2);
                                                 ?>
                                                 <label class="eventos-check-item <?= $estaMarcado ? 'checked' : '' ?> <?= $esAsignacionAuto ? 'disabled is-auto' : '' ?>">
                                                     <input type="checkbox"

@@ -260,16 +260,16 @@ class EscaleraAsistenciaSync {
             return;
         }
 
-        $proceso = $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklist) : null;
+        $proceso = $this->soportaProceso
+            ? $this->calcularProcesoPorChecklist($checklist, $persona)
+            : null;
         $this->personaModel->updateEscaleraChecklistYProceso($idPersona, $json, $proceso);
     }
 
     private function aplicarReglasAutomaticasGanar(array &$checklist, array $persona): void {
         $checklist['Ganar'][1] = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
         $checklist['Ganar'][4] = !empty($persona['Id_Celula']);
-        if (!empty($persona['Id_Celula'])) {
-            $checklist['Enviar'][2] = true;
-        }
+        $checklist['Enviar'][2] = $this->personaModel->esLiderDeCelulaPersona($persona);
     }
 
     private function decodificarChecklist(string $raw): array {
@@ -335,7 +335,13 @@ class EscaleraAsistenciaSync {
         return $normalizado;
     }
 
-    private function calcularProcesoPorChecklist(array $checklistNormalizado): string {
-        return $this->personaModel->calcularProcesoDesdeChecklist($checklistNormalizado);
+    private function calcularProcesoPorChecklist(array $checklistNormalizado, array $persona = []): string {
+        $contexto = [
+            'es_lider_celula' => !empty($checklistNormalizado['Enviar'][2])
+                || ($persona !== [] && $this->personaModel->esLiderDeCelulaPersona($persona)),
+            'inscrito_uv' => !empty($checklistNormalizado['Consolidar'][0]),
+            'inscrito_encuentro' => !empty($checklistNormalizado['Consolidar'][1]),
+        ];
+        return $this->personaModel->calcularProcesoDesdeChecklist($checklistNormalizado, $contexto);
     }
 }

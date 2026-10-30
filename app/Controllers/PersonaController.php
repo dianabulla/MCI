@@ -70,6 +70,10 @@ class PersonaController extends BaseController {
         $userRoleModel = new UserRole();
         $viewData['id_rol_maestro_cap'] = (int)$userRoleModel->buscarRolPorAlias('maestro');
         $viewData['id_rol_discipulo_cap'] = (int)$userRoleModel->buscarRolPorAlias('discipulo');
+        if (!empty($viewData['persona']) && is_array($viewData['persona']) && $this->soportaChecklistEscalera) {
+            $viewData['persona'] = $this->enriquecerChecklistPersona($viewData['persona']);
+            $viewData['dirige_celula'] = $this->personaModel->esLiderDeCelulaPersona($viewData['persona']);
+        }
         return $viewData;
     }
 
@@ -655,9 +659,7 @@ class PersonaController extends BaseController {
         $checklistNormalizado = $this->normalizarChecklistEscalera($checklistActual);
         $checklistNormalizado['Ganar'][1] = $this->personaTieneAsignacionLiderYMinisterio($personaReferencia);
         $checklistNormalizado['Ganar'][4] = $this->personaTieneCelulaAsignada($personaReferencia);
-        if ($checklistNormalizado['Ganar'][4]) {
-            $checklistNormalizado['Enviar'][2] = true;
-        }
+        $checklistNormalizado['Enviar'][2] = $this->personaModel->esLiderDeCelulaPersona($personaReferencia);
         $checklistNormalizado['_meta']['convenciones'] = [];
 
         return $checklistNormalizado;
@@ -865,6 +867,19 @@ class PersonaController extends BaseController {
         $this->redirect($rutaFallback);
     }
 
+    /**
+     * Destino tras crear persona cuando no hay return_url.
+     * Antes iba a reportes (exige reportes:ver) y el alta quedaba hecha pero con acceso denegado.
+     */
+    private function rutaTrasCrearPersona(): string {
+        $entrada = AuthController::urlEntradaGanarConsolidarRelativa();
+        if ($entrada !== '' && $entrada !== 'auth/acceso-denegado') {
+            return $entrada;
+        }
+
+        return 'personas/crear&ok=1';
+    }
+
     private function personaTieneAsignacionLiderYMinisterio(array $persona) {
         return !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
     }
@@ -1042,6 +1057,8 @@ class PersonaController extends BaseController {
         $checklist['Ganar'][1] = $this->personaTieneAsignacionLiderYMinisterio($persona);
         // Regla de negocio: "Asignación a una célula" se calcula automáticamente.
         $checklist['Ganar'][4] = $this->personaTieneCelulaAsignada($persona);
+        // Enviar: dirige célula / líder de célula (no basta ser miembro).
+        $checklist['Enviar'][2] = $this->personaModel->esLiderDeCelulaPersona($persona);
 
         $persona['Escalera_Checklist'] = json_encode($checklist, JSON_UNESCAPED_UNICODE);
         $persona['Seguimiento_No_Disponible'] = !empty($checklist['Ganar'][5]);
@@ -1179,6 +1196,43 @@ class PersonaController extends BaseController {
         return array_values(array_filter($personas, function($persona) {
             return !$this->esRolLiderazgoPorIdRol((int)($persona['Id_Rol'] ?? 0));
         }));
+    }
+
+    /**
+     * Etapas de la escalera: discípulos + líderes de célula (Enviar).
+     * Excluye pastor y líder de 12.
+     */
+    private function filtrarPersonasParaEtapasEscalera(array $personas) {
+        return array_values(array_filter($personas, function ($persona) {
+            $idRol = (int)($persona['Id_Rol'] ?? 0);
+            if ($idRol <= 0) {
+                return true;
+            }
+            $jerarquia = $this->personaModel->getJerarquiaByRol($idRol);
+            return !in_array($jerarquia, ['pastor', 'lider_12'], true);
+        }));
+    }
+
+    /**
+     * @param array{encuentro?:bool,universidad_vida?:bool,bautismo?:bool,capacitacion_destino?:bool} $flagsFormacion
+     * @return array{es_lider_celula:bool,inscrito_uv:bool,inscrito_encuentro:bool}
+     */
+    private function construirContextoProcesoEscalera(array $persona, array $flagsFormacion = [], ?bool $dirigeCelula = null): array {
+        $esLiderCelula = false;
+        $idRol = (int)($persona['Id_Rol'] ?? 0);
+        if ($idRol > 0 && $this->personaModel->getJerarquiaByRol($idRol) === 'lider_celula') {
+            $esLiderCelula = true;
+        } elseif ($dirigeCelula !== null) {
+            $esLiderCelula = $dirigeCelula;
+        } else {
+            $esLiderCelula = $this->personaModel->esLiderDeCelulaPersona($persona);
+        }
+
+        return [
+            'es_lider_celula' => $esLiderCelula,
+            'inscrito_uv' => !empty($flagsFormacion['universidad_vida']),
+            'inscrito_encuentro' => !empty($flagsFormacion['encuentro']),
+        ];
     }
 
     private function esRolDiscipularPorIdRol($idRol) {
@@ -1756,6 +1810,198 @@ class PersonaController extends BaseController {
         return $totales;
     }
 
+    /**
+     * @return array{hombres: int, mujeres: int, sin_genero: int}
+     */
+    private function contarRedGeneroEscalera(array $personas): array {
+        $totales = [
+            'hombres' => 0,
+            'mujeres' => 0,
+            'sin_genero' => 0,
+        ];
+
+        foreach ($personas as $persona) {
+            $red = $this->clasificarRedGeneroPersona((array)$persona);
+            $totales[$red]++;
+        }
+
+        return $totales;
+    }
+
+    private function clasificarRedGeneroPersona(array $persona): string {
+        $genero = $this->normalizarGeneroBinario($persona['Genero'] ?? null);
+        if ($genero === 'Hombre') {
+            return 'hombres';
+        }
+        if ($genero === 'Mujer') {
+            return 'mujeres';
+        }
+
+        return 'sin_genero';
+    }
+
+    private function filtrarPersonasPorRedGenero(array $personas, string $red): array {
+        $red = strtolower(trim($red));
+        if (!in_array($red, ['hombres', 'mujeres'], true)) {
+            return $personas;
+        }
+
+        return array_values(array_filter($personas, function ($persona) use ($red) {
+            return $this->clasificarRedGeneroPersona((array)$persona) === $red;
+        }));
+    }
+
+    /**
+     * Totales absolutos por ministerio visible: activas, con/sin líder o célula.
+     *
+     * @param array<int, array<string, mixed>> $ministerios
+     * @return array<string, array{id: string, nombre: string, total: int, hombres: int, mujeres: int}>
+     */
+    private function construirTotalesMinisterioAbsolutos(array $ministerios): array {
+        $totales = [];
+        foreach ($ministerios as $ministerioRow) {
+            $idMinisterio = (int)($ministerioRow['Id_Ministerio'] ?? 0);
+            if ($idMinisterio <= 0) {
+                continue;
+            }
+            $clave = (string)$idMinisterio;
+            $nombre = trim((string)($ministerioRow['Nombre_Ministerio'] ?? ''));
+            if ($nombre === '') {
+                $nombre = 'Ministerio';
+            }
+            try {
+                $conteo = $this->personaModel->contarPersonasMinisterioPorGenero($idMinisterio, '1=1');
+            } catch (Throwable $e) {
+                $conteo = ['total' => 0, 'hombres' => 0, 'mujeres' => 0];
+            }
+            $totales[$clave] = [
+                'id' => $clave,
+                'nombre' => $nombre,
+                'total' => (int)($conteo['total'] ?? 0),
+                'hombres' => (int)($conteo['hombres'] ?? 0),
+                'mujeres' => (int)($conteo['mujeres'] ?? 0),
+            ];
+        }
+
+        uasort($totales, static function (array $a, array $b): int {
+            if ($a['total'] === $b['total']) {
+                return strcasecmp((string)$a['nombre'], (string)$b['nombre']);
+            }
+            return $b['total'] <=> $a['total'];
+        });
+
+        return $totales;
+    }
+
+    /**
+     * Orden del listado por peldaño:
+     * 1) Quienes aún faltan UV o Encuentro
+     * 2) Avance de casillas del peldaño (Ganar / niveles Destino en Discipular)
+     * 3) Fecha de creación de la ficha (más reciente → más antiguo)
+     */
+    private function ordenarPersonasListadoEtapa(array $personas, string $etapaNombre, array $flagsFormacion = []): array {
+        $etapaNombre = trim($etapaNombre);
+        if ($etapaNombre === '') {
+            $etapaNombre = 'Ganar';
+        }
+
+        usort($personas, function ($a, $b) use ($etapaNombre, $flagsFormacion) {
+            $a = (array)$a;
+            $b = (array)$b;
+
+            $faltaA = $this->personaFaltaUvOEncuentro($a, $flagsFormacion) ? 0 : 1;
+            $faltaB = $this->personaFaltaUvOEncuentro($b, $flagsFormacion) ? 0 : 1;
+            if ($faltaA !== $faltaB) {
+                return $faltaA <=> $faltaB;
+            }
+
+            $progA = $this->progresoCasillasEtapaPersona($a, $etapaNombre);
+            $progB = $this->progresoCasillasEtapaPersona($b, $etapaNombre);
+            if ($progA !== $progB) {
+                return $progA <=> $progB;
+            }
+
+            $fechaA = $this->timestampRegistroPersona($a);
+            $fechaB = $this->timestampRegistroPersona($b);
+            if ($fechaA !== $fechaB) {
+                return $fechaB <=> $fechaA;
+            }
+
+            return ((int)($b['Id_Persona'] ?? 0)) <=> ((int)($a['Id_Persona'] ?? 0));
+        });
+
+        return array_values($personas);
+    }
+
+    private function personaFaltaUvOEncuentro(array $persona, array $flagsFormacion = []): bool {
+        $idPersona = (int)($persona['Id_Persona'] ?? 0);
+        $flags = is_array($flagsFormacion[$idPersona] ?? null) ? $flagsFormacion[$idPersona] : [];
+        $checklist = $this->checklistNormalizadoDePersona($persona);
+
+        $tieneUv = !empty($flags['universidad_vida']) || !empty($checklist['Consolidar'][0]);
+        $tieneEncuentro = !empty($flags['encuentro']) || !empty($checklist['Consolidar'][1]);
+
+        return !$tieneUv || !$tieneEncuentro;
+    }
+
+    private function checklistNormalizadoDePersona(array $persona): array {
+        $raw = (string)($persona['Escalera_Checklist'] ?? '');
+        $decoded = $raw !== '' ? json_decode($raw, true) : [];
+        return $this->normalizarChecklistEscalera(is_array($decoded) ? $decoded : []);
+    }
+
+    private function progresoCasillasEtapaPersona(array $persona, string $etapaNombre): int {
+        $checklist = $this->checklistNormalizadoDePersona($persona);
+
+        if ($etapaNombre === 'Discipular') {
+            if (!empty($checklist['Discipular'][2])) {
+                return 3;
+            }
+            if (!empty($checklist['Discipular'][1])) {
+                return 2;
+            }
+            if (!empty($checklist['Discipular'][0])) {
+                return 1;
+            }
+            return 0;
+        }
+
+        if ($etapaNombre === 'Ganar') {
+            $avance = 0;
+            foreach ([0, 1, 2, 3, 4] as $indice) {
+                if (!empty($checklist['Ganar'][$indice])) {
+                    $avance++;
+                }
+            }
+            return $avance;
+        }
+
+        if ($etapaNombre === 'Consolidar') {
+            $avance = 0;
+            foreach ([0, 1, 2] as $indice) {
+                if (!empty($checklist['Consolidar'][$indice])) {
+                    $avance++;
+                }
+            }
+            return $avance;
+        }
+
+        if ($etapaNombre === 'Enviar') {
+            return !empty($checklist['Enviar'][2]) ? 1 : 0;
+        }
+
+        return 0;
+    }
+
+    private function timestampRegistroPersona(array $persona): int {
+        $fecha = trim((string)($persona['Fecha_Registro'] ?? ''));
+        if ($fecha === '' || strpos($fecha, '0000-00-00') === 0) {
+            return 0;
+        }
+        $ts = strtotime($fecha);
+        return $ts !== false ? $ts : 0;
+    }
+
     private function obtenerEtiquetaOrigenGanar(array $persona) {
         $tipoReunionRaw = trim((string)($persona['Tipo_Reunion'] ?? ''));
         $tipoReunion = strtolower($tipoReunionRaw);
@@ -2172,6 +2418,10 @@ class PersonaController extends BaseController {
         $filtroMinisterio = isset($_GET['ministerio']) ? preg_replace('/\s+/u', '', trim((string)$_GET['ministerio'])) : '';
         $filtroLider = isset($_GET['lider']) ? preg_replace('/\s+/u', '', trim((string)$_GET['lider'])) : '';
         $filtroNombre = preg_replace('/\s+/u', ' ', trim((string)($_GET['buscar'] ?? '')));
+        $filtroRed = strtolower(trim((string)($_GET['red'] ?? '')));
+        if (!in_array($filtroRed, ['hombres', 'mujeres'], true)) {
+            $filtroRed = '';
+        }
         if ($filtroMinisterio !== '' && $filtroMinisterio !== '0' && !ctype_digit($filtroMinisterio)) {
             $filtroMinisterio = '';
         }
@@ -2273,57 +2523,154 @@ class PersonaController extends BaseController {
         $seguimientoSinMinisterio = $this->filtrarPersonasPorMinisterioListado($seguimientoSinMinisterio, $filtroMinisterio);
         $seguimientoSinMinisterio = $this->filtrarPersonasPorLiderListado($seguimientoSinMinisterio, $filtroLider);
         $personasEnSeguimiento = $this->unirPersonasSinDuplicados($personasEnSeguimiento, $seguimientoSinMinisterio);
-        $totalPendientesConectarContexto = count($personasFusionDiscipulos);
-        $totalEnSeguimientoContexto = count($personasEnSeguimiento);
         $sugerenciasNombre = $this->obtenerSugerenciasNombreListado(
             $this->unirPersonasSinDuplicados($personasFusionDiscipulos, $personasEnSeguimiento)
         );
         $personas = $this->filtrarPersonasPorNombreListado($personasFusionDiscipulos, $filtroNombre);
         $personasEnSeguimiento = $this->filtrarPersonasPorNombreListado($personasEnSeguimiento, $filtroNombre);
+        if ($filtroRed !== '') {
+            $personas = $this->filtrarPersonasPorRedGenero($personas, $filtroRed);
+            $personasEnSeguimiento = $this->filtrarPersonasPorRedGenero($personasEnSeguimiento, $filtroRed);
+        }
+        $totalPendientesConectarContexto = count($personas);
+        $totalEnSeguimientoContexto = count($personasEnSeguimiento);
 
+        // Misma base que el total del ministerio: todas las fichas visibles
+        // (activas e inactivas, con/sin líder o célula). No se excluyen pastor/líder 12
+        // para que la suma de peldaños coincida con el total del ministerio.
         $personasEtapas = $this->personaModel->getWithFiltersAndRole(
             $filtroRol,
             null,
             null,
             null,
-            'Activo',
+            null,
             null,
             null,
             null,
             null,
             null
         );
-        $personasEtapas = $this->filtrarSoloDiscipulos($personasEtapas);
         $personasEtapas = $this->filtrarPersonasPorMinisterioListado($personasEtapas, $filtroMinisterio);
         $personasEtapas = $this->filtrarPersonasPorLiderListado($personasEtapas, $filtroLider);
         $personasEtapas = $this->filtrarPersonasPorNombreListado($personasEtapas, $filtroNombre);
-        $totalesEtapaEscalera = $this->contarEtapasEscalera($personasEtapas);
+        // Usuario de ministerio: solo fichas de su(s) ministerio(s), para que
+        // la suma de peldaños = total del chip (sin mezclar otras redes).
+        if (!empty($contextoFiltros['restringido'])
+            && is_array($contextoFiltros['ministerioIdsPermitidos'] ?? null)
+            && $contextoFiltros['ministerioIdsPermitidos'] !== []
+            && $filtroMinisterio === ''
+        ) {
+            $permitidosEtapas = array_map('intval', $contextoFiltros['ministerioIdsPermitidos']);
+            $personasEtapas = array_values(array_filter($personasEtapas, static function ($persona) use ($permitidosEtapas) {
+                return in_array((int)($persona['Id_Ministerio'] ?? 0), $permitidosEtapas, true);
+            }));
+        }
+
+        $flagsFormacionEscalera = [];
+        $idsEtapasFormacion = [];
+        foreach ($personasEtapas as $personaEtapaFlag) {
+            $idFlag = (int)(($personaEtapaFlag['Id_Persona'] ?? 0));
+            if ($idFlag > 0) {
+                $idsEtapasFormacion[] = $idFlag;
+            }
+        }
+        $mapaDirigeCelula = $this->personaModel->mapaIdsQueDirigenCelula($idsEtapasFormacion);
+        if ($idsEtapasFormacion !== []) {
+            try {
+                $inscripcionEscuelaModel = new EscuelaFormacionInscripcion();
+                $flagsFormacionEscalera = $inscripcionEscuelaModel->getFlagsFormacionPorIdsPersonas($idsEtapasFormacion);
+            } catch (Throwable $e) {
+                $flagsFormacionEscalera = [];
+            }
+        }
+        foreach ($personasEtapas as &$personaEtapaResuelta) {
+            $idEtapaRes = (int)($personaEtapaResuelta['Id_Persona'] ?? 0);
+            $flagsEtapa = is_array($flagsFormacionEscalera[$idEtapaRes] ?? null)
+                ? $flagsFormacionEscalera[$idEtapaRes]
+                : [];
+            $idRolEtapa = (int)($personaEtapaResuelta['Id_Rol'] ?? 0);
+            $jerarquiaEtapa = $idRolEtapa > 0 ? $this->personaModel->getJerarquiaByRol($idRolEtapa) : '';
+            $dirigeCelula = !empty($mapaDirigeCelula[$idEtapaRes]) || $jerarquiaEtapa === 'lider_celula';
+
+            if (in_array($jerarquiaEtapa, ['pastor', 'lider_12', 'lider_celula'], true) || $dirigeCelula) {
+                $personaEtapaResuelta['Proceso'] = 'Enviar';
+                continue;
+            }
+
+            $checklistRawEtapa = (string)($personaEtapaResuelta['Escalera_Checklist'] ?? '');
+            $checklistDecodedEtapa = $checklistRawEtapa !== '' ? json_decode($checklistRawEtapa, true) : [];
+            $checklistTmp = $this->normalizarChecklistEscalera(is_array($checklistDecodedEtapa) ? $checklistDecodedEtapa : []);
+            $checklistTmp['Ganar'][1] = !empty($personaEtapaResuelta['Id_Lider']) && !empty($personaEtapaResuelta['Id_Ministerio']);
+            $checklistTmp['Ganar'][4] = !empty($personaEtapaResuelta['Id_Celula']);
+            $checklistTmp['Enviar'][2] = $dirigeCelula;
+
+            $personaEtapaResuelta['Proceso'] = $this->personaModel->calcularProcesoDesdeChecklist(
+                $checklistTmp,
+                $this->construirContextoProcesoEscalera($personaEtapaResuelta, $flagsEtapa, $dirigeCelula)
+            );
+        }
+        unset($personaEtapaResuelta);
+
+        // Por defecto abrir el primer peldaño (Ganar); ya no hay vista "Todas".
         $etapaLista = strtolower(trim((string)($_GET['etapa'] ?? '')));
         $etapasListaPermitidas = ['ganar', 'consolidar', 'discipular', 'enviar', 'sin_etapa'];
         if (!in_array($etapaLista, $etapasListaPermitidas, true)) {
-            $etapaLista = '';
+            $etapaLista = 'ganar';
         }
-        if ($etapaLista !== '') {
-            $mapaEtapaLista = [
-                'ganar' => 'Ganar',
-                'consolidar' => 'Consolidar',
-                'discipular' => 'Discipular',
-                'enviar' => 'Enviar',
-            ];
-            $personasEtapas = array_values(array_filter($personasEtapas, static function ($persona) use ($etapaLista, $mapaEtapaLista) {
-                $proceso = trim((string)($persona['Proceso'] ?? ''));
-                if ($etapaLista === 'sin_etapa') {
-                    return $proceso === '';
-                }
-                return $proceso === ($mapaEtapaLista[$etapaLista] ?? '');
-            }));
+
+        // Conteos de red (hombres/mujeres) sobre la vista actual de etapa,
+        // antes de filtrar por género, para poder cambiar de red sin perder el contexto.
+        $mapaEtapaLista = [
+            'ganar' => 'Ganar',
+            'consolidar' => 'Consolidar',
+            'discipular' => 'Discipular',
+            'enviar' => 'Enviar',
+        ];
+        $personasParaConteoRed = array_values(array_filter($personasEtapas, static function ($persona) use ($etapaLista, $mapaEtapaLista) {
+            $proceso = trim((string)($persona['Proceso'] ?? ''));
+            if ($etapaLista === 'sin_etapa') {
+                return $proceso === '';
+            }
+            return $proceso === ($mapaEtapaLista[$etapaLista] ?? '');
+        }));
+        $totalesRedEscalera = $this->contarRedGeneroEscalera($personasParaConteoRed);
+
+        // El filtro de red aplica a toda la interfaz (etapas, pendientes, listado).
+        if ($filtroRed !== '') {
+            $personasEtapas = $this->filtrarPersonasPorRedGenero($personasEtapas, $filtroRed);
         }
+
+        $totalesEtapaEscalera = $this->contarEtapasEscalera($personasEtapas);
+        $personasEtapas = array_values(array_filter($personasEtapas, static function ($persona) use ($etapaLista, $mapaEtapaLista) {
+            $proceso = trim((string)($persona['Proceso'] ?? ''));
+            if ($etapaLista === 'sin_etapa') {
+                return $proceso === '';
+            }
+            return $proceso === ($mapaEtapaLista[$etapaLista] ?? '');
+        }));
+        $etapaNombreOrden = $mapaEtapaLista[$etapaLista] ?? 'Ganar';
+        if ($etapaLista === 'sin_etapa') {
+            $etapaNombreOrden = 'Ganar';
+        }
+        $personasEtapas = $this->ordenarPersonasListadoEtapa(
+            $personasEtapas,
+            $etapaNombreOrden,
+            $flagsFormacionEscalera
+        );
+
+        // Total del chip "Por ministerio": todas las personas activas del ministerio
+        // (hombres/mujeres, con o sin líder/célula), sin recortar por etapa ni red.
+        $totalesMinisterioEscalera = $this->construirTotalesMinisterioAbsolutos($ministerios);
 
         $this->view('personas/lista', [
             'personas' => $personas,
             'personasEtapas' => $personasEtapas,
+            'flagsFormacionEscalera' => $flagsFormacionEscalera,
             'totalesEtapaEscalera' => $totalesEtapaEscalera,
             'filtroEtapaActual' => $etapaLista,
+            'totalesRedEscalera' => $totalesRedEscalera,
+            'filtroRedActual' => $filtroRed,
+            'totalesMinisterioEscalera' => $totalesMinisterioEscalera,
             'ministerios' => $ministerios,
             'lideres' => $lideres,
             'filtroMinisterioActual' => $filtroMinisterio,
@@ -2332,7 +2679,8 @@ class PersonaController extends BaseController {
             'totalPendientesConectarContexto' => $totalPendientesConectarContexto,
             'personasEnSeguimiento' => $personasEnSeguimiento,
             'totalEnSeguimientoContexto' => $totalEnSeguimientoContexto,
-            'sugerenciasNombre' => $sugerenciasNombre
+            'sugerenciasNombre' => $sugerenciasNombre,
+            'contextoFiltrosEscalera' => $contextoFiltros,
         ]);
     }
 
@@ -3080,8 +3428,12 @@ class PersonaController extends BaseController {
         return !empty($valores[0]) && !empty($valores[1]) && !empty($valores[2]);
     }
 
-    private function calcularProcesoPorChecklist(array $checklistNormalizado) {
-        return $this->personaModel->calcularProcesoDesdeChecklist($checklistNormalizado);
+    private function calcularProcesoPorChecklist(array $checklistNormalizado, array $persona = [], array $flagsFormacion = []) {
+        $contexto = $this->construirContextoProcesoEscalera($persona, $flagsFormacion);
+        if (!empty($checklistNormalizado['Enviar'][2])) {
+            $contexto['es_lider_celula'] = true;
+        }
+        return $this->personaModel->calcularProcesoDesdeChecklist($checklistNormalizado, $contexto);
     }
 
     private function resolverProgramaCapacitacionDestinoPorIndiceChecklist(int $indice): string {
@@ -3226,7 +3578,7 @@ class PersonaController extends BaseController {
             $this->json(['success' => false, 'message' => 'No se pudo guardar'], 500);
         }
 
-        $proceso = $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklist) : null;
+        $proceso = $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklist, $persona) : null;
         $ok = $this->personaModel->updateEscaleraChecklistYProceso($idPersona, $checklistJson, $proceso);
         if (!$ok) {
             $this->json(['success' => false, 'message' => 'No se pudo guardar el seguimiento'], 500);
@@ -3319,14 +3671,14 @@ class PersonaController extends BaseController {
 
         // Regla de negocio: "Asignación a líderes y ministerio" se controla automáticamente.
         $checklistNormalizado['Ganar'][1] = $this->personaTieneAsignacionLiderYMinisterio($persona);
-        // Regla de negocio: "Asignación a una célula" se controla automáticamente.
+        // Regla de negocio: "Ubicado en célula" se controla automáticamente.
         $checklistNormalizado['Ganar'][4] = $this->personaTieneCelulaAsignada($persona);
 
         if ($etapa === 'Ganar' && $indice === 1) {
             $this->json([
                 'success' => true,
                 'message' => 'Asignación a líderes y ministerio se actualiza automáticamente',
-                'proceso' => $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklistNormalizado) : null,
+                'proceso' => $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklistNormalizado, $persona) : null,
                 'checklist' => $checklistNormalizado
             ]);
         }
@@ -3334,8 +3686,8 @@ class PersonaController extends BaseController {
         if ($etapa === 'Ganar' && $indice === 4) {
             $this->json([
                 'success' => true,
-                'message' => 'Asignación a una célula se actualiza automáticamente',
-                'proceso' => $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklistNormalizado) : null,
+                'message' => 'Ubicado en célula se actualiza automáticamente',
+                'proceso' => $this->soportaProceso ? $this->calcularProcesoPorChecklist($checklistNormalizado, $persona) : null,
                 'checklist' => $checklistNormalizado
             ]);
         }
@@ -3365,12 +3717,11 @@ class PersonaController extends BaseController {
             }
         }
 
-        if (!empty($checklistNormalizado['Ganar'][4]) && !($etapa === 'Enviar' && $indice === 2 && !$marcado)) {
-            $checklistNormalizado['Enviar'][2] = true;
-        }
+        // Enviar/Célula = dirige una célula o es líder de célula (no basta ser miembro).
+        $checklistNormalizado['Enviar'][2] = $this->personaModel->esLiderDeCelulaPersona($persona);
 
         $nuevoProceso = $this->soportaProceso
-            ? $this->calcularProcesoPorChecklist($checklistNormalizado)
+            ? $this->calcularProcesoPorChecklist($checklistNormalizado, $persona)
             : null;
 
         $checklistJson = json_encode($checklistNormalizado, JSON_UNESCAPED_UNICODE);
@@ -3756,8 +4107,8 @@ class PersonaController extends BaseController {
     }
 
     public function crear() {
-        // Verificar permiso de crear
-        if (!AuthController::puede('personas:crear')) {
+        // Misma regla que RouteGuard / sidebar: personas, consulta o acceso rápido.
+        if (!AuthController::puedeCrearPersonasConsulta()) {
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
@@ -4043,7 +4394,7 @@ class PersonaController extends BaseController {
 
             if ($this->soportaProceso) {
                 $data['Proceso'] = $checklistNormalizado !== null
-                    ? $this->calcularProcesoPorChecklist($checklistNormalizado)
+                    ? $this->calcularProcesoPorChecklist($checklistNormalizado, $data)
                     : 'Ganar';
             }
 
@@ -4150,7 +4501,15 @@ class PersonaController extends BaseController {
                     $this->redirect($urlRetorno);
                 }
 
-                $this->redirigirConRetorno($returnUrl, 'reportes&tipo=personas');
+                if ($returnTo === 'celulas') {
+                    $urlRetorno = 'celulas';
+                    if ($celulaRetorno) {
+                        $urlRetorno = 'celulas/detalle&id=' . (int)$celulaRetorno;
+                    }
+                    $this->redirigirConRetorno($returnUrl, $urlRetorno);
+                }
+
+                $this->redirigirConRetorno($returnUrl, $this->rutaTrasCrearPersona());
             } catch (PDOException $e) {
                 // Detectar error de duplicado
                 if ($e->getCode() == 23000 || strpos($e->getMessage(), '1062') !== false) {
@@ -4193,6 +4552,9 @@ class PersonaController extends BaseController {
                 'return_url' => $returnUrl,
                 'celula_retorno' => $celulaRetorno
             ];
+            if ((string)($_GET['ok'] ?? '') === '1') {
+                $data['success'] = 'Persona creada correctamente.';
+            }
             $prefill = $this->prefillCrearDesdeConsulta();
             if ($prefill !== []) {
                 $data['post_data'] = $prefill;
@@ -4447,7 +4809,10 @@ class PersonaController extends BaseController {
 
             if ($this->soportaProceso) {
                 $data['Proceso'] = $checklistNormalizado !== null
-                    ? $this->calcularProcesoPorChecklist($checklistNormalizado)
+                    ? $this->calcularProcesoPorChecklist(
+                        $checklistNormalizado,
+                        array_merge($personaAntes ?: [], $data, ['Id_Persona' => (int)$id])
+                    )
                     : 'Ganar';
             }
 

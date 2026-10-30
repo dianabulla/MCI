@@ -72,7 +72,7 @@ return [
 
     'personas/exportarExcel' => ['any' => ['personas:exportar_excel', 'personas:editar']],
 
-    'personas/crear' => ['any' => ['personas:crear', 'acceso_rapido_nuevo_discipulo:crear']],
+    'personas/crear' => ['checker' => 'puedeCrearPersonasConsulta'],
 
     'personas/sincronizar-edades' => ['admin_only' => true],
 

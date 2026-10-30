@@ -2,6 +2,8 @@
 
 Cambio del 14 de octubre de 2026. Pantalla: Pagos de Universidad de la Vida, sin red elegida (`escuelas_formacion/pagos/consolidar`). Vista: `views/programas/pagos_redes.php`. Datos: `EscuelaFormacionRegistroController`.
 
+Registro público (crear ficha en el mismo formulario, 20 oct 2026): ver `docs/ESCUELAS_FORMACION_REGISTRO.md`.
+
 ## Qué se ve
 
 Una sola tabla, con dos filas: **Encuentros** y **Libros**. Cada una muestra personas y valor del semestre.

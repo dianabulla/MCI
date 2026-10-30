@@ -1,6 +1,6 @@
 # Escalera del éxito y Almas ganadas
 
-Registro al 13 de octubre de 2026.
+Registro actualizado al 30 de octubre de 2026.
 
 ## Entrada del módulo
 
@@ -14,9 +14,26 @@ Quien solo tiene permiso de Almas ganadas entra directo a `personas/ganar`.
 
 **En seguimiento.** Salen de Por conectar cuando se les guarda una nota de seguimiento. También entran quienes vienen de Almas ganadas y solo asisten a la iglesia (aún sin ministerio). Cuando ya tienen líder y célula, salen de esta lista.
 
-**Etapas de la escalera.** Personas activas que no son de liderazgo, con filtro por etapa (Ganar, Consolidar, Discipular, Enviar o sin etapa). Esta lista no cambia al marcar seguimiento.
+**Etapas de la escalera.** Por defecto se abre en el peldaño **Ganar** (ya no hay vista «Todas»). Los chips son Ganar, Consolidar, Discipular, Enviar y Sin etapa. La lista incluye las fichas del ministerio visible (activas e inactivas, con o sin líder/célula), para que la suma de peldaños coincida con el total del ministerio. Pastores y líderes de 12 también entran (suelen quedar en Enviar).
+
+**Orden del listado dentro de cada peldaño:** 1) quienes aún faltan Universidad de la Vida o Encuentro; 2) avance de casillas del peldaño (en Discipular: nivel 1 → 2 → 3 de Capacitación Destino); 3) fecha de creación de la ficha, de la más reciente a la más antigua.
+
+**Por ministerio.** El número del chip es el total absoluto de fichas de ese ministerio (activas e inactivas, con o sin líder/célula). No depende del peldaño ni del filtro de red.
+
+**Red hombres / Red mujeres.** Botones junto al total del ministerio. Cuentan todas las fichas del ministerio por género (incluye Joven Hombre / Joven Mujer). Al activarlos filtran toda la interfaz (peldaños, por conectar, en seguimiento y listado). Volver a pulsar el activo quita el filtro.
+
+En **Acciones**, el estado de escuelas no depende del peldaño (Ganar, Consolidar, etc.): si aún no está inscrita aparecen **Inscribir UV** / **Inscribir CD** (formulario con la ficha cargada); si ya fue, se muestra **Ya UV** / **Ya CD** y no se vuelve a sugerir esa inscripción.
 
 Quien no tiene ministerio y no está en seguimiento sigue en Almas ganadas.
+
+## Cambios del 30 de octubre de 2026
+
+- Filtro global **Red hombres / Red mujeres** en Escalera del éxito.
+- Peldaño por defecto **Ganar**; se quitó el chip «Todas».
+- Orden del listado por UV/Encuentro pendiente, casillas del peldaño y fecha de ficha.
+- Totales de ministerio y de red = conteo absoluto del ministerio (incluye inactivas y sin líder/célula).
+- La suma de peldaños se alinea con ese total (misma base de fichas; no se excluye el liderazgo del conteo).
+- Despliegue a producción por FTP de los archivos de personas/escalera.
 
 ## Almas ganadas (`personas/ganar`)
 
@@ -40,6 +57,8 @@ Una persona sale de **Nuevos** cuando ya tiene líder y ministerio, o cuando pas
 Si la persona está en una célula y el líder o el ministerio están vacíos, se llenan con el líder de esa célula y el ministerio de ese líder (o el ministerio guardado en la célula). No se reemplaza un líder o ministerio que ya esté elegido, ni se asigna a la persona como su propio líder.
 
 Al guardar una ficha nueva o editada con célula, ocurre lo mismo.
+
+En Ganar, el ítem **Ubicado en célula** es automático: se marca solo cuando la persona tiene célula asignada y no se puede desmarcar a mano.
 
 ## Regla de 4 días
 
@@ -81,11 +100,11 @@ Los botones de guardar, ver respuestas y abrir formulario van al final del edito
 
 ## Creación de personas desde talleres y escuelas
 
-Talleres, Universidad de la Vida y Capacitación Destino no crean la ficha por su cuenta. Si la persona no está en el registro, abren `personas/crear` con lo que ya se escribió: nombre, apellidos, tipo y número de documento, teléfono, dirección, género, fecha de nacimiento y, si venía elegido, ministerio y líder. Al guardar, se vuelve al formulario de origen y se busca de nuevo por cédula.
+**Universidad de la Vida y Capacitación Destino (registro público, 20 oct 2026):** si la persona no está en la base, la ficha se crea **en el mismo formulario** al guardar, con las mismas reglas de identidad que `personas/crear` (nombre y apellidos separados, documento, teléfono, fecha de nacimiento, género, tratamiento de datos). Ya no redirigen al formulario privado. Detalle: `docs/ESCUELAS_FORMACION_REGISTRO.md`.
 
-Ese formulario sigue exigiendo los mismos datos: nombre, apellidos, tipo de documento, número de documento, fecha de nacimiento, género, teléfono y tratamiento de datos. Dirección, barrio, célula, ministerio y líder siguen siendo opcionales.
+**Talleres:** en general no crean la ficha por su cuenta. Si la persona no está en el registro, abren `personas/crear` con lo que ya se escribió. Al guardar, se vuelve al formulario de origen y se busca de nuevo por cédula. Hace falta estar dentro de la aplicación con permiso para crear personas.
 
-Hace falta estar dentro de la aplicación con permiso para crear personas. Quien no ha iniciado sesión llega primero al login.
+Ese formulario privado sigue exigiendo: nombre, apellidos, tipo de documento, número de documento, fecha de nacimiento, género, teléfono y tratamiento de datos. Dirección, barrio, célula, ministerio y líder siguen siendo opcionales.
 
 En un taller, incluido el Tour Levántate y Resplandece, la inscripción no se guarda hasta que la persona exista. Si desde las respuestas se asigna ministerio a una inscripción sin ficha, se abre el mismo formulario de personas, con el ministerio ya elegido.
 

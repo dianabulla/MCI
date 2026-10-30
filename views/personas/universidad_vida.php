@@ -39,7 +39,7 @@ foreach ($personas as $personaResumen) {
             <a href="<?= PUBLIC_URL ?>?url=personas/universidad-vida" class="personas-action-pill is-active" aria-current="page">Universidad de la Vida</a>
         </div>
         <div class="personas-action-group">
-            <?php if (AuthController::puede('personas:crear')): ?>
+            <?php if (AuthController::puedeCrearPersonasConsulta()): ?>
             <a href="<?= PUBLIC_URL ?>?url=personas/crear" class="personas-action-pill">+ Nuevo Discipulo</a>
             <?php endif; ?>
         </div>

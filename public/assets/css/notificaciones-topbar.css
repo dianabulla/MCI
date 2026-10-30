@@ -4,22 +4,24 @@
 }
 
 .main-content--with-topbar {
-    margin-top: 0;
+    margin-top: 0 !important;
     border-top-left-radius: 0;
     border-top-right-radius: 0;
+    border-top: 0;
 }
 
 .app-topbar {
     position: sticky;
     top: 0;
-    z-index: 120;
-    margin: 0 12px;
-    padding: 8px 12px;
+    z-index: 200;
+    margin: 10px 12px 0;
+    /* padding-right extra: el scrollbar overlay de Windows no debe tapar la campana */
+    padding: 8px 22px 8px 12px;
     background: #ffffff;
     border: 1px solid #d7e2f2;
     border-bottom: 0;
-    border-radius: 14px 14px 0 0;
-    box-shadow: 0 4px 14px rgba(15, 38, 79, 0.06);
+    border-radius: 16px 16px 0 0;
+    box-shadow: none;
 }
 
 .app-topbar-inner {
@@ -28,6 +30,8 @@
     justify-content: flex-end;
     gap: 12px;
     min-height: 44px;
+    position: relative;
+    z-index: 2;
 }
 
 .app-topbar-title {
@@ -37,6 +41,9 @@
 
 .fb-notif {
     position: relative;
+    z-index: 5;
+    flex: 0 0 auto;
+    margin-right: 2px;
 }
 
 .fb-notif-bell {
@@ -52,6 +59,7 @@
     justify-content: center;
     cursor: pointer;
     transition: background 0.15s ease, transform 0.15s ease;
+    z-index: 6;
 }
 
 .fb-notif-bell:hover,
@@ -92,7 +100,7 @@
     border-radius: 14px;
     box-shadow: 0 16px 40px rgba(15, 38, 79, 0.18);
     overflow: hidden;
-    z-index: 130;
+    z-index: 220;
 }
 
 .fb-notif-panel[hidden] {
@@ -216,13 +224,13 @@
         position: sticky;
         top: 0;
         z-index: 350;
-        margin: 0 10px;
-        padding: 8px 10px;
+        margin: 10px 10px 0;
+        padding: 8px 18px 8px 10px;
         min-height: 56px;
         background: #ffffff;
         border: 1px solid #d7e2f2;
-        border-radius: 12px 12px 0 0;
-        box-shadow: 0 4px 14px rgba(15, 38, 79, 0.08);
+        border-radius: 14px 14px 0 0;
+        box-shadow: none;
     }
 
     .app-chrome-bar .sidebar-arrow-toggle {

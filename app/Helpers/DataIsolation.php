@@ -722,4 +722,3 @@ class DataIsolation {
         return "1=0";
     }
 }
-?>

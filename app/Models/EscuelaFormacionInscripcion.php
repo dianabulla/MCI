@@ -485,7 +485,12 @@ class EscuelaFormacionInscripcion extends BaseModel {
         if ($categoriaNormalizada === 'libro') {
             $tipoPago = strtolower(trim((string)$tipoPago)) === 'completo' ? 'completo' : 'abono';
         } else {
-            $tipoPago = $this->resolverTipoPagoTrasMovimiento($programa, (string)$tipoPago, (float)$valorPago, $cedula, $idPersona);
+            $umbralTipo = 180000.0;
+            if ($this->programaUsaUmbralPagoCompletoUv($programa)) {
+                require_once APP . '/Helpers/UmbralPagoCompletoUv.php';
+                $umbralTipo = (float)UmbralPagoCompletoUv::valorParaFecha((string)($inscripcion['Fecha_Registro'] ?? ''));
+            }
+            $tipoPago = $this->resolverTipoPagoTrasMovimiento($programa, (string)$tipoPago, (float)$valorPago, $cedula, $idPersona, $umbralTipo);
         }
 
         $ok = $this->execute(
@@ -554,14 +559,15 @@ class EscuelaFormacionInscripcion extends BaseModel {
         return (float)($rows[0]['Total'] ?? 0);
     }
 
-    public function resolverTipoPagoTrasMovimiento(string $programa, string $tipoPago, float $valorNuevo, string $cedula, int $idPersona): string {
+    public function resolverTipoPagoTrasMovimiento(string $programa, string $tipoPago, float $valorNuevo, string $cedula, int $idPersona, float $umbral = 180000): string {
         $tipoPago = strtolower(trim($tipoPago)) === 'completo' ? 'completo' : 'abono';
         if (!$this->programaUsaUmbralPagoCompletoUv($programa) || $valorNuevo <= 0) {
             return $tipoPago;
         }
 
+        $umbral = $umbral > 0 ? $umbral : 180000.0;
         $acumulado = $this->getTotalPagadoAcumuladoPorClave($cedula, $idPersona, $programa) + $valorNuevo;
-        if ($acumulado >= 180000) {
+        if ($acumulado >= $umbral) {
             return 'completo';
         }
 
@@ -571,7 +577,10 @@ class EscuelaFormacionInscripcion extends BaseModel {
     /**
      * Si la persona acumuló >= umbral en el programa, marca todos sus movimientos como pago completo.
      */
-    public function sincronizarTiposPagoAcumuladoCompleto(string $programa, float $umbral = 180000, string $cedula = '', int $idPersona = 0): void {
+    /**
+     * @param list<array{inicio:string,fin:string}> $excluirRangos
+     */
+    public function sincronizarTiposPagoAcumuladoCompleto(string $programa, float $umbral = 180000, string $cedula = '', int $idPersona = 0, array $excluirRangos = []): void {
         $programa = trim($programa);
         $umbral = max(1, (float)$umbral);
         $cedula = trim($cedula);
@@ -600,6 +609,34 @@ class EscuelaFormacionInscripcion extends BaseModel {
             $paramsMov[] = $idPersona;
         }
 
+        $sqlExclusion = '';
+        if ($cedula === '' && $idPersona <= 0 && $excluirRangos !== []) {
+            $partesRango = [];
+            $paramsRango = [];
+            foreach ($excluirRangos as $rango) {
+                $inicio = substr(trim((string)($rango['inicio'] ?? '')), 0, 10);
+                $fin = substr(trim((string)($rango['fin'] ?? '')), 0, 10);
+                if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $inicio) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fin)) {
+                    continue;
+                }
+                $partesRango[] = '(DATE(i.Fecha_Registro) >= ? AND DATE(i.Fecha_Registro) <= ?)';
+                $paramsRango[] = $inicio;
+                $paramsRango[] = $fin;
+            }
+            if ($partesRango !== []) {
+                $sqlExclusion = " AND NOT EXISTS (
+                    SELECT 1 FROM {$this->table} i
+                    WHERE (
+                        (TRIM(COALESCE(s.Cedula, '')) <> '' AND TRIM(COALESCE(i.Cedula, '')) = TRIM(COALESCE(s.Cedula, '')))
+                        OR (COALESCE(s.Id_Persona, 0) > 0 AND i.Id_Persona = s.Id_Persona)
+                    )
+                    AND LOWER(TRIM(COALESCE(i.Programa, ''))) IN ('universidad_vida', 'encuentro', 'bautismo')
+                    AND (" . implode(' OR ', $partesRango) . ')
+                )';
+                $paramsSub = array_merge($paramsRango, $paramsSub);
+            }
+        }
+
         $exprClaveSub = "COALESCE(NULLIF(TRIM(s.Cedula), ''), CONCAT('SIN-CEDULA-', COALESCE(s.Id_Persona, 0)))";
         $exprClaveMov = "COALESCE(NULLIF(TRIM(m.Cedula), ''), CONCAT('SIN-CEDULA-', COALESCE(m.Id_Persona, 0)))";
         $exprProgSub = "COALESCE(NULLIF(TRIM(s.Programa), ''), 'SIN-PROGRAMA')";
@@ -616,6 +653,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
                   AND COALESCE(s.Valor_Pago, 0) > 0
                   AND {$exprLibroSub} = 0
                   {$filtroPersonaSub}
+                  {$sqlExclusion}
                 GROUP BY {$exprClaveSub}, {$exprProgSub}
                 HAVING SUM(COALESCE(s.Valor_Pago, 0)) >= ?
             ) k ON k.ClavePersona = {$exprClaveMov} AND k.ClavePrograma = {$exprProgMov}
@@ -653,6 +691,7 @@ class EscuelaFormacionInscripcion extends BaseModel {
                   AND COALESCE(s.Valor_Pago, 0) > 0
                   AND {$exprLibroSub} = 0
                   {$filtroPersonaSub}
+                  {$sqlExclusion}
                 GROUP BY {$exprClaveSub}, {$exprProgSub}
                 HAVING SUM(COALESCE(s.Valor_Pago, 0)) >= ?
             ) k ON k.ClavePersona = {$exprClaveIns}

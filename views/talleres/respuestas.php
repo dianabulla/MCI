@@ -222,9 +222,15 @@ function taller_resp_valor(array $valores, string $clave): string {
     border: 1px solid #dbeafe;
     border-radius: 12px;
     background: #f8fbff;
-    --taller-min-cols: 40px minmax(0, 1fr) 128px;
+    --taller-min-cols: 40px minmax(0, 1fr) 88px 128px;
     --taller-min-gap: 8px;
     --taller-min-pad-x: 16px;
+}
+.taller-min-count {
+    font-weight: 700;
+    color: #0f172a;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 .taller-resp-resumen-ministerios .table-container {
     overflow-x: auto;
@@ -1186,11 +1192,12 @@ uasort($resumenPagosResponsable, static function ($a, $b) {
 <?php else: ?>
 <section class="taller-resp-resumen-ministerios" aria-label="Inscritos por ministerio">
     <h3>Inscritos por ministerio</h3>
-    <p class="subtitulo" id="taller-filtro-aviso">Haga clic en <strong>Con pago</strong> o <strong>Sin pago</strong> para ver esas personas. También puede abrir un ministerio.</p>
+    <p class="subtitulo" id="taller-filtro-aviso">La tabla muestra cuántos inscritos hay por ministerio. Pulse una fila para ver quiénes son. Use <strong>Con pago</strong> o <strong>Sin pago</strong> para filtrar.</p>
     <div class="table-container">
         <div class="taller-min-header" aria-hidden="true">
             <span>#</span>
             <span>Ministerio</span>
+            <span style="text-align:right;">Inscritos</span>
             <span></span>
         </div>
         <div id="lista-respuestas">
@@ -1216,6 +1223,7 @@ uasort($resumenPagosResponsable, static function ($a, $b) {
                     <summary>
                         <span class="taller-min-num"><?= (int)$i + 1 ?></span>
                         <span class="taller-min-nombre"><?= htmlspecialchars($nombreMinisterio, ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="taller-min-count"><?= (int)$totalMin ?></span>
                         <span class="taller-min-hint"></span>
                     </summary>
                     <div class="taller-min-lista taller-resp-list">
@@ -1227,9 +1235,11 @@ uasort($resumenPagosResponsable, static function ($a, $b) {
         <?php
         $valores = is_array($resp['valores'] ?? null) ? $resp['valores'] : [];
         $nombre = $esPresentacionNinos ? taller_resp_valor($valores, 'nino_nombre') : taller_resp_valor($valores, 'persona_nombre');
+        $padresNombre = $esPresentacionNinos ? taller_resp_valor($valores, 'padres_nombre') : '';
         if ($nombre === '' && $esPresentacionNinos) {
-            $nombre = taller_resp_valor($valores, 'padres_nombre');
+            $nombre = $padresNombre;
         }
+        $edadNino = $esPresentacionNinos ? taller_resp_valor($valores, 'nino_edad') : '';
         $documento = $esPresentacionNinos ? taller_resp_valor($valores, 'nino_documento') : taller_resp_valor($valores, 'persona_documento');
         $telefono = $esPresentacionNinos
             ? taller_resp_valor($valores, 'padres_telefono')
@@ -1246,7 +1256,7 @@ uasort($resumenPagosResponsable, static function ($a, $b) {
         $esSinMinisterio = strcasecmp($ministerioPersona, 'Sin ministerio asignado') === 0;
         $generoPersona = (string)($resp['genero'] ?? '');
         $etiquetaGenero = $generoPersona === 'hombre' ? 'Hombre' : ($generoPersona === 'mujer' ? 'Mujer' : '');
-        $busqueda = strtolower($nombre . ' ' . $documento . ' ' . $telefono . ' ' . $nombreLider12 . ' ' . $ministerioPersona);
+        $busqueda = strtolower($nombre . ' ' . $padresNombre . ' ' . $edadNino . ' ' . $documento . ' ' . $telefono . ' ' . $nombreLider12 . ' ' . $ministerioPersona);
         $firmaImg = (string)($resp['firma_imagen'] ?? '');
         $idRespuesta = (int)($resp['id'] ?? 0);
         $totalPagado = (float)($resp['total_pagado'] ?? 0);
@@ -1269,6 +1279,12 @@ uasort($resumenPagosResponsable, static function ($a, $b) {
             <summary>
                 <div class="taller-resp-resumen">
                     <strong><?= htmlspecialchars($nombre !== '' ? $nombre : 'Sin nombre', ENT_QUOTES, 'UTF-8') ?></strong>
+                    <?php if ($esPresentacionNinos && ($padresNombre !== '' || $edadNino !== '')): ?>
+                    <span class="text-muted" style="display:block;font-size:0.82rem;font-weight:500;">
+                        <?php if ($padresNombre !== ''): ?>Padres: <?= htmlspecialchars($padresNombre, ENT_QUOTES, 'UTF-8') ?><?php endif; ?>
+                        <?php if ($edadNino !== ''): ?><?= $padresNombre !== '' ? ' · ' : '' ?>Edad: <?= htmlspecialchars($edadNino, ENT_QUOTES, 'UTF-8') ?><?php endif; ?>
+                    </span>
+                    <?php endif; ?>
                 </div>
                 <div class="taller-resp-pago">
                     <span class="taller-resp-pago-status<?= $pagadoFila ? ' ok' : ' no' ?>"><?= $pagadoFila ? 'Pagó' : 'Sin pago' ?></span>
@@ -1386,7 +1402,8 @@ uasort($resumenPagosResponsable, static function ($a, $b) {
         </div>
         <div class="taller-min-header taller-min-total">
             <span></span>
-            <span>Total inscritos: <?= (int)$total ?></span>
+            <span>Total</span>
+            <span class="taller-min-count"><?= (int)$total ?></span>
             <span></span>
         </div>
     </div>

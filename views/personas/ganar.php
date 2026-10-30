@@ -380,6 +380,10 @@ $returnUrlGanar = $buildPendientesUrl();
                                         <input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="3" <?= !empty($ganarChecklist[3]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
                                         <span>Visita</span>
                                     </label>
+                                    <label class="escalera-inline-item is-auto" title="Se marca solo al asignar la persona a una célula">
+                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="4" <?= !empty($ganarChecklist[4]) ? 'checked' : '' ?> disabled>
+                                        <span>Ubicado en célula</span>
+                                    </label>
                                     <label class="escalera-inline-item" title="No se dispone">
                                         <input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="5" <?= !empty($ganarChecklist[5]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
                                         <span>No se dispone</span>
@@ -417,9 +421,9 @@ $returnUrlGanar = $buildPendientesUrl();
                                 </div>
 
                                 <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Enviar" hidden>
-                                    <label class="escalera-inline-item" title="Célula">
-                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Enviar" data-indice="2" <?= (!empty($checklistEscalera['Enviar'][2]) || !empty($tieneCelulaAsignada)) ? 'checked' : '' ?> <?= $puedeEditarEscaleraInline ? '' : 'disabled' ?>>
-                                        <span>Célula</span>
+                                    <label class="escalera-inline-item is-auto" title="Se marca solo si dirige una célula o es líder de célula">
+                                        <input type="checkbox" class="js-inline-escalera-check" data-etapa="Enviar" data-indice="2" <?= !empty($checklistEscalera['Enviar'][2]) ? 'checked' : '' ?> disabled>
+                                        <span>Dirige célula</span>
                                     </label>
                                 </div>
                             </div>
@@ -1454,7 +1458,7 @@ $returnUrlGanar = $buildPendientesUrl();
 (function() {
     const etapas = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
     const subprocesos = {
-        Ganar: ['Primer contacto', 'Asignacion a lideres y ministerio', 'Fonovisita', 'Visita', 'Asignacion a una celula', 'No se dispone'],
+        Ganar: ['Primer contacto', 'Asignacion a lideres y ministerio', 'Fonovisita', 'Visita', 'Ubicado en celula', 'No se dispone'],
         Consolidar: ['Universidad de la vida', 'Encuentro', 'Bautismo'],
         Discipular: ['Capacitacion destino nivel 1 (modulos 1 y 2)', 'Capacitacion destino nivel 2 (modulos 3 y 4)', 'Capacitacion destino nivel 3 (modulos 5 y 6)'],
         Enviar: ['Celula']

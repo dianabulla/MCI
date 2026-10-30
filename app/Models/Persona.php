@@ -2053,39 +2053,94 @@ class Persona extends BaseModel {
     }
 
     /**
-     * Proceso que ve la ficha (escalera), no solo la columna Proceso.
-     * Liderazgo = Enviar. Célula asignada marca Enviar[2], igual que el formulario.
+     * True si el rol es líder de célula o si la persona figura como Id_Lider de alguna célula.
      */
-    public function resolverProcesoVisible(array $persona): string {
+    public function esLiderDeCelulaPersona(array $persona): bool {
+        $idPersona = (int)($persona['Id_Persona'] ?? 0);
+        $idRol = (int)($persona['Id_Rol'] ?? 0);
+        if ($idRol > 0 && $this->getJerarquiaByRol($idRol) === 'lider_celula') {
+            return true;
+        }
+        if ($idPersona <= 0) {
+            return false;
+        }
+        return $this->personaDirigeCelula($idPersona);
+    }
+
+    public function personaDirigeCelula(int $idPersona): bool {
+        $idPersona = (int)$idPersona;
+        if ($idPersona <= 0 || !$this->tieneTabla('celula')) {
+            return false;
+        }
+        $row = $this->query(
+            'SELECT 1 AS ok FROM celula WHERE Id_Lider = ? LIMIT 1',
+            [$idPersona]
+        );
+        return !empty($row[0]['ok']);
+    }
+
+    /**
+     * @param int[] $idsPersona
+     * @return array<int, true> Id_Persona que dirigen al menos una célula
+     */
+    public function mapaIdsQueDirigenCelula(array $idsPersona): array {
+        $ids = [];
+        foreach ($idsPersona as $id) {
+            $id = (int)$id;
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+        if ($ids === [] || !$this->tieneTabla('celula')) {
+            return [];
+        }
+        $inSql = implode(',', array_map('intval', array_values($ids)));
+        $rows = $this->query(
+            "SELECT DISTINCT Id_Lider
+             FROM celula
+             WHERE Id_Lider IN ({$inSql})
+               AND Id_Lider IS NOT NULL
+               AND Id_Lider > 0"
+        );
+        $mapa = [];
+        foreach ((array)$rows as $row) {
+            $id = (int)($row['Id_Lider'] ?? 0);
+            if ($id > 0) {
+                $mapa[$id] = true;
+            }
+        }
+        return $mapa;
+    }
+
+    /**
+     * Proceso que ve la ficha (escalera), no solo la columna Proceso.
+     * Enviar = dirige célula / rol líder de célula. Pastor y líder 12 también Enviar.
+     *
+     * @param array{encuentro?:bool,universidad_vida?:bool,bautismo?:bool,capacitacion_destino?:bool} $flagsFormacion
+     */
+    public function resolverProcesoVisible(array $persona, array $flagsFormacion = []): string {
         $permitidos = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
         $idRol = (int)($persona['Id_Rol'] ?? 0);
-        if ($idRol > 0) {
-            $jerarquia = $this->getJerarquiaByRol($idRol);
-            if (in_array($jerarquia, ['pastor', 'lider_12', 'lider_celula'], true)) {
-                return 'Enviar';
-            }
+        $jerarquia = $idRol > 0 ? $this->getJerarquiaByRol($idRol) : '';
+        if (in_array($jerarquia, ['pastor', 'lider_12', 'lider_celula'], true)) {
+            return 'Enviar';
         }
 
         $checklist = $this->normalizarChecklistParaProcesoVisible($persona['Escalera_Checklist'] ?? null);
         $checklist['Ganar'][1] = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
-        $tieneCelula = !empty($persona['Id_Celula']);
-        $checklist['Ganar'][4] = $tieneCelula;
-        if ($tieneCelula) {
-            $checklist['Enviar'][2] = true;
-        }
+        $checklist['Ganar'][4] = !empty($persona['Id_Celula']);
+        $esLiderCelula = $this->esLiderDeCelulaPersona($persona);
+        $checklist['Enviar'][2] = $esLiderCelula;
 
-        $calculado = $this->calcularProcesoDesdeChecklist($checklist);
+        $contexto = [
+            'es_lider_celula' => $esLiderCelula,
+            'inscrito_uv' => !empty($flagsFormacion['universidad_vida']),
+            'inscrito_encuentro' => !empty($flagsFormacion['encuentro']),
+        ];
+
+        $calculado = $this->calcularProcesoDesdeChecklist($checklist, $contexto);
         if (!in_array($calculado, $permitidos, true)) {
-            $calculado = 'Ganar';
-        }
-
-        $guardado = trim((string)($persona['Proceso'] ?? ''));
-        if (in_array($guardado, $permitidos, true)) {
-            $idxCalc = array_search($calculado, $permitidos, true);
-            $idxGuard = array_search($guardado, $permitidos, true);
-            if ($idxGuard !== false && $idxCalc !== false && $idxGuard > $idxCalc) {
-                return $guardado;
-            }
+            return 'Ganar';
         }
 
         return $calculado;
@@ -2125,32 +2180,124 @@ class Persona extends BaseModel {
         return $normalizado;
     }
 
-    public function calcularProcesoDesdeChecklist(array $checklist): string {
+    /**
+     * Reglas de etapa:
+     * - Enviar: dirige una célula o es líder de célula (contexto o casilla Enviar[2]).
+     * - Discipular: al menos un ítem de Discipular.
+     * - Consolidar: casilla UV, casilla Encuentro, inscripción UV o inscripción/asistencia Encuentro.
+     * - Ganar: resto (incluida "No se dispone").
+     * Bautismo solo no pasa a Consolidar. Completar Ganar solo no pasa a Consolidar.
+     *
+     * @param array{es_lider_celula?:bool,inscrito_uv?:bool,inscrito_encuentro?:bool} $contexto
+     */
+    public function calcularProcesoDesdeChecklist(array $checklist, array $contexto = []): string {
         if (!empty($checklist['Ganar'][5])) {
             return 'Ganar';
         }
 
+        $esLiderCelula = !empty($contexto['es_lider_celula']) || !empty($checklist['Enviar'][2]);
+        if ($esLiderCelula) {
+            return 'Enviar';
+        }
+
         $discipular = $checklist['Discipular'] ?? [];
-        $consolidar = $checklist['Consolidar'] ?? [];
-        $ganar = $checklist['Ganar'] ?? [];
-
         $hayDiscipular = !empty($discipular[0]) || !empty($discipular[1]) || !empty($discipular[2]);
-        $discipularCompleto = !empty($discipular[0]) && !empty($discipular[1]) && !empty($discipular[2]);
-        $hayConsolidar = !empty($consolidar[0]) || !empty($consolidar[1]) || !empty($consolidar[2]);
-        $consolidarCompleto = !empty($consolidar[0]) && !empty($consolidar[1]) && !empty($consolidar[2]);
-        $ganarCompleto = !empty($ganar[0]) && !empty($ganar[1]) && !empty($ganar[2]) && !empty($ganar[3]);
-
         if ($hayDiscipular) {
-            return $discipularCompleto ? 'Enviar' : 'Discipular';
+            return 'Discipular';
         }
+
+        $consolidar = $checklist['Consolidar'] ?? [];
+        $hayConsolidar = !empty($consolidar[0])
+            || !empty($consolidar[1])
+            || !empty($contexto['inscrito_uv'])
+            || !empty($contexto['inscrito_encuentro']);
         if ($hayConsolidar) {
-            return $consolidarCompleto ? 'Discipular' : 'Consolidar';
-        }
-        if ($ganarCompleto) {
             return 'Consolidar';
         }
 
         return 'Ganar';
+    }
+
+    /**
+     * Etapa + subpaso actual de la escalera (ej. "Consolidar / Bautismo").
+     *
+     * @param array<string, mixed> $persona
+     * @param array{encuentro?:bool,universidad_vida?:bool,bautismo?:bool,capacitacion_destino?:bool} $flagsFormacion
+     */
+    public function describirProcesoConDetalle(array $persona, string $proceso = '', array $flagsFormacion = []): string {
+        $permitidos = ['Ganar', 'Consolidar', 'Discipular', 'Enviar'];
+        $proceso = trim($proceso);
+        if (!in_array($proceso, $permitidos, true)) {
+            $proceso = $this->resolverProcesoVisible($persona);
+        }
+        if (!in_array($proceso, $permitidos, true)) {
+            return 'Sin proceso';
+        }
+
+        $checklist = $this->normalizarChecklistParaProcesoVisible($persona['Escalera_Checklist'] ?? null);
+        $checklist['Ganar'][1] = !empty($persona['Id_Lider']) && !empty($persona['Id_Ministerio']);
+        $checklist['Ganar'][4] = !empty($persona['Id_Celula']);
+        $checklist['Enviar'][2] = $this->esLiderDeCelulaPersona($persona);
+
+        if (!empty($flagsFormacion['universidad_vida'])) {
+            $checklist['Consolidar'][0] = true;
+        }
+        if (!empty($flagsFormacion['encuentro'])) {
+            $checklist['Consolidar'][1] = true;
+        }
+        if (!empty($flagsFormacion['bautismo'])) {
+            $checklist['Consolidar'][2] = true;
+        }
+        if (!empty($flagsFormacion['capacitacion_destino'])) {
+            // Sin nivel exacto: marcar al menos el primer módulo si aún no hay checklist.
+            if (empty($checklist['Discipular'][0]) && empty($checklist['Discipular'][1]) && empty($checklist['Discipular'][2])) {
+                $checklist['Discipular'][0] = true;
+            }
+        }
+
+        $etiquetas = [
+            'Ganar' => [
+                0 => 'Primer contacto',
+                1 => 'Líder y ministerio',
+                2 => 'Fonovisita',
+                3 => 'Visita',
+                4 => 'Ubicado en célula',
+                5 => 'No se dispone',
+            ],
+            'Consolidar' => [
+                0 => 'Universidad de la Vida',
+                1 => 'Encuentro',
+                2 => 'Bautismo',
+            ],
+            'Discipular' => [
+                0 => 'Cap. Destino N1',
+                1 => 'Cap. Destino N2',
+                2 => 'Cap. Destino N3',
+            ],
+            'Enviar' => [
+                2 => 'Dirige célula',
+            ],
+        ];
+
+        $items = $etiquetas[$proceso] ?? [];
+        $detalle = '';
+        foreach ($items as $indice => $etiqueta) {
+            if (empty($checklist[$proceso][(int)$indice])) {
+                $detalle = $etiqueta;
+                break;
+            }
+        }
+        if ($detalle === '' && $items !== []) {
+            $claves = array_keys($items);
+            $ultima = (int)end($claves);
+            $detalle = (string)$items[$ultima];
+        }
+
+        if ($detalle === '') {
+            return $proceso;
+        }
+
+        return $proceso . ' / ' . $detalle;
     }
 
     /**
@@ -3603,6 +3750,8 @@ class Persona extends BaseModel {
             return ['total' => 0, 'hombres' => 0, 'mujeres' => 0];
         }
 
+        // Conteo absoluto del ministerio: TODAS las fichas del ministerio
+        // (activas e inactivas, con/sin líder o célula). Hombres/mujeres por Genero.
         $sql = "SELECT
                     COUNT(*) AS Total,
                     SUM(
@@ -3611,16 +3760,26 @@ class Persona extends BaseModel {
                               OR LOWER(COALESCE(p.Genero, '')) LIKE '%femen%'
                             THEN 1 ELSE 0
                         END
-                    ) AS Mujeres
+                    ) AS Mujeres,
+                    SUM(
+                        CASE
+                            WHEN LOWER(COALESCE(p.Genero, '')) LIKE '%mujer%'
+                              OR LOWER(COALESCE(p.Genero, '')) LIKE '%femen%'
+                            THEN 0
+                            WHEN LOWER(COALESCE(p.Genero, '')) LIKE '%hombre%'
+                              OR LOWER(COALESCE(p.Genero, '')) LIKE '%mascul%'
+                              OR LOWER(TRIM(COALESCE(p.Genero, ''))) IN ('m', 'h', 'male')
+                            THEN 1 ELSE 0
+                        END
+                    ) AS Hombres
                 FROM {$this->table} p
                 WHERE p.Id_Ministerio = ?
-                  AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
                   AND {$filtroRol}";
 
         $rows = $this->query($sql, [$idMinisterio]);
         $total = (int)($rows[0]['Total'] ?? 0);
         $mujeres = (int)($rows[0]['Mujeres'] ?? 0);
-        $hombres = max(0, $total - $mujeres);
+        $hombres = (int)($rows[0]['Hombres'] ?? 0);
 
         return [
             'total' => $total,

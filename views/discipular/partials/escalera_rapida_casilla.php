@@ -110,9 +110,9 @@ $attrDisabled = $escaleraPuedeEditar ? '' : 'disabled';
         </label>
     </div>
     <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Enviar" hidden>
-        <label class="escalera-inline-item" title="Célula">
-            <input type="checkbox" class="js-inline-escalera-check" data-etapa="Enviar" data-indice="2" <?= (!empty($checklistEscalera['Enviar'][2]) || $escaleraIdCelula > 0) ? 'checked' : '' ?> <?= $attrDisabled ?>>
-            <span>Célula</span>
+        <label class="escalera-inline-item is-auto" title="Se marca solo si dirige una célula o es líder de célula">
+            <input type="checkbox" class="js-inline-escalera-check" data-etapa="Enviar" data-indice="2" <?= !empty($checklistEscalera['Enviar'][2]) ? 'checked' : '' ?> disabled>
+            <span>Dirige célula</span>
         </label>
     </div>
 </div>

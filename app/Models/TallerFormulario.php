@@ -30,10 +30,6 @@ class TallerFormulario extends BaseModel {
         'persona_fecha_nacimiento' => 'Fecha de nacimiento',
         'persona_edad' => 'Edad',
         'persona_telefono' => 'Teléfono de contacto',
-        'persona_email' => 'Correo electrónico',
-        'persona_direccion' => 'Dirección de residencia',
-        'persona_estado_civil' => 'Estado civil',
-        'persona_ocupacion' => 'Ocupación',
         'persona_lider' => 'Líder',
         'persona_ministerio' => 'Ministerio',
     ];
@@ -56,6 +52,7 @@ class TallerFormulario extends BaseModel {
 
     public const TIPO_PLANTILLA_GENERAL = 'general';
     public const TIPO_PLANTILLA_PRESENTACION_NINOS = 'presentacion_ninos';
+    public const TIPO_PLANTILLA_FIESTA_NINOS = 'fiesta_ninos';
     public const TIPO_PLANTILLA_TOUR_LEVANTATE = 'tour_levantate';
 
     public function __construct() {
@@ -488,8 +485,42 @@ class TallerFormulario extends BaseModel {
         if ($slug === 'presentacion-ninos' || str_starts_with($slug, 'presentacion-ninos-')) {
             return true;
         }
-        $titulo = strtolower(trim((string)($formulario['Titulo'] ?? '')));
-        return str_contains($titulo, 'presentación de niños') || str_contains($titulo, 'presentacion de ninos');
+        $titulo = $this->normalizarTextoBusqueda((string)($formulario['Titulo'] ?? ''));
+        return str_contains($titulo, 'presentacion de ninos');
+    }
+
+    public function esFiestaNinos(?array $formulario): bool {
+        if (!is_array($formulario)) {
+            return false;
+        }
+        if (trim((string)($formulario['Tipo_Plantilla'] ?? '')) === self::TIPO_PLANTILLA_FIESTA_NINOS) {
+            return true;
+        }
+        $slug = strtolower(trim((string)($formulario['Slug'] ?? '')));
+        if ($slug === 'fiesta-de-los-ninos' || str_starts_with($slug, 'fiesta-de-los-ninos')) {
+            return true;
+        }
+        if (str_contains($slug, 'fiesta') && str_contains($slug, 'ninos')) {
+            return true;
+        }
+        $titulo = $this->normalizarTextoBusqueda((string)($formulario['Titulo'] ?? ''));
+        return str_contains($titulo, 'fiesta de los ninos')
+            || (str_contains($titulo, 'fiesta') && str_contains($titulo, 'ninos'));
+    }
+
+    /**
+     * Presentación o Fiesta: formulario fijo (padres, niño, edad, ministerio) aislado en Talleres.
+     */
+    public function esInscripcionNinosFija(?array $formulario): bool {
+        return $this->esPresentacionNinos($formulario) || $this->esFiestaNinos($formulario);
+    }
+
+    private function normalizarTextoBusqueda(string $texto): string {
+        $texto = mb_strtolower(trim($texto));
+        return strtr($texto, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u',
+            'ü' => 'u', 'ñ' => 'n',
+        ]);
     }
 
     /**
@@ -523,14 +554,30 @@ class TallerFormulario extends BaseModel {
     }
 
     public function asegurarTipoPlantillaPresentacionNinos(int $idFormulario): void {
+        $this->asegurarTipoPlantillaInscripcionNinos($idFormulario);
+    }
+
+    public function asegurarTipoPlantillaInscripcionNinos(int $idFormulario): void {
         if ($idFormulario <= 0) {
             return;
         }
         $formulario = $this->getById($idFormulario);
-        if (!$formulario || !$this->esPresentacionNinos($formulario)) {
+        if (!$formulario || !$this->esInscripcionNinosFija($formulario)) {
             return;
         }
-        if (trim((string)($formulario['Tipo_Plantilla'] ?? '')) === self::TIPO_PLANTILLA_PRESENTACION_NINOS) {
+
+        $tipoActual = trim((string)($formulario['Tipo_Plantilla'] ?? ''));
+        if ($this->esFiestaNinos($formulario)) {
+            if ($tipoActual === self::TIPO_PLANTILLA_FIESTA_NINOS) {
+                return;
+            }
+            $this->update($idFormulario, [
+                'Tipo_Plantilla' => self::TIPO_PLANTILLA_FIESTA_NINOS,
+            ]);
+            return;
+        }
+
+        if ($tipoActual === self::TIPO_PLANTILLA_PRESENTACION_NINOS) {
             return;
         }
         $this->update($idFormulario, [
@@ -677,11 +724,11 @@ class TallerFormulario extends BaseModel {
         }
 
         $formulario = $this->getById($idFormulario) ?: [];
-        $esPresentacionNinos = $this->esPresentacionNinos($formulario);
+        $esInscripcionNinosFija = $this->esInscripcionNinosFija($formulario);
 
         $bloques = $this->getBloquesPorFormulario($idFormulario);
         if (empty($bloques)) {
-            if ($esPresentacionNinos) {
+            if ($esInscripcionNinosFija) {
                 $this->reemplazarBloquesPresentacionNinos($idFormulario);
             } else {
                 $this->migrarFormularioLegacy($idFormulario);
@@ -689,8 +736,9 @@ class TallerFormulario extends BaseModel {
             $bloques = $this->getBloquesPorFormulario($idFormulario);
         }
 
-        if ($esPresentacionNinos) {
-            $this->ensureBloquesPresentacionNinos($idFormulario, $bloques);
+        if ($esInscripcionNinosFija) {
+            // Bloques fijos: padres, niño y consentimiento (sin documentos).
+            $this->ensureBloquesInscripcionNinosFija($idFormulario, $bloques, false);
         } else {
             $this->ensureBloquePersona($idFormulario, $bloques);
         }
@@ -833,9 +881,22 @@ class TallerFormulario extends BaseModel {
      * @param array<int, array<string, mixed>> $bloquesExistentes
      */
     private function ensureBloquesPresentacionNinos(int $idFormulario, array $bloquesExistentes): void {
+        $this->ensureBloquesInscripcionNinosFija($idFormulario, $bloquesExistentes, false);
+    }
+
+    /**
+     * Garantiza bloques padres/niño (sin documentos). Migra sin borrar preguntas personalizadas.
+     *
+     * @param array<int, array<string, mixed>> $bloquesExistentes
+     */
+    private function ensureBloquesInscripcionNinosFija(
+        int $idFormulario,
+        array $bloquesExistentes,
+        bool $forzarDocumentos = false
+    ): void {
         $tienePadres = false;
         $tieneNino = false;
-        $tieneDocumentos = false;
+        $tienePersona = false;
         foreach ($bloquesExistentes as $bloque) {
             $tipo = (string)($bloque['Tipo'] ?? '');
             if ($tipo === 'padres') {
@@ -844,16 +905,92 @@ class TallerFormulario extends BaseModel {
             if ($tipo === 'nino') {
                 $tieneNino = true;
             }
-            if ($tipo === 'documentos') {
-                $tieneDocumentos = true;
+            if ($tipo === 'persona') {
+                $tienePersona = true;
             }
         }
+
+        // Quitar bloque de documentos si aún existe en formularios antiguos.
+        $this->eliminarBloquesDocumentosInscripcionNinos($idFormulario, $bloquesExistentes);
+
         if (!$tienePadres || !$tieneNino) {
-            $this->reemplazarBloquesPresentacionNinos($idFormulario);
-            return;
+            if (!$tienePersona) {
+                $this->reemplazarBloquesPresentacionNinos($idFormulario);
+                return;
+            }
+            $this->migrarABloquesInscripcionNinosFija($idFormulario, $bloquesExistentes, false);
         }
-        if (!$tieneDocumentos) {
-            $this->insertarBloqueDocumentosPresentacion($idFormulario, $bloquesExistentes);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $bloquesExistentes
+     */
+    private function eliminarBloquesDocumentosInscripcionNinos(int $idFormulario, array $bloquesExistentes): void {
+        foreach ($bloquesExistentes as $bloque) {
+            if ((string)($bloque['Tipo'] ?? '') !== 'documentos') {
+                continue;
+            }
+            $idBloque = (int)($bloque['Id_Bloque'] ?? 0);
+            if ($idBloque <= 0) {
+                continue;
+            }
+            $this->execute('DELETE FROM talleres_formulario_campo WHERE Id_Bloque = ?', [$idBloque]);
+            $this->execute('DELETE FROM talleres_formulario_bloque WHERE Id_Bloque = ?', [$idBloque]);
+        }
+    }
+
+    /**
+     * Sustituye el bloque persona por padres/niño y conserva personalizados.
+     *
+     * @param array<int, array<string, mixed>> $bloquesExistentes
+     */
+    private function migrarABloquesInscripcionNinosFija(
+        int $idFormulario,
+        array $bloquesExistentes,
+        bool $conDocumentos
+    ): void {
+        foreach ($bloquesExistentes as $bloque) {
+            if ((string)($bloque['Tipo'] ?? '') !== 'persona') {
+                continue;
+            }
+            $idBloque = (int)($bloque['Id_Bloque'] ?? 0);
+            if ($idBloque <= 0) {
+                continue;
+            }
+            $this->execute('DELETE FROM talleres_formulario_campo WHERE Id_Bloque = ?', [$idBloque]);
+            $this->execute('DELETE FROM talleres_formulario_bloque WHERE Id_Bloque = ?', [$idBloque]);
+        }
+
+        $this->execute(
+            'UPDATE talleres_formulario_bloque SET Orden = Orden + 10 WHERE Id_Formulario = ?',
+            [$idFormulario]
+        );
+
+        $this->insertEnTabla('talleres_formulario_bloque', [
+            'Id_Formulario' => $idFormulario,
+            'Titulo' => '1. Datos de los padres o acudientes',
+            'Tipo' => 'padres',
+            'Orden' => 0,
+        ]);
+        $this->insertEnTabla('talleres_formulario_bloque', [
+            'Id_Formulario' => $idFormulario,
+            'Titulo' => '2. Datos del niño(a)',
+            'Tipo' => 'nino',
+            'Orden' => 1,
+        ]);
+
+        if ($conDocumentos) {
+            $bloques = $this->getBloquesPorFormulario($idFormulario);
+            $tieneDocumentos = false;
+            foreach ($bloques as $bloque) {
+                if ((string)($bloque['Tipo'] ?? '') === 'documentos') {
+                    $tieneDocumentos = true;
+                    break;
+                }
+            }
+            if (!$tieneDocumentos) {
+                $this->insertarBloqueDocumentosPresentacion($idFormulario, $bloques);
+            }
         }
     }
 
@@ -903,15 +1040,9 @@ class TallerFormulario extends BaseModel {
         ]);
         $this->insertEnTabla('talleres_formulario_bloque', [
             'Id_Formulario' => $idFormulario,
-            'Titulo' => '3. Documentos',
-            'Tipo' => 'documentos',
-            'Orden' => 2,
-        ]);
-        $this->insertEnTabla('talleres_formulario_bloque', [
-            'Id_Formulario' => $idFormulario,
-            'Titulo' => '4. Consentimiento',
+            'Titulo' => '3. Consentimiento',
             'Tipo' => 'autorizacion',
-            'Orden' => 3,
+            'Orden' => 2,
         ]);
     }
 
@@ -922,7 +1053,7 @@ class TallerFormulario extends BaseModel {
         return [
             'titulo' => 'Presentación de niños',
             'slug' => 'presentacion-ninos',
-            'descripcion' => 'Formulario de inscripción para la presentación de niños. Los datos del acudiente deben estar registrados en el sistema.',
+            'descripcion' => 'Inscripción fija: nombre de los padres, nombre del niño(a), edad y ministerio. Los datos quedan solo en Talleres.',
             'mensaje_gracias' => '¡Gracias! Hemos recibido la inscripción para la presentación de su niño(a).',
             'texto_autorizacion' => 'Autorizo el tratamiento de datos personales e imágenes del niño(a) registrado en este formulario, '
                 . 'exclusivamente para fines pastorales, de seguimiento y difusión interna del ministerio infantil y de la iglesia, '
@@ -1059,7 +1190,7 @@ class TallerFormulario extends BaseModel {
             return;
         }
 
-        $conservarTipos = ['padres', 'nino', 'documentos'];
+        $conservarTipos = ['padres', 'nino'];
         $existentes = $this->getBloquesPorFormulario($idFormulario);
         $conservados = [];
         foreach ($existentes as $bloque) {
@@ -1569,6 +1700,66 @@ class TallerFormulario extends BaseModel {
                 'id_respuesta' => $idRespuesta,
                 'fecha' => (string)($row['Fecha_Registro'] ?? ''),
                 'nino_nombre' => trim((string)($json['nino_nombre'] ?? '')),
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Duplicado de presentación de niños por nombres (formulario fijo sin documento).
+     *
+     * @return array{id_respuesta:int, fecha:string, nino_nombre:string, padres_nombre:string}|null
+     */
+    public function buscarInscripcionPresentacionPorNombres(
+        int $idFormulario,
+        string $padresNombre,
+        string $ninoNombre,
+        int $idApertura = 0,
+        int $excluirIdRespuesta = 0
+    ): ?array {
+        $padresNombre = mb_strtolower(trim($padresNombre));
+        $ninoNombre = mb_strtolower(trim($ninoNombre));
+        if ($idFormulario <= 0 || $padresNombre === '' || $ninoNombre === '') {
+            return null;
+        }
+
+        $sql = 'SELECT Id_Respuesta, Datos_JSON, Fecha_Registro FROM talleres_formulario_respuesta WHERE Id_Formulario = ?';
+        $params = [$idFormulario];
+        if ($idApertura > 0) {
+            $sql .= ' AND Id_Apertura = ?';
+            $params[] = $idApertura;
+        }
+        $rows = $this->query($sql, $params);
+
+        foreach ($rows as $row) {
+            $idRespuesta = (int)($row['Id_Respuesta'] ?? 0);
+            if ($idRespuesta <= 0) {
+                continue;
+            }
+            if ($excluirIdRespuesta > 0 && $idRespuesta === $excluirIdRespuesta) {
+                continue;
+            }
+
+            $json = json_decode((string)($row['Datos_JSON'] ?? '{}'), true);
+            if (!is_array($json)) {
+                continue;
+            }
+
+            $padresRow = mb_strtolower(trim((string)($json['padres_nombre'] ?? '')));
+            $ninoRow = mb_strtolower(trim((string)($json['nino_nombre'] ?? '')));
+            if ($padresRow === '' || $ninoRow === '') {
+                continue;
+            }
+            if ($padresRow !== $padresNombre || $ninoRow !== $ninoNombre) {
+                continue;
+            }
+
+            return [
+                'id_respuesta' => $idRespuesta,
+                'fecha' => (string)($row['Fecha_Registro'] ?? ''),
+                'nino_nombre' => trim((string)($json['nino_nombre'] ?? '')),
+                'padres_nombre' => trim((string)($json['padres_nombre'] ?? '')),
             ];
         }
 
