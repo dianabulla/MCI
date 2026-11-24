@@ -340,6 +340,7 @@ return [
     'escuelas_formacion/inscritos' => 'EscuelaFormacionRegistroController@listadoInscritos',
     'escuelas_formacion/inscritos/guardar-asistencia' => 'EscuelaFormacionRegistroController@guardarAsistenciaClase',
     'escuelas_formacion/inscritos/eliminar' => 'EscuelaFormacionRegistroController@eliminarInscripcionListado',
+    'escuelas_formacion/inscritos/cerrar-ciclo' => 'EscuelaFormacionRegistroController@cerrarCicloInscripcionListado',
     'escuelas_formacion/inscritos/abono-admin' => 'EscuelaFormacionRegistroController@abonoAdminPreauth',
     'escuelas_formacion/asistencia-publica' => 'EscuelaFormacionRegistroController@asistenciaPublica',
     'escuelas_formacion/asistencia-publica/qr' => 'EscuelaFormacionRegistroController@asistenciaPublicaQr',

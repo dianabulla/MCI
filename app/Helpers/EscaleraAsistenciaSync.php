@@ -148,6 +148,21 @@ class EscaleraAsistenciaSync {
             $this->decodificarChecklist((string)($persona['Escalera_Checklist'] ?? ''))
         );
         $this->aplicarReglasAutomaticasGanar($checklist, $persona);
+
+        // Si el ciclo UV fue cerrado y no hay inscripción abierta, no reactivar Consolidar.
+        $cicloCerrado = !empty($checklist['_meta']['uv_ciclo_cerrado']);
+        $tieneUvAbierta = $this->inscripcionModel->tieneInscripcionUvAbierta($idPersona);
+        if ($cicloCerrado && !$tieneUvAbierta) {
+            $checklist['Consolidar'][0] = false;
+            $checklist['Consolidar'][1] = false;
+            $this->persistir($idPersona, $checklist, $persona);
+            return;
+        }
+
+        if ($tieneUvAbierta) {
+            $checklist['_meta']['uv_ciclo_cerrado'] = false;
+        }
+
         if ($tieneUv) {
             $checklist['Consolidar'][0] = true;
         }
@@ -302,6 +317,9 @@ class EscaleraAsistenciaSync {
             'reasignado_manual' => false,
             'reasignado_manual_at' => '',
             'reasignado_manual_motivo' => '',
+            'uv_ciclo_cerrado' => false,
+            'uv_ciclo_cerrado_at' => '',
+            'uv_ciclo_cerrado_inscripcion' => 0,
         ];
 
         if (!is_array($checklist)) {
@@ -330,6 +348,9 @@ class EscaleraAsistenciaSync {
             $normalizado['_meta']['reasignado_manual'] = !empty($checklist['_meta']['reasignado_manual']);
             $normalizado['_meta']['reasignado_manual_at'] = trim((string)($checklist['_meta']['reasignado_manual_at'] ?? ''));
             $normalizado['_meta']['reasignado_manual_motivo'] = trim((string)($checklist['_meta']['reasignado_manual_motivo'] ?? ''));
+            $normalizado['_meta']['uv_ciclo_cerrado'] = !empty($checklist['_meta']['uv_ciclo_cerrado']);
+            $normalizado['_meta']['uv_ciclo_cerrado_at'] = trim((string)($checklist['_meta']['uv_ciclo_cerrado_at'] ?? ''));
+            $normalizado['_meta']['uv_ciclo_cerrado_inscripcion'] = (int)($checklist['_meta']['uv_ciclo_cerrado_inscripcion'] ?? 0);
         }
 
         return $normalizado;

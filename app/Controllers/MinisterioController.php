@@ -1192,6 +1192,27 @@ class MinisterioController extends BaseController {
             $totalesPersonasMinisterio = $this->personaModel->contarPersonasActivasPorGenero($filtroPersonas);
         }
 
+        $idsParaCelulas = [];
+        foreach (array_keys($equipoDirectoPorLider) as $idLiderMapa) {
+            $idsParaCelulas[] = (int)$idLiderMapa;
+            foreach ((array)($equipoDirectoPorLider[$idLiderMapa] ?? []) as $slotMapa) {
+                if (!is_array($slotMapa)) {
+                    continue;
+                }
+                $idSlotMapa = (int)($slotMapa['id_persona'] ?? 0);
+                if ($idSlotMapa > 0) {
+                    $idsParaCelulas[] = $idSlotMapa;
+                }
+            }
+        }
+        if ($idLiderPrincipal1 > 0) {
+            $idsParaCelulas[] = $idLiderPrincipal1;
+        }
+        if ($idLiderPrincipal2 > 0) {
+            $idsParaCelulas[] = $idLiderPrincipal2;
+        }
+        $celulasPorLider = $this->celulaModel->mapaNombresCelulasPorLideres($idsParaCelulas);
+
         $this->view('discipular/ministerios/lideres', [
             'id_ministerio_filtro' => $idMinisterioFiltro,
             'nombre_ministerio_filtro' => $nombreMinisterioFiltro,
@@ -1218,6 +1239,7 @@ class MinisterioController extends BaseController {
             ],
             'ministerios_navegacion' => $ministeriosNavegacion,
             'equipo_directo_por_lider' => $equipoDirectoPorLider,
+            'celulas_por_lider' => $celulasPorLider,
             'codigos_jerarquia' => $codigosJerarquia,
             'es_ministerio_pastoral' => $esMinisterioPastoral,
             'ids_lideres_12_cobertura_cupo' => $idsLideres12CoberturaCupo,

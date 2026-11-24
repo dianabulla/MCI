@@ -1224,7 +1224,7 @@ class HomeController extends BaseController {
         $totalProgramas = $inscripcionModel->contarPersonasUnicasInscritas([
             'universidad_vida',
             'capacitacion_destino',
-        ]);
+        ], $filtroPersonas);
 
         $data = [
             'totalPersonas' => $totalPersonas,

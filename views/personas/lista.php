@@ -10,7 +10,7 @@ $mostrarAcciones = $puedeVerPersona || $puedeEditarPersona || $puedeEliminarPers
 $mostrarEscaleraRapida = $puedeModuloGanarCompleto;
 ?>
 
-<div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
+<div class="page-header" data-tour="page-personas" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
     <h2 style="margin:0;">Escalera del éxito</h2>
     <div class="personas-header-actions">
         <?php if ($puedeModuloGanarCompleto): ?>
@@ -63,6 +63,16 @@ $mostrarEscaleraRapida = $puedeModuloGanarCompleto;
             return PUBLIC_URL . '?' . http_build_query($params);
         };
         $returnUrlPersonas = $buildPersonasUrl();
+        $puedeExportarExcelPersonas = AuthController::esAdministrador()
+            || AuthController::puede('personas:exportar_excel')
+            || AuthController::puede('personas:editar');
+        $buildExportExcelUrl = static function(array $extra = []) use ($queryBasePersonas) {
+            $params = array_merge($queryBasePersonas, $extra, ['url' => 'personas/exportarExcel']);
+            $params = array_filter($params, static function($value) {
+                return $value !== null && $value !== '';
+            });
+            return PUBLIC_URL . '?' . http_build_query($params);
+        };
         ?>
         <form method="GET" action="<?= PUBLIC_URL ?>" class="filters-inline" id="filtro_perfil_form">
             <input type="hidden" name="url" value="personas">
@@ -227,12 +237,14 @@ $listasConexion = [
         'exportTitle' => 'Por conectar — Escalera del éxito',
         'filename' => 'escalera-por-conectar',
         'clase' => '',
+        'perfilExport' => 'pendientes_conectar',
     ],
     [
         'id' => 'listaEnSeguimiento',
         'btn' => 'btnEnSeguimiento',
         'titulo' => 'En seguimiento',
         'texto' => 'Salieron de Nuevos o de Por conectar. Quien solo asiste a la iglesia queda aquí. Cuando tengan líder y célula, salen de esta lista.',
+        'ayuda' => 'Cómo usarlo: abre «En seguimiento», anota avances (llamadas/visitas) y, cuando tengan líder y célula, salen solos de esta lista. Sirve para no perder de vista a quien solo asiste.',
         'personas' => $personasEnSeguimientoVista,
         'total' => $totalEnSeguimientoBanner,
         'abierta' => $perfilListaActual === 'en_seguimiento',
@@ -242,6 +254,7 @@ $listasConexion = [
         'exportTitle' => 'En seguimiento — Escalera del éxito',
         'filename' => 'escalera-en-seguimiento',
         'clase' => ' por-conectar-toggle-seguimiento',
+        'perfilExport' => 'en_seguimiento',
     ],
 ];
 ?>
@@ -262,8 +275,21 @@ $listasConexion = [
 </button>
 
 <div id="<?= htmlspecialchars($listaConexion['id']) ?>"<?= !empty($listaConexion['abierta']) ? '' : ' hidden' ?>>
+<?php if (!empty($listaConexion['ayuda'])): ?>
+<div class="seguimiento-ayuda-box" style="margin:0 0 10px;padding:10px 12px;border-radius:10px;background:#f0f9ff;border:1px solid #bae6fd;color:#0c4a6e;font-size:0.86rem;line-height:1.45;">
+    <?= htmlspecialchars((string)$listaConexion['ayuda']) ?>
+</div>
+<?php endif; ?>
 <div class="discipulos-export-toolbar" style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-    <small style="color:#64748b;font-size:0.82rem;margin-right:auto;">La imagen refleja los discípulos visibles con los filtros actuales.</small>
+    <small style="color:#64748b;font-size:0.82rem;margin-right:auto;">La exportación refleja lo visible con los filtros actuales.</small>
+    <?php if (!empty($puedeExportarExcelPersonas)): ?>
+    <a
+        class="btn btn-outline-success btn-sm"
+        href="<?= htmlspecialchars($buildExportExcelUrl(['perfil' => (string)($listaConexion['perfilExport'] ?? '')]), ENT_QUOTES, 'UTF-8') ?>"
+        title="Exportar a Excel según filtros de pantalla">
+        <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+    </a>
+    <?php endif; ?>
     <button
         type="button"
         class="btn btn-outline-secondary btn-sm btn-descargar-imagen-tabla"
@@ -282,6 +308,7 @@ $listasConexion = [
         <thead>
             <tr>
                 <th>Nombre</th>
+                <th>Teléfono</th>
                 <th>Ministerio</th>
                 <th>Líder</th>
                 <th>Falta</th>
@@ -347,6 +374,26 @@ $listasConexion = [
                             <span class="ganar-cell-truncate persona-nombre-cell" title="<?= htmlspecialchars($persona['Nombre'] . ' ' . $persona['Apellido']) ?>">
                                 <?= htmlspecialchars($persona['Nombre'] . ' ' . $persona['Apellido']) ?>
                             </span>
+                        </td>
+                        <td>
+                            <?php
+                            $telConexion = preg_replace('/\D+/', '', (string)($persona['Telefono'] ?? ''));
+                            $telConexionMostrar = trim((string)($persona['Telefono'] ?? ''));
+                            ?>
+                            <?php if ($telConexion !== ''): ?>
+                            <?php $waConexion = (strpos($telConexion, '57') === 0) ? $telConexion : ('57' . $telConexion); ?>
+                            <span class="persona-tel-chip">
+                                <a class="persona-tel-call" href="tel:<?= htmlspecialchars($telConexion, ENT_QUOTES, 'UTF-8') ?>" title="Llamar">
+                                    <i class="bi bi-telephone-fill" aria-hidden="true"></i>
+                                    <span><?= htmlspecialchars($telConexionMostrar !== '' ? $telConexionMostrar : $telConexion) ?></span>
+                                </a>
+                                <a class="persona-tel-wa" href="https://wa.me/<?= htmlspecialchars($waConexion, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" title="WhatsApp" aria-label="WhatsApp">
+                                    <i class="bi bi-whatsapp" aria-hidden="true"></i>
+                                </a>
+                            </span>
+                            <?php else: ?>
+                            <span class="persona-tel-empty">—</span>
+                            <?php endif; ?>
                         </td>
                         <td><?= htmlspecialchars($persona['Nombre_Ministerio'] ?? 'Sin ministerio') ?></td>
                         <td><?= htmlspecialchars(trim((string)($persona['Nombre_Lider'] ?? '')) ?: 'Sin líder') ?></td>
@@ -470,7 +517,7 @@ $listasConexion = [
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <?php $columnasBase = 4 + ($mostrarEscaleraRapida ? 1 : 0) + ($mostrarAcciones ? 1 : 0); ?>
+                    <?php $columnasBase = 5 + ($mostrarEscaleraRapida ? 1 : 0) + ($mostrarAcciones ? 1 : 0); ?>
                     <td colspan="<?= (string)$columnasBase ?>" class="text-center"><?= htmlspecialchars($listaConexion['vacio']) ?></td>
                 </tr>
             <?php endif; ?>
@@ -560,9 +607,19 @@ foreach ($totalesMinisterioVista as $ministerioRedTot) {
 }
 ?>
 <section class="escalera-etapas" aria-label="Etapas de la escalera">
-    <div class="escalera-etapas-head">
-        <h3>Etapas de la escalera</h3>
-        <p>Personas activas de tu red (incluidos líderes de célula). Consolidar: UV o Encuentro · Discipular: al menos un ítem · Enviar: dirige una célula. Los filtros de arriba también aplican aquí.</p>
+    <div class="escalera-etapas-head" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start;">
+        <div>
+            <h3>Etapas de la escalera</h3>
+            <p>Personas activas de tu red (incluidos líderes de célula). Consolidar: UV o Encuentro · Discipular: al menos un ítem · Enviar: dirige una célula. Los filtros de arriba también aplican aquí.</p>
+        </div>
+        <?php if (!empty($puedeExportarExcelPersonas)): ?>
+        <a
+            class="btn btn-outline-success btn-sm"
+            href="<?= htmlspecialchars($buildExportExcelUrl(['etapa' => $etapaVistaActual !== '' ? $etapaVistaActual : 'ganar']), ENT_QUOTES, 'UTF-8') ?>"
+            title="Exportar a Excel la etapa y filtros actuales">
+            <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+        </a>
+        <?php endif; ?>
     </div>
     <div class="escalera-etapas-nav">
         <?php foreach ($etapasEscaleraNav as $claveNav => $etapaNav): ?>
@@ -626,16 +683,23 @@ foreach ($totalesMinisterioVista as $ministerioRedTot) {
             <thead>
                 <tr>
                     <th>Persona</th>
+                    <th>Teléfono</th>
                     <th>Ministerio</th>
                     <th>Líder</th>
                     <th>Etapa</th>
+                    <?php if ($mostrarEscaleraRapida): ?>
+                    <th class="escalera-inline-col">Escalera rápida</th>
+                    <?php endif; ?>
                     <?php if ($mostrarAcciones): ?><th class="action-col">Acciones</th><?php endif; ?>
                 </tr>
             </thead>
             <tbody>
+                <?php
+                $colspanEtapas = 5 + ($mostrarEscaleraRapida ? 1 : 0) + ($mostrarAcciones ? 1 : 0);
+                ?>
                 <?php if ($personasEtapasVista === []): ?>
                 <tr>
-                    <td colspan="<?= $mostrarAcciones ? '5' : '4' ?>" class="text-center">No hay personas en esta etapa con los filtros actuales.</td>
+                    <td colspan="<?= (int)$colspanEtapas ?>" class="text-center">No hay personas en esta etapa con los filtros actuales.</td>
                 </tr>
                 <?php else: ?>
                     <?php foreach ($personasEtapasVista as $personaEtapa): ?>
@@ -661,12 +725,96 @@ foreach ($totalesMinisterioVista as $ministerioRedTot) {
                     if ($cedulaEtapa !== '') {
                         $qsInscripcionPersona .= '&cedula=' . rawurlencode($cedulaEtapa);
                     }
+                    $telEtapa = preg_replace('/\D+/', '', (string)($personaEtapa['Telefono'] ?? ''));
+                    $telEtapaMostrar = trim((string)($personaEtapa['Telefono'] ?? ''));
+                    $checklistEtapaRaw = (string)($personaEtapa['Escalera_Checklist'] ?? '');
+                    $checklistEtapa = [
+                        'Ganar' => [false, false, false, false, false, false],
+                        'Consolidar' => [false, false, false],
+                        'Discipular' => [false, false, false],
+                        'Enviar' => [false, false, false],
+                    ];
+                    if ($checklistEtapaRaw !== '') {
+                        $tmpEtapaChecklist = json_decode($checklistEtapaRaw, true);
+                        if (is_array($tmpEtapaChecklist)) {
+                            $checklistEtapa = array_merge($checklistEtapa, $tmpEtapaChecklist);
+                        }
+                    }
+                    $idMinEtapa = (int)($personaEtapa['Id_Ministerio'] ?? 0);
+                    $idLidEtapa = (int)($personaEtapa['Id_Lider'] ?? 0);
+                    $idCelEtapa = (int)($personaEtapa['Id_Celula'] ?? 0);
+                    $checklistEtapa['Ganar'][1] = $idLidEtapa > 0 && $idMinEtapa > 0;
+                    $checklistEtapa['Ganar'][4] = $idCelEtapa > 0;
+                    $checklistEtapaJson = htmlspecialchars((string)json_encode($checklistEtapa, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                    $puedeEditarEscaleraEtapa = !empty($puedeEditarPersona);
                     ?>
                     <tr>
                         <td class="persona-nombre-cell"><?= htmlspecialchars($nombreEtapa) ?></td>
+                        <td>
+                            <?php if ($telEtapa !== ''): ?>
+                            <?php $waEtapa = (strpos($telEtapa, '57') === 0) ? $telEtapa : ('57' . $telEtapa); ?>
+                            <span class="persona-tel-chip">
+                                <a class="persona-tel-call" href="tel:<?= htmlspecialchars($telEtapa, ENT_QUOTES, 'UTF-8') ?>" title="Llamar">
+                                    <i class="bi bi-telephone-fill" aria-hidden="true"></i>
+                                    <span><?= htmlspecialchars($telEtapaMostrar !== '' ? $telEtapaMostrar : $telEtapa) ?></span>
+                                </a>
+                                <a class="persona-tel-wa" href="https://wa.me/<?= htmlspecialchars($waEtapa, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" title="WhatsApp" aria-label="WhatsApp">
+                                    <i class="bi bi-whatsapp" aria-hidden="true"></i>
+                                </a>
+                            </span>
+                            <?php else: ?>
+                            <span class="persona-tel-empty">—</span>
+                            <?php endif; ?>
+                        </td>
                         <td><?= htmlspecialchars((string)($personaEtapa['Nombre_Ministerio'] ?? 'Sin ministerio')) ?></td>
                         <td><?= htmlspecialchars(trim((string)($personaEtapa['Nombre_Lider'] ?? '')) ?: 'Sin líder') ?></td>
                         <td><?= htmlspecialchars($procesoEtapa) ?></td>
+                        <?php if ($mostrarEscaleraRapida): ?>
+                        <td class="escalera-inline-col">
+                            <div
+                                class="escalera-inline-card js-inline-escalera"
+                                data-persona-id="<?= $idEtapa ?>"
+                                data-checklist="<?= $checklistEtapaJson ?>"
+                                data-proceso="<?= htmlspecialchars($procesoEtapa, ENT_QUOTES, 'UTF-8') ?>"
+                                data-puede-editar="<?= $puedeEditarEscaleraEtapa ? '1' : '0' ?>"
+                            >
+                                <div class="escalera-inline-steps">
+                                    <button type="button" class="escalera-step-btn etapa-ganar js-inline-step-btn" data-etapa="Ganar" title="Ganar" aria-label="Ganar">
+                                        <span class="escalera-step-icon" aria-hidden="true"><span class="step-initial">G</span></span>
+                                    </button>
+                                    <button type="button" class="escalera-step-btn etapa-consolidar js-inline-step-btn" data-etapa="Consolidar" title="Consolidar" aria-label="Consolidar">
+                                        <span class="escalera-step-icon" aria-hidden="true"><span class="step-initial">C</span></span>
+                                    </button>
+                                    <button type="button" class="escalera-step-btn etapa-discipular js-inline-step-btn" data-etapa="Discipular" title="Discipular" aria-label="Discipular">
+                                        <span class="escalera-step-icon" aria-hidden="true"><span class="step-initial">D</span></span>
+                                    </button>
+                                    <button type="button" class="escalera-step-btn etapa-enviar js-inline-step-btn" data-etapa="Enviar" title="Enviar" aria-label="Enviar">
+                                        <span class="escalera-step-icon" aria-hidden="true"><span class="step-initial">E</span></span>
+                                    </button>
+                                </div>
+                                <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Ganar" hidden>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="0" <?= !empty($checklistEtapa['Ganar'][0]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraEtapa ? '' : 'disabled' ?>><span>Primer contacto</span></label>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="2" <?= !empty($checklistEtapa['Ganar'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraEtapa ? '' : 'disabled' ?>><span>Fonovisita</span></label>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="3" <?= !empty($checklistEtapa['Ganar'][3]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraEtapa ? '' : 'disabled' ?>><span>Visita</span></label>
+                                    <label class="escalera-inline-item is-auto"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="4" <?= !empty($checklistEtapa['Ganar'][4]) ? 'checked' : '' ?> disabled><span>Ubicado en célula</span></label>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Ganar" data-indice="5" <?= !empty($checklistEtapa['Ganar'][5]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraEtapa ? '' : 'disabled' ?>><span>No se dispone</span></label>
+                                </div>
+                                <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Consolidar" hidden>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Consolidar" data-indice="0" <?= !empty($checklistEtapa['Consolidar'][0]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraEtapa ? '' : 'disabled' ?>><span>Universidad de la vida</span></label>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Consolidar" data-indice="1" <?= !empty($checklistEtapa['Consolidar'][1]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraEtapa ? '' : 'disabled' ?>><span>Encuentro</span></label>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Consolidar" data-indice="2" <?= !empty($checklistEtapa['Consolidar'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraEtapa ? '' : 'disabled' ?>><span>Bautismo</span></label>
+                                </div>
+                                <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Discipular" hidden>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Discipular" data-indice="0" <?= !empty($checklistEtapa['Discipular'][0]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraEtapa ? '' : 'disabled' ?>><span>Destino nivel 1</span></label>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Discipular" data-indice="1" <?= !empty($checklistEtapa['Discipular'][1]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraEtapa ? '' : 'disabled' ?>><span>Destino nivel 2</span></label>
+                                    <label class="escalera-inline-item"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Discipular" data-indice="2" <?= !empty($checklistEtapa['Discipular'][2]) ? 'checked' : '' ?> <?= $puedeEditarEscaleraEtapa ? '' : 'disabled' ?>><span>Destino nivel 3</span></label>
+                                </div>
+                                <div class="escalera-inline-panel js-inline-stage-panel" data-etapa="Enviar" hidden>
+                                    <label class="escalera-inline-item is-auto"><input type="checkbox" class="js-inline-escalera-check" data-etapa="Enviar" data-indice="2" <?= !empty($checklistEtapa['Enviar'][2]) ? 'checked' : '' ?> disabled><span>Dirige célula</span></label>
+                                </div>
+                            </div>
+                        </td>
+                        <?php endif; ?>
                         <?php if ($mostrarAcciones): ?>
                         <td class="action-col">
                             <div class="action-buttons action-buttons-compact">
@@ -770,6 +918,72 @@ foreach ($totalesMinisterioVista as $ministerioRedTot) {
 }
 .persona-nombre-cell {
     font-weight: 700;
+}
+.persona-tel-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 3px 4px 3px 10px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+    border: 1px solid #d7e6fb;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+.persona-tel-call {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: #1e3a5f;
+    text-decoration: none;
+    font-size: 0.84rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+}
+.persona-tel-call i {
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    color: #3b82f6;
+}
+.persona-tel-call span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.persona-tel-call:hover {
+    color: #0f2744;
+}
+.persona-tel-call:hover i {
+    color: #2563eb;
+}
+.persona-tel-wa {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #25d366;
+    color: #fff;
+    text-decoration: none;
+    box-shadow: 0 1px 2px rgba(15, 118, 110, 0.25);
+    transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.persona-tel-wa i {
+    font-size: 0.95rem;
+    line-height: 1;
+}
+.persona-tel-wa:hover {
+    background: #1ebe57;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(37, 211, 102, 0.35);
+}
+.persona-tel-empty {
+    color: #94a3b8;
 }
 .falta-conexion {
     display: inline-block;

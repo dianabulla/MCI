@@ -3388,6 +3388,9 @@ class PersonaController extends BaseController {
             'reasignado_manual_motivo' => '',
             'en_seguimiento' => false,
             'seguimiento_notas' => [],
+            'uv_ciclo_cerrado' => false,
+            'uv_ciclo_cerrado_at' => '',
+            'uv_ciclo_cerrado_inscripcion' => 0,
         ];
 
         if (!is_array($checklist)) {
@@ -3416,6 +3419,9 @@ class PersonaController extends BaseController {
             $normalizado['_meta']['reasignado_manual_motivo'] = trim((string)($checklist['_meta']['reasignado_manual_motivo'] ?? ''));
             $normalizado['_meta']['en_seguimiento'] = !empty($checklist['_meta']['en_seguimiento']);
             $normalizado['_meta']['seguimiento_notas'] = $this->normalizarNotasSeguimientoPersona($checklist['_meta']['seguimiento_notas'] ?? []);
+            $normalizado['_meta']['uv_ciclo_cerrado'] = !empty($checklist['_meta']['uv_ciclo_cerrado']);
+            $normalizado['_meta']['uv_ciclo_cerrado_at'] = trim((string)($checklist['_meta']['uv_ciclo_cerrado_at'] ?? ''));
+            $normalizado['_meta']['uv_ciclo_cerrado_inscripcion'] = (int)($checklist['_meta']['uv_ciclo_cerrado_inscripcion'] ?? 0);
         }
 
         return $normalizado;
@@ -4038,21 +4044,11 @@ class PersonaController extends BaseController {
             $filtroFechaFin = '';
         }
 
+        $perfilExportRaw = strtolower(trim((string)($_GET['perfil'] ?? '')));
         $exportListaPendientesConectar = !$esModoGanar && $filtroPerfil === 'pendientes_conectar';
+        $exportListaEnSeguimiento = !$esModoGanar && $perfilExportRaw === 'en_seguimiento';
 
-        if ($exportListaPendientesConectar) {
-            $personas = $this->personaModel->getWithFiltersAndRole(
-                $filtroRol,
-                null,
-                null,
-                null,
-                'Activo',
-                '0',
-                null,
-                null,
-                null,
-                null
-            );
+        if ($exportListaPendientesConectar || $exportListaEnSeguimiento) {
             $fMinList = $filtroMinisterio !== null && $filtroMinisterio !== '' ? preg_replace('/\s+/u', '', trim((string)$filtroMinisterio)) : '';
             $fLidList = $filtroLider !== null && $filtroLider !== '' ? preg_replace('/\s+/u', '', trim((string)$filtroLider)) : '';
             if ($fMinList !== '' && $fMinList !== '0' && !ctype_digit($fMinList)) {
@@ -4061,19 +4057,35 @@ class PersonaController extends BaseController {
             if ($fLidList !== '' && $fLidList !== '0' && !ctype_digit($fLidList)) {
                 $fLidList = '';
             }
-            $personas = $this->filtrarPersonasPorMinisterioListado($personas, $fMinList);
-            $personas = $this->filtrarPersonasPorLiderListado($personas, $fLidList);
-            $personas = $this->filtrarPendientesPorConectarListado($personas);
-            $personasUv = $this->personaModel->getPersonasUniversidadVida($filtroRol);
-            $personasUv = $this->filtrarPendientesPorConectarListado($personasUv);
-            $personasUv = $this->filtrarPersonasPorMinisterioListado($personasUv, $fMinList);
-            $personasUv = $this->filtrarPersonasPorLiderListado($personasUv, $fLidList);
-            $personas = $this->unirPersonasSinDuplicados($personas, $personasUv);
-            $personas = $this->enriquecerChecklistPersonas($personas);
-            $personas = array_values(array_filter($personas, function ($persona) {
-                return empty($persona['Seguimiento_No_Disponible'])
-                    && !$this->personaMarcadaEnSeguimiento((array)$persona);
-            }));
+
+            if ($exportListaEnSeguimiento) {
+                $personas = $this->personaModel->getWithFiltersAndRole(
+                    $filtroRol, null, null, null, 'Activo', null, null, null, null, null
+                );
+                $personas = $this->filtrarPersonasPorMinisterioListado($personas, $fMinList);
+                $personas = $this->filtrarPersonasPorLiderListado($personas, $fLidList);
+                $personas = $this->enriquecerChecklistPersonas($personas);
+                $personas = array_values(array_filter($personas, function ($persona) {
+                    return $this->personaMarcadaEnSeguimiento((array)$persona);
+                }));
+            } else {
+                $personas = $this->personaModel->getWithFiltersAndRole(
+                    $filtroRol, null, null, null, 'Activo', '0', null, null, null, null
+                );
+                $personas = $this->filtrarPersonasPorMinisterioListado($personas, $fMinList);
+                $personas = $this->filtrarPersonasPorLiderListado($personas, $fLidList);
+                $personas = $this->filtrarPendientesPorConectarListado($personas);
+                $personasUv = $this->personaModel->getPersonasUniversidadVida($filtroRol);
+                $personasUv = $this->filtrarPendientesPorConectarListado($personasUv);
+                $personasUv = $this->filtrarPersonasPorMinisterioListado($personasUv, $fMinList);
+                $personasUv = $this->filtrarPersonasPorLiderListado($personasUv, $fLidList);
+                $personas = $this->unirPersonasSinDuplicados($personas, $personasUv);
+                $personas = $this->enriquecerChecklistPersonas($personas);
+                $personas = array_values(array_filter($personas, function ($persona) {
+                    return empty($persona['Seguimiento_No_Disponible'])
+                        && !$this->personaMarcadaEnSeguimiento((array)$persona);
+                }));
+            }
         } elseif (($filtroMinisterio !== null && $filtroMinisterio !== '') || ($filtroLider !== null && $filtroLider !== '') || ($filtroEstado !== null && $filtroEstado !== '') || ($filtroCelula !== null && $filtroCelula !== '') || ($filtroEtapa !== null && $filtroEtapa !== '') || ($filtroOrigen !== '') || ($filtroFechaInicio !== '' && $filtroFechaFin !== '')) {
             $personas = $this->personaModel->getWithFiltersAndRole($filtroRol, $filtroMinisterio, $filtroLider, $soloGanar, $filtroEstado, $filtroCelula, $filtroEtapa, $esModoGanar ? '' : $filtroOrigen, $filtroFechaInicio, $filtroFechaFin);
         } else {

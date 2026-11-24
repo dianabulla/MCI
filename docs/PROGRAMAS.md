@@ -4,6 +4,12 @@ Cambio del 14 de octubre de 2026. Pantalla: Pagos de Universidad de la Vida, sin
 
 Registro público (crear ficha en el mismo formulario, 20 oct 2026): ver `docs/ESCUELAS_FORMACION_REGISTRO.md`.
 
+## Cerrar ciclo UV (24 nov 2026)
+
+En el listado de inscritos/asistencias UV, quien culminó los dos días de encuentro puede **cerrar el ciclo**: sale del listado activo, vuelve a Ganar y deja Inscribir UV disponible para el próximo ciclo. Ver [DETALLES_MENORES_2026-11-24.md](DETALLES_MENORES_2026-11-24.md).
+
+El conteo de **Programas** en Inicio respeta el aislamiento de red/ministerio del usuario.
+
 ## Qué se ve
 
 Una sola tabla, con dos filas: **Encuentros** y **Libros**. Cada una muestra personas y valor del semestre.

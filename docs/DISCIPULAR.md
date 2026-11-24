@@ -1,10 +1,12 @@
 # Discipular
 
-Registro al 13 de octubre de 2026. Estos cambios están en el código y en la página.
+Registro actualizado al 24 de noviembre de 2026. Estos cambios están en el código y en la página.
 
 ## Qué muestra el módulo
 
-Discipular abre el equipo de 12. Cada líder tiene las casillas 1 a 12, con la escalera rápida y el botón **Cambiar** en cada fila.
+Discipular abre el equipo de 12. Cada líder tiene las casillas 1 a 12 y el botón **Cambiar** en cada fila.
+
+En casillas de **liderazgo** ya no se muestra la escalera G/C/D/E (no era editable): se ve personas a cargo, cupo 1–12 y las células que dirige. La escalera rápida queda para discípulos. Detalle: [DETALLES_MENORES_2026-11-24.md](DETALLES_MENORES_2026-11-24.md).
 
 Listados generales salió de esta pantalla. La red completa se consulta en Escalera del éxito.
 

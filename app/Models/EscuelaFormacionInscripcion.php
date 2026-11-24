@@ -217,6 +217,28 @@ class EscuelaFormacionInscripcion extends BaseModel {
         }
 
         try {
+            $stmt = $this->db->prepare("SHOW COLUMNS FROM {$this->table} LIKE ?");
+            $stmt->execute(['Ciclo_Cerrado']);
+            $col = $stmt->fetch();
+            if (empty($col)) {
+                $this->db->exec("ALTER TABLE {$this->table} ADD COLUMN Ciclo_Cerrado TINYINT(1) NOT NULL DEFAULT 0 AFTER Fecha_Registro");
+            }
+        } catch (Exception $e) {
+            error_log('No se pudo asegurar columna Ciclo_Cerrado en escuela_formacion_inscripcion: ' . $e->getMessage());
+        }
+
+        try {
+            $stmt = $this->db->prepare("SHOW COLUMNS FROM {$this->table} LIKE ?");
+            $stmt->execute(['Fecha_Cierre_Ciclo']);
+            $col = $stmt->fetch();
+            if (empty($col)) {
+                $this->db->exec("ALTER TABLE {$this->table} ADD COLUMN Fecha_Cierre_Ciclo DATETIME NULL AFTER Ciclo_Cerrado");
+            }
+        } catch (Exception $e) {
+            error_log('No se pudo asegurar columna Fecha_Cierre_Ciclo en escuela_formacion_inscripcion: ' . $e->getMessage());
+        }
+
+        try {
             $stmt = $this->db->prepare("SHOW COLUMNS FROM {$this->tablePagos} LIKE ?");
             $stmt->execute(['Categoria_Pago']);
             $col = $stmt->fetch();
@@ -803,6 +825,59 @@ class EscuelaFormacionInscripcion extends BaseModel {
         return $rows[0] ?? null;
     }
 
+    /**
+     * Condición SQL para excluir inscripciones retiradas del ciclo activo.
+     */
+    public function sqlFiltroCicloAbierto(string $alias = 'i'): string {
+        $alias = preg_replace('/[^a-zA-Z0-9_]/', '', $alias);
+        if ($alias === '') {
+            $alias = 'i';
+        }
+        if (!$this->tableColumnExists($this->table, 'Ciclo_Cerrado')) {
+            return '1=1';
+        }
+        return "COALESCE({$alias}.Ciclo_Cerrado, 0) = 0";
+    }
+
+    /**
+     * Retira una inscripción UV del ciclo activo (conserva historial).
+     */
+    public function cerrarCicloInscripcion(int $idInscripcion): bool {
+        $idInscripcion = (int)$idInscripcion;
+        if ($idInscripcion <= 0 || !$this->tableColumnExists($this->table, 'Ciclo_Cerrado')) {
+            return false;
+        }
+
+        $sql = "UPDATE {$this->table}
+                SET Ciclo_Cerrado = 1,
+                    Fecha_Cierre_Ciclo = NOW()
+                WHERE Id_Inscripcion = ?
+                  AND COALESCE(Ciclo_Cerrado, 0) = 0";
+        return (bool)$this->execute($sql, [$idInscripcion]);
+    }
+
+    /**
+     * True si la persona tiene al menos una inscripción UV/encuentro abierta (no cerrada).
+     */
+    public function tieneInscripcionUvAbierta(int $idPersona): bool {
+        $idPersona = (int)$idPersona;
+        if ($idPersona <= 0) {
+            return false;
+        }
+
+        $filtroCerrado = $this->sqlFiltroCicloAbierto('i');
+        $rows = $this->query(
+            "SELECT 1 AS ok
+             FROM {$this->table} i
+             WHERE i.Id_Persona = ?
+               AND i.Programa IN ('universidad_vida', 'encuentro')
+               AND ({$filtroCerrado})
+             LIMIT 1",
+            [$idPersona]
+        );
+        return !empty($rows[0]['ok']);
+    }
+
     public function buscarInscripcionesPorTelefonoOCedula($telefono = '', $cedula = '', $limit = 20) {
         $telefono = $this->normalizarSoloDigitos($telefono);
         $cedula = $this->normalizarSoloDigitos($cedula);
@@ -877,6 +952,9 @@ class EscuelaFormacionInscripcion extends BaseModel {
         );
 
         foreach ((array)$rows as $fila) {
+            if (!empty($fila['Ciclo_Cerrado'])) {
+                continue;
+            }
             $fecha = substr(trim((string)($fila['Fecha_Registro'] ?? '')), 0, 10);
             if (PeriodoSemestre::fechaEnRango($fecha, $ciclo)) {
                 return $fila;
@@ -996,10 +1074,14 @@ class EscuelaFormacionInscripcion extends BaseModel {
         }
 
         $inSql = implode(',', array_map('intval', array_values($ids)));
+        $filtroCicloAbierto = $this->tableColumnExists($this->table, 'Ciclo_Cerrado')
+            ? 'COALESCE(Ciclo_Cerrado, 0) = 0'
+            : '1=1';
         $rows = $this->query(
             "SELECT Id_Persona, Programa
              FROM {$this->table}
-             WHERE Id_Persona IN ({$inSql})"
+             WHERE Id_Persona IN ({$inSql})
+               AND ({$filtroCicloAbierto})"
         );
 
         $mapa = [];
@@ -1061,7 +1143,8 @@ class EscuelaFormacionInscripcion extends BaseModel {
             $rowsCedula = $this->query(
                 "SELECT {$exprCedula} AS Cedula_Norm, Programa
                  FROM {$this->table}
-                 WHERE {$exprCedula} IN ({$cedulasSql})"
+                 WHERE {$exprCedula} IN ({$cedulasSql})
+                   AND ({$filtroCicloAbierto})"
             );
             foreach ((array)$rowsCedula as $row) {
                 $cedulaNorm = (string)($row['Cedula_Norm'] ?? '');
@@ -1079,7 +1162,8 @@ class EscuelaFormacionInscripcion extends BaseModel {
             $rowsTel = $this->query(
                 "SELECT {$exprTelefono} AS Telefono_Norm, Programa
                  FROM {$this->table}
-                 WHERE {$exprTelefono} IN ({$telefonosSql})"
+                 WHERE {$exprTelefono} IN ({$telefonosSql})
+                   AND ({$filtroCicloAbierto})"
             );
             foreach ((array)$rowsTel as $row) {
                 $telNorm = (string)($row['Telefono_Norm'] ?? '');
@@ -2480,9 +2564,17 @@ class EscuelaFormacionInscripcion extends BaseModel {
 
     /**
      * Personas únicas inscritas en UV y/o Capacitación Destino (sin tope de filas).
+     * Si se pasa $filtroPersonas (p.ej. DataIsolation), solo cuenta la red/ministerio visible.
      */
-    public function contarPersonasUnicasInscritas(array $programas = []): int {
-        $filtroPrograma = '';
+    public function contarPersonasUnicasInscritas(array $programas = [], string $filtroPersonas = '1=1'): int {
+        $filtroPersonasSql = trim($filtroPersonas);
+        if ($filtroPersonasSql === '') {
+            $filtroPersonasSql = '1=1';
+        } elseif (preg_match('/[;]|--|#|\/\*/', $filtroPersonasSql)) {
+            $filtroPersonasSql = '1=0';
+        }
+
+        $where = ['1=1'];
         if ($programas !== []) {
             $partes = [];
             foreach ($programas as $programa) {
@@ -2494,9 +2586,17 @@ class EscuelaFormacionInscripcion extends BaseModel {
                 }
             }
             if ($partes !== []) {
-                $filtroPrograma = 'WHERE (' . implode(' OR ', $partes) . ')';
+                $where[] = '(' . implode(' OR ', $partes) . ')';
             }
         }
+
+        if ($this->tableColumnExists($this->table, 'Ciclo_Cerrado')) {
+            $where[] = 'COALESCE(i.Ciclo_Cerrado, 0) = 0';
+        }
+
+        $where[] = "({$filtroPersonasSql})";
+        $whereStr = implode(' AND ', $where);
+
         $sql = "SELECT COUNT(*) AS Total FROM (
                     SELECT DISTINCT CASE
                         WHEN i.Id_Persona IS NOT NULL AND i.Id_Persona > 0 THEN CONCAT('id:', i.Id_Persona)
@@ -2504,7 +2604,8 @@ class EscuelaFormacionInscripcion extends BaseModel {
                         ELSE CONCAT('ins:', i.Id_Inscripcion)
                     END AS clave
                     FROM {$this->table} i
-                    {$filtroPrograma}
+                    LEFT JOIN persona p ON i.Id_Persona = p.Id_Persona AND i.Id_Persona > 0
+                    WHERE {$whereStr}
                 ) t";
         $rows = $this->query($sql);
         return (int)($rows[0]['Total'] ?? 0);
@@ -2536,6 +2637,10 @@ class EscuelaFormacionInscripcion extends BaseModel {
                 $innerWhere[] = 'i.Programa = ?';
                 $innerParams[] = $programa;
             }
+        }
+
+        if ($programa === '' || $programa === 'universidad_vida' || $programa === 'encuentro') {
+            $innerWhere[] = $this->sqlFiltroCicloAbierto('i');
         }
 
         if ($buscar !== '') {

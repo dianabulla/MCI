@@ -26,6 +26,15 @@ En **Acciones**, el estado de escuelas no depende del peldaño (Ganar, Consolida
 
 Quien no tiene ministerio y no está en seguimiento sigue en Almas ganadas.
 
+## Cambios del 24 de noviembre de 2026
+
+Detalle completo: [DETALLES_MENORES_2026-11-24.md](DETALLES_MENORES_2026-11-24.md).
+
+- Teléfono + WhatsApp y escalera rápida G/C/D/E también en etapas.
+- Exportar Excel según filtros en Por conectar, En seguimiento y Etapas.
+- Ayuda breve al abrir En seguimiento.
+- Cerrar ciclo UV tras culminar Encuentro (vuelve a Ganar; Inscribir UV disponible).
+
 ## Cambios del 30 de octubre de 2026
 
 - Filtro global **Red hombres / Red mujeres** en Escalera del éxito.

@@ -5,9 +5,24 @@ $buildJerarquiaUrl = is_callable($buildJerarquiaUrl ?? null) ? $buildJerarquiaUr
 };
 $resumenLiderPorId = is_array($resumenLiderPorId ?? null) ? $resumenLiderPorId : [];
 $equipoDirectoPorLider = is_array($equipoDirectoPorLider ?? null) ? $equipoDirectoPorLider : [];
+$celulasPorLider = is_array($celulas_por_lider ?? null) ? $celulas_por_lider : (is_array($celulasPorLider ?? null) ? $celulasPorLider : []);
+$jerarquiaPorLiderIdVista = is_array($jerarquia_por_lider_id ?? null) ? $jerarquia_por_lider_id : (is_array($jerarquiaPorLiderId ?? null) ? $jerarquiaPorLiderId : []);
 $cadenaBreadcrumbJerarquia = is_array($cadenaBreadcrumbJerarquia ?? null) ? $cadenaBreadcrumbJerarquia : [];
 $generoRedActual = (string)($generoRedActual ?? '');
 $nodoActivoId = (int)($coberturaPrincipalActual ?? 0);
+
+$esRolLiderazgoJerarquia = static function (string $rol, string $codigoJerarquia = ''): bool {
+    $rolNorm = function_exists('mb_strtolower') ? mb_strtolower($rol, 'UTF-8') : strtolower($rol);
+    $rolNorm = strtr($rolNorm, ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n']);
+    if (in_array($codigoJerarquia, ['pastor', 'lider_12', 'lider_144', 'lider_celula'], true)) {
+        return true;
+    }
+    return strpos($rolNorm, 'pastor') !== false
+        || strpos($rolNorm, 'lider de 12') !== false
+        || strpos($rolNorm, 'lider de 144') !== false
+        || strpos($rolNorm, 'lider de celula') !== false
+        || strpos($rolNorm, 'lider celula') !== false;
+};
 
 $contarEquipo = is_callable($contarEquipoPrincipalFn ?? null)
     ? $contarEquipoPrincipalFn
@@ -380,6 +395,17 @@ if ($nivelJerarquia === 'red') {
                             <?php if ($puedeDrill || $equipoMiembro > 0): ?>
                             <span class="jer-miembro-meta">Su equipo: <?= $equipoMiembro ?> de 12</span>
                             <?php endif; ?>
+                            <?php if ($redMiembro > 0): ?>
+                            <span class="jer-miembro-meta">Personas a cargo: <?= $redMiembro ?></span>
+                            <?php endif; ?>
+                            <?php
+                            $celulasMiembro = is_array($celulasPorLider[$idMiembro] ?? null) ? $celulasPorLider[$idMiembro] : [];
+                            if ($celulasMiembro !== []):
+                            ?>
+                            <span class="jer-miembro-meta" title="<?= htmlspecialchars(implode(', ', $celulasMiembro), ENT_QUOTES, 'UTF-8') ?>">
+                                Células: <?= htmlspecialchars(implode(', ', $celulasMiembro)) ?>
+                            </span>
+                            <?php endif; ?>
                         </div>
                     </div>
                     <?php if ($puedeDrill && $urlMiembro !== ''): ?>
@@ -394,6 +420,13 @@ if ($nivelJerarquia === 'red') {
                         <button type="button" class="btn btn-sm btn-outline-primary js-casilla-abrir">Cambiar</button>
                     </div>
                     <?php endif; ?>
+                    <?php
+                    $codigoJerMiembro = (string)($jerarquiaPorLiderIdVista[$idMiembro] ?? ($miembro['jerarquia'] ?? ''));
+                    $esLiderazgoSlot = $esRolLiderazgoJerarquia($rolMiembro, $codigoJerMiembro)
+                        || $celulasMiembro !== []
+                        || $equipoMiembro > 0;
+                    ?>
+                    <?php if (!$esLiderazgoSlot): ?>
                     <div class="jer-miembro-escalera tabla-discipulos-compacta">
                         <?php
                         $escaleraPersonaId = $idMiembro;
@@ -405,6 +438,18 @@ if ($nivelJerarquia === 'red') {
                         include VIEWS . '/discipular/partials/escalera_rapida_casilla.php';
                         ?>
                     </div>
+                    <?php else: ?>
+                    <div class="jer-miembro-metricas" style="margin-top:8px;padding:8px 10px;border-radius:10px;background:#f8fafc;border:1px solid #e2e8f0;font-size:0.78rem;color:#475569;line-height:1.4;">
+                        <strong style="color:#0f172a;">Resumen de liderazgo</strong><br>
+                        Personas a cargo: <strong><?= (int)$redMiembro ?></strong>
+                        · Equipo 1–12: <strong><?= (int)$equipoMiembro ?>/12</strong>
+                        <?php if ($celulasMiembro !== []): ?>
+                        <br>Células a cargo: <?= htmlspecialchars(implode(', ', $celulasMiembro)) ?>
+                        <?php else: ?>
+                        <br>Células a cargo: ninguna registrada
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
                     <?php if ($puedeGestionarCupos): ?>
                     <div class="asig-panel-slot"></div>
                     <?php endif; ?>

@@ -196,6 +196,44 @@ class Celula extends BaseModel {
     }
 
     /**
+     * Mapa Id_Lider => lista de nombres de células que dirige.
+     *
+     * @param int[] $idsLider
+     * @return array<int, list<string>>
+     */
+    public function mapaNombresCelulasPorLideres(array $idsLider): array {
+        $ids = [];
+        foreach ($idsLider as $id) {
+            $id = (int)$id;
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+        if ($ids === []) {
+            return [];
+        }
+
+        $inSql = implode(',', array_map('intval', array_values($ids)));
+        $rows = $this->query(
+            "SELECT Id_Lider, Nombre_Celula
+             FROM {$this->table}
+             WHERE Id_Lider IN ({$inSql})
+             ORDER BY Nombre_Celula ASC"
+        );
+
+        $mapa = [];
+        foreach ((array)$rows as $row) {
+            $idLider = (int)($row['Id_Lider'] ?? 0);
+            $nombre = trim((string)($row['Nombre_Celula'] ?? ''));
+            if ($idLider <= 0 || $nombre === '') {
+                continue;
+            }
+            $mapa[$idLider][] = $nombre;
+        }
+        return $mapa;
+    }
+
+    /**
      * Obtener células con contador de miembros y aislamiento de rol
      */
     public function getAllWithMemberCountAndRole($filtroRol, $idMinisterio = null, $idLider = null) {

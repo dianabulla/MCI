@@ -315,16 +315,19 @@ class EscuelaFormacionRegistroController extends BaseController {
 
             $fechaRegistro = substr(trim((string)($item['Fecha_Registro'] ?? '')), 0, 10);
             $esUv = in_array($prog, ['universidad_vida', 'encuentro'], true);
-            $enCiclo = $esUv && PeriodoSemestre::fechaEnRango($fechaRegistro, $ciclo);
+            $cicloCerrado = !empty($item['Ciclo_Cerrado']);
+            $enCiclo = $esUv && !$cicloCerrado && PeriodoSemestre::fechaEnRango($fechaRegistro, $ciclo);
             $asistencias = ($idPersona > 0 && isset($asistenciasPorPersona[$idPersona]))
                 ? (array)$asistenciasPorPersona[$idPersona]
                 : [];
             $completoEncuentro = !empty($asistencias[5]) && !empty($asistencias[6]);
-            $caducada = $esUv && !$enCiclo && !$completoEncuentro;
-            $permiteReinscripcion = $esUv && !$enCiclo;
+            $caducada = $esUv && !$cicloCerrado && !$enCiclo && !$completoEncuentro;
+            $permiteReinscripcion = $esUv && ($cicloCerrado || !$enCiclo);
 
             $estadoLabel = 'Inscripción existente';
-            if ($enCiclo) {
+            if ($cicloCerrado) {
+                $estadoLabel = 'Ciclo cerrado · lista para nuevo ciclo';
+            } elseif ($enCiclo) {
                 $estadoLabel = 'Inscrita en este ciclo';
             } elseif ($caducada) {
                 $estadoLabel = 'Ciclo anterior · caducada (no asistió a los dos días de encuentro)';
@@ -340,6 +343,7 @@ class EscuelaFormacionRegistroController extends BaseController {
                 'fecha_asistencia' => (string)($item['Fecha_Asistencia_Clase'] ?? ''),
                 'fecha_registro' => $fechaRegistro,
                 'vigente_ciclo' => $enCiclo,
+                'ciclo_cerrado' => $cicloCerrado,
                 'caducada' => $caducada,
                 'completo_encuentro' => $completoEncuentro,
                 'permite_reinscripcion' => $permiteReinscripcion,
@@ -491,7 +495,10 @@ class EscuelaFormacionRegistroController extends BaseController {
             'reasignado_automatico_motivo' => '',
             'reasignado_manual' => false,
             'reasignado_manual_at' => '',
-            'reasignado_manual_motivo' => ''
+            'reasignado_manual_motivo' => '',
+            'uv_ciclo_cerrado' => false,
+            'uv_ciclo_cerrado_at' => '',
+            'uv_ciclo_cerrado_inscripcion' => 0,
         ];
 
         if (!is_array($checklist)) {
@@ -520,6 +527,9 @@ class EscuelaFormacionRegistroController extends BaseController {
             $normalizado['_meta']['reasignado_manual'] = !empty($checklist['_meta']['reasignado_manual']);
             $normalizado['_meta']['reasignado_manual_at'] = trim((string)($checklist['_meta']['reasignado_manual_at'] ?? ''));
             $normalizado['_meta']['reasignado_manual_motivo'] = trim((string)($checklist['_meta']['reasignado_manual_motivo'] ?? ''));
+            $normalizado['_meta']['uv_ciclo_cerrado'] = !empty($checklist['_meta']['uv_ciclo_cerrado']);
+            $normalizado['_meta']['uv_ciclo_cerrado_at'] = trim((string)($checklist['_meta']['uv_ciclo_cerrado_at'] ?? ''));
+            $normalizado['_meta']['uv_ciclo_cerrado_inscripcion'] = (int)($checklist['_meta']['uv_ciclo_cerrado_inscripcion'] ?? 0);
         }
 
         return $normalizado;
@@ -568,6 +578,11 @@ class EscuelaFormacionRegistroController extends BaseController {
         $checklistNormalizado['Ganar'][4] = !empty($persona['Id_Celula']);
         $checklistNormalizado['Enviar'][2] = $this->personaModel->esLiderDeCelulaPersona($persona);
         $checklistNormalizado['Consolidar'][(int)$mapaProgramaAIndice[$programa]] = true;
+        if (in_array($programa, ['universidad_vida', 'encuentro'], true)) {
+            $checklistNormalizado['_meta']['uv_ciclo_cerrado'] = false;
+            $checklistNormalizado['_meta']['uv_ciclo_cerrado_at'] = '';
+            $checklistNormalizado['_meta']['uv_ciclo_cerrado_inscripcion'] = 0;
+        }
 
         $checklistJson = json_encode($checklistNormalizado, JSON_UNESCAPED_UNICODE);
         if ($checklistJson === false) {
@@ -5109,6 +5124,146 @@ class EscuelaFormacionRegistroController extends BaseController {
         }
 
         $this->json(['success' => true, 'mensaje' => 'Inscripción eliminada correctamente']);
+    }
+
+    /**
+     * Retira del ciclo UV a quien culminó encuentro: vuelve a Ganar e Inscribir UV queda disponible.
+     * POST: id_inscripcion
+     */
+    public function cerrarCicloInscripcionListado() {
+        if (!class_exists('AuthController')) {
+            $this->json(['success' => false, 'mensaje' => 'Sin permiso'], 403);
+            return;
+        }
+
+        $puedeGestionar = AuthController::esAdministrador()
+            || AuthController::puede('escuelas_formacion:editar')
+            || AuthController::puede('escuelas_formacion:eliminar')
+            || AuthController::puede('personas:editar')
+            || $this->usuarioPuedeVerListadoInscritosUv();
+        if (
+            !$puedeGestionar
+            || (class_exists('DataIsolation') && DataIsolation::esLiderazgoAsistenciasSoloConsulta())
+        ) {
+            $this->json(['success' => false, 'mensaje' => 'Sin permiso para cerrar el ciclo'], 403);
+            return;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->json(['success' => false, 'mensaje' => 'Método no permitido'], 405);
+            return;
+        }
+
+        $idInscripcion = (int)($_POST['id_inscripcion'] ?? 0);
+        if ($idInscripcion <= 0) {
+            $this->json(['success' => false, 'mensaje' => 'Inscripción inválida'], 422);
+            return;
+        }
+
+        $inscripcion = $this->inscripcionModel->getByIdInscripcion($idInscripcion);
+        if (empty($inscripcion)) {
+            $this->json(['success' => false, 'mensaje' => 'La inscripción no existe'], 404);
+            return;
+        }
+
+        $programa = trim((string)($inscripcion['Programa'] ?? ''));
+        if (!in_array($programa, ['universidad_vida', 'encuentro'], true)) {
+            $this->json(['success' => false, 'mensaje' => 'Solo aplica a Universidad de la Vida'], 422);
+            return;
+        }
+
+        if (!empty($inscripcion['Ciclo_Cerrado'])) {
+            $this->json(['success' => false, 'mensaje' => 'Esta inscripción ya está retirada del ciclo'], 422);
+            return;
+        }
+
+        $idPersona = (int)($inscripcion['Id_Persona'] ?? 0);
+        if ($idPersona > 0) {
+            $asistencias = $this->escuelaAsistenciaClaseModel->getAsistenciasPorPrograma(
+                [$idPersona],
+                'consolidar',
+                'universidad_vida'
+            );
+            $map = $asistencias[$idPersona] ?? [];
+            $culminoEncuentro = !empty($map[5]) && !empty($map[6]);
+            if (!$culminoEncuentro) {
+                $this->json([
+                    'success' => false,
+                    'mensaje' => 'Solo se puede retirar del ciclo a quienes culminaron los dos días de encuentro',
+                ], 422);
+                return;
+            }
+        }
+
+        $ok = $this->inscripcionModel->cerrarCicloInscripcion($idInscripcion);
+        if (!$ok) {
+            $this->json(['success' => false, 'mensaje' => 'No se pudo cerrar el ciclo'], 500);
+            return;
+        }
+
+        if ($idPersona > 0) {
+            $this->devolverPersonaAGanarTrasCerrarCicloUv($idPersona, $idInscripcion);
+        }
+
+        $this->json([
+            'success' => true,
+            'mensaje' => 'Ciclo cerrado: la persona vuelve a Ganar y UV queda disponible para el próximo ciclo',
+        ]);
+    }
+
+    /**
+     * Limpia UV/Encuentro en la escalera y recalcula proceso (sin tocar Discipular/Enviar).
+     */
+    private function devolverPersonaAGanarTrasCerrarCicloUv(int $idPersona, int $idInscripcion = 0): void {
+        $idPersona = (int)$idPersona;
+        if ($idPersona <= 0) {
+            return;
+        }
+
+        $persona = $this->personaModel->getById($idPersona);
+        if (empty($persona)) {
+            return;
+        }
+
+        $idRol = (int)($persona['Id_Rol'] ?? 0);
+        $jerarquia = $idRol > 0 ? $this->personaModel->getJerarquiaByRol($idRol) : '';
+        if (in_array($jerarquia, ['pastor', 'lider_12', 'lider_celula'], true)
+            || $this->personaModel->esLiderDeCelulaPersona($persona)
+        ) {
+            return;
+        }
+
+        $this->personaModel->ensureEscaleraChecklistColumnExists();
+        $raw = (string)($persona['Escalera_Checklist'] ?? '');
+        $decoded = $raw !== '' ? json_decode($raw, true) : [];
+        if (!is_array($decoded)) {
+            $decoded = [];
+        }
+
+        $checklist = [
+            'Ganar' => array_values(array_pad(array_map('boolval', (array)($decoded['Ganar'] ?? [])), 6, false)),
+            'Consolidar' => array_values(array_pad(array_map('boolval', (array)($decoded['Consolidar'] ?? [])), 3, false)),
+            'Discipular' => array_values(array_pad(array_map('boolval', (array)($decoded['Discipular'] ?? [])), 3, false)),
+            'Enviar' => array_values(array_pad(array_map('boolval', (array)($decoded['Enviar'] ?? [])), 3, false)),
+            '_meta' => is_array($decoded['_meta'] ?? null) ? $decoded['_meta'] : [],
+        ];
+
+        $checklist['Consolidar'][0] = false;
+        $checklist['Consolidar'][1] = false;
+        $checklist['_meta']['uv_ciclo_cerrado'] = true;
+        $checklist['_meta']['uv_ciclo_cerrado_at'] = date('Y-m-d H:i:s');
+        $checklist['_meta']['uv_ciclo_cerrado_inscripcion'] = (int)$idInscripcion;
+
+        $hayDiscipular = !empty($checklist['Discipular'][0])
+            || !empty($checklist['Discipular'][1])
+            || !empty($checklist['Discipular'][2]);
+        $proceso = $hayDiscipular ? 'Discipular' : 'Ganar';
+
+        $json = json_encode($checklist, JSON_UNESCAPED_UNICODE);
+        if ($json === false) {
+            return;
+        }
+        $this->personaModel->updateEscaleraChecklistYProceso($idPersona, $json, $proceso);
     }
 
     /**

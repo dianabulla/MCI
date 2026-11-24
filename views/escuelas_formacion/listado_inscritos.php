@@ -202,9 +202,9 @@ $puedeIrPagos = !$soloConsultaLiderazgo && class_exists('AuthController') && (
 .li-table.li-table--compact th.col-culmino,
 .li-table.li-table--compact td.col-culmino { width: 7%; }
 .li-table.li-table--compact th.col-acciones,
-.li-table.li-table--compact td.col-acciones { width: 56px; }
+.li-table.li-table--compact td.col-acciones { width: 92px; }
 .li-table.li-table--modo-red.li-table--compact th.col-acciones,
-.li-table.li-table--modo-red.li-table--compact td.col-acciones { width: 96px; }
+.li-table.li-table--modo-red.li-table--compact td.col-acciones { width: 128px; }
 .li-table.li-table--compact th[class*="col-pre-"],
 .li-table.li-table--compact th[class*="col-enc-"],
 .li-table.li-table--compact th[class*="col-post-"],
@@ -346,6 +346,18 @@ $puedeIrPagos = !$soloConsultaLiderazgo && class_exists('AuthController') && (
 .li-acc-btn--pago { border-color: #99f6e4; color: #0f766e; }
 .li-acc-btn--pago:hover { background: #ecfdf5; border-color: #5eead4; color: #115e59; }
 .li-acc-btn--del:hover { background: #fef2f2; border-color: #f87171; color: #991b1b; }
+.li-acc-btn--ciclo {
+  border-color: #fde68a;
+  color: #a16207;
+  width: auto;
+  min-width: 26px;
+  padding: 0 6px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  gap: 3px;
+}
+.li-acc-btn--ciclo:hover { background: #fffbeb; border-color: #fbbf24; color: #92400e; }
 .li-acc-btn:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
 
 /* ── Estado de carga ────────────────────────────────────────────── */
@@ -716,6 +728,7 @@ $puedeIrPagos = !$soloConsultaLiderazgo && class_exists('AuthController') && (
   const ABONO_URL    = BASE_URL + 'escuelas_formacion/inscritos/abono-admin';
   const ASIST_URL    = BASE_URL + 'escuelas_formacion/inscritos/guardar-asistencia';
   const ELIMINAR_URL = BASE_URL + 'escuelas_formacion/inscritos/eliminar';
+  const CERRAR_CICLO_URL = BASE_URL + 'escuelas_formacion/inscritos/cerrar-ciclo';
   const CAMBIO_RED_URL = BASE_URL + 'home/cambiar-segmento-inscripcion';
   const DATOS_URL    = BASE_URL + 'escuelas_formacion/inscritos&ajax=1';
   const EDITAR_URL   = BASE_URL + 'personas/editar';
@@ -1383,6 +1396,15 @@ $puedeIrPagos = !$soloConsultaLiderazgo && class_exists('AuthController') && (
       }
     }
 
+    if (PERMISOS.puedeEditar && idInscripcion > 0 && culminoEncuentro(p)) {
+      html += '<button type="button" class="li-acc-btn li-acc-btn--ciclo js-li-cerrar-ciclo"'
+        + ' data-id-inscripcion="' + idInscripcion + '"'
+        + ' data-nombre="' + nombre + '"'
+        + ' title="Retirar del ciclo: vuelve a Ganar y UV queda verde para el próximo ciclo"'
+        + ' aria-label="Cerrar ciclo">'
+        + '<i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i><span>Ciclo</span></button>';
+    }
+
     if (PERMISOS.puedeEliminar) {
       if (idInscripcion > 0) {
         html += '<button type="button" class="li-acc-btn li-acc-btn--del js-li-eliminar"'
@@ -1422,6 +1444,36 @@ $puedeIrPagos = !$soloConsultaLiderazgo && class_exists('AuthController') && (
       await cargarDatos();
     } catch (e) {
       mostrarIndicador(e.message || 'Error al eliminar', true);
+    }
+  }
+
+  async function cerrarCicloInscripcion(idInscripcion, nombre) {
+    if (!confirm(
+      '¿Retirar a ' + nombre + ' del ciclo de Universidad de la Vida?\n\n'
+      + '• Sale del listado de este ciclo\n'
+      + '• Vuelve a la etapa Ganar\n'
+      + '• El botón Inscribir UV quedará disponible para el próximo ciclo'
+    )) {
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append('id_inscripcion', String(idInscripcion));
+
+    try {
+      const resp = await fetch(CERRAR_CICLO_URL, {
+        method: 'POST',
+        body: fd,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      const json = await resp.json();
+      if (!json.success) {
+        throw new Error(json.mensaje || 'No se pudo cerrar el ciclo');
+      }
+      mostrarIndicador(json.mensaje || 'Ciclo cerrado', false);
+      await cargarDatos();
+    } catch (e) {
+      mostrarIndicador(e.message || 'Error al cerrar ciclo', true);
     }
   }
 
@@ -1772,6 +1824,15 @@ $puedeIrPagos = !$soloConsultaLiderazgo && class_exists('AuthController') && (
     const btnRed = ev.target.closest('.js-li-cambio-red');
     if (btnRed) {
       abrirModalCambioRed(btnRed);
+      return;
+    }
+    const btnCiclo = ev.target.closest('.js-li-cerrar-ciclo');
+    if (btnCiclo) {
+      const idCiclo = Number(btnCiclo.dataset.idInscripcion || 0);
+      const nombreCiclo = btnCiclo.dataset.nombre || 'esta persona';
+      if (idCiclo > 0) {
+        cerrarCicloInscripcion(idCiclo, nombreCiclo);
+      }
       return;
     }
     const btn = ev.target.closest('.js-li-eliminar');
