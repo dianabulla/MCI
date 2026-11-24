@@ -68,3 +68,29 @@ views/discipular/partials/jerarquia_red_navegacion.php
 views/escuelas_formacion/listado_inscritos.php
 views/personas/lista.php
 ```
+
+## Optimización pendientes por ubicar (24 nov 2026, tarde)
+
+Documento completo: [PENDIENTES_POR_UBICAR.md](PENDIENTES_POR_UBICAR.md).
+
+Para que los líderes sí actualicen la cola:
+
+1. **Ubicar inline** en Por conectar: elige célula y asigna (completa líder/ministerio). Ruta `personas/ubicarRapido`.
+2. **Visibilidad ampliada** (mismo criterio que Almas): líderes de célula/12 ven pendientes de su ministerio sin líder, no solo su red anclada. Campana + listado.
+3. Campana renombrada a **Pendientes por ubicar** con CTA claro.
+4. Permisos de Almas ganadas (asignar/reasignar/editar) alineados a `puedeEditarPersonasConsulta()`.
+5. KPI arriba de la lista: total, días promedio/máximo, conteos 7+ y 14+ días. La lista Por conectar se abre sola si hay pendientes.
+
+### Archivos de este cambio (FTP)
+
+```
+app/Config/routes.php
+app/Controllers/PersonaController.php
+views/layout/header.php
+views/layout/_topbar_notificaciones.php
+views/personas/lista.php
+views/personas/ganar.php
+docs/PENDIENTES_POR_UBICAR.md
+docs/DETALLES_MENORES_2026-11-24.md
+docs/ESCALERA_ALMAS_GANADAS.md
+```

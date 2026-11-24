@@ -2437,6 +2437,8 @@ class PersonaController extends BaseController {
 
         // Aplicar aislamiento por rol del usuario conectado.
         $filtroRol = DataIsolation::generarFiltroPersonas();
+        // Cola de ubicación: incluye ministerio sin líder (no solo red anclada).
+        $filtroRolPendientes = DataIsolation::generarFiltroPersonasPendienteConsolidar();
         $contextoFiltros = $this->getContextoFiltrosVisibles();
         $ministerios = $contextoFiltros['ministerios'] ?? [];
         $lideres = $contextoFiltros['lideres'] ?? [];
@@ -2444,7 +2446,7 @@ class PersonaController extends BaseController {
 
         // Discípulos: todas las personas activas sin célula (nuevas, antiguas, UV, etc.).
         $personasPendientesConectar = $this->personaModel->getWithFiltersAndRole(
-            $filtroRol,
+            $filtroRolPendientes,
             null,
             null,
             null,
@@ -2459,14 +2461,14 @@ class PersonaController extends BaseController {
         $personasPendientesConectar = $this->filtrarPersonasPorLiderListado($personasPendientesConectar, $filtroLider);
         $personasPendientesConectar = $this->filtrarPendientesPorConectarListado($personasPendientesConectar);
 
-        $personasUniversidadVida = $this->personaModel->getPersonasUniversidadVida($filtroRol);
+        $personasUniversidadVida = $this->personaModel->getPersonasUniversidadVida($filtroRolPendientes);
         $personasUniversidadVida = $this->filtrarPendientesPorConectarListado($personasUniversidadVida);
         $personasUniversidadVida = $this->filtrarPersonasPorMinisterioListado($personasUniversidadVida, $filtroMinisterio);
         $personasUniversidadVida = $this->filtrarPersonasPorLiderListado($personasUniversidadVida, $filtroLider);
 
         $personasFusionDiscipulos = $this->unirPersonasSinDuplicados($personasPendientesConectar, $personasUniversidadVida);
         $personasSinLider = $this->personaModel->getWithFiltersAndRole(
-            $filtroRol,
+            $filtroRolPendientes,
             null,
             '0',
             null,
@@ -2668,6 +2670,16 @@ class PersonaController extends BaseController {
         // (hombres/mujeres, con o sin líder/célula), sin recortar por etapa ni red.
         $totalesMinisterioEscalera = $this->construirTotalesMinisterioAbsolutos($ministerios);
 
+        $kpiPendientesUbicar = $this->calcularKpiPendientesUbicar($personas);
+        $filtroCelulasUbicar = DataIsolation::generarFiltroCelulas();
+        $celulasUbicar = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulasUbicar);
+        if ($filtroMinisterio !== '' && $filtroMinisterio !== '0') {
+            $idMinUbicar = (int)$filtroMinisterio;
+            $celulasUbicar = array_values(array_filter((array)$celulasUbicar, static function ($celula) use ($idMinUbicar) {
+                return (int)($celula['Id_Ministerio_Lider'] ?? $celula['Id_Ministerio'] ?? 0) === $idMinUbicar;
+            }));
+        }
+
         $this->view('personas/lista', [
             'personas' => $personas,
             'personasEtapas' => $personasEtapas,
@@ -2687,7 +2699,58 @@ class PersonaController extends BaseController {
             'totalEnSeguimientoContexto' => $totalEnSeguimientoContexto,
             'sugerenciasNombre' => $sugerenciasNombre,
             'contextoFiltrosEscalera' => $contextoFiltros,
+            'kpiPendientesUbicar' => $kpiPendientesUbicar,
+            'celulasUbicar' => $celulasUbicar,
         ]);
+    }
+
+    /**
+     * KPI de antigüedad en la cola Por conectar.
+     *
+     * @param array<int, array<string, mixed>> $personas
+     * @return array{total:int,dias_promedio:int,dias_max:int,mas_7:int,mas_14:int}
+     */
+    private function calcularKpiPendientesUbicar(array $personas): array {
+        $hoy = new DateTimeImmutable('today');
+        $suma = 0;
+        $max = 0;
+        $mas7 = 0;
+        $mas14 = 0;
+        $conFecha = 0;
+        foreach ($personas as $persona) {
+            $fechaRaw = substr(trim((string)($persona['Fecha_Registro'] ?? '')), 0, 10);
+            if ($fechaRaw === '' || $fechaRaw === '0000-00-00') {
+                continue;
+            }
+            try {
+                $fecha = new DateTimeImmutable($fechaRaw);
+            } catch (Exception $e) {
+                continue;
+            }
+            $dias = (int)$fecha->diff($hoy)->days;
+            if ($fecha > $hoy) {
+                $dias = 0;
+            }
+            $suma += $dias;
+            $conFecha++;
+            if ($dias > $max) {
+                $max = $dias;
+            }
+            if ($dias >= 7) {
+                $mas7++;
+            }
+            if ($dias >= 14) {
+                $mas14++;
+            }
+        }
+
+        return [
+            'total' => count($personas),
+            'dias_promedio' => $conFecha > 0 ? (int)round($suma / $conFecha) : 0,
+            'dias_max' => $max,
+            'mas_7' => $mas7,
+            'mas_14' => $mas14,
+        ];
     }
 
     public function plantillasWhatsapp() {
@@ -3776,13 +3839,101 @@ class PersonaController extends BaseController {
         ]);
     }
 
+    /**
+     * Ubica rápido desde Por conectar: asigna célula y completa líder/ministerio.
+     */
+    public function ubicarRapido() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('personas&perfil=pendientes_conectar');
+            return;
+        }
+
+        if (!AuthController::puedeEditarPersonasConsulta()) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $idPersona = (int)($_POST['id_persona'] ?? 0);
+        $idCelula = (int)($_POST['id_celula'] ?? 0);
+        $returnUrl = (string)($_POST['return_url'] ?? '');
+
+        if ($idPersona <= 0 || $idCelula <= 0) {
+            $this->redirigirConRetorno($returnUrl, 'personas&perfil=pendientes_conectar');
+            return;
+        }
+
+        $filtroRol = DataIsolation::generarFiltroPersonasPendienteConsolidar();
+        if (!$this->personaModel->puedeEditarEscaleraPorRol($idPersona, $filtroRol)) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        $celulasVisibles = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
+        $celulaOk = false;
+        foreach ((array)$celulasVisibles as $celulaVisible) {
+            if ((int)($celulaVisible['Id_Celula'] ?? 0) === $idCelula) {
+                $celulaOk = true;
+                break;
+            }
+        }
+        if (!$celulaOk) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $personaAntes = $this->personaModel->getById($idPersona);
+        if (empty($personaAntes)) {
+            $this->redirigirConRetorno($returnUrl, 'personas&perfil=pendientes_conectar');
+            return;
+        }
+
+        $dataActualizar = [
+            'Id_Celula' => $idCelula,
+            'Id_Lider' => (int)($personaAntes['Id_Lider'] ?? 0),
+            'Id_Ministerio' => (int)($personaAntes['Id_Ministerio'] ?? 0),
+        ];
+        $dataActualizar = $this->completarLiderYMinisterioDesdeCelula($dataActualizar, $idPersona);
+
+        if ($this->soportaFechaAsignacionLider) {
+            $dataActualizar['Fecha_Asignacion_Lider'] = $this->resolverFechaAsignacionLider($dataActualizar, $personaAntes);
+        }
+
+        // Marca checklist de ubicación en célula / líder+ministerio.
+        $rawChecklist = (string)($personaAntes['Escalera_Checklist'] ?? '');
+        $decoded = $rawChecklist !== '' ? json_decode($rawChecklist, true) : [];
+        if (!is_array($decoded)) {
+            $decoded = [];
+        }
+        $checklist = $this->normalizarChecklistEscalera($decoded);
+        $checklist['Ganar'][1] = !empty($dataActualizar['Id_Lider']) && !empty($dataActualizar['Id_Ministerio']);
+        $checklist['Ganar'][4] = true;
+        $proceso = $this->calcularProcesoPorChecklist($checklist, array_merge($personaAntes, $dataActualizar));
+        $json = json_encode($checklist, JSON_UNESCAPED_UNICODE);
+        if ($json !== false && $this->soportaChecklistEscalera) {
+            $dataActualizar['Escalera_Checklist'] = $json;
+            if ($this->soportaProceso) {
+                $dataActualizar['Proceso'] = $proceso;
+            }
+        }
+
+        $this->personaModel->update($idPersona, $dataActualizar);
+
+        $personaDespues = $this->personaModel->getById($idPersona);
+        if (!empty($personaDespues)) {
+            $this->encolarNotificacionCambiosAsignacion((array)$personaAntes, (array)$personaDespues);
+        }
+
+        $this->redirigirConRetorno($returnUrl !== '' ? $returnUrl : 'personas&perfil=pendientes_conectar', 'personas&perfil=pendientes_conectar');
+    }
+
     public function asignarMinisterioGanar() {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             $this->redirect('reportes&tipo=personas');
             return;
         }
 
-        if (!AuthController::puede('personas:editar')) {
+        if (!AuthController::puedeEditarPersonasConsulta()) {
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
@@ -3796,7 +3947,7 @@ class PersonaController extends BaseController {
             return;
         }
 
-        $filtroRol = DataIsolation::generarFiltroPersonas();
+        $filtroRol = DataIsolation::generarFiltroPersonasPendienteConsolidar();
         if (!$this->personaModel->puedeEditarEscaleraPorRol($idPersona, $filtroRol)) {
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
@@ -3851,7 +4002,7 @@ class PersonaController extends BaseController {
             return;
         }
 
-        if (!AuthController::puede('personas:editar')) {
+        if (!AuthController::puedeEditarPersonasConsulta()) {
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
@@ -3865,7 +4016,7 @@ class PersonaController extends BaseController {
             return;
         }
 
-        $filtroRol = DataIsolation::generarFiltroPersonas();
+        $filtroRol = DataIsolation::generarFiltroPersonasPendienteConsolidar();
         if (!$this->personaModel->puedeEditarEscaleraPorRol($idPersona, $filtroRol)) {
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;

@@ -230,7 +230,7 @@ $listasConexion = [
         'texto' => 'Tienen ministerio y les falta la célula, el líder, o los dos. Si las marcas En seguimiento, salen de aquí.',
         'personas' => $personasPorConectarVista,
         'total' => $totalPendientesBanner,
-        'abierta' => $perfilListaActual === 'pendientes_conectar',
+        'abierta' => $perfilListaActual === 'pendientes_conectar' || ($perfilListaActual === '' && $totalPendientesBanner > 0),
         'vacio' => 'No hay personas con ministerio pendientes de célula o líder.',
         'tablaWrap' => 'discipulosTableWrap',
         'tabla' => 'tabla-discipulos',
@@ -238,6 +238,7 @@ $listasConexion = [
         'filename' => 'escalera-por-conectar',
         'clase' => '',
         'perfilExport' => 'pendientes_conectar',
+        'mostrarUbicar' => true,
     ],
     [
         'id' => 'listaEnSeguimiento',
@@ -257,7 +258,29 @@ $listasConexion = [
         'perfilExport' => 'en_seguimiento',
     ],
 ];
+$kpiPendientesUbicarVista = is_array($kpiPendientesUbicar ?? null) ? $kpiPendientesUbicar : [
+    'total' => $totalPendientesBanner,
+    'dias_promedio' => 0,
+    'dias_max' => 0,
+    'mas_7' => 0,
+    'mas_14' => 0,
+];
+$celulasUbicarVista = is_array($celulasUbicar ?? null) ? $celulasUbicar : [];
 ?>
+
+<?php if ($totalPendientesBanner > 0): ?>
+<div class="ubicar-kpi-strip" role="status" aria-label="Indicadores de pendientes por ubicar">
+    <strong>Pendientes por ubicar: <?= (int)$kpiPendientesUbicarVista['total'] ?></strong>
+    <span>Promedio <?= (int)$kpiPendientesUbicarVista['dias_promedio'] ?> días</span>
+    <span>Más antiguo <?= (int)$kpiPendientesUbicarVista['dias_max'] ?> días</span>
+    <?php if ((int)$kpiPendientesUbicarVista['mas_7'] > 0): ?>
+    <span class="ubicar-kpi-warn"><?= (int)$kpiPendientesUbicarVista['mas_7'] ?> con 7+ días</span>
+    <?php endif; ?>
+    <?php if ((int)$kpiPendientesUbicarVista['mas_14'] > 0): ?>
+    <span class="ubicar-kpi-alert"><?= (int)$kpiPendientesUbicarVista['mas_14'] ?> con 14+ días</span>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <?php foreach ($listasConexion as $listaConexion): ?>
 <button
@@ -469,6 +492,29 @@ $listasConexion = [
                         <?php if ($mostrarAcciones): ?>
                         <td class="action-col">
                             <div class="action-buttons action-buttons-compact">
+                                <?php if (!empty($listaConexion['mostrarUbicar']) && $puedeEditarPersona && $celulasUbicarVista !== []): ?>
+                                <?php $returnUrlUbicar = $buildPersonasUrl(['perfil' => 'pendientes_conectar']); ?>
+                                <form method="POST" action="<?= PUBLIC_URL ?>?url=personas/ubicarRapido" class="ubicar-rapido-form">
+                                    <input type="hidden" name="id_persona" value="<?= (int)($persona['Id_Persona'] ?? 0) ?>">
+                                    <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrlUbicar, ENT_QUOTES, 'UTF-8') ?>">
+                                    <select name="id_celula" class="ubicar-rapido-select" required aria-label="Elegir célula">
+                                        <option value="">Ubicar en célula…</option>
+                                        <?php foreach ($celulasUbicarVista as $celulaUbicar): ?>
+                                        <?php
+                                        $idCelUbicar = (int)($celulaUbicar['Id_Celula'] ?? 0);
+                                        if ($idCelUbicar <= 0) {
+                                            continue;
+                                        }
+                                        $nombreCelUbicar = trim((string)($celulaUbicar['Nombre_Celula'] ?? ('Célula #' . $idCelUbicar)));
+                                        $liderCelUbicar = trim((string)($celulaUbicar['Nombre_Lider'] ?? ''));
+                                        $labelCel = $nombreCelUbicar . ($liderCelUbicar !== '' ? (' · ' . $liderCelUbicar) : '');
+                                        ?>
+                                        <option value="<?= $idCelUbicar ?>"><?= htmlspecialchars($labelCel) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <button type="submit" class="ubicar-rapido-btn" title="Asignar célula y líder">Ubicar</button>
+                                </form>
+                                <?php endif; ?>
                                 <button
                                     type="button"
                                     class="action-seguimiento-btn js-seguimiento-btn<?= $enSeguimientoBtn ? ' is-active' : '' ?>"
@@ -918,6 +964,65 @@ foreach ($totalesMinisterioVista as $ministerioRedTot) {
 }
 .persona-nombre-cell {
     font-weight: 700;
+}
+.ubicar-kpi-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    align-items: center;
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+    border: 1px solid #fdba74;
+    color: #9a3412;
+    font-size: 0.86rem;
+}
+.ubicar-kpi-strip strong {
+    color: #7c2d12;
+}
+.ubicar-kpi-warn {
+    font-weight: 700;
+    color: #c2410c;
+}
+.ubicar-kpi-alert {
+    font-weight: 800;
+    color: #b91c1c;
+}
+.ubicar-rapido-form {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    max-width: 100%;
+}
+.ubicar-rapido-select {
+    min-width: 160px;
+    max-width: 220px;
+    height: 32px;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    background: #fff;
+    color: #1e3a5f;
+    font-size: 0.78rem;
+    padding: 0 8px;
+}
+.ubicar-rapido-btn {
+    height: 32px;
+    border: 0;
+    border-radius: 8px;
+    background: #1d4ed8;
+    color: #fff;
+    font-size: 0.78rem;
+    font-weight: 800;
+    padding: 0 12px;
+    cursor: pointer;
+}
+.ubicar-rapido-btn:hover {
+    background: #1e40af;
+}
+.fb-notif-item--urgent {
+    background: #fff7ed;
 }
 .persona-tel-chip {
     display: inline-flex;

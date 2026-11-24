@@ -54,13 +54,13 @@ $paginaNotificacionesActiva = ($currentUrl ?? '') === 'personas/notificaciones';
                 </a>
                 <?php endif; ?>
 
-                <a href="<?= htmlspecialchars($urlNotifDiscipulos, ENT_QUOTES, 'UTF-8') ?>" class="fb-notif-item" role="menuitem">
+                <a href="<?= htmlspecialchars($urlNotifDiscipulos, ENT_QUOTES, 'UTF-8') ?>" class="fb-notif-item<?= $totalNotifDiscipulos > 0 ? ' fb-notif-item--urgent' : '' ?>" role="menuitem">
                     <span class="fb-notif-item-icon fb-notif-item-icon--discipulos" aria-hidden="true">
-                        <i class="bi bi-people-fill"></i>
+                        <i class="bi bi-geo-alt-fill"></i>
                     </span>
                     <span class="fb-notif-item-body">
-                        <span class="fb-notif-item-title">Discípulos</span>
-                        <span class="fb-notif-item-desc">Tienen ministerio y les falta líder o célula. En seguimiento no entra aquí.</span>
+                        <span class="fb-notif-item-title">Pendientes por ubicar</span>
+                        <span class="fb-notif-item-desc">Tienen ministerio y les falta líder o célula. Ábrelos y usa Ubicar.</span>
                     </span>
                     <?php if ($totalNotifDiscipulos > 0): ?>
                         <span class="fb-notif-item-count"><?= $totalNotifDiscipulos > 99 ? '99+' : $totalNotifDiscipulos ?></span>

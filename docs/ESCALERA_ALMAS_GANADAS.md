@@ -10,7 +10,7 @@ Quien solo tiene permiso de Almas ganadas entra directo a `personas/ganar`.
 
 ## Escalera del éxito (`personas`)
 
-**Por conectar a célula o líder.** Personas con ministerio a las que les falta la célula, el líder, o los dos. La lista se abre al pulsar la tarjeta. La columna **Falta** dice qué les falta. Quien ya tiene líder sigue aquí si no tiene célula.
+**Por conectar a célula o líder** (también «Pendientes por ubicar» en la campana). Personas con ministerio a las que les falta la célula, el líder, o los dos. La lista se abre sola si hay pendientes o al pulsar la tarjeta / el ítem de la campana. La columna **Falta** dice qué les falta. Quien ya tiene líder sigue aquí si no tiene célula. Quien puede editar usa **Ubicar** en la fila (elige célula y se completa líder/ministerio). Detalle: [PENDIENTES_POR_UBICAR.md](PENDIENTES_POR_UBICAR.md).
 
 **En seguimiento.** Salen de Por conectar cuando se les guarda una nota de seguimiento. También entran quienes vienen de Almas ganadas y solo asisten a la iglesia (aún sin ministerio). Cuando ya tienen líder y célula, salen de esta lista.
 
@@ -28,12 +28,13 @@ Quien no tiene ministerio y no está en seguimiento sigue en Almas ganadas.
 
 ## Cambios del 24 de noviembre de 2026
 
-Detalle completo: [DETALLES_MENORES_2026-11-24.md](DETALLES_MENORES_2026-11-24.md).
+Detalle completo: [DETALLES_MENORES_2026-11-24.md](DETALLES_MENORES_2026-11-24.md). Pendientes por ubicar: [PENDIENTES_POR_UBICAR.md](PENDIENTES_POR_UBICAR.md).
 
 - Teléfono + WhatsApp y escalera rápida G/C/D/E también en etapas.
 - Exportar Excel según filtros en Por conectar, En seguimiento y Etapas.
 - Ayuda breve al abrir En seguimiento.
 - Cerrar ciclo UV tras culminar Encuentro (vuelve a Ganar; Inscribir UV disponible).
+- **Pendientes por ubicar:** Ubicar inline, visibilidad ampliada (`PendienteConsolidar`), campana renombrada, KPI de antigüedad, permisos alineados a consulta.
 
 ## Cambios del 30 de octubre de 2026
 

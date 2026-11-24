@@ -31,8 +31,9 @@ Objetivo: validar que no se rompa la separacion de reglas entre tarjetas, campan
 - Confirmar que no aparece ninguna fila nueva.
 
 4. Abrir campana (panel lateral):
-- Revisar numero de Pendientes por conectar.
-- Entrar al acceso de gestion y comprobar que coincide con lo visto en la tarjeta de pendientes.
+- Revisar numero de **Pendientes por ubicar** (antes «Pendientes por conectar»).
+- Entrar al acceso de gestion (`personas&perfil=pendientes_conectar`) y comprobar que coincide con Por conectar.
+- Si hay permiso de edicion: probar **Ubicar** (celula) en una fila. Ver [PENDIENTES_POR_UBICAR.md](PENDIENTES_POR_UBICAR.md).
 
 5. Revisar Nuevas en Almas ganadas:
 - Debe mantenerse separado de Pendientes por conectar.

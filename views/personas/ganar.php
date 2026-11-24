@@ -1,7 +1,7 @@
 <?php include VIEWS . '/layout/header.php'; ?>
 <?php
 $puedeVerPersona = AuthController::puedeVerModuloPersonasGanar();
-$puedeEditarPersona = AuthController::puede('personas:editar');
+$puedeEditarPersona = AuthController::puedeEditarPersonasConsulta();
 $puedeEliminarPersona = AuthController::puede('personas:eliminar');
 $puedeVerAtajoAsignados = AuthController::esAdministrador()
     || AuthController::puede('personas_ganar_asignados:ver');
@@ -448,7 +448,7 @@ $returnUrlGanar = $buildPendientesUrl();
                                 <i class="bi bi-eye"></i>
                             </a>
                             <?php endif; ?>
-                            <?php if (AuthController::puede('personas:editar')): ?>
+                            <?php if ($puedeEditarPersona): ?>
                             <a href="<?= PUBLIC_URL ?>?url=personas/editar&id=<?= $persona['Id_Persona'] ?>&return_url=<?= urlencode($returnUrlGanar) ?>" class="action-icon-btn action-icon-warning" title="Editar" aria-label="Editar">
                                 <i class="bi bi-pencil"></i>
                             </a>
@@ -459,7 +459,7 @@ $returnUrlGanar = $buildPendientesUrl();
                             </a>
                             <?php endif; ?>
                             </div>
-                            <?php if (AuthController::puede('personas:editar') && $puedeAsignarDesdeAccion): ?>
+                            <?php if ($puedeEditarPersona && $puedeAsignarDesdeAccion): ?>
                             <form method="POST" action="<?= PUBLIC_URL ?>?url=personas/asignarMinisterioGanar" class="ganar-assign-form">
                                 <input type="hidden" name="id_persona" value="<?= (int)($persona['Id_Persona'] ?? 0) ?>">
                                 <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrlGanar, ENT_QUOTES, 'UTF-8') ?>">
@@ -483,7 +483,7 @@ $returnUrlGanar = $buildPendientesUrl();
                                 </select>
                             </form>
                             <?php endif; ?>
-                            <?php if (AuthController::puede('personas:editar') && (int)($persona['Id_Ministerio'] ?? 0) > 0): ?>
+                            <?php if ($puedeEditarPersona && (int)($persona['Id_Ministerio'] ?? 0) > 0): ?>
                             <form method="POST" action="<?= PUBLIC_URL ?>?url=personas/reasignarMinisterioGanar" class="ganar-assign-form ganar-reasignar-form">
                                 <input type="hidden" name="id_persona" value="<?= (int)($persona['Id_Persona'] ?? 0) ?>">
                                 <input type="hidden" name="return_url" value="<?= htmlspecialchars($returnUrlGanar, ENT_QUOTES, 'UTF-8') ?>">

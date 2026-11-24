@@ -99,7 +99,8 @@ if ($puedeVerPendientesGanar || $campanaSoloDiscipulos) {
     try {
         $personaCampanaModel = new Persona();
         $filtroRolPendientes = DataIsolation::generarFiltroPersonasPendienteConsolidar();
-        $filtroRolDiscipulos = DataIsolation::generarFiltroPersonas();
+        // Misma cobertura amplia para "por ubicar": ministerio sin líder + red anclada.
+        $filtroRolDiscipulos = $filtroRolPendientes;
         $personasCampana = $campanaSoloDiscipulos
             ? []
             : $personaCampanaModel->getAllWithRole($filtroRolPendientes, true);
@@ -216,7 +217,7 @@ if ($puedeVerPendientesGanar || $campanaSoloDiscipulos) {
             }
         }
 
-        $filtroRolUniversidad = DataIsolation::generarFiltroPersonas();
+        $filtroRolUniversidad = $filtroRolPendientes;
         $personasUniversidad = $personaCampanaModel->getPersonasUniversidadVida($filtroRolUniversidad);
         foreach ((array)$personasUniversidad as $personaUvTmp) {
             $rolUv = (string)($personaUvTmp['Nombre_Rol'] ?? '');

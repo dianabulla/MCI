@@ -64,6 +64,7 @@ return [
     'personas/guardarNotaSeguimiento' => 'PersonaController@guardarNotaSeguimiento',
     'personas/asignarMinisterioGanar' => 'PersonaController@asignarMinisterioGanar',
     'personas/reasignarMinisterioGanar' => 'PersonaController@reasignarMinisterioGanar',
+    'personas/ubicarRapido' => 'PersonaController@ubicarRapido',
     'personas/plantillas-whatsapp' => 'PersonaController@plantillasWhatsapp',
     'personas/plantillas-whatsapp/programar' => 'PersonaController@programarPlantillaWhatsapp',
     'personas/whatsapp/bandeja' => 'PersonaController@bandejaWhatsapp',
