@@ -61,9 +61,16 @@
         </div>
         <?php endif; ?>
 
-        <div class="form-group" style="margin-bottom: 0; display: flex; gap: 8px;">
+        <div class="form-group" style="margin-bottom: 0; display: flex; gap: 8px; flex-wrap: wrap;">
             <button type="submit" class="btn btn-primary">Filtrar</button>
             <a href="<?= PUBLIC_URL ?>?url=celulas" class="btn btn-secondary">Limpiar</a>
+            <?php if (AuthController::puede('celulas:ver') && (string)($filtro_ministerio_actual ?? '') !== ''): ?>
+                <a href="<?= PUBLIC_URL ?>?url=celulas/reporte-individual/exportar-ministerio&ministerio=<?= (int)$filtro_ministerio_actual ?>"
+                   class="btn btn-success"
+                   title="Descargar Excel con el reporte individual de todas las células de este ministerio">
+                    <i class="bi bi-file-earmark-excel" aria-hidden="true"></i> Excel reporte ministerio
+                </a>
+            <?php endif; ?>
         </div>
     </form>
 </div>
@@ -175,12 +182,39 @@ $slugMinisterio = static function ($texto) {
 </div>
 
 <?php foreach ($ministerioGrupos as $ministerioNombre => $celulasMinisterio): ?>
-    <?php $ministerioKey = $slugMinisterio($ministerioNombre); ?>
+    <?php
+    $ministerioKey = $slugMinisterio($ministerioNombre);
+    $idMinisterioExport = 0;
+    foreach ($celulasMinisterio as $celulaMinExport) {
+        $idMinTmp = (int)($celulaMinExport['id_ministerio'] ?? 0);
+        if ($idMinTmp > 0) {
+            $idMinisterioExport = $idMinTmp;
+            break;
+        }
+    }
+    if ($idMinisterioExport <= 0) {
+        foreach (($ministerios_disponibles ?? []) as $minDisp) {
+            if (trim((string)($minDisp['Nombre_Ministerio'] ?? '')) === trim((string)$ministerioNombre)) {
+                $idMinisterioExport = (int)($minDisp['Id_Ministerio'] ?? 0);
+                break;
+            }
+        }
+    }
+    ?>
     <div id="tabla-ministerio-<?= htmlspecialchars($ministerioKey) ?>" class="card celulas-detalle-card" <?= $ministerioActivoInicial === (string)$ministerioNombre ? '' : 'hidden' ?> style="margin-bottom: 18px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
             <h3 style="margin:0;">Ministerio: <?= htmlspecialchars($ministerioNombre) ?></h3>
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                 <small style="color:#637087;">Células: <?= count($celulasMinisterio) ?></small>
+                <?php if (AuthController::puede('celulas:ver') && $idMinisterioExport > 0): ?>
+                <a href="<?= PUBLIC_URL ?>?url=celulas/reporte-individual/exportar-ministerio&ministerio=<?= $idMinisterioExport ?>"
+                   class="btn btn-sm celulas-action-btn"
+                   style="background:#ecfdf5;border-color:#86efac;color:#166534;height:32px;padding:0 10px;display:inline-flex;align-items:center;gap:5px;"
+                   title="Descargar Excel con reporte individual de todas las células de este ministerio">
+                    <i class="bi bi-file-earmark-excel" aria-hidden="true"></i>
+                    <span>Excel reporte</span>
+                </a>
+                <?php endif; ?>
                 <?php
                 $personasSegMin = $seguimientoPorMinisterio[$ministerioNombre] ?? [];
                 $payloadSegMin = [];
@@ -259,11 +293,16 @@ $slugMinisterio = static function ($texto) {
                             <?php endif; ?>
                             <td>
                                 <div class="celulas-actions-row">
-                                    <a href="<?= PUBLIC_URL ?>?url=celulas/detalle&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon" title="Ver" aria-label="Ver">
-                                        <i class="bi bi-eye-fill" aria-hidden="true"></i>
+                                    <a href="<?= PUBLIC_URL ?>?url=celulas/detalle&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon celulas-action-btn--celugrama" title="Celugrama" aria-label="Celugrama">
+                                        <i class="bi bi-bar-chart-steps" aria-hidden="true"></i>
                                     </a>
+                                    <?php if (AuthController::puede('celulas:ver')): ?>
+                                        <a href="<?= PUBLIC_URL ?>?url=celulas/reporte-individual&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon" title="Reporte individual" aria-label="Reporte individual">
+                                            <i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i>
+                                        </a>
+                                    <?php endif; ?>
                                     <?php if (AuthController::puede('asistencias:crear')): ?>
-                                        <a href="<?= PUBLIC_URL ?>?url=asistencias/registrar&celula=<?= (int)$section['id_celula'] ?><?= $fechaReporteCelula !== '' ? '&fecha=' . urlencode($fechaReporteCelula) : '' ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--report">Reportar célula</a>
+                                        <a href="<?= PUBLIC_URL ?>?url=celulas/detalle&id=<?= (int)$section['id_celula'] ?>&reporte=1<?= $fechaReporteCelula !== '' ? '&fecha=' . urlencode($fechaReporteCelula) : '' ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--report">Reportar célula</a>
                                     <?php endif; ?>
                                     <?php if (AuthController::puede('celulas:editar')): ?>
                                     <a href="<?= PUBLIC_URL ?>?url=celulas/editar&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon celulas-action-btn--edit" title="Editar" aria-label="Editar">
@@ -457,6 +496,17 @@ $slugMinisterio = static function ($texto) {
 .celulas-action-btn--edit:hover {
     background: #fff1d8;
     color: #7a5600;
+}
+
+.celulas-action-btn--celugrama {
+    background: #f5f3ff;
+    border-color: #ddd6fe;
+    color: #5b21b6;
+}
+
+.celulas-action-btn--celugrama:hover {
+    background: #ede9fe;
+    color: #4c1d95;
 }
 
 .celulas-action-btn--delete {

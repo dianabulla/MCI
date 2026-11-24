@@ -172,13 +172,19 @@ class PersonaController extends BaseController {
             return $errorNombreApellido;
         }
 
-        if (trim((string)($_POST['telefono'] ?? '')) === '') {
-            return 'El teléfono es obligatorio.';
+        if (!class_exists('PersonaValidacion', false)) {
+            require_once APP . '/Helpers/PersonaValidacion.php';
         }
-        $fechaNacimiento = trim((string)($_POST['fecha_nacimiento'] ?? ''));
-        if ($fechaNacimiento === '' || $fechaNacimiento === '0000-00-00') {
-            return 'La fecha de nacimiento es obligatoria.';
+        $errorDatos = PersonaValidacion::validarIdentidadBasica(
+            $_POST['numero_documento'] ?? '',
+            $_POST['telefono'] ?? '',
+            $_POST['fecha_nacimiento'] ?? '',
+            $_POST['tipo_documento'] ?? ''
+        );
+        if ($errorDatos !== null) {
+            return $errorDatos;
         }
+
         if ($this->normalizarGeneroBinario($_POST['genero'] ?? null) === null) {
             return 'Debe seleccionar el género.';
         }
@@ -3601,7 +3607,7 @@ class PersonaController extends BaseController {
             $this->json(['success' => false, 'message' => 'Checklist de escalera no disponible en esta base de datos'], 400);
         }
 
-        if (!AuthController::puedeVerModuloPersonasGanar() && !AuthController::puedeEditarPersonaDesdeDiscipular()) {
+        if (!AuthController::puedeActualizarChecklistEscalera()) {
             $this->json(['success' => false, 'message' => 'No autorizado'], 403);
         }
 
@@ -3712,6 +3718,16 @@ class PersonaController extends BaseController {
             // Personas no concretadas pasan a no activas; al reactivar, vuelven a Activo.
             $this->personaModel->cambiarEstado($idPersona, $marcado ? 'Inactivo' : 'Activo');
             if ($marcado) {
+                $idCelulaAntes = (int)($persona['Id_Celula'] ?? 0);
+                if ($idCelulaAntes > 0) {
+                    require_once APP . '/Models/PersonaSalidaCelula.php';
+                    (new PersonaSalidaCelula())->registrar(
+                        $idPersona,
+                        $idCelulaAntes,
+                        PersonaSalidaCelula::MOTIVO_NO_SE_DISPONE,
+                        $observacionNoDisponible
+                    );
+                }
                 $this->personaModel->update($idPersona, ['Id_Celula' => null]);
                 $checklistNormalizado['Ganar'][4] = false;
             }
@@ -4494,11 +4510,10 @@ class PersonaController extends BaseController {
                 }
 
                 if ($returnTo === 'asistencia') {
-                    $urlRetorno = 'asistencias/registrar';
                     if ($celulaRetorno) {
-                        $urlRetorno .= '&celula=' . $celulaRetorno;
+                        $this->redirect('celulas/detalle&id=' . (int)$celulaRetorno . '&reporte=1');
                     }
-                    $this->redirect($urlRetorno);
+                    $this->redirect('celulas');
                 }
 
                 if ($returnTo === 'celulas') {
@@ -4910,11 +4925,10 @@ class PersonaController extends BaseController {
                 }
 
                 if ($returnTo === 'asistencia') {
-                    $urlRetorno = 'asistencias/registrar';
                     if ($celulaRetorno) {
-                        $urlRetorno .= '&celula=' . $celulaRetorno;
+                        $this->redirect('celulas/detalle&id=' . (int)$celulaRetorno . '&reporte=1');
                     }
-                    $this->redirect($urlRetorno);
+                    $this->redirect('celulas');
                 }
 
                 if ($returnTo === 'celulas') {
@@ -4954,11 +4968,10 @@ class PersonaController extends BaseController {
                             }
 
                             if ($returnTo === 'asistencia') {
-                                $urlRetorno = 'asistencias/registrar';
                                 if ($celulaRetorno) {
-                                    $urlRetorno .= '&celula=' . $celulaRetorno;
+                                    $this->redirect('celulas/detalle&id=' . (int)$celulaRetorno . '&reporte=1');
                                 }
-                                $this->redirect($urlRetorno);
+                                $this->redirect('celulas');
                             }
 
                             if ($returnTo === 'celulas') {
@@ -5045,25 +5058,68 @@ class PersonaController extends BaseController {
     }
 
     public function eliminar() {
-        if (!AuthController::puedeEliminarPersonaDesdeDiscipular()) {
+        $xhr = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''));
+        $accept = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
+        $esAjax = ($xhr === 'xmlhttprequest') || (strpos($accept, 'application/json') !== false);
+
+        if (!AuthController::puedeEliminarPersonaDesdeDiscipular() && !AuthController::puede('personas:eliminar')) {
+            if ($esAjax) {
+                $this->json(['success' => false, 'message' => 'No autorizado'], 403);
+            }
             header('Location: ' . public_app_url('auth/acceso-denegado'));
             exit;
         }
-        
-        $id = $_GET['id'] ?? null;
-        $returnUrl = $_GET['return_url'] ?? null;
-        
-        if ($id) {
-            $personaBorrar = $this->personaModel->getById($id);
-            $nombreBorrar = trim((string)($personaBorrar['Nombre'] ?? '') . ' ' . (string)($personaBorrar['Apellido'] ?? ''));
-            $this->personaModel->delete($id);
-            Auditoria::ok('personas', 'eliminar', [
-                'entidad' => 'persona',
-                'id_registro' => (int)$id,
-                'mensaje' => $nombreBorrar !== '' ? $nombreBorrar : ('ID ' . (int)$id),
+
+        $id = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
+        $returnUrl = $_GET['return_url'] ?? $_POST['return_url'] ?? null;
+
+        if ($id <= 0) {
+            if ($esAjax) {
+                $this->json(['success' => false, 'message' => 'Persona inválida'], 422);
+            }
+            $this->redirigirConRetorno($returnUrl, 'personas');
+        }
+
+        $filtroRol = DataIsolation::generarFiltroPersonas();
+        if (!$this->personaModel->puedeEditarEscaleraPorRol($id, $filtroRol)) {
+            if ($esAjax) {
+                $this->json(['success' => false, 'message' => 'No tienes acceso a esta persona'], 403);
+            }
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $personaBorrar = $this->personaModel->getById($id);
+        if (!$personaBorrar) {
+            if ($esAjax) {
+                $this->json(['success' => false, 'message' => 'Persona no encontrada'], 404);
+            }
+            $this->redirigirConRetorno($returnUrl, 'personas');
+        }
+
+        $nombreBorrar = trim((string)($personaBorrar['Nombre'] ?? '') . ' ' . (string)($personaBorrar['Apellido'] ?? ''));
+        $ok = $this->personaModel->delete($id);
+        if (!$ok) {
+            if ($esAjax) {
+                $this->json(['success' => false, 'message' => 'No se pudo eliminar la persona'], 500);
+            }
+            $this->redirigirConRetorno($returnUrl, 'personas');
+        }
+
+        Auditoria::ok('personas', 'eliminar', [
+            'entidad' => 'persona',
+            'id_registro' => $id,
+            'mensaje' => $nombreBorrar !== '' ? $nombreBorrar : ('ID ' . $id),
+        ]);
+
+        if ($esAjax) {
+            $this->json([
+                'success' => true,
+                'message' => 'Persona eliminada',
+                'id_persona' => $id,
             ]);
         }
-        
+
         $this->redirigirConRetorno($returnUrl, 'personas');
     }
 

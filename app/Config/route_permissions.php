@@ -48,7 +48,13 @@ return [
 
     'celulas/exportarExcel' => 'celulas:exportar_datos',
 
+    'celulas/reporte-individual' => 'celulas:ver',
 
+    'celulas/reporte-individual/exportar' => ['any' => ['celulas:exportar_datos', 'celulas:ver']],
+
+    'celulas/reporte-individual/exportar-ministerio' => ['any' => ['celulas:exportar_datos', 'celulas:ver']],
+
+    'celulas/celugrama/guardar' => ['any' => ['asistencias:crear', 'celulas:editar']],
 
     // --- Personas ---
 
@@ -59,6 +65,8 @@ return [
     'personas/notasSeguimiento' => ['checker' => 'puedeUsarSeguimientoPersonaListado'],
 
     'personas/guardarNotaSeguimiento' => ['checker' => 'puedeGuardarSeguimientoPersonaListado'],
+
+    'personas/actualizarChecklistEscalera' => ['checker' => 'puedeActualizarChecklistEscalera'],
 
     'personas/plantillas-whatsapp' => 'personas_plantillas_whatsapp:ver',
 
@@ -187,7 +195,6 @@ return [
     'asistencias/actualizarEntregoSobre' => ['checker' => 'puedeMarcarEntregoSobre'],
 
     'asistencias/marcarNoDisponible' => ['any' => ['asistencias:crear', 'asistencias:editar']],
-    'asistencias/quitarDeCelula' => ['any' => ['asistencias:crear', 'asistencias:editar']],
     'asistencias/migrarCelula' => ['any' => ['asistencias:crear', 'asistencias:editar']],
 
     'asistencias/*' => ['modulo' => 'asistencias', 'inferir_accion' => true],
@@ -540,6 +547,8 @@ return [
     'talleres/guardar-pago' => ['any' => ['talleres:editar', 'talleres:crear']],
     'talleres/nueva-actividad' => ['any' => ['talleres:editar', 'talleres:crear']],
     'talleres/documento-presentacion' => ['checker' => 'puedeAccederRespuestasTalleres'],
+    'talleres/premiacion' => ['any' => ['talleres:ver', 'talleres:ver_respuestas', 'talleres:editar', 'talleres:crear']],
+    'talleres/premiacion/guardar' => ['any' => ['talleres:editar', 'talleres:crear']],
 
     'entrega_obsequio/marcarEntregado' => 'entrega_obsequio:editar',
 

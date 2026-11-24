@@ -51,6 +51,12 @@
         $idPastorSel = (string)($_POST['id_pastor'] ?? ($celula['Id_Pastor'] ?? ''));
         $nombrePastorSel = trim((string)($celula['Nombre_Pastor'] ?? $celula['Pastor_Principal'] ?? ''));
         $telefonoAnfitrionMostrar = (string)($celula['Telefono_Persona_Anfitrion'] ?? $celula['Telefono_Anfitrion'] ?? '');
+        $diaReunionSel = (string)($celula['Dia_Reunion'] ?? '');
+        $redSel = (string)($celula['Red'] ?? '');
+        $idLiderInmediatoSel = (string)($celula['Id_Lider_Inmediato'] ?? '');
+        $nombreLiderInmediatoSel = (string)($celula['Nombre_Lider_Inmediato'] ?? '');
+        $nombreAnfitrionSel = (string)($celula['Nombre_Anfitrion'] ?? '');
+        $idAnfitrionSel = (string)($celula['Id_Anfitrion'] ?? '');
         ?>
 
         <div class="form-group">
@@ -114,13 +120,13 @@
             <label for="dia_reunion">Día de Reunión</label>
             <select id="dia_reunion" name="dia_reunion" class="form-control" required>
                 <option value="">Seleccione...</option>
-                <option value="Lunes" <?= isset($celula) && $celula['Dia_Reunion'] == 'Lunes' ? 'selected' : '' ?>>Lunes</option>
-                <option value="Martes" <?= isset($celula) && $celula['Dia_Reunion'] == 'Martes' ? 'selected' : '' ?>>Martes</option>
-                <option value="Miércoles" <?= isset($celula) && $celula['Dia_Reunion'] == 'Miércoles' ? 'selected' : '' ?>>Miércoles</option>
-                <option value="Jueves" <?= isset($celula) && $celula['Dia_Reunion'] == 'Jueves' ? 'selected' : '' ?>>Jueves</option>
-                <option value="Viernes" <?= isset($celula) && $celula['Dia_Reunion'] == 'Viernes' ? 'selected' : '' ?>>Viernes</option>
-                <option value="Sábado" <?= isset($celula) && $celula['Dia_Reunion'] == 'Sábado' ? 'selected' : '' ?>>Sábado</option>
-                <option value="Domingo" <?= isset($celula) && $celula['Dia_Reunion'] == 'Domingo' ? 'selected' : '' ?>>Domingo</option>
+                <option value="Lunes" <?= $diaReunionSel === 'Lunes' ? 'selected' : '' ?>>Lunes</option>
+                <option value="Martes" <?= $diaReunionSel === 'Martes' ? 'selected' : '' ?>>Martes</option>
+                <option value="Miércoles" <?= $diaReunionSel === 'Miércoles' ? 'selected' : '' ?>>Miércoles</option>
+                <option value="Jueves" <?= $diaReunionSel === 'Jueves' ? 'selected' : '' ?>>Jueves</option>
+                <option value="Viernes" <?= $diaReunionSel === 'Viernes' ? 'selected' : '' ?>>Viernes</option>
+                <option value="Sábado" <?= $diaReunionSel === 'Sábado' ? 'selected' : '' ?>>Sábado</option>
+                <option value="Domingo" <?= $diaReunionSel === 'Domingo' ? 'selected' : '' ?>>Domingo</option>
             </select>
         </div>
 
@@ -189,15 +195,15 @@
                        class="form-control autocomplete-input" 
                        placeholder="Buscar líder de 12..."
                        autocomplete="off"
-                       value="<?= isset($celula) && !empty($celula['Nombre_Lider_Inmediato']) ? htmlspecialchars($celula['Nombre_Lider_Inmediato']) : '' ?>">
+                       value="<?= htmlspecialchars($nombreLiderInmediatoSel) ?>">
                 <input type="hidden" 
                        id="id_lider_inmediato" 
                        name="id_lider_inmediato" 
-                       value="<?= isset($celula) ? $celula['Id_Lider_Inmediato'] : '' ?>">
+                       value="<?= htmlspecialchars($idLiderInmediatoSel) ?>">
                 <div id="lider_inmediato_autocomplete_results" class="autocomplete-results"></div>
                 <small class="form-text text-muted">
-                    <?php if (isset($celula) && !empty($celula['Nombre_Lider_Inmediato'])): ?>
-                        Líder inmediato: <strong><?= htmlspecialchars($celula['Nombre_Lider_Inmediato']) ?></strong>
+                    <?php if ($nombreLiderInmediatoSel !== ''): ?>
+                        Líder inmediato: <strong><?= htmlspecialchars($nombreLiderInmediatoSel) ?></strong>
                     <?php else: ?>
                         Escriba para buscar líder de 12
                     <?php endif; ?>
@@ -215,13 +221,13 @@
             <label for="red">Red</label>
             <select id="red" name="red" class="form-control">
                 <option value="">Seleccione...</option>
-                <option value="Hombre" <?= isset($celula) && $celula['Red'] == 'Hombre' ? 'selected' : '' ?>>Hombre</option>
-                <option value="Mujer" <?= isset($celula) && $celula['Red'] == 'Mujer' ? 'selected' : '' ?>>Mujer</option>
-                <option value="Mixta" <?= isset($celula) && $celula['Red'] == 'Mixta' ? 'selected' : '' ?>>Mixta</option>
-                <option value="Jóvenes" <?= isset($celula) && $celula['Red'] == 'Jóvenes' ? 'selected' : '' ?>>Jóvenes</option>
-                <option value="Rocas" <?= isset($celula) && $celula['Red'] == 'Rocas' ? 'selected' : '' ?>>Rocas</option>
-                <option value="Teens" <?= isset($celula) && $celula['Red'] == 'Teens' ? 'selected' : '' ?>>Teens</option>
-                <option value="Kids" <?= isset($celula) && $celula['Red'] == 'Kids' ? 'selected' : '' ?>>Kids</option>
+                <option value="Hombre" <?= $redSel === 'Hombre' ? 'selected' : '' ?>>Hombre</option>
+                <option value="Mujer" <?= $redSel === 'Mujer' ? 'selected' : '' ?>>Mujer</option>
+                <option value="Mixta" <?= $redSel === 'Mixta' ? 'selected' : '' ?>>Mixta</option>
+                <option value="Jóvenes" <?= $redSel === 'Jóvenes' ? 'selected' : '' ?>>Jóvenes</option>
+                <option value="Rocas" <?= $redSel === 'Rocas' ? 'selected' : '' ?>>Rocas</option>
+                <option value="Teens" <?= $redSel === 'Teens' ? 'selected' : '' ?>>Teens</option>
+                <option value="Kids" <?= $redSel === 'Kids' ? 'selected' : '' ?>>Kids</option>
             </select>
         </div>
 
@@ -234,16 +240,16 @@
                        class="form-control autocomplete-input" 
                        placeholder="Buscar anfitrión..."
                        autocomplete="off"
-                       value="<?= isset($celula) && !empty($celula['Nombre_Anfitrion']) ? htmlspecialchars($celula['Nombre_Anfitrion']) : '' ?>">
+                       value="<?= htmlspecialchars($nombreAnfitrionSel) ?>">
                 <input type="hidden" 
                        id="id_anfitrion" 
                        name="id_anfitrion" 
-                       value="<?= (isset($celula) && !empty($celula['Id_Anfitrion'])) ? (int)$celula['Id_Anfitrion'] : '' ?>"
-                       data-inicial="<?= (isset($celula) && !empty($celula['Id_Anfitrion'])) ? (int)$celula['Id_Anfitrion'] : '' ?>">
+                       value="<?= $idAnfitrionSel !== '' ? (int)$idAnfitrionSel : '' ?>"
+                       data-inicial="<?= $idAnfitrionSel !== '' ? (int)$idAnfitrionSel : '' ?>">
                 <div id="anfitrion_autocomplete_results" class="autocomplete-results"></div>
                 <small class="form-text text-muted">
-                    <?php if (isset($celula) && !empty($celula['Nombre_Anfitrion'])): ?>
-                        Anfitrión actual: <strong><?= htmlspecialchars($celula['Nombre_Anfitrion']) ?></strong>
+                    <?php if ($nombreAnfitrionSel !== ''): ?>
+                        Anfitrión actual: <strong><?= htmlspecialchars($nombreAnfitrionSel) ?></strong>
                     <?php else: ?>
                         Escriba para buscar anfitrión
                     <?php endif; ?>

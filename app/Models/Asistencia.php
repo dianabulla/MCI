@@ -634,4 +634,76 @@ class Asistencia extends BaseModel {
 
         return $mapa;
     }
+
+    /**
+     * Matriz de asistencia por persona y semana (lunes) en una célula.
+     *
+     * @return array{
+     *   por_persona: array<int, array<string, bool>>,
+     *   totales_semana: array<string, int>,
+     *   semanas_reportadas: array<string, true>,
+     *   temas_asistencia: array<string, string>
+     * }
+     */
+    public function getMatrizCelugramaPorCelula(int $idCelula, string $fechaInicio, string $fechaFin): array {
+        $idCelula = (int)$idCelula;
+        $fechaInicio = substr(trim($fechaInicio), 0, 10);
+        $fechaFin = substr(trim($fechaFin), 0, 10);
+        $vacio = [
+            'por_persona' => [],
+            'totales_semana' => [],
+            'semanas_reportadas' => [],
+            'temas_asistencia' => [],
+        ];
+        if ($idCelula <= 0 || $fechaInicio === '' || $fechaFin === '') {
+            return $vacio;
+        }
+
+        $sql = "SELECT Id_Persona, Asistio, Fecha_Asistencia, Tema
+                FROM {$this->table}
+                WHERE Id_Celula = ?
+                  AND Fecha_Asistencia BETWEEN ? AND ?";
+        $rows = $this->query($sql, [$idCelula, $fechaInicio, $fechaFin]);
+
+        $porPersona = [];
+        $totales = [];
+        $semanasReportadas = [];
+        $temas = [];
+
+        foreach ((array)$rows as $row) {
+            $fecha = substr(trim((string)($row['Fecha_Asistencia'] ?? '')), 0, 10);
+            $semana = $this->lunesDeSemana($fecha);
+            if ($semana === '') {
+                continue;
+            }
+            $semanasReportadas[$semana] = true;
+
+            $tema = trim((string)($row['Tema'] ?? ''));
+            if ($tema !== '' && (!isset($temas[$semana]) || $temas[$semana] === '')) {
+                $temas[$semana] = $tema;
+            }
+
+            if ((int)($row['Asistio'] ?? 0) !== 1) {
+                continue;
+            }
+            $idPersona = (int)($row['Id_Persona'] ?? 0);
+            if ($idPersona <= 0) {
+                continue;
+            }
+            if (!isset($porPersona[$idPersona])) {
+                $porPersona[$idPersona] = [];
+            }
+            if (empty($porPersona[$idPersona][$semana])) {
+                $porPersona[$idPersona][$semana] = true;
+                $totales[$semana] = (int)($totales[$semana] ?? 0) + 1;
+            }
+        }
+
+        return [
+            'por_persona' => $porPersona,
+            'totales_semana' => $totales,
+            'semanas_reportadas' => $semanasReportadas,
+            'temas_asistencia' => $temas,
+        ];
+    }
 }

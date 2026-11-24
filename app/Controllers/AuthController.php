@@ -1398,6 +1398,21 @@ class AuthController extends BaseController {
     }
 
     /**
+     * Checklist de escalera desde Almas ganadas, Discipular o Celugrama.
+     * Debe coincidir con PersonaController::actualizarChecklistEscalera y el botón de Celugrama.
+     */
+    public static function puedeActualizarChecklistEscalera(): bool {
+        if (self::esAdministrador()) {
+            return true;
+        }
+
+        return self::puedeVerModuloPersonasGanar()
+            || self::puedeEditarPersonaDesdeDiscipular()
+            || self::puede('asistencias:crear')
+            || self::puede('celulas:ver');
+    }
+
+    /**
      * Crear ficha de persona (formulario personas/crear y accesos rápidos).
      * Acepta cualquiera de: Almas ganadas → Registrar almas, Escalera → Crear fichas,
      * o Acceso rápido → Registrar discípulo.

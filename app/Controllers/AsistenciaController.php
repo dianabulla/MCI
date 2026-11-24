@@ -6,18 +6,22 @@
 require_once APP . '/Models/Asistencia.php';
 require_once APP . '/Models/Celula.php';
 require_once APP . '/Models/Persona.php';
+require_once APP . '/Models/PersonaSalidaCelula.php';
 require_once APP . '/Controllers/AuthController.php';
 require_once APP . '/Helpers/DataIsolation.php';
+require_once APP . '/Helpers/Auditoria.php';
 
 class AsistenciaController extends BaseController {
     private $asistenciaModel;
     private $celulaModel;
     private $personaModel;
+    private $salidaCelulaModel;
 
     public function __construct() {
         $this->asistenciaModel = new Asistencia();
         $this->celulaModel = new Celula();
         $this->personaModel = new Persona();
+        $this->salidaCelulaModel = new PersonaSalidaCelula();
         $this->asistenciaModel->ensureEntregaSobreTableExists();
     }
 
@@ -89,106 +93,139 @@ class AsistenciaController extends BaseController {
     }
 
     /**
-     * Miembros activos de una célula sin duplicar por cédula (JSON para reporte).
+     * Rango lun–dom de la semana que cuenta el reporte, p. ej. "del 20 al 26 de octubre".
      */
-    public function miembrosCelula() {
-        header('Content-Type: application/json; charset=utf-8');
-
-        if (!AuthController::puede('asistencias:crear')) {
-            http_response_code(403);
-            echo json_encode(['ok' => false, 'error' => 'Sin permiso']);
-            return;
+    private function formatearRangoSemanaReporteVisible(string $fechaYmd): string {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaYmd)) {
+            return $fechaYmd !== '' ? $fechaYmd : 'sin fecha';
         }
 
-        $idCelula = (int)($_GET['id_celula'] ?? 0);
-        if ($idCelula <= 0) {
-            echo json_encode(['ok' => true, 'miembros' => [], 'conteo' => [], 'duplicados_ocultos' => 0]);
-            return;
+        $ts = strtotime($fechaYmd);
+        if ($ts === false) {
+            return $fechaYmd;
         }
 
-        $filtroCelulas = DataIsolation::generarFiltroCelulas();
-        $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
-        $celulaPermitida = false;
-        foreach ($celulas as $celula) {
-            if ((int)($celula['Id_Celula'] ?? 0) === $idCelula) {
-                $celulaPermitida = true;
-                break;
-            }
+        $diaSemana = (int)date('N', $ts);
+        $inicioTs = (int)strtotime('-' . ($diaSemana - 1) . ' days', $ts);
+        $finTs = (int)strtotime('+6 days', $inicioTs);
+
+        $meses = [
+            1 => 'enero', 2 => 'febrero', 3 => 'marzo', 4 => 'abril',
+            5 => 'mayo', 6 => 'junio', 7 => 'julio', 8 => 'agosto',
+            9 => 'septiembre', 10 => 'octubre', 11 => 'noviembre', 12 => 'diciembre',
+        ];
+
+        $diaIni = (int)date('j', $inicioTs);
+        $mesIni = (int)date('n', $inicioTs);
+        $anioIni = (int)date('Y', $inicioTs);
+        $diaFin = (int)date('j', $finTs);
+        $mesFin = (int)date('n', $finTs);
+        $anioFin = (int)date('Y', $finTs);
+        $mesIniNombre = $meses[$mesIni] ?? '';
+        $mesFinNombre = $meses[$mesFin] ?? '';
+
+        if ($mesIni === $mesFin && $anioIni === $anioFin) {
+            return 'del ' . $diaIni . ' al ' . $diaFin . ' de ' . $mesIniNombre;
         }
 
-        if (!$celulaPermitida) {
-            http_response_code(403);
-            echo json_encode(['ok' => false, 'error' => 'Célula no permitida']);
-            return;
+        if ($anioIni === $anioFin) {
+            return 'del ' . $diaIni . ' de ' . $mesIniNombre . ' al ' . $diaFin . ' de ' . $mesFinNombre;
         }
 
-        $resultado = $this->obtenerMiembrosUnicosActivosPorCelula($idCelula);
-        $ids = array_map(static function ($p) {
-            return (int)($p['Id_Persona'] ?? 0);
-        }, $resultado['miembros']);
-        $conteo = $this->asistenciaModel->getConteoAsistenciasPorPersonaYCelula($ids, $idCelula);
-
-        echo json_encode([
-            'ok' => true,
-            'miembros' => $resultado['miembros'],
-            'conteo' => $conteo,
-            'duplicados_ocultos' => $resultado['duplicados_ocultos'],
-        ]);
+        return 'del ' . $diaIni . ' de ' . $mesIniNombre . ' de ' . $anioIni
+            . ' al ' . $diaFin . ' de ' . $mesFinNombre . ' de ' . $anioFin;
     }
 
     /**
-     * @return array{miembros: array<int, array<string, mixed>>, duplicados_ocultos: int}
+     * @return array{nombre: string, entidad: string}
      */
-    private function obtenerMiembrosUnicosActivosPorCelula(int $idCelula): array {
-        $sql = "SELECT p.*
-                FROM persona p
-                WHERE p.Id_Celula = ?
-                  AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
-                ORDER BY p.Apellido, p.Nombre, p.Id_Persona DESC";
-        $filas = $this->personaModel->query($sql, [$idCelula]);
-
-        $mapa = [];
-        foreach ($filas as $fila) {
-            $doc = preg_replace('/\D+/', '', (string)($fila['Numero_Documento'] ?? ''));
-            $clave = strlen($doc) >= 5
-                ? ('doc:' . $doc)
-                : ('id:' . (int)($fila['Id_Persona'] ?? 0));
-
-            if (!isset($mapa[$clave])) {
-                $mapa[$clave] = $fila;
-                continue;
-            }
-
-            $idNuevo = (int)($fila['Id_Persona'] ?? 0);
-            $idViejo = (int)($mapa[$clave]['Id_Persona'] ?? 0);
-            if ($idNuevo > $idViejo) {
-                $mapa[$clave] = $fila;
+    private function resolverContextoAuditoriaCelula(int $idCelula): array {
+        $nombre = '';
+        if ($idCelula > 0) {
+            try {
+                $celula = $this->celulaModel->getById($idCelula);
+                $nombre = trim((string)($celula['Nombre_Celula'] ?? ''));
+            } catch (Throwable $e) {
+                $nombre = '';
             }
         }
 
-        $miembros = array_values($mapa);
-
         return [
-            'miembros' => $miembros,
-            'duplicados_ocultos' => max(0, count($filas) - count($miembros)),
+            'nombre' => $nombre !== '' ? $nombre : ('Célula #' . $idCelula),
+            'entidad' => 'celula',
         ];
+    }
+
+    private function auditarReporteCelulaOk(
+        int $idCelula,
+        string $fechaSemana,
+        int $guardados,
+        int $fallos,
+        bool $noSeRealizo,
+        string $fechaHoraEnvio
+    ): void {
+        $ctx = $this->resolverContextoAuditoriaCelula($idCelula);
+        $rangoSemana = $this->formatearRangoSemanaReporteVisible($fechaSemana);
+        $mensaje = $ctx['nombre'] . ' · semana reportada ' . $rangoSemana;
+        if ($fallos > 0) {
+            $mensaje .= ' · parcial (' . $guardados . ' ok, ' . $fallos . ' fallos)';
+        }
+
+        Auditoria::ok('asistencias', 'reportar_celula', [
+            'entidad' => $ctx['entidad'],
+            'id_registro' => $idCelula,
+            'mensaje' => $mensaje,
+            'detalle' => [
+                'id_celula' => $idCelula,
+                'nombre_celula' => $ctx['nombre'],
+                'fecha_semana' => $fechaSemana,
+                'rango_semana' => $rangoSemana,
+                'enviado_en' => $fechaHoraEnvio,
+                'miembros_guardados' => $guardados,
+                'miembros_fallidos' => $fallos,
+                'no_se_realizo' => $noSeRealizo ? 1 : 0,
+                'parcial' => $fallos > 0 ? 1 : 0,
+            ],
+        ]);
+    }
+
+    private function auditarReporteCelulaFallo(
+        int $idCelula,
+        string $fechaSemana,
+        string $mensajeError,
+        string $fechaHoraEnvio,
+        int $guardados = 0,
+        int $fallos = 0,
+        ?string $detalleTecnico = null
+    ): void {
+        $ctx = $this->resolverContextoAuditoriaCelula($idCelula);
+        $etiquetaCelula = $idCelula > 0
+            ? $ctx['nombre']
+            : 'Sin célula';
+        $rangoSemana = $fechaSemana !== ''
+            ? $this->formatearRangoSemanaReporteVisible($fechaSemana)
+            : 'sin fecha';
+
+        $mensajeBitacora = $etiquetaCelula . ' · semana reportada ' . $rangoSemana . ' · ' . $mensajeError;
+        Auditoria::fallo('asistencias', 'reportar_celula', $mensajeBitacora, [
+            'entidad' => $ctx['entidad'],
+            'id_registro' => $idCelula > 0 ? $idCelula : null,
+            'detalle' => [
+                'id_celula' => $idCelula,
+                'nombre_celula' => $ctx['nombre'],
+                'fecha_semana' => $fechaSemana !== '' ? $fechaSemana : null,
+                'rango_semana' => $fechaSemana !== '' ? $rangoSemana : null,
+                'enviado_en' => $fechaHoraEnvio,
+                'miembros_guardados' => $guardados,
+                'miembros_fallidos' => $fallos,
+                'error' => $mensajeError,
+                'detalle_tecnico' => $detalleTecnico,
+            ],
+        ]);
     }
 
     public function index() {
         $this->redirigirFueraDeReporteSemanalAsistencias();
-    }
-
-    private function fechaPorDefectoReporteCelula(): string {
-        $hoy = new DateTimeImmutable('today');
-        $diaSemana = (int)$hoy->format('N');
-
-        // Semana vencida = lunes a domingo. Si se reporta el domingo, esa fecha
-        // es el cierre de esa semana y el lunes ya se ve como vencida.
-        if ($diaSemana === 7) {
-            return $hoy->format('Y-m-d');
-        }
-
-        return $hoy->modify('monday this week')->modify('-1 day')->format('Y-m-d');
     }
 
     public function actualizarEntregoSobre() {
@@ -309,6 +346,7 @@ class AsistenciaController extends BaseController {
                 $observaciones = $observaciones !== '' ? $observaciones : null;
                 $guardados = 0;
                 $fallos = 0;
+                $ultimoErrorFila = '';
 
                 foreach ($asistencias as $idPersona => $asistio) {
                     $asistioValor = (int)$asistio;
@@ -326,77 +364,89 @@ class AsistenciaController extends BaseController {
                             $guardados++;
                         } else {
                             $fallos++;
+                            $ultimoErrorFila = 'No se pudo guardar la asistencia de la persona #' . (int)$idPersona;
                         }
                     } catch (Throwable $eFila) {
                         error_log('Error al registrar asistencia de célula: ' . $eFila->getMessage());
                         $fallos++;
+                        $ultimoErrorFila = $eFila->getMessage();
                     }
                 }
 
                 if ($guardados <= 0) {
+                    $this->auditarReporteCelulaFallo(
+                        $idCelula,
+                        $fecha,
+                        'No se pudo reportar la célula. Inténtalo de nuevo.',
+                        $fechaHora,
+                        $guardados,
+                        $fallos,
+                        $ultimoErrorFila !== '' ? $ultimoErrorFila : null
+                    );
                     throw new RuntimeException('No se pudo reportar la célula. Inténtalo de nuevo.');
                 }
 
-                $mensajeOk = 'Célula reportada con éxito. Fecha y hora: ' . $fechaHora;
+                $rangoSemanaVisible = $this->formatearRangoSemanaReporteVisible($fecha);
+                $mensajeOk = 'Célula reportada con éxito. Semana reportada ' . $rangoSemanaVisible
+                    . '. Enviado: ' . $fechaHora;
+                if ($fallos > 0) {
+                    $mensajeOk .= '. Atención: ' . $fallos . ' miembro(s) no se guardaron; revisa e intenta de nuevo.';
+                    $this->auditarReporteCelulaFallo(
+                        $idCelula,
+                        $fecha,
+                        'Reporte parcial: ' . $guardados . ' guardados, ' . $fallos . ' fallidos.',
+                        $fechaHora,
+                        $guardados,
+                        $fallos,
+                        $ultimoErrorFila !== '' ? $ultimoErrorFila : null
+                    );
+                } else {
+                    $this->auditarReporteCelulaOk(
+                        $idCelula,
+                        $fecha,
+                        $guardados,
+                        $fallos,
+                        $noSeRealizo,
+                        $fechaHora
+                    );
+                }
                 $this->responderRegistroCelula($esAjax, true, $mensajeOk, $returnUrl, $fechaHora);
             } catch (Throwable $e) {
                 error_log('Error al reportar célula: ' . $e->getMessage());
                 $mensajeError = $e instanceof RuntimeException
                     ? $e->getMessage()
                     : 'Ocurrió un error y no se pudo reportar la célula. Inténtalo de nuevo.';
+                // Evitar duplicar el log si ya se registró el fallo total arriba.
+                if (!($e instanceof RuntimeException && $mensajeError === 'No se pudo reportar la célula. Inténtalo de nuevo.')) {
+                    $this->auditarReporteCelulaFallo(
+                        $idCelula,
+                        $fecha,
+                        $mensajeError,
+                        $fechaHora,
+                        0,
+                        is_array($asistencias) ? count($asistencias) : 0,
+                        $e instanceof RuntimeException ? null : $e->getMessage()
+                    );
+                }
                 $this->responderRegistroCelula($esAjax, false, $mensajeError, $returnUrl, $fechaHora);
             }
             return;
-        } else {
-            $returnUrl = $this->resolverReturnUrlAsistencias($_GET['return_url'] ?? '');
-            $filtroCelulas = DataIsolation::generarFiltroCelulas();
-            $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas);
-
-            $celulaPreseleccionada = null;
-            if (isset($_GET['celula']) && $_GET['celula'] !== '') {
-                $idCelulaSolicitada = (int) $_GET['celula'];
-                foreach ($celulas as $celula) {
-                    if ((int) $celula['Id_Celula'] === $idCelulaSolicitada) {
-                        $celulaPreseleccionada = $idCelulaSolicitada;
-                        break;
-                    }
-                }
-            }
-
-            $fechaPreseleccionada = $this->fechaPorDefectoReporteCelula();
-            if (!empty($_GET['fecha'])) {
-                $fechaSolicitada = trim((string)$_GET['fecha']);
-                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaSolicitada)) {
-                    $fechaPreseleccionada = $fechaSolicitada;
-                }
-            }
-
-            $data = [
-                'celulas' => $celulas,
-                'celula_preseleccionada' => $celulaPreseleccionada,
-                'fecha_preseleccionada' => $fechaPreseleccionada,
-                'return_url' => $returnUrl,
-            ];
-            $this->view('asistencias/formulario', $data);
-        }
-    }
-
-    public function porCelula() {
-        $idCelula = $_GET['id'] ?? null;
-        
-        if (!$idCelula) {
-            $this->redirect('asistencias');
         }
 
-        $asistencias = $this->asistenciaModel->getByCelula($idCelula);
-        $celula = $this->celulaModel->getById($idCelula);
-        $returnUrl = $this->resolverReturnUrlAsistencias($_GET['return_url'] ?? '');
-        
-        $this->view('asistencias/porCelula', [
-            'asistencias' => $asistencias,
-            'celula' => $celula,
-            'return_url' => $returnUrl
-        ]);
+        // GET obsoleto: el reporte vive en el modal del Celugrama.
+        $idCelula = (int)($_GET['celula'] ?? 0);
+        if ($idCelula > 0) {
+            $params = ['id' => $idCelula, 'reporte' => '1'];
+            $fechaSolicitada = trim((string)($_GET['fecha'] ?? ''));
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaSolicitada)) {
+                $params['fecha'] = $fechaSolicitada;
+            }
+            header('Location: ' . public_app_url('celulas/detalle', $params));
+            exit;
+        }
+
+        header('Location: ' . PUBLIC_URL . '?url=celulas');
+        exit;
     }
 
     private function normalizarChecklistParaNoDisponible($checklist) {
@@ -482,10 +532,21 @@ class AsistenciaController extends BaseController {
             $this->json(['success' => false, 'message' => 'No se pudo procesar el checklist'], 500);
         }
 
+        $idCelulaAntes = (int)($persona['Id_Celula'] ?? 0);
+
         $procesoActual = isset($persona['Proceso']) ? (string)$persona['Proceso'] : null;
         $ok = $this->personaModel->updateEscaleraChecklistYProceso($idPersona, $checklistJson, $procesoActual);
         if (!$ok) {
             $this->json(['success' => false, 'message' => 'No se pudo guardar el estado No se dispone'], 500);
+        }
+
+        if ($idCelulaAntes > 0) {
+            $this->salidaCelulaModel->registrar(
+                $idPersona,
+                $idCelulaAntes,
+                PersonaSalidaCelula::MOTIVO_NO_SE_DISPONE,
+                $observacion
+            );
         }
 
         $okSalidaCelula = $this->personaModel->update($idPersona, [
@@ -501,37 +562,6 @@ class AsistenciaController extends BaseController {
             'success' => true,
             'message' => 'Persona marcada como No se dispone',
             'id_persona' => $idPersona
-        ]);
-    }
-
-    public function quitarDeCelula() {
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $this->json(['success' => false, 'message' => 'Método no permitido'], 405);
-        }
-        if (!$this->puedeGestionarAccionesReporteCelula()) {
-            $this->json(['success' => false, 'message' => 'No autorizado'], 403);
-        }
-
-        $idPersona = (int)($_POST['id_persona'] ?? 0);
-        $idCelula = (int)($_POST['id_celula'] ?? 0);
-        if ($idPersona <= 0 || $idCelula <= 0) {
-            $this->json(['success' => false, 'message' => 'Datos inválidos'], 422);
-        }
-
-        $persona = $this->obtenerPersonaAccionReporte($idPersona, $idCelula);
-        if ($persona === null) {
-            return;
-        }
-
-        $ok = $this->personaModel->update($idPersona, ['Id_Celula' => null]);
-        if (!$ok) {
-            $this->json(['success' => false, 'message' => 'No se pudo quitar a la persona de la célula'], 500);
-        }
-
-        $this->json([
-            'success' => true,
-            'message' => 'Persona eliminada de esta célula',
-            'id_persona' => $idPersona,
         ]);
     }
 
@@ -590,6 +620,15 @@ class AsistenciaController extends BaseController {
         if ($minDestino > 0) {
             $datos['Id_Ministerio'] = $minDestino;
         }
+
+        $nombreDestino = trim((string)($destino['Nombre_Celula'] ?? 'otra celula'));
+        $this->salidaCelulaModel->registrar(
+            $idPersona,
+            $idCelulaOrigen,
+            PersonaSalidaCelula::MOTIVO_TRANSFERIDA,
+            'Transferida a: ' . ($nombreDestino !== '' ? $nombreDestino : 'otra celula'),
+            $idCelulaDestino
+        );
 
         $ok = $this->personaModel->update($idPersona, $datos);
         if (!$ok) {

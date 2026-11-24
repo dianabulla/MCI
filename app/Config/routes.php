@@ -89,6 +89,10 @@ return [
     'celulas/buscarPastores' => 'CelulaController@buscarPastores',
     'celulas/buscarAnfitriones' => 'CelulaController@buscarAnfitriones',
     'celulas/exportarExcel' => 'CelulaController@exportarExcel',
+    'celulas/reporte-individual' => 'CelulaController@reporteIndividual',
+    'celulas/reporte-individual/exportar' => 'CelulaController@exportarReporteIndividual',
+    'celulas/reporte-individual/exportar-ministerio' => 'CelulaController@exportarReporteIndividualMinisterio',
+    'celulas/celugrama/guardar' => 'CelulaController@guardarCelugrama',
 
     // Teen
     'teen' => 'TeenController@index',
@@ -245,6 +249,14 @@ return [
     'talleres/servicio-social/eliminar' => 'TallerServicioSocialController@eliminar',
     'talleres/servicio-social/exportar' => 'TallerServicioSocialController@exportar',
 
+    // Talleres — Premiación (no escribe en células, personas ni otros formularios)
+    'talleres/premiacion' => 'TallerPremiacionController@index',
+    'talleres/premiacion/guardar' => 'TallerPremiacionController@guardar',
+    'votar-premios' => 'TallerPremiacionController@votar',
+    'talleres_publico/premiacion' => 'TallerPremiacionController@votar',
+    'talleres_publico/premiacion/guardar' => 'TallerPremiacionController@guardarVoto',
+    'talleres_publico/premiacion/sugerencias' => 'TallerPremiacionController@sugerencias',
+
     // Talleres — formulario público (sin autenticación)
     'talleres_publico' => 'TallerController@formularioPublico',
     'talleres_publico/guardar' => 'TallerController@guardarPublico',
@@ -258,11 +270,8 @@ return [
     // Asistencias
     'asistencias' => 'AsistenciaController@index',
     'asistencias/registrar' => 'AsistenciaController@registrar',
-    'asistencias/miembros-celula' => 'AsistenciaController@miembrosCelula',
-    'asistencias/porCelula' => 'AsistenciaController@porCelula',
     'asistencias/actualizarEntregoSobre' => 'AsistenciaController@actualizarEntregoSobre',
     'asistencias/marcarNoDisponible' => 'AsistenciaController@marcarNoDisponible',
-    'asistencias/quitarDeCelula' => 'AsistenciaController@quitarDeCelula',
     'asistencias/migrarCelula' => 'AsistenciaController@migrarCelula',
     'asistencias/exportarExcel' => 'AsistenciaController@exportarExcel',
     

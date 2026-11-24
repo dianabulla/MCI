@@ -7,15 +7,20 @@ require_once APP . '/Models/Celula.php';
 require_once APP . '/Models/Persona.php';
 require_once APP . '/Models/Ministerio.php';
 require_once APP . '/Models/Asistencia.php';
+require_once APP . '/Models/Celugrama.php';
+require_once APP . '/Models/PersonaSalidaCelula.php';
 require_once APP . '/Models/EscuelaFormacionInscripcion.php';
 require_once APP . '/Controllers/AuthController.php';
 require_once APP . '/Helpers/DataIsolation.php';
+require_once APP . '/Helpers/ProgresoFormacionFlujo.php';
 
 class CelulaController extends BaseController {
     private $celulaModel;
     private $personaModel;
     private $ministerioModel;
     private $asistenciaModel;
+    private $celugramaModel;
+    private $salidaCelulaModel;
     private $inscripcionFormacionModel;
 
     public function __construct() {
@@ -23,6 +28,8 @@ class CelulaController extends BaseController {
         $this->personaModel = new Persona();
         $this->ministerioModel = new Ministerio();
         $this->asistenciaModel = new Asistencia();
+        $this->celugramaModel = new Celugrama();
+        $this->salidaCelulaModel = new PersonaSalidaCelula();
         $this->inscripcionFormacionModel = new EscuelaFormacionInscripcion();
     }
 
@@ -254,6 +261,7 @@ class CelulaController extends BaseController {
             $sections[] = [
                 'id_celula' => $idCelula,
                 'label' => (string)($celula['Nombre_Celula'] ?? 'Célula sin nombre'),
+                'id_ministerio' => (int)($celula['Id_Ministerio_Lider'] ?? 0),
                 'ministerio' => (string)($celula['Nombre_Ministerio_Lider'] ?? 'Sin ministerio'),
                 'lider' => (string)($celula['Nombre_Lider'] ?? 'Sin líder'),
                 'anfitrion' => (string)($celula['Nombre_Anfitrion'] ?? 'Sin anfitrión'),
@@ -489,10 +497,133 @@ class CelulaController extends BaseController {
             }
         }
 
+        $trimestreClave = trim((string)($_GET['trimestre'] ?? ''));
+        $celugrama = $this->construirCelugramaDetalle((int)$id, is_array($celula) ? $celula : [], $trimestreClave);
+        $mensajeCelugrama = trim((string)($_GET['celugrama'] ?? ''));
+        $mensajeReporte = trim((string)($_GET['reportado'] ?? ''));
+        $abrirReporte = trim((string)($_GET['reporte'] ?? '')) === '1';
+
+        $fechaReporteDefault = $this->fechaPorDefectoReporteCelugrama();
+        $fechaSolicitada = trim((string)($_GET['fecha'] ?? ''));
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaSolicitada)) {
+            $fechaReporteDefault = $fechaSolicitada;
+        }
+
         $this->view('celulas/detalle', [
             'celula' => $celula,
             'personasEnSeguimiento' => $personasEnSeguimiento,
+            'celugrama' => $celugrama,
+            'mensajeCelugrama' => $mensajeCelugrama,
+            'mensajeReporte' => $mensajeReporte,
+            'abrirReporte' => $abrirReporte,
+            'fechaReporteDefault' => $fechaReporteDefault,
+            'puedeReportarCelula' => AuthController::puede('asistencias:crear'),
+            'celulasMigracion' => $this->celulasMismoMinisterioParaMigrar((int)$id),
         ]);
+    }
+
+    /**
+     * Otras células del mismo ministerio (para migrar desde Celugrama).
+     *
+     * @return list<array{id:int,nombre:string}>
+     */
+    private function celulasMismoMinisterioParaMigrar(int $idCelulaActual): array {
+        $idCelulaActual = (int)$idCelulaActual;
+        if ($idCelulaActual <= 0) {
+            return [];
+        }
+
+        $filas = $this->celulaModel->getAllWithMemberCountAndRole(DataIsolation::generarFiltroCelulas());
+        $minActual = 0;
+        foreach ($filas as $fila) {
+            if ((int)($fila['Id_Celula'] ?? 0) === $idCelulaActual) {
+                $minActual = (int)($fila['Id_Ministerio_Lider'] ?? $fila['Id_Ministerio'] ?? 0);
+                break;
+            }
+        }
+        if ($minActual <= 0) {
+            return [];
+        }
+
+        $salida = [];
+        foreach ($filas as $fila) {
+            $id = (int)($fila['Id_Celula'] ?? 0);
+            $min = (int)($fila['Id_Ministerio_Lider'] ?? $fila['Id_Ministerio'] ?? 0);
+            if ($id <= 0 || $id === $idCelulaActual || $min !== $minActual) {
+                continue;
+            }
+            $nombre = trim((string)($fila['Nombre_Celula'] ?? ''));
+            $salida[] = [
+                'id' => $id,
+                'nombre' => $nombre !== '' ? $nombre : ('Célula #' . $id),
+            ];
+        }
+        usort($salida, static function (array $a, array $b): int {
+            return strnatcasecmp((string)$a['nombre'], (string)$b['nombre']);
+        });
+        return $salida;
+    }
+
+    private function fechaPorDefectoReporteCelugrama(): string {
+        $hoy = new DateTimeImmutable('today');
+        $diaSemana = (int)$hoy->format('N');
+        if ($diaSemana === 7) {
+            return $hoy->format('Y-m-d');
+        }
+        return $hoy->modify('monday this week')->modify('-1 day')->format('Y-m-d');
+    }
+
+    /**
+     * Guarda temas e indicadores del celugrama sin salir del detalle.
+     */
+    public function guardarCelugrama() {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->redirect('celulas');
+        }
+
+        $idCelula = (int)($_POST['id_celula'] ?? 0);
+        $trimestre = trim((string)($_POST['trimestre'] ?? ''));
+        if ($idCelula <= 0 || !$this->puedeAccederCelula($idCelula)) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+        if (!AuthController::puede('asistencias:crear') && !AuthController::puede('celulas:editar') && !AuthController::esAdministrador()) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $temas = is_array($_POST['temas'] ?? null) ? $_POST['temas'] : [];
+        foreach ($temas as $semana => $filaTema) {
+            $semana = substr(trim((string)$semana), 0, 10);
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $semana)) {
+                continue;
+            }
+            $titulo = trim((string)($filaTema['titulo'] ?? ''));
+            $texto = trim((string)($filaTema['texto'] ?? ''));
+            $this->celugramaModel->guardarTema($idCelula, $semana, $titulo, $texto);
+        }
+
+        $indicadores = is_array($_POST['indicadores'] ?? null) ? $_POST['indicadores'] : [];
+        foreach ($indicadores as $claveMes => $filaInd) {
+            $claveMes = trim((string)$claveMes);
+            if (!preg_match('/^(\d{4})-(\d{2})$/', $claveMes, $m)) {
+                continue;
+            }
+            $anio = (int)$m[1];
+            $mes = (int)$m[2];
+            $invCel = max(0, (int)($filaInd['invitados_celula'] ?? 0));
+            $invCol = max(0, (int)($filaInd['invitados_coliseo'] ?? 0));
+            $noRealRaw = trim((string)($filaInd['celulas_no_realizadas'] ?? ''));
+            $noReal = $noRealRaw === '' ? null : max(0, (int)$noRealRaw);
+            $this->celugramaModel->guardarIndicadorMes($idCelula, $anio, $mes, $invCel, $invCol, $noReal);
+        }
+
+        $params = ['id' => $idCelula, 'celugrama' => 'ok'];
+        if ($trimestre !== '') {
+            $params['trimestre'] = $trimestre;
+        }
+        header('Location: ' . public_app_url('celulas/detalle', $params) . '#celugrama');
+        exit;
     }
 
     /**
@@ -513,6 +644,399 @@ class CelulaController extends BaseController {
             'ministerio' => $ministerio !== '' ? $ministerio : 'Sin ministerio',
             'id_celula' => (int)($fila['Id_Celula'] ?? 0),
         ];
+    }
+
+    /**
+     * Celugrama digital: resumen fácil + detalle tipo papel, sin códigos.
+     *
+     * @param array<string, mixed> $celula
+     * @return array<string, mixed>
+     */
+    private function construirCelugramaDetalle(int $idCelula, array $celula, string $trimestreClave = ''): array {
+        $trimestre = $this->resolverTrimestreCelugrama($trimestreClave);
+        $desde = (string)$trimestre['desde'];
+        $hasta = (string)$trimestre['hasta'];
+        $semanas = $this->semanasTrimestreCelugrama($desde, $hasta);
+        $meses = $this->mesesTrimestreCelugrama((int)$trimestre['anio'], (int)$trimestre['numero']);
+
+        $miembros = is_array($celula['miembros'] ?? null) ? $celula['miembros'] : [];
+        $idsPersona = [];
+        foreach ($miembros as $miembro) {
+            $idPersona = (int)($miembro['Id_Persona'] ?? 0);
+            if ($idPersona > 0) {
+                $idsPersona[] = $idPersona;
+            }
+        }
+
+        $matriz = $this->asistenciaModel->getMatrizCelugramaPorCelula($idCelula, $desde, $hasta);
+        $porPersona = is_array($matriz['por_persona'] ?? null) ? $matriz['por_persona'] : [];
+        $totalesSemana = is_array($matriz['totales_semana'] ?? null) ? $matriz['totales_semana'] : [];
+        $semanasReportadas = is_array($matriz['semanas_reportadas'] ?? null) ? $matriz['semanas_reportadas'] : [];
+        $temasAsistencia = is_array($matriz['temas_asistencia'] ?? null) ? $matriz['temas_asistencia'] : [];
+
+        $temasGuardados = $this->celugramaModel->getTemasPorCelulaYRango($idCelula, $desde, $hasta);
+        $indicadoresGuardados = $this->celugramaModel->getIndicadoresPorCelulaYAnios(
+            $idCelula,
+            [(int)$trimestre['anio']]
+        );
+
+        $hechos = [];
+        if ($idsPersona !== []) {
+            try {
+                $hechos = (new ProgresoFormacionFlujo())->hechosPorPersonas($idsPersona);
+            } catch (Throwable $e) {
+                $hechos = [];
+            }
+        }
+
+        $filasMiembros = [];
+        $conEncuentro = 0;
+        $conPosEncuentro = 0;
+        $conCap = 0;
+        $maxAsistenciasTrimestre = 0;
+
+        foreach ($miembros as $miembro) {
+            $idPersona = (int)($miembro['Id_Persona'] ?? 0);
+            if ($idPersona <= 0) {
+                continue;
+            }
+            $hecho = is_array($hechos[$idPersona] ?? null) ? $hechos[$idPersona] : [];
+            $encuentro = !empty($hecho['encuentro']);
+            $posEncuentro = !empty($hecho['inscrito_uv']) || !empty($hecho['asistio_uv']);
+            $bautismo = !empty($hecho['bautismo']);
+            $nivel = $this->resolverNivelCapDestinoDesdeHecho($hecho);
+            $cap = !empty($hecho['cap_destino']) || $nivel > 0;
+            if ($encuentro) {
+                $conEncuentro++;
+            }
+            if ($posEncuentro) {
+                $conPosEncuentro++;
+            }
+            if ($cap) {
+                $conCap++;
+            }
+
+            $asistenciasPersona = is_array($porPersona[$idPersona] ?? null) ? $porPersona[$idPersona] : [];
+            $totalTrim = 0;
+            $marcas = [];
+            foreach ($semanas as $semana) {
+                $clave = (string)$semana['inicio'];
+                $vino = !empty($asistenciasPersona[$clave]);
+                $marcas[$clave] = $vino;
+                if ($vino) {
+                    $totalTrim++;
+                }
+            }
+            if ($totalTrim > $maxAsistenciasTrimestre) {
+                $maxAsistenciasTrimestre = $totalTrim;
+            }
+
+            $nombre = trim(((string)($miembro['Nombre'] ?? '')) . ' ' . ((string)($miembro['Apellido'] ?? '')));
+            $indicador = trim((string)($miembro['Indicador_Asistencia'] ?? ''));
+            if ($indicador === '') {
+                $totalHist = (int)($miembro['Total_Asistencias'] ?? 0);
+                if ($totalHist <= 0) {
+                    $indicador = 'Sin asistencia';
+                } elseif ($totalHist >= 3) {
+                    $indicador = 'Frecuente';
+                } else {
+                    $indicador = 'Regular';
+                }
+            }
+            $proceso = trim((string)($miembro['Proceso_Detalle'] ?? $miembro['Proceso'] ?? ''));
+            if ($proceso === '') {
+                $proceso = 'Sin proceso';
+            }
+            $filasMiembros[] = [
+                'id_persona' => $idPersona,
+                'nombre' => $nombre !== '' ? $nombre : 'Sin nombre',
+                'documento' => trim((string)($miembro['Numero_Documento'] ?? '')) ?: 'N/A',
+                'telefono' => trim((string)($miembro['Telefono'] ?? '')) ?: 'N/A',
+                'edad' => $this->edadDesdeFechaNacimiento((string)($miembro['Fecha_Nacimiento'] ?? '')),
+                'indicador' => $indicador,
+                'proceso' => $proceso,
+                'total_asistencias' => (int)($miembro['Total_Asistencias'] ?? 0),
+                'asistencias' => $marcas,
+                'total_trimestre' => $totalTrim,
+                'encuentro' => $encuentro,
+                'pos_encuentro' => $posEncuentro,
+                'bautismo' => $bautismo,
+                'cap_destino' => $cap,
+                'nivel_cap' => $nivel,
+                'nivel_cap_texto' => $this->textoNivelCapDestino($nivel, $cap),
+                'escalera_checklist' => (string)($miembro['Escalera_Checklist'] ?? ''),
+                'en_seguimiento' => Persona::checklistIndicaEnSeguimiento($miembro['Escalera_Checklist'] ?? ''),
+                'id_ministerio' => (int)($miembro['Id_Ministerio'] ?? 0),
+            ];
+        }
+
+        usort($filasMiembros, static function (array $a, array $b): int {
+            return strnatcasecmp((string)$a['nombre'], (string)$b['nombre']);
+        });
+
+        $serieGrafica = [];
+        $sumaAsistentes = 0;
+        $semanasConReporte = 0;
+        foreach ($semanas as $semana) {
+            $clave = (string)$semana['inicio'];
+            $total = (int)($totalesSemana[$clave] ?? 0);
+            $reportada = !empty($semanasReportadas[$clave]);
+            if ($reportada) {
+                $semanasConReporte++;
+                $sumaAsistentes += $total;
+            }
+            $serieGrafica[] = [
+                'semana' => $clave,
+                'etiqueta' => (string)$semana['etiqueta_corta'],
+                'mes' => (string)$semana['mes_clave'],
+                'total' => $total,
+                'reportada' => $reportada,
+            ];
+        }
+
+        $promedioTrimestre = $semanasConReporte > 0
+            ? round($sumaAsistentes / $semanasConReporte, 1)
+            : 0.0;
+
+        $temasFilas = [];
+        foreach ($semanas as $semana) {
+            $clave = (string)$semana['inicio'];
+            $guardado = is_array($temasGuardados[$clave] ?? null) ? $temasGuardados[$clave] : [];
+            $titulo = trim((string)($guardado['titulo'] ?? ''));
+            $texto = trim((string)($guardado['texto'] ?? ''));
+            if ($titulo === '' && isset($temasAsistencia[$clave])) {
+                $titulo = trim((string)$temasAsistencia[$clave]);
+            }
+            $temasFilas[] = [
+                'semana' => $clave,
+                'etiqueta' => (string)$semana['etiqueta'],
+                'mes_clave' => (string)$semana['mes_clave'],
+                'mes_nombre' => (string)$semana['mes_nombre'],
+                'titulo' => $titulo,
+                'texto' => $texto,
+                'reportada' => !empty($semanasReportadas[$clave]),
+            ];
+        }
+
+        $indicadoresMes = [];
+        $invitadosCelulaTrim = 0;
+        $invitadosColiseoTrim = 0;
+        $noRealizadasTrim = 0;
+        foreach ($meses as $mesInfo) {
+            $claveMes = (string)$mesInfo['clave'];
+            $guardado = is_array($indicadoresGuardados[$claveMes] ?? null) ? $indicadoresGuardados[$claveMes] : [];
+            $semanasMes = array_values(array_filter($semanas, static function (array $s) use ($claveMes): bool {
+                return (string)$s['mes_clave'] === $claveMes;
+            }));
+            $reportadasMes = 0;
+            $sumaMes = 0;
+            foreach ($semanasMes as $sm) {
+                $claveSem = (string)$sm['inicio'];
+                if (!empty($semanasReportadas[$claveSem])) {
+                    $reportadasMes++;
+                    $sumaMes += (int)($totalesSemana[$claveSem] ?? 0);
+                }
+            }
+            $esperadas = count($semanasMes);
+            $noRealizadasAuto = max(0, $esperadas - $reportadasMes);
+            $noRealizadasManual = array_key_exists('celulas_no_realizadas', $guardado)
+                ? $guardado['celulas_no_realizadas']
+                : null;
+            $noRealizadas = $noRealizadasManual !== null ? (int)$noRealizadasManual : $noRealizadasAuto;
+            $invCel = (int)($guardado['invitados_celula'] ?? 0);
+            $invCol = (int)($guardado['invitados_coliseo'] ?? 0);
+            $invitadosCelulaTrim += $invCel;
+            $invitadosColiseoTrim += $invCol;
+            $noRealizadasTrim += $noRealizadas;
+
+            $indicadoresMes[] = [
+                'clave' => $claveMes,
+                'nombre' => (string)$mesInfo['nombre'],
+                'anio' => (int)$mesInfo['anio'],
+                'mes' => (int)$mesInfo['mes'],
+                'promedio' => $reportadasMes > 0 ? round($sumaMes / $reportadasMes, 1) : 0.0,
+                'semanas_reportadas' => $reportadasMes,
+                'semanas_esperadas' => $esperadas,
+                'invitados_celula' => $invCel,
+                'invitados_coliseo' => $invCol,
+                'celulas_no_realizadas' => $noRealizadas,
+                'celulas_no_realizadas_auto' => $noRealizadasAuto,
+                'enviados_encuentro' => $conEncuentro,
+                'graduados_pos_encuentro' => $conPosEncuentro,
+            ];
+        }
+
+        $maxGrafica = max(1, $maxAsistenciasTrimestre);
+        foreach ($serieGrafica as $puntoGrafica) {
+            $maxGrafica = max($maxGrafica, (int)($puntoGrafica['total'] ?? 0));
+        }
+
+        return [
+            'trimestre' => $trimestre,
+            'opciones_trimestre' => $this->opcionesTrimestreCelugrama((int)$trimestre['anio']),
+            'semanas' => $semanas,
+            'meses' => $meses,
+            'miembros' => $filasMiembros,
+            'serie_grafica' => $serieGrafica,
+            'max_grafica' => $maxGrafica,
+            'temas' => $temasFilas,
+            'indicadores_mes' => $indicadoresMes,
+            'resumen' => [
+                'miembros' => count($filasMiembros),
+                'promedio_asistencia' => $promedioTrimestre,
+                'semanas_reportadas' => $semanasConReporte,
+                'semanas_totales' => count($semanas),
+                'invitados_celula' => $invitadosCelulaTrim,
+                'invitados_coliseo' => $invitadosColiseoTrim,
+                'celulas_no_realizadas' => $noRealizadasTrim,
+                'con_encuentro' => $conEncuentro,
+                'con_pos_encuentro' => $conPosEncuentro,
+                'con_cap' => $conCap,
+            ],
+            'puede_editar' => AuthController::puede('asistencias:crear')
+                || AuthController::puede('celulas:editar')
+                || AuthController::esAdministrador(),
+            'puede_seguimiento' => AuthController::puedeUsarSeguimientoPersonaListado(),
+            'puede_guardar_seguimiento' => AuthController::puedeGuardarSeguimientoPersonaListado(),
+            'puede_eliminar_miembro' => AuthController::puede('asistencias:crear')
+                || AuthController::puede('asistencias:editar')
+                || AuthController::esAdministrador(),
+            'puede_migrar' => AuthController::puede('asistencias:crear')
+                || AuthController::puede('asistencias:editar')
+                || AuthController::esAdministrador(),
+            'puede_eliminar_persona' => AuthController::puedeEliminarPersonaDesdeDiscipular()
+                || AuthController::puede('personas:eliminar')
+                || AuthController::esAdministrador(),
+            'puede_escalera' => AuthController::puedeActualizarChecklistEscalera(),
+            'puede_editar_persona' => AuthController::puede('personas:editar')
+                || AuthController::puedeEditarPersonaDesdeDiscipular()
+                || AuthController::esAdministrador(),
+        ];
+    }
+
+    /**
+     * @return array{clave:string,anio:int,numero:int,etiqueta:string,desde:string,hasta:string}
+     */
+    private function resolverTrimestreCelugrama(string $clave = ''): array {
+        $ahora = new DateTimeImmutable('today');
+        $anio = (int)$ahora->format('Y');
+        $numero = (int)ceil(((int)$ahora->format('n')) / 3);
+
+        if (preg_match('/^(\d{4})-Q([1-4])$/', trim($clave), $m)) {
+            $anio = (int)$m[1];
+            $numero = (int)$m[2];
+        }
+
+        $mesInicio = (($numero - 1) * 3) + 1;
+        $mesFin = $mesInicio + 2;
+        $desde = sprintf('%04d-%02d-01', $anio, $mesInicio);
+        $hastaTs = strtotime(sprintf('%04d-%02d-01', $anio, $mesFin) . ' +1 month -1 day');
+        $hasta = $hastaTs ? date('Y-m-d', $hastaTs) : sprintf('%04d-%02d-28', $anio, $mesFin);
+
+        $nombres = [1 => 'Ene–Mar', 2 => 'Abr–Jun', 3 => 'Jul–Sep', 4 => 'Oct–Dic'];
+        return [
+            'clave' => sprintf('%04d-Q%d', $anio, $numero),
+            'anio' => $anio,
+            'numero' => $numero,
+            'etiqueta' => ($nombres[$numero] ?? ('T' . $numero)) . ' ' . $anio,
+            'desde' => $desde,
+            'hasta' => $hasta,
+        ];
+    }
+
+    /**
+     * @return list<array{clave:string,etiqueta:string}>
+     */
+    private function opcionesTrimestreCelugrama(int $anioBase): array {
+        $opciones = [];
+        for ($anio = $anioBase - 1; $anio <= $anioBase + 1; $anio++) {
+            for ($q = 1; $q <= 4; $q++) {
+                $nombres = [1 => 'Ene–Mar', 2 => 'Abr–Jun', 3 => 'Jul–Sep', 4 => 'Oct–Dic'];
+                $opciones[] = [
+                    'clave' => sprintf('%04d-Q%d', $anio, $q),
+                    'etiqueta' => ($nombres[$q] ?? ('T' . $q)) . ' ' . $anio,
+                ];
+            }
+        }
+        return $opciones;
+    }
+
+    /**
+     * @return list<array{inicio:string,fin:string,etiqueta:string,etiqueta_corta:string,mes_clave:string,mes_nombre:string,mes:int}>
+     */
+    private function semanasTrimestreCelugrama(string $desde, string $hasta): array {
+        $lunes = $this->asistenciaModel->lunesDeSemana($desde);
+        if ($lunes === '') {
+            return [];
+        }
+        $nombresMes = [
+            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+            5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+            9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre',
+        ];
+        $out = [];
+        $cursor = strtotime($lunes);
+        $finTs = strtotime($hasta);
+        if ($cursor === false || $finTs === false) {
+            return [];
+        }
+        while ($cursor <= $finTs) {
+            $inicio = date('Y-m-d', $cursor);
+            $fin = date('Y-m-d', strtotime('+6 days', $cursor));
+            $mes = (int)date('n', $cursor);
+            $anio = (int)date('Y', $cursor);
+            $out[] = [
+                'inicio' => $inicio,
+                'fin' => $fin,
+                'etiqueta' => date('d/m', $cursor) . '–' . date('d/m', strtotime('+6 days', $cursor)),
+                'etiqueta_corta' => date('d/m', $cursor),
+                'mes_clave' => sprintf('%04d-%02d', $anio, $mes),
+                'mes_nombre' => $nombresMes[$mes] ?? ('Mes ' . $mes),
+                'mes' => $mes,
+            ];
+            $cursor = strtotime('+7 days', $cursor);
+            if ($cursor === false) {
+                break;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * @return list<array{clave:string,anio:int,mes:int,nombre:string}>
+     */
+    private function mesesTrimestreCelugrama(int $anio, int $numero): array {
+        $mesInicio = (($numero - 1) * 3) + 1;
+        $nombres = [
+            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+            5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+            9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre',
+        ];
+        $out = [];
+        for ($i = 0; $i < 3; $i++) {
+            $mes = $mesInicio + $i;
+            $out[] = [
+                'clave' => sprintf('%04d-%02d', $anio, $mes),
+                'anio' => $anio,
+                'mes' => $mes,
+                'nombre' => $nombres[$mes] ?? ('Mes ' . $mes),
+            ];
+        }
+        return $out;
+    }
+
+    private function edadDesdeFechaNacimiento(string $fechaNacimiento): string {
+        $fechaNacimiento = substr(trim($fechaNacimiento), 0, 10);
+        if ($fechaNacimiento === '' || $fechaNacimiento === '0000-00-00') {
+            return '—';
+        }
+        try {
+            $nac = new DateTimeImmutable($fechaNacimiento);
+            $hoy = new DateTimeImmutable('today');
+            return (string)$nac->diff($hoy)->y;
+        } catch (Throwable $e) {
+            return '—';
+        }
     }
 
     public function exportarExcel() {
@@ -546,6 +1070,700 @@ class CelulaController extends BaseController {
             ['Celula', 'Lider', 'Anfitrion', 'Direccion', 'Dia Reunion', 'Hora Reunion', 'Ministerio', 'Total Miembros'],
             $rows
         );
+    }
+
+    /**
+     * Reporte individual por célula (nuevo, aparte de detalle/listados existentes).
+     */
+    public function reporteIndividual() {
+        if (!AuthController::puede('celulas:ver')) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $id = (int)($_GET['id'] ?? 0);
+        if ($id <= 0) {
+            $this->redirect('celulas');
+        }
+        if (!$this->puedeAccederCelula($id)) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $reporte = $this->construirDatosReporteIndividual($id);
+        if ($reporte === null) {
+            $this->redirect('celulas');
+        }
+
+        $this->view('celulas/reporte_individual', $reporte);
+    }
+
+    /**
+     * Exportación Excel del reporte individual de todas las células de un ministerio.
+     */
+    public function exportarReporteIndividualMinisterio() {
+        if (!AuthController::puede('celulas:exportar_datos') && !AuthController::puede('celulas:ver')) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $idMinisterio = (int)($_GET['ministerio'] ?? 0);
+        if ($idMinisterio <= 0) {
+            $this->redirect('celulas');
+        }
+
+        $filtroCelulas = DataIsolation::generarFiltroCelulas();
+        $celulas = $this->celulaModel->getAllWithMemberCountAndRole($filtroCelulas, $idMinisterio, '');
+        if ($celulas === []) {
+            $this->redirect('celulas&ministerio=' . $idMinisterio);
+        }
+
+        usort($celulas, static function ($a, $b) {
+            $na = mb_strtolower(trim((string)($a['Nombre_Celula'] ?? '')), 'UTF-8');
+            $nb = mb_strtolower(trim((string)($b['Nombre_Celula'] ?? '')), 'UTF-8');
+            return strnatcasecmp($na, $nb);
+        });
+
+        $nombreMinisterio = trim((string)($celulas[0]['Nombre_Ministerio_Lider'] ?? ''));
+        if ($nombreMinisterio === '') {
+            $ministerio = $this->ministerioModel->getById($idMinisterio);
+            $nombreMinisterio = trim((string)($ministerio['Nombre_Ministerio'] ?? 'Ministerio'));
+        }
+
+        $reportes = [];
+        $totalIntegrantes = 0;
+        $totalEncuentro = 0;
+        $totalBautismo = 0;
+        $totalCap = 0;
+        $totalGanadosSemana = 0;
+        $rangoSemana = '';
+
+        foreach ($celulas as $celulaFila) {
+            $idCelula = (int)($celulaFila['Id_Celula'] ?? 0);
+            if ($idCelula <= 0 || !$this->puedeAccederCelula($idCelula)) {
+                continue;
+            }
+            $reporte = $this->construirDatosReporteIndividual($idCelula);
+            if ($reporte === null) {
+                continue;
+            }
+            $reportes[] = $reporte;
+            $totalIntegrantes += (int)($reporte['resumen']['total_integrantes'] ?? 0);
+            $totalEncuentro += (int)($reporte['resumen']['con_encuentro'] ?? 0);
+            $totalBautismo += (int)($reporte['resumen']['con_bautismo'] ?? 0);
+            $totalCap += (int)($reporte['resumen']['con_cap_destino'] ?? 0);
+            $totalGanadosSemana += (int)($reporte['semana']['total_ganados'] ?? 0);
+            if ($rangoSemana === '') {
+                $rangoSemana = (string)($reporte['semana']['rango_texto'] ?? '');
+            }
+        }
+
+        if ($reportes === []) {
+            $this->redirect('celulas&ministerio=' . $idMinisterio);
+        }
+
+        $colSpan = 16;
+        $blank = array_fill(0, $colSpan, '');
+        $filaTitulo = static function (string $texto) use ($blank): array {
+            $row = $blank;
+            $row[0] = $texto;
+            return $row;
+        };
+
+        $rows = [];
+        $rows[] = $filaTitulo('REPORTE INDIVIDUAL POR CELULAS · MINISTERIO');
+        $rows[] = $filaTitulo('Ministerio: ' . $nombreMinisterio);
+        $rows[] = $filaTitulo('Generado: ' . date('d/m/Y H:i'));
+        $rows[] = $filaTitulo('Semana actual: ' . $rangoSemana);
+        $rows[] = $filaTitulo(
+            'Totales ministerio -> Celulas: ' . count($reportes)
+            . ' | Integrantes: ' . $totalIntegrantes
+            . ' | Ganados semana: ' . $totalGanadosSemana
+            . ' | Encuentro: ' . $totalEncuentro
+            . ' | Bautizados: ' . $totalBautismo
+            . ' | Cap. Destino: ' . $totalCap
+        );
+        $rows[] = $blank;
+        $rows[] = $filaTitulo('=== RESUMEN POR CELULA ===');
+
+        foreach ($reportes as $reporte) {
+            $celula = $reporte['celula'];
+            $resumen = $reporte['resumen'];
+            $semana = $reporte['semana'];
+            $cierreOTiempo = !empty($resumen['esta_cerrada'])
+                ? ('Cerrada: ' . (string)$resumen['fecha_cierre_texto'])
+                : ('Abierta: ' . (string)$resumen['tiempo_abierta_texto']);
+
+            $rows[] = [
+                'RESUMEN',
+                (string)($celula['Nombre_Celula'] ?? ''),
+                (string)($celula['Nombre_Lider'] ?? ''),
+                (string)($celula['Estado_Celula'] ?? 'Activa'),
+                (string)$resumen['fecha_apertura_texto'],
+                $cierreOTiempo,
+                (string)((int)$semana['total_ganados']),
+                'de ' . (int)$resumen['total_integrantes'] . ' activos / ' . (int)($resumen['total_retirados'] ?? 0) . ' retiros',
+                '',
+                '',
+                '',
+                '',
+                (string)((int)$resumen['con_encuentro']),
+                (string)((int)$resumen['con_bautismo']),
+                '',
+                'N1:' . (int)$resumen['cap_n1'] . ' N2:' . (int)$resumen['cap_n2'] . ' N3:' . (int)$resumen['cap_n3'],
+            ];
+        }
+
+        $rows[] = $blank;
+        $rows[] = $filaTitulo('=== DETALLE POR INTEGRANTE ===');
+
+        foreach ($reportes as $reporte) {
+            $celula = $reporte['celula'];
+            $resumen = $reporte['resumen'];
+            $semana = $reporte['semana'];
+            $cierreOTiempo = !empty($resumen['esta_cerrada'])
+                ? ('Cerrada: ' . (string)$resumen['fecha_cierre_texto'])
+                : ('Abierta: ' . (string)$resumen['tiempo_abierta_texto']);
+
+            $rows[] = $blank;
+            $rows[] = $filaTitulo(
+                'CELULA: ' . (string)($celula['Nombre_Celula'] ?? '')
+                . ' | Lider: ' . (string)($celula['Nombre_Lider'] ?? 'No especificado')
+                . ' | Estado: ' . (string)($celula['Estado_Celula'] ?? 'Activa')
+                . ' | Apertura: ' . (string)$resumen['fecha_apertura_texto']
+                . ' | ' . $cierreOTiempo
+                . ' | Ganados semana: ' . (int)$semana['total_ganados']
+            );
+
+            $integrantes = is_array($reporte['integrantes'] ?? null) ? $reporte['integrantes'] : [];
+            if ($integrantes === []) {
+                $rows[] = [
+                    'DETALLE',
+                    (string)($celula['Nombre_Celula'] ?? ''),
+                    (string)($celula['Nombre_Lider'] ?? ''),
+                    (string)($celula['Estado_Celula'] ?? 'Activa'),
+                    (string)$resumen['fecha_apertura_texto'],
+                    $cierreOTiempo,
+                    (string)((int)$semana['total_ganados']),
+                    'Sin integrantes',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                ];
+                continue;
+            }
+
+            foreach ($integrantes as $fila) {
+                $rows[] = [
+                    'DETALLE',
+                    (string)($celula['Nombre_Celula'] ?? ''),
+                    (string)($celula['Nombre_Lider'] ?? ''),
+                    (string)($celula['Estado_Celula'] ?? 'Activa'),
+                    (string)$resumen['fecha_apertura_texto'],
+                    $cierreOTiempo,
+                    (string)((int)$semana['total_ganados']),
+                    (string)($fila['nombre'] ?? ''),
+                    (($fila['estado_en_celula'] ?? '') === 'retirado') ? 'Retirado' : 'Activo',
+                    (string)($fila['tiempo_activo_texto'] ?? 'No disponible'),
+                    (string)($fila['desde_activo_texto'] ?? '-'),
+                    (string)($fila['fecha_retiro_texto'] ?? '-'),
+                    (string)($fila['observacion_retiro'] ?? '-'),
+                    !empty($fila['encuentro']) ? 'Si' : 'No',
+                    !empty($fila['bautismo']) ? 'Si' : 'No',
+                    (string)(
+                        !empty($fila['cap_destino'])
+                            ? ((string)($fila['nivel_cap_texto'] ?? 'Si'))
+                            : 'No'
+                    ),
+                ];
+            }
+        }
+
+        $slug = preg_replace('/[^a-zA-Z0-9_\-]+/', '_', $nombreMinisterio);
+        $this->exportCsv(
+            'reporte_celulas_ministerio_' . $slug . '_' . date('Ymd_His'),
+            [
+                'Seccion',
+                'Celula',
+                'Lider',
+                'Estado celula',
+                'Fecha apertura',
+                'Cierre o tiempo abierta',
+                'Ganados semana actual',
+                'Integrante',
+                'Estado persona',
+                'Tiempo activo en celula',
+                'Desde',
+                'Fecha retiro',
+                'Observacion retiro',
+                'Fue a encuentro',
+                'Bautizado',
+                'Cap. Destino / Nivel',
+            ],
+            $rows,
+            false
+        );
+    }
+
+    /**
+     * Exportación Excel del reporte individual por célula.
+     */
+    public function exportarReporteIndividual() {
+        if (!AuthController::puede('celulas:exportar_datos') && !AuthController::puede('celulas:ver')) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $id = (int)($_GET['id'] ?? 0);
+        if ($id <= 0 || !$this->puedeAccederCelula($id)) {
+            header('Location: ' . public_app_url('auth/acceso-denegado'));
+            exit;
+        }
+
+        $reporte = $this->construirDatosReporteIndividual($id);
+        if ($reporte === null) {
+            $this->redirect('celulas');
+        }
+
+        $celula = $reporte['celula'];
+        $resumen = $reporte['resumen'];
+        $semana = $reporte['semana'];
+        $integrantes = $reporte['integrantes'];
+
+        $nombreCelula = (string)($celula['Nombre_Celula'] ?? 'Celula');
+        $colSpan = 10;
+        $blank = array_fill(0, $colSpan, '');
+
+        $filaTitulo = static function (string $texto) use ($blank): array {
+            $row = $blank;
+            $row[0] = $texto;
+            return $row;
+        };
+
+        $rows = [];
+        $rows[] = $filaTitulo('REPORTE INDIVIDUAL DE CELULA');
+        $rows[] = $filaTitulo('Celula: ' . $nombreCelula);
+        $rows[] = $filaTitulo('Lider: ' . (string)($celula['Nombre_Lider'] ?? 'No especificado'));
+        $rows[] = $filaTitulo('Ministerio: ' . (string)($celula['Nombre_Ministerio'] ?? 'No especificado'));
+        $rows[] = $filaTitulo('Estado: ' . (string)($celula['Estado_Celula'] ?? 'Activa'));
+        $rows[] = $filaTitulo('Fecha de apertura: ' . (string)$resumen['fecha_apertura_texto']);
+        $rows[] = $filaTitulo(
+            !empty($resumen['esta_cerrada'])
+                ? ('Fecha de cierre: ' . (string)$resumen['fecha_cierre_texto'])
+                : ('Tiempo abierta: ' . (string)$resumen['tiempo_abierta_texto'])
+        );
+        $rows[] = $filaTitulo(
+            'Personas ganadas semana actual (' . (string)$semana['rango_texto'] . '): '
+            . (int)$semana['total_ganados']
+        );
+        $rows[] = $blank;
+        $rows[] = $filaTitulo(
+            'Resumen formacion: de ' . (int)$resumen['total_integrantes']
+            . ' integrantes activos -> Encuentro: ' . (int)$resumen['con_encuentro']
+            . ' | Bautizados: ' . (int)$resumen['con_bautismo']
+            . ' | Cap. Destino: ' . (int)$resumen['con_cap_destino']
+            . ' (N1: ' . (int)$resumen['cap_n1']
+            . ' / N2: ' . (int)$resumen['cap_n2']
+            . ' / N3: ' . (int)$resumen['cap_n3'] . ')'
+            . ' | Retiros: ' . (int)($resumen['total_retirados'] ?? 0)
+        );
+        $rows[] = $blank;
+        $rows[] = $filaTitulo('Detalle por integrante');
+
+        foreach ($integrantes as $fila) {
+            $rows[] = [
+                (string)($fila['nombre'] ?? ''),
+                (($fila['estado_en_celula'] ?? '') === 'retirado') ? 'Retirado' : 'Activo',
+                (string)($fila['tiempo_activo_texto'] ?? 'No disponible'),
+                (string)($fila['desde_activo_texto'] ?? '-'),
+                (string)($fila['fecha_retiro_texto'] ?? '-'),
+                (string)($fila['observacion_retiro'] ?? '-'),
+                !empty($fila['encuentro']) ? 'Si' : 'No',
+                !empty($fila['bautismo']) ? 'Si' : 'No',
+                !empty($fila['cap_destino']) ? 'Si' : 'No',
+                (string)($fila['nivel_cap_texto'] ?? '-'),
+            ];
+        }
+
+        $slug = preg_replace('/[^a-zA-Z0-9_\-]+/', '_', $nombreCelula);
+        $this->exportCsv(
+            'reporte_celula_' . $slug . '_' . date('Ymd_His'),
+            [
+                'Integrante',
+                'Estado',
+                'Tiempo activo en celula',
+                'Desde',
+                'Fecha retiro',
+                'Observacion retiro',
+                'Fue a encuentro',
+                'Bautizado',
+                'En Cap. Destino',
+                'Nivel Cap. Destino',
+            ],
+            $rows,
+            false
+        );
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function construirDatosReporteIndividual(int $idCelula): ?array {
+        $celula = $this->celulaModel->getWithMembers($idCelula);
+        if (!$celula) {
+            return null;
+        }
+
+        $miembros = is_array($celula['miembros'] ?? null) ? $celula['miembros'] : [];
+        $idsPersona = [];
+        foreach ($miembros as $miembro) {
+            $idPersona = (int)($miembro['Id_Persona'] ?? 0);
+            if ($idPersona > 0) {
+                $idsPersona[] = $idPersona;
+            }
+        }
+
+        $hechos = [];
+        if ($idsPersona !== []) {
+            try {
+                $hechos = (new ProgresoFormacionFlujo())->hechosPorPersonas($idsPersona);
+            } catch (Throwable $e) {
+                $hechos = [];
+            }
+        }
+
+        $estado = strtolower(trim((string)($celula['Estado_Celula'] ?? 'Activa')));
+        $estaCerrada = ($estado === 'cerrada');
+        $fechaAperturaRaw = substr(trim((string)($celula['Fecha_Apertura'] ?? '')), 0, 10);
+        $fechaCierreRaw = substr(trim((string)($celula['Fecha_Cierre'] ?? '')), 0, 10);
+        $fechaAperturaTexto = $this->formatearFechaReporte($fechaAperturaRaw);
+        $fechaCierreTexto = $estaCerrada ? $this->formatearFechaReporte($fechaCierreRaw) : '';
+        $tiempoAbiertaTexto = $estaCerrada
+            ? ''
+            : $this->calcularTiempoAbiertaTexto($fechaAperturaRaw);
+        $fechaFinActividad = ($estaCerrada && $fechaCierreRaw !== '' && $fechaCierreRaw !== '0000-00-00')
+            ? $fechaCierreRaw
+            : date('Y-m-d');
+
+        $primerasAsistencias = $this->mapaPrimeraAsistenciaEnCelula($idsPersona, $idCelula);
+
+        $integrantes = [];
+        $conEncuentro = 0;
+        $conBautismo = 0;
+        $conCap = 0;
+        $capN1 = 0;
+        $capN2 = 0;
+        $capN3 = 0;
+
+        foreach ($miembros as $miembro) {
+            $idPersona = (int)($miembro['Id_Persona'] ?? 0);
+            $hecho = is_array($hechos[$idPersona] ?? null) ? $hechos[$idPersona] : [];
+            $nivel = $this->resolverNivelCapDestinoDesdeHecho($hecho);
+            $encuentro = !empty($hecho['encuentro']);
+            $bautismo = !empty($hecho['bautismo']);
+            $capDestino = !empty($hecho['cap_destino']) || $nivel > 0;
+
+            if ($encuentro) {
+                $conEncuentro++;
+            }
+            if ($bautismo) {
+                $conBautismo++;
+            }
+            if ($capDestino) {
+                $conCap++;
+            }
+            if ($nivel === 1) {
+                $capN1++;
+            } elseif ($nivel === 2) {
+                $capN2++;
+            } elseif ($nivel === 3) {
+                $capN3++;
+            }
+
+            $nombre = trim(((string)($miembro['Nombre'] ?? '')) . ' ' . ((string)($miembro['Apellido'] ?? '')));
+            $documento = trim((string)($miembro['Numero_Documento'] ?? ''));
+            $telefono = trim((string)($miembro['Telefono'] ?? ''));
+
+            $desdeActivoRaw = (string)($primerasAsistencias[$idPersona] ?? '');
+            if ($desdeActivoRaw === '') {
+                $desdeActivoRaw = substr(trim((string)($miembro['Fecha_Registro'] ?? '')), 0, 10);
+            }
+            $tiempoActivoTexto = $this->calcularTiempoEntreFechasTexto($desdeActivoRaw, $fechaFinActividad);
+
+            $integrantes[] = [
+                'id_persona' => $idPersona,
+                'nombre' => $nombre !== '' ? $nombre : 'Sin nombre',
+                'documento' => $documento !== '' ? $documento : 'N/A',
+                'telefono' => $telefono !== '' ? $telefono : 'N/A',
+                'estado_en_celula' => 'activo',
+                'desde_activo' => $desdeActivoRaw,
+                'desde_activo_texto' => $this->formatearFechaReporte($desdeActivoRaw),
+                'tiempo_activo_texto' => $tiempoActivoTexto !== '' ? $tiempoActivoTexto : 'No disponible',
+                'fecha_retiro' => '',
+                'fecha_retiro_texto' => '—',
+                'observacion_retiro' => '—',
+                'encuentro' => $encuentro,
+                'bautismo' => $bautismo,
+                'cap_destino' => $capDestino,
+                'nivel_cap' => $nivel,
+                'nivel_cap_texto' => $this->textoNivelCapDestino($nivel, $capDestino),
+            ];
+        }
+
+        $idsActivos = array_fill_keys($idsPersona, true);
+        $idsSalida = [];
+        $salidas = [];
+        try {
+            $salidas = $this->salidaCelulaModel->listarPorCelula($idCelula);
+        } catch (Throwable $e) {
+            $salidas = [];
+        }
+        foreach ($salidas as $salida) {
+            $idSalidaPersona = (int)($salida['Id_Persona'] ?? 0);
+            if ($idSalidaPersona > 0) {
+                $idsSalida[] = $idSalidaPersona;
+            }
+        }
+        $hechosSalida = [];
+        if ($idsSalida !== []) {
+            try {
+                $hechosSalida = (new ProgresoFormacionFlujo())->hechosPorPersonas($idsSalida);
+            } catch (Throwable $e) {
+                $hechosSalida = [];
+            }
+        }
+        $primerasAsistenciasSalida = $this->mapaPrimeraAsistenciaEnCelula($idsSalida, $idCelula);
+
+        foreach ($salidas as $salida) {
+            $idPersona = (int)($salida['Id_Persona'] ?? 0);
+            if ($idPersona <= 0 || isset($idsActivos[$idPersona])) {
+                // Si volvió a la célula, no duplicar como retiro vigente.
+                continue;
+            }
+
+            $hecho = is_array($hechosSalida[$idPersona] ?? null) ? $hechosSalida[$idPersona] : [];
+            $nivel = $this->resolverNivelCapDestinoDesdeHecho($hecho);
+            $encuentro = !empty($hecho['encuentro']);
+            $bautismo = !empty($hecho['bautismo']);
+            $capDestino = !empty($hecho['cap_destino']) || $nivel > 0;
+
+            $nombre = trim(((string)($salida['Nombre'] ?? '')) . ' ' . ((string)($salida['Apellido'] ?? '')));
+            $fechaRetiroRaw = substr(trim((string)($salida['Fecha_Retiro'] ?? '')), 0, 10);
+            $desdeActivoRaw = (string)($primerasAsistenciasSalida[$idPersona] ?? '');
+            if ($desdeActivoRaw === '') {
+                $desdeActivoRaw = substr(trim((string)($salida['Fecha_Registro'] ?? '')), 0, 10);
+            }
+            $finTiempo = ($fechaRetiroRaw !== '' && $fechaRetiroRaw !== '0000-00-00')
+                ? $fechaRetiroRaw
+                : $fechaFinActividad;
+            $tiempoActivoTexto = $this->calcularTiempoEntreFechasTexto($desdeActivoRaw, $finTiempo);
+
+            $integrantes[] = [
+                'id_persona' => $idPersona,
+                'nombre' => $nombre !== '' ? $nombre : 'Sin nombre',
+                'documento' => 'N/A',
+                'telefono' => 'N/A',
+                'estado_en_celula' => 'retirado',
+                'desde_activo' => $desdeActivoRaw,
+                'desde_activo_texto' => $this->formatearFechaReporte($desdeActivoRaw),
+                'tiempo_activo_texto' => $tiempoActivoTexto !== '' ? $tiempoActivoTexto : 'No disponible',
+                'fecha_retiro' => $fechaRetiroRaw,
+                'fecha_retiro_texto' => $this->formatearFechaReporte($fechaRetiroRaw),
+                'observacion_retiro' => PersonaSalidaCelula::armarObservacionVisible($salida),
+                'encuentro' => $encuentro,
+                'bautismo' => $bautismo,
+                'cap_destino' => $capDestino,
+                'nivel_cap' => $nivel,
+                'nivel_cap_texto' => $this->textoNivelCapDestino($nivel, $capDestino),
+            ];
+        }
+
+        [$semanaInicio, $semanaFin] = $this->rangoSemanaActualLunesDomingo();
+        $totalGanadosSemana = $this->contarGanadosCelulaEnRango($idCelula, $semanaInicio, $semanaFin);
+        $totalActivos = 0;
+        $totalRetirados = 0;
+        foreach ($integrantes as $filaInt) {
+            if (($filaInt['estado_en_celula'] ?? '') === 'retirado') {
+                $totalRetirados++;
+            } else {
+                $totalActivos++;
+            }
+        }
+
+        return [
+            'celula' => $celula,
+            'integrantes' => $integrantes,
+            'semana' => [
+                'inicio' => $semanaInicio,
+                'fin' => $semanaFin,
+                'rango_texto' => $this->formatearFechaReporte($semanaInicio) . ' – ' . $this->formatearFechaReporte($semanaFin),
+                'total_ganados' => $totalGanadosSemana,
+            ],
+            'resumen' => [
+                'fecha_apertura_texto' => $fechaAperturaTexto,
+                'fecha_cierre_texto' => $fechaCierreTexto !== '' ? $fechaCierreTexto : 'No registrada',
+                'tiempo_abierta_texto' => $tiempoAbiertaTexto !== '' ? $tiempoAbiertaTexto : 'No disponible',
+                'esta_cerrada' => $estaCerrada,
+                'total_integrantes' => $totalActivos,
+                'total_retirados' => $totalRetirados,
+                'con_encuentro' => $conEncuentro,
+                'con_bautismo' => $conBautismo,
+                'con_cap_destino' => $conCap,
+                'cap_n1' => $capN1,
+                'cap_n2' => $capN2,
+                'cap_n3' => $capN3,
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $hecho
+     */
+    private function resolverNivelCapDestinoDesdeHecho(array $hecho): int {
+        if (!empty($hecho['cap_n3'])) {
+            return 3;
+        }
+        if (!empty($hecho['cap_n2'])) {
+            return 2;
+        }
+        if (!empty($hecho['cap_n1'])) {
+            return 1;
+        }
+        return 0;
+    }
+
+    private function textoNivelCapDestino(int $nivel, bool $enCap): string {
+        if ($nivel === 1) {
+            return 'Nivel 1';
+        }
+        if ($nivel === 2) {
+            return 'Nivel 2';
+        }
+        if ($nivel === 3) {
+            return 'Nivel 3';
+        }
+        if ($enCap) {
+            return 'En Cap. Destino (sin nivel)';
+        }
+        return '—';
+    }
+
+    private function formatearFechaReporte(string $fechaYmd): string {
+        $fechaYmd = substr(trim($fechaYmd), 0, 10);
+        if ($fechaYmd === '' || $fechaYmd === '0000-00-00') {
+            return 'No especificada';
+        }
+        $ts = strtotime($fechaYmd);
+        return $ts ? date('d/m/Y', $ts) : $fechaYmd;
+    }
+
+    /**
+     * @return array{0:string,1:string}
+     */
+    private function rangoSemanaActualLunesDomingo(?string $fechaReferencia = null): array {
+        $timestamp = strtotime((string)($fechaReferencia ?: date('Y-m-d')));
+        if ($timestamp === false) {
+            $timestamp = time();
+        }
+        $diaSemana = (int)date('N', $timestamp); // 1 lunes … 7 domingo
+        $inicio = strtotime('-' . ($diaSemana - 1) . ' days', $timestamp);
+        $fin = strtotime('+6 days', $inicio);
+        return [date('Y-m-d', $inicio), date('Y-m-d', $fin)];
+    }
+
+    private function calcularTiempoAbiertaTexto(string $fechaAperturaYmd): string {
+        return $this->calcularTiempoEntreFechasTexto($fechaAperturaYmd, date('Y-m-d'));
+    }
+
+    private function calcularTiempoEntreFechasTexto(string $fechaInicioYmd, string $fechaFinYmd): string {
+        $fechaInicioYmd = substr(trim($fechaInicioYmd), 0, 10);
+        $fechaFinYmd = substr(trim($fechaFinYmd), 0, 10);
+        if ($fechaInicioYmd === '' || $fechaInicioYmd === '0000-00-00') {
+            return '';
+        }
+        if ($fechaFinYmd === '' || $fechaFinYmd === '0000-00-00') {
+            $fechaFinYmd = date('Y-m-d');
+        }
+        try {
+            $inicio = new DateTimeImmutable($fechaInicioYmd);
+            $fin = new DateTimeImmutable($fechaFinYmd);
+        } catch (Throwable $e) {
+            return '';
+        }
+        if ($inicio > $fin) {
+            return '0 días';
+        }
+
+        $diff = $inicio->diff($fin);
+        $partes = [];
+        if ((int)$diff->y > 0) {
+            $partes[] = (int)$diff->y . ((int)$diff->y === 1 ? ' año' : ' años');
+        }
+        if ((int)$diff->m > 0) {
+            $partes[] = (int)$diff->m . ((int)$diff->m === 1 ? ' mes' : ' meses');
+        }
+        if ((int)$diff->d > 0 || $partes === []) {
+            $partes[] = (int)$diff->d . ((int)$diff->d === 1 ? ' día' : ' días');
+        }
+        return implode(', ', $partes);
+    }
+
+    /**
+     * Primera fecha de asistencia reportada en la célula por persona.
+     *
+     * @param array<int, int> $idsPersona
+     * @return array<int, string> Id_Persona => Y-m-d
+     */
+    private function mapaPrimeraAsistenciaEnCelula(array $idsPersona, int $idCelula): array {
+        $idsPersona = array_values(array_unique(array_filter(array_map('intval', $idsPersona))));
+        if ($idsPersona === [] || $idCelula <= 0) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsPersona), '?'));
+        $params = $idsPersona;
+        $params[] = $idCelula;
+        $sql = "SELECT a.Id_Persona, MIN(DATE(a.Fecha_Asistencia)) AS Primera_Fecha
+                FROM asistencia_celula a
+                WHERE a.Id_Persona IN ({$placeholders})
+                  AND a.Id_Celula = ?
+                  AND a.Fecha_Asistencia IS NOT NULL
+                  AND DATE(a.Fecha_Asistencia) > '0000-00-00'
+                GROUP BY a.Id_Persona";
+
+        $mapa = [];
+        try {
+            $filas = $this->asistenciaModel->query($sql, $params);
+        } catch (Throwable $e) {
+            return [];
+        }
+        foreach ((array)$filas as $fila) {
+            $id = (int)($fila['Id_Persona'] ?? 0);
+            $fecha = substr(trim((string)($fila['Primera_Fecha'] ?? '')), 0, 10);
+            if ($id > 0 && $fecha !== '' && $fecha !== '0000-00-00') {
+                $mapa[$id] = $fecha;
+            }
+        }
+        return $mapa;
+    }
+
+    private function contarGanadosCelulaEnRango(int $idCelula, string $desde, string $hasta): int {
+        $filtroNuevas = $this->personaModel->tieneColumna('Es_Antiguo')
+            ? ' AND COALESCE(p.Es_Antiguo, 1) = 0'
+            : '';
+        $sql = "SELECT COUNT(*) AS total
+                FROM persona p
+                WHERE p.Id_Celula = ?
+                  AND DATE(p.Fecha_Registro) BETWEEN ? AND ?
+                  AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                  {$filtroNuevas}";
+        $filas = $this->personaModel->query($sql, [$idCelula, $desde, $hasta]);
+        return (int)($filas[0]['total'] ?? 0);
     }
 
     public function eliminar() {

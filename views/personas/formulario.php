@@ -10,7 +10,9 @@ $modoSoloEventosProcesos = in_array($panelEventosProcesos, ['escalera', 'convenc
 $urlVolver = $returnUrl !== ''
     ? $returnUrl
     : ($returnToAsistencia
-        ? (PUBLIC_URL . '?url=asistencias/registrar' . (!empty($celula_retorno) ? '&celula=' . (int)$celula_retorno : ''))
+        ? (!empty($celula_retorno)
+            ? (PUBLIC_URL . '?url=celulas/detalle&id=' . (int)$celula_retorno . '&reporte=1')
+            : (PUBLIC_URL . '?url=celulas'))
         : ($returnToCelulas ? (PUBLIC_URL . '?url=celulas') : (PUBLIC_URL . '?url=personas')));
 ?>
 
@@ -97,17 +99,29 @@ $urlVolver = $returnUrl !== ''
 
                 <div class="form-group">
                     <label for="numero_documento">Número de documento <span class="req">*</span></label>
-                    <input type="text" id="numero_documento" name="numero_documento" class="form-control" 
-                           value="<?= htmlspecialchars($post_data['numero_documento'] ?? $persona['Numero_Documento'] ?? '') ?>" required>
+                    <input type="text" id="numero_documento" name="numero_documento" class="form-control"
+                           value="<?= htmlspecialchars($post_data['numero_documento'] ?? $persona['Numero_Documento'] ?? '') ?>"
+                           required autocomplete="off" inputmode="numeric"
+                           placeholder="Documento real (sin ceros, X ni el celular)">
+                    <small class="form-text text-muted">No uses valores de prueba, ceros, X ni el número de teléfono.</small>
                 </div>
             </div>
 
             <div class="form-row form-row-2">
                 <div class="form-group">
                     <label for="fecha_nacimiento">Fecha de nacimiento <span class="req">*</span></label>
-                    <?php $fechaNacimientoForm = $post_data['fecha_nacimiento'] ?? ($persona['Fecha_Nacimiento'] ?? ''); ?>
-                    <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" class="form-control" 
-                           value="<?= htmlspecialchars((string)$fechaNacimientoForm) ?>" required>
+                    <?php
+                    if (!class_exists('PersonaValidacion', false)) {
+                        require_once APP . '/Helpers/PersonaValidacion.php';
+                    }
+                    $fechaNacimientoMax = PersonaValidacion::fechaNacimientoMaxHtml();
+                    $fechaNacimientoForm = $post_data['fecha_nacimiento'] ?? ($persona['Fecha_Nacimiento'] ?? '');
+                    ?>
+                    <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" class="form-control"
+                           value="<?= htmlspecialchars((string)$fechaNacimientoForm) ?>"
+                           max="<?= htmlspecialchars($fechaNacimientoMax) ?>"
+                           required>
+                    <small class="form-text text-muted">Debe ser anterior a hoy. Para menores puedes usar una fecha de este año, pero real (no el día de hoy).</small>
                 </div>
 
                 <div class="form-group">
@@ -146,7 +160,10 @@ $urlVolver = $returnUrl !== ''
                 <div class="form-group">
                     <label for="telefono">Teléfono <span class="req">*</span></label>
                     <input type="tel" id="telefono" name="telefono" class="form-control" required
-                           value="<?= htmlspecialchars($post_data['telefono'] ?? $persona['Telefono'] ?? '') ?>">
+                           value="<?= htmlspecialchars($post_data['telefono'] ?? $persona['Telefono'] ?? '') ?>"
+                           inputmode="tel" autocomplete="tel"
+                           placeholder="Celular real (mín. 7 dígitos)">
+                    <small class="form-text text-muted">No uses 0000000 ni números de prueba.</small>
                 </div>
             </div>
         </div>
@@ -916,6 +933,49 @@ const edadInput = document.getElementById('edad');
 const liderSearchInput = document.getElementById('lider_search');
 const liderHiddenInput = document.getElementById('id_lider');
 const personaForm = document.getElementById('persona_form');
+const numeroDocumentoInput = document.getElementById('numero_documento');
+const telefonoInput = document.getElementById('telefono');
+
+function normalizarDocCliente(v) {
+    return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+function normalizarTelCliente(v) {
+    return String(v || '').replace(/\D+/g, '');
+}
+function validarDatosBasicosCliente() {
+    const doc = normalizarDocCliente(numeroDocumentoInput ? numeroDocumentoInput.value : '');
+    const tel = normalizarTelCliente(telefonoInput ? telefonoInput.value : '');
+    const fecha = fechaNacimientoInput ? String(fechaNacimientoInput.value || '').trim() : '';
+
+    if (!tel || tel.length < 7) return 'El teléfono debe tener al menos 7 dígitos.';
+    if (/^0+$/.test(tel) || ['1','123','0000000','0000000000','300000'].indexOf(tel) !== -1) {
+        return 'El teléfono no puede ser un valor de prueba o solo ceros.';
+    }
+    if (!doc || doc.length < 5) return 'El número de documento es demasiado corto. Usa el documento real.';
+    if (/^X+$/.test(doc) || /^0+$/.test(doc)) return 'El número de documento no puede ser solo ceros o X.';
+    if (doc === tel) return 'El número de documento no puede ser igual al teléfono.';
+    if (/^3\d{9}$/.test(doc) || /^573\d{9}$/.test(doc)) {
+        return 'El número de documento parece un teléfono. Escribe la cédula o registro civil real.';
+    }
+    if (!fecha) return 'La fecha de nacimiento es obligatoria.';
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const partes = fecha.split('-');
+    if (partes.length !== 3) return 'La fecha de nacimiento no es válida.';
+    const nac = new Date(parseInt(partes[0], 10), parseInt(partes[1], 10) - 1, parseInt(partes[2], 10));
+    if (isNaN(nac.getTime())) return 'La fecha de nacimiento no es válida.';
+    if (nac >= hoy) return 'La fecha de nacimiento no puede ser hoy ni una fecha futura.';
+    return '';
+}
+if (personaForm) {
+    personaForm.addEventListener('submit', function (e) {
+        const err = validarDatosBasicosCliente();
+        if (err) {
+            e.preventDefault();
+            window.alert(err);
+        }
+    });
+}
 
 function normalizarClaveNombrePersona(texto) {
     return String(texto || '')

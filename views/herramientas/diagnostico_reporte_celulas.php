@@ -15,7 +15,7 @@ $urlReportar = static function (int $idCelula, string $fechaInicio): string {
     if ($idCelula <= 0) {
         return '';
     }
-    return PUBLIC_URL . '?url=asistencias/registrar&celula=' . $idCelula . '&fecha=' . urlencode($fechaInicio);
+    return PUBLIC_URL . '?url=celulas/detalle&id=' . $idCelula . '&reporte=1&fecha=' . urlencode($fechaInicio);
 };
 ?>
 <!DOCTYPE html>

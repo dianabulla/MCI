@@ -821,6 +821,11 @@ textarea.form-control {
     max-width: 900px;
 }
 
+.detail-container--celugrama {
+    max-width: none;
+    width: 100%;
+}
+
 .detail-section {
     background: #f8f9fa;
     padding: 25px;
