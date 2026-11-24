@@ -96,6 +96,37 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
 .talleres-btn-ss .talleres-btn-ss-copy { display: flex; flex-direction: column; gap: 1px; }
 .talleres-btn-ss strong { font-size: 0.92rem; line-height: 1.15; }
 .talleres-btn-ss small { font-size: 0.72rem; font-weight: 600; color: #be123c; }
+.talleres-btn-premio {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px 8px 8px;
+    border-radius: 12px;
+    text-decoration: none;
+    color: #92400e !important;
+    background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+    border: 1px solid #fcd34d;
+    box-shadow: 0 4px 12px rgba(180, 83, 9, 0.12);
+}
+.talleres-btn-premio:hover {
+    background: linear-gradient(180deg, #fef3c7 0%, #fde68a 100%);
+    color: #78350f !important;
+}
+.talleres-btn-premio i {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #d97706;
+    color: #fff;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+.talleres-btn-premio .talleres-btn-ss-copy { display: flex; flex-direction: column; gap: 1px; }
+.talleres-btn-premio strong { font-size: 0.92rem; line-height: 1.15; }
+.talleres-btn-premio small { font-size: 0.72rem; font-weight: 600; color: #b45309; }
 </style>
 
 <div class="talleres-lista-head">
@@ -113,6 +144,20 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
         <?php if ($puedeCrear): ?>
         <a href="<?= PUBLIC_URL ?>?url=talleres/crear" class="talleres-btn-nuevo">
             <i class="bi bi-plus-lg"></i> Nuevo formulario
+        </a>
+        <?php endif; ?>
+        <?php if (
+            AuthController::puede('talleres:ver')
+            || AuthController::puede('talleres:ver_respuestas')
+            || AuthController::puede('talleres:editar')
+            || AuthController::puede('talleres:crear')
+        ): ?>
+        <a href="<?= PUBLIC_URL ?>?url=talleres/premiacion" class="talleres-btn-premio">
+            <i class="bi bi-award"></i>
+            <span class="talleres-btn-ss-copy">
+                <strong>Premiación</strong>
+                <small>Votos y ganadores</small>
+            </span>
         </a>
         <?php endif; ?>
         <?php if (AuthController::puedeVerServicioSocial()): ?>

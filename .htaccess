@@ -4,6 +4,9 @@ RewriteEngine On
 # Excluir la carpeta api de las redirecciones
 RewriteRule ^api/ - [L]
 
+# Votación de premios: enlace fijo y público, sin inicio de sesión
+RewriteRule ^votar-premios/?$ public/index.php?url=votar-premios [L,QSA]
+
 # Si no es un archivo o directorio existente, redirigir a public/
 RewriteCond %{REQUEST_URI} !^/public/
 RewriteCond %{REQUEST_FILENAME} !-f

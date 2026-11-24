@@ -1,6 +1,34 @@
 # Talleres
 
-Controlador: `TallerController`. Modelo: `TallerFormulario`. Helpers: `TallerPersonaSync`, `TallerPresentacionNinosSync`, `TallerAutorizacionSync`, `TallerPresentacionDocumentos`. Servicio Social (`TallerServicioSocialController`) es un submódulo aparte.
+Controlador: `TallerController`. Modelo: `TallerFormulario`. Helpers: `TallerPersonaSync`, `TallerPresentacionNinosSync`, `TallerAutorizacionSync`, `TallerPresentacionDocumentos`. Servicio Social (`TallerServicioSocialController`) y Premiación (`TallerPremiacionController`) son submódulos aparte.
+
+## Premiación (20 nov 2026)
+
+Panel en Talleres → **Premiación** (`talleres/premiacion`). Enlace público fijo, sin sesión: `https://www.mcimadridcolombia.com/votar-premios`.
+
+La categoría Líderes de 12 y Célula no se vota. El panel muestra un solo ganador por premio, el primero del ranking del sistema. Sara copia ese nombre al Excel. Las otras categorías se votan en el enlace: una persona por premio, del listado del Excel `Premios_MCI_Nominados`.
+
+El celular se guarda solo en `talleres_premiacion_voto` (único por año). El mismo número no puede votar dos veces. No se crea ni se actualiza una ficha en Personas. Células y asistencias solo se leen para la categoría 1.
+
+Voluntarios se escribe en el enlace: nombre y apellido, en mayúsculas. Si la persona ya está en el registro, salen sugerencias del nombre. No se modifica la ficha. Producción se vota de un solo listado con los grupos Redes y Producción de sonido. Kids, de Maestros y Auxiliares.
+
+| Premio de categoría 1 | Cómo se ordena |
+| --- | --- |
+| Célula de Mayor Crecimiento | Personas nuevas del año que siguen en la célula y asistieron a los dos días de encuentro y a una clase de capacitación destino. El bautismo no es requisito. |
+| Pastor de Corazón | Líder de 12 o de célula con personas nuevas que asistieron a los dos días de encuentro en el semestre 1 y también en el semestre 2. La inscripción sola no cuenta. |
+| Líder Revelación | Líder nuevo o de una célula nueva (fecha de apertura del año, célula marcada nueva, o líder registrado en el año). Su gente asistió a los dos días de encuentro y después a una clase de capacitación destino. |
+
+### Pendiente
+
+1. Voluntarios ya se escribe libre (nombre y apellido, mayúsculas, sugerencias).
+2. Criterios de la categoría 1 confirmados el 20 nov 2026: asistencia real, escalera en movimiento sin gente sin célula, y encuentro del año.
+3. Subir esta pasada a producción cuando lo pidan.
+
+### Archivos
+
+`TallerPremiacionController.php`, `TallerPremiacion.php`, `views/talleres/premiacion/formulario.php`, `views/talleres_publico/premiacion_votar.php`, `PublicRouteRegistry.php`, `routes.php`, botón en `views/talleres/lista.php`. SQL: `docs/sql/2026-11-19_talleres_premiacion.sql`.
+
+Subido por FTP el 20 nov 2026: modelo, controlador, panel, formulario público, rutas y el botón de Talleres.
 
 Hay tres tipos de formulario: general (Taller de Padres), Presentación de niños y Tour Levántate. El público no pide sesión. Los pagos se registran en el panel (`talleres/pago`) y también en Comunidad.
 
@@ -78,6 +106,7 @@ No se puede crear (ni renombrar) un formulario con el mismo nombre que otro.
 
 ## Pendiente
 
+- Premiación: ver la sección del 19 nov 2026 (listados de Josué y criterio de la categoría 1).
 - Servicio Social (agendamiento, horarios, historia clínica): no se revisó en esta pasada.
 - En producción, al desplegar la pasada del 14 de octubre, había tres formularios: Fiesta de los niños (abierto), Seminario de parejas y Presentación de niños (cerrados). No había dos «Taller de Padres». Si más adelante hace falta el de Padres, cree uno y use Nueva actividad en cada fecha.
 

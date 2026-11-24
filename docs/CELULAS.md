@@ -71,6 +71,81 @@ La casilla la ven quienes tienen acceso total: administrador, Ganar, pastor y el
 
 En cada célula, las dos últimas columnas siguen siendo semanas. En el subtotal del ministerio y en el total general cuentan **cuántas células** tienen al menos una semana pendiente, y se leen como «N células».
 
+## Reporte individual por célula (24 nov 2026)
+
+Reporte **nuevo y aparte** del detalle/Celugrama. No modifica la lógica de listados ni del reporte operativo.
+
+### Cómo abrirlo
+
+| Desde | Acción |
+| --- | --- |
+| Listado de células | Ícono de hoja / reporte por fila |
+| Detalle / Celugrama | Botón **Reporte** |
+| URL | `?url=celulas/reporte-individual&id=ID_CELULA` |
+
+### Cabecera de la célula
+
+1. **Fecha de apertura**
+2. **Fecha de cierre** si está cerrada; si sigue activa, **tiempo abierta** (años/meses/días)
+3. **Personas ganadas · semana actual** (lunes a domingo de la semana en curso), con el rango de fechas visible
+
+### Formación de integrantes (embudo)
+
+Sobre los miembros activos (sin el líder): de N → cuántos fueron a encuentro, cuántos bautizados, cuántos en Cap. Destino (N1 / N2 / N3). Los hechos salen de `ProgresoFormacionFlujo` (inscripciones, asistencias de escuela y escalera).
+
+### Tabla «Detalle por integrante»
+
+Columnas:
+
+| Columna | Contenido |
+| --- | --- |
+| Integrante | Solo el nombre (sin documento ni teléfono) |
+| Tiempo activo | Desde la primera asistencia en esa célula; si no hay, desde `Fecha_Registro` |
+| Desde | Fecha de inicio usada para el tiempo activo |
+| Fecha retiro | Fecha en que salió; `—` si sigue activa |
+| Observación retiro | Motivo legible; `—` si sigue activa |
+| Encuentro / Bautizado / Cap. Destino / Nivel | Estado formativo |
+
+Los retirados aparecen en la misma tabla con marca **Retirado**. El pie muestra activos, retiros y totales de formación (solo sobre activos).
+
+### Exportación Excel
+
+- Por célula: botón **Descargar Excel** → `celulas/reporte-individual/exportar`
+- Por ministerio: en el listado, botón **Excel reporte** de cada ministerio (o filtrando por ministerio) → `celulas/reporte-individual/exportar-ministerio`
+
+El archivo es CSV con `;` y BOM (mismo patrón del sistema). El Excel del ministerio trae bloque de resumen por célula y luego detalle por integrante.
+
+Los valores del Excel se **normalizan a ASCII** en `BaseController::sanitizeExportValue` (sin tildes, sin ñ, sin flechas ni símbolos raros) para que abran limpios en Excel.
+
+### Historial de salidas (`persona_salida_celula`)
+
+Tabla creada automáticamente por `PersonaSalidaCelula`. Se registra al salir:
+
+| Motivo | Cuándo | Observación típica |
+| --- | --- | --- |
+| `no_se_dispone` | No se dispone (Celugrama / escalera) | La observación que escribe el usuario |
+| `transferida` | Migrar a otra célula del mismo ministerio | `Transferida a: [nombre]` |
+| `eliminada` | Quitar de la célula | Texto libre o «Eliminada de la celula» |
+
+Solo quedan guardadas las salidas **desde el despliegue de esta función**. Las anteriores no tenían historial.
+
+### Rutas y permisos
+
+| Ruta | Permiso |
+| --- | --- |
+| `celulas/reporte-individual` | `celulas:ver` |
+| `celulas/reporte-individual/exportar` | `celulas:exportar_datos` o `celulas:ver` |
+| `celulas/reporte-individual/exportar-ministerio` | `celulas:exportar_datos` o `celulas:ver` |
+
+### Archivos del reporte individual
+
+- `views/celulas/reporte_individual.php` — pantalla
+- `app/Controllers/CelulaController.php` — `reporteIndividual`, `exportarReporteIndividual`, `exportarReporteIndividualMinisterio`, armado de datos
+- `app/Models/PersonaSalidaCelula.php` — historial de salidas
+- `app/Controllers/AsistenciaController.php` / `PersonaController.php` — registran la salida al migrar / no se dispone / quitar
+- `app/Controllers/BaseController.php` — normalización ASCII del Excel
+- Enlaces en `views/celulas/lista.php` y `views/celulas/detalle.php`
+
 ## Permisos (alineación 24 nov 2026)
 
 - Ver Celugrama: `celulas:ver`.
@@ -87,15 +162,19 @@ El seguimiento tras cuatro faltas no se programó. Quién puede abrir una célul
 
 - `asistencias` y `asistencias/exportarExcel` redirigen al reporte de células o al listado de Células.
 - `asistencias/registrar` (GET) redirige al Celugrama y abre el modal. El **POST** sigue activo para guardar el reporte.
-- Eliminadas rutas y vistas: `asistencias/porCelula`, `asistencias/miembros-celula`, `asistencias/quitarDeCelula` (soft-remove). Ya no hay formulario suelto de asistencias.
+- Eliminadas vistas sueltas: `asistencias/porCelula`, `asistencias/miembros-celula`. Ya no hay formulario suelto de asistencias.
+- `asistencias/quitarDeCelula` sigue disponible como API de salida (registra historial) cuando se usa desde el flujo de célula.
 - Se retiró del Celugrama la sección **Temas / texto bíblico** (el tema sigue pudiendo ir en el modal al reportar).
 - Se retiraron de la página los scripts sueltos de diagnóstico de Teen y de marcar Ganar completo.
 
-## Archivos principales (Celugrama)
+## Archivos principales (Celugrama + reporte)
 
-- `views/celulas/detalle.php` — pantalla + modales (reporte, escalera, migrar, no se dispone).
+- `views/celulas/detalle.php` — Celugrama + modales (reporte, escalera, migrar, no se dispone) + enlace al reporte individual.
 - `views/celulas/partials/celugrama.php` — ficha, KPIs, gráfica, tabla, indicadores.
-- `app/Controllers/CelulaController.php` — `detalle`, `guardarCelugrama`, armado del Celugrama.
+- `views/celulas/reporte_individual.php` — reporte individual por célula.
+- `views/celulas/lista.php` — accesos a Celugrama, reporte individual y Excel por ministerio.
+- `app/Controllers/CelulaController.php` — `detalle`, `guardarCelugrama`, reporte individual y exportaciones.
 - `app/Models/Celugrama.php` — temas/indicadores de trimestre.
-- `app/Controllers/AsistenciaController.php` — registrar (POST), migrar, no se dispone; GET viejo redirige.
+- `app/Models/PersonaSalidaCelula.php` — historial de retiros.
+- `app/Controllers/AsistenciaController.php` — registrar (POST), migrar, no se dispone, quitar; GET viejo redirige.
 - `app/Config/routes.php` / `route_permissions.php` — rutas y permisos.

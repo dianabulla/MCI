@@ -8,6 +8,9 @@ php_value max_execution_time 300
 php_value max_input_time 300
 php_value memory_limit 768M
 
+# Votación de premios: enlace fijo y público
+RewriteRule ^votar-premios/?$ index.php?url=votar-premios [L,QSA]
+
 # Permitir acceso directo a archivos estáticos (assets)
 RewriteCond %{REQUEST_URI} ^/public/assets/
 RewriteRule ^ - [L]

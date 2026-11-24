@@ -112,8 +112,46 @@ class BaseController {
 
     private function sanitizeExportValue($value) {
         $text = trim((string)($value ?? ''));
-        $text = preg_replace('/\s+/u', ' ', $text);
-        return $text;
+        if ($text === '') {
+            return '';
+        }
+
+        if (function_exists('mb_convert_encoding')) {
+            $convertedUtf8 = @mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+            if (is_string($convertedUtf8) && $convertedUtf8 !== '') {
+                $text = $convertedUtf8;
+            }
+        }
+
+        // ASCII seguro para Excel: sin tildes, ñ ni símbolos tipográficos.
+        $text = strtr($text, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+            'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ü' => 'U', 'Ñ' => 'N',
+            'à' => 'a', 'è' => 'e', 'ì' => 'i', 'ò' => 'o', 'ù' => 'u',
+            'À' => 'A', 'È' => 'E', 'Ì' => 'I', 'Ò' => 'O', 'Ù' => 'U',
+            'â' => 'a', 'ê' => 'e', 'î' => 'i', 'ô' => 'o', 'û' => 'u',
+            'Â' => 'A', 'Ê' => 'E', 'Î' => 'I', 'Ô' => 'O', 'Û' => 'U',
+            'ã' => 'a', 'õ' => 'o', 'Ã' => 'A', 'Õ' => 'O',
+            'ç' => 'c', 'Ç' => 'C',
+            '→' => '->', '←' => '<-', '⇒' => '=>', '⇐' => '<=', '↔' => '<->',
+            '–' => '-', '—' => '-', '−' => '-',
+            '“' => '"', '”' => '"', '‘' => "'", '’' => "'",
+            '…' => '...', '•' => '-', '·' => '-',
+            'º' => 'o', 'ª' => 'a',
+            '¿' => '', '¡' => '',
+        ]);
+
+        if (function_exists('iconv')) {
+            $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
+            if (is_string($ascii)) {
+                $text = $ascii;
+            }
+        }
+
+        // Solo printable ASCII (evita caracteres raros al abrir en Excel).
+        $text = preg_replace('/[^\x20-\x7E]/', '', $text);
+        $text = preg_replace('/\s+/', ' ', (string)$text);
+        return trim((string)$text);
     }
 
     protected function validarNombreYApellidoPersona($nombre, $apellido): array {
