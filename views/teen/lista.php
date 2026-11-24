@@ -23,7 +23,7 @@ $mesActual = (int)($mes_actual ?? (int)date('n'));
 ?>
 
 <div class="teen-material-page">
-    <div class="page-header teen-material-header">
+    <div class="page-header teen-material-header" data-tour="page-teen">
         <div>
             <h2 style="margin:0;">Material Teens</h2>
             <p class="teen-material-subtitle">

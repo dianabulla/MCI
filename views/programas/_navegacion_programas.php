@@ -8,7 +8,7 @@ $modoHub = ($navProgramas['modo'] ?? '') === 'hub';
 $secciones = (array)($navProgramas['secciones'] ?? []);
 $breadcrumb = (array)($navProgramas['breadcrumb'] ?? []);
 ?>
-<nav class="programas-nav" aria-label="Navegación de programas">
+<nav class="programas-nav" data-tour="page-programas" aria-label="Navegación de programas">
     <div class="programas-nav__top">
         <a href="<?= htmlspecialchars((string)($navProgramas['atras_url'] ?? '#'), ENT_QUOTES, 'UTF-8') ?>" class="programas-nav__back">
             <i class="bi bi-arrow-left" aria-hidden="true"></i>

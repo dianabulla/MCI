@@ -7,19 +7,7 @@
 </div>
 
     <script src="<?= htmlspecialchars(function_exists('asset_url') ? asset_url('js/main.js') : (ASSETS_URL . '/js/main.js?v=' . date('Ymd')), ENT_QUOTES, 'UTF-8') ?>"></script>
-    <?php
-    $productTourRoleFooter = '';
-    if (class_exists('AuthController') && AuthController::estaAutenticado()) {
-        $esMenuMaestroFooter = AuthController::esContextoMaestro() && !AuthController::esAdministrador();
-        $esMenuDiscipuloFooter = AuthController::esVistaDiscipuloSimplificada();
-        if ($esMenuMaestroFooter && AuthController::puedeVerMaterialCapacitacionDestino()) {
-            $productTourRoleFooter = 'maestro';
-        } elseif ($esMenuDiscipuloFooter) {
-            $productTourRoleFooter = 'discipulo';
-        }
-    }
-    ?>
-    <?php if ($productTourRoleFooter !== ''): ?>
+    <?php if (class_exists('AuthController') && AuthController::debeVerGuiaProducto()): ?>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
     <link rel="stylesheet" href="<?= htmlspecialchars(function_exists('asset_url') ? asset_url('css/product-tour.css') : (ASSETS_URL . '/css/product-tour.css?v=' . date('Ymd')), ENT_QUOTES, 'UTF-8') ?>">
     <script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js"></script>

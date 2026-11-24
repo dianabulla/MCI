@@ -264,7 +264,7 @@ $edadesMujeresJson = json_encode(array_values($porEdadesMujeres));
 @keyframes dashMetasFade { from { opacity:.45; transform:translateY(4px);} to { opacity:1; transform:translateY(0);} }
 </style>
 
-<div class="dash-header">
+<div class="dash-header" data-tour="page-reportes">
     <div>
         <h2>Dashboard · <?= htmlspecialchars($dashModuloTitulo, ENT_QUOTES, 'UTF-8') ?></h2>
         <small style="color:#64748b;">

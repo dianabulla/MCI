@@ -6,9 +6,9 @@
 </div>
 <?php endif; ?>
 
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+<div class="page-header" data-tour="page-celulas" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
     <h2 style="margin:0;">Células</h2>
-    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+    <div data-tour="celulas-acciones" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <?php if (AuthController::esAdministrador() || AuthController::puede('reportes:ver')): ?>
             <a href="<?= PUBLIC_URL ?>?url=reportes&tipo=celulas" class="btn btn-secondary">Reporte de Células</a>
         <?php endif; ?>
@@ -18,7 +18,7 @@
     </div>
 </div>
 
-<div class="form-container" style="margin-bottom: 20px;">
+<div class="form-container" data-tour="celulas-filtros" style="margin-bottom: 20px;">
     <form method="GET" class="filter-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: end;">
         <input type="hidden" name="url" value="celulas">
 
@@ -62,7 +62,7 @@
         <?php endif; ?>
 
         <div class="form-group" style="margin-bottom: 0; display: flex; gap: 8px; flex-wrap: wrap;">
-            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <button type="submit" class="btn btn-primary" data-tour="celulas-filtrar">Filtrar</button>
             <a href="<?= PUBLIC_URL ?>?url=celulas" class="btn btn-secondary">Limpiar</a>
             <?php if (AuthController::puede('celulas:ver') && (string)($filtro_ministerio_actual ?? '') !== ''): ?>
                 <a href="<?= PUBLIC_URL ?>?url=celulas/reporte-individual/exportar-ministerio&ministerio=<?= (int)$filtro_ministerio_actual ?>"
@@ -293,7 +293,7 @@ $slugMinisterio = static function ($texto) {
                             <?php endif; ?>
                             <td>
                                 <div class="celulas-actions-row">
-                                    <a href="<?= PUBLIC_URL ?>?url=celulas/detalle&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon celulas-action-btn--celugrama" title="Celugrama" aria-label="Celugrama">
+                                    <a href="<?= PUBLIC_URL ?>?url=celulas/detalle&id=<?= (int)$section['id_celula'] ?>" class="btn btn-sm celulas-action-btn celulas-action-btn--icon celulas-action-btn--celugrama" data-tour="celulas-celugrama" title="Celugrama" aria-label="Celugrama">
                                         <i class="bi bi-bar-chart-steps" aria-hidden="true"></i>
                                     </a>
                                     <?php if (AuthController::puede('celulas:ver')): ?>

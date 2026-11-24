@@ -129,7 +129,7 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
 .talleres-btn-premio small { font-size: 0.72rem; font-weight: 600; color: #b45309; }
 </style>
 
-<div class="talleres-lista-head">
+<div class="talleres-lista-head" data-tour="page-talleres">
     <div class="talleres-lista-title">
         <h2>Talleres</h2>
         <p class="text-muted">
@@ -140,7 +140,7 @@ $puedeGestionarEnlace = !empty($permisosTaller['gestionar_enlace']);
             <?php endif; ?>
         </p>
     </div>
-    <div class="talleres-lista-actions">
+    <div class="talleres-lista-actions" data-tour="talleres-acciones">
         <?php if ($puedeCrear): ?>
         <a href="<?= PUBLIC_URL ?>?url=talleres/crear" class="talleres-btn-nuevo">
             <i class="bi bi-plus-lg"></i> Nuevo formulario

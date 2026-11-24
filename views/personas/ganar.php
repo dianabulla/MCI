@@ -14,9 +14,9 @@ $puedeVerReportes = AuthController::esAdministrador() || AuthController::puede('
 $verHistorialGanar = !empty($verHistorialGanar);
 ?>
 
-<div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
+<div class="page-header" data-tour="page-ganar" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
     <h2 style="margin:0;">Almas ganadas</h2>
-    <div class="personas-header-actions">
+    <div class="personas-header-actions" data-tour="personas-acciones">
         <div class="personas-action-group personas-action-group-nav">
             <?php if (AuthController::puedeVerSubmoduloPersonasConsulta()): ?>
             <a href="<?= PUBLIC_URL ?>?url=personas" class="personas-action-pill">Escalera del éxito</a>
@@ -147,7 +147,7 @@ $returnUrlGanar = $buildPendientesUrl();
                 </div>
 
                 <div class="ganar-filtros-acciones">
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary" data-tour="personas-filtrar">
                         <i class="bi bi-funnel"></i> Filtrar
                     </button>
                     <?php if ($hayFiltrosPendiente): ?>

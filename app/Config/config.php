@@ -32,6 +32,18 @@ define('BASE_URL', $baseUrl);
 define('PUBLIC_URL', $publicUrl);
 define('ASSETS_URL', rtrim(PUBLIC_URL, '/') . '/assets');
 
+/**
+ * Guías paso a paso / product tour.
+ * false = desactivado en producción (código listo; reactivar poniendo true).
+ * También se puede forzar con env PRODUCT_TOUR_ENABLED=1|0.
+ */
+$productTourEnv = getenv('PRODUCT_TOUR_ENABLED');
+if ($productTourEnv === false || $productTourEnv === '') {
+    define('PRODUCT_TOUR_ENABLED', false);
+} else {
+    define('PRODUCT_TOUR_ENABLED', in_array(strtolower(trim((string)$productTourEnv)), ['1', 'true', 'yes', 'on'], true));
+}
+
 $assetVersionHelper = __DIR__ . '/../Helpers/AssetVersion.php';
 if (is_file($assetVersionHelper)) {
     require_once $assetVersionHelper;

@@ -74,10 +74,23 @@ foreach ($sidebarMenu as $itemNav):
     $iconoNav = trim((string)($itemNav['icon'] ?? 'bi-circle'));
     $labelNav = (string)($itemNav['label'] ?? 'Enlace');
     $idNav = (string)($itemNav['id'] ?? '');
-    $dataTourNav = '';
-    if (in_array($idNav, ['material_cap_destino', 'capacitacion_destino'], true)) {
-        $dataTourNav = 'sidebar-cap-destino';
-    }
+    $tourPorId = [
+        'home' => 'sidebar-home',
+        'personas_ganar' => 'sidebar-ganar',
+        'celulas' => 'sidebar-celulas',
+        'programas' => 'sidebar-programas',
+        'discipular_ministerios' => 'sidebar-discipular',
+        'teen' => 'sidebar-teen',
+        'nehemias' => 'sidebar-nehemias',
+        'talleres' => 'sidebar-talleres',
+        'reportes_ganar' => 'sidebar-reportes',
+        'administracion' => 'sidebar-admin',
+        'material_hub' => 'sidebar-material',
+        'material_cap_destino' => 'sidebar-cap-destino',
+        'capacitacion_destino' => 'sidebar-cap-destino',
+        'servicio_social' => 'sidebar-servicio-social',
+    ];
+    $dataTourNav = $tourPorId[$idNav] ?? '';
 ?>
     <a class="sidebar-link <?= $activoNav ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($rutaNav, ENT_QUOTES, 'UTF-8') ?>"<?= $dataTourNav !== '' ? ' data-tour="' . htmlspecialchars($dataTourNav, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
         <span class="sidebar-link-icon"><i class="bi <?= htmlspecialchars($iconoNav, ENT_QUOTES, 'UTF-8') ?>"></i></span>

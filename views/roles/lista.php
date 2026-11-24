@@ -11,7 +11,7 @@ unset($_SESSION['roles_flash_error']);
 <div class="alert alert-danger" role="alert" style="margin-bottom:14px;"><?= htmlspecialchars($rolesFlashError, ENT_QUOTES, 'UTF-8') ?></div>
 <?php endif; ?>
 
-<div class="page-header roles-page-header">
+<div class="page-header roles-page-header" data-tour="page-admin">
     <h2>Roles</h2>
     <?php $puedeCrearRoles = AuthController::esAdministrador() || AuthController::puede('roles:crear'); ?>
     <?php $puedeEditarRoles = AuthController::esAdministrador() || AuthController::puede('roles:editar'); ?>

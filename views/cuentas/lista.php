@@ -49,7 +49,7 @@ usort($cuentasMinisteriales, static function ($a, $b) {
 });
 ?>
 
-<div class="page-header" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
+<div class="page-header" data-tour="page-admin" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
     <h2 style="margin:0;">Cuentas</h2>
     <div class="cuentas-header-actions">
         <div class="cuentas-action-group">

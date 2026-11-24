@@ -2121,6 +2121,33 @@ class AuthController extends BaseController {
     }
 
     /**
+     * Guías paso a paso: solo líderes (célula, 12, 144 u otros roles de liderazgo).
+     * No aplica a administradores ni a roles puramente administrativos.
+     * Interruptor global: PRODUCT_TOUR_ENABLED en app/Config/config.php (hoy desactivado).
+     */
+    public static function debeVerGuiaProducto(): bool {
+        if (!defined('PRODUCT_TOUR_ENABLED') || !PRODUCT_TOUR_ENABLED) {
+            return false;
+        }
+
+        if (!self::estaAutenticado() || self::esAdministrador()) {
+            return false;
+        }
+
+        if (DataIsolation::esLiderCelula() || DataIsolation::esLider12() || DataIsolation::esLider144()) {
+            return true;
+        }
+
+        $rol = DataIsolation::getUsuarioRolNombre();
+        if ($rol === '' || $rol === 'celulas') {
+            return false;
+        }
+
+        // Otros roles de liderazgo (p. ej. "lider de red") sin ser admin.
+        return strpos($rol, 'lider') !== false;
+    }
+
+    /**
      * Vista simplificada de alumno (menú y pantalla de evaluaciones).
      */
     public static function esVistaDiscipuloSimplificada(): bool {

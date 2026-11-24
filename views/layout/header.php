@@ -13,18 +13,26 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
 </head>
 <?php
-$productTourRole = '';
-if (class_exists('AuthController') && AuthController::estaAutenticado()) {
+$productTourEnabled = class_exists('AuthController') && AuthController::debeVerGuiaProducto();
+$productTourProfile = '';
+if ($productTourEnabled) {
     $esMenuMaestroTour = AuthController::debeUsarMenuLateralSoloMaterial();
     $esMenuDiscipuloTour = AuthController::esVistaDiscipuloSimplificada();
     if ($esMenuMaestroTour && AuthController::puedeVerMaterialCapacitacionDestino()) {
-        $productTourRole = 'maestro';
+        $productTourProfile = 'maestro';
     } elseif ($esMenuDiscipuloTour) {
-        $productTourRole = 'discipulo';
+        $productTourProfile = 'discipulo';
+    }
+}
+$bodyTourAttrs = '';
+if ($productTourEnabled) {
+    $bodyTourAttrs = ' data-product-tour="1"';
+    if ($productTourProfile !== '') {
+        $bodyTourAttrs .= ' data-product-tour-profile="' . htmlspecialchars($productTourProfile, ENT_QUOTES, 'UTF-8') . '"';
     }
 }
 ?>
-<body<?= $productTourRole !== '' ? ' data-product-tour-role="' . htmlspecialchars($productTourRole, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
+<body<?= $bodyTourAttrs ?>>
 <?php
 $currentUrl = $_GET['url'] ?? 'home';
 $isActive = function(array $prefixes) use ($currentUrl) {
@@ -281,7 +289,7 @@ if ($esMenuMaestro) {
 
 <div class="app-shell">
     <aside class="app-sidebar" id="appSidebar">
-        <div class="sidebar-brand">
+        <div class="sidebar-brand" data-tour="sidebar-brand">
             <div class="sidebar-brand-main">
                 <img src="<?= ASSETS_URL ?>/img/logo-mci-madrid.svg" alt="Logo MCI Madrid" class="sidebar-brand-logo">
                 <div class="sidebar-brand-copy">
@@ -369,7 +377,7 @@ if ($esMenuMaestro) {
                 <?php include VIEWS . '/layout/_sidebar_nav_dynamic.php'; ?>
             <?php elseif ($esMenuMaestro): ?>
             <?php if (AuthController::puedeAccederHubMaterialCompleto()): ?>
-            <a class="sidebar-link <?= $isActive(['home/material', 'celulas/materiales', 'teen']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home/material">
+            <a class="sidebar-link <?= $isActive(['home/material', 'celulas/materiales', 'teen']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home/material" data-tour="sidebar-material">
                 <span class="sidebar-link-icon"><i class="bi bi-folder2-open"></i></span><span class="sidebar-link-text">Material</span>
             </a>
             <?php elseif ($puedeVerMaterialCapDestino): ?>
@@ -382,23 +390,23 @@ if ($esMenuMaestro) {
                 <span class="sidebar-link-icon"><i class="bi bi-signpost-split-fill"></i></span><span class="sidebar-link-text">Cap. Destino</span>
             </a>
             <?php elseif ($esMenuServicioSocial): ?>
-            <a class="sidebar-link <?= $isActive(['talleres/servicio-social']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=talleres/servicio-social">
+            <a class="sidebar-link <?= $isActive(['talleres/servicio-social']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=talleres/servicio-social" data-tour="sidebar-servicio-social">
                 <span class="sidebar-link-icon"><i class="bi bi-heart-pulse"></i></span><span class="sidebar-link-text">Servicio Social</span>
             </a>
             <?php else: ?>
-            <a class="sidebar-link <?= $isActive(['home']) && !$isActive(['home/material']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home">
+            <a class="sidebar-link <?= $isActive(['home']) && !$isActive(['home/material']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=home" data-tour="sidebar-home">
                 <span class="sidebar-link-icon"><i class="bi bi-house-heart"></i></span><span class="sidebar-link-text">Inicio</span>
             </a>
 
             <?php if ($puedeVerGanarArea): ?>
-            <a class="sidebar-link <?= $isActive(['personas', 'personas/ganar']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($urlEntradaGanarConsolidar, ENT_QUOTES, 'UTF-8') ?>">
+            <a class="sidebar-link <?= $isActive(['personas', 'personas/ganar']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($urlEntradaGanarConsolidar, ENT_QUOTES, 'UTF-8') ?>" data-tour="sidebar-ganar">
                 <span class="sidebar-link-icon"><i class="bi bi-person-heart"></i></span><span class="sidebar-link-text">Escalera del éxito</span>
             </a>
             <?php endif; ?>
             <!-- Eliminado acceso directo y comentarios de Material para evitar restos visibles -->
 
             <?php if ($puedeVerEnviar): ?>
-            <a class="sidebar-link <?= $isActive(['celulas', 'asistencias']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=celulas">
+            <a class="sidebar-link <?= $isActive(['celulas', 'asistencias']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=celulas" data-tour="sidebar-celulas">
                 <span class="sidebar-link-icon"><i class="bi bi-send-check"></i></span><span class="sidebar-link-text">Células</span>
             </a>
             <?php endif; ?>
@@ -411,37 +419,37 @@ if ($esMenuMaestro) {
                 || AuthController::puede('programas:ver_universidad_vida')
                 || AuthController::puede('programas:ver_capacitacion_destino')
             ): ?>
-            <a class="sidebar-link <?= $isActive(['programas']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=programas">
+            <a class="sidebar-link <?= $isActive(['programas']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=programas" data-tour="sidebar-programas">
                 <span class="sidebar-link-icon"><i class="bi bi-mortarboard"></i></span><span class="sidebar-link-text">Programas</span>
             </a>
             <?php endif; ?>
 
             <?php if ($puedeVerMinisterios): ?>
-            <a class="sidebar-link <?= $isActive(['discipular/ministerios','discipular/ministerios/equipo-principal']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=discipular/ministerios/equipo-principal">
+            <a class="sidebar-link <?= $isActive(['discipular/ministerios','discipular/ministerios/equipo-principal']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=discipular/ministerios/equipo-principal" data-tour="sidebar-discipular">
                 <span class="sidebar-link-icon"><i class="bi bi-bank2"></i></span><span class="sidebar-link-text">Discipular</span>
             </a>
             <?php endif; ?>
 
             <?php if ($puedeVerRegistroTeensKids): ?>
-            <a class="sidebar-link <?= $isActive(['teen']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=teen/registro-menores">
+            <a class="sidebar-link <?= $isActive(['teen']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=teen/registro-menores" data-tour="sidebar-teen">
                 <span class="sidebar-link-icon"><i class="bi bi-balloon-heart"></i></span><span class="sidebar-link-text">Teens</span>
             </a>
             <?php endif; ?>
 
             <?php if ($puedeVerNehemias): ?>
-            <a class="sidebar-link <?= $isActive(['nehemias']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=nehemias/lista">
+            <a class="sidebar-link <?= $isActive(['nehemias']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=nehemias/lista" data-tour="sidebar-nehemias">
                 <span class="sidebar-link-icon"><i class="bi bi-clipboard-data"></i></span><span class="sidebar-link-text">Nehemias</span>
             </a>
             <?php endif; ?>
 
             <?php if ($puedeVerTalleres): ?>
-            <a class="sidebar-link <?= $isActive(['talleres']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=talleres">
+            <a class="sidebar-link <?= $isActive(['talleres']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=talleres" data-tour="sidebar-talleres">
                 <span class="sidebar-link-icon"><i class="bi bi-ui-checks-grid"></i></span><span class="sidebar-link-text">Talleres</span>
             </a>
             <?php endif; ?>
 
             <?php if ($puedeVerReportes): ?>
-            <a class="sidebar-link <?= (strpos((string)$currentUrl, 'reportes/dashboard-ganar') === 0) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=reportes/dashboard-ganar">
+            <a class="sidebar-link <?= (strpos((string)$currentUrl, 'reportes/dashboard-ganar') === 0) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=reportes/dashboard-ganar" data-tour="sidebar-reportes">
                 <span class="sidebar-link-icon"><i class="bi bi-speedometer2"></i></span><span class="sidebar-link-text">Dashboard Ganar</span>
             </a>
             <?php endif; ?>
@@ -453,7 +461,7 @@ if ($esMenuMaestro) {
                 : (GestionSistemaAccess::puedeVerMatrizPermisos() ? 'permisos' : 'roles');
             ?>
             <?php if (GestionSistemaAccess::puedeVerBloqueAdministracion()): ?>
-            <a class="sidebar-link <?= $isActive(['cuentas', 'roles', 'permisos']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($urlAdminSidebar) ?>">
+            <a class="sidebar-link <?= $isActive(['cuentas', 'roles', 'permisos']) ? 'active' : '' ?>" href="<?= PUBLIC_URL ?>?url=<?= htmlspecialchars($urlAdminSidebar) ?>" data-tour="sidebar-admin">
                 <span class="sidebar-link-icon"><i class="bi bi-people-fill"></i></span><span class="sidebar-link-text">Administración</span>
             </a>
             <?php endif; ?>

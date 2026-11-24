@@ -123,11 +123,11 @@ if (!$esPerfilMenuReducido
 }
 ?>
 
-<div class="page-header">
+<div class="page-header" data-tour="home-dashboard">
     <h2>Panel de Control</h2>
 </div>
 
-<div class="dashboard-grid home-dashboard-grid">
+<div class="dashboard-grid home-dashboard-grid" data-tour="home-dashboard">
     <?php foreach ($cardsDashboard as $card): ?>
     <a href="<?= htmlspecialchars((string)$card['href']) ?>" class="dashboard-card home-dashboard-card home-dashboard-card-link home-dashboard-card--<?= htmlspecialchars((string)$card['clase']) ?>">
         <div class="home-dashboard-head">

@@ -1,8 +1,10 @@
+/* Guías a la izquierda; el asistente MCI queda a la derecha */
 .mci-tour-launcher {
     position: fixed;
-    right: 18px;
+    left: 18px;
+    right: auto;
     bottom: 18px;
-    z-index: 1040;
+    z-index: 10060;
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -25,6 +27,72 @@
 
 .mci-tour-launcher i {
     font-size: 16px;
+}
+
+.mci-tour-launcher--required {
+    box-shadow: 0 8px 22px rgba(23, 62, 110, 0.28), 0 0 0 2px #fbbf24;
+}
+
+.mci-tour-launcher--required::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #fbbf24;
+    flex-shrink: 0;
+}
+
+.mci-tour-menu {
+    position: fixed;
+    left: 18px;
+    right: auto;
+    bottom: 68px;
+    z-index: 10061;
+    min-width: 220px;
+    max-width: min(280px, calc(100vw - 32px));
+    max-height: min(60vh, 420px);
+    overflow: auto;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid #c9daf0;
+    background: #fff;
+    box-shadow: 0 14px 32px rgba(23, 62, 110, 0.22);
+}
+
+.mci-tour-menu-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #637087;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 2px 6px 8px;
+}
+
+.mci-tour-menu-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    border-radius: 8px;
+    padding: 9px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e3a5f;
+    cursor: pointer;
+}
+
+.mci-tour-menu-item:hover {
+    background: #eef4fc;
+}
+
+.driver-popover.mci-driver-popover--required .driver-popover-close-btn {
+    display: none !important;
+}
+
+.driver-popover.mci-driver-popover--click .driver-popover-next-btn,
+.driver-popover.mci-driver-popover--click .driver-popover-done-btn {
+    display: none !important;
 }
 
 .driver-popover.mci-driver-popover {
@@ -65,9 +133,20 @@
     color: #fff;
 }
 
+.mci-tour-click-hint {
+    display: block;
+    margin-top: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: #fff7e6;
+    color: #92400e;
+    font-size: 12px;
+    font-weight: 700;
+}
+
 @media (max-width: 768px) {
     .mci-tour-launcher {
-        right: 12px;
+        left: 12px;
         bottom: 12px;
         padding: 9px 12px;
         font-size: 12px;
@@ -75,5 +154,10 @@
 
     .mci-tour-launcher span {
         display: none;
+    }
+
+    .mci-tour-menu {
+        left: 12px;
+        bottom: 58px;
     }
 }

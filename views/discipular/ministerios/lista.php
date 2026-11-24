@@ -15,20 +15,20 @@ $urlNuevoMinisterio = PUBLIC_URL . '?url=discipular/ministerios/crear' . $return
 $fechaReferenciaVista = (string)($fecha_referencia ?? date('Y-m-d'));
 ?>
 
-<div class="page-header" style="align-items:flex-start; gap:16px;">
+<div class="page-header" data-tour="page-discipular" style="align-items:flex-start; gap:16px;">
     <div>
         <h2>Discipular · Ministerios (redes)</h2>
         <p style="margin:6px 0 0; font-size:0.9rem; color:#5c6f8b; max-width:52rem; line-height:1.4;">
             Cada ministerio corresponde a una <strong>red</strong>. Desde aquí abres el equipo de 12 y las metas.
         </p>
     </div>
-    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-start;">
+    <div data-tour="discipular-acciones" style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-start;">
         <?php if (!empty($returnUrl)): ?>
         <a href="<?= htmlspecialchars((string)$returnUrl) ?>" class="btn btn-secondary">← Volver a reportes</a>
         <?php endif; ?>
         <a href="<?= $urlEquipoPrincipal ?>" class="btn btn-secondary">← Volver a Discipular</a>
         <?php if ($puedeCrearMinisterio): ?>
-        <a href="<?= $urlNuevoMinisterio ?>" class="btn btn-primary">+ Nuevo Ministerio</a>
+        <a href="<?= $urlNuevoMinisterio ?>" class="btn btn-primary" data-tour="discipular-nuevo">+ Nuevo Ministerio</a>
         <?php endif; ?>
     </div>
 </div>

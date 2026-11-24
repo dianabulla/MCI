@@ -34,7 +34,7 @@
         + ($mostrarAcciones ? 1 : 0);
 ?>
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center module-header-card">
+    <div class="d-flex justify-content-between align-items-center module-header-card" data-tour="page-nehemias">
         <h2 class="page-title">
             <i class="bi bi-clipboard-data"></i> Nehemias - Registros
             <?php 
