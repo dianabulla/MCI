@@ -319,18 +319,29 @@
                         </div>
                         <div class="field">
                             <label for="cedula">Número de documento <span class="req">*</span></label>
-                            <input type="text" id="cedula" name="cedula" required value="<?= htmlspecialchars((string)($old['cedula'] ?? '')) ?>" placeholder="Número de documento">
+                            <input type="text" id="cedula" name="cedula" required value="<?= htmlspecialchars((string)($old['cedula'] ?? '')) ?>" placeholder="Documento real (no el celular)" autocomplete="off" inputmode="numeric">
+                            <small>No uses ceros, X ni el número de teléfono como documento.</small>
                         </div>
                     </div>
 
                     <div class="field">
                         <label for="telefono">Teléfono <span class="req">*</span></label>
                         <input type="tel" id="telefono" name="telefono" required value="<?= htmlspecialchars((string)($old['telefono'] ?? '')) ?>" placeholder="Ej: 3001234567">
+                        <small>Teléfono real, mínimo 7 dígitos. No uses 0000000.</small>
                     </div>
 
                     <div class="field">
                         <label for="fecha_nacimiento">Fecha de nacimiento <span class="req">*</span></label>
-                        <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" required value="<?= htmlspecialchars((string)($old['fecha_nacimiento'] ?? '')) ?>">
+                        <?php
+                        if (!class_exists('PersonaValidacion', false)) {
+                            require_once APP . '/Helpers/PersonaValidacion.php';
+                        }
+                        $fechaNacimientoMaxPublico = PersonaValidacion::fechaNacimientoMaxHtml();
+                        ?>
+                        <input type="date" id="fecha_nacimiento" name="fecha_nacimiento" required
+                               max="<?= htmlspecialchars($fechaNacimientoMaxPublico) ?>"
+                               value="<?= htmlspecialchars((string)($old['fecha_nacimiento'] ?? '')) ?>">
+                        <small>Debe ser anterior a hoy. Para bebés puedes usar una fecha de este año, pero real.</small>
                     </div>
 
                     <div class="field">

@@ -277,18 +277,12 @@ class RegistroPersonaController extends BaseController {
             $errores[] = 'Debe seleccionar el tipo de documento';
         }
 
-        if ($cedula === '') {
-            $errores[] = 'La cédula es obligatoria';
+        if (!class_exists('PersonaValidacion', false)) {
+            require_once APP . '/Helpers/PersonaValidacion.php';
         }
-
-        if ($telefono === '') {
-            $errores[] = 'El teléfono es obligatorio';
-        } elseif (strlen(preg_replace('/\D+/', '', $telefono)) < 7) {
-            $errores[] = 'El teléfono debe tener al menos 7 dígitos';
-        }
-
-        if ($fechaNacimiento === '' || $fechaNacimiento === '0000-00-00') {
-            $errores[] = 'La fecha de nacimiento es obligatoria';
+        $errorIdentidad = PersonaValidacion::validarIdentidadBasica($cedula, $telefono, $fechaNacimiento, $tipoDocumento);
+        if ($errorIdentidad !== null) {
+            $errores[] = $errorIdentidad;
         }
 
         if ($genero === null || $genero === '') {
