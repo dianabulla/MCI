@@ -603,20 +603,7 @@ class CelulaController extends BaseController {
             $this->celugramaModel->guardarTema($idCelula, $semana, $titulo, $texto);
         }
 
-        $indicadores = is_array($_POST['indicadores'] ?? null) ? $_POST['indicadores'] : [];
-        foreach ($indicadores as $claveMes => $filaInd) {
-            $claveMes = trim((string)$claveMes);
-            if (!preg_match('/^(\d{4})-(\d{2})$/', $claveMes, $m)) {
-                continue;
-            }
-            $anio = (int)$m[1];
-            $mes = (int)$m[2];
-            $invCel = max(0, (int)($filaInd['invitados_celula'] ?? 0));
-            $invCol = max(0, (int)($filaInd['invitados_coliseo'] ?? 0));
-            $noRealRaw = trim((string)($filaInd['celulas_no_realizadas'] ?? ''));
-            $noReal = $noRealRaw === '' ? null : max(0, (int)$noRealRaw);
-            $this->celugramaModel->guardarIndicadorMes($idCelula, $anio, $mes, $invCel, $invCol, $noReal);
-        }
+        // Indicadores del mes: solo lectura; se calculan desde ganados, reportes y formación.
 
         $params = ['id' => $idCelula, 'celugrama' => 'ok'];
         if ($trimestre !== '') {
@@ -675,10 +662,7 @@ class CelulaController extends BaseController {
         $temasAsistencia = is_array($matriz['temas_asistencia'] ?? null) ? $matriz['temas_asistencia'] : [];
 
         $temasGuardados = $this->celugramaModel->getTemasPorCelulaYRango($idCelula, $desde, $hasta);
-        $indicadoresGuardados = $this->celugramaModel->getIndicadoresPorCelulaYAnios(
-            $idCelula,
-            [(int)$trimestre['anio']]
-        );
+        $fechasFormacionMes = $this->fechasFormacionCelugramaPorPersonas($idsPersona);
 
         $hechos = [];
         if ($idsPersona !== []) {
@@ -822,9 +806,29 @@ class CelulaController extends BaseController {
         $invitadosCelulaTrim = 0;
         $invitadosColiseoTrim = 0;
         $noRealizadasTrim = 0;
+        $encuentroPorMes = [];
+        $posEncuentroPorMes = [];
+        foreach ($fechasFormacionMes['encuentro'] as $fechaEnc) {
+            $claveEnc = substr((string)$fechaEnc, 0, 7);
+            if ($claveEnc !== '') {
+                $encuentroPorMes[$claveEnc] = (int)($encuentroPorMes[$claveEnc] ?? 0) + 1;
+            }
+        }
+        foreach ($fechasFormacionMes['pos_encuentro'] as $fechaPos) {
+            $clavePos = substr((string)$fechaPos, 0, 7);
+            if ($clavePos !== '') {
+                $posEncuentroPorMes[$clavePos] = (int)($posEncuentroPorMes[$clavePos] ?? 0) + 1;
+            }
+        }
+
         foreach ($meses as $mesInfo) {
             $claveMes = (string)$mesInfo['clave'];
-            $guardado = is_array($indicadoresGuardados[$claveMes] ?? null) ? $indicadoresGuardados[$claveMes] : [];
+            $anioMes = (int)$mesInfo['anio'];
+            $numMes = (int)$mesInfo['mes'];
+            $mesInicio = sprintf('%04d-%02d-01', $anioMes, $numMes);
+            $mesFinTs = strtotime($mesInicio . ' +1 month -1 day');
+            $mesFin = $mesFinTs !== false ? date('Y-m-d', $mesFinTs) : $mesInicio;
+
             $semanasMes = array_values(array_filter($semanas, static function (array $s) use ($claveMes): bool {
                 return (string)$s['mes_clave'] === $claveMes;
             }));
@@ -838,13 +842,12 @@ class CelulaController extends BaseController {
                 }
             }
             $esperadas = count($semanasMes);
-            $noRealizadasAuto = max(0, $esperadas - $reportadasMes);
-            $noRealizadasManual = array_key_exists('celulas_no_realizadas', $guardado)
-                ? $guardado['celulas_no_realizadas']
-                : null;
-            $noRealizadas = $noRealizadasManual !== null ? (int)$noRealizadasManual : $noRealizadasAuto;
-            $invCel = (int)($guardado['invitados_celula'] ?? 0);
-            $invCol = (int)($guardado['invitados_coliseo'] ?? 0);
+            $noRealizadas = max(0, $esperadas - $reportadasMes);
+            $ganadosMes = $this->contarGanadosPorOrigenCelulaEnRango($idCelula, $mesInicio, $mesFin);
+            $invCel = (int)($ganadosMes['celula'] ?? 0);
+            $invCol = (int)($ganadosMes['iglesia'] ?? 0);
+            $encMes = (int)($encuentroPorMes[$claveMes] ?? 0);
+            $posMes = (int)($posEncuentroPorMes[$claveMes] ?? 0);
             $invitadosCelulaTrim += $invCel;
             $invitadosColiseoTrim += $invCol;
             $noRealizadasTrim += $noRealizadas;
@@ -852,17 +855,17 @@ class CelulaController extends BaseController {
             $indicadoresMes[] = [
                 'clave' => $claveMes,
                 'nombre' => (string)$mesInfo['nombre'],
-                'anio' => (int)$mesInfo['anio'],
-                'mes' => (int)$mesInfo['mes'],
+                'anio' => $anioMes,
+                'mes' => $numMes,
                 'promedio' => $reportadasMes > 0 ? round($sumaMes / $reportadasMes, 1) : 0.0,
                 'semanas_reportadas' => $reportadasMes,
                 'semanas_esperadas' => $esperadas,
                 'invitados_celula' => $invCel,
                 'invitados_coliseo' => $invCol,
                 'celulas_no_realizadas' => $noRealizadas,
-                'celulas_no_realizadas_auto' => $noRealizadasAuto,
-                'enviados_encuentro' => $conEncuentro,
-                'graduados_pos_encuentro' => $conPosEncuentro,
+                'celulas_no_realizadas_auto' => $noRealizadas,
+                'enviados_encuentro' => $encMes,
+                'graduados_pos_encuentro' => $posMes,
             ];
         }
 
@@ -870,6 +873,23 @@ class CelulaController extends BaseController {
         foreach ($serieGrafica as $puntoGrafica) {
             $maxGrafica = max($maxGrafica, (int)($puntoGrafica['total'] ?? 0));
         }
+
+        // KPIs del resumen = movimientos del trimestre (no acumulado histórico de la célula).
+        $conEncuentroTrim = 0;
+        foreach ($fechasFormacionMes['encuentro'] as $fechaEncTrim) {
+            $fechaEncTrim = substr((string)$fechaEncTrim, 0, 10);
+            if ($fechaEncTrim >= $desde && $fechaEncTrim <= $hasta) {
+                $conEncuentroTrim++;
+            }
+        }
+        $conPosEncuentroTrim = 0;
+        foreach ($fechasFormacionMes['pos_encuentro'] as $fechaPosTrim) {
+            $fechaPosTrim = substr((string)$fechaPosTrim, 0, 10);
+            if ($fechaPosTrim >= $desde && $fechaPosTrim <= $hasta) {
+                $conPosEncuentroTrim++;
+            }
+        }
+        $conCapTrim = $this->contarCapDestinoCelugramaEnRango($idsPersona, $desde, $hasta);
 
         return [
             'trimestre' => $trimestre,
@@ -889,9 +909,13 @@ class CelulaController extends BaseController {
                 'invitados_celula' => $invitadosCelulaTrim,
                 'invitados_coliseo' => $invitadosColiseoTrim,
                 'celulas_no_realizadas' => $noRealizadasTrim,
-                'con_encuentro' => $conEncuentro,
-                'con_pos_encuentro' => $conPosEncuentro,
-                'con_cap' => $conCap,
+                'con_encuentro' => $conEncuentroTrim,
+                'con_pos_encuentro' => $conPosEncuentroTrim,
+                'con_cap' => $conCapTrim,
+                // Totales actuales de miembros (ficha), por si se necesitan aparte.
+                'con_encuentro_miembros' => $conEncuentro,
+                'con_pos_encuentro_miembros' => $conPosEncuentro,
+                'con_cap_miembros' => $conCap,
             ],
             'puede_editar' => AuthController::puede('asistencias:crear')
                 || AuthController::puede('celulas:editar')
@@ -1333,6 +1357,7 @@ class CelulaController extends BaseController {
         $celula = $reporte['celula'];
         $resumen = $reporte['resumen'];
         $semana = $reporte['semana'];
+        $ganadosMes = is_array($reporte['ganados_mes'] ?? null) ? $reporte['ganados_mes'] : [];
         $integrantes = $reporte['integrantes'];
 
         $nombreCelula = (string)($celula['Nombre_Celula'] ?? 'Celula');
@@ -1361,6 +1386,18 @@ class CelulaController extends BaseController {
             'Personas ganadas semana actual (' . (string)$semana['rango_texto'] . '): '
             . (int)$semana['total_ganados']
         );
+        $rows[] = $filaTitulo(
+            'Personas ganadas mes ' . (string)($ganadosMes['mes_texto'] ?? '')
+            . ' (total): ' . (int)($ganadosMes['total_mes'] ?? 0)
+        );
+        foreach ((array)($ganadosMes['semanas'] ?? []) as $semanaMes) {
+            $rows[] = $filaTitulo(
+                '  Semana ' . (int)($semanaMes['numero'] ?? 0)
+                . ' (' . (string)($semanaMes['rango_texto'] ?? '') . '): '
+                . (int)($semanaMes['total'] ?? 0)
+                . (!empty($semanaMes['es_actual']) ? ' [actual]' : '')
+            );
+        }
         $rows[] = $blank;
         $rows[] = $filaTitulo(
             'Resumen formacion: de ' . (int)$resumen['total_integrantes']
@@ -1585,6 +1622,7 @@ class CelulaController extends BaseController {
 
         [$semanaInicio, $semanaFin] = $this->rangoSemanaActualLunesDomingo();
         $totalGanadosSemana = $this->contarGanadosCelulaEnRango($idCelula, $semanaInicio, $semanaFin);
+        $ganadosMes = $this->construirGanadosMesPorSemanas($idCelula);
         $totalActivos = 0;
         $totalRetirados = 0;
         foreach ($integrantes as $filaInt) {
@@ -1604,6 +1642,7 @@ class CelulaController extends BaseController {
                 'rango_texto' => $this->formatearFechaReporte($semanaInicio) . ' – ' . $this->formatearFechaReporte($semanaFin),
                 'total_ganados' => $totalGanadosSemana,
             ],
+            'ganados_mes' => $ganadosMes,
             'resumen' => [
                 'fecha_apertura_texto' => $fechaAperturaTexto,
                 'fecha_cierre_texto' => $fechaCierreTexto !== '' ? $fechaCierreTexto : 'No registrada',
@@ -1764,6 +1803,346 @@ class CelulaController extends BaseController {
                   {$filtroNuevas}";
         $filas = $this->personaModel->query($sql, [$idCelula, $desde, $hasta]);
         return (int)($filas[0]['total'] ?? 0);
+    }
+
+    /**
+     * Ganados del mes por origen: célula vs iglesia (Domingo / Somos Uno / Otros).
+     *
+     * @return array{celula:int,iglesia:int}
+     */
+    private function contarGanadosPorOrigenCelulaEnRango(int $idCelula, string $desde, string $hasta): array {
+        $resultado = ['celula' => 0, 'iglesia' => 0];
+        $idCelula = (int)$idCelula;
+        $desde = substr(trim($desde), 0, 10);
+        $hasta = substr(trim($hasta), 0, 10);
+        if ($idCelula <= 0 || $desde === '' || $hasta === '' || $desde > $hasta) {
+            return $resultado;
+        }
+
+        $filtroNuevas = $this->personaModel->tieneColumna('Es_Antiguo')
+            ? ' AND COALESCE(p.Es_Antiguo, 1) = 0'
+            : '';
+        $tieneOrigenGanar = $this->personaModel->tieneColumna('Origen_Ganar');
+        $colOrigen = $tieneOrigenGanar ? ', p.Origen_Ganar' : '';
+
+        $sql = "SELECT p.Tipo_Reunion{$colOrigen}
+                FROM persona p
+                WHERE p.Id_Celula = ?
+                  AND DATE(p.Fecha_Registro) BETWEEN ? AND ?
+                  AND (p.Estado_Cuenta = 'Activo' OR p.Estado_Cuenta IS NULL)
+                  {$filtroNuevas}";
+        try {
+            $filas = $this->personaModel->query($sql, [$idCelula, $desde, $hasta]);
+        } catch (Throwable $e) {
+            return $resultado;
+        }
+
+        foreach ((array)$filas as $fila) {
+            $origen = $this->clasificarOrigenGanarCelugrama(is_array($fila) ? $fila : []);
+            if ($origen === 'celula' || $origen === 'iglesia') {
+                $resultado[$origen]++;
+            }
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * @param array<string, mixed> $persona
+     */
+    private function clasificarOrigenGanarCelugrama(array $persona): string {
+        $tipo = strtolower(trim((string)($persona['Tipo_Reunion'] ?? '')));
+        $tipo = strtr($tipo, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        ]);
+        $origenGanar = strtolower(trim((string)($persona['Origen_Ganar'] ?? '')));
+        $origenGanar = strtr($origenGanar, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        ]);
+
+        if (strpos($tipo, 'migrados') !== false) {
+            return 'otros';
+        }
+        if (strpos($tipo, 'celula') !== false || ($tipo === '' && $origenGanar === 'celula')) {
+            return 'celula';
+        }
+        if ($tipo !== '') {
+            return 'iglesia';
+        }
+        if ($origenGanar === 'domingo') {
+            return 'iglesia';
+        }
+
+        return 'otros';
+    }
+
+    /**
+     * Personas que iniciaron Cap. Destino en el rango (inscripción a cualquier nivel).
+     *
+     * @param array<int, int> $idsPersona
+     */
+    private function contarCapDestinoCelugramaEnRango(array $idsPersona, string $desde, string $hasta): int {
+        $idsPersona = array_values(array_unique(array_filter(array_map('intval', $idsPersona), static function ($id) {
+            return $id > 0;
+        })));
+        $desde = substr(trim($desde), 0, 10);
+        $hasta = substr(trim($hasta), 0, 10);
+        if ($idsPersona === [] || $desde === '' || $hasta === '' || $desde > $hasta) {
+            return 0;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsPersona), '?'));
+        $sql = "SELECT COUNT(*) AS total FROM (
+                    SELECT Id_Persona, MIN(DATE(Fecha_Registro)) AS Primera_Fecha
+                    FROM escuela_formacion_inscripcion
+                    WHERE Id_Persona IN ({$placeholders})
+                      AND Programa IN (
+                          'capacitacion_destino',
+                          'capacitacion_destino_nivel_1',
+                          'capacitacion_destino_nivel_2',
+                          'capacitacion_destino_nivel_3'
+                      )
+                      AND Fecha_Registro IS NOT NULL
+                      AND DATE(Fecha_Registro) > '0000-00-00'
+                    GROUP BY Id_Persona
+                ) t
+                WHERE t.Primera_Fecha BETWEEN ? AND ?";
+        try {
+            $filas = $this->inscripcionFormacionModel->query(
+                $sql,
+                array_merge($idsPersona, [$desde, $hasta])
+            );
+        } catch (Throwable $e) {
+            return 0;
+        }
+
+        return (int)($filas[0]['total'] ?? 0);
+    }
+
+    /**
+     * Fecha real de encuentro / pos-encuentro por persona (para indicadores mensuales).
+     * Encuentro: completa clases 5+6 UV o asistencia a programa encuentro.
+     * Pos-encuentro: primera asistencia a clases 7-10 UV.
+     *
+     * @param array<int, int> $idsPersona
+     * @return array{encuentro:array<int,string>,pos_encuentro:array<int,string>}
+     */
+    private function fechasFormacionCelugramaPorPersonas(array $idsPersona): array {
+        $encuentro = [];
+        $posEncuentro = [];
+        $idsPersona = array_values(array_unique(array_filter(array_map('intval', $idsPersona), static function ($id) {
+            return $id > 0;
+        })));
+        if ($idsPersona === []) {
+            return ['encuentro' => $encuentro, 'pos_encuentro' => $posEncuentro];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($idsPersona), '?'));
+
+        // Asistencias UV / encuentro con fecha de clase (o actualización como respaldo).
+        $sqlAsist = "SELECT a.Id_Persona, a.Programa, a.Numero_Clase,
+                            COALESCE(NULLIF(f.Fecha_Clase, '0000-00-00'), DATE(a.Fecha_Actualizacion)) AS Fecha_Evento
+                     FROM escuela_formacion_asistencia_clase a
+                     LEFT JOIN escuela_formacion_clase_fecha f
+                       ON f.Modulo = a.Modulo
+                      AND f.Programa = a.Programa
+                      AND f.Numero_Clase = a.Numero_Clase
+                     WHERE a.Modulo = 'consolidar'
+                       AND a.Asistio = 1
+                       AND a.Id_Persona IN ({$placeholders})
+                       AND (
+                            (a.Programa = 'universidad_vida' AND a.Numero_Clase BETWEEN 5 AND 10)
+                         OR a.Programa = 'encuentro'
+                       )";
+        $uvClases = [];
+        $encuentroProg = [];
+        try {
+            $filasAsist = $this->inscripcionFormacionModel->query($sqlAsist, $idsPersona);
+        } catch (Throwable $e) {
+            $filasAsist = [];
+        }
+        foreach ((array)$filasAsist as $fila) {
+            $id = (int)($fila['Id_Persona'] ?? 0);
+            $programa = strtolower(trim((string)($fila['Programa'] ?? '')));
+            $numero = (int)($fila['Numero_Clase'] ?? 0);
+            $fecha = substr(trim((string)($fila['Fecha_Evento'] ?? '')), 0, 10);
+            if ($id <= 0 || $fecha === '' || $fecha === '0000-00-00' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+                continue;
+            }
+            if ($programa === 'universidad_vida') {
+                if ($numero >= 5 && $numero <= 6) {
+                    if (!isset($uvClases[$id])) {
+                        $uvClases[$id] = [];
+                    }
+                    $prev = $uvClases[$id][$numero] ?? null;
+                    if ($prev === null || $fecha > $prev) {
+                        $uvClases[$id][$numero] = $fecha;
+                    }
+                } elseif ($numero >= 7 && $numero <= 10) {
+                    if (!isset($posEncuentro[$id]) || $fecha < $posEncuentro[$id]) {
+                        $posEncuentro[$id] = $fecha;
+                    }
+                }
+            } elseif ($programa === 'encuentro') {
+                if (!isset($encuentroProg[$id]) || $fecha < $encuentroProg[$id]) {
+                    $encuentroProg[$id] = $fecha;
+                }
+            }
+        }
+
+        foreach ($uvClases as $id => $clases) {
+            if (!empty($clases[5]) && !empty($clases[6])) {
+                $fechaCompleto = max((string)$clases[5], (string)$clases[6]);
+                if (!isset($encuentro[$id]) || $fechaCompleto < $encuentro[$id]) {
+                    $encuentro[$id] = $fechaCompleto;
+                }
+            }
+        }
+        foreach ($encuentroProg as $id => $fecha) {
+            if (!isset($encuentro[$id]) || $fecha < $encuentro[$id]) {
+                $encuentro[$id] = $fecha;
+            }
+        }
+
+        // Respaldo: inscripción a programa encuentro con asistencia marcada.
+        $sqlInscEnc = "SELECT Id_Persona,
+                              COALESCE(
+                                NULLIF(DATE(Fecha_Asistencia_Clase), '0000-00-00'),
+                                DATE(Fecha_Registro)
+                              ) AS Fecha_Evento
+                       FROM escuela_formacion_inscripcion
+                       WHERE Id_Persona IN ({$placeholders})
+                         AND Programa = 'encuentro'
+                         AND (Asistio_Clase = 1 OR Fecha_Asistencia_Clase IS NOT NULL)";
+        try {
+            $filasInscEnc = $this->inscripcionFormacionModel->query($sqlInscEnc, $idsPersona);
+        } catch (Throwable $e) {
+            $filasInscEnc = [];
+        }
+        foreach ((array)$filasInscEnc as $fila) {
+            $id = (int)($fila['Id_Persona'] ?? 0);
+            $fecha = substr(trim((string)($fila['Fecha_Evento'] ?? '')), 0, 10);
+            if ($id <= 0 || $fecha === '' || $fecha === '0000-00-00' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+                continue;
+            }
+            if (!isset($encuentro[$id]) || $fecha < $encuentro[$id]) {
+                $encuentro[$id] = $fecha;
+            }
+        }
+
+        // Pos-encuentro / UV: si no hay clases 7-10, usar fecha de inscripción a UV.
+        $sqlInscUv = "SELECT Id_Persona, MIN(DATE(Fecha_Registro)) AS Fecha_Evento
+                      FROM escuela_formacion_inscripcion
+                      WHERE Id_Persona IN ({$placeholders})
+                        AND Programa = 'universidad_vida'
+                        AND Fecha_Registro IS NOT NULL
+                        AND DATE(Fecha_Registro) > '0000-00-00'
+                      GROUP BY Id_Persona";
+        try {
+            $filasInscUv = $this->inscripcionFormacionModel->query($sqlInscUv, $idsPersona);
+        } catch (Throwable $e) {
+            $filasInscUv = [];
+        }
+        foreach ((array)$filasInscUv as $fila) {
+            $id = (int)($fila['Id_Persona'] ?? 0);
+            $fecha = substr(trim((string)($fila['Fecha_Evento'] ?? '')), 0, 10);
+            if ($id <= 0 || $fecha === '' || $fecha === '0000-00-00' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+                continue;
+            }
+            // Solo si aún no hay fecha de clases 7-10.
+            if (!isset($posEncuentro[$id])) {
+                $posEncuentro[$id] = $fecha;
+            }
+        }
+
+        return ['encuentro' => $encuentro, 'pos_encuentro' => $posEncuentro];
+    }
+
+    /**
+     * Semanas (lun–dom) que tocan el mes actual, con ganados por semana y total del mes.
+     *
+     * @return array{
+     *   anio:int,
+     *   mes:int,
+     *   mes_nombre:string,
+     *   mes_texto:string,
+     *   total_mes:int,
+     *   semanas:array<int, array<string, mixed>>
+     * }
+     */
+    private function construirGanadosMesPorSemanas(int $idCelula, ?string $fechaReferencia = null): array {
+        $timestamp = strtotime((string)($fechaReferencia ?: date('Y-m-d')));
+        if ($timestamp === false) {
+            $timestamp = time();
+        }
+
+        $anio = (int)date('Y', $timestamp);
+        $mes = (int)date('n', $timestamp);
+        $mesInicio = sprintf('%04d-%02d-01', $anio, $mes);
+        $mesFin = date('Y-m-t', $timestamp);
+        $hoy = date('Y-m-d');
+        [$semanaActualInicio] = $this->rangoSemanaActualLunesDomingo($hoy);
+
+        $nombresMes = [
+            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+            5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+            9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre',
+        ];
+        $mesNombre = $nombresMes[$mes] ?? date('F', $timestamp);
+
+        [$lunesCursor] = $this->rangoSemanaActualLunesDomingo($mesInicio);
+        $semanas = [];
+        $numero = 1;
+        while ($lunesCursor <= $mesFin && $numero <= 6) {
+            $domingo = date('Y-m-d', strtotime($lunesCursor . ' +6 days'));
+            if ($domingo >= $mesInicio) {
+                $semanas[] = [
+                    'numero' => $numero,
+                    'inicio' => $lunesCursor,
+                    'fin' => $domingo,
+                    'rango_texto' => $this->formatearFechaReporte($lunesCursor) . ' – ' . $this->formatearFechaReporte($domingo),
+                    'es_actual' => ($lunesCursor === $semanaActualInicio),
+                    'total' => 0,
+                ];
+                $numero++;
+            }
+            $lunesCursor = date('Y-m-d', strtotime($lunesCursor . ' +7 days'));
+        }
+
+        if ($semanas === []) {
+            return [
+                'anio' => $anio,
+                'mes' => $mes,
+                'mes_nombre' => $mesNombre,
+                'mes_texto' => $mesNombre . ' ' . $anio,
+                'total_mes' => 0,
+                'semanas' => [],
+            ];
+        }
+
+        $totalMes = 0;
+        foreach ($semanas as &$semana) {
+            $inicio = (string)$semana['inicio'];
+            $fin = (string)$semana['fin'];
+            // Cuenta solo lo ganado dentro del mes actual (aunque la semana cruce de mes).
+            $desdeEfectivo = ($inicio > $mesInicio) ? $inicio : $mesInicio;
+            $hastaEfectivo = ($fin < $mesFin) ? $fin : $mesFin;
+            $total = ($desdeEfectivo <= $hastaEfectivo)
+                ? $this->contarGanadosCelulaEnRango($idCelula, $desdeEfectivo, $hastaEfectivo)
+                : 0;
+            $semana['total'] = $total;
+            $totalMes += $total;
+        }
+        unset($semana);
+
+        return [
+            'anio' => $anio,
+            'mes' => $mes,
+            'mes_nombre' => $mesNombre,
+            'mes_texto' => $mesNombre . ' ' . $anio,
+            'total_mes' => $totalMes,
+            'semanas' => $semanas,
+        ];
     }
 
     public function eliminar() {

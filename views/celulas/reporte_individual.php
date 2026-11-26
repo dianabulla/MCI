@@ -4,6 +4,8 @@ include VIEWS . '/layout/header.php';
 $celula = is_array($celula ?? null) ? $celula : [];
 $resumen = is_array($resumen ?? null) ? $resumen : [];
 $semana = is_array($semana ?? null) ? $semana : [];
+$ganadosMes = is_array($ganados_mes ?? null) ? $ganados_mes : [];
+$semanasGanados = is_array($ganadosMes['semanas'] ?? null) ? $ganadosMes['semanas'] : [];
 $integrantes = is_array($integrantes ?? null) ? $integrantes : [];
 
 $idCelula = (int)($celula['Id_Celula'] ?? 0);
@@ -16,6 +18,8 @@ $capN1 = (int)($resumen['cap_n1'] ?? 0);
 $capN2 = (int)($resumen['cap_n2'] ?? 0);
 $capN3 = (int)($resumen['cap_n3'] ?? 0);
 $estaCerrada = !empty($resumen['esta_cerrada']);
+$totalGanadosMes = (int)($ganadosMes['total_mes'] ?? 0);
+$mesGanadosTexto = (string)($ganadosMes['mes_texto'] ?? date('F Y'));
 $exportUrl = PUBLIC_URL . 'index.php?url=celulas/reporte-individual/exportar&id=' . $idCelula;
 $detalleUrl = PUBLIC_URL . 'index.php?url=celulas/detalle&id=' . $idCelula;
 $listaUrl = PUBLIC_URL . 'index.php?url=celulas';
@@ -60,10 +64,50 @@ $listaUrl = PUBLIC_URL . 'index.php?url=celulas';
             <span class="ri-celula-label">Líder</span>
             <span class="ri-celula-value"><?= htmlspecialchars((string)($celula['Nombre_Lider'] ?? 'No especificado')) ?></span>
         </div>
-        <div class="ri-celula-meta-item ri-celula-meta-item--wide">
-            <span class="ri-celula-label">Personas ganadas · semana actual (<?= htmlspecialchars((string)($semana['rango_texto'] ?? '')) ?>)</span>
-            <span class="ri-celula-value ri-celula-value--accent"><?= (int)($semana['total_ganados'] ?? 0) ?></span>
+    </div>
+
+    <div class="ri-celula-ganados-mes">
+        <div class="ri-celula-ganados-mes-head">
+            <h3>Personas ganadas · <?= htmlspecialchars($mesGanadosTexto) ?></h3>
+            <p>Ganados por semana (lun–dom) del mes actual.</p>
         </div>
+        <?php if ($semanasGanados !== []): ?>
+            <div class="ri-celula-ganados-sheet-wrap">
+                <table class="ri-celula-ganados-sheet">
+                    <thead>
+                        <tr>
+                            <?php foreach ($semanasGanados as $semanaMes): ?>
+                                <?php $esActual = !empty($semanaMes['es_actual']); ?>
+                                <th class="<?= $esActual ? 'is-actual' : '' ?>">
+                                    <span class="ri-sheet-semana">S<?= (int)($semanaMes['numero'] ?? 0) ?><?= $esActual ? ' · actual' : '' ?></span>
+                                    <span class="ri-sheet-rango"><?= htmlspecialchars((string)($semanaMes['rango_texto'] ?? '')) ?></span>
+                                </th>
+                            <?php endforeach; ?>
+                            <th class="is-total">
+                                <span class="ri-sheet-semana">Total mes</span>
+                                <span class="ri-sheet-rango"><?= htmlspecialchars($mesGanadosTexto) ?></span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <?php foreach ($semanasGanados as $semanaMes): ?>
+                                <?php
+                                $esActual = !empty($semanaMes['es_actual']);
+                                $totalSem = (int)($semanaMes['total'] ?? 0);
+                                ?>
+                                <td class="<?= $esActual ? 'is-actual' : '' ?>">
+                                    <strong><?= $totalSem ?></strong>
+                                </td>
+                            <?php endforeach; ?>
+                            <td class="is-total"><strong><?= $totalGanadosMes ?></strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <p class="ri-celula-empty" style="padding:12px 0;">No hay semanas para mostrar en este mes.</p>
+        <?php endif; ?>
     </div>
 
     <div class="ri-celula-funnel">
@@ -245,9 +289,6 @@ $listaUrl = PUBLIC_URL . 'index.php?url=celulas';
     flex-direction: column;
     gap: 4px;
 }
-.ri-celula-meta-item--wide {
-    grid-column: 1 / -1;
-}
 .ri-celula-label {
     font-size: 0.75rem;
     text-transform: uppercase;
@@ -260,9 +301,99 @@ $listaUrl = PUBLIC_URL . 'index.php?url=celulas';
     color: #0f172a;
     font-weight: 700;
 }
-.ri-celula-value--accent {
+.ri-celula-ganados-mes {
+    padding: 12px 14px 14px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+.ri-celula-ganados-mes-head h3 {
+    margin: 0 0 2px;
+    font-size: 0.95rem;
+    color: #1e293b;
+}
+.ri-celula-ganados-mes-head p {
+    margin: 0 0 10px;
+    color: #64748b;
+    font-size: 0.8rem;
+}
+.ri-celula-ganados-sheet-wrap {
+    overflow-x: auto;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+}
+.ri-celula-ganados-sheet {
+    width: 100%;
+    min-width: 560px;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 0.78rem;
+    background: #fff;
+}
+.ri-celula-ganados-sheet th,
+.ri-celula-ganados-sheet td {
+    border-right: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 6px 8px;
+    text-align: center;
+    vertical-align: middle;
+}
+.ri-celula-ganados-sheet th:last-child,
+.ri-celula-ganados-sheet td:last-child {
+    border-right: 0;
+}
+.ri-celula-ganados-sheet thead th {
+    background: #f1f5f9;
+    color: #334155;
+    font-weight: 700;
+}
+.ri-celula-ganados-sheet .ri-sheet-semana {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+}
+.ri-celula-ganados-sheet .ri-sheet-rango {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.66rem;
+    font-weight: 500;
+    color: #64748b;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+.ri-celula-ganados-sheet tbody td {
+    background: #fff;
+    padding: 8px 6px;
+}
+.ri-celula-ganados-sheet tbody td strong {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #1e3a5f;
+}
+.ri-celula-ganados-sheet th.is-actual,
+.ri-celula-ganados-sheet td.is-actual {
+    background: #eff6ff;
+}
+.ri-celula-ganados-sheet th.is-actual {
     color: #1d4ed8;
-    font-size: 1.35rem;
+    box-shadow: inset 0 2px 0 #3b82f6;
+}
+.ri-celula-ganados-sheet td.is-actual strong {
+    color: #1d4ed8;
+}
+.ri-celula-ganados-sheet th.is-total,
+.ri-celula-ganados-sheet td.is-total {
+    background: #ecfdf5;
+}
+.ri-celula-ganados-sheet th.is-total {
+    color: #166534;
+    box-shadow: inset 0 2px 0 #22c55e;
+}
+.ri-celula-ganados-sheet td.is-total strong {
+    color: #166534;
+    font-size: 1.12rem;
 }
 .ri-celula-funnel,
 .ri-celula-tabla-block {

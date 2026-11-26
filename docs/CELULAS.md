@@ -1,6 +1,6 @@
 # Células
 
-Registro actualizado el **24 de noviembre de 2026**. Estos cambios están en el código y en producción (FTP Hostinger).
+Registro actualizado el **26 de noviembre de 2026**. Estos cambios están en el código y en producción (FTP Hostinger).
 
 ## Nombre del módulo
 
@@ -23,10 +23,31 @@ El ícono del listado abre el **Celugrama** (`celulas/detalle`): una sola pantal
 ### Qué muestra
 
 - Ficha: apertura, dirección, día/hora, estado, ministerio, líder, pastor, líder de 12, anfitrión.
-- KPIs del trimestre: promedio, semanas reportadas, invitados célula, invitados a iglesia, encuentro, pos-encuentro/UV, Cap. Destino, no realizadas.
+- KPIs del trimestre (solo movimientos del periodo seleccionado).
 - Gráfica de asistencia por semana.
-- Tabla de miembros: indicador, proceso, asistencias del trimestre, Enc., Pos., Bautizo, Cap. Destino y acciones.
-- Indicadores del mes (editables si hay permiso).
+- Tabla de miembros: indicador, proceso, asistencias del trimestre, Enc., Pos., Bautizo, Cap. Destino y acciones (Sí/— = estado actual de la persona).
+- Indicadores del mes: **solo lectura**, calculados solos.
+
+### KPIs e indicadores (26 nov 2026)
+
+Nadie edita invitados, no realizadas, encuentro ni pos-encuentro en el Celugrama. Todo sale de la plataforma:
+
+| Dato | Cómo se calcula |
+| --- | --- |
+| Promedio / semana | Suma de asistentes de semanas **reportadas** ÷ cantidad de semanas reportadas (puede salir decimal, p. ej. 4.7) |
+| Semanas reportadas | Semanas del trimestre con reporte de asistencia |
+| Inv. célula | Personas ganadas en el mes/trimestre con origen célula (`Tipo_Reunion` / `Origen_Ganar`) |
+| Inv. iglesia | Ganados del mes/trimestre con origen iglesia (Domingo, Somos Uno, Otros, etc.; no Migrados) |
+| No realizadas | Semanas del mes/trimestre sin reporte |
+| Encuentro | Personas de la célula que **completaron** encuentro en ese mes/trimestre (clases UV 5+6 o programa encuentro, con fecha de clase o inscripción) |
+| Pos-encuentro / UV | Primera clase UV 7–10 en el periodo; si no hay, fecha de inscripción a Universidad de Vida |
+| Cap. Destino | Primera inscripción a Cap. Destino (cualquier nivel) en el trimestre |
+
+**Importante:** Encuentro / pos-encuentro del resumen y de la tabla mensual **no** repiten el total histórico de la célula en todos los meses. Solo cuentan en el mes (y en el trimestre) donde ocurrió el movimiento.
+
+La gráfica **Asistencia por semana**: barra azul = semana reportada; gris = sin reporte. El número es el total de asistentes de esa semana.
+
+La ruta `celulas/celugrama/guardar` ya no guarda indicadores manuales (solo queda por si hay temas).
 
 ### Acciones por persona
 
@@ -42,10 +63,6 @@ El ícono del listado abre el **Celugrama** (`celulas/detalle`): una sola pantal
 ### Reportar célula
 
 Se hace en un modal dentro del Celugrama (POST a `asistencias/registrar`). Desde el listado, «Reportar célula» abre `celulas/detalle&id=…&reporte=1` y abre el modal.
-
-### Guardar indicadores
-
-Ruta `celulas/celugrama/guardar`. Requiere `asistencias:crear` o `celulas:editar`.
 
 ### Indicador de miembros (historial en esa célula)
 
@@ -71,9 +88,11 @@ La casilla la ven quienes tienen acceso total: administrador, Ganar, pastor y el
 
 En cada célula, las dos últimas columnas siguen siendo semanas. En el subtotal del ministerio y en el total general cuentan **cuántas células** tienen al menos una semana pendiente, y se leen como «N células».
 
-## Reporte individual por célula (24 nov 2026)
+## Reporte individual por célula (24 nov 2026 · verificado 26 nov)
 
 Reporte **nuevo y aparte** del detalle/Celugrama. No modifica la lógica de listados ni del reporte operativo.
+
+**Verificación 26 nov 2026 (prod, célula Amparo/Doris):** las semanas de ganados en 0 son coherentes (nadie nuevo ese mes en la célula). Formación (encuentro / bautismo / Cap. Destino) sale de `ProgresoFormacionFlujo` sobre integrantes activos sin el líder.
 
 ### Cómo abrirlo
 
@@ -87,7 +106,29 @@ Reporte **nuevo y aparte** del detalle/Celugrama. No modifica la lógica de list
 
 1. **Fecha de apertura**
 2. **Fecha de cierre** si está cerrada; si sigue activa, **tiempo abierta** (años/meses/días)
-3. **Personas ganadas · semana actual** (lunes a domingo de la semana en curso), con el rango de fechas visible
+3. **Personas ganadas · mes actual**: cuadrícula compacta tipo Excel con una columna por semana (lun–dom) que toca el mes, el número de ganados por semana, la semana en curso marcada, y **Total del mes**
+
+#### Cómo cuenta “personas ganadas” en este reporte
+
+- Persona **nueva**: `Es_Antiguo = 0`
+- Fecha: `DATE(Fecha_Registro)` dentro de la semana (recortada al mes si la semana cruza de mes)
+- Debe estar **asignada hoy a esa célula**: `Id_Celula = Id de la célula del reporte`
+- Estado activo (`Activo` o vacío)
+
+No separa origen iglesia vs célula; es “nuevos registrados en esa semana que hoy están en esta célula”.
+
+#### Relación con el Dashboard Ganar (pendiente de cliente)
+
+**Misma idea de negocio** (personas nuevas por `Fecha_Registro`), **pero no es el mismo cálculo** que el dashboard general.
+
+| | Reporte individual de célula | Dashboard Ganar |
+| --- | --- | --- |
+| Agrupa por | Célula (`Id_Celula`) | Líder / red (líder de 12) |
+| Qué muestra | Solo ubicados en **esa** célula | GI, GC, UC, fono, visita, totales |
+| Semana | Semanas del **mes actual** (lun–dom) | Suele usar la **semana vencida** |
+| Origen ganado en | No clasifica | Sí (iglesia / célula / otros) |
+
+**Pendiente con el cliente (24 nov 2026):** decidir si se deja así (vista por célula) o se alinea con el dashboard (por ejemplo solo GC, misma semana vencida, u otra regla). Hasta nueva instrucción no se cambia el conteo.
 
 ### Formación de integrantes (embudo)
 

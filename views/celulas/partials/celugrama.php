@@ -8,7 +8,6 @@ $serieCg = is_array($celugrama['serie_grafica'] ?? null) ? $celugrama['serie_gra
 $indicadoresCg = is_array($celugrama['indicadores_mes'] ?? null) ? $celugrama['indicadores_mes'] : [];
 $opcionesTrimestre = is_array($celugrama['opciones_trimestre'] ?? null) ? $celugrama['opciones_trimestre'] : [];
 $maxGrafica = max(1, (int)($celugrama['max_grafica'] ?? 1));
-$puedeEditarCg = !empty($celugrama['puede_editar']);
 $idCelulaCg = (int)($celula['Id_Celula'] ?? 0);
 $claveTrimestre = (string)($trimestre['clave'] ?? '');
 $mensajeCelugrama = trim((string)($mensajeCelugrama ?? ''));
@@ -69,7 +68,7 @@ $mostrarAccionesCg = $puedeSeguimientoCg || $puedeMigrarCg || $puedeEliminarPers
     <div class="celugrama-head">
         <div>
             <h3>Resumen del trimestre</h3>
-            <p class="celugrama-sub">Una sola pantalla: ficha, miembros, asistencia y reporte sin saltar a otra vista.</p>
+            <p class="celugrama-sub">Solo movimientos de este trimestre: asistencia reportada, ganados y formación con fecha.</p>
         </div>
         <form method="GET" class="celugrama-trimestre-form" action="<?= PUBLIC_URL ?>index.php">
             <input type="hidden" name="url" value="celulas/detalle">
@@ -90,8 +89,8 @@ $mostrarAccionesCg = $puedeSeguimientoCg || $puedeMigrarCg || $puedeEliminarPers
     <?php endif; ?>
 
     <div class="celugrama-resumen">
-        <div class="celugrama-kpi">
-            <span class="celugrama-kpi-label">Promedio asistencia</span>
+        <div class="celugrama-kpi" title="Suma de asistentes de las semanas reportadas ÷ cantidad de semanas reportadas">
+            <span class="celugrama-kpi-label">Promedio / semana</span>
             <strong class="celugrama-kpi-value"><?= htmlspecialchars((string)($resumenCg['promedio_asistencia'] ?? 0)) ?></strong>
         </div>
         <div class="celugrama-kpi">
@@ -144,10 +143,7 @@ $mostrarAccionesCg = $puedeSeguimientoCg || $puedeMigrarCg || $puedeEliminarPers
         </div>
     </div>
 
-    <form method="POST" action="<?= PUBLIC_URL ?>index.php?url=celulas/celugrama/guardar" class="celugrama-form">
-            <input type="hidden" name="id_celula" value="<?= $idCelulaCg ?>">
-            <input type="hidden" name="trimestre" value="<?= htmlspecialchars($claveTrimestre) ?>">
-
+    <div class="celugrama-form">
             <div class="celugrama-bloque-titulo-row">
                 <div>
                     <h4 class="celugrama-block-title">Miembros, asistencia y crecimiento</h4>
@@ -300,7 +296,7 @@ $mostrarAccionesCg = $puedeSeguimientoCg || $puedeMigrarCg || $puedeEliminarPers
             <?php endif; ?>
 
             <h4 class="celugrama-block-title">Indicadores del mes</h4>
-            <p class="celugrama-hint">Promedio y “no realizadas” se calculan solos. Invitados se llenan aquí. Encuentro / pos-encuentro muestran el total de la célula.</p>
+            <p class="celugrama-hint">Se calculan solos: promedio y no realizadas (reportes), invitados (ganados del mes), encuentro y pos-encuentro (fecha real de formación).</p>
             <div class="table-container">
                 <table class="data-table celugrama-indicadores">
                     <thead>
@@ -316,36 +312,12 @@ $mostrarAccionesCg = $puedeSeguimientoCg || $puedeMigrarCg || $puedeEliminarPers
                     </thead>
                     <tbody>
                         <?php foreach ($indicadoresCg as $ind): ?>
-                            <?php $claveMes = (string)$ind['clave']; ?>
                             <tr>
                                 <td data-label="Mes"><?= htmlspecialchars((string)$ind['nombre']) ?></td>
                                 <td data-label="Promedio"><?= htmlspecialchars((string)$ind['promedio']) ?></td>
-                                <td data-label="Inv. célula">
-                                    <?php if ($puedeEditarCg): ?>
-                                        <input type="number" min="0" class="form-control celugrama-num" name="indicadores[<?= htmlspecialchars($claveMes) ?>][invitados_celula]"
-                                               value="<?= (int)$ind['invitados_celula'] ?>">
-                                    <?php else: ?>
-                                        <?= (int)$ind['invitados_celula'] ?>
-                                    <?php endif; ?>
-                                </td>
-                                <td data-label="Inv. iglesia">
-                                    <?php if ($puedeEditarCg): ?>
-                                        <input type="number" min="0" class="form-control celugrama-num" name="indicadores[<?= htmlspecialchars($claveMes) ?>][invitados_coliseo]"
-                                               value="<?= (int)$ind['invitados_coliseo'] ?>"
-                                               title="Invitados a iglesia (ganar)">
-                                    <?php else: ?>
-                                        <?= (int)$ind['invitados_coliseo'] ?>
-                                    <?php endif; ?>
-                                </td>
-                                <td data-label="No realizadas">
-                                    <?php if ($puedeEditarCg): ?>
-                                        <input type="number" min="0" class="form-control celugrama-num" name="indicadores[<?= htmlspecialchars($claveMes) ?>][celulas_no_realizadas]"
-                                               value="<?= (int)$ind['celulas_no_realizadas'] ?>"
-                                               title="Automático: <?= (int)$ind['celulas_no_realizadas_auto'] ?>">
-                                    <?php else: ?>
-                                        <?= (int)$ind['celulas_no_realizadas'] ?>
-                                    <?php endif; ?>
-                                </td>
+                                <td data-label="Inv. célula"><?= (int)$ind['invitados_celula'] ?></td>
+                                <td data-label="Inv. iglesia"><?= (int)$ind['invitados_coliseo'] ?></td>
+                                <td data-label="No realizadas"><?= (int)$ind['celulas_no_realizadas'] ?></td>
                                 <td data-label="Encuentro"><?= (int)$ind['enviados_encuentro'] ?></td>
                                 <td data-label="Pos-encuentro"><?= (int)$ind['graduados_pos_encuentro'] ?></td>
                             </tr>
@@ -353,13 +325,7 @@ $mostrarAccionesCg = $puedeSeguimientoCg || $puedeMigrarCg || $puedeEliminarPers
                     </tbody>
                 </table>
             </div>
-
-            <?php if ($puedeEditarCg): ?>
-                <div class="celugrama-actions">
-                    <button type="submit" class="btn btn-primary">Guardar indicadores</button>
-                </div>
-            <?php endif; ?>
-    </form>
+    </div>
 </section>
 
 <style>

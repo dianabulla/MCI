@@ -1,7 +1,7 @@
 <?php
 /**
- * Celugrama por célula: temas semanales e indicadores mensuales editables.
- * Asistencia y crecimiento espiritual se leen de lo ya reportado.
+ * Celugrama por célula: temas semanales.
+ * Indicadores del mes se calculan en CelulaController (ganados, reportes, formación).
  */
 
 require_once APP . '/Models/BaseModel.php';
