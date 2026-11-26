@@ -10,6 +10,15 @@ En el listado de inscritos/asistencias UV, quien culminó los dos días de encue
 
 El conteo de **Programas** en Inicio respeta el aislamiento de red/ministerio del usuario.
 
+## Bautismo: chuleo para liderazgo (26 nov 2026)
+
+En **Programas → Asistencias** (listado UV / `escuelas_formacion/listado_inscritos.php`), los roles **Líder de célula**, **Líder de 12** y **Líder de 144** siguen en modo solo consulta para clases UV, acciones y pagos, pero **sí pueden marcar la casilla Bautismo**.
+
+- Vista: columna y filtro Bautismo visibles; el resto de checkboxes de asistencia no.
+- Backend: `DataIsolation::puedeMarcarBautismoEnAsistenciasSoloConsulta()`; permisos `puedeGuardarAsistenciaListadoUniversidadVida` / `puedeMarcarAsistenciaBautismoListadoUniversidadVida` en `AuthController`.
+- Guardado: `escuelas_formacion/inscritos/guardar-asistencia` acepta solo `programa=bautismo` para ese liderazgo; el resto de clases sigue bloqueado.
+- Despliegue: FTP a Hostinger el 26 nov 2026 (sin SQL).
+
 ## Qué se ve
 
 Una sola tabla, con dos filas: **Encuentros** y **Libros**. Cada una muestra personas y valor del semestre.

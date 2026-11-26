@@ -31,8 +31,11 @@ $puedeAccesoListado = $esAdminSesion
     || (class_exists('AuthController') && AuthController::puedeVerListadoAsistenciasUniversidadVida());
 require_once APP . '/Helpers/DataIsolation.php';
 $soloConsultaLiderazgo = !$esAdminSesion && DataIsolation::esLiderazgoAsistenciasSoloConsulta();
+$puedeMarcarBautismoLiderazgo = $soloConsultaLiderazgo
+    && DataIsolation::puedeMarcarBautismoEnAsistenciasSoloConsulta();
+$mostrarColumnaBautismo = !$soloConsultaLiderazgo || $puedeMarcarBautismoLiderazgo;
 $colspanTablaUv = $soloConsultaLiderazgo
-    ? ($modoRedAsistencia ? 8 : 10)
+    ? ($modoRedAsistencia ? (8 + ($mostrarColumnaBautismo ? 1 : 0)) : (10 + ($mostrarColumnaBautismo ? 1 : 0)))
     : ($modoRedAsistencia ? 21 : 23);
 
 if (!isset($puede_editar)) {
@@ -539,6 +542,10 @@ $puedeIrPagos = !$soloConsultaLiderazgo && class_exists('AuthController') && (
         <option value="con_al_menos_uno">Asistieron al menos un día</option>
       </select>
     </div>
+    <?php else: ?>
+    <input type="hidden" id="li-encuentro" value="todos">
+    <?php endif; ?>
+    <?php if (!empty($mostrarColumnaBautismo)): ?>
     <div>
       <label for="li-bautismo">Bautismo</label>
       <select id="li-bautismo" title="Filtra por casilla de bautismo marcada">
@@ -548,7 +555,6 @@ $puedeIrPagos = !$soloConsultaLiderazgo && class_exists('AuthController') && (
       </select>
     </div>
     <?php else: ?>
-    <input type="hidden" id="li-encuentro" value="todos">
     <input type="hidden" id="li-bautismo" value="todos">
     <?php endif; ?>
     <div>
@@ -649,6 +655,8 @@ $puedeIrPagos = !$soloConsultaLiderazgo && class_exists('AuthController') && (
             <th colspan="2" class="th-post col-post-group" data-col-group="post">Post-encuentro</th>
             <th rowspan="2" class="th-baut col-bautismo">Bautismo</th>
             <th rowspan="2" class="th-enc col-culmino">Culminó encuentro</th>
+            <?php elseif (!empty($mostrarColumnaBautismo)): ?>
+            <th rowspan="2" class="th-baut col-bautismo">Bautismo</th>
             <?php endif; ?>
           </tr>
           <tr>
@@ -723,6 +731,7 @@ $puedeIrPagos = !$soloConsultaLiderazgo && class_exists('AuthController') && (
   const RED_BLOQUEADA = <?= json_encode($redAsistenciaListado) ?>;
   const MODO_RED = <?= $modoRedAsistencia ? 'true' : 'false' ?>;
   const SOLO_CONSULTA_LIDERAZGO = <?= !empty($soloConsultaLiderazgo) ? 'true' : 'false' ?>;
+  const PUEDE_MARCAR_BAUTISMO = <?= !empty($mostrarColumnaBautismo) ? 'true' : 'false' ?>;
   const COLSPAN_TABLA = <?= (int)$colspanTablaUv ?>;
   const BASE_URL   = <?= json_encode(rtrim($publicUrl, '/') . '/?url=') ?>;
   const ABONO_URL    = BASE_URL + 'escuelas_formacion/inscritos/abono-admin';
@@ -1263,6 +1272,18 @@ $puedeIrPagos = !$soloConsultaLiderazgo && class_exists('AuthController') && (
         tdCulmino.className = 'col-culmino';
         tdCulmino.innerHTML = badgeCulminoEncuentro(p);
         tr.appendChild(tdCulmino);
+      } else if (PUEDE_MARCAR_BAUTISMO) {
+        const tdBaut = document.createElement('td');
+        tdBaut.className = 'col-bautismo';
+        const cbBaut = document.createElement('input');
+        cbBaut.type = 'checkbox';
+        cbBaut.className = 'check-asist';
+        cbBaut.checked = !!p.clase_bautismo;
+        cbBaut.dataset.idPersona = p.Id_Persona;
+        cbBaut.dataset.tipo = 'bautismo';
+        cbBaut.addEventListener('change', onCheckChange);
+        tdBaut.appendChild(cbBaut);
+        tr.appendChild(tdBaut);
       }
 
       fragment.appendChild(tr);
@@ -1629,7 +1650,7 @@ $puedeIrPagos = !$soloConsultaLiderazgo && class_exists('AuthController') && (
         'pre-1': true, 'pre-2': true, 'pre-3': true, 'pre-4': true,
         'enc-1': true, 'enc-2': true,
         'post-1': true, 'post-2': true, 'post-3': true, 'post-4': true,
-        bautismo: true,
+        bautismo: !PUEDE_MARCAR_BAUTISMO,
         culmino: true
       };
       if (idsOcultosLiderazgo[col.id]) return false;

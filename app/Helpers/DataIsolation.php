@@ -139,10 +139,22 @@ class DataIsolation {
     }
 
     /**
-     * Líder de célula / 12 / 144: ven inscritos UV (datos y pagos), no marcan asistencia.
+     * Líder de célula / 12 / 144: ven inscritos UV (datos y pagos), no marcan asistencia
+     * de clases UV (salvo bautismo para célula/12/144; ver puedeMarcarBautismoEnAsistenciasSoloConsulta).
      */
     public static function esLiderazgoAsistenciasSoloConsulta() {
         if (self::esAdmin()) {
+            return false;
+        }
+        return self::esLiderCelula() || self::esLider12() || self::esLider144();
+    }
+
+    /**
+     * En modo solo consulta del listado UV, líder de célula / 12 / 144
+     * sí pueden chulear asistencia a bautismo.
+     */
+    public static function puedeMarcarBautismoEnAsistenciasSoloConsulta() {
+        if (!self::esLiderazgoAsistenciasSoloConsulta()) {
             return false;
         }
         return self::esLiderCelula() || self::esLider12() || self::esLider144();

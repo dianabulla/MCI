@@ -1560,6 +1560,26 @@ class AuthController extends BaseController {
     }
 
     /**
+     * Guardar asistencia desde el listado UV: marcado completo, o solo bautismo
+     * para líder de célula / 12 / 144 (resto del liderazgo sigue en solo consulta).
+     */
+    public static function puedeGuardarAsistenciaListadoUniversidadVida(): bool {
+        if (self::puedeMarcarAsistenciaListadoUniversidadVida()) {
+            return true;
+        }
+        require_once APP . '/Helpers/DataIsolation.php';
+        return DataIsolation::puedeMarcarBautismoEnAsistenciasSoloConsulta();
+    }
+
+    public static function puedeMarcarAsistenciaBautismoListadoUniversidadVida(): bool {
+        if (self::puedeMarcarAsistenciaListadoUniversidadVida()) {
+            return true;
+        }
+        require_once APP . '/Helpers/DataIsolation.php';
+        return DataIsolation::puedeMarcarBautismoEnAsistenciasSoloConsulta();
+    }
+
+    /**
      * Sin modulo Personas completo pero con acceso a Programas (UV, Cap. Destino o programas ver).
      * Quien este en este modo gestiona inscritos desde Programas; no se muestra panel Personas en inicio
      * y las entradas personas/ redirigen al consolidado correspondiente.

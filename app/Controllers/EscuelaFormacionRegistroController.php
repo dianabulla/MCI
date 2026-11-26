@@ -5271,7 +5271,7 @@ class EscuelaFormacionRegistroController extends BaseController {
      * POST: id_persona, modulo, programa, numero_clase, asistio (0/1)
      */
     public function guardarAsistenciaClase() {
-        if (!class_exists('AuthController') || !AuthController::puedeMarcarAsistenciaListadoUniversidadVida()) {
+        if (!class_exists('AuthController') || !AuthController::puedeGuardarAsistenciaListadoUniversidadVida()) {
             $this->json(['success' => false, 'mensaje' => 'Sin permiso'], 403);
             return;
         }
@@ -5305,6 +5305,13 @@ class EscuelaFormacionRegistroController extends BaseController {
         require_once APP . '/Helpers/DataIsolation.php';
         if (!DataIsolation::personaVisibleParaUsuarioActual($idPersona)) {
             $this->json(['success' => false, 'mensaje' => 'Sin acceso a esta persona'], 403);
+            return;
+        }
+
+        $soloBautismoLiderazgo = !AuthController::puedeMarcarAsistenciaListadoUniversidadVida()
+            && DataIsolation::puedeMarcarBautismoEnAsistenciasSoloConsulta();
+        if ($soloBautismoLiderazgo && $programa !== 'bautismo') {
+            $this->json(['success' => false, 'mensaje' => 'Solo puede marcar asistencia a bautismo'], 403);
             return;
         }
 

@@ -462,7 +462,7 @@ return [
 
     'escuelas_formacion/inscritos/eliminar' => ['any' => ['escuelas_formacion:eliminar', 'personas:eliminar']],
 
-    'escuelas_formacion/inscritos/guardar-asistencia' => ['checker' => 'puedeMarcarAsistenciaListadoUniversidadVida'],
+    'escuelas_formacion/inscritos/guardar-asistencia' => ['checker' => 'puedeGuardarAsistenciaListadoUniversidadVida'],
 
     'escuelas_formacion/inscritos/*' => ['checker' => 'puedeVerListadoAsistenciasUniversidadVida'],
 
